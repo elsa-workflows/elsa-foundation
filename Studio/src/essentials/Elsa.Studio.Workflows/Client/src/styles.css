@@ -87,19 +87,19 @@
   --wf-label-transform: uppercase;
   --wf-label-tracking: 0.04em;
 
-  /* Activity icon accents — colour by category through --studio-* tokens (see --wf-icon-tone-*).
-     Legacy --wf-activity-* aliases stay so existing data-icon rules keep working. */
-  --wf-icon-tone-terminal: var(--studio-success);
-  --wf-icon-tone-composite: var(--studio-accent);
-  --wf-icon-tone-runtime: var(--studio-warning);
-  --wf-icon-tone-trigger: var(--studio-warning);
+  /* Activity icon accents — category tones honour the documented host override
+     `--studio-wf-activity-*`, then fall back to `--studio-*` semantic tokens. */
+  --wf-activity-terminal: var(--studio-wf-activity-terminal, var(--studio-success));
+  --wf-activity-composite: var(--studio-wf-activity-composite, var(--studio-accent));
+  --wf-activity-runtime: var(--studio-wf-activity-runtime, var(--studio-warning));
+  --wf-activity-trigger: var(--studio-wf-activity-trigger, var(--studio-warning));
+  --wf-icon-tone-terminal: var(--wf-activity-terminal);
+  --wf-icon-tone-composite: var(--wf-activity-composite);
+  --wf-icon-tone-runtime: var(--wf-activity-runtime);
+  --wf-icon-tone-trigger: var(--wf-activity-trigger);
   --wf-icon-tone-success: var(--studio-success);
   --wf-icon-tone-danger: var(--studio-danger);
   --wf-icon-tone-accent: var(--studio-accent);
-  --wf-activity-terminal: var(--studio-wf-activity-terminal, var(--wf-icon-tone-terminal));
-  --wf-activity-composite: var(--studio-wf-activity-composite, var(--wf-icon-tone-composite));
-  --wf-activity-runtime: var(--studio-wf-activity-runtime, var(--wf-icon-tone-runtime));
-  --wf-activity-trigger: var(--studio-wf-activity-trigger, var(--wf-icon-tone-trigger));
 
   /* Disabled foreground — explicit colour rather than opacity-only (a11y contrast). */
   --wf-disabled-text: var(--wf-muted-text);
@@ -3750,38 +3750,38 @@ html[data-theme-appearance="high-contrast"] .wf-node[data-trigger-enabled="true"
 
 .wf-node[data-tone="terminal"] .wf-node-icon,
 .wf-node-icon[data-tone="terminal"] {
-  border-color: color-mix(in srgb, var(--wf-icon-tone-terminal) 34%, var(--wf-border));
+  border-color: color-mix(in srgb, var(--wf-activity-terminal) 34%, var(--wf-border));
   background:
-    linear-gradient(color-mix(in srgb, var(--wf-icon-tone-terminal) 12%, transparent) 0 0),
+    linear-gradient(color-mix(in srgb, var(--wf-activity-terminal) 12%, transparent) 0 0),
     var(--wf-panel);
-  color: var(--wf-icon-tone-terminal);
+  color: var(--wf-activity-terminal);
 }
 
 .wf-node[data-tone="composite"] .wf-node-icon,
 .wf-node-icon[data-tone="composite"] {
-  border-color: color-mix(in srgb, var(--wf-icon-tone-composite) 34%, var(--wf-border));
+  border-color: color-mix(in srgb, var(--wf-activity-composite) 34%, var(--wf-border));
   background:
-    linear-gradient(color-mix(in srgb, var(--wf-icon-tone-composite) 12%, transparent) 0 0),
+    linear-gradient(color-mix(in srgb, var(--wf-activity-composite) 12%, transparent) 0 0),
     var(--wf-panel);
-  color: var(--wf-icon-tone-composite);
+  color: var(--wf-activity-composite);
 }
 
 .wf-node[data-tone="runtime"] .wf-node-icon,
 .wf-node-icon[data-tone="runtime"] {
-  border-color: color-mix(in srgb, var(--wf-icon-tone-runtime) 35%, var(--wf-border));
+  border-color: color-mix(in srgb, var(--wf-activity-runtime) 35%, var(--wf-border));
   background:
-    linear-gradient(color-mix(in srgb, var(--wf-icon-tone-runtime) 12%, transparent) 0 0),
+    linear-gradient(color-mix(in srgb, var(--wf-activity-runtime) 12%, transparent) 0 0),
     var(--wf-panel);
-  color: var(--wf-icon-tone-runtime);
+  color: var(--wf-activity-runtime);
 }
 
 .wf-node[data-tone="trigger"] .wf-node-icon,
 .wf-node-icon[data-tone="trigger"] {
-  border-color: color-mix(in srgb, var(--wf-icon-tone-trigger) 35%, var(--wf-border));
+  border-color: color-mix(in srgb, var(--wf-activity-trigger) 35%, var(--wf-border));
   background:
-    linear-gradient(color-mix(in srgb, var(--wf-icon-tone-trigger) 12%, transparent) 0 0),
+    linear-gradient(color-mix(in srgb, var(--wf-activity-trigger) 12%, transparent) 0 0),
     var(--wf-panel);
-  color: var(--wf-icon-tone-trigger);
+  color: var(--wf-activity-trigger);
 }
 
 .wf-node[data-tone="success"] .wf-node-icon,
@@ -4000,31 +4000,31 @@ button.wf-node-slot-badge:focus-visible {
 
 .wf-activity-icon[data-tone="terminal"],
 .wf-activity-icon[data-icon="terminal"]:not([data-tone]) {
-  border-color: color-mix(in srgb, var(--wf-icon-tone-terminal) 34%, var(--wf-border));
-  background: color-mix(in srgb, var(--wf-icon-tone-terminal) 12%, transparent);
-  color: var(--wf-icon-tone-terminal);
+  border-color: color-mix(in srgb, var(--wf-activity-terminal) 34%, var(--wf-border));
+  background: color-mix(in srgb, var(--wf-activity-terminal) 12%, transparent);
+  color: var(--wf-activity-terminal);
 }
 
 .wf-activity-icon[data-tone="composite"],
 .wf-activity-icon[data-icon="flowchart"]:not([data-tone]),
 .wf-activity-icon[data-icon="sequence"]:not([data-tone]) {
-  border-color: color-mix(in srgb, var(--wf-icon-tone-composite) 34%, var(--wf-border));
-  background: color-mix(in srgb, var(--wf-icon-tone-composite) 12%, transparent);
-  color: var(--wf-icon-tone-composite);
+  border-color: color-mix(in srgb, var(--wf-activity-composite) 34%, var(--wf-border));
+  background: color-mix(in srgb, var(--wf-activity-composite) 12%, transparent);
+  color: var(--wf-activity-composite);
 }
 
 .wf-activity-icon[data-tone="runtime"],
 .wf-activity-icon[data-icon="runtime"]:not([data-tone]) {
-  border-color: color-mix(in srgb, var(--wf-icon-tone-runtime) 35%, var(--wf-border));
-  background: color-mix(in srgb, var(--wf-icon-tone-runtime) 12%, transparent);
-  color: var(--wf-icon-tone-runtime);
+  border-color: color-mix(in srgb, var(--wf-activity-runtime) 35%, var(--wf-border));
+  background: color-mix(in srgb, var(--wf-activity-runtime) 12%, transparent);
+  color: var(--wf-activity-runtime);
 }
 
 .wf-activity-icon[data-tone="trigger"],
 .wf-activity-icon[data-icon="trigger"]:not([data-tone]) {
-  border-color: color-mix(in srgb, var(--wf-icon-tone-trigger) 35%, var(--wf-border));
-  background: color-mix(in srgb, var(--wf-icon-tone-trigger) 12%, transparent);
-  color: var(--wf-icon-tone-trigger);
+  border-color: color-mix(in srgb, var(--wf-activity-trigger) 35%, var(--wf-border));
+  background: color-mix(in srgb, var(--wf-activity-trigger) 12%, transparent);
+  color: var(--wf-activity-trigger);
 }
 
 .wf-activity-icon[data-tone="success"] {

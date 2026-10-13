@@ -80,6 +80,8 @@ const kindIcons: Record<string, LucideIcon> = {
   activity: Boxes
 };
 
+export const mappedLucideExportNames = Object.keys(lucideByExportName);
+
 /** Shared presentational formatters used across the workflow editor and instance views. */
 
 export function formatDate(value?: string | null) {

@@ -6,7 +6,8 @@ import type { ActivityCatalogItem } from "./workflowTypes";
  * palette- or node-only table.
  *
  * `icon` is the historical kind token. `iconName` is a lucide name from the descriptor (design
- * spec: when set, render that lucide icon and never ignore it in favour of the generic Boxes).
+ * spec: when set and mapped, render that lucide icon). An unknown `icon` / `iconName` is ignored
+ * so type → category → trigger → generic still run; `Boxes` is only the last resort.
  */
 
 export const knownWorkflowNodeIcons = [
@@ -42,7 +43,38 @@ export type WorkflowNodeIcon = KnownWorkflowNodeIcon | (string & {});
 export const activityIconTones = ["terminal", "composite", "runtime", "trigger", "success", "danger", "accent"] as const;
 export type ActivityIconTone = (typeof activityIconTones)[number];
 
+export const knownLucideExportNames = [
+  "Activity",
+  "AlertTriangle",
+  "Boxes",
+  "Braces",
+  "Clock",
+  "Code2",
+  "Database",
+  "FlagTriangleRight",
+  "GitBranch",
+  "GitFork",
+  "GitMerge",
+  "Globe",
+  "Layers3",
+  "ListTree",
+  "Mail",
+  "Play",
+  "Repeat",
+  "Square",
+  "Terminal",
+  "Timer",
+  "Variable",
+  "Workflow",
+  "Zap"
+] as const;
+
 const knownIconSet = new Set<string>(knownWorkflowNodeIcons);
+const knownLucideSet = new Set<string>(knownLucideExportNames);
+
+export function isKnownLucideExportName(name: string): boolean {
+  return knownLucideSet.has(name);
+}
 
 const typeIconBySuffix: Record<string, KnownWorkflowNodeIcon> = {
   writeline: "terminal",
@@ -168,7 +200,7 @@ function normalizeConfiguredIcon(icon: string | null | undefined): WorkflowNodeI
   if (knownIconSet.has(kind)) return kind as KnownWorkflowNodeIcon;
 
   const lucideName = toLucideExportName(trimmed);
-  if (lucideName) return lucideName;
+  if (lucideName && isKnownLucideExportName(lucideName)) return lucideName;
   return null;
 }
 

@@ -1596,6 +1596,12 @@ if (darkVariant) {
     document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
   }
 }
+if (activityIconsFixture && searchParams.get("host-override") === "1") {
+  document.documentElement.style.setProperty("--studio-wf-activity-terminal", "rgb(255, 17, 0)");
+  document.documentElement.style.setProperty("--studio-wf-activity-composite", "rgb(124, 58, 237)");
+  document.documentElement.style.setProperty("--studio-wf-activity-runtime", "rgb(234, 88, 12)");
+  document.documentElement.style.setProperty("--studio-wf-activity-trigger", "rgb(219, 39, 119)");
+}
 createRoot(document.getElementById("root")!).render(
   searchParams.get("mode") === "workflow-toolbar"
     ? <WorkflowToolbarFixture />

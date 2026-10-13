@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { resolveActivityIcon, resolveActivityIconTone } from "../activityIcons";
+import { knownLucideExportNames, resolveActivityIcon, resolveActivityIconTone } from "../activityIcons";
+import { mappedLucideExportNames } from "../workflowFormatting";
 import type { ActivityCatalogItem } from "../workflowTypes";
 import { writeLine } from "./fixtures";
 
@@ -15,6 +16,38 @@ describe("resolveActivityIcon", () => {
   it("renders a descriptor-supplied lucide iconName instead of the generic Boxes kind", () => {
     expect(resolveActivityIcon(catalog({ iconName: "GitBranch" }))).toBe("GitBranch");
     expect(resolveActivityIcon(catalog({ iconName: "git-branch" }))).toBe("GitBranch");
+  });
+
+  it("ignores an unmapped iconName and continues to type and category fallbacks", () => {
+    expect(resolveActivityIcon(catalog({
+      iconName: "Rocket",
+      activityTypeKey: "Elsa.Activities.Email.Activities.SendEmail",
+      displayName: "Send Email",
+      category: "Email"
+    }))).toBe("email");
+    expect(resolveActivityIcon(catalog({
+      icon: "rocket",
+      activityTypeKey: "Acme.Activities.Custom.UnknownHttpCall",
+      displayName: "Unknown HTTP Call",
+      category: "HTTP"
+    }))).toBe("http");
+    expect(resolveActivityIcon(catalog({
+      iconName: "NotARealIcon",
+      activityTypeKey: "Acme.Activities.Custom.OddThing",
+      displayName: "Odd Thing",
+      category: "Uncategorised",
+      executionType: "Trigger"
+    }))).toBe("trigger");
+    expect(resolveActivityIcon(catalog({
+      iconName: "Rocket",
+      activityTypeKey: "Acme.Activities.Custom.OddThing",
+      displayName: "Odd Thing",
+      category: "Uncategorised"
+    }))).toBe("activity");
+  });
+
+  it("keeps the resolver lucide map in lockstep with the renderer", () => {
+    expect([...mappedLucideExportNames].sort()).toEqual([...knownLucideExportNames].sort());
   });
 
   it("maps well-known activity types to distinct icons", () => {

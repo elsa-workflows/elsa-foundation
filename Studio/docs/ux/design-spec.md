@@ -151,11 +151,13 @@ description, pinned mark and body stay visible (content first).
 
 `exists`: one resolver, `resolveActivityIcon` in `activityIcons.ts` (re-exported from
 `workflowAdapter.ts`), used by the designer palette, canvas nodes, and the run-view timeline.
-Order: catalog `icon` kind token, then catalog `iconName` (a lucide export or kebab name), then
-the activity type key, then the category icon, then `executionType === trigger`.
-`renderActivityIcon` maps the resolved kind or lucide name to a lucide glyph (default `Boxes`
-only when nothing was supplied). Palette rows and canvas nodes set `data-tone` from
-`resolveActivityIconTone` and colour through `--studio-success` / `--studio-accent` /
+Order: catalog `icon` kind token, then catalog `iconName` (a mapped lucide export or kebab name),
+then the activity type key, then the category icon, then `executionType === trigger`. An
+`icon` / `iconName` that is not a known kind and not in the lucide map is ignored so the later
+steps still run. `renderActivityIcon` maps the resolved kind or lucide name to a lucide glyph
+(default `Boxes` only when nothing was supplied). Palette rows and canvas nodes set `data-tone`
+from `resolveActivityIconTone` and colour through `--wf-activity-*`, which honour the host
+override `--studio-wf-activity-*` and then `--studio-success` / `--studio-accent` /
 `--studio-warning` / `--studio-danger`.
 
 `target, phase 4`: `iconColor` from the catalog is still unused; category tone wins so icons
