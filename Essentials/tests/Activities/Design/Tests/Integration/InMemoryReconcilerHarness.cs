@@ -17,6 +17,7 @@ using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Enums;
 using Elsa.Primitives.Persistence;
+using Elsa.Primitives.Hosting.Services;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.Services;
 using Microsoft.Extensions.Logging.Abstractions;
