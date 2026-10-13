@@ -32,7 +32,11 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Tasks`, the compo
   determined at this seam because only the executor observes that the node is dormant for the task. A
   single-node lock that is never acquired, or lost while the task runs, is `failed`; only a cancellation
   of the shell's own token is `cancelled`.
-- **Override:** `services.Replace(...)`.
+- **Override:** `services.Replace(ServiceDescriptor.Singleton<ITaskExecutor, MyExecutor>())`. A replacement runs what
+  `TaskManager` executes: every startup task, each background task's `ExecuteAsync`, and every recurring run. It does not
+  see the starts and stops. A background task's `StartAsync` always goes through the internal `TaskExecutor`, so the
+  dormancy check and `[SingleNodeTask]` gate it there whatever the replacement does; a background task's `StopAsync` and
+  a recurring task's `StartAsync` and `StopAsync` are called on the task directly, with no gating.
 
 ### `[SingleNodeTask]`: one at a time, at shell start
 The whole guarantee, and nothing more (#2192):

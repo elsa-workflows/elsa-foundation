@@ -245,15 +245,16 @@ public sealed class RuntimeResumptionPumpTaskTests
         Assert.DoesNotContain(logger.Entries, entry => entry.EventId.Name == "WorkflowTestScopeCleanupFailed");
     }
 
-    /// <summary>The schedule comes from the Tasks base class, whose own tests pin its type.</summary>
+    /// <summary>
+    /// The pump's schedule is the Tasks base class's adaptive interval schedule, which follows the widened backoff. The
+    /// schedule class is internal to Elsa.Tasks.Schedules, so its type name is written out.
+    /// </summary>
     [Fact]
-    public async Task GetSchedule_SchedulesAnExecution()
+    public void GetSchedule_ReturnsAdaptiveSchedule()
     {
         var pump = CreatePump(new FakeResumptionService(), new RuntimeResumptionOptions());
 
-        await using var execution = pump.GetSchedule().ScheduleExecution(() => Task.CompletedTask);
-
-        Assert.NotNull(execution);
+        Assert.Equal("AdaptiveIntervalSchedule", pump.GetSchedule().GetType().Name);
     }
 
     [Fact]

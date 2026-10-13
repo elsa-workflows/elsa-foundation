@@ -21,7 +21,7 @@ Elsa.Tasks.Core.ITask.ExecuteAsync(System.Threading.CancellationToken cancellati
 Elsa.Tasks.Core.ITaskExecutor
 Elsa.Tasks.Core.ITaskExecutor.ExecuteTaskAsync(Elsa.Tasks.Core.ITask! task, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
 Elsa.Tasks.Core.ITaskManager
-Elsa.Tasks.Core.ITaskManager.StartExecutingRegisteredTasks(System.Threading.CancellationToken token) -> System.Threading.Tasks.Task!
+Elsa.Tasks.Core.ITaskManager.StartExecutingRegisteredTasks(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Elsa.Tasks.Core.ITaskManager.StopExecutingRegisteredTasks(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 Elsa.Tasks.Core.ITaskSchedule
 Elsa.Tasks.Core.ITaskSchedule.ScheduleExecution(System.Func<System.Threading.Tasks.Task!>! action) -> Elsa.Tasks.Core.IScheduledTaskExecution!

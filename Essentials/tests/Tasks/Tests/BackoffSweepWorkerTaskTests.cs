@@ -1,3 +1,4 @@
+using System.Reflection;
 using Elsa.Tasks.Schedules;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -12,14 +13,26 @@ public sealed class BackoffSweepWorkerTaskTests
         Assert.Throws<ArgumentNullException>(() => new NullLoggerWorker());
     }
 
-    /// <summary>Every derived worker gets its schedule from the base: an adaptive interval schedule over the current sweep interval.</summary>
+    /// <summary>
+    /// Every derived worker gets its schedule from the base: an adaptive interval schedule whose next wait is the worker's
+    /// current sweep interval, so failed sweeps widen the wait before the next one.
+    /// </summary>
     [Fact]
-    public async Task GetSchedule_ReturnsAnAdaptiveIntervalSchedule()
+    public async Task GetSchedule_WaitsTheWidenedSweepIntervalAfterFailures()
     {
-        var schedule = Assert.IsType<AdaptiveIntervalSchedule>(new TestWorker().GetSchedule());
+        var worker = new TestWorker { Fail = () => new InvalidOperationException("boom") };
+        var schedule = Assert.IsType<AdaptiveIntervalSchedule>(worker.GetSchedule());
+        await using var execution = Assert.IsType<ScheduledTaskExecution>(schedule.ScheduleExecution(() => Task.CompletedTask));
+        // The interval the execution re-arms its timer with after every run.
+        var nextWait = (Func<TimeSpan>)typeof(ScheduledTaskExecution)
+            .GetField("_interval", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(execution)!;
+        Assert.Equal(TimeSpan.FromSeconds(1), nextWait());
 
-        await using var execution = schedule.ScheduleExecution(() => Task.CompletedTask);
-        Assert.NotNull(execution);
+        await worker.ExecuteAsync(CancellationToken.None);
+        await worker.ExecuteAsync(CancellationToken.None);
+
+        Assert.Equal(TimeSpan.FromSeconds(2), nextWait());
     }
 
     [Fact]

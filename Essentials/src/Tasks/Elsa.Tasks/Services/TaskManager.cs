@@ -20,17 +20,17 @@ internal sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider
     private TaskStateManager? taskStateManager;
     private Task? _stopTask;
 
-    public async Task StartExecutingRegisteredTasks(CancellationToken token)
+    public async Task StartExecutingRegisteredTasks(CancellationToken cancellationToken = default)
     {
         if (Volatile.Read(ref _disposeRequested) == 1)
             return;
 
         var taskExecutor = serviceProvider.GetRequiredService<ITaskExecutor>();
 
-        var stateManager = GetOrInitializeTaskStateManager(token);
-        var cancellationToken = stateManager.GetCancellationToken();
+        var stateManager = GetOrInitializeTaskStateManager(cancellationToken);
+        var tasksToken = stateManager.GetCancellationToken();
 
-        await stateManager.Gate.WaitAsync(cancellationToken);
+        await stateManager.Gate.WaitAsync(tasksToken);
 
         try
         {
@@ -45,17 +45,17 @@ internal sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider
             // channel cannot be reopened — the restarted reader would drain-and-exit and every later
             // background publish would throw. Restart means: dispose this manager (new shell generation).
             await stateManager.Stop();
-            stateManager.CancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(token);
-            cancellationToken = stateManager.GetCancellationToken();
+            stateManager.CancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            tasksToken = stateManager.GetCancellationToken();
 
             // Step 1: Run startup tasks (with dependency ordering)
-            await RunStartupTasks(serviceProvider, taskExecutor, cancellationToken);
+            await RunStartupTasks(serviceProvider, taskExecutor, tasksToken);
 
             // Step 2: Run background tasks
-            await RunBackgroundTasks(serviceProvider, taskExecutor, stateManager, cancellationToken);
+            await RunBackgroundTasks(serviceProvider, taskExecutor, stateManager, tasksToken);
 
             // Step 3: Start recurring tasks
-            await StartRecurringTasksAsync(serviceProvider, taskExecutor, stateManager, cancellationToken);
+            await StartRecurringTasksAsync(serviceProvider, taskExecutor, stateManager, tasksToken);
         }
         catch (Exception e)
         {
