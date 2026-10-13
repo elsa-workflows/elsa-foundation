@@ -1,6 +1,6 @@
 # Studio Preferences API
 
-This package exposes the authenticated Studio Preferences REST surface. It is the first production canary in the [First-party REST API Consolidation program](../../../../docs/program-goals/first-party-rest-api-consolidation.md).
+This package exposes the authenticated Studio Preferences REST surface. It is the first production canary in the [First-party REST API Consolidation program](../../../../../docs/program-goals/first-party-rest-api-consolidation.md).
 
 ## Composition
 

@@ -88,5 +88,5 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 
 ## Cross-references
 
-- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.22.1; Elsa §E2.2 (no Runtime → Design dependency).
