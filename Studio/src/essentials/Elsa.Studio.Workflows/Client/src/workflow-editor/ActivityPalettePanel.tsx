@@ -1,8 +1,10 @@
 import React, { useId, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, GripVertical, Search } from "lucide-react";
 import type { ActivityCatalogItem } from "../workflowTypes";
-import { getActivityDisplay, resolveActivityIcon } from "../workflowAdapter";
-import { formatActivityVersion, renderActivityIcon } from "../workflowFormatting";
+import { resolveActivityIcon, resolveActivityIconFallback, resolveActivityIconTone } from "../activityIcons";
+import { renderActivityIcon } from "../activityIconView";
+import { getActivityDisplay } from "../workflowAdapter";
+import { formatActivityVersion } from "../workflowFormatting";
 import type { ActivityPaletteGroup } from "./editorTypes";
 
 interface ActivityPalettePanelProps {
@@ -134,6 +136,7 @@ export function ActivityPalettePanel({
                   const descriptionId = description ? `wf-palette-description-${activity.activityVersionId}` : undefined;
                   const displayName = getActivityDisplay(activity);
                   const icon = resolveActivityIcon(activity);
+                  const tone = resolveActivityIconTone(activity);
                   const activityKey = `activity:${activity.activityVersionId}`;
                   const version = formatActivityVersion(
                     activity.activityDefinitionVersion ?? activity.version);
@@ -165,8 +168,8 @@ export function ActivityPalettePanel({
                         onActivityClick(activity);
                       }}
                     >
-                      <span className="wf-activity-icon" data-icon={icon} aria-hidden="true">
-                        {renderActivityIcon(icon)}
+                      <span className="wf-activity-icon" data-icon={icon} data-tone={tone} aria-hidden="true">
+                        {renderActivityIcon(icon, resolveActivityIconFallback(activity))}
                       </span>
                       <span className="wf-palette-activity-text">
                         <strong>{displayName}</strong>

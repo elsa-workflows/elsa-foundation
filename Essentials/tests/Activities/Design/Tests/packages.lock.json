@@ -294,6 +294,12 @@
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.activities.design.tests.clriconfixture": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.activities.dispatchworkflow.runtime": {
         "type": "Project",
         "dependencies": {

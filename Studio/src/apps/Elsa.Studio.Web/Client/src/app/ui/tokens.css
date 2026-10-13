@@ -67,6 +67,10 @@
   --studio-body-size: 13px;
   --studio-label-size: 12px;
 
+  /* Disclosure motion. Caps enter/expand animation at 150ms; reduced-motion zeroes both. */
+  --studio-disclosure-duration: 150ms;
+  --studio-disclosure-distance: 4px;
+
   /* Compatibility aliases for independently bundled Studio modules. */
   --surface: var(--studio-surface);
   --text: var(--studio-text);
@@ -86,14 +90,24 @@ html[data-theme-mode="dark"] {
 }
 
 /*
- * Signature themes — Meridian, Drift, Schematic, Atelier, Elsa Cloud, Signal, Dusk.
+ * Signature themes — Classic, Meridian, Drift, Schematic, Atelier, Elsa Cloud, Signal, Dusk.
  *
  * Their colours, fonts and radii come from the theme definitions (foundationThemes.ts) through
  * ThemeProvider. What lives here is what a definition cannot carry: elevation recipes and a few
  * layer-2 refinements. Every one of these themes defines all four modes; a dark-scheme block
  * therefore covers both Dark and Dim: the shared one below for Meridian, Drift, Schematic, Atelier and Dusk,
- * and Elsa Cloud's and Signal's own.
+ * and Classic's, Elsa Cloud's and Signal's own.
  */
+html[data-theme="classic"] {
+  --shadow-sm: 0 1px 2px oklch(0.21 0.04 266 / 0.04);
+  --shadow-md: 0 1px 2px oklch(0.21 0.04 266 / 0.04), 0 4px 12px -4px oklch(0.21 0.04 266 / 0.08);
+  --shadow-lg: 0 1px 2px oklch(0.21 0.04 266 / 0.04), 0 12px 28px -8px oklch(0.21 0.04 266 / 0.12);
+  --shadow-xl: 0 2px 6px oklch(0.21 0.04 266 / 0.05), 0 20px 40px -12px oklch(0.21 0.04 266 / 0.16);
+  --studio-surface-raised: var(--card);
+  --studio-accent-soft: color-mix(in srgb, var(--primary) 10%, transparent);
+  --studio-title-weight: 600;
+}
+
 html[data-theme="meridian"] {
   --shadow-sm: 0 1px 2px oklch(0.25 0.03 265 / 0.07);
   --shadow-md: 0 1px 2px oklch(0.25 0.03 265 / 0.05), 0 6px 16px -4px oklch(0.25 0.03 265 / 0.12);
@@ -183,6 +197,15 @@ html:is([data-theme="meridian"], [data-theme="drift"], [data-theme="schematic"],
   --studio-accent-soft: color-mix(in srgb, var(--primary) 18%, transparent);
 }
 
+/* Classic's dark recipe: hairline first, a tight slate shadow second — Elsa 3's dark cards. */
+html[data-theme="classic"][data-theme-mode="dark"] {
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.25);
+  --shadow-md: 0 1px 2px oklch(0 0 0 / 0.25), 0 6px 14px -6px oklch(0 0 0 / 0.4);
+  --shadow-lg: 0 2px 6px oklch(0 0 0 / 0.25), 0 14px 32px -12px oklch(0 0 0 / 0.5);
+  --shadow-xl: 0 4px 10px oklch(0 0 0 / 0.3), 0 22px 48px -14px oklch(0 0 0 / 0.56);
+  --studio-accent-soft: color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
 /* Signal's dark recipe: near-flat, the hairline border does the separating. */
 html[data-theme="signal"][data-theme-mode="dark"] {
   --shadow-sm: 0 1px 0 oklch(0 0 0 / 0.3);
@@ -199,6 +222,13 @@ html[data-theme="elsa-cloud"][data-theme-mode="dark"] {
   --shadow-lg: 0 2px 6px oklch(0 0 0 / 0.25), 0 14px 32px -12px oklch(0 0 0 / 0.5);
   --shadow-xl: 0 4px 10px oklch(0 0 0 / 0.3), 0 22px 48px -14px oklch(0 0 0 / 0.56);
   --studio-accent-soft: color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --studio-disclosure-duration: 0ms;
+    --studio-disclosure-distance: 0px;
+  }
 }
 
 /*

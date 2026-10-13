@@ -46,7 +46,7 @@ namespace Elsa.Workflows.Runtime.Distributed.Services;
 /// renewal that loses to the newer generation passivates the old generation's actor without releasing anything.
 /// </para>
 /// </remarks>
-public sealed class ExecutionPlacementPumpTask : BackoffSweepPumpTask, IRecurringTask
+public sealed class ExecutionPlacementPumpTask : BackoffSweepWorkerTask, IRecurringTask
 {
     private readonly IWorkflowExecutionActorProvider _actorProvider;
     private readonly IPersistenceScopeRunner? _scopeRunner;

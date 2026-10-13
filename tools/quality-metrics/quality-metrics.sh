@@ -2,11 +2,21 @@
 # Elsa 4 simplification metrics (ADR 0080 D7). Prints a Markdown section to stdout.
 # Every number is a cheap, deterministic count over the working tree; trends matter, not exact values.
 #
-# Usage: quality-metrics.sh [repo-root]
+# Usage: quality-metrics.sh [repo-root] [--by-domain]
+#   --by-domain  also prints the public-type count per domain folder of Essentials/src, each Workflows.* folder
+#                counted as its own domain, as the before/after evidence of a domain's internal-by-default change.
 # Called by tools/repo-hygiene/hygiene.sh for the weekly report; safe to run locally.
 
 set -euo pipefail
-root="${1:-$(git rev-parse --show-toplevel)}"
+by_domain=false
+root=""
+for arg in "$@"; do
+  case "$arg" in
+    --by-domain) by_domain=true ;;
+    *) root="$arg" ;;
+  esac
+done
+root="${root:-$(git rev-parse --show-toplevel)}"
 cd "$root"
 
 cs_files() { find "$@" -name '*.cs' -not -path '*/obj/*' -not -path '*/bin/*' -not -path '*/Migrations/*' 2>/dev/null; }
@@ -39,14 +49,18 @@ glossary=$(cat docs/glossary/*.md | grep_ok -E '^\| ' | grep_ok -vE '^\| (Term|-
 constitution=$(cat .specify/memory/constitution*.md | wc -l)
 agents=$(wc -l < AGENTS.md)
 # Committed blob sizes at HEAD, so neither build output nor local edits or deletions skew the share.
+# Usage: kb <exclude-regex> <path>...; a blob whose path matches the regex (empty: none) is left out. The filter runs
+# on ls-tree's output because git ls-tree does not support exclude pathspec magic.
 kb() {
+  local exclude="$1"; shift
   if git rev-parse --verify -q HEAD >/dev/null; then
-    git ls-tree -r -l HEAD -- "$@" | awk '{s+=$4} END {print int(s/1024)}'
+    git ls-tree -r -l HEAD -- "$@" |
+      awk -F'\t' -v exclude="$exclude" '(exclude == "" || $2 !~ exclude) { split($1, f, " "); s += f[4] } END { print int(s/1024) }'
   else
     du -sk --exclude=bin --exclude=obj "$@" 2>/dev/null | awk '{s+=$1} END {print s+0}'
   fi
 }
-meta_kb=$(kb docs specs); code_kb=$(kb Essentials Extensions ':(exclude)Extensions/*/studio/**')
+meta_kb=$(kb '' docs specs); code_kb=$(kb '^Extensions/[^/]+/studio/' Essentials Extensions)
 meta_pct=$(( meta_kb * 100 / (meta_kb + code_kb) ))
 
 budget_file=$(find Essentials/tests Extensions -name 'ef-command-budgets.json' -not -path '*/bin/*' -not -path '*/studio/*' 2>/dev/null | head -1)
@@ -71,3 +85,27 @@ cat <<MD
 | Meta share of docs, specs and backend bytes | $meta_pct% | trend down |
 | EF command budgets | $ef | budgets only go down |
 MD
+
+domain_row() {
+  local files
+  mapfile -t files < <(cs_files "$2")
+  echo "| $1 | $(count "$public_decl" "${files[@]}") | $(count "$type_decl" "${files[@]}") |"
+}
+
+if $by_domain; then
+  cat <<MD
+
+### Public types per domain in \`Essentials/src\` (excluding migrations)
+
+| Domain | Public types | All types |
+|---|---|---|
+MD
+  for dir in Essentials/src/*/; do
+    domain=$(basename "$dir")
+    if [[ "$domain" == Workflows ]]; then
+      for sub in "$dir"*/; do domain_row "Workflows.$(basename "$sub")" "$sub"; done
+    else
+      domain_row "$domain" "$dir"
+    fi
+  done
+fi

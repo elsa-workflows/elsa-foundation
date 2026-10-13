@@ -41,6 +41,7 @@
     <ProjectReference Include="..\..\..\..\src\Activities\Scripting\Elsa.Activities.Scripting.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
     <ProjectReference Include="..\Fixtures\ClrFixture\Elsa.Activities.Design.Tests.ClrFixture.csproj" />
+    <ProjectReference Include="..\Fixtures\ClrIconFixture\Elsa.Activities.Design.Tests.ClrIconFixture.csproj" />
     <ProjectReference Include="..\..\..\..\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\Events\Core\Elsa.Events.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\Primitives\Primitives\Elsa.Primitives.csproj" />

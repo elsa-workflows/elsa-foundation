@@ -1,5 +1,6 @@
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Mediator.Core.Models;
+using Elsa.Mediator.Pipeline;
 
 namespace Elsa.Mediator.Commands;
 
@@ -7,7 +8,7 @@ namespace Elsa.Mediator.Commands;
 /// Sends commands through the shared mediator pipeline. Commands resolve their handler through the
 /// closed <see cref="ICommandHandler{TCommand,TResult}"/> generic.
 /// </summary>
-public sealed class CommandSender(IServiceProvider serviceProvider, CommandPipeline commandPipeline) : ICommandSender
+internal sealed class CommandSender(IServiceProvider serviceProvider, CommandPipeline commandPipeline) : ICommandSender
 {
     private const string Kind = "command";
 

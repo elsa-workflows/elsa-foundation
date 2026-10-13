@@ -92,9 +92,6 @@ jobs:
       - name: Check contributor checkpoint workflow guards
         run: python3 tools/contributor-checkpoints/test_workflow_guards.py
 
-      - name: Check consolidation path mapping
-        run: python3 tools/consolidation/verify-layout.py --self-test
-
       - name: Check Studio asset gate
         run: python3 tools/ci/verify-studio-assets.py --self-test
 

@@ -2,7 +2,9 @@
 """Verify the pinned consolidation inventory and resolved project references.
 
 Uses the two original repository inventories rather than discovery selectors from
-maps or architecture guards. Run on a candidate checkout, including clean CI.
+maps or architecture guards. This is the frozen record of the consolidation, not a CI
+gate: run it on demand against the consolidation merge (#2644) or a checkout close to
+it. Projects added, merged or renamed since then show up as unaccounted or missing.
 """
 from __future__ import annotations
 import argparse

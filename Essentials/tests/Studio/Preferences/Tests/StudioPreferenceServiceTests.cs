@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Studio.Preferences.Api;
 using Elsa.Studio.Preferences.Core;
 using Elsa.Studio.Preferences.Core.Contracts;
 using Elsa.Studio.Preferences.Core.Exceptions;
@@ -17,7 +18,8 @@ public sealed class StudioPreferenceServiceTests
         var registry = new StudioPreferenceNamespaceRegistry(
         [
             new DashboardPreferenceNamespace(),
-            new AttentionPreferenceNamespace()
+            new AttentionPreferenceNamespace(),
+            new HomeLayoutPreferenceNamespace()
         ]);
         _service = new(registry, new InMemoryStudioPreferenceStore(), TimeProvider.System);
     }
@@ -70,6 +72,34 @@ public sealed class StudioPreferenceServiceTests
             await _service.FindAsync(Key(StudioPreferenceNamespaces.Dashboard) with { SubjectId = "" }));
         await Assert.ThrowsAsync<StudioPreferenceValidationException>(async () =>
             await _service.WriteAsync(Key(StudioPreferenceNamespaces.Dashboard), new(2, Json("{}")), StudioPreferenceWriteCondition.MustNotExist));
+    }
+
+    [Fact]
+    public async Task DeleteRemovesTheUserDocument()
+    {
+        var key = Key(StudioPreferenceNamespaces.HomeLayout);
+        await _service.WriteAsync(key, new(1, StudioHomeLayout.BuiltInValue), StudioPreferenceWriteCondition.MustNotExist);
+
+        Assert.True(await _service.DeleteAsync(key));
+        Assert.Null(await _service.FindAsync(key));
+        Assert.False(await _service.DeleteAsync(key));
+    }
+
+    [Fact]
+    public async Task HomeLayoutRejectsDuplicateIdsAndUnknownSizes()
+    {
+        var key = Key(StudioPreferenceNamespaces.HomeLayout);
+        await Assert.ThrowsAsync<StudioPreferenceValidationException>(async () =>
+            await _service.WriteAsync(key, new(1, Json("""{"widgets":[{"id":"a","size":"huge"}]}""")), StudioPreferenceWriteCondition.MustNotExist));
+        await Assert.ThrowsAsync<StudioPreferenceValidationException>(async () =>
+            await _service.WriteAsync(key, new(1, Json("""{"widgets":[{"id":"a","size":"small"},{"id":"a","size":"medium"}]}""")), StudioPreferenceWriteCondition.MustNotExist));
+
+        var saved = await _service.WriteAsync(
+            key,
+            new(1, Json("""{"widgets":[{"id":"home.get-started","size":"L"}]}""")),
+            StudioPreferenceWriteCondition.MustNotExist);
+        Assert.Equal("home-layout", saved.Namespace);
+        Assert.Equal(1, saved.Value.GetProperty("widgets").GetArrayLength());
     }
 
     private static StudioPreferenceKey Key(string @namespace) => new("user-1", "tenant-1", "studio-primary", @namespace);

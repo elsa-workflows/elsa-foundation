@@ -1,0 +1,159 @@
+import { isThemeMode, themeModeLabels, type ThemeMode } from "./presets";
+import { isNavModePreference, navModeStorageKey, type NavModePreference } from "./navMode";
+
+/**
+ * The user's appearance choices as one model: which theme, which colour mode and where the
+ * navigation sits. ThemeProvider owns the live state; this module owns the shape, the defaults,
+ * persistence and resolution, so the topbar menu and a Settings › Appearance page share one source.
+ *
+ * `system` is a mode preference, not a theme mode: it follows the OS contrast and colour-scheme
+ * preferences and keeps following them while they change.
+ */
+export type ThemeModePreference = ThemeMode | "system";
+
+export interface AppearancePreferences {
+  /** Theme id, or null for the configured default theme. */
+  themeId: string | null;
+  mode: ThemeModePreference;
+  navigation: NavModePreference;
+}
+
+export const appearanceStorageKeys = {
+  themeId: "elsa-studio-theme",
+  mode: "elsa-studio-theme-mode",
+  navigation: navModeStorageKey
+} as const;
+
+/** Sidebar and dock keys Reset also clears. These are chrome, not theme/mode/nav preferences. */
+export const appearanceChromeStorageKeys = {
+  sidebarCollapsed: "elsa-studio-sidebar-collapsed",
+  bottomPanelCollapsed: "elsa-studio-bottom-panel-collapsed",
+  bottomPanelHeight: "elsa-studio-bottom-panel-height",
+  bottomPanelMaximized: "elsa-studio-bottom-panel-maximized",
+  activeBottomPanel: "elsa-studio-active-bottom-panel"
+} as const;
+
+/** Every key `resetAppearancePreferences` removes. Spec and code must stay in lockstep (8 keys). */
+export const appearanceResetStorageKeys = [
+  appearanceStorageKeys.themeId,
+  appearanceStorageKeys.mode,
+  appearanceStorageKeys.navigation,
+  appearanceChromeStorageKeys.sidebarCollapsed,
+  appearanceChromeStorageKeys.bottomPanelCollapsed,
+  appearanceChromeStorageKeys.bottomPanelHeight,
+  appearanceChromeStorageKeys.bottomPanelMaximized,
+  appearanceChromeStorageKeys.activeBottomPanel
+] as const;
+
+export const appearanceResetEventName = "elsa-studio:appearance-reset";
+
+export const themeModePreferenceLabels: Record<ThemeModePreference, string> = {
+  system: "System",
+  ...themeModeLabels
+};
+
+export const appearanceModePreferences: readonly ThemeModePreference[] = [
+  "system",
+  "light",
+  "dark",
+  "dim",
+  "high-contrast"
+];
+
+export const defaultAppearancePreferences: AppearancePreferences = {
+  themeId: null,
+  mode: "system",
+  navigation: "theme"
+};
+
+export function isThemeModePreference(value: unknown): value is ThemeModePreference {
+  return value === "system" || isThemeMode(value);
+}
+
+interface PreferenceStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+function defaultStorage(): PreferenceStorage | undefined {
+  try {
+    return typeof window === "undefined" ? undefined : window.localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+function safely<T>(action: () => T, fallback: T): T {
+  try {
+    return action();
+  } catch {
+    // Appearance is a best-effort browser preference; storage failures must not block Studio.
+    return fallback;
+  }
+}
+
+/** Reads stored preferences; unknown or missing values fall back to the defaults. */
+export function readAppearancePreferences(storage: PreferenceStorage | undefined = defaultStorage()): AppearancePreferences {
+  const read = (key: string) => (storage ? safely(() => storage.getItem(key), null) : null);
+  const mode = read(appearanceStorageKeys.mode);
+  const navigation = read(appearanceStorageKeys.navigation);
+  return {
+    themeId: read(appearanceStorageKeys.themeId) || null,
+    mode: isThemeModePreference(mode) ? mode : defaultAppearancePreferences.mode,
+    navigation: isNavModePreference(navigation) ? navigation : defaultAppearancePreferences.navigation
+  };
+}
+
+/** Persists the given subset of preferences. A null theme id clears the stored theme. */
+export function writeAppearancePreferences(
+  preferences: Partial<AppearancePreferences>,
+  storage: PreferenceStorage | undefined = defaultStorage()
+) {
+  if (!storage) return;
+  safely(() => {
+    if (preferences.themeId !== undefined) {
+      if (preferences.themeId === null) storage.removeItem(appearanceStorageKeys.themeId);
+      else storage.setItem(appearanceStorageKeys.themeId, preferences.themeId);
+    }
+    if (preferences.mode !== undefined) storage.setItem(appearanceStorageKeys.mode, preferences.mode);
+    if (preferences.navigation !== undefined) storage.setItem(appearanceStorageKeys.navigation, preferences.navigation);
+  }, undefined);
+}
+
+/** Removes every stored appearance preference and chrome key so the defaults apply again. */
+export function resetAppearancePreferences(storage: PreferenceStorage | undefined = defaultStorage()): AppearancePreferences {
+  if (storage) {
+    appearanceResetStorageKeys.forEach(key => safely(() => storage.removeItem(key), undefined));
+  }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(appearanceResetEventName));
+  }
+  return { ...defaultAppearancePreferences };
+}
+
+type MatchMedia = (query: string) => { matches: boolean };
+
+function defaultMatchMedia(): MatchMedia | undefined {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" ? q => window.matchMedia(q) : undefined;
+}
+
+/** The theme mode the OS asks for: high contrast first, then dark, else light. */
+export function getSystemThemeMode(matchMedia: MatchMedia | undefined = defaultMatchMedia()): ThemeMode {
+  if (!matchMedia) return "light";
+  if (matchMedia("(prefers-contrast: more)").matches) return "high-contrast";
+  return matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+/** Turns a mode preference into a concrete theme mode. */
+export function resolveModePreference(preference: ThemeModePreference, matchMedia?: MatchMedia): ThemeMode {
+  return preference === "system" ? getSystemThemeMode(matchMedia) : preference;
+}
+
+/** Calls `onChange` whenever the OS colour-scheme or contrast preference changes. Returns an unsubscribe. */
+export function watchSystemThemeMode(onChange: () => void): () => void {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return () => undefined;
+  const queries = ["(prefers-color-scheme: dark)", "(prefers-contrast: more)"].map(q => window.matchMedia(q));
+  queries.forEach(q => q.addEventListener?.("change", onChange));
+  return () => queries.forEach(q => q.removeEventListener?.("change", onChange));
+}

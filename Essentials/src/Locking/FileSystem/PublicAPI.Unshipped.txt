@@ -1,0 +1,12 @@
+#nullable enable
+Elsa.Locking.FileSystem.FileSystemLockingFeature
+Elsa.Locking.FileSystem.FileSystemLockingFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Locking.FileSystem.FileSystemLockingFeature.FileSystemLockingFeature() -> void
+Elsa.Locking.FileSystem.FileSystemLockingFeature.LockAcquisitionTimeoutMinutes.get -> double
+Elsa.Locking.FileSystem.FileSystemLockingFeature.LockAcquisitionTimeoutMinutes.set -> void
+Elsa.Locking.FileSystem.FileSystemLockingFeature.LocksFolderPath.get -> string!
+Elsa.Locking.FileSystem.FileSystemLockingFeature.LocksFolderPath.set -> void
+Elsa.Locking.FileSystem.Options.DistributedLockingOptions
+Elsa.Locking.FileSystem.Options.DistributedLockingOptions.DistributedLockingOptions() -> void
+Elsa.Locking.FileSystem.Options.DistributedLockingOptions.LockAcquisitionTimeout.get -> System.TimeSpan
+Elsa.Locking.FileSystem.Options.DistributedLockingOptions.LockAcquisitionTimeout.set -> void

@@ -32,8 +32,7 @@ public class TasksFeature : IShellFeature
         // Stays scoped deliberately: it is only ever resolved inside the dedicated scope
         // TaskManager.RunStartupTasks opens for the (scoped) startup tasks, never from the root path
         // that starts background/recurring tasks — so it must not be promoted to singleton here.
-        services.AddScoped<ITopologicalTaskSorter, TopologicalTaskSorter>();
-        services.AddSingleton<IBackgroundTaskStarter>(sp => sp.GetRequiredService<TaskExecutor>());
+        services.AddScoped<TopologicalTaskSorter>();
         services.AddSingleton<ITaskExecutor>(sp => sp.GetRequiredService<TaskExecutor>());
         services.AddSingleton<ITaskManager, TaskManager>();
         services.AddShellInitializer<RunShellTasksInitializer>(LifecyclePhase.Start, 0);

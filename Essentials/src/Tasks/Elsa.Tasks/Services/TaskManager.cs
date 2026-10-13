@@ -11,7 +11,7 @@ namespace Elsa.Tasks.Services;
 /// Manages the lifecycle of startup, background, and recurring tasks for tenants.
 /// Executes tasks in the proper sequence: startup tasks first, then background tasks, then recurring tasks.
 /// </summary>
-public sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider serviceProvider) : ITaskManager, IStoppableTaskManager, IAsyncDisposable
+internal sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider serviceProvider) : ITaskManager, IAsyncDisposable
 {
     private readonly ILogger<TaskManager> logger = loggerFactory.CreateLogger<TaskManager>();
     private readonly CancellationTokenSource _shutdownCancellationTokenSource = new();
@@ -20,17 +20,17 @@ public sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider s
     private TaskStateManager? taskStateManager;
     private Task? _stopTask;
 
-    public async Task StartExecutingRegisteredTasks(CancellationToken token)
+    public async Task StartExecutingRegisteredTasks(CancellationToken cancellationToken = default)
     {
         if (Volatile.Read(ref _disposeRequested) == 1)
             return;
 
         var taskExecutor = serviceProvider.GetRequiredService<ITaskExecutor>();
 
-        var stateManager = GetOrInitializeTaskStateManager(token);
-        var cancellationToken = stateManager.GetCancellationToken();
+        var stateManager = GetOrInitializeTaskStateManager(cancellationToken);
+        var tasksToken = stateManager.GetCancellationToken();
 
-        await stateManager.Gate.WaitAsync(cancellationToken);
+        await stateManager.Gate.WaitAsync(tasksToken);
 
         try
         {
@@ -45,17 +45,17 @@ public sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider s
             // channel cannot be reopened — the restarted reader would drain-and-exit and every later
             // background publish would throw. Restart means: dispose this manager (new shell generation).
             await stateManager.Stop();
-            stateManager.CancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(token);
-            cancellationToken = stateManager.GetCancellationToken();
+            stateManager.CancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            tasksToken = stateManager.GetCancellationToken();
 
             // Step 1: Run startup tasks (with dependency ordering)
-            await RunStartupTasks(serviceProvider, taskExecutor, cancellationToken);
+            await RunStartupTasks(serviceProvider, taskExecutor, tasksToken);
 
             // Step 2: Run background tasks
-            await RunBackgroundTasks(serviceProvider, taskExecutor, stateManager, cancellationToken);
+            await RunBackgroundTasks(serviceProvider, taskExecutor, stateManager, tasksToken);
 
             // Step 3: Start recurring tasks
-            await StartRecurringTasksAsync(serviceProvider, taskExecutor, stateManager, cancellationToken);
+            await StartRecurringTasksAsync(serviceProvider, taskExecutor, stateManager, tasksToken);
         }
         catch (Exception e)
         {
@@ -103,11 +103,8 @@ public sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider s
 
         // First apply OrderAttribute to determine a base order, then perform topological sorting.
         // The topological sort is the final ordering step to ensure dependency constraints are respected.
-        var topologicalSorter = scopedProvider.GetService<ITopologicalTaskSorter>();
-
-        var tasksToExecute = topologicalSorter is not null
-            ? topologicalSorter.Sort(startupTasks)
-            : startupTasks;
+        // The sorter is required: running the tasks unsorted would drop [TaskDependency] ordering without an error.
+        var tasksToExecute = scopedProvider.GetRequiredService<TopologicalTaskSorter>().Sort(startupTasks);
 
         foreach (var task in tasksToExecute)
         {
@@ -118,7 +115,7 @@ public sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider s
     private static Task RunBackgroundTasks(IServiceProvider serviceProvider, ITaskExecutor taskExecutor, TaskStateManager stateManager, CancellationToken cancellationToken)
     {
         var backgroundTasks = serviceProvider.GetServices<IBackgroundTask>();
-        var backgroundTaskStarter = serviceProvider.GetRequiredService<IBackgroundTaskStarter>();
+        var backgroundTaskStarter = serviceProvider.GetRequiredService<TaskExecutor>();
         var tenantCancellationToken = stateManager.CancellationTokenSource?.Token ?? cancellationToken;
 
         foreach (var backgroundTask in backgroundTasks)

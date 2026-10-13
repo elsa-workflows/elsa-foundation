@@ -9,7 +9,7 @@ namespace Elsa.Events.Services;
 /// <paramref name="defaultPublishingStrategy"/> (Sequential by default — synchronous, awaited,
 /// CAN break the caller). Fire-and-forget callers pass the Background strategy explicitly.
 /// </summary>
-public sealed class EventPublisher(
+internal sealed class EventPublisher(
     IServiceProvider serviceProvider,
     IEventPublishingStrategy defaultPublishingStrategy,
     IEventPipeline eventPipeline

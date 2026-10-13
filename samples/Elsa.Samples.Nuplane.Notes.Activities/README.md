@@ -22,7 +22,7 @@ stays on the version it pins until it is moved to the new one.
 
 Drop release 1.1.0 of both packages into a running Workbench's feed. The Workbench installs them, refreshes its feature
 catalog, and switches at the next shell reload: `POST /_admin/shells/reload/{name}`, or by itself when
-`Elsa:Shells:ReloadOnPackageChange` is `true` (see [Hot reload](../../docs/foundation-host-feeds.md#hot-reload-after-a-package-change)).
+`Elsa:Shells:ReloadOnPackageChange` is `true` (see [Hot reload](../../docs/host-feeds/updating-packages.md#hot-reload-after-a-package-change)).
 While the module's `AddTags` migration is pending, a host whose policy is `Validate` refuses that reload, naming the
 pending migration and the `dotnet elsa persistence apply` command that applies it, and its shell keeps serving release
 1.0.0 until a reload after the apply.

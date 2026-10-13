@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />

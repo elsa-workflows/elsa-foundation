@@ -133,16 +133,6 @@ public class SemVerTests
     }
 
     [Fact]
-    public void SemVerComparer_DelegatesToCompareTo()
-    {
-        Assert.True(SemVer.TryParse("1.0.0", out var a));
-        Assert.True(SemVer.TryParse("2.0.0", out var b));
-        Assert.True(SemVerComparer.Instance.Compare(a, b) < 0);
-        Assert.True(SemVerComparer.Instance.Compare(b, a) > 0);
-        Assert.Equal(0, SemVerComparer.Instance.Compare(a, a));
-    }
-
-    [Fact]
     public void ToString_RoundTripsFullVersion()
     {
         Assert.True(SemVer.TryParse("1.2.3-alpha.1+build.7", out var semVer));

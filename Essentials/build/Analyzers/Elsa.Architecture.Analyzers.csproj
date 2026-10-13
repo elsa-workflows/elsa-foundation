@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Compiler-loaded naming rules for the Elsa source tree. The root Directory.Build.props adds this project to every
+    production project as an analyzer (OutputItemType="Analyzer", ReferenceOutputAssembly="false"), so it ships in no
+    package and is never referenced as a library.
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
+  </ItemGroup>
+
+</Project>

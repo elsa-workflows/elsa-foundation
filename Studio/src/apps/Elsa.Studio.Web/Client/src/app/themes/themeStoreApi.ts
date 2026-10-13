@@ -89,7 +89,9 @@ export function normalizeThemeStore(value?: Partial<ThemeStoreResponse> | null):
       ...cloneThemeDefinition(theme),
       enabled: !disabledBuiltIns.has(theme.id.toLowerCase())
     })),
-    ...customThemes.filter(theme => !builtInIds.has(theme.id))
+    // Built-in ids are reserved. A custom or directory theme that reuses one is dropped so
+    // the built-in wins; save/import reject the same clash before it is persisted.
+    ...customThemes.filter(theme => !builtInIds.has(theme.id.toLowerCase()))
   ];
   const defaultThemeId = themes.some(theme => theme.id === value?.defaultThemeId)
     ? value!.defaultThemeId!
@@ -120,6 +122,8 @@ export function validateThemeDefinition(theme: StudioThemeDefinition): ThemeVali
   const issues: ThemeValidationIssue[] = [];
   if (!theme.id || !/^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/.test(theme.id)) {
     issues.push(error("id", "Theme ID must be kebab-case and between 3 and 64 characters."));
+  } else if (theme.source === "custom" && builtInThemeDefinitions.some(builtIn => builtIn.id === theme.id)) {
+    issues.push(error("id", "Theme ID is reserved for a built-in theme."));
   }
 
   if (!theme.name?.trim()) {

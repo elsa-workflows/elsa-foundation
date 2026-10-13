@@ -3,7 +3,7 @@ namespace Elsa.Primitives.Persistence;
 /// <summary>
 /// Represents pagination arguments.
 /// </summary>
-public sealed record PageArgs
+internal sealed record PageArgs
 {
     /// <summary>
     /// Gets pagination arguments that returns all items.

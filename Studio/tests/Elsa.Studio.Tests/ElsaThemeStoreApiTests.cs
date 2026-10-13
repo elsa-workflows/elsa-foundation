@@ -90,6 +90,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     }
 
     [Theory]
+    [InlineData("classic")]
     [InlineData("meridian")]
     [InlineData("drift")]
     [InlineData("schematic")]
@@ -129,6 +130,32 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
         Assert.Equal("\"Instrument Serif\", serif", saved?.Typography?.Display);
         Assert.Equal("0.75rem", saved?.Shape?.RadiusXl);
         Assert.Equal("editorial", saved?.Layout);
+    }
+
+    [Theory]
+    [InlineData("classic")]
+    [InlineData("meridian")]
+    public async Task SavingACustomThemeWithABuiltInIdIsRejected(string themeId)
+    {
+        var theme = CustomTheme() with { Id = themeId };
+        var response = await _client.PutAsJsonAsync($"/_elsa/theme-store/themes/{themeId}", theme);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DirectoryThemeThatReusesABuiltInIdIsDropped()
+    {
+        var theme = CustomTheme() with { Id = "classic", Name = "Not Classic" };
+        var themesFile = Path.Combine(_contentRoot, "clash-themes.json");
+        await File.WriteAllTextAsync(
+            themesFile,
+            JsonSerializer.Serialize(new { themes = new[] { theme } }, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        _themeConfig.ThemesDirectory = themesFile;
+
+        var store = await GetStoreAsync();
+
+        Assert.DoesNotContain(store.Themes, item => item.Id == "classic");
     }
 
     [Theory]

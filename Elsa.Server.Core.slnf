@@ -80,6 +80,7 @@
       "Essentials/tests/Primitives/Hosting/Tests/Elsa.Primitives.Hosting.Tests.csproj",
       "Essentials/tests/Primitives/Tests/Elsa.Primitives.Tests.csproj",
       "Essentials/tests/Serialization/Tests/Elsa.Serialization.Tests.csproj",
+      "Essentials/tests/Tasks/Testing/Elsa.Tasks.Testing.csproj",
       "Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj",
       "Essentials/tests/Testing/Elsa.Testing.csproj",
       "Essentials/tests/Workflows/Design/Api/Tests/Elsa.Workflows.Design.Api.Tests.csproj",

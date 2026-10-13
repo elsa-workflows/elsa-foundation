@@ -20,10 +20,10 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Events` — the c
 - **Kind:** Marker interface — implement to define an event type. Typically a `sealed record`.
 - No registration needed; passed to `IEventPublisher.Publish(...)`.
 
-### `IEventMiddleware` *(Core — `Elsa.Events.Core`)*
-- **Kind:** Contributor (event pipeline middleware). Composes the event dispatch pipeline.
-- **Signature:** `ValueTask InvokeAsync(EventContext context, Func<EventContext, ValueTask> next);`
-- **Register:** via `UseMiddleware<TMiddleware>()` on the event pipeline builder.
+### `IEventMiddleware` *(Core, `Elsa.Events.Core`)*
+- **Kind:** Contributor (event pipeline middleware). Runs in front of handler dispatch.
+- **Signature:** `ValueTask Invoke(IEventContext context)`. The constructor receives the next step, `PipelineDelegate<IEventContext> next`; its other parameters come from the `UseMiddleware` arguments or the service provider.
+- **Register:** `IEventPipeline.Setup(builder => builder.UseMiddleware<TMiddleware>())`, with `UseMiddleware` from `Elsa.Events.Core.Extensions`. `Setup` replaces any earlier composition and always ends the pipeline with the handler invoker, after the supplied middleware, so a setup cannot drop dispatch. Middleware runs in registration order; one that does not call `next` stops the event before any handler sees it.
 
 ---
 
@@ -40,6 +40,6 @@ Defined in `Elsa.Events.Strategies`. Each strategy determines how the published 
 
 ## Cross-references
 
-- Pipeline middleware shape: [`Elsa.Pipelines.Core/EXTENSION_POINTS.md`](../Elsa.Pipelines.Core/EXTENSION_POINTS.md).
-- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- Pipeline middleware shape: [`Pipelines/Core/EXTENSION_POINTS.md`](../../Pipelines/Core/EXTENSION_POINTS.md).
+- Repo-wide index: [`EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.6 + §2.22.1 + §2.24.2.

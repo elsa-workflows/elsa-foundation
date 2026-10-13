@@ -15,7 +15,7 @@ namespace Elsa3.Activities.Design.Import.Services;
 /// <c>EXTENSION_POINTS.md</c>). Each tick visits
 /// every persistence scope the host supplies and deletes at most
 /// <see cref="ReusableActivityImportOptions.ExpiredCollectionSweepBatchSize"/> expired uploads in each. Failure
-/// backoff comes from <see cref="BackoffSweepPumpTask"/>.
+/// backoff comes from <see cref="BackoffSweepWorkerTask"/>.
 /// </summary>
 /// <remarks>
 /// Every node runs it. The delete is idempotent, so two nodes sweeping the same rows need no coordination.
@@ -24,7 +24,7 @@ public sealed class ExpiredImportCollectionSweepTask(
     IPersistenceScopeRunner scopeRunner,
     IOptions<ReusableActivityImportOptions> options,
     TimeProvider timeProvider,
-    ILogger<ExpiredImportCollectionSweepTask> logger) : BackoffSweepPumpTask(logger)
+    ILogger<ExpiredImportCollectionSweepTask> logger) : BackoffSweepWorkerTask(logger)
 {
     private static readonly TimeSpan MinimumMaxBackoffInterval = TimeSpan.FromHours(1);
     private readonly ReusableActivityImportOptions _options = ReusableActivityImportOperationService.ValidateOptions(options.Value);

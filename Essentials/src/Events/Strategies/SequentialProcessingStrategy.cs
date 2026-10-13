@@ -7,7 +7,7 @@ namespace Elsa.Events.Strategies;
 /// before the next starts, and a throwing handler propagates to — and CAN break — the caller.
 /// No exception shielding.
 /// </summary>
-public sealed class SequentialProcessingStrategy : IEventPublishingStrategy
+internal sealed class SequentialProcessingStrategy : IEventPublishingStrategy
 {
     public async Task PublishAsync(IEventStrategyContext context)
     {

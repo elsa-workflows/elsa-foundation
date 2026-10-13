@@ -105,8 +105,8 @@ public sealed class EmbeddedFixtureHostEvidenceTests : IDisposable
         var settings = shell.ServiceProvider.GetRequiredService<ShellSettings>();
         Assert.Equal(selectedIds.OrderBy(id => id, StringComparer.Ordinal),
             settings.EnabledFeatures.OrderBy(id => id, StringComparer.Ordinal));
-        Assert.IsType<DistributedLockProviderAdaptor>(
-            shell.ServiceProvider.GetRequiredService<IDistributedLockProvider>());
+        Assert.Equal(typeof(FileSystemLockingFeature).Assembly,
+            shell.ServiceProvider.GetRequiredService<IDistributedLockProvider>().GetType().Assembly);
 
         await ExerciseRuntimeAsync(shell);
     }

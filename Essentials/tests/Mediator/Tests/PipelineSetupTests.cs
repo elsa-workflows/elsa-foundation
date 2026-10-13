@@ -1,6 +1,7 @@
 using Elsa.Mediator.Commands;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Mediator.Core.Models;
+using Elsa.Mediator.Pipeline;
 using Elsa.Pipelines.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;

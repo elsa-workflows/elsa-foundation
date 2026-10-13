@@ -24,7 +24,7 @@ describe("theme presets", () => {
   });
 
   it("duplicates built-ins into custom draft themes", () => {
-    const copy = createCustomThemeFrom(builtInThemeDefinitions[0], "meridian-copy", "Meridian Copy");
+    const copy = createCustomThemeFrom(builtInThemeDefinitions[0], "classic-copy", "Classic Copy");
 
     expect(copy.source).toBe("custom");
     expect(copy.published).toBe(false);
@@ -63,16 +63,16 @@ describe("theme presets", () => {
   });
 
   it.each(retiredThemeIds)("lands a user whose stored theme is the retired %s on the default theme", themeId => {
-    expect(findSelectableTheme(normalizeThemeStore(), themeId).id).toBe("meridian");
+    expect(findSelectableTheme(normalizeThemeStore(), themeId).id).toBe("classic");
     expect(findSelectableTheme(normalizeThemeStore({ defaultThemeId: "atelier" }), themeId).id).toBe("atelier");
   });
 
   it.each(retiredThemeIds)("falls back to the first built-in when the store default is the retired %s", themeId => {
     const store = normalizeThemeStore({ defaultThemeId: themeId });
 
-    expect(store.defaultThemeId).toBe("meridian");
+    expect(store.defaultThemeId).toBe("classic");
     expect(store.themes.some(theme => theme.id === themeId)).toBe(false);
-    expect(findSelectableTheme(store, null).id).toBe("meridian");
+    expect(findSelectableTheme(store, null).id).toBe("classic");
   });
 
   it("keeps a custom copy of a retired material theme valid, textures and all", () => {
@@ -106,6 +106,23 @@ describe("theme presets", () => {
     expect(requested).toEqual({ url: "/_elsa/theme-store/themes/drift/visibility", body: { enabled: false } });
     expect(store.themes.find(theme => theme.id === "drift")?.enabled).toBe(false);
     expect(store.themes.filter(theme => theme.enabled).length).toBeGreaterThan(0);
+  });
+
+  it("rejects a custom theme whose id is reserved for a built-in, and drops it so the built-in wins", () => {
+    const clash = createCustomThemeFrom(builtInThemeDefinitions[0], "classic", "Not Classic");
+
+    expect(validateThemeDefinition(clash).valid).toBe(false);
+    expect(validateThemeDefinition(clash).issues.some(issue => issue.message.includes("reserved"))).toBe(true);
+
+    const store = normalizeThemeStore({
+      defaultThemeId: "classic",
+      themes: [{ ...clash, published: true, enabled: true }]
+    });
+    const classic = store.themes.filter(theme => theme.id === "classic");
+
+    expect(classic).toHaveLength(1);
+    expect(classic[0].source).toBe("built-in");
+    expect(classic[0].name).toBe("Classic");
   });
 
   it("normalizes store-shaped mutation responses with built-in themes", async () => {

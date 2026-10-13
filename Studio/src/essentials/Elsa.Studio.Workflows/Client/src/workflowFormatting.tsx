@@ -1,6 +1,3 @@
-import { Boxes, GitBranch, Layers3, ListTree, Play, Terminal, Zap } from "lucide-react";
-import type { WorkflowNodeData } from "./workflowAdapter";
-
 /** Shared presentational formatters used across the workflow editor and instance views. */
 
 export function formatDate(value?: string | null) {
@@ -95,23 +92,4 @@ export function formatActivityDefinitionDate(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime()) || date.getFullYear() < 2000) return "—";
   return date.toLocaleDateString();
-}
-
-export function renderActivityIcon(icon: WorkflowNodeData["icon"]) {
-  switch (icon) {
-    case "flowchart":
-      return <GitBranch size={15} />;
-    case "sequence":
-      return <ListTree size={15} />;
-    case "terminal":
-      return <Terminal size={15} />;
-    case "runtime":
-      return <Play size={15} />;
-    case "trigger":
-      return <Zap size={15} />;
-    case "reusable":
-      return <Layers3 size={15} />;
-    default:
-      return <Boxes size={15} />;
-  }
 }

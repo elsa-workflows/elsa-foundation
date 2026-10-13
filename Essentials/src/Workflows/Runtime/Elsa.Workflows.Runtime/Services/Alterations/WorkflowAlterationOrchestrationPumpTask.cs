@@ -11,10 +11,10 @@ namespace Elsa.Workflows.Runtime.Services.Alterations;
 /// <summary>
 /// Tenant-scope-aware recurring activation for durable alteration plans. The coordinator does no in-memory queueing:
 /// every tick re-discovers bounded active-plan pages, so capture and leases safely resume after a process restart.
-/// Failure backoff comes from <see cref="BackoffSweepPumpTask"/>; only a cancellation of the pump's own token
+/// Failure backoff comes from <see cref="BackoffSweepWorkerTask"/>; only a cancellation of the pump's own token
 /// escapes, so a dependency's unrelated timeout feeds the backoff instead of crashing the recurring-task host.
 /// </summary>
-public sealed class WorkflowAlterationOrchestrationPumpTask : BackoffSweepPumpTask
+public sealed class WorkflowAlterationOrchestrationPumpTask : BackoffSweepWorkerTask
 {
     private readonly IPersistenceScopeRunner? _scopeRunner;
     private readonly WorkflowAlterationOrchestrationSweep? _directSweep;

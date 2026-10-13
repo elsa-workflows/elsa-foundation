@@ -1,6 +1,6 @@
 namespace Elsa.Tasks.Schedules.Expressions;
 
-public enum IntervalExpressionType
+internal enum IntervalExpressionType
 {
     Cron,
     Interval

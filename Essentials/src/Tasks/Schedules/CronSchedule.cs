@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Tasks.Schedules;
 
-public sealed class CronSchedule(ISystemClock systemClock, CronExpression expression, ILogger logger) : ITaskSchedule
+internal sealed class CronSchedule(ISystemClock systemClock, CronExpression expression, ILogger logger) : ITaskSchedule
 {
     public IScheduledTaskExecution ScheduleExecution(Func<Task> action)
     {

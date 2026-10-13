@@ -60,12 +60,12 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// retried, are not replayed.
 /// </para>
 /// <para>
-/// <b>Whole-sweep backoff.</b> Comes from <see cref="BackoffSweepPumpTask"/>: a sweep that throws is caught,
+/// <b>Whole-sweep backoff.</b> Comes from <see cref="BackoffSweepWorkerTask"/>: a sweep that throws is caught,
 /// logged, and never rethrown; consecutive failures widen the schedule interval geometrically up to
 /// <see cref="RecurringTriggerPumpOptions.MaxBackoffInterval"/>, and the first clean sweep resets it.
 /// </para>
 /// </remarks>
-public sealed class RecurringTriggerPumpTask : BackoffSweepPumpTask
+public sealed class RecurringTriggerPumpTask : BackoffSweepWorkerTask
 {
     private const string PumpRequestedBy = "runtime.recurring-trigger";
 

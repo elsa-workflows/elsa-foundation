@@ -1,27 +1,65 @@
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { describe, expect, it, vi } from "vitest";
-import { AnonymousAuthProvider, AuthProvider, type AuthProviderManager, type AuthSession } from "@elsa-workflows/studio-sdk";
-import { DashboardPage } from "../DashboardPage";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { AnonymousAuthProvider, AuthProvider, homeWidgetIds, registerHomeWidget, type AuthProviderManager, type AuthSession } from "@elsa-workflows/studio-sdk";
+import { HomePage } from "../HomePage";
 import { DashboardPreferenceStore, reconcileDashboardPreferences } from "../dashboardPreferences";
+import { HomeLayoutStore, reconcileHomeLayout } from "../homeLayout";
 import { register } from "../module";
-import { flush, stubApi, waitUntil, widget } from "./testSupport";
+import { flush, seedHomeLayout, stubApi, waitUntil, widget } from "./testSupport";
 
 describe("dashboard widget contract", () => {
-  it("registers the canonical and legacy Dashboard routes", () => {
+  afterEach(() => {
+    localStorage.clear();
+    vi.unstubAllGlobals();
+  });
+
+  it("keeps unregistered Home widget ids in the saved layout", () => {
+    const result = reconcileHomeLayout({
+      widgets: [
+        { id: "home.recent-runs", size: "full", visible: true },
+        { id: "weather.forecast", size: "medium", visible: true }
+      ]
+    }, [widget({ id: "home.recent-runs", title: "Recent runs", defaultSize: "full", supportedSizes: ["full"] })]);
+    expect(result.widgets.map(entry => entry.id)).toEqual(["home.recent-runs", "weather.forecast"]);
+    expect(result.widgets[1]).toMatchObject({ id: "weather.forecast", size: "medium", visible: true });
+  });
+
+  it("registers Home routes and core widgets through registerHomeWidget", () => {
     const api = stubApi();
     register(api);
     expect(api.navigation.list().map(item => item.path)).toEqual(["/dashboard"]);
+    expect(api.navigation.list().map(item => item.label)).toEqual(["Home"]);
     expect(api.routes.list().map(item => item.path)).toEqual(["/", "/dashboard", "/overview"]);
+    expect(api.homeWidgets.list().map(item => item.id)).toEqual([
+      homeWidgetIds.getStarted,
+      homeWidgetIds.recentWorkflows,
+      homeWidgetIds.needsAttention,
+      homeWidgetIds.recentRuns
+    ]);
+  });
+
+  it("normalizes S/M/L sizes on registerHomeWidget", () => {
+    const api = stubApi();
+    registerHomeWidget(api, {
+      id: "custom.tile",
+      moduleId: "test",
+      title: "Custom",
+      defaultSize: "S",
+      supportedSizes: ["S", "M", "L"],
+      component: () => null
+    });
+    expect(api.homeWidgets.list()[0]).toMatchObject({ defaultSize: "small", supportedSizes: ["small", "medium", "full"] });
   });
 
   it("frames a loader-less contribution and passes default settings to its body", async () => {
     const api = stubApi();
     api.dashboardWidgets.add(widget({ component: ({ settings }) => <span>Body {(settings as { range: string }).range}</span> }));
+    seedHomeLayout(api, ["workflows.runs"]);
     const container = document.createElement("div");
     const root = createRoot(container);
-    flushSync(() => root.render(<AnonymousAuthProvider><DashboardPage api={api} /></AnonymousAuthProvider>));
+    flushSync(() => root.render(<AnonymousAuthProvider><HomePage api={api} /></AnonymousAuthProvider>));
     await flush();
     expect(container.textContent).toContain("Workflow runs");
     expect(container.textContent).toContain("Body 7d");
@@ -36,9 +74,10 @@ describe("dashboard widget contract", () => {
       load: async () => ({ total: 12 }),
       component: ({ snapshot }) => <span>Total {(snapshot as { total?: number } | undefined)?.total}</span>
     }));
+    seedHomeLayout(api, ["workflows.runs"]);
     const container = document.createElement("div");
     const root = createRoot(container);
-    flushSync(() => root.render(<AnonymousAuthProvider><DashboardPage api={api} /></AnonymousAuthProvider>));
+    flushSync(() => root.render(<AnonymousAuthProvider><HomePage api={api} /></AnonymousAuthProvider>));
     await waitUntil(() => container.textContent?.includes("Total 12") === true);
     expect(container.textContent).toContain("Total 12");
     expect(container.querySelector("footer")?.textContent).toContain("stale");
@@ -54,9 +93,10 @@ describe("dashboard widget contract", () => {
       }),
       component: () => <span>Late widget body</span>
     }));
+    seedHomeLayout(api, ["workflows.runs"]);
     const container = document.createElement("div");
     const root = createRoot(container);
-    flushSync(() => root.render(<AnonymousAuthProvider><DashboardPage api={api} /></AnonymousAuthProvider>));
+    flushSync(() => root.render(<AnonymousAuthProvider><HomePage api={api} /></AnonymousAuthProvider>));
 
     await waitUntil(() => container.textContent?.includes("The widget timed out.") === true);
     expect(container.textContent).not.toContain("Late widget body");
@@ -72,9 +112,10 @@ describe("dashboard widget contract", () => {
       emptyState: { title: "No workflow runs", description: "Runs will appear after the first dispatch." },
       component: Body
     }));
+    seedHomeLayout(api, ["workflows.runs"]);
     const container = document.createElement("div");
     const root = createRoot(container);
-    flushSync(() => root.render(<AnonymousAuthProvider><DashboardPage api={api} /></AnonymousAuthProvider>));
+    flushSync(() => root.render(<AnonymousAuthProvider><HomePage api={api} /></AnonymousAuthProvider>));
 
     await waitUntil(() => container.textContent?.includes("No workflow runs") === true);
     expect(container.textContent).toContain("Runs will appear after the first dispatch.");
@@ -87,14 +128,15 @@ describe("dashboard widget contract", () => {
     const api = stubApi();
     const load = vi.fn(async () => ({ total: 12 }));
     api.dashboardWidgets.add(widget({ cacheLifetimeMs: 60_000, load, component: () => null }));
+    seedHomeLayout(api, ["workflows.runs"]);
 
     const firstRoot = createRoot(document.createElement("div"));
-    flushSync(() => firstRoot.render(<AnonymousAuthProvider><DashboardPage api={api} /></AnonymousAuthProvider>));
+    flushSync(() => firstRoot.render(<AnonymousAuthProvider><HomePage api={api} /></AnonymousAuthProvider>));
     await waitUntil(() => load.mock.calls.length === 1);
     flushSync(() => firstRoot.unmount());
 
     const secondRoot = createRoot(document.createElement("div"));
-    flushSync(() => secondRoot.render(<AnonymousAuthProvider><DashboardPage api={api} /></AnonymousAuthProvider>));
+    flushSync(() => secondRoot.render(<AnonymousAuthProvider><HomePage api={api} /></AnonymousAuthProvider>));
     await waitUntil(() => load.mock.calls.length === 2);
     flushSync(() => secondRoot.unmount());
   });
@@ -136,16 +178,15 @@ describe("dashboard widget contract", () => {
       }
     }));
     const stored = {
-      namespace: "dashboard",
+      source: "user" as const,
+      namespace: "home-layout",
       schemaVersion: 1,
       revision: "rev-1",
       value: {
-        refreshIntervalMs: 300_000 as const,
-        autoAddNewWidgets: true,
         widgets: [
-          { id: "workflows.runs", visible: true, size: "wide" as const, settingsSchemaVersion: 1, settings: { range: "7d" } },
-          { id: "secrets.attention", visible: true, size: "wide" as const, settingsSchemaVersion: 1, settings: { secretScope: "production" } },
-          { id: "missing.widget", visible: false, size: "small" as const, settings: { retained: true } }
+          { id: "workflows.runs", visible: true, size: "wide" as const },
+          { id: "secrets.attention", visible: true, size: "wide" as const, options: { secretScope: "production" } },
+          { id: "missing.widget", visible: false, size: "small" as const, options: { retained: true } }
         ]
       }
     };
@@ -157,13 +198,11 @@ describe("dashboard widget contract", () => {
     const manager = authenticatedManager({ permissions: [] });
     const container = document.createElement("div");
     const root = createRoot(container);
-    flushSync(() => root.render(<AuthProvider manager={manager}><DashboardPage api={api} /></AuthProvider>));
+    flushSync(() => root.render(<AuthProvider manager={manager}><HomePage api={api} /></AuthProvider>));
 
-    await waitUntil(() => putJson.mock.calls.length === 1);
-    const saved = putJson.mock.calls[0][1] as { value: typeof stored.value };
-    expect(saved.value.widgets.map(entry => entry.id)).toEqual(["workflows.runs", "missing.widget"]);
-    expect(JSON.stringify(saved)).not.toContain("secrets.attention");
-    expect(JSON.stringify(saved)).not.toContain("production");
+    await waitUntil(() => container.querySelector("article") != null);
+    expect(container.textContent).toContain("Workflow runs");
+    expect(container.textContent).not.toContain("Secrets attention");
     flushSync(() => root.unmount());
   });
 
@@ -223,6 +262,28 @@ describe("dashboard widget contract", () => {
 
     expect((await first.load()).value.refreshIntervalMs).toBe(60_000);
     expect((await second.load()).value.refreshIntervalMs).toBe(300_000);
+    vi.unstubAllGlobals();
+  });
+
+  it("isolates anonymous Home layouts by tenant and host and resets to the builtin default", async () => {
+    const values = new Map<string, string>();
+    vi.stubGlobal("localStorage", { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => { values.delete(key); } });
+    const api = stubApi();
+    const first = new HomeLayoutStore(api, { studioHostId: "studio-a", backendBaseUrl: "backend", subjectId: "anonymous", tenantId: "tenant-a" });
+    const second = new HomeLayoutStore(api, { studioHostId: "studio-a", backendBaseUrl: "backend", subjectId: "anonymous", tenantId: "tenant-b" });
+    const document = { source: "local" as const, namespace: "home-layout", schemaVersion: 1, value: { widgets: [{ id: "home.recent-runs", size: "full" as const, visible: true }] } };
+
+    await first.save(document);
+
+    expect((await first.load()).value.widgets.map(entry => entry.id)).toEqual(["home.recent-runs"]);
+    expect((await second.load()).value.widgets.map(entry => entry.id)).toEqual([
+      "home.get-started",
+      "home.recent-workflows",
+      "home.needs-attention",
+      "home.recent-runs"
+    ]);
+    await first.reset();
+    expect((await first.load()).source).toBe("builtin");
     vi.unstubAllGlobals();
   });
 });

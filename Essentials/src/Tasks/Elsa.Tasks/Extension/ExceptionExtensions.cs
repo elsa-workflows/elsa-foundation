@@ -1,6 +1,6 @@
 namespace Elsa.Tasks.Extension;
 
-public static class ExceptionExtensions
+internal static class ExceptionExtensions
 {
 
     /// <summary>

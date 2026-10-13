@@ -18,7 +18,9 @@ export function register(api: ElsaStudioModuleApi) {
     nav: {
       title: "Secrets",
       path: "/security/secrets",
-      iconColor: "#64748b"
+      iconColor: "#64748b",
+      placement: "more",
+      order: 30
     },
     routes: [
       {

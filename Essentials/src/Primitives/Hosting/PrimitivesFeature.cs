@@ -14,7 +14,7 @@ namespace Elsa.Primitives.Hosting;
     DisplayName = "Primitives",
     Description = "Registers primitive hosting services shared by Elsa foundation features."
 )]
-public sealed class PrimitivesFeature : IShellFeature
+public class PrimitivesFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {
