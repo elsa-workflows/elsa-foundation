@@ -2,26 +2,8 @@
   "schema_version": 1,
   "foundation_source": "0e0c1ff6fa101282cef65e1eabf030b72de32acf",
   "studio_source": "3eef8fa788bfe2ebd4686df0e9a116532c9b0dc9",
-  "scope": "Pinned migration inventory; update deliberately when qualifying a new source baseline. Not a permanent feature backlog.",
+  "scope": "Frozen record of the Foundation/Studio consolidation (#2644, #2656): the projects as they stood when the consolidation landed. Not checked in CI; projects added, merged or renamed afterwards are not tracked here. verify-layout.py checks a checkout against it on demand.",
   "projects": [
-    {
-      "product": "foundation",
-      "source": "Essentials/build/Analyzers/Elsa.Architecture.Analyzers.csproj",
-      "target": "Essentials/build/Analyzers/Elsa.Architecture.Analyzers.csproj",
-      "project_name": "Elsa.Architecture.Analyzers",
-      "package_id": "Elsa.Architecture.Analyzers",
-      "assembly_name": "Elsa.Architecture.Analyzers",
-      "explicit_is_packable": "false"
-    },
-    {
-      "product": "foundation",
-      "source": "Essentials/tests/Architecture/Analyzers/Tests/Elsa.Architecture.Analyzers.Tests.csproj",
-      "target": "Essentials/tests/Architecture/Analyzers/Tests/Elsa.Architecture.Analyzers.Tests.csproj",
-      "project_name": "Elsa.Architecture.Analyzers.Tests",
-      "package_id": "Elsa.Architecture.Analyzers.Tests",
-      "assembly_name": "Elsa.Architecture.Analyzers.Tests",
-      "explicit_is_packable": null
-    },
     {
       "product": "foundation",
       "source": "docs/reports/repros/openapi-collectible-contract-retention/Contract/Contract.csproj",
@@ -1496,15 +1478,6 @@
       "project_name": "ResponseReplayHost",
       "package_id": "ResponseReplayHost",
       "assembly_name": "ResponseReplayHost",
-      "explicit_is_packable": null
-    },
-    {
-      "product": "foundation",
-      "source": null,
-      "target": "Essentials/tests/Activities/Http/CommandCost/Tests/Elsa.Activities.Http.CommandCost.Tests.csproj",
-      "project_name": "Elsa.Activities.Http.CommandCost.Tests",
-      "package_id": "Elsa.Activities.Http.CommandCost.Tests",
-      "assembly_name": "Elsa.Activities.Http.CommandCost.Tests",
       "explicit_is_packable": null
     },
     {
