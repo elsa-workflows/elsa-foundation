@@ -1,9 +1,8 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Events;
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Core.Extensions;
-using Elsa.Events.Services;
-using Elsa.Events.Strategies;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations;
@@ -177,9 +176,8 @@ public sealed class EventPublisherSmokeTests
         var services = new ServiceCollection();
         services.AddOptions();
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
-        services.AddScoped<IEventPublisher, EventPublisher>();
-        services.AddSingleton<IEventPipeline, EventPipeline>();
-        services.AddSingleton<IEventPublishingStrategy>(EventPublishingStrategy.Sequential);
+        // The production publisher, pipeline and default Sequential strategy, as the feature composes them.
+        new EventsFeature().ConfigureServices(services);
 
         configure(services);
 

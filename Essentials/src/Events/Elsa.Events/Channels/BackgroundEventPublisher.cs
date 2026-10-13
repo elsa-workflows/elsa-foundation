@@ -9,7 +9,7 @@ namespace Elsa.Events.Channels;
 /// <summary>
 /// Reads queued event contexts off the <see cref="IEventChannel"/> and dispatches each via
 /// <see cref="IsolatingProcessingStrategy"/>: awaited and in order, like
-/// <see cref="SequentialProcessingStrategy"/>, but with each handler isolated. Single-reader, FIFO
+/// <c>SequentialProcessingStrategy</c>, but with each handler isolated. Single-reader, FIFO
 /// order — enqueue order is preserved at dispatch.
 /// </summary>
 /// <remarks>
@@ -29,7 +29,7 @@ namespace Elsa.Events.Channels;
 /// drains everything already queued and then exits cleanly, instead of dropping in-flight events.
 /// It is invoked by the background-task host before the lifetime token is cancelled.
 /// </remarks>
-public sealed class BackgroundEventPublisher(
+internal sealed class BackgroundEventPublisher(
     IEventChannel channel,
     IServiceScopeFactory scopeFactory,
     ILogger<BackgroundEventPublisher> logger

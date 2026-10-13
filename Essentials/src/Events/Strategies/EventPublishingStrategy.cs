@@ -1,3 +1,5 @@
+using Elsa.Events.Core.Contracts;
+
 namespace Elsa.Events.Strategies;
 
 /// <summary>
@@ -9,8 +11,8 @@ namespace Elsa.Events.Strategies;
 public static class EventPublishingStrategy
 {
     /// <summary>Default. Awaited; handlers run in sequence; a throw CAN break the caller.</summary>
-    public static readonly SequentialProcessingStrategy Sequential = new();
+    public static readonly IEventPublishingStrategy Sequential = new SequentialProcessingStrategy();
 
     /// <summary>Fire-and-forget; the call returns before handlers run; failures are shielded.</summary>
-    public static readonly BackgroundProcessingStrategy Background = new();
+    public static readonly IEventPublishingStrategy Background = new BackgroundProcessingStrategy();
 }

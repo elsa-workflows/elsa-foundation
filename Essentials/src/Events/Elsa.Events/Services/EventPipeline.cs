@@ -7,7 +7,7 @@ using Elsa.Pipelines.Core.Contracts;
 namespace Elsa.Events.Services;
 
 /// <inheritdoc />
-public sealed class EventPipeline(IServiceProvider serviceProvider) : IEventPipeline
+internal sealed class EventPipeline(IServiceProvider serviceProvider) : IEventPipeline
 {
     private volatile PipelineDelegate<IEventContext>? _pipeline;
 
