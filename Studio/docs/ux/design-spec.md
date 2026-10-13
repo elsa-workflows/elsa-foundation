@@ -168,7 +168,8 @@ budget; a rejected chunk load or a throwing glyph keeps the placeholder. Unmappe
 names load on demand and show the category placeholder briefly while the import resolves;
 `asset:` values render as an `<img>` (they cannot follow tone tokens) resolved against the
 Studio host base path; `ext:` values resolve through the public `registerActivityIcons`
-registry in `@elsa-workflows/studio-sdk` (also on `api.workflowDesigner.registerActivityIcons`),
+registry in `@elsa-workflows/studio-sdk` (optionally also on
+`api.workflowDesigner.registerActivityIcons` — callers must guard when the host omits it),
 matching names case-insensitively and re-rendering if the icon is registered after first paint.
 A failed load falls back to the category / type icon and never takes down the palette or canvas.
 CLR activities set the catalog value with `[Activity(Icon = …)]`. The facet is presentation

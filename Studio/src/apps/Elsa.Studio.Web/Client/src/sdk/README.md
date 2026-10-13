@@ -74,7 +74,8 @@ import { SlackIcon } from "./SlackIcon";
 
 export function register(api: ElsaStudioModuleApi) {
   registerActivityIcons({ slack: SlackIcon });
-  // equivalent: api.workflowDesigner.registerActivityIcons({ slack: SlackIcon });
+  // Prefer the standalone export. The host alias is optional:
+  // api.workflowDesigner.registerActivityIcons?.({ slack: SlackIcon });
 }
 ```
 
