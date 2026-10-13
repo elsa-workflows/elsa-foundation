@@ -6,7 +6,7 @@
 
 **Status**: Draft
 
-**Tracking**: ADO 47607
+**Tracking**: ADO 47607, #2707 (prerequisites #2705, #2706)
 
 **Input**: User description: "Elsa 3 workflow definitions (JSON) must convert to Elsa 4 automatically at engine
 start, through the existing reconciliation mechanism, with no HTTP import and no Studio step. We use this to run
@@ -293,7 +293,7 @@ two skipped items, and the rest of the folder is reconciled. Repeat with the str
 
 ## Dependencies
 
-- **Converter completeness is out of scope and tracked as separate prerequisite specs.** Main's converter throws on
+- **Converter completeness is out of scope and tracked as separate prerequisite specs (#2705 Flowchart connections, #2706 type/member map and value-flow lowering).** Main's converter throws on
   Flowchart connections, has no Elsa 3 → Elsa 4 type and member map (parity report §2.8 renames, §4 Flow
   activities), and the collection path skips value-flow lowering. Until those land, most real Elsa 3 workflows,
   and likely most of the JTest suite, are reported as unconvertible by this feature (FR-018). The acceptance
