@@ -4,7 +4,11 @@ using System.Linq.Expressions;
 
 namespace Elsa.Events.Strategies;
 
-public static class EventHandlerHelper
+/// <summary>
+/// Invokes an event handler for the event an <see cref="IEventContext"/> carries, through a compiled delegate cached
+/// per event type. Publishing strategies dispatch each handler through <see cref="Invoke"/>.
+/// </summary>
+public static class EventHandlerInvoker
 {
     // Per-event-type compiled invoker. Rebuilding typeof(IEventHandler<>).MakeGenericType + GetMethod and
     // then dispatching through MethodBase.Invoke on every Publish was avoidable per-call reflection on a
@@ -27,7 +31,7 @@ public static class EventHandlerHelper
     /// <summary>
     /// Returns the cached compiled invoker for <paramref name="eventType"/>, building it once on first use.
     /// </summary>
-    public static Func<IEventHandler, IEvent, CancellationToken, Task> GetInvoker(Type eventType)
+    internal static Func<IEventHandler, IEvent, CancellationToken, Task> GetInvoker(Type eventType)
         => InvokerCache.GetOrAdd(eventType, static t => BuildInvoker(t));
 
     private static Func<IEventHandler, IEvent, CancellationToken, Task> BuildInvoker(Type eventType)
