@@ -156,7 +156,8 @@ the category icon, then `executionType === trigger`. An `icon` / `iconName` that
 known kind and not in the lucide map is ignored so the later steps still run.
 `renderActivityIcon` (in `activityIconView.tsx`) lazy-loads the lucide table from
 `activityIconGlyphs.tsx` so the Workflows entry and landing paths stay inside the bundle
-budget; extensions call `loadActivityIconRegistry` then `registerActivityIconGlyphs`.
+budget; a rejected chunk load keeps the placeholder. Extensions call
+`loadActivityIconRegistry` then `registerActivityIconGlyphs`.
 Palette rows and canvas nodes set `data-tone` from `resolveActivityIconTone` and colour
 through `--wf-activity-*`, which honour the host override `--studio-wf-activity-*` and then
 `--studio-success` / `--studio-accent` / `--studio-warning` / `--studio-danger`.
