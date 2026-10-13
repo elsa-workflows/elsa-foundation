@@ -5,7 +5,11 @@ namespace Elsa.Events.Core.Contracts;
 /// <summary>The composed event dispatch pipeline. One instance per process (singleton).</summary>
 public interface IEventPipeline
 {
-    /// <summary>Replaces the pipeline composition with the supplied setup.</summary>
+    /// <summary>
+    /// Composes the supplied middleware in front of handler dispatch, replacing any earlier composition. The handler
+    /// invoker always ends the pipeline, so a setup cannot drop dispatch; a middleware that does not call its next
+    /// delegate stops the event before any handler sees it.
+    /// </summary>
     PipelineDelegate<IEventContext> Setup(Action<IPipelineBuilder<IEventContext>> setup);
 
     /// <summary>The composed delegate. Lazy-initialised to the default pipeline on first read.</summary>
