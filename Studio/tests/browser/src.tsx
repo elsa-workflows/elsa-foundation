@@ -93,6 +93,8 @@ const activityGraphAuthoringFixture = searchParams.get("mode") === "activity-def
 const activityIconsFixture = searchParams.get("mode") === "activity-icons";
 const navPlacementFixture = searchParams.get("mode") === "nav-placement";
 const navBeforeFixture = searchParams.get("mode") === "nav-before";
+const settingsBeforeFixture = searchParams.get("mode") === "settings-before";
+const settingsFixture = searchParams.get("mode") === "settings";
 const expressionCodeIntelligenceFixture = searchParams.get("mode") === "expression-code-intelligence";
 const expressionToolingUnavailable = searchParams.get("tooling") === "unavailable";
 const expressionFieldCount = Math.max(1, Math.min(50, Number(searchParams.get("fields") ?? 1)));
@@ -1589,7 +1591,7 @@ function browserVersion(
 // `?theme=dark` is the second visual variant the specs cover. The fixture has no ThemeProvider, so it
 // writes Meridian's dark palette onto <html> itself, the way the provider does at runtime.
 const darkVariant = searchParams.get("theme") === "dark";
-if (!navPlacementFixture && !navBeforeFixture) {
+if (!navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture) {
   document.documentElement.dataset.theme = "meridian";
   document.documentElement.dataset.themeLayout = "classic";
   document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
@@ -1613,6 +1615,16 @@ async function renderRequestedFixture() {
   if (navBeforeFixture) {
     const { NavBeforeFixture } = await import("./navBeforeFixture");
     root.render(<NavBeforeFixture />);
+    return;
+  }
+  if (settingsBeforeFixture) {
+    const { SettingsBeforeFixture } = await import("./settingsBeforeFixture");
+    root.render(<SettingsBeforeFixture />);
+    return;
+  }
+  if (settingsFixture) {
+    const { SettingsFixture } = await import("./settingsFixture");
+    root.render(<SettingsFixture />);
     return;
   }
   if (navPlacementFixture) {

@@ -36,7 +36,8 @@ interface ThemeContextType {
   /** The stored mode choice, including `system` (follow the OS). */
   modePreference: ThemeModePreference;
   setTheme: (themeId: string) => void;
-  setMode: (mode: ThemeMode) => void;
+  /** Accepts a concrete mode or `system`. Same implementation as `setModePreference`. */
+  setMode: (mode: ThemeModePreference) => void;
   setModePreference: (preference: ThemeModePreference) => void;
   /** Clears every stored appearance choice so the configured defaults apply again. */
   resetAppearance: () => void;

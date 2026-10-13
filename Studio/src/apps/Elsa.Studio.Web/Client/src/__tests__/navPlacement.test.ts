@@ -50,7 +50,7 @@ describe("navigation placement", () => {
     expect(isNavigationItemAccessible(tasks)).toBe(true);
   });
 
-  it("hides role-gated items from authenticated users without the role, and hides admin and settings without host-control read", () => {
+  it("hides role-gated items from authenticated users without the role, and hides admin without host-control read", () => {
     expect(isNavigationItemAccessible(adminOnly, { authenticated: true, roles: ["designer"], canReadAdmin: true })).toBe(false);
     expect(isNavigationItemAccessible(adminOnly, { authenticated: true, roles: ["administrator"], canReadAdmin: true })).toBe(true);
     expect(isNavigationItemAccessible(adminOnly, { authenticated: false, canReadAdmin: true })).toBe(true);
@@ -102,11 +102,11 @@ describe("navigation placement", () => {
     expect(getChildNavigationItems(allowed, navigation[0]).map(item => item.id)).toEqual(["mod-logs"]);
   });
 
-  it("hides settings placement without host-control read, the same gate as admin", () => {
+  it("keeps settings placement without host-control read; admin stays gated", () => {
     const appearance: StudioNavigationContribution = { id: "appearance", label: "Appearance", path: "/settings/appearance", placement: "settings" };
-    expect(isNavigationItemAccessible(appearance, { canReadAdmin: false })).toBe(false);
+    expect(isNavigationItemAccessible(appearance, { canReadAdmin: false })).toBe(true);
     expect(isNavigationItemAccessible(appearance, { canReadAdmin: true })).toBe(true);
-    expect(isNavigationItemAccessible(appearance, { authenticated: false, canReadAdmin: true })).toBe(true);
+    expect(isNavigationItemAccessible(modules, { canReadAdmin: false })).toBe(false);
   });
 
   it("remembers More tools open/closed through the appearance-style storage helper", () => {

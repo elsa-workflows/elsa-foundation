@@ -21,7 +21,8 @@ export interface NavigationAccess {
   /** Authenticated users are held to role/permission gates; demo/anonymous is not. */
   authenticated?: boolean;
   /**
-   * Host-control read (module-management). `admin` and `settings` are hidden without it.
+   * Host-control read (module-management). `admin` items are hidden without it.
+   * `settings` items (Appearance) stay visible: they are per-browser, not host-control.
    * Anonymous/demo stays allowed: when sign-in is off the session is never authenticated, the
    * server accepts admin calls anonymously, and `useHostControlAccess` therefore reports
    * `canReadModuleManagement: true`. Only an authenticated user is held to the permission.
@@ -107,7 +108,7 @@ export function isNavigationItemAccessible(
   navigation: readonly StudioNavigationContribution[] = []
 ): boolean {
   const placement = resolveNavigationPlacement(item, navigation);
-  if ((placement === "admin" || placement === "settings") && access.canReadAdmin === false) {
+  if (placement === "admin" && access.canReadAdmin === false) {
     return false;
   }
 

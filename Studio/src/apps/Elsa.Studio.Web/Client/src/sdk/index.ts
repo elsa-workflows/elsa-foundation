@@ -216,9 +216,10 @@ export interface StudioNavigationContribution {
   section?: StudioNavigationSection;
   /**
    * Sidebar placement. `main` is the curated Home / Workflows / Runs / Tasks list; `more` is More tools;
-   * `settings` is a settings page (not a sidebar row until the Settings shell lands); `admin` is the
-   * gated Administration group. Unset defaults to `more` at the top level, or to the parent placement
-   * when this item is a child. `admin` and `settings` use the same host-control read gate.
+   * `settings` is a Settings shell section (Appearance; available to every session); `admin` is
+   * Settings › Administration and uses the host-control read gate. Unset defaults to `more` at the
+   * top level, or to the parent placement when this item is a child. The sidebar keeps one Settings
+   * entry.
    */
   placement?: StudioNavigationPlacement;
   /** Hide the item when any listed feature is disabled. The contributing module's own gate still applies. */
