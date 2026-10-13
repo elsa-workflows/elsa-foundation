@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Studio.Preferences.Api.Services;
+using Elsa.Studio.Preferences.Core;
 using Elsa.Studio.Preferences.Core.Exceptions;
 using Xunit;
 
@@ -19,6 +20,19 @@ public sealed class StudioPreferenceScopeResolverTests
         Assert.Equal("user-7", key.SubjectId);
         Assert.Equal("tenant-3", key.TenantId);
         Assert.Equal("studio-primary", key.StudioHostId);
+    }
+
+    [Fact]
+    public async Task DefaultScopeUsesTheReservedAdminSubject()
+    {
+        var resolver = new StudioPreferenceScopeResolver(new SessionService(new(
+            "authenticated", "user-7", "Ada", "tenant-3", new HashSet<string>(), new HashSet<string>(), "fresh", "test")));
+
+        var key = await resolver.ResolveDefaultAsync(new ClaimsPrincipal(), "studio-primary", StudioPreferenceNamespaces.HomeLayout);
+
+        Assert.Equal(StudioHomeLayout.DefaultSubjectId, key.SubjectId);
+        Assert.Equal("tenant-3", key.TenantId);
+        Assert.Equal("home-layout", key.Namespace);
     }
 
     [Theory]

@@ -206,6 +206,8 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
                 "write" => [StudioPreferencesPermissions.Write],
                 "wildcard" => [PermissionKey.Wildcard],
                 "resource-denied" => [StudioPreferencesPermissions.Read, StudioPreferencesPermissions.Write],
+                "host-read" => [StudioHomeLayoutApi.HostControlRead],
+                "host-manage" => [StudioHomeLayoutApi.HostControlManage],
                 _ => Array.Empty<string>()
             };
             var claims = new List<Claim>

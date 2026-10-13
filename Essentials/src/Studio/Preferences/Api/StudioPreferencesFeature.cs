@@ -20,6 +20,7 @@ public sealed class StudioPreferencesFeature : IShellFeature
     {
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IStudioPreferenceNamespace, DashboardPreferenceNamespace>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IStudioPreferenceNamespace, AttentionPreferenceNamespace>());
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStudioPreferenceNamespace, HomeLayoutPreferenceNamespace>());
         services.TryAddSingleton<IStudioPreferenceNamespaceRegistry, StudioPreferenceNamespaceRegistry>();
         services.TryAddSingleton<IStudioPreferenceStore, InMemoryStudioPreferenceStore>();
         services.TryAddSingleton(TimeProvider.System);

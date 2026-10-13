@@ -35,7 +35,7 @@ import type {
   StudioNavigationSection,
   StudioPanelContribution
 } from "../sdk";
-import { requestStudioNavigation } from "../sdk";
+import { isHomeRunDetailPath, recordHomeRunDetailOpened, requestStudioNavigation } from "../sdk";
 import { createStudioRegistry, findFeatureAreaForPath } from "./registry";
 import type { AuthProviderManager } from "../sdk";
 import { getStudioRuntimeConfig, getStudioRuntimeSettings } from "./runtime";
@@ -187,6 +187,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
       acceptedPathRef.current = nextPath;
       acceptedLocationRef.current = nextLocation;
       setPath(nextPath);
+      if (isHomeRunDetailPath(nextPath)) recordHomeRunDetailOpened();
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -198,6 +199,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
     acceptedPathRef.current = normalizePath(window.location.pathname);
     acceptedLocationRef.current = currentRelativeLocation();
     setPath(acceptedPathRef.current);
+    if (isHomeRunDetailPath(acceptedPathRef.current)) recordHomeRunDetailOpened();
     window.dispatchEvent(new PopStateEvent("popstate"));
   }, []);
 
@@ -288,6 +290,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         // (through the same authenticated shell context) by useStudioManifest; here we only turn it into
         // a loaded registry.
         const backendContext = createStudioEndpointContext(backendBaseUrl, authManager);
+        const enabledFeatures = [...new Set((manifest.modules ?? []).flatMap(module => [module.id, ...(module.capabilities ?? [])]))];
         const registry = createStudioRegistry({
           hostVersion: manifest.hostVersion,
           sdkVersion: manifest.sdkVersion,
@@ -298,7 +301,10 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
         }, {
           backendBaseUrl,
           backendHttp: backendContext.http,
-          runtime: getStudioRuntimeSettings(runtimeConfig, authManager?.getSession())
+          runtime: {
+            ...getStudioRuntimeSettings(runtimeConfig, authManager?.getSession()),
+            enabledFeatures
+          }
         });
         registerBuiltInSettingEditors(registry);
 

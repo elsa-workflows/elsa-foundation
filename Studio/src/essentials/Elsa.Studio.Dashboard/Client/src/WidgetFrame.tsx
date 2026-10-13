@@ -1,10 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, EyeOff, RefreshCw, Settings } from "lucide-react";
-import { selectSettingEditor } from "@elsa-workflows/studio-ui";
-import type { ElsaStudioModuleApi, StudioDashboardWidgetContribution, StudioDashboardWidgetSize } from "@elsa-workflows/studio-sdk";
+import { OverflowMenu, selectSettingEditor } from "@elsa-workflows/studio-ui";
+import { normalizeHomeWidgetSize, type ElsaStudioModuleApi, type StudioDashboardWidgetContribution, type StudioDashboardWidgetSize } from "@elsa-workflows/studio-sdk";
 import { useDashboardWidget } from "./useDashboardWidgets";
 
-export function WidgetFrame({ api, widget, size, settings, refreshIntervalMs, globalRefreshVersion, active, cacheScopeKey, pinned, onMove, onHide, onSize, onSettings }: {
+const sizeLabels: Record<StudioDashboardWidgetSize, string> = {
+  small: "S",
+  medium: "M",
+  wide: "Wide",
+  full: "L"
+};
+
+export function WidgetFrame({ api, widget, size, settings, refreshIntervalMs, globalRefreshVersion, active, cacheScopeKey, pinned, editing, onMove, onHide, onSize, onSettings, onSnapshot }: {
   api: ElsaStudioModuleApi;
   widget: StudioDashboardWidgetContribution;
   size: StudioDashboardWidgetSize;
@@ -14,16 +21,19 @@ export function WidgetFrame({ api, widget, size, settings, refreshIntervalMs, gl
   active: boolean;
   cacheScopeKey: string;
   pinned: boolean;
+  editing: boolean;
   onMove(delta: -1 | 1): void;
   onHide(): void;
   onSize(size: StudioDashboardWidgetSize): void;
   onSettings(value: unknown): void;
+  onSnapshot?(snapshot: unknown): void;
 }) {
   const runtime = useDashboardWidget(widget, settings, refreshIntervalMs, api.runtime.dashboard?.widgetTimeoutMs ?? 10_000, cacheScopeKey, active);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [bodyResetVersion, setBodyResetVersion] = useState(0);
   useEffect(() => { if (globalRefreshVersion > 0) void runtime.refresh(); }, [globalRefreshVersion]); // eslint-disable-line react-hooks/exhaustive-deps
   const snapshot = runtime.state.status === "ready" || runtime.state.status === "refreshing" ? runtime.state.snapshot : undefined;
+  useEffect(() => { if (snapshot !== undefined) onSnapshot?.(snapshot); }, [onSnapshot, snapshot]);
   const bodyResetKey = React.useMemo(
     () => ({ widget, cacheScopeKey, settings, size, updatedAt: "updatedAt" in runtime.state ? runtime.state.updatedAt : undefined, bodyResetVersion }),
     [bodyResetVersion, cacheScopeKey, runtime.state, settings, size, widget]
@@ -36,26 +46,52 @@ export function WidgetFrame({ api, widget, size, settings, refreshIntervalMs, gl
     runtime.state.status === "ready" ||
     runtime.state.status === "refreshing" ||
     (runtime.state.status === "idle" && !widget.load);
-  return <article className="dashboard-widget" data-size={size} aria-labelledby={`${widget.id}-title`} aria-busy={runtime.state.status === "loading" || runtime.state.status === "refreshing"}>
+
+  return <article className="dashboard-widget" data-size={size} data-editing={editing ? "true" : undefined} aria-labelledby={`${widget.id}-title`} aria-busy={runtime.state.status === "loading" || runtime.state.status === "refreshing"}>
     <header className="dashboard-widget-header">
-      <div><h3 id={`${widget.id}-title`}>{widget.title}{pinned ? <span className="dashboard-widget-pinned">Pinned</span> : null}</h3>{widget.description ? <p>{widget.description}</p> : null}</div>
-      <div className="dashboard-widget-actions" aria-label={`${widget.title} controls`}>
-        <button type="button" onClick={() => onMove(-1)} aria-label={`Move ${widget.title} earlier`}><ChevronLeft size={15} /></button>
-        <button type="button" onClick={() => onMove(1)} aria-label={`Move ${widget.title} later`}><ChevronRight size={15} /></button>
-        <select aria-label={`Size of ${widget.title}`} value={size} onChange={event => onSize(event.target.value as StudioDashboardWidgetSize)}>
-          {widget.supportedSizes.map(option => <option key={option} value={option}>{option}</option>)}
-        </select>
-        {widget.settings ? <button type="button" onClick={() => setSettingsOpen(true)} aria-label={`Settings for ${widget.title}`}><Settings size={15} /></button> : null}
-        {widget.load ? <button type="button" onClick={() => void runtime.refresh()} aria-label={`Refresh ${widget.title}`}><RefreshCw size={15} /></button> : null}
-        {!pinned ? <button type="button" onClick={onHide} aria-label={`Hide ${widget.title}`}><EyeOff size={15} /></button> : null}
+      <div>
+        <h3 id={`${widget.id}-title`}>
+          {editing ? <span className="home-widget-handle" aria-hidden="true">⠿</span> : null}
+          {widget.title}
+          {pinned ? <span className="dashboard-widget-pinned">Pinned</span> : null}
+        </h3>
+        {widget.description ? <p>{widget.description}</p> : null}
       </div>
+      {editing ? (
+        <div className="dashboard-widget-actions" aria-label={`${widget.title} controls`}>
+          <button type="button" onClick={() => onMove(-1)} aria-label={`Move ${widget.title} earlier`}><ChevronLeft size={15} /></button>
+          <button type="button" onClick={() => onMove(1)} aria-label={`Move ${widget.title} later`}><ChevronRight size={15} /></button>
+          <select aria-label={`Size of ${widget.title}`} value={size} onChange={event => onSize(normalizeHomeWidgetSize(event.target.value))}>
+            {widget.supportedSizes.map(option => <option key={option} value={option}>{sizeLabels[option] ?? option}</option>)}
+          </select>
+          {widget.settings ? <button type="button" onClick={() => setSettingsOpen(true)} aria-label={`Settings for ${widget.title}`}><Settings size={15} /></button> : null}
+          {widget.load ? <button type="button" onClick={() => void runtime.refresh()} aria-label={`Refresh ${widget.title}`}><RefreshCw size={15} /></button> : null}
+          {!pinned ? <button type="button" onClick={onHide} aria-label={widget.id === "home.get-started" ? `Dismiss ${widget.title}` : `Hide ${widget.title}`}><EyeOff size={15} /></button> : null}
+        </div>
+      ) : (
+        <OverflowMenu
+          ariaLabel={`${widget.title} actions`}
+          items={[
+            ...(widget.load ? [{ id: "refresh", label: "Refresh", onSelect: () => { void runtime.refresh(); } }] : []),
+            ...(widget.settings ? [{ id: "options", label: "Options…", onSelect: () => setSettingsOpen(true) }] : []),
+            ...widget.supportedSizes.map(option => ({
+              id: `size-${option}`,
+              label: `Size ${sizeLabels[option] ?? option}`,
+              onSelect: () => onSize(option)
+            })),
+            ...(!pinned ? [{ id: "remove", label: widget.id === "home.get-started" ? "Dismiss" : "Remove", destructive: true, onSelect: onHide }] : [])
+          ]}
+        />
+      )}
     </header>
     <div className="dashboard-widget-body">
       {runtime.state.status === "loading" ? <div role="status">Loading…</div> : null}
       {runtime.state.status === "error" || runtime.state.status === "timedOut" ? <div role="alert">{runtime.state.error} <button type="button" onClick={() => void runtime.refresh()}>Retry</button></div> : null}
       {bodyVisible ? (
         <WidgetBodyBoundary title={widget.title} resetKey={bodyResetKey} onRetry={retryBody}>
-          <DashboardWidgetBody widget={widget} snapshot={snapshot} settings={settings} size={size} />
+          <React.Suspense fallback={<div role="status">Loading…</div>}>
+            <DashboardWidgetBody widget={widget} snapshot={snapshot} settings={settings} size={size} />
+          </React.Suspense>
         </WidgetBodyBoundary>
       ) : null}
     </div>
