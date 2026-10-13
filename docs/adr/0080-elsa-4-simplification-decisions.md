@@ -102,10 +102,11 @@ activity" holds and the per-checkpoint drain is gone. `Ephemeral` keeps the atte
 that is not ReplaySafe (ADR 0032). The target of under 40 EF commands for ten WriteLine activities under `Balanced`
 moved to epic [#2564](https://github.com/elsa-workflows/elsa-foundation/issues/2564); the budgets in CI hold the
 measured counts. Not a decision, but a description of the result: as implemented, `Ephemeral` commits at more points
-than the table's row lists. Besides a suspension, a fault and completion, it commits that attempt claim before an
-activity that is not ReplaySafe, a child workflow dispatch, and the end of a pass that does not complete the run.
+than the table's row lists. Besides a suspension, a fault and completion, it commits a cancellation, a recorded or
+resolved incident and an alteration (as every mode does), that attempt claim before an activity that is not ReplaySafe,
+a child workflow dispatch, and the end of a pass that does not complete the run.
 "No trace" therefore applies only to a run that completes in one pass with none of those earlier commits: all its
-activities are ReplaySafe and it dispatches no child.
+activities are ReplaySafe, it dispatches no child, and it is not cancelled, altered or given an incident.
 
 ### D3 — Internal by default
 

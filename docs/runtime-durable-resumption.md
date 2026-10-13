@@ -382,7 +382,7 @@ instead of degrading to per-checkpoint persistence. The cap bounds both replay c
 Continuation outbox items persisted durably by a cap flush keep delivering from the overlay for the next segment; the
 session writes their overlay outcome back to the durable outbox store at the next flush, so no durable `Pending`
 residue survives the drain to be redelivered by a later sweep. Ephemeral has no cap: a long pass that meets none of its
-commit points (a suspension, fault or cancellation, a child dispatch, an activity that is not safe to repeat, the end of
+commit points (a suspension, fault or cancellation, an incident or alteration, a child dispatch, an activity that is not safe to repeat, the end of
 the pass) holds its working set in memory.
 
 **The crash-replay window and at-least-once semantics.** A crash mid-segment loses the buffered-but-unflushed
