@@ -20,6 +20,12 @@ public sealed class PersistenceModeCompositionTests
 {
     private readonly IServiceCollection _services = new ServiceCollection().AddWorkflowRuntime();
 
+    [Fact]
+    public void The_resolver_contract_declares_single_implementation_replacement_semantics()
+    {
+        Assert.True(typeof(IRuntimePersistenceModeResolver).IsDefined(typeof(RuntimePersistenceModeResolverReplacementContractAttribute), inherit: false));
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
