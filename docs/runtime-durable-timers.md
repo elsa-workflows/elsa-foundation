@@ -1,91 +1,82 @@
-# Durable timers and the `Delay` activity (E3-2)
+# Durable timers and the `Delay` activity
 
-> **Audience:** engineers and architects working in `elsa-foundation`.
-> **Purpose:** document how a workflow suspends on a relative delay and resumes durably after a
-> process restart — the worked reference behind roadmap unit **W8** of the Elsa 4 review-remediation
-> program (finding **E3-2**).
-> **Knowledge role:** worked reference. Canonical short definitions live in
-> [`docs/glossary/elsa.md`](glossary/elsa.md); the extension-point contracts live in
-> [`Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
-> **See also:** [`docs/runtime-durable-resumption.md`](runtime-durable-resumption.md) — the durable
-> resumption spine (W2) this unit piggybacks on; and
-> [`docs/bookmark-expiration.md`](bookmark-expiration.md) — the bookmark admissibility cutoff,
-> non-timeout semantics, and worked use cases.
+**Who this is for:** contributors who want to know how a workflow waits for a period of time and still wakes up on schedule after the server restarts.
 
 ## The problem
 
-A `Delay(5s)` must suspend the workflow, survive a process restart, and resume on schedule. "Survive a
-restart" is the hard part: an in-memory timer dies with the process. Durable timers add a persisted,
-due-time-indexed record plus a hosted pump that fires due timers through the **existing** resume path.
+A `Delay` of 5 seconds must suspend the workflow, survive a process restart, and resume on time. Surviving the restart is the hard part: an in-memory timer dies with the process.
+
+Durable timers solve it with a **saved timer record**, indexed by due time, plus a **background pump** that fires due timers through the **normal** bookmark-resume path. Nothing about resuming is special to timers.
+
+> *Good to know:* `Delay` survives a restart **only** in a shell with a durable timer store (EF Core). With the in-memory default it still suspends and resumes within one process, but a restart loses the timer.
 
 ## The three pieces
 
-1. **Durable timer store** (`IDurableTimerStore`, document kind `durableTimer`). Persists a
-   `DurableTimer { TimerId, WorkflowExecutionId, StimulusType, StimulusHash, DueTime, CreatedAt, … }`
-   keyed by `(WorkflowExecutionId, TimerId)`. `EfDurableTimerStore` is the durable bridge
-   (`AddRuntimeEntityFrameworkCore`); `InMemoryDurableTimerStore` is the non-durable default. Routes
-   through the runtime document serializer + `ElsaRuntimeDocumentVersions` with a v1 golden
-   fixture, following the `schedulerWorkItem` pattern (W3).
+| Piece | What it does |
+|---|---|
+| **Timer store** | Saves each timer: which run it belongs to, the stimulus it will send, its due time and when it was created. Keyed by run and timer id. In memory by default; a database store when EF Core runtime persistence is on. |
+| **Timer pump** | A recurring background task. Each tick it takes a bounded batch of due timers, fires each as a bookmark resume through the same single-writer mailbox path every other resume uses, and backs off (per sweep and per timer) on failure. It never throws out of a tick. It is modelled on the [resumption pump](runtime-durable-resumption.md). |
+| **`Delay` activity** | Schedules a timer, then suspends with a matching bookmark registration. |
 
-2. **Hosted timer pump** (`DurableTimerPumpTask : IRecurringTask`, `Elsa.Workflows.Runtime.Scheduling`).
-   Modeled on `RuntimeResumptionPumpTask`: one bounded sweep per tick (`MaxTimersPerTick`), geometric
-   whole-sweep and per-timer backoff, never throws out of a tick. Each due timer is fired as a bookmark
-   resume through `IBookmarkResumeDispatcher` — the same single-writer mailbox path every other resume
-   uses (W5).
+The real `Delay.ExecuteAsync`, trimmed:
 
-3. **`Delay` activity** (`Elsa.Activities.Scheduling`). Writes the timer, then creates a matching
-   bookmark, then suspends.
+```csharp
+var now = timeProvider.GetUtcNow();
+var dueTime = Duration <= TimeSpan.Zero ? now : now + Duration;
+var timerId = $"timer:{context.InvocationId}";
 
-## The suspend/resume cycle
+await scheduler.ScheduleAsync(new DurableTimer(
+    TimerId: timerId,
+    WorkflowExecutionId: context.WorkflowExecutionId,
+    StimulusType: DurableTimerConstants.TimerStimulusType,
+    StimulusHash: timerId,
+    DueTime: dueTime,
+    CreatedAt: now, ...), ct);
 
-```
-Delay.ExecuteAsync                  DurableTimerPumpTask (per tick)         resume spine
-------------------                  -------------------------------        ------------
-dueTime = clock.now + Duration
-write DurableTimer  ───────────►    (persisted, survives restart)
-CreateBookmark(ExpiresAt = null)    ───────────►  (persisted bookmark)
-suspend
-                                    ListDueAsync(now) → due timer
-                                    DispatchAsync(ResumeBookmark) ──────►  agent mailbox
-                                                                           ProcessAsync enqueues
-                                                                           work durably, then drains
-                                    on Dispatched/Duplicate → delete timer
+return Suspend(new DelayState(timerId), [registration]); // the runtime saves the bookmark
 ```
 
-## Three correctness cruxes
+## How a delay suspends and resumes
 
-### 1. Delete-on-`Dispatched` is safe
+```mermaid
+sequenceDiagram
+    participant D as Delay activity
+    participant T as Timer store
+    participant B as Bookmark store
+    participant P as Timer pump
+    participant M as Run's mailbox
+    D->>T: save timer (due = now + Duration)
+    D->>B: suspend; runtime saves bookmark (no expiry)
+    Note over T,B: both survive a restart
+    loop every tick
+        P->>T: list due timers
+        P->>M: resume bookmark (key "timer:{TimerId}")
+        M-->>P: Dispatched / Duplicate
+        P->>T: delete timer
+    end
+    M->>M: queue resume work durably, then drain
+```
 
-The pump deletes a timer as soon as the dispatcher returns `Dispatched`. That is only safe because the
-resume is **durably enqueued before the dispatcher returns**:
-`WorkflowSchedulerCommandRouter.ProcessAsync` calls `_schedulerWorkQueue.EnqueueAsync(workItem)`
-(durable when EF Core-backed) **before** the drain and before the agent returns `Accepted`. So if the
-process crashes after the timer delete but before the resume commits, W2's resumption sweep
-(`IRuntimeResumptionService.SweepAsync`) discovers the durable backlog
-(`ListClaimableWorkflowExecutionIdsAsync`) and re-drives the workflow to completion. The timer being gone
-is harmless — it already did its one job.
-*Covered by `DurableTimerRestartCrashTests.DeleteOnDispatched_IsSafe_ResumeSurvivesCrashBeforeDrain_AndConverges`.*
+## Why it is correct
 
-### 2. The bookmark does not own the deadline
+### 1. Deleting the timer once the resume is accepted is safe
 
-The bookmark is created with `ExpiresAt = null`. The **timer** owns the deadline. Setting
-`ExpiresAt = dueTime` would make the bookmark unmatchable exactly at fire time — the stimulus lookup
-filters out bookmarks whose expiry is at/behind the evaluation instant — producing `NotFound` forever
-and a permanent hang. See [bookmark expiration](bookmark-expiration.md) for the general contract and
-examples of finite expiration.
+The pump deletes a timer as soon as the dispatcher answers *Dispatched* (or *Duplicate*). That is safe because the resume is **already saved in the queue** before the dispatcher answers: the scheduler's command router queues the work item (durably, with EF Core) before the drain runs and before the mailbox answers *Accepted*.
 
-### 3. Idempotency under at-least-once delivery
+So if the process crashes after the timer is deleted but before the resume commits, the resumption sweep finds the queued work and finishes the run. The deleted timer has already done its one job.
 
-The pump fires with `idempotencyKey = "timer:{TimerId}"`. A duplicate/late fire finds the single-use
-bookmark already consumed and returns `NotFound`; past the `NotFoundGrace` window the pump deletes the
-timer. Within grace, `NotFound` is treated as "a very short delay is still committing its bookmark" and
-retried. So a duplicate fire can never double-resume.
-*Covered by `DurableTimerRestartCrashTests.TimerFire_IsIdempotent_UnderAtLeastOnceDuplicateDelivery`.*
+### 2. The timer owns the deadline, not the bookmark
 
-## Durability caveat
+The bookmark is saved with **no expiry**. If it expired at the due time, it would stop matching at exactly the moment the timer fires (the stimulus lookup filters out bookmarks whose expiry is at or before the evaluation instant). The result would be *NotFound* for ever, and the workflow would hang. See [bookmark expiration](bookmark-expiration.md) for the general rule and examples of finite expiry.
 
-`Delay` is restart-durable **only** in a shell with a durable timer store (EF Core). With the
-in-memory default store it still suspends and resumes within the process but does not survive a restart.
+### 3. Firing twice cannot resume twice
+
+Timers are delivered at least once. The pump fires with the idempotency key `timer:{TimerId}`. A duplicate or late fire finds the single-use bookmark already used and gets *NotFound*:
+
+- **within** the grace window (`NotFoundGrace`), *NotFound* is treated as "a very short delay is still saving its bookmark", and the fire is retried;
+- **after** it, the pump deletes the timer.
+
+So a duplicate fire can never resume the workflow twice.
 
 ## Timer and Cron start triggers: at least once per occurrence
 
@@ -148,17 +139,40 @@ another node, started again. So during a rolling deploy an occurrence that falls
 new node and start twice, and an old node that crashes mid-fire still loses its occurrence. Roll every node
 that runs the recurring-trigger pump before relying on the guarantee, or stop the pump on old nodes first.
 
-## Follow-ups (not in this wave)
+## Known limits
 
-- **Timer/Cron start triggers** (schedules that *start* a workflow) shipped through their own recurring
-  schedule store and pump rather than a `start-trigger` variant of the `durableTimer` kind; see
-  [Timer and Cron start triggers](#timer-and-cron-start-triggers-at-least-once-per-occurrence).
 - **Native due-time range index.** Without a range index on `DueTime`, `ListDueAsync` loads the whole
   timer partition each tick and filters `DueTime` in memory. `MaxTimersPerTick` bounds the dispatch
   burst, not the load. A native range index is the scale follow-up.
-- **Atomic timer registration (Option B).** Registering the timer via a post-commit
+- **Atomic timer registration.** Registering the timer via a post-commit
   `RegisterDurableTimer` intent would make the timer==bookmark lifecycle fully atomic, at the cost of
   editing the core create-bookmark handler and the single-implementation post-commit intent dispatcher.
 - **Node-scoped resume targets.** The executable compiler keys `ResumeTargets` by the `[ResumeTarget]`
-  attribute ID, so only one instance of a given resume-target activity is supported per workflow this
-  wave. Node-scoped IDs (keyed by node + attribute) would lift the single-`Delay`-per-workflow limit.
+  attribute ID, so only one instance of a given resume-target activity is supported per workflow. Node-scoped IDs (keyed by node + attribute) would lift the single-`Delay`-per-workflow limit.
+
+## How this is tested
+
+| Claim | Test |
+|---|---|
+| Deleting on *Dispatched* is safe | `DurableTimerRestartCrashTests.DeleteOnDispatched_IsSafe_ResumeSurvivesCrashBeforeDrain_AndConverges` |
+| A duplicate fire is harmless | `DurableTimerRestartCrashTests.TimerFire_IsIdempotent_UnderAtLeastOnceDuplicateDelivery` |
+
+## Where this lives in the code
+
+| Role | Types | Location |
+|---|---|---|
+| `Delay` activity | `Delay`, `DelayState`, `DurableTimerElapsed` | `Essentials/src/Activities/Scheduling/Activities/Delay.cs` (package `Elsa.Activities.Scheduling`) |
+| Scheduling a timer | `IDurableTimerScheduler.ScheduleAsync` | `Essentials/src/Workflows/Runtime/Core/Contracts/` |
+| Timer record | `DurableTimer { TimerId, WorkflowExecutionId, StimulusType, StimulusHash, DueTime, CreatedAt, … }`, keyed by `(WorkflowExecutionId, TimerId)` | `Essentials/src/Workflows/Runtime/Core/Models/` |
+| Timer store | `IDurableTimerStore` (`ListDueAsync`, `DeleteAsync`); `InMemoryDurableTimerStore` (default); `EfDurableTimerStore` (registered by `AddRuntimeEntityFrameworkCore`) | `Essentials/src/Workflows/Runtime/` |
+| Timer pump | `DurableTimerPumpTask : IRecurringTask` with `MaxTimersPerTick`, `NotFoundGrace`; feature in `Elsa.Workflows.Runtime.Scheduling` | `Essentials/src/Workflows/Runtime/Scheduling/DurableTimerPumpTask.cs`, `WorkflowsRuntimeSchedulingFeature.cs` |
+| Resume path | `IBookmarkResumeDispatcher.DispatchAsync(ResumeBookmark)`; `WorkflowSchedulerCommandRouter.ProcessAsync` queues via `EnqueueAsync(workItem)` before draining | `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/` |
+| Crash recovery | `IRuntimeResumptionService.SweepAsync`, `ListClaimableWorkflowExecutionIdsAsync` | see [durable resumption](runtime-durable-resumption.md) |
+| Recurring start triggers | `IRecurringTriggerScheduleStore`, `RecurringTriggerPumpTask`, feature `WorkflowsRuntimeRecurringTriggers` | `Essentials/src/Workflows/Runtime/Scheduling/` |
+| Tests | `DurableTimerRestartCrashTests` | `Essentials/tests/Activities/Scheduling/Tests/DurableTimerRestartCrashTests.cs` |
+
+Related: [Elsa glossary](glossary/elsa.md) · [Runtime extension points](../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) · [Recovering after a crash](runtime-durable-resumption.md) · [Bookmark expiration](bookmark-expiration.md)
+
+## Background
+
+This page was the worked reference for roadmap unit **W8** of the Elsa 4 review-remediation programme (finding **E3-2**). It builds on the durable resumption spine (**W2**) and the single-writer mailbox (**W5**). An earlier version said the timer store routed through "the runtime document serializer + `ElsaRuntimeDocumentVersions` with a v1 golden fixture, following the `schedulerWorkItem` pattern (W3)"; that type no longer exists on `main`, and runtime state now evolves through EF Core migrations and schema families (see [serialization](serialization.md)). Timer/Cron *start* triggers shipped with their own recurring schedule store and pump, not as a `start-trigger` variant of the timer record. "Atomic timer registration" was tracked as *Option B*.
