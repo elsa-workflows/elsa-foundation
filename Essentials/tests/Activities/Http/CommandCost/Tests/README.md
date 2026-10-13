@@ -54,9 +54,22 @@ how it was found:
 | `stitched` | A store method resumed after real I/O, so its stack holds the store but not the store's caller. The stack is completed with the latest whole stack of the same asynchronous flow that ran through the same store frame, normally the store's own earlier command or the opening of its connection. `<~` in the frames marks the seam. |
 | `none` | No caller was found. The run fails if any command ends up here. |
 
-Each measured call, each request of the measured host and each engine span starts a flow's memory of whole stacks. On
-the runs measured in October 2026, every PostgreSQL statement was attributed to the same caller as the matching SQLite
-statement.
+Each measured call, each request of the measured host and each engine span starts a flow's memory of whole stacks.
+
+Callers are read from stack frames, so they depend on what the JIT inlined. With tiered compilation a method is
+inlined only once it is hot, so the provider measured second in a process lost frames the first kept. The project
+therefore turns tiered compilation off (`<TieredCompilation>false</TieredCompilation>`, in its own runtimeconfig only):
+every method is compiled once, fully optimized, and a frame is inlined in every run or in none. What was checked, on
+the runs of 13 October 2026:
+
+- Both providers in one process, in Debug and twice in Release: every PostgreSQL statement has the same caller as the
+  matching SQLite statement (4888 statements, 0 mismatches), and the two Release runs are identical.
+- SQLite alone in a fresh Release process gives the same statements, callers and locations as SQLite in the combined
+  run.
+- Debug and Release attribute differently, because a Debug build of Elsa is not optimized and inlines nothing. A
+  Release build consistently inlines `RuntimeExecutionOwnershipService.FindVersionedOwnershipStateAsync` into
+  `AcquireAsync`, `ReleaseAsync` and `EnsureCurrentAsync`, and `WorkflowDrainOrchestrator.ListHeldContinuationsAsync`
+  into `SettleContinuationsAsync`, on both providers. Compare runs of one configuration only.
 
 A round trip on the relay starts when the client sends a Sync or a simple Query while no earlier one is unanswered,
 and ends with the ReadyForQuery that answers the last one outstanding. Requests written together, such as the

@@ -5,6 +5,11 @@
        armed, which the nightly EF container leg does; the fast lane never measures. See README.md. -->
   <PropertyGroup>
     <IsTestProject>true</IsTestProject>
+    <!-- Attribution reads stack frames, and tiered compilation inlines a method only once it is hot, so the frames of one
+         call depended on how warm the process was: the second provider measured in a process lost frames the first
+         kept. Without tiering every method is compiled once, fully optimized, so a frame is inlined in every run or in
+         none. This writes System.Runtime.TieredCompilation=false into this project's runtimeconfig only. -->
+    <TieredCompilation>false</TieredCompilation>
   </PropertyGroup>
 
   <ItemGroup>
