@@ -159,7 +159,11 @@ const categoryToneByName: Record<string, ActivityIconTone> = {
   storage: "composite"
 };
 
-export function resolveActivityIcon(activity: ActivityCatalogItem | undefined): WorkflowNodeIcon {
+/** Fields the shared resolver reads. Catalog items and canvas node snapshots both qualify. */
+export type ActivityIconSource = Pick<ActivityCatalogItem, "activityTypeKey" | "displayName" | "category" | "executionType"> &
+  Partial<Pick<ActivityCatalogItem, "icon" | "iconName" | "activityDefinitionId">>;
+
+export function resolveActivityIcon(activity: ActivityIconSource | undefined): WorkflowNodeIcon {
   if (!activity) return "activity";
   if (activity.activityDefinitionId) return "reusable";
 
@@ -176,9 +180,7 @@ export function resolveActivityIcon(activity: ActivityCatalogItem | undefined): 
   return "activity";
 }
 
-export function resolveActivityIconTone(
-  activity: Pick<ActivityCatalogItem, "category" | "executionType" | "activityTypeKey" | "displayName"> | undefined
-): ActivityIconTone {
+export function resolveActivityIconTone(activity: ActivityIconSource | undefined): ActivityIconTone {
   if (!activity) return "accent";
 
   const typeKey = lastTypeSegment(activity.activityTypeKey);

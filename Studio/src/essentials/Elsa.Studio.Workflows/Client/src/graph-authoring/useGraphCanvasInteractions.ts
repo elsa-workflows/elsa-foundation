@@ -25,10 +25,9 @@ import {
   getActivityDisplay,
   getActivitySourcePorts,
   getChildSlots,
-  resolveActivityIcon,
-  resolveActivityIconTone,
   type WorkflowNodeData
 } from "../workflowAdapter";
+import { resolveActivityIcon, resolveActivityIconTone } from "../activityIcons";
 import { computeAutoLayout } from "../workflowLayout";
 import { activityDragDataType, pointerDragThreshold } from "../workflow-editor/constants";
 import {

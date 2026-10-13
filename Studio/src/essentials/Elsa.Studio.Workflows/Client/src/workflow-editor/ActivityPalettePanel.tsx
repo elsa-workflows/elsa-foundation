@@ -1,8 +1,10 @@
 import React, { useId, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, GripVertical, Search } from "lucide-react";
 import type { ActivityCatalogItem } from "../workflowTypes";
-import { getActivityDisplay, resolveActivityIcon, resolveActivityIconTone } from "../workflowAdapter";
-import { formatActivityVersion, renderActivityIcon } from "../workflowFormatting";
+import { resolveActivityIcon, resolveActivityIconTone } from "../activityIcons";
+import { renderActivityIcon } from "../activityIconView";
+import { getActivityDisplay } from "../workflowAdapter";
+import { formatActivityVersion } from "../workflowFormatting";
 import type { ActivityPaletteGroup } from "./editorTypes";
 
 interface ActivityPalettePanelProps {

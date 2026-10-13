@@ -32,8 +32,8 @@ import {
 } from "./activityAvailability";
 import { formatTypeName } from "./activityProperties";
 import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem } from "./workflowTypes";
-import { resolveActivityIcon } from "./workflowAdapter";
-import { renderActivityIcon } from "./workflowFormatting";
+import { resolveActivityIcon } from "./activityIcons";
+import { renderActivityIcon } from "./activityIconView";
 import "./activityAvailability.css";
 
 /** Unique row identity for React keys and details-panel selection (rule keys can collide across versions). */

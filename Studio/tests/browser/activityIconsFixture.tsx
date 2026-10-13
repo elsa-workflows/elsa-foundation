@@ -4,17 +4,9 @@ import type { NodeProps } from "@xyflow/react";
 import { ActivityPalettePanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/ActivityPalettePanel";
 import { WorkflowActivityNode } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/graph";
 import { groupActivityPalette } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorHelpers";
-import {
-  resolveActivityIcon,
-  type WorkflowNodeData
-} from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter";
+import { resolveActivityIcon, resolveActivityIconTone } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityIcons";
+import type { WorkflowNodeData } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter";
 import type { ActivityCatalogItem } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
-
-type AdapterWithTone = {
-  resolveActivityIconTone?(activity: ActivityCatalogItem): string;
-};
-
-const adapter = await import("../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowAdapter") as AdapterWithTone;
 
 const catalog: ActivityCatalogItem[] = [
   item("write-line", "Elsa.Activities.Primitives.Activities.WriteLine", "Write Line", "Primitives", "Writes text to the console."),
@@ -89,7 +81,7 @@ export function ActivityIconsFixture() {
                   executionType: activity.executionType,
                   description: activity.description ?? undefined,
                   icon: resolveActivityIcon(activity),
-                  iconTone: adapter.resolveActivityIconTone?.(activity) as WorkflowNodeData["iconTone"],
+                  iconTone: resolveActivityIconTone(activity),
                   childSlots: [],
                   acceptsInbound: true,
                   sourcePorts: [{ name: "Done", displayName: "Done" }]

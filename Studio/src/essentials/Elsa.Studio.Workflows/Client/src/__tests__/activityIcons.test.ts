@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { knownLucideExportNames, resolveActivityIcon, resolveActivityIconTone } from "../activityIcons";
-import { mappedLucideExportNames } from "../workflowFormatting";
+import { mappedLucideExportNames } from "../activityIconGlyphs";
 import type { ActivityCatalogItem } from "../workflowTypes";
 import { writeLine } from "./fixtures";
 

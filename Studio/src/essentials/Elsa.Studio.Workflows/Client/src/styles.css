@@ -3722,32 +3722,7 @@ html[data-theme-appearance="high-contrast"] .wf-node[data-trigger-enabled="true"
   color: var(--wf-accent);
 }
 
-.wf-node[data-icon="terminal"] .wf-node-icon {
-  border-color: color-mix(in srgb, var(--wf-activity-terminal) 34%, var(--wf-border));
-  background:
-    linear-gradient(color-mix(in srgb, var(--wf-activity-terminal) 12%, transparent) 0 0),
-    var(--wf-panel);
-  color: var(--wf-activity-terminal);
-}
-
-.wf-node[data-icon="flowchart"] .wf-node-icon,
-.wf-node[data-icon="sequence"] .wf-node-icon,
-.wf-node[data-icon="reusable"] .wf-node-icon {
-  border-color: color-mix(in srgb, var(--wf-activity-composite) 34%, var(--wf-border));
-  background:
-    linear-gradient(color-mix(in srgb, var(--wf-activity-composite) 12%, transparent) 0 0),
-    var(--wf-panel);
-  color: var(--wf-activity-composite);
-}
-
-.wf-node[data-icon="runtime"] .wf-node-icon {
-  border-color: color-mix(in srgb, var(--wf-activity-runtime) 35%, var(--wf-border));
-  background:
-    linear-gradient(color-mix(in srgb, var(--wf-activity-runtime) 12%, transparent) 0 0),
-    var(--wf-panel);
-  color: var(--wf-activity-runtime);
-}
-
+.wf-node[data-icon="terminal"] .wf-node-icon,
 .wf-node[data-tone="terminal"] .wf-node-icon,
 .wf-node-icon[data-tone="terminal"] {
   border-color: color-mix(in srgb, var(--wf-activity-terminal) 34%, var(--wf-border));
@@ -3757,6 +3732,9 @@ html[data-theme-appearance="high-contrast"] .wf-node[data-trigger-enabled="true"
   color: var(--wf-activity-terminal);
 }
 
+.wf-node[data-icon="flowchart"] .wf-node-icon,
+.wf-node[data-icon="sequence"] .wf-node-icon,
+.wf-node[data-icon="reusable"] .wf-node-icon,
 .wf-node[data-tone="composite"] .wf-node-icon,
 .wf-node-icon[data-tone="composite"] {
   border-color: color-mix(in srgb, var(--wf-activity-composite) 34%, var(--wf-border));
@@ -3766,6 +3744,7 @@ html[data-theme-appearance="high-contrast"] .wf-node[data-trigger-enabled="true"
   color: var(--wf-activity-composite);
 }
 
+.wf-node[data-icon="runtime"] .wf-node-icon,
 .wf-node[data-tone="runtime"] .wf-node-icon,
 .wf-node-icon[data-tone="runtime"] {
   border-color: color-mix(in srgb, var(--wf-activity-runtime) 35%, var(--wf-border));
@@ -3973,55 +3952,30 @@ button.wf-node-slot-badge:focus-visible {
   line-height: 0;
 }
 
-.wf-activity-icon[data-icon="terminal"] {
+.wf-activity-icon[data-icon="terminal"],
+.wf-activity-icon[data-tone="terminal"] {
   border-color: color-mix(in srgb, var(--wf-activity-terminal) 34%, var(--wf-border));
   background: color-mix(in srgb, var(--wf-activity-terminal) 12%, transparent);
   color: var(--wf-activity-terminal);
 }
 
 .wf-activity-icon[data-icon="flowchart"],
-.wf-activity-icon[data-icon="sequence"] {
+.wf-activity-icon[data-icon="sequence"],
+.wf-activity-icon[data-tone="composite"] {
   border-color: color-mix(in srgb, var(--wf-activity-composite) 34%, var(--wf-border));
   background: color-mix(in srgb, var(--wf-activity-composite) 12%, transparent);
   color: var(--wf-activity-composite);
 }
 
-.wf-activity-icon[data-icon="runtime"] {
+.wf-activity-icon[data-icon="runtime"],
+.wf-activity-icon[data-tone="runtime"] {
   border-color: color-mix(in srgb, var(--wf-activity-runtime) 35%, var(--wf-border));
   background: color-mix(in srgb, var(--wf-activity-runtime) 12%, transparent);
   color: var(--wf-activity-runtime);
 }
 
-.wf-activity-icon[data-icon="trigger"] {
-  border-color: color-mix(in srgb, var(--wf-activity-trigger) 35%, var(--wf-border));
-  background: color-mix(in srgb, var(--wf-activity-trigger) 12%, transparent);
-  color: var(--wf-activity-trigger);
-}
-
-.wf-activity-icon[data-tone="terminal"],
-.wf-activity-icon[data-icon="terminal"]:not([data-tone]) {
-  border-color: color-mix(in srgb, var(--wf-activity-terminal) 34%, var(--wf-border));
-  background: color-mix(in srgb, var(--wf-activity-terminal) 12%, transparent);
-  color: var(--wf-activity-terminal);
-}
-
-.wf-activity-icon[data-tone="composite"],
-.wf-activity-icon[data-icon="flowchart"]:not([data-tone]),
-.wf-activity-icon[data-icon="sequence"]:not([data-tone]) {
-  border-color: color-mix(in srgb, var(--wf-activity-composite) 34%, var(--wf-border));
-  background: color-mix(in srgb, var(--wf-activity-composite) 12%, transparent);
-  color: var(--wf-activity-composite);
-}
-
-.wf-activity-icon[data-tone="runtime"],
-.wf-activity-icon[data-icon="runtime"]:not([data-tone]) {
-  border-color: color-mix(in srgb, var(--wf-activity-runtime) 35%, var(--wf-border));
-  background: color-mix(in srgb, var(--wf-activity-runtime) 12%, transparent);
-  color: var(--wf-activity-runtime);
-}
-
-.wf-activity-icon[data-tone="trigger"],
-.wf-activity-icon[data-icon="trigger"]:not([data-tone]) {
+.wf-activity-icon[data-icon="trigger"],
+.wf-activity-icon[data-tone="trigger"] {
   border-color: color-mix(in srgb, var(--wf-activity-trigger) 35%, var(--wf-border));
   background: color-mix(in srgb, var(--wf-activity-trigger) 12%, transparent);
   color: var(--wf-activity-trigger);

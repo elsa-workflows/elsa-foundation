@@ -10,10 +10,10 @@ import { bpmnStructureKind } from "./bpmn/bpmnTypes";
 import { buildIntrinsicWireBlock, readIntrinsicDescriptor } from "./intrinsicActivities";
 import { getActivityDisplay } from "./activityDisplay";
 import { indexActivityPresentation, resolveActivityLabel } from "./activityPresentation";
-import { resolveActivityIcon, resolveActivityIconTone, type ActivityIconTone, type WorkflowNodeIcon } from "./activityIcons";
+import type { ActivityIconTone, WorkflowNodeIcon } from "./activityIcons";
 
 export { getActivityDisplay } from "./activityDisplay";
-export { resolveActivityIcon, resolveActivityIconTone, type ActivityIconTone, type WorkflowNodeIcon } from "./activityIcons";
+export type { ActivityIconTone, WorkflowNodeIcon } from "./activityIcons";
 
 export const sequenceStructureKind = "elsa.sequence.structure";
 export {
@@ -44,6 +44,11 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   /** Runtime activity identity for canvases whose visible node id is a different domain element id. */
   runtimeNodeId?: string;
   description?: string;
+  /** Catalog identity used at render time so reusable activities resolve without an eager icon table. */
+  activityDefinitionId?: string;
+  /** Raw catalog `icon` / `iconName`; the canvas resolves them so `activityIcons` stays off the entry. */
+  catalogIcon?: string | null;
+  catalogIconName?: string | null;
   /** True for the Flowchart activity execution enters first, so the canvas can say which node starts. */
   isStartNode?: boolean;
   /** True when this activity can start a workflow (its `CanStartWorkflow` input is a literal true). */
@@ -860,8 +865,9 @@ function createWorkflowNode(
       summary: catalogItem && formatSummary ? formatSummary(activity, catalogItem) : undefined,
       description: presentation?.description ?? undefined,
       activityDefinitionVersion: catalogItem?.activityDefinitionVersion,
-      icon: resolveActivityIcon(catalogItem),
-      iconTone: resolveActivityIconTone(catalogItem),
+      activityDefinitionId: catalogItem?.activityDefinitionId,
+      catalogIcon: catalogItem?.icon,
+      catalogIconName: catalogItem?.iconName,
       childSlots: getChildSlots(activity, catalogItem),
       acceptsInbound: activityAcceptsInbound(activity, catalogItem),
       sourcePorts: options.suppressFlowPorts ? [] : getActivitySourcePorts(activity, catalogItem),

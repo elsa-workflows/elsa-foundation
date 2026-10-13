@@ -2,7 +2,8 @@ import type { Edge, Node, XYPosition } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityNode, ActivityPresentationRecord, DesignMetadataRecord } from "../workflowTypes";
 import { indexActivityPresentation, resolveActivityLabel } from "../activityPresentation";
 import type { WorkflowRuntimeNodeOverlay } from "../workflowAdapter";
-import { collectActivityNodeIds, getActivityDisplay, getChildSlots, readStructureDesignFacet, resolveActivityIcon, resolveActivityIconTone, type ActivityCatalogLookup, type ActivityIconTone, type CanvasScope, type ChildSlot, type WorkflowNodeIcon } from "../workflowAdapter";
+import { resolveActivityIcon, resolveActivityIconTone } from "../activityIcons";
+import { collectActivityNodeIds, getActivityDisplay, getChildSlots, readStructureDesignFacet, type ActivityCatalogLookup, type ActivityIconTone, type CanvasScope, type ChildSlot, type WorkflowNodeIcon } from "../workflowAdapter";
 import {
   bpmnElementTypes,
   bpmnStructureKind,

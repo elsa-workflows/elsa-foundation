@@ -3,9 +3,11 @@ import { BaseEdge, EdgeLabelRenderer, Handle, Position, getBezierPath, getSmooth
 import { useStudioThemeLayout, type StudioThemeLayout } from "@elsa-workflows/studio-sdk";
 import { AlertTriangle, Flag, Plus, Trash2 } from "lucide-react";
 import type { ActivityCatalogItem } from "../workflowTypes";
+import { resolveActivityIcon, resolveActivityIconTone } from "../activityIcons";
+import { renderActivityIcon } from "../activityIconView";
 import { getActivityDisplay, type WorkflowNodeData } from "../workflowAdapter";
 import { getAvailabilityStateLabel } from "../activityAvailability";
-import { renderActivityIcon, truncate } from "../workflowFormatting";
+import { truncate } from "../workflowFormatting";
 import { groupActivityPalette, isActivityBrowsable } from "./editorHelpers";
 import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext } from "./contexts";
 import { NodeSlotBadges } from "./NodeSlotBadges";
@@ -17,8 +19,25 @@ import type { WorkflowEdge } from "./editorTypes";
 export const nodeTypes = { workflowActivity: WorkflowActivityNode, bpmnElement: BpmnElementNode };
 export const edgeTypes = { workflow: WorkflowFlowEdge };
 
+function resolveNodeActivityVisual(nodeData: WorkflowNodeData) {
+  const source = {
+    activityTypeKey: nodeData.activityTypeKey ?? "",
+    displayName: nodeData.label,
+    category: nodeData.category ?? "",
+    executionType: nodeData.executionType ?? "",
+    icon: nodeData.catalogIcon,
+    iconName: nodeData.catalogIconName,
+    activityDefinitionId: nodeData.activityDefinitionId
+  };
+  return {
+    icon: nodeData.icon ?? resolveActivityIcon(source),
+    tone: nodeData.iconTone ?? resolveActivityIconTone(source)
+  };
+}
+
 export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
   const nodeData = data as WorkflowNodeData;
+  const { icon, tone } = resolveNodeActivityVisual(nodeData);
   const runtime = nodeData.runtime;
   const showFlowPorts = !nodeData.suppressFlowPorts;
   const sourcePorts = showFlowPorts
@@ -32,8 +51,8 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
       className={["wf-node", selected ? "selected" : "", runtime ? "wf-node-runtime" : "", runtime?.hasBlockingIncident ? "faulted" : "", availability ? "wf-node-unavailable" : "", nodeData.ghost ? "wf-node-ghost" : "", nodeData.isStartNode ? "wf-node-start" : ""].filter(Boolean).join(" ")}
       data-start-node={nodeData.isStartNode ? "true" : undefined}
       data-trigger-enabled={nodeData.canStartWorkflow ? "true" : undefined}
-      data-icon={nodeData.icon ?? "activity"}
-      data-tone={nodeData.iconTone ?? "accent"}
+      data-icon={icon}
+      data-tone={tone}
       data-runtime-node-id={nodeData.runtimeNodeId ?? id}
       title={[nodeData.label, nodeData.description].filter(Boolean).join(" — ")}
       aria-description={nodeData.description}
@@ -50,7 +69,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
         </span>
       ) : null}
       <div className="wf-node-content">
-        <span className="wf-node-icon" aria-hidden="true">{renderActivityIcon(nodeData.icon)}</span>
+        <span className="wf-node-icon" aria-hidden="true">{renderActivityIcon(icon)}</span>
         <span className="wf-node-copy">
           <strong title={nodeData.label}>{nodeData.label}</strong>
           {nodeData.ghost ? <small className="wf-node-ghost-note">Not available in this environment</small> : subtitle.text ? <small title={subtitle.title}>{subtitle.text}</small> : null}

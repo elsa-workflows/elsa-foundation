@@ -26,7 +26,10 @@ import {
 import { buildDraftFromJson } from "../workflowSerialization";
 import { WorkflowCodeView } from "../WorkflowCodeView";
 import { WorkflowPropertiesView } from "../WorkflowPropertiesView";
+import { loadActivityIconRegistry } from "../activityIconView";
 import { weaverUnavailableTitle } from "./constants";
+
+void loadActivityIconRegistry();
 import type { CanvasView, WorkflowDesignerPanelContext, WorkflowEditorError, WorkflowEditorOperation, WorkflowEditorPanelTab, WorkflowErrorInput } from "./editorTypes";
 import type { WorkflowSlotNavigation } from "./contexts";
 import {

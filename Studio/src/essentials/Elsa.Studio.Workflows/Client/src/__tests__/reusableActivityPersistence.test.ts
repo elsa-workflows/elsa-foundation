@@ -115,7 +115,7 @@ describe("reusable activity draft persistence", () => {
     const immutableVersion = await getActivityDefinitionVersion(context, reloaded.state.rootActivity!.activityVersionId);
 
     expect(canvas.nodes[0].data).toMatchObject({
-      icon: "reusable",
+      activityDefinitionId: "invoice-definition",
       activityDefinitionVersion: "2.0.0"
     });
     expect(immutableVersion).toMatchObject({

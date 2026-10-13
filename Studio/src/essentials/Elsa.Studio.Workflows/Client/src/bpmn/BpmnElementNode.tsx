@@ -1,6 +1,6 @@
 import React from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { renderActivityIcon } from "../workflowFormatting";
+import { renderActivityIcon } from "../activityIconView";
 import { NodeSlotBadges } from "../workflow-editor/NodeSlotBadges";
 import { RuntimeIncidentAction } from "../workflow-editor/RuntimeIncidentAction";
 import { bpmnElementTypes, bpmnElementTypeLabel, isEventElementType, isGatewayElementType, isTerminateEndEvent } from "./bpmnTypes";
