@@ -1,4 +1,11 @@
 <!--
+SYNC IMPACT REPORT — 6.0.0 -> 6.0.1 (2026-10-13)
+PATCH: §2.23.3 wording (#2591, owner decision E2). Implementations are tested through [InternalsVisibleTo] to their own domain's test assemblies rather than "the project's own test assembly", because the test tree has one test project per domain, not per project; a project never grants [InternalsVisibleTo] to another production project, except the one host grant the owner kept (Elsa.Workbench -> Elsa.Modularity.Tests).
+Gate index: the §2.23.3 row names the realigned checks (InternalsVisibleTo per domain, the public API tracking opt-in, feature-class shape), switched on domain by domain by #2591.
+Templates requiring updates: .specify/memory/constitution.md (re-pin v6.0.1).
+Approval: Sipke Schoorstra, 2026-10-13 (#2591).
+-->
+<!--
 SYNC IMPACT REPORT — 5.0.1 -> 6.0.0 (2026-10-12)
 MAJOR: compaction to enforceable gates (#2578, ADR 0080 D6); sections are removed and three gates redefined. Owner decisions D1–D9 per #2578.
 Removed: §1 (-> docs/reference/architecture-rationale.md#anti-patterns); §2.12 and §2.23.6 (-> Deferred); §2.15 (-> architecture-rationale.md#repository-organisation, D2); §2.18.4 (restated §2.21.1).
@@ -10,7 +17,7 @@ Approval: Sipke Schoorstra, 2026-10-12 (#2578), on his authority alone; open to 
 -->
 # Modular Software Design Framework Constitution
 
-**Version:** 6.0.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-10-12
+**Version:** 6.0.1 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-10-13
 
 **Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance calls for consensus among Joey Barten, Sipke Schoorstra and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. A section marked draft (§2.24) is **not** covered by it.
 
@@ -30,7 +37,7 @@ Gates with an automated check (tests in `Essentials/tests/Architecture/Tests/`).
 | §2.5, §2.23.1 | Every feature composes and its services resolve (virtual `ConfigureServices` and inheritance shape: review) | `FeatureCompositionTests.Every_feature_composes_and_each_service_it_registers_resolves` |
 | §2.9 | Persistence contracts take no concrete provider | `ArchitectureGuardTests.In_scope_persistence_contract_projects_remain_free_of_concrete_provider_dependencies` |
 | §2.20 | Only admitted projects resolve EF Core packages | `EfCoreDependencyGuardTests` |
-| §2.23.3 | Internal implementations; tracked public surface | Realigned per domain by #2591. Until then `ArchitectureGuardTests.InternalsVisibleTo_occurrences_are_limited_to_documented_exceptions` holds the pre-5.0 allow-list and `PublicApiFilesGuardTests` covers Line A only. |
+| §2.23.3 | Grants reach only the granting project's own domain's tests; tracked public surface; feature classes public and not sealed | `ArchitectureGuardTests.InternalsVisibleTo_grants_go_only_to_the_granting_domains_test_assemblies` (reads the grants compiled into every production assembly, so every way of declaring one counts; the Workbench exception is listed), `PublicApiFilesGuardTests` (the `ElsaTrackPublicApi` opt-in, both files and the analyzer move together), `FeatureClassShapeGuardTests` (per activated domain). #2591 switches the opt-in and the activation on domain by domain. |
 
 ## Preamble — What this document is
 
@@ -191,7 +198,7 @@ Tests prove behaviour at risk, at the cheapest level that proves it (ADR 0080 D1
 
 - **§2.23.1 Composition test.** One test builds a shell from every feature and resolves each feature's registrations. A feature needs its own registration test only when its wiring carries logic (conditional registration, decoration, options validation).
 - **§2.23.2 Behaviour tests.** Logic-bearing implementations are tested through behaviour, with stubs where cheapest, covering risk: decisions, failure paths, boundaries, concurrency, persistence semantics. Coverage is the reviewer's judgement; trivial branches need no test. Tests MUST NOT assert on markdown, documentation or source text; a mechanically checkable rule gets an analyzer or an architecture test.
-- **§2.23.3 Visibility rule.** Feature classes are `public` and not sealed. Implementations are `internal sealed` unless public surface, tested through `[InternalsVisibleTo]` to the project's own test assembly. The public surface (contracts users implement or call, models crossing a package boundary, activities, feature classes, options, entry points) is tracked with PublicApiAnalyzers in every packable project. Check realigned per domain by #2591 (D6).
+- **§2.23.3 Visibility rule.** Feature classes are `public` and not sealed. Implementations are `internal sealed` unless public surface, tested through `[InternalsVisibleTo]` to their own domain's test assemblies; a project never grants `[InternalsVisibleTo]` to another production project. One exception is kept: the Elsa.Workbench host grants to `Elsa.Modularity.Tests`, for its host-only module-management registry builder. The public surface (contracts users implement or call, models crossing a package boundary, activities, feature classes, options, entry points) is tracked with PublicApiAnalyzers in every packable project. Checked per domain as #2591 realigns each (D6).
 - **§2.23.4 Refactoring obligations.** Hidden coupling a refactor exposes is the defect: lift it to a contract, typically a named event, or remove it. A stub MUST NOT reproduce the side effect to pass a test.
 - **§2.23.5 Exception boundaries — infrastructure exceptions are wrapped.** Infrastructure exceptions (`JsonException`, `DbUpdateException`, `IOException`, `SqlException`, third-party) MUST NOT escape a feature boundary unwrapped. Rethrow a domain exception from the feature's `.Core` or a sibling, with the original as `InnerException` and identifiers that localise the failure; public methods document it. Wrapping is not swallowing. Reviewers MUST challenge a raw infrastructure exception crossing a boundary ([rationale](../../docs/reference/architecture-rationale.md#exception-boundaries)).
 

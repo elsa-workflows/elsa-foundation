@@ -69,6 +69,8 @@ on:
     branches: [main]
     # Narrowed to the image definitions themselves (#2622); the post-merge build after Packages is unchanged.
     # '**/Dockerfile' matches Essentials/apps/Elsa.Workbench/Dockerfile and Essentials/apps/Elsa.Foundation.Host/Dockerfile.
+    # The root build files and the naming analyzer are inputs to every image build: a change to them can break an image
+    # that no Dockerfile change touches.
     paths:
       - '**/Dockerfile'
       - '**/*.Dockerfile'
@@ -76,6 +78,9 @@ on:
       - .dockerignore
       - .github/workflows/docker.yml
       - tools/contributor-checkpoints/**
+      - Directory.Build.props
+      - Directory.Packages.props
+      - Essentials/build/Analyzers/**
   workflow_dispatch:
     inputs:
       commit:

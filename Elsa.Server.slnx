@@ -74,6 +74,9 @@
     <Project Path="Essentials/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj" />
     <Project Path="Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj" />
   </Folder>
+  <Folder Name="/Essentials/build/">
+    <Project Path="Essentials/build/Analyzers/Elsa.Architecture.Analyzers.csproj" />
+  </Folder>
   <Folder Name="/Essentials/src/">
     <Project Path="Essentials/src/Git/Elsa.Git.csproj" />
   </Folder>
@@ -398,6 +401,9 @@
   </Folder>
   <Folder Name="/Essentials/tests/Architecture/">
     <Project Path="Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/tests/Architecture/Analyzers/">
+    <Project Path="Essentials/tests/Architecture/Analyzers/Tests/Elsa.Architecture.Analyzers.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Architecture/ExtensionBoundary/">
     <Project Path="Essentials/tests/Architecture/ExtensionBoundary/Tests/Elsa.Architecture.ExtensionBoundary.Tests.csproj" />
