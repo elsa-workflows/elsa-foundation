@@ -97,6 +97,24 @@ public sealed class RuntimePersistenceModeResolverTests : IAsyncDisposable
         Assert.Equal(new ResolvedPersistenceMode(chosen, RunHasRecord: false), await resolver.ResolveAsync(RedriveEnvelope()));
     }
 
+    [Theory]
+    [InlineData(PersistenceMode.Balanced, PersistenceMode.Ephemeral)]
+    [InlineData(PersistenceMode.Ephemeral, PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Durable, PersistenceMode.Balanced)]
+    public async Task ARedeliveredStart_ResolvesTheModeOfTheStartTheQueueKept_AsALaterRedriveDoes(PersistenceMode kept, PersistenceMode redelivered)
+    {
+        // A keyed or retained-dispatch start delivered again after the host default changed carries another mode. The
+        // queue keeps the first delivery, so that is the start the drain runs and the one a later redrive reads.
+        var resolver = Compose(redelivered);
+        await QueueAsync(StartEnvelope(stampedMode: kept.ToString()));
+        var redelivery = StartEnvelope(stampedMode: redelivered.ToString());
+        await QueueAsync(redelivery);
+
+        var expected = new ResolvedPersistenceMode(kept, RunHasRecord: false);
+        Assert.Equal(expected, await resolver.ResolveAsync(redelivery));
+        Assert.Equal(expected, await resolver.ResolveAsync(RedriveEnvelope()));
+    }
+
     [Fact]
     public async Task AQueuedStartWithoutAMode_IsResolvedFromItsPinnedWorkflow()
     {

@@ -11,7 +11,8 @@ public interface IRuntimePersistenceModeResolver
 {
     /// <summary>
     /// Resolves the mode for the run the <paramref name="envelope"/> targets, whichever command kind it carries: the
-    /// mode the run recorded at its first commit, or before that the mode its start command carries. Also reports
+    /// mode the run recorded at its first commit, or before that the mode its start command carries, read off the start
+    /// the scheduler queue holds (the start's first delivery) rather than off a start delivered again. Also reports
     /// whether the run already has a durable record. Throws when the run has a record or a queued start but its mode
     /// cannot be determined, rather than drain the run in a mode it did not choose.
     /// </summary>

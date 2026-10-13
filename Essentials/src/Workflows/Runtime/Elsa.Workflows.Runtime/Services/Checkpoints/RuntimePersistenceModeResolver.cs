@@ -9,8 +9,8 @@ namespace Elsa.Workflows.Runtime.Services.Checkpoints;
 /// <summary>
 /// Default <see cref="IRuntimePersistenceModeResolver"/>. A run's mode is decided once, when it is started: the
 /// workflow's choice wins over the host default, and the start dispatcher writes the result onto the start command,
-/// which the scheduler queue keeps until the run's first commit. From that commit on, the mode recorded on the run
-/// decides. Every drain of a run therefore finds the same mode, whichever command starts it, including a drain that
+/// which the scheduler queue keeps, as first delivered, until the run's first commit. From that commit on, the mode
+/// recorded on the run decides. Every drain of a run therefore finds the same mode, whichever command starts it, including a drain that
 /// runs the run again after its first pass ended before anything was committed.
 /// </summary>
 internal sealed class RuntimePersistenceModeResolver(
@@ -36,10 +36,13 @@ internal sealed class RuntimePersistenceModeResolver(
         if (state is not null)
             return new(await ModeOfRecordedRunAsync(state, cancellationToken), RunHasRecord: true);
 
-        // Nothing committed yet: the run's start decides. It is this command, or the start the queue still holds.
-        var start = envelope.Command.Kind == WorkflowExecutionCommandKind.Start
-            ? new StartCommand(envelope.Command.Metadata, envelope.Command.Payload)
-            : await FindQueuedStartAsync(workflowExecutionId, cancellationToken);
+        // Nothing committed yet: the run's start decides. That is the start the queue holds, which is the one the drain
+        // runs: the queue keeps a start's first delivery, so a start delivered again (stamped under a host default that
+        // has changed since) is not the one that runs. A start the queue does not hold decides for itself.
+        var start = await FindQueuedStartAsync(workflowExecutionId, cancellationToken)
+            ?? (envelope.Command.Kind == WorkflowExecutionCommandKind.Start
+                ? new StartCommand(envelope.Command.Metadata, envelope.Command.Payload)
+                : null);
         if (start is not null)
             return new(await ModeOfStartAsync(workflowExecutionId, start, cancellationToken), RunHasRecord: false);
 
