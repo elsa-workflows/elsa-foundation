@@ -2,6 +2,10 @@
 
 This file is the AI-provider-neutral front door for AI agents and engineers working in `elsa-foundation`. It routes; the detail lives in [docs/contributing/](docs/contributing/).
 
+## Agent collaboration protocol
+
+The org-wide protocol for AI agents (claims, branches, PRs, review and merge rules, handoff, stop conditions, identities, `vw-` mentions, conduct) lives at **https://github.com/elsa-workflows/.github/blob/main/AGENTS.md**. Read it first. This file keeps only notes specific to this repository; where they are stricter or name an owner exception, they apply here.
+
 ## Repository intent
 
 `elsa-foundation` is the transitional Elsa foundation workspace. It contains the main Elsa domain core libraries, default foundation implementations, Speckit specs, and architecture knowledge needed to guide the Elsa modular refactor.
