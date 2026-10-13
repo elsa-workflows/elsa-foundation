@@ -83,6 +83,7 @@ not automatic constitution violations.
 | Domain | Catalog |
 |---|---|
 | API Capabilities (typed operational Sources and deterministic catalog replacement) | [`Essentials/src/Api/Capabilities/EXTENSION_POINTS.md`](Essentials/src/Api/Capabilities/EXTENSION_POINTS.md) |
+| API endpoint layer (failure pipeline, endpoint composition contracts, unload-safety enforcement) | [`Essentials/src/Api/EXTENSION_POINTS.md`](Essentials/src/Api/EXTENSION_POINTS.md) |
 
 ### Agent and Identity
 
@@ -133,6 +134,9 @@ not automatic constitution violations.
 | Activities design — persistence replacement (Entity Framework Core) | [`Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Activities design API — catalog and availability services | [`Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md`](Essentials/src/Activities/Design/Api/EXTENSION_POINTS.md) |
 | Activities graph design — authoring provider, compiler, dependency discovery, and reference rewriting | [`Essentials/src/Activities/Graph/Design/EXTENSION_POINTS.md`](Essentials/src/Activities/Graph/Design/EXTENSION_POINTS.md) |
+| Activities graph runtime — compiled graph activity consumer and transient activation | [`Essentials/src/Activities/Graph/Runtime/EXTENSION_POINTS.md`](Essentials/src/Activities/Graph/Runtime/EXTENSION_POINTS.md) |
+| Activities BPMN (scoped execution seam, element behavior contributors) | [`Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md) |
+| Activities BPMN interchange (document importer and exporter replacement) | [`Essentials/src/Activities/Bpmn/Interchange/EXTENSION_POINTS.md`](Essentials/src/Activities/Bpmn/Interchange/EXTENSION_POINTS.md) |
 
 ### Workflows
 

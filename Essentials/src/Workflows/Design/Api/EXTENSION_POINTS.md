@@ -12,7 +12,7 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 - **Implementable contributor interfaces** — *add-don't-replace* seams aggregated by a single handler (framework §2.6.1, §2.24.2).
 - **Events** — the FR-018/FR-018a mutation + lifecycle events this domain publishes.
 
-> **Domain spans several projects.** Contracts live in `Elsa.Workflows.Design.Core` and `Elsa.Workflows.Design.Persistence.Core`; the provider-neutral default services (`WorkflowDefinitionLookup`, `DraftStateDiffEngine`) also live in `Elsa.Workflows.Design.Persistence.Core`, while the concrete store/command provider implementations are in `Elsa.Workflows.Design.Persistence.EntityFrameworkCore`. Per three-layer rule (framework §2.1): contracts in `.Core`, defaults in the persistence layer, composition in this Api feature. The EF Core provider persists design records through provider-neutral read/write ports (no EF `EntitySaving` / `EntityLoading` hydration seams); see [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md).
+> **Domain spans several projects.** Contracts live in `Elsa.Workflows.Design.Core` and `Elsa.Workflows.Design.Persistence.Core`; the provider-neutral default services (`WorkflowDefinitionLookup`, `DraftStateDiffEngine`) also live in `Elsa.Workflows.Design.Persistence.Core`, while the concrete store/command provider implementations are in `Elsa.Workflows.Design.Persistence.EntityFrameworkCore`. Per three-layer rule (framework §2.1): contracts in `.Core`, defaults in the persistence layer, composition in this Api feature. The EF Core provider persists design records through provider-neutral read/write ports (no EF `EntitySaving` / `EntityLoading` hydration seams); see [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Persistence/EntityFrameworkCore/EXTENSION_POINTS.md).
 
 ---
 
@@ -27,10 +27,10 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 ### `IWorkflowDefinitionLookup` *(Core — `Elsa.Workflows.Design.Core`)*
 - **Signature:** `GetDefinition(id)`, `ListDefinitions(searchTerm?)`, `GetVersion(versionId)`, `FindLatestVersion(definitionId)`, `ListVersions(definitionId)` — all `Task`-returning reads.
 - **Default impl:** `WorkflowDefinitionLookup` (`Elsa.Workflows.Design.Persistence.Core`), backed by the named `IWorkflowDefinitionVersionStore` + `IWorkflowDefinitionStore` read ports.
-- **Override:** `services.Replace(ServiceDescriptor.Scoped<IWorkflowDefinitionLookup, MyLookup>())`. Or override one of the underlying named read ports (see [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md)) — two granularities of the same *override* axis.
+- **Override:** `services.Replace(ServiceDescriptor.Scoped<IWorkflowDefinitionLookup, MyLookup>())`. Or override one of the underlying named read ports (see [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Persistence/EntityFrameworkCore/EXTENSION_POINTS.md)) — two granularities of the same *override* axis.
 
 ### Commands — `IUpdateDraftCommand` + 5 lifecycle *(Core — `Elsa.Workflows.Design.Persistence.Core`)*
-Full detail in the persistence catalog: [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md).
+Full detail in the persistence catalog: [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Persistence/EntityFrameworkCore/EXTENSION_POINTS.md).
 
 Summary: `IUpdateDraftCommand`, `ICreateDraftCommand`, `ICloneDraftFromVersionCommand`, `IDiscardDraftCommand`, `IPromoteDraftToVersionCommand`, `IAddWorkflowDefinitionCommand` — each backed by an EF Core default; `services.Replace(...)` to swap individual commands while keeping the rest (the canonical *swap-commands-keep-queries* example per Joey's framing). A replacement `IPromoteDraftToVersionCommand` keeps its content precondition: it takes the `WorkflowDraftStateHash` of the draft the Drafts/Promote route admitted and refuses with `WorkflowDraftChangedException` (409) when the draft it promotes no longer has that content (spec 188, research R7).
 
@@ -45,7 +45,7 @@ Summary: `IUpdateDraftCommand`, `ICreateDraftCommand`, `ICloneDraftFromVersionCo
 
 ## Implementable contributor interfaces
 
-The Draft-validation contributor (`IDraftValidator`) lives in [`Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md). Subscribers also extend this domain by handling the Background events below.
+The Draft-validation contributor (`IDraftValidator`) lives in [`Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](../Validations/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md). Subscribers also extend this domain by handling the Background events below.
 
 ### `IExpressionAuthoringContextSource` *(Core — `Elsa.Workflows.Design.Core`)*
 
@@ -114,7 +114,7 @@ Known implementations:
 
 Every event the Workflows.Design domain publishes is an `IEvent` (framework §2.6.1), grouped by **delivery strategy** (§2.6.6).
 
-**Sequential / contribution** — none in this domain's Core. The contribution event (`DraftValidating`, Sequential) lives in [`Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md).
+**Sequential / contribution** — none in this domain's Core. The contribution event (`DraftValidating`, Sequential) lives in [`Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](../Validations/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md).
 
 Heading convention: `### <EventClassName>`. Every published `IEvent` type of the `Elsa.Workflows.Design.Core` design namespace has a heading here, and every such heading names one; review keeps the two in step.
 
@@ -243,7 +243,7 @@ Heading convention: `### <EventClassName>`. Every published `IEvent` type of the
 
 ## Cross-references
 
-- Validation events (`DraftValidating` Sequential gate + `DraftValidated` Background outcome): [`Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md).
-- Command + diff-engine overridables: [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md).
-- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- Validation events (`DraftValidating` Sequential gate + `DraftValidated` Background outcome): [`Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md`](../Validations/Elsa.Workflows.Design.Validations/EXTENSION_POINTS.md).
+- Command + diff-engine overridables: [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Persistence/EntityFrameworkCore/EXTENSION_POINTS.md).
+- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.6 + §2.22.1.

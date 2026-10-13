@@ -36,5 +36,5 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Serialization` �
 
 ## Cross-references
 
-- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.22.1.

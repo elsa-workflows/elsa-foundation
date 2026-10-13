@@ -6,4 +6,4 @@ See [`EXTENSION_POINTS.md`](EXTENSION_POINTS.md) for the `IEventHandler<T>` cont
 
 ## Cross-domain contributions
 
-- **`IBackgroundTask`** *(Core — `Elsa.Tasks.Core`)* — `BackgroundEventPublisher` runs as a long-lived background task that drains the background-strategy event queue in isolation from the caller. Catalog: [`Elsa.Tasks/EXTENSION_POINTS.md`](../Elsa.Tasks/EXTENSION_POINTS.md)
+- **`IBackgroundTask`** *(Core — `Elsa.Tasks.Core`)* — `BackgroundEventPublisher` runs as a long-lived background task that drains the background-strategy event queue in isolation from the caller. Catalog: [`Elsa.Tasks/EXTENSION_POINTS.md`](../../Tasks/Elsa.Tasks/EXTENSION_POINTS.md)

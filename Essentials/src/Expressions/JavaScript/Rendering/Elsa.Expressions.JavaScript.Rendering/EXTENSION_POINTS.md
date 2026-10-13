@@ -41,6 +41,6 @@ Every `IEvent` type in `Elsa.Expressions.JavaScript.Rendering.Core` has a `### <
 
 ## Cross-references
 
-- JS script pre/post processors (runtime execution): [`Elsa.Expressions.JavaScript/EXTENSION_POINTS.md`](../Elsa.Expressions.JavaScript/EXTENSION_POINTS.md).
+- JS script pre/post processors (runtime execution): [`Elsa.Expressions.JavaScript/EXTENSION_POINTS.md`](../../Elsa.Expressions.JavaScript/EXTENSION_POINTS.md).
 - Repo-wide index: [`../../EXTENSION_POINTS.md`](../../../Elsa.Expressions/EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.6 + §2.22.1.
