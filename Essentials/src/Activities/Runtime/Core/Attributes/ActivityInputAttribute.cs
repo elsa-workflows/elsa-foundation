@@ -58,4 +58,17 @@ public sealed class ActivityInputAttribute : Attribute
     /// <see cref="RefusesSecretBindingAttribute"/>, and any input of a checkpoint participant.
     /// </summary>
     public bool IsCredential { get; init; }
+
+    /// <summary>
+    /// Optional designer disclosure tier. Presentation only: it is copied onto
+    /// <c>InputDefinition.Tier</c> and the authoring catalog <c>tier</c> field, and is excluded from
+    /// the descriptor hash, so adding or changing it does not throw
+    /// <c>ActivityVersionHashMismatchException</c>. Leave unset for the client default.
+    /// </summary>
+    /// <remarks>
+    /// Attribute parameters cannot be nullable enums, so the CLR default is <c>0</c> (not a defined
+    /// <see cref="InputTier"/>). Reconciliation treats that default as unset and writes
+    /// <see langword="null"/> to the catalog.
+    /// </remarks>
+    public InputTier Tier { get; init; }
 }

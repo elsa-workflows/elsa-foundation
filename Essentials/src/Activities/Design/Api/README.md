@@ -34,6 +34,8 @@ Catalog items and version details carry a `provenance` object (`sourceKind`, `so
 
 Each catalog input carries `isSensitive` and `isCredential`, the activity's sensitivity declaration, always present and `false` for an input that declares nothing and for every engine-intrinsic input; a credential input is sensitive too. The legacy `AddDefinition` and `AddVersion` commands accept an input declared sensitive but refuse one declared a credential (400, `activity.request.invalid`), before anything is stored, because nothing here can check that the input could be bound to a secret reference; CLR reconciliation checks that for `[ActivityInput(IsCredential = true)]`.
 
+Each catalog input also carries `tier`: `essential`, `optional`, `setting`, or `null`. It is presentation only. CLR authors set `[ActivityInput(Tier = InputTier.Optional)]`; JSON catalogs and the descriptor/version API set `InputDefinition.Tier` to the same strings (`ActivityInputTiers`). When the activity does not declare a tier, or the stored value is not one of those three strings, the catalog field is `null` and the client applies its own default. The hasher excludes `tier`, so adding or changing it does not throw `ActivityVersionHashMismatchException`.
+
 ## Extension points
 
 See [EXTENSION_POINTS.md](EXTENSION_POINTS.md) and the [reconciliation extension catalog](../Reconciliation/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md).

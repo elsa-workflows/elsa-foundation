@@ -301,9 +301,13 @@ public sealed class ClrAssemblyScannerTests
         Assert.Equal("Simple", inputs[nameof(ComplexInputFixtureActivity.Mode)].Category);
         Assert.Equal("Auto", inputs[nameof(ComplexInputFixtureActivity.Mode)].DefaultValue?.GetString());
         Assert.Equal("Literal", inputs[nameof(ComplexInputFixtureActivity.Mode)].DefaultSyntax);
+        Assert.Equal(ActivityInputTiers.Essential, inputs[nameof(ComplexInputFixtureActivity.Mode)].Tier);
         Assert.Equal(20, inputs[nameof(ComplexInputFixtureActivity.Payload)].Order);
         Assert.Null(inputs[nameof(ComplexInputFixtureActivity.Payload)].Category);
+        Assert.Equal(ActivityInputTiers.Optional, inputs[nameof(ComplexInputFixtureActivity.Payload)].Tier);
         Assert.Equal(30, inputs[nameof(ComplexInputFixtureActivity.Label)].Order);
+        Assert.Null(inputs[nameof(ComplexInputFixtureActivity.Label)].Tier);
+        Assert.Equal(ActivityInputTiers.Setting, inputs[nameof(ComplexInputFixtureActivity.Count)].Tier);
     }
 
     [Fact]
@@ -747,8 +751,9 @@ public sealed class ClrAssemblyScannerTests
 
     public static TheoryData<Type, string> BuiltInCatalogHashesUnchangedFromMain => new()
     {
-        // Snapshot of origin/main at 14dd6f6e7 (#2716). Built-ins declare no [Activity(Icon)], and the
-        // icon facet is excluded from the hash, so these stay the values main already persisted.
+        // Snapshot of origin/main at 14dd6f6e7 (#2716). Icon facets and input tiers are presentation
+        // only and are excluded from the hash, so these stay the values main already persisted even
+        // after SendHttpRequest and HttpEndpoint declare tiers.
         { typeof(HttpEndpoint), "E7E0CBCEC193A6377AD9102415555997268AC479B89FDDE58578244A5EBF7C88" },
         { typeof(WriteLine), "618BB61870A3FADC2551123EA520F7F5852CB0D00CD4AE5E6DB8A80D7677EF2C" },
         { typeof(ParallelActivity), "A466AC1D4873108D85B6BA08D2058ACD9FD51A60571E8BA043043A17B20CCC82" },
@@ -764,6 +769,35 @@ public sealed class ClrAssemblyScannerTests
 
         Assert.DoesNotContain(model.DesignFacets, facet => facet.Kind == ActivityIconName.FacetKind);
         Assert.Equal(expectedHash, CatalogVersion(model, model, activityType.Assembly).Hash);
+    }
+
+    [Fact]
+    public void BuiltInHttpActivities_DeclareTheObviousInputTiers()
+    {
+        using var httpFolder = TempAssemblyFolder.WithCopyOf(typeof(SendHttpRequest).Assembly);
+        var send = CreateScanner().Scan(httpFolder.Path).Single(candidate => candidate.ActivityTypeKey == typeof(SendHttpRequest).FullName);
+        var sendInputs = send.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
+
+        Assert.Equal(ActivityInputTiers.Essential, sendInputs[nameof(SendHttpRequest.Url)].Tier);
+        Assert.Equal(ActivityInputTiers.Essential, sendInputs[nameof(SendHttpRequest.Method)].Tier);
+        Assert.Equal(ActivityInputTiers.Essential, sendInputs[nameof(SendHttpRequest.Content)].Tier);
+        Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.ContentType)].Tier);
+        Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.RequestHeaders)].Tier);
+        Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.Authorization)].Tier);
+        Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.ExpectedStatusCodes)].Tier);
+        Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.Timeout)].Tier);
+
+        var endpoint = CreateScanner().Scan(httpFolder.Path).Single(candidate => candidate.ActivityTypeKey == typeof(HttpEndpoint).FullName);
+        var endpointInputs = endpoint.Inputs.ToDictionary(input => input.ReferenceKey, StringComparer.Ordinal);
+
+        Assert.Equal(ActivityInputTiers.Essential, endpointInputs[nameof(HttpEndpoint.Path)].Tier);
+        Assert.Equal(ActivityInputTiers.Essential, endpointInputs[nameof(HttpEndpoint.SupportedMethods)].Tier);
+        Assert.Equal(ActivityInputTiers.Essential, endpointInputs[nameof(HttpEndpoint.ResponseMode)].Tier);
+        Assert.Equal(ActivityInputTiers.Optional, endpointInputs[nameof(HttpEndpoint.RequestTimeout)].Tier);
+        Assert.Equal(ActivityInputTiers.Optional, endpointInputs[nameof(HttpEndpoint.RequestSizeLimit)].Tier);
+        Assert.Equal(ActivityInputTiers.Setting, endpointInputs[nameof(HttpEndpoint.CanStartWorkflow)].Tier);
+        Assert.Equal(ActivityInputTiers.Setting, endpointInputs[nameof(HttpEndpoint.Authorize)].Tier);
+        Assert.Equal(ActivityInputTiers.Setting, endpointInputs[nameof(HttpEndpoint.Policy)].Tier);
     }
 
     [Fact]

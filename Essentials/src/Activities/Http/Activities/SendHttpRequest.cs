@@ -54,24 +54,24 @@ public sealed class SendHttpRequest(
     IOptions<HttpActivityOptions> httpActivityOptions) : Activity<SendHttpRequestResult>
 {
     /// <summary>The absolute request URL. Required.</summary>
-    [ActivityInput(Key = nameof(Url))]
+    [ActivityInput(Key = nameof(Url), Tier = InputTier.Essential)]
     [Required]
     public Uri Url { get; set; } = null!;
 
     /// <summary>The HTTP method (verb). Defaults to <c>GET</c> when not set.</summary>
-    [ActivityInput(Key = nameof(Method), DefaultValue = "GET", DefaultSyntax = "Literal", Options = ["GET", "POST", "PUT", "DELETE", "HEAD"])]
+    [ActivityInput(Key = nameof(Method), DefaultValue = "GET", DefaultSyntax = "Literal", Options = ["GET", "POST", "PUT", "DELETE", "HEAD"], Tier = InputTier.Essential)]
     public string Method { get; set; } = "GET";
 
     /// <summary>Optional request body content, serialized as a UTF-8 string.</summary>
-    [ActivityInput(Key = nameof(Content))]
+    [ActivityInput(Key = nameof(Content), Tier = InputTier.Essential)]
     public string? Content { get; set; }
 
     /// <summary>Content type (media type) for the request body. Defaults to <c>text/plain</c> when content is present.</summary>
-    [ActivityInput(Key = nameof(ContentType), DefaultValue = "text/plain", DefaultSyntax = "Literal", Options = ["text/plain", "application/json"])]
+    [ActivityInput(Key = nameof(ContentType), DefaultValue = "text/plain", DefaultSyntax = "Literal", Options = ["text/plain", "application/json"], Tier = InputTier.Optional)]
     public string? ContentType { get; set; }
 
     /// <summary>Optional request headers to add to the outbound request.</summary>
-    [ActivityInput(Key = nameof(RequestHeaders))]
+    [ActivityInput(Key = nameof(RequestHeaders), Tier = InputTier.Optional)]
     public IDictionary<string, string>? RequestHeaders { get; set; }
 
     /// <summary>
@@ -86,15 +86,15 @@ public sealed class SendHttpRequest(
     /// only, so this value is not part of it; a server that reflects the value in its response puts it into the
     /// result. The value goes to whatever <see cref="Url"/> resolves to. Phase 1's http Connection replaces this input.
     /// </summary>
-    [ActivityInput(Key = nameof(Authorization), DisplayName = "Authorization", IsCredential = true)]
+    [ActivityInput(Key = nameof(Authorization), DisplayName = "Authorization", IsCredential = true, Tier = InputTier.Optional)]
     public string? Authorization { get; set; }
 
     /// <summary>Optional set of status codes that should branch on the matching numeric outcome; others branch on <c>Unmatched</c>.</summary>
-    [ActivityInput(Key = nameof(ExpectedStatusCodes))]
+    [ActivityInput(Key = nameof(ExpectedStatusCodes), Tier = InputTier.Optional)]
     public ICollection<int>? ExpectedStatusCodes { get; set; }
 
     /// <summary>Optional per-request timeout overriding <c>HttpActivityOptions.DefaultTimeout</c>.</summary>
-    [ActivityInput(Key = nameof(Timeout))]
+    [ActivityInput(Key = nameof(Timeout), Tier = InputTier.Optional)]
     public TimeSpan? Timeout { get; set; }
 
     protected override async ValueTask<ActivityTransition<SendHttpRequestResult>> ExecuteAsync(ActivityExecutionContext context)

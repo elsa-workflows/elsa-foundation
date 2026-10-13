@@ -36,7 +36,7 @@ public sealed class HttpEndpoint :
     }
 
     /// <summary>The endpoint-relative route template.</summary>
-    [ActivityInput(Key = nameof(Path), Category = "Simple", Order = 10)]
+    [ActivityInput(Key = nameof(Path), Category = "Simple", Order = 10, Tier = InputTier.Essential)]
     [Required]
     public string Path { get; set; } = string.Empty;
 
@@ -46,26 +46,27 @@ public sealed class HttpEndpoint :
         Category = "Simple",
         Order = 20,
         UIHint = ActivityInputUIHints.CheckList,
-        Options = ["GET", "POST", "PUT", "HEAD", "DELETE"])]
+        Options = ["GET", "POST", "PUT", "HEAD", "DELETE"],
+        Tier = InputTier.Essential)]
     public ICollection<string>? SupportedMethods { get; set; }
 
     /// <summary>Whether this node may start a workflow.</summary>
-    [ActivityInput(Key = nameof(CanStartWorkflow), Category = "Simple", Order = 0)]
+    [ActivityInput(Key = nameof(CanStartWorkflow), Category = "Simple", Order = 0, Tier = InputTier.Setting)]
     public bool CanStartWorkflow { get; set; }
 
-    [ActivityInput(Key = nameof(Authorize), Category = "Advanced", Order = 100)]
+    [ActivityInput(Key = nameof(Authorize), Category = "Advanced", Order = 100, Tier = InputTier.Setting)]
     public bool Authorize { get; set; }
 
-    [ActivityInput(Key = nameof(Policy), Category = "Advanced", Order = 110)]
+    [ActivityInput(Key = nameof(Policy), Category = "Advanced", Order = 110, Tier = InputTier.Setting)]
     public string? Policy { get; set; }
 
-    [ActivityInput(Key = nameof(RequestTimeout), Category = "Advanced", Order = 120)]
+    [ActivityInput(Key = nameof(RequestTimeout), Category = "Advanced", Order = 120, Tier = InputTier.Optional)]
     public TimeSpan? RequestTimeout { get; set; }
 
-    [ActivityInput(Key = nameof(RequestSizeLimit), Category = "Advanced", Order = 130)]
+    [ActivityInput(Key = nameof(RequestSizeLimit), Category = "Advanced", Order = 130, Tier = InputTier.Optional)]
     public long? RequestSizeLimit { get; set; }
 
-    [ActivityInput(Key = nameof(ResponseMode), Category = "Simple", Order = 30)]
+    [ActivityInput(Key = nameof(ResponseMode), Category = "Simple", Order = 30, Tier = InputTier.Essential)]
     public ResponseMode ResponseMode { get; set; } = ResponseMode.Async;
 
     protected override ValueTask<ActivityTransition<HttpEndpointResult, HttpEndpointState>> ExecuteAsync(
