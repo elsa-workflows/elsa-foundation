@@ -12,7 +12,7 @@ public interface IEventPipeline
     /// </summary>
     PipelineDelegate<IEventContext> Setup(Action<IPipelineBuilder<IEventContext>> setup);
 
-    /// <summary>The composed delegate. Lazy-initialised to the default pipeline on first read.</summary>
+    /// <summary>The composed delegate. Lazy-initialized to the default pipeline on first read.</summary>
     PipelineDelegate<IEventContext> Pipeline { get; }
 
     /// <summary>Dispatches the given context through the composed pipeline.</summary>

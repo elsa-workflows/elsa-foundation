@@ -8,7 +8,7 @@ namespace Elsa.Mediator.Middleware;
 
 /// <summary>
 /// Logs the message being dispatched and its completion. Applied to the command pipeline (preserving
-/// the prior command-logging behaviour); the request pipeline does not compose it.
+/// the prior command-logging behavior); the request pipeline does not compose it.
 /// </summary>
 [UsedImplicitly]
 internal sealed class LoggingMiddleware(PipelineDelegate<IMessageContext> next, ILogger<LoggingMiddleware> logger) : IMessageMiddleware

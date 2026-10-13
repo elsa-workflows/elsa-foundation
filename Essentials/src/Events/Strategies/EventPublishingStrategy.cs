@@ -4,7 +4,7 @@ namespace Elsa.Events.Strategies;
 
 /// <summary>
 /// Pre-built singleton instances of the baseline publishing strategies. Callers pass these into
-/// <c>IEventPublisher.Publish(...)</c> to override the per-call dispatch behaviour without resolving
+/// <c>IEventPublisher.Publish(...)</c> to override the per-call dispatch behavior without resolving
 /// a strategy from DI. Most call sites should prefer the intent-revealing
 /// <c>IInlineEventPublisher</c> / <c>IDeferredEventPublisher</c> faces over selecting a strategy here.
 /// </summary>

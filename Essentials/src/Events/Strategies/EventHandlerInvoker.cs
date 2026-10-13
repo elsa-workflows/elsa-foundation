@@ -15,7 +15,7 @@ public static class EventHandlerInvoker
     // hot path. The compiled delegate closes over nothing, casts the handler and event to their
     // closed generic types, and calls Handle directly — no reflection, no args-array allocation per
     // dispatch, and exceptions surface unwrapped (the handler's own exception, not a
-    // TargetInvocationException), matching the previous InvokeAndUnwrap behaviour.
+    // TargetInvocationException), matching the previous InvokeAndUnwrap behavior.
     private static readonly ConcurrentDictionary<Type, Func<IEventHandler, IEvent, CancellationToken, Task>> InvokerCache = new();
 
     /// <summary>

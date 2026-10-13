@@ -8,7 +8,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Pipelines.Core` �
 
 ### `IMiddleware` *(Core — `Elsa.Pipelines.Core`)*
 - **Kind:** Contributor (pipeline middleware step).
-- **Signature:** a marker with no members. The engine binds the middleware's one public `Invoke` or `InvokeAsync(TContext context)` method, which returns `Task` or `ValueTask`, and hands the next step, `PipelineDelegate<TContext> next`, to its constructor.
+- **Signature:** a marker with no members. The engine binds the middleware's one public `Invoke` or `InvokeAsync(TContext context)` method, which returns `ValueTask`, and hands the next step, `PipelineDelegate<TContext> next`, to its constructor.
 - **Register:** via `UseMiddleware<TContext, TMiddleware>()` on the pipeline builder (not DI-registered directly). Pipelines are built at startup via `MiddlewareExtensions.BuildMiddlewareDelegate()`.
 - **Consumed by:** the pipeline delegate chain built by `BuildMiddlewareDelegate`. There is no single aggregating `IEventHandler`; the pipeline is a composed delegate, not an event-driven fan-in.
 

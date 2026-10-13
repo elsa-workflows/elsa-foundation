@@ -7,7 +7,7 @@ namespace Elsa.Mediator.Requests;
 
 /// <summary>
 /// The request dispatch pipeline: handler invoker only (no logging middleware, preserving the prior
-/// request behaviour). A thin default composition over the shared <see cref="MessagePipeline"/>.
+/// request behavior). A thin default composition over the shared <see cref="MessagePipeline"/>.
 /// </summary>
 internal sealed class RequestPipeline(IServiceProvider serviceProvider) : MessagePipeline(serviceProvider)
 {
