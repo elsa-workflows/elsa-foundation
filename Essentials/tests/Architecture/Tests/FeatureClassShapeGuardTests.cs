@@ -5,9 +5,9 @@ using Xunit;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Framework §2.5 and §2.23.3: a feature class is public, so CShells can discover it and an inheriting feature can
-/// extend it, and it is not sealed, so a feature in another package can derive from it and override
-/// <c>ConfigureServices</c>.
+/// A feature class is public, so CShells can discover it and an inheriting feature can extend it, and it is not sealed,
+/// so a feature in another package can derive from it and override <c>ConfigureServices</c>: feature inheritance is how
+/// one feature builds on another.
 /// </summary>
 /// <remarks>
 /// The rule is activated domain by domain, as each domain's internal-by-default change unseals its features, because

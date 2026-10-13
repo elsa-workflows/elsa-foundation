@@ -135,13 +135,6 @@ Jargon in public and internal type names is renamed before GA, one term per batc
 with each domain's D3 internalisation so no type is renamed twice. Old names are banned by an analyzer. The suffix rules in framework §2.6.1 and Elsa §E6 R4 follow the rename:
 `…Extension` replaces `…Contributor`, domain by domain; both suffixes are accepted until the rename completes.
 
-**Owner amendment, 13 October 2026 (#2591):** the analyzer is `Elsa.Architecture.Analyzers`, which every production
-project compiles with. It reports a retired term in any type name, public or internal (`ELSANAME001`), and in any
-namespace (`ELSANAME002`), naming the replacement. A term is banned domain by domain, not repository-wide: each
-domain's realignment adds a section for its folder to the root `.editorconfig` (key `elsa_naming.retired_terms`, for
-example `Pump|Pumps=Worker`), so a term that a domain not yet realigned still uses does not break the build. A list
-the analyzer cannot parse is itself an error (`ELSANAME003`).
-
 | Today | Becomes |
 |---|---|
 | Stimulus | Signal |
@@ -158,6 +151,17 @@ the analyzer cannot parse is itself an error (`ELSANAME003`).
 
 The glossary splits into a user glossary of about 40 terms and a contributor glossary. Process vocabulary (work
 unit, ratification, phase-owned) does not appear in product docs or type names.
+
+**Owner amendment, 13 October 2026:** decisions taken while delivering D3 and D5
+([#2591](https://github.com/elsa-workflows/elsa-foundation/issues/2591)). The old names are banned by a real Roslyn
+analyzer, not an architecture test. Every production project references it, and the lock-file churn that brings is
+accepted. A term is banned domain by domain, as each domain is realigned, not across the repository at once. Not a
+decision, but a description of the result: the analyzer is `Elsa.Architecture.Analyzers`, kept in `Essentials/build/`
+outside the module roots because it is build tooling, not a domain. It reports a retired term in a type name, public or
+internal (`ELSANAME001`), and in a namespace (`ELSANAME002`), naming the replacement, and a term list it cannot parse
+is itself an error (`ELSANAME003`). A domain activates its terms with a section for its folder in the root
+`.editorconfig` (key `elsa_naming.retired_terms`, for example `Pump|Pumps=Worker`). The analyzer reference is
+analyzer-only, which NuGet leaves out of the consumers' restore graphs, so no existing lock file changed.
 
 ### D6 — Meta diet
 
