@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { House, Plus, RefreshCw } from "lucide-react";
 import {
   homeWidgetIds,
@@ -7,7 +7,8 @@ import {
   type ElsaStudioModuleApi,
   type StudioDashboardWidgetContribution
 } from "@elsa-workflows/studio-sdk";
-import { hostControlPermissions } from "./hostControl";
+import { homeLayoutPermissions } from "./hostControl";
+import { useHomeDialogFocus } from "./useHomeDialogFocus";
 import {
   HomeLayoutStore,
   createHomeLayoutScope,
@@ -43,12 +44,18 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
   const cacheScopeKey = useMemo(() => JSON.stringify(scope), [scope]);
   const store = useMemo(() => new HomeLayoutStore(api, scope), [api, scope]);
   const pinnedWidgetIds = useMemo(() => api.runtime.dashboard?.pinnedWidgetIds ?? [], [api]);
-  const canSaveDefault = permissions.has(hostControlPermissions.moduleManagementManage) || permissions.has("*");
+  const canSaveDefault = permissions.has(homeLayoutPermissions.manageDefaults) || permissions.has("*");
   const [document, setDocument] = useState<HomeLayoutDocument | null>(null);
   const [preferenceError, setPreferenceError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
+  const [liveMessage, setLiveMessage] = useState("");
+  const [moveFocus, setMoveFocus] = useState<{ id: string; label: string } | null>(null);
+  const pageRef = useRef<HTMLElement>(null);
+  const pickerRef = useRef<HTMLElement>(null);
+  const closePicker = useCallback(() => { setPickerOpen(false); setPickerQuery(""); }, []);
+  useHomeDialogFocus(pickerRef, pickerOpen ? closePicker : null);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [refreshIntervalMs, setRefreshIntervalMs] = useState(api.runtime.dashboard?.defaultRefreshIntervalMs ?? 300_000);
   const [active, setActive] = useState(!globalThis.document.hidden);
@@ -89,6 +96,14 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
     setDocument(next);
     void store.save(next).catch(() => setPreferenceError("Home layout could not be saved."));
   }, [document, getStartedSnapshot, store]);
+  useEffect(() => {
+    if (!moveFocus) return;
+    const root = pageRef.current ?? globalThis.document;
+    const button = root.querySelector<HTMLButtonElement>(
+      `[data-widget-id="${moveFocus.id}"] button[aria-label="${moveFocus.label}"]`
+    );
+    button?.focus();
+  }, [moveFocus]);
 
   if (!document) return <section className="dashboard-page home-page"><div role="status">Loading Home…</div></section>;
 
@@ -109,6 +124,13 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
     const from = widgets.findIndex(entry => entry.id === id);
     const to = Math.max(0, Math.min(widgets.length - 1, from + delta));
     if (from >= 0 && from !== to) widgets.splice(to, 0, widgets.splice(from, 1)[0]);
+    const title = known.get(id)?.title ?? id;
+    const visibleAfter = widgets.filter(entry => entry.visible && known.has(entry.id));
+    const position = visibleAfter.findIndex(entry => entry.id === id) + 1;
+    if (from >= 0 && from !== to && position > 0) {
+      setLiveMessage(`${title} moved to position ${position} of ${visibleAfter.length}`);
+      setMoveFocus({ id, label: delta < 0 ? `Move ${title} earlier` : `Move ${title} later` });
+    }
     return { widgets };
   });
   const addWidget = (widget: StudioDashboardWidgetContribution) => {
@@ -146,7 +168,7 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
   });
 
   return (
-    <section className={`dashboard-page home-page${editing ? " home-page--editing" : ""}`}>
+    <section ref={pageRef} className={`dashboard-page home-page${editing ? " home-page--editing" : ""}`}>
       <header className="dashboard-page-header">
         <div>
           <h2>Home</h2>
@@ -163,11 +185,12 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
               <button type="button" onClick={() => { setPickerOpen(true); setPickerQuery(""); }}><Plus size={15} /> Add widget</button>
               <button type="button" onClick={reset}>Reset to default</button>
               {canSaveDefault && !store.anonymous ? <button type="button" onClick={saveDefault}>Save as server default</button> : null}
-              <button type="button" onClick={() => { setEditing(false); setPickerOpen(false); }}>Done</button>
+              <button type="button" onClick={() => { setEditing(false); closePicker(); }}>Done</button>
             </>
           ) : <button type="button" onClick={() => setEditing(true)}>Edit home</button>}
         </div>
       </header>
+      <div className="visually-hidden" aria-live="polite">{liveMessage}</div>
       {preferenceError ? <div role="status">{preferenceError}</div> : null}
       <div className="dashboard-grid">
         {visible.length ? visible.map(entry => {
@@ -209,16 +232,23 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
       </div>
       {pickerOpen ? (
         <div className="dashboard-settings-backdrop">
-          <section role="dialog" aria-modal="true" aria-label="Add widget" className="dashboard-settings-dialog">
+          <section
+            ref={pickerRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Add widget"
+            className="dashboard-settings-dialog"
+            tabIndex={-1}
+          >
             <h4>Add widget</h4>
             <label>
               <span>Search</span>
-              <input value={pickerQuery} onChange={event => setPickerQuery(event.target.value)} />
+              <input aria-label="Search widgets" value={pickerQuery} onChange={event => setPickerQuery(event.target.value)} />
             </label>
             <AddWidgetGroup title="Core" widgets={filteredAddable.filter(widget => widget.core)} hidden={hidden} onAdd={addWidget} />
             <AddWidgetGroup title="From modules" widgets={filteredAddable.filter(widget => !widget.core)} hidden={hidden} onAdd={addWidget} />
             {!filteredAddable.length ? <p>No widgets match.</p> : null}
-            <div><button type="button" onClick={() => setPickerOpen(false)}>Close</button></div>
+            <div><button type="button" onClick={closePicker}>Close</button></div>
           </section>
         </div>
       ) : null}

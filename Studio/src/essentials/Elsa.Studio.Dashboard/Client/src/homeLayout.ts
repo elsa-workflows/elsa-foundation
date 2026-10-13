@@ -83,16 +83,14 @@ export function reconcileHomeLayout(
 
   for (const entry of layout.widgets) {
     if (seen.has(entry.id) || excludedWidgetIds.has(entry.id)) continue;
-    seen.add(entry.id);
     const widget = known.get(entry.id);
-    const size = widget
-      ? (widget.supportedSizes.includes(normalizeHomeWidgetSize(entry.size))
-        ? normalizeHomeWidgetSize(entry.size)
-        : widget.defaultSize)
-      : normalizeHomeWidgetSize(entry.size);
+    if (!widget) continue;
+    seen.add(entry.id);
     widgets.push({
       id: entry.id,
-      size,
+      size: widget.supportedSizes.includes(normalizeHomeWidgetSize(entry.size))
+        ? normalizeHomeWidgetSize(entry.size)
+        : widget.defaultSize,
       visible: entry.visible !== false,
       options: entry.options
     });
@@ -115,8 +113,9 @@ export class HomeLayoutStore {
     if (this.anonymous) return this.loadLocal();
     try {
       const document = await this.api.backend.http.getJson<HomeLayoutDocument>(homeLayoutRoute, { headers: this.headers() });
-      this.revision = document.revision;
-      return normalizeDocument(document);
+      const normalized = normalizeDocument(document);
+      this.revision = normalized.source === "user" ? normalized.revision : undefined;
+      return normalized;
     } catch {
       return this.loadLocal();
     }
@@ -149,7 +148,7 @@ export class HomeLayoutStore {
   }
 
   async saveDefault(document: HomeLayoutDocument): Promise<HomeLayoutDocument> {
-    const revision = this.revision ?? document.revision;
+    const revision = document.source === "default" ? document.revision : undefined;
     const headers = { ...this.headers(), ...(revision ? { "If-Match": `"${revision}"` } : { "If-None-Match": "*" }) };
     const saved = await this.api.backend.http.putJson<HomeLayoutDocument>(homeLayoutDefaultRoute, {
       schemaVersion: homeLayoutSchemaVersion,

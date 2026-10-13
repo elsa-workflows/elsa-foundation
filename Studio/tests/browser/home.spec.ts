@@ -41,6 +41,17 @@ test.describe("customizable Home", () => {
     await page.keyboard.press("Enter");
     await expect(page.getByRole("button", { name: "Add widget" }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Reset to default" })).toBeVisible();
+    const addWidget = page.getByRole("button", { name: "Add widget" }).first();
+    await addWidget.focus();
+    await expect(addWidget).toBeFocused();
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "Add widget" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel("Search widgets")).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(addWidget).toBeFocused();
+
     await page.getByRole("button", { name: "Done" }).click();
 
     await expectNoSeriousAxeViolations(page);

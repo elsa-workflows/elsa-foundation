@@ -35,6 +35,16 @@ public sealed class StudioPreferenceScopeResolverTests
         Assert.Equal("home-layout", key.Namespace);
     }
 
+    [Fact]
+    public async Task ReservedAdminDefaultSubjectIsRejectedOnTheUserScope()
+    {
+        var resolver = new StudioPreferenceScopeResolver(new SessionService(new(
+            "authenticated", StudioHomeLayout.DefaultSubjectId, "Admin", "tenant-3", new HashSet<string>(), new HashSet<string>(), "fresh", "test")));
+
+        await Assert.ThrowsAsync<StudioPreferenceScopeException>(async () =>
+            await resolver.ResolveAsync(new ClaimsPrincipal(), "studio-primary", StudioPreferenceNamespaces.HomeLayout));
+    }
+
     [Theory]
     [InlineData("anonymous", null, null)]
     [InlineData("authenticated", null, "tenant")]

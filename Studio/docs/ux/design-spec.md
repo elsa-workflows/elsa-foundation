@@ -159,8 +159,10 @@ default.
 when every step is done or dismissed, and can be restored from Add widget.
 
 **Edit home** is a tinted mode with add, remove, reorder, Add widget, Reset to default, and
-(for host-control manage) Save as server default. Normal view collapses per-widget chrome
-into `OverflowMenu`.
+(for `studio-preferences.manage-defaults`) Save as server default. Normal view collapses
+per-widget chrome into `OverflowMenu`. Add widget moves focus into the dialog, closes on
+Escape, and returns focus to the trigger. Reorder keeps focus on the moved widget and
+announces the new position.
 
 ## Dashboard widget chrome
 

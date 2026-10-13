@@ -17,10 +17,12 @@ Enable `StudioPreferences` for the core store, namespaces, service, and permissi
 | GET | `/_elsa/studio/home-layout` | `studio.preferences.read` or `*` | Read the current user's Home layout. Falls back to the admin default, then the built-in layout. |
 | PUT | `/_elsa/studio/home-layout` | `studio.preferences.write` or `*` | Create or update the current user's Home layout. |
 | DELETE | `/_elsa/studio/home-layout` | `studio.preferences.write` or `*` | Reset: delete the user's layout so the admin default (or built-in) applies. |
-| GET | `/_elsa/studio/home-layout/default` | `module-management.read` / `manage` or `*` | Read the admin default Home layout. |
-| PUT | `/_elsa/studio/home-layout/default` | `module-management.manage` or `*` | Save the admin default Home layout. |
+| GET | `/_elsa/studio/home-layout/default` | `studio-preferences.manage-defaults` or `*` | Read the admin default Home layout. |
+| PUT | `/_elsa/studio/home-layout/default` | `studio-preferences.manage-defaults` or `*` | Save the admin default Home layout. |
 
-Both routes use the Foundation Identity policy provider and evaluator. `studio.preferences.write` implies `studio.preferences.read`. The authenticated subject and tenant plus `X-Elsa-Studio-Host-Id` form the scope; the route namespace is authoritative. PUT requires either `If-None-Match: *` for creation or one quoted `If-Match` revision for update.
+Both routes use the Foundation Identity policy provider and evaluator. `studio.preferences.write` implies `studio.preferences.read`. `studio-preferences.manage-defaults` is a separate Studio-preferences permission (wildcard still grants it); it is not `module-management`. The authenticated subject and tenant plus `X-Elsa-Studio-Host-Id` form the scope; the reserved subject `__admin_default__` is rejected on the per-user route. PUT requires either `If-None-Match: *` for creation or one quoted `If-Match` revision for update.
+
+GET `/home-layout` returns the fallback document's `ETag` when the source is `default`. That ETag identifies the admin default, not a user revision: the first user PUT must still send `If-None-Match: *`. A builtin fallback has no ETag. PUT rejects malformed values, unknown widget ids, and more than 50 widgets with 422.
 
 ## Registered services and contributors
 

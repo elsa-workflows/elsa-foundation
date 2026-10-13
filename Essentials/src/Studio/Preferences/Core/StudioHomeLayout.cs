@@ -12,9 +12,24 @@ public static class StudioHomeLayout
 {
     public const string DefaultSubjectId = "__admin_default__";
     public const int SchemaVersion = 1;
+    public const int MaxWidgetCount = 50;
 
     public static readonly IReadOnlyList<string> AllowedSizes =
         ["small", "medium", "wide", "full", "S", "M", "L"];
+
+    /// <summary>
+    /// First-party Home widget ids. PUT rejects any other id.
+    /// </summary>
+    public static readonly IReadOnlySet<string> KnownWidgetIds = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "home.get-started",
+        "home.recent-workflows",
+        "home.needs-attention",
+        "home.recent-runs",
+        "attention.queue",
+        "workflows.portfolio",
+        "workflows.run-health"
+    };
 
     public static readonly JsonElement BuiltInValue = Parse("""
         {
@@ -33,6 +48,8 @@ public static class StudioHomeLayout
             return false;
         if (!value.TryGetProperty("widgets", out var widgets) || widgets.ValueKind != JsonValueKind.Array)
             return false;
+        if (widgets.GetArrayLength() > MaxWidgetCount)
+            return false;
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var entry in widgets.EnumerateArray())
@@ -43,6 +60,8 @@ public static class StudioHomeLayout
                 return false;
             var widgetId = id.GetString();
             if (string.IsNullOrWhiteSpace(widgetId) || widgetId.Length > 128 || !seen.Add(widgetId))
+                return false;
+            if (!IsKnownWidgetId(widgetId))
                 return false;
             if (entry.TryGetProperty("size", out var size))
             {
@@ -62,6 +81,9 @@ public static class StudioHomeLayout
 
         return true;
     }
+
+    public static bool IsKnownWidgetId(string? widgetId) =>
+        !string.IsNullOrWhiteSpace(widgetId) && KnownWidgetIds.Contains(widgetId);
 
     public static JsonElement Normalize(JsonElement value)
     {

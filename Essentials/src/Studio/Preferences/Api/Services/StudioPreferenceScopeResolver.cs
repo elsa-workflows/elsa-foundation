@@ -23,6 +23,9 @@ public sealed partial class StudioPreferenceScopeResolver(IAuthSessionService se
             string.IsNullOrWhiteSpace(session.TenantId))
             throw new StudioPreferenceScopeException("An authenticated subject and tenant are required.");
 
+        if (string.Equals(session.Subject, StudioHomeLayout.DefaultSubjectId, StringComparison.Ordinal))
+            throw new StudioPreferenceScopeException("The reserved admin-default subject cannot use the per-user Home layout.");
+
         if (string.IsNullOrWhiteSpace(studioHostId) || studioHostId.Length > 128 || !HostIdPattern().IsMatch(studioHostId))
             throw new StudioPreferenceHostException("X-Elsa-Studio-Host-Id must contain 1-128 letters, digits, dots, underscores, colons, or hyphens.");
 

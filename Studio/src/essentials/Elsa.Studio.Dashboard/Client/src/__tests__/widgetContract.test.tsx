@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AnonymousAuthProvider, AuthProvider, homeWidgetIds, registerHomeWidget, type AuthProviderManager, type AuthSession } from "@elsa-workflows/studio-sdk";
 import { HomePage } from "../HomePage";
 import { DashboardPreferenceStore, reconcileDashboardPreferences } from "../dashboardPreferences";
-import { HomeLayoutStore } from "../homeLayout";
+import { HomeLayoutStore, reconcileHomeLayout } from "../homeLayout";
 import { register } from "../module";
 import { flush, seedHomeLayout, stubApi, waitUntil, widget } from "./testSupport";
 
@@ -13,6 +13,16 @@ describe("dashboard widget contract", () => {
   afterEach(() => {
     localStorage.clear();
     vi.unstubAllGlobals();
+  });
+
+  it("drops unknown Home widget ids while keeping registered contributions", () => {
+    const result = reconcileHomeLayout({
+      widgets: [
+        { id: "home.recent-runs", size: "full", visible: true },
+        { id: "unknown.widget", size: "small", visible: true }
+      ]
+    }, [widget({ id: "home.recent-runs", title: "Recent runs", defaultSize: "full", supportedSizes: ["full"] })]);
+    expect(result.widgets.map(entry => entry.id)).toEqual(["home.recent-runs"]);
   });
 
   it("registers Home routes and core widgets through registerHomeWidget", () => {

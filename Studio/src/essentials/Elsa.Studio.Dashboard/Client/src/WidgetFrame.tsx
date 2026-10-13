@@ -47,7 +47,7 @@ export function WidgetFrame({ api, widget, size, settings, refreshIntervalMs, gl
     runtime.state.status === "refreshing" ||
     (runtime.state.status === "idle" && !widget.load);
 
-  return <article className="dashboard-widget" data-size={size} data-editing={editing ? "true" : undefined} aria-labelledby={`${widget.id}-title`} aria-busy={runtime.state.status === "loading" || runtime.state.status === "refreshing"}>
+  return <article className="dashboard-widget" data-widget-id={widget.id} data-size={size} data-editing={editing ? "true" : undefined} aria-labelledby={`${widget.id}-title`} aria-busy={runtime.state.status === "loading" || runtime.state.status === "refreshing"}>
     <header className="dashboard-widget-header">
       <div>
         <h3 id={`${widget.id}-title`}>

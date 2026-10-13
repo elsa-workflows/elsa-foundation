@@ -23,6 +23,8 @@ describe("HomePage", () => {
     clickText(container, "Edit home");
     click(container, "Move Second earlier");
     expect([...container.querySelectorAll("h3")].map(value => value.textContent?.replace("⠿", ""))).toEqual(["Second", "First"]);
+    expect(container.querySelector("[aria-live='polite']")?.textContent).toBe("Second moved to position 1 of 2");
+    expect(container.querySelector('button[aria-label="Move Second earlier"]')).toBe(document.activeElement);
 
     const size = container.querySelector('select[aria-label="Size of Second"]') as HTMLSelectElement;
     flushSync(() => { size.value = "medium"; size.dispatchEvent(new Event("change", { bubbles: true })); });
@@ -30,6 +32,18 @@ describe("HomePage", () => {
 
     click(container, "Hide Second");
     expect(container.textContent).not.toContain("Second body");
+    const addWidget = [...container.querySelectorAll("button")].find(value => value.textContent?.includes("Add widget"));
+    if (!addWidget) throw new Error("Missing Add widget");
+    flushSync(() => addWidget.focus());
+    flushSync(() => addWidget.click());
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    const dialog = container.querySelector('[role="dialog"][aria-label="Add widget"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.contains(document.activeElement)).toBe(true);
+    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(container.querySelector('[role="dialog"][aria-label="Add widget"]')).toBeNull();
+    expect(document.activeElement).toBe(addWidget);
+
     clickText(container, "Add widget");
     clickText(container, "Second");
     expect(container.textContent).toContain("Second body");
@@ -145,8 +159,14 @@ describe("HomePage", () => {
 
 function render(api: ReturnType<typeof stubApi>) {
   const container = document.createElement("div");
+  document.body.append(container);
   const root = createRoot(container);
   flushSync(() => root.render(<AnonymousAuthProvider><HomePage api={api} /></AnonymousAuthProvider>));
+  const originalUnmount = root.unmount.bind(root);
+  root.unmount = () => {
+    originalUnmount();
+    container.remove();
+  };
   return { container, root };
 }
 

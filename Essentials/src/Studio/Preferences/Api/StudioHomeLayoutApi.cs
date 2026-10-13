@@ -26,13 +26,6 @@ public static class StudioHomeLayoutApi
     public const string UserRoute = "/_elsa/studio/home-layout";
     public const string DefaultRoute = "/_elsa/studio/home-layout/default";
 
-    /// <summary>
-    /// Host-control keys owned by module-management. Preferences does not take a project
-    /// reference on Modularity; the strings are the stable catalog keys.
-    /// </summary>
-    public const string HostControlRead = "module-management.read";
-    public const string HostControlManage = "module-management.manage";
-
     public static void MapStudioHomeLayoutApi(IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
@@ -59,12 +52,12 @@ public static class StudioHomeLayoutApi
         api.MapUnboundOperation("GET", DefaultRoute, "GetHomeLayoutDefault",
                 typeof(HomeLayoutDocument), StatusCodes.Status200OK, null, HandleGetDefaultAsync,
                 containFailures: false)
-            .RequireAnyPermission(PermissionKey.Wildcard, HostControlRead, HostControlManage);
+            .RequireAnyPermission(PermissionKey.Wildcard, StudioPreferencesPermissions.ManageDefaults);
 
         api.MapUnboundOperation("PUT", DefaultRoute, "PutHomeLayoutDefault",
                 typeof(HomeLayoutDocument), StatusCodes.Status200OK, null, HandlePutDefaultAsync,
                 containFailures: false)
-            .RequireAnyPermission(PermissionKey.Wildcard, HostControlManage);
+            .RequireAnyPermission(PermissionKey.Wildcard, StudioPreferencesPermissions.ManageDefaults);
     }
 
     private static async Task HandleGetUserAsync(HttpContext httpContext)
@@ -98,6 +91,11 @@ public static class StudioHomeLayoutApi
                 httpContext.Request.Headers[StudioPreferenceScopeResolver.StudioHostIdHeader].FirstOrDefault(),
                 StudioPreferenceNamespaces.HomeLayout,
                 httpContext.RequestAborted);
+            if (IsReservedSubject(key.SubjectId))
+            {
+                await Results.StatusCode(StatusCodes.Status403Forbidden).ExecuteAsync(httpContext);
+                return;
+            }
             await preferences.DeleteAsync(key, httpContext.RequestAborted);
             await Results.NoContent().ExecuteAsync(httpContext);
         }
@@ -125,6 +123,12 @@ public static class StudioHomeLayoutApi
                 httpContext.RequestAborted);
             var defaultKey = userKey with { SubjectId = StudioHomeLayout.DefaultSubjectId };
 
+            if (!adminDefault && IsReservedSubject(userKey.SubjectId))
+            {
+                await Results.StatusCode(StatusCodes.Status403Forbidden).ExecuteAsync(httpContext);
+                return;
+            }
+
             if (adminDefault)
             {
                 var storedDefault = await preferences.FindAsync(defaultKey, httpContext.RequestAborted);
@@ -144,10 +148,10 @@ public static class StudioHomeLayoutApi
             }
 
             var fallback = await preferences.FindAsync(defaultKey, httpContext.RequestAborted);
-            await Results.Json(
-                    ToDocument(fallback, fallback is null ? "builtin" : "default"),
-                    contentType: "application/json")
-                .ExecuteAsync(httpContext);
+            var fallbackDocument = ToDocument(fallback, fallback is null ? "builtin" : "default");
+            if (fallbackDocument.Revision is not null)
+                httpContext.Response.Headers.ETag = $"\"{fallbackDocument.Revision}\"";
+            await Results.Json(fallbackDocument, contentType: "application/json").ExecuteAsync(httpContext);
         }
         catch (StudioPreferenceScopeException)
         {
@@ -182,6 +186,16 @@ public static class StudioHomeLayoutApi
             return;
         }
 
+        if (!StudioHomeLayout.IsValid(request.Value))
+        {
+            await CreateProblem(
+                    httpContext,
+                    new StudioPreferenceValidationException("Home layout value must be an object with a widgets array of known widget ids."),
+                    StatusCodes.Status422UnprocessableEntity)
+                .ExecuteAsync(httpContext);
+            return;
+        }
+
         try
         {
             var scopes = httpContext.RequestServices.GetRequiredService<StudioPreferenceScopeResolver>();
@@ -198,6 +212,11 @@ public static class StudioHomeLayoutApi
                     hostId,
                     StudioPreferenceNamespaces.HomeLayout,
                     httpContext.RequestAborted);
+            if (!adminDefault && IsReservedSubject(key.SubjectId))
+            {
+                await Results.StatusCode(StatusCodes.Status403Forbidden).ExecuteAsync(httpContext);
+                return;
+            }
             var condition = StudioPreferencePreconditions.Parse(
                 httpContext.Request.Headers[HeaderNames.IfMatch].FirstOrDefault(),
                 httpContext.Request.Headers[HeaderNames.IfNoneMatch].FirstOrDefault());
@@ -239,6 +258,9 @@ public static class StudioHomeLayoutApi
             await CreateProblem(httpContext, exception, StatusCodes.Status422UnprocessableEntity).ExecuteAsync(httpContext);
         }
     }
+
+    private static bool IsReservedSubject(string subjectId) =>
+        string.Equals(subjectId, StudioHomeLayout.DefaultSubjectId, StringComparison.Ordinal);
 
     private static HomeLayoutDocument ToDocument(StudioPreferenceDocument? document, string source)
     {
