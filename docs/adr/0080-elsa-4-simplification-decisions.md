@@ -137,7 +137,7 @@ with each domain's D3 internalisation so no type is renamed twice. Old names are
 
 | Today | Becomes |
 |---|---|
-| Stimulus | Signal |
+| Stimulus | Stimulus (kept; see the owner amendment below) |
 | Contributor (`I*Contributor`) | Extension (`I*Extension`) |
 | Attention | Alert |
 | Pump | Worker |
@@ -162,6 +162,16 @@ internal (`ELSANAME001`), and in a namespace (`ELSANAME002`), naming the replace
 is itself an error (`ELSANAME003`). A domain activates its terms with a section for its folder in the root
 `.editorconfig` (key `elsa_naming.retired_terms`, for example `Pump|Pumps=Worker`). The analyzer reference is
 analyzer-only, which NuGet leaves out of the consumers' restore graphs, so no existing lock file changed.
+
+**Owner amendment, 13 October 2026 (later the same day):** two adjustments from a BPMN review
+([#2591](https://github.com/elsa-workflows/elsa-foundation/issues/2591#issuecomment-6147212044)).
+
+- Stimulus is not renamed. Signal collides with BPMN's Signal, the broadcast throw and catch event, which Elsa's BPMN
+  engine exposes in the API and in Studio next to the runtime concept. Trigger is taken too: Elsa uses it for start
+  triggers. "Stimulus" stays and is not a retired term.
+- `Essentials/src/Activities/Bpmn` is left out of the Activities domain's D3 and D5 work. ADR 0063 is being finished:
+  Elsa 4's BPMN token engine is replaced by the `Bpmn.Semantics` package, which Elsa 3 already ships on (3.9.0).
+  The BPMN program is parked until 21 November 2026, and whatever survives the switch is made internal and renamed then.
 
 ### D6 — Meta diet
 
