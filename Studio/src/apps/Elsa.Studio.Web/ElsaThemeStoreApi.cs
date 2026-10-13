@@ -23,6 +23,7 @@ internal static class ElsaThemeStoreApi
     private static readonly string[] ThemeLayoutNames = ["classic", "floating", "workbench", "editorial"];
     private static readonly HashSet<string> BuiltInThemeIds = new(StringComparer.OrdinalIgnoreCase)
     {
+        "classic",
         "meridian",
         "drift",
         "schematic",

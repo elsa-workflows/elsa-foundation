@@ -162,10 +162,52 @@ const geistTypography: ThemeTypography = {
   mono: `"Geist Mono Variable", "Geist Mono", ${monoFallback}`
 };
 
+// Classic: Elsa 3's default (elsa-studio-react `data-elsa-theme="classic"`) rebuilt on the
+// `--studio-*` contract. Sky-500 (#0EA5E9, hue 237) is the identity; Light darkens the solid
+// fill so white button text meets AA, the same way Signal deepens its lime on a pale ground.
+// Surfaces follow the source slate ladder (white page, slate-50 sidebar/cards, slate-200
+// hairlines). Dim and High contrast are derived: Dim lifts the dark slate, High contrast uses
+// the shared black-ground recipe with a bright sky accent.
+const skyHue = 237;
+const classicEmerald = (lightness: number, chroma = 0.13) => oklch(lightness, chroma, 163);
+
+const classic = definition(
+  "classic",
+  "Classic",
+  "The Elsa 3 Studio look: sky-blue primary, pale tinted sidebar, hairline cards and Geist. The Elsa Studio 4 default.",
+  geistTypography,
+  { radiusSm: "5px", radius: "8px", radiusMd: "10px", radiusLg: "12px", radiusXl: "14px" },
+  "classic",
+  {
+    light: mode({
+      scheme: "light", hue: 250, chroma: 0.012,
+      background: 1, card: 0.984, muted: 0.97, border: 0.929, input: 0.929, sidebar: 0.984, foreground: 0.208, mutedForeground: 0.48,
+      primary: oklch(0.54, 0.148, skyHue), primaryForeground: white,
+      wash: oklch(0.954, 0.018, 239), activeForeground: oklch(0.4, 0.14, skyHue),
+      overrides: { success: classicEmerald(0.54) }
+    }),
+    dark: mode({
+      scheme: "dark", hue: 262, chroma: 0.037,
+      background: 0.208, card: 0.252, muted: 0.277, border: 0.372, input: 0.372, sidebar: 0.208, foreground: 0.96, mutedForeground: 0.775,
+      primary: oklch(0.754, 0.115, skyHue), primaryForeground: oklch(0.183, 0.031, 263),
+      wash: oklch(0.294, 0.057, 253), activeForeground: oklch(0.86, 0.1, skyHue),
+      overrides: { success: classicEmerald(0.773, 0.153), successForeground: oklch(0.17, 0.03, 163) }
+    }),
+    dim: mode({
+      scheme: "dim", hue: 258, chroma: 0.03,
+      background: 0.28, card: 0.325, muted: 0.36, border: 0.42, input: 0.3, sidebar: 0.26, foreground: 0.95, mutedForeground: 0.8,
+      primary: oklch(0.78, 0.12, skyHue), primaryForeground: oklch(0.18, 0.03, 263),
+      wash: oklch(0.38, 0.06, skyHue), activeForeground: oklch(0.9, 0.08, skyHue),
+      overrides: { success: classicEmerald(0.8, 0.14), successForeground: oklch(0.18, 0.03, 163) }
+    }),
+    highContrast: highContrast(oklch(0.86, 0.16, skyHue), skyHue, { success: classicEmerald(0.86, 0.19) })
+  }
+);
+
 const meridian = definition(
   "meridian",
   "Meridian",
-  "Crisp, neutral precision with a single indigo accent. The Elsa Studio 4 default.",
+  "Crisp, neutral precision with a single indigo accent.",
   geistTypography,
   { radiusSm: "5px", radius: "7px", radiusMd: "9px", radiusLg: "12px", radiusXl: "14px" },
   "classic",
@@ -423,6 +465,6 @@ const dusk = definition(
   }
 );
 
-export const foundationThemeIds = ["meridian", "drift", "schematic", "atelier", "elsa-cloud", "signal", "dusk"] as const;
+export const foundationThemeIds = ["classic", "meridian", "drift", "schematic", "atelier", "elsa-cloud", "signal", "dusk"] as const;
 
-export const foundationThemeDefinitions: StudioThemeDefinition[] = [meridian, drift, schematic, atelier, elsaCloud, signal, dusk];
+export const foundationThemeDefinitions: StudioThemeDefinition[] = [classic, meridian, drift, schematic, atelier, elsaCloud, signal, dusk];

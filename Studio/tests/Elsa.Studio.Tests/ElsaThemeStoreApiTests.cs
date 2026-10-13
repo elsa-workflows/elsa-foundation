@@ -90,6 +90,7 @@ public sealed class ElsaThemeStoreApiTests : IAsyncLifetime
     }
 
     [Theory]
+    [InlineData("classic")]
     [InlineData("meridian")]
     [InlineData("drift")]
     [InlineData("schematic")]
