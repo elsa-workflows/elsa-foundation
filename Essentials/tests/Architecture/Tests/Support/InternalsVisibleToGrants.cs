@@ -1,3 +1,5 @@
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using System.Xml.Linq;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -5,56 +7,138 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Finds every <c>InternalsVisibleTo</c> grant under a repository root, in all three forms the build honors, and judges
-/// each against the rule that an assembly opens its internals only to its own domain's test assemblies.
+/// Finds every <c>InternalsVisibleTo</c> grant under a repository root and judges each against the rule that an
+/// assembly opens its internals only to its own domain's test assemblies.
 /// </summary>
 /// <remarks>
-/// The forms are the MSBuild <c>&lt;InternalsVisibleTo Include="..."/&gt;</c> item, an
-/// <c>&lt;AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo"&gt;</c> item, and an
-/// <c>[assembly: InternalsVisibleTo("...")]</c> attribute in a source file. Reading only the first, as the guard this
-/// replaces did, let the other two pass unseen.
+/// <para>
+/// The authority for a production project is the assembly the build produced: its <c>InternalsVisibleToAttribute</c>s
+/// are what the runtime honors, whatever wrote them. That covers every way to declare a grant: the MSBuild item, an
+/// <c>AssemblyAttribute</c> item, an attribute in source behind a using alias or with a computed argument, a linked
+/// <c>Compile</c> item from outside the project folder, and an item from an imported <c>.props</c> or <c>.targets</c>
+/// anywhere. A production project with no compiled assembly fails rather than passing unchecked.
+/// </para>
+/// <para>
+/// The source scan says where a grant is declared, for the failure message. It is also the check for test projects,
+/// which the build does not require here, and there an argument the scan cannot read as a literal fails closed.
+/// </para>
 /// </remarks>
 internal static class InternalsVisibleToGrants
 {
-    private const string AttributeTypeName = "System.Runtime.CompilerServices.InternalsVisibleTo";
+    private const string AttributeNamespace = "System.Runtime.CompilerServices";
+    private const string AttributeName = "InternalsVisibleToAttribute";
+    private const string AttributeTypeName = AttributeNamespace + ".InternalsVisibleTo";
 
     /// <summary>One grant: the project that opens its internals, the assembly it opens them to, and where it says so.</summary>
-    internal sealed record Grant(string Project, string ProjectPath, string Target, string DeclaredIn);
+    /// <param name="Target">The assembly granted to, or <see langword="null"/> when the source argument is not a literal.</param>
+    internal sealed record Grant(string Project, string ProjectPath, string? Target, string DeclaredIn);
 
-    /// <summary>Every grant declared by a project under <see cref="ModuleRoots.All"/> of <paramref name="repoRoot"/>.</summary>
-    internal static IReadOnlyList<Grant> Find(string repoRoot) =>
-        [.. Projects(repoRoot).SelectMany(project => GrantsOf(repoRoot, project))];
+    /// <summary>Every grant compiled into the built assembly of each production project under <paramref name="repoRoot"/>.</summary>
+    internal static IReadOnlyList<Grant> FindCompiled(string repoRoot, string configuration) =>
+        [.. ProductionProjects(repoRoot).SelectMany(project =>
+            BuiltAssemblyPath(project, configuration) is { } assembly && File.Exists(assembly)
+                ? CompiledTargets(assembly).Select(target => new Grant(AssemblyName(project), Relative(repoRoot, project), target, Relative(repoRoot, assembly)))
+                : [])];
 
     /// <summary>
-    /// Every grant that breaks the rule, plus every shared build file that declares a grant on behalf of the projects
-    /// importing it, as human-readable lines.
+    /// Every grant that breaks the rule, every production project with no compiled assembly to read, and every shared build
+    /// file that declares a grant for the projects importing it, as human-readable lines.
     /// </summary>
-    internal static IReadOnlyList<string> Violations(string repoRoot, IReadOnlySet<(string Project, string Target)> exceptions)
+    internal static IReadOnlyList<string> Violations(string repoRoot, string configuration, IReadOnlySet<(string Project, string Target)> exceptions)
     {
         var assemblies = Projects(repoRoot)
             .GroupBy(project => AssemblyName(project), StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => Relative(repoRoot, group.First()), StringComparer.Ordinal);
+        var declared = Projects(repoRoot).SelectMany(project => SourceGrantsOf(repoRoot, project)).ToArray();
 
-        var grantViolations = Find(repoRoot)
-            .Where(grant => !exceptions.Contains((grant.Project, grant.Target)))
-            .Select(grant => Judge(grant, assemblies))
+        var unbuilt = ProductionProjects(repoRoot)
+            .Where(project => BuiltAssemblyPath(project, configuration) is not { } path || !File.Exists(path))
+            .Select(project => $"{AssemblyName(project)}: no compiled assembly at {Relative(repoRoot, BuiltAssemblyPath(project, configuration)!)}; " +
+                               "build it first (the Architecture tests build every production project), because its grants are read from it");
+
+        var compiled = FindCompiled(repoRoot, configuration)
+            .Where(grant => !exceptions.Contains((grant.Project, grant.Target!)))
+            .Select(grant => Judge(grant with { DeclaredIn = DeclarationOf(grant, declared) }, assemblies))
+            .OfType<string>();
+
+        var testProjectGrants = declared
+            .Where(grant => ModuleRoots.IsTestPath(grant.ProjectPath))
+            .Select(grant => grant.Target is null
+                ? $"{grant.Project} ({grant.DeclaredIn}): an InternalsVisibleTo argument that is not a string literal cannot be judged; write the assembly name as a literal"
+                : exceptions.Contains((grant.Project, grant.Target)) ? null : Judge(grant, assemblies))
             .OfType<string>();
 
         var sharedViolations = SharedBuildFiles(repoRoot)
             .Where(path => MsBuildGrantTargets(XDocument.Load(path)).Any())
             .Select(path => $"{Relative(repoRoot, path)} declares InternalsVisibleTo for every project that imports it; declare it in the granting project instead");
 
-        return [.. grantViolations.Concat(sharedViolations).Order(StringComparer.Ordinal)];
+        return [.. unbuilt.Concat(compiled).Concat(testProjectGrants).Concat(sharedViolations).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
+    }
+
+    /// <summary>The assemblies a built assembly opens its internals to, read from its metadata without loading it.</summary>
+    internal static IReadOnlyList<string> CompiledTargets(string assemblyPath)
+    {
+        using var stream = File.OpenRead(assemblyPath);
+        using var image = new PEReader(stream);
+        var reader = image.GetMetadataReader();
+
+        return
+        [
+            .. reader.GetAssemblyDefinition().GetCustomAttributes()
+                .Select(reader.GetCustomAttribute)
+                .Where(attribute => IsInternalsVisibleTo(reader, attribute.Constructor))
+                .Select(attribute =>
+                {
+                    var value = reader.GetBlobReader(attribute.Value);
+                    value.ReadUInt16(); // the custom-attribute prolog
+                    return (value.ReadSerializedString() ?? string.Empty).Split(',')[0].Trim();
+                })
+                .Where(target => target.Length > 0)
+        ];
+    }
+
+    private static bool IsInternalsVisibleTo(MetadataReader reader, EntityHandle constructor)
+    {
+        var type = constructor.Kind switch
+        {
+            HandleKind.MemberReference => reader.GetMemberReference((MemberReferenceHandle)constructor).Parent,
+            HandleKind.MethodDefinition => reader.GetMethodDefinition((MethodDefinitionHandle)constructor).GetDeclaringType(),
+            _ => default(EntityHandle)
+        };
+
+        return type.Kind switch
+        {
+            HandleKind.TypeReference => reader.GetTypeReference((TypeReferenceHandle)type) is var reference &&
+                                        reader.StringComparer.Equals(reference.Name, AttributeName) &&
+                                        reader.StringComparer.Equals(reference.Namespace, AttributeNamespace),
+            HandleKind.TypeDefinition => reader.GetTypeDefinition((TypeDefinitionHandle)type) is var definition &&
+                                         reader.StringComparer.Equals(definition.Name, AttributeName) &&
+                                         reader.StringComparer.Equals(definition.Namespace, AttributeNamespace),
+            _ => false
+        };
+    }
+
+    /// <summary>
+    /// The production project's built assembly: <c>bin/&lt;configuration&gt;/&lt;target framework&gt;/&lt;assembly&gt;.dll</c>
+    /// beside its project file, the framework from the project file or the repository default.
+    /// </summary>
+    internal static string? BuiltAssemblyPath(string projectPath, string configuration)
+    {
+        var project = XDocument.Load(projectPath);
+        var framework = project.Descendants().LastOrDefault(element => element.Name.LocalName == "TargetFramework")?.Value.Trim() is { Length: > 0 } declared
+            ? declared
+            : "net10.0";
+        return Path.Join(Path.GetDirectoryName(projectPath), "bin", configuration, framework, $"{AssemblyName(projectPath)}.dll");
     }
 
     private static string? Judge(Grant grant, IReadOnlyDictionary<string, string> assemblies)
     {
         var granting = $"{grant.Project} -> {grant.Target} ({grant.DeclaredIn})";
 
-        if (!assemblies.TryGetValue(grant.Target, out var targetPath))
+        if (!assemblies.TryGetValue(grant.Target!, out var targetPath))
             return $"{granting}: names no project of this repository";
 
-        if (!ElsaDomains.IsTestPath(targetPath))
+        if (!ModuleRoots.IsTestPath(targetPath))
             return $"{granting}: {targetPath} is not a test project; a project never opens its internals to another production project";
 
         var ownDomain = ElsaDomains.Of(grant.ProjectPath);
@@ -67,7 +151,20 @@ internal static class InternalsVisibleToGrants
             : $"{granting}: {targetPath} tests domain '{targetDomain}', not the granting project's domain '{ownDomain}'";
     }
 
-    private static IEnumerable<Grant> GrantsOf(string repoRoot, string projectPath)
+    /// <summary>Where a compiled grant is declared, as far as the source scan can tell.</summary>
+    private static string DeclarationOf(Grant compiled, IReadOnlyList<Grant> declared)
+    {
+        if (declared.FirstOrDefault(grant => grant.Project == compiled.Project && grant.Target == compiled.Target) is { } literal)
+            return literal.DeclaredIn;
+
+        if (declared.FirstOrDefault(grant => grant.Project == compiled.Project && grant.Target is null) is { } computed)
+            return $"{computed.DeclaredIn}, computed argument";
+
+        return $"compiled into {compiled.DeclaredIn}; not declared in the project file or its own sources, " +
+               "so a linked file, an imported build file or a computed argument";
+    }
+
+    private static IEnumerable<Grant> SourceGrantsOf(string repoRoot, string projectPath)
     {
         var project = AssemblyName(projectPath);
         var relativeProject = Relative(repoRoot, projectPath);
@@ -83,25 +180,34 @@ internal static class InternalsVisibleToGrants
     }
 
     /// <summary>
-    /// The assemblies a source file grants to through <c>[assembly: InternalsVisibleTo("...")]</c>, read from the parsed
-    /// syntax so the same text inside a comment or a string literal is not mistaken for a grant.
+    /// The assemblies a source file grants to through an assembly-level <c>InternalsVisibleTo</c> attribute, read from the
+    /// parsed syntax so the same text in a comment or a string literal is no grant. The attribute is recognised by its own
+    /// names and by any using alias of it; an argument that is not a string literal yields <see langword="null"/>.
     /// </summary>
-    private static IEnumerable<string> AssemblyAttributeTargets(string source)
+    private static IEnumerable<string?> AssemblyAttributeTargets(string source)
     {
         if (!source.Contains("InternalsVisibleTo", StringComparison.Ordinal))
             return [];
 
-        return CSharpSyntaxTree.ParseText(source).GetRoot()
-            .DescendantNodes(node => node is CompilationUnitSyntax or BaseNamespaceDeclarationSyntax)
+        var root = CSharpSyntaxTree.ParseText(source).GetRoot();
+        var names = root.DescendantNodes()
+            .OfType<UsingDirectiveSyntax>()
+            .Where(directive => directive.Alias is not null && directive.NamespaceOrType is NameSyntax target && IsAttributeName(RightmostName(target)))
+            .SelectMany(directive => new[] { directive.Alias!.Name.Identifier.ValueText, directive.Alias.Name.Identifier.ValueText + "Attribute" })
+            .Concat(["InternalsVisibleTo", "InternalsVisibleToAttribute"])
+            .ToHashSet(StringComparer.Ordinal);
+
+        return root.DescendantNodes(node => node is CompilationUnitSyntax or BaseNamespaceDeclarationSyntax)
             .OfType<AttributeListSyntax>()
             .Where(list => list.Target?.Identifier.ValueText == "assembly")
             .SelectMany(list => list.Attributes)
-            .Where(attribute => RightmostName(attribute.Name) is "InternalsVisibleTo" or "InternalsVisibleToAttribute")
-            .Select(attribute => attribute.ArgumentList?.Arguments.FirstOrDefault()?.Expression)
-            .OfType<LiteralExpressionSyntax>()
-            .Select(literal => literal.Token.ValueText.Split(',')[0].Trim())
-            .Where(target => target.Length > 0);
+            .Where(attribute => names.Contains(RightmostName(attribute.Name)))
+            .Select(attribute => attribute.ArgumentList?.Arguments.FirstOrDefault()?.Expression is LiteralExpressionSyntax literal
+                ? literal.Token.ValueText.Split(',')[0].Trim()
+                : null);
     }
+
+    private static bool IsAttributeName(string name) => name is "InternalsVisibleTo" or "InternalsVisibleToAttribute";
 
     private static string RightmostName(NameSyntax name) => name switch
     {
@@ -151,7 +257,10 @@ internal static class InternalsVisibleToGrants
             .SelectMany(root => Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories))
             .Where(path => !RepoPaths.IsBuildOutput(repoRoot, path));
 
-    /// <summary>The repository-root build files and every <c>Directory.Build.*</c> and <c>.targets</c> file under the module roots.</summary>
+    private static IEnumerable<string> ProductionProjects(string repoRoot) =>
+        Projects(repoRoot).Where(project => ModuleRoots.IsProductionPath(Relative(repoRoot, project)));
+
+    /// <summary>The repository-root build files and every <c>.props</c> and <c>.targets</c> file under the module roots.</summary>
     private static IEnumerable<string> SharedBuildFiles(string repoRoot) =>
         Directory.EnumerateFiles(repoRoot, "*.props").Concat(Directory.EnumerateFiles(repoRoot, "*.targets"))
             .Concat(ModuleRoots.Resolve(repoRoot, ModuleRoots.All)

@@ -4,9 +4,9 @@ using static Elsa.Architecture.Tests.RepoPaths;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Framework §2.23.3: implementations are internal and are tested through <c>InternalsVisibleTo</c> to their own
-/// domain's test assemblies. A project never opens its internals to another production project, and never to the tests
-/// of another domain.
+/// Implementations are internal and are tested by their own domain's test assemblies, which reach them through
+/// <c>InternalsVisibleTo</c>. A project never opens its internals to another production project, and never to the tests
+/// of another domain: either would let code outside the domain depend on what the domain is free to change.
 /// </summary>
 public sealed partial class ArchitectureGuardTests
 {
@@ -20,21 +20,25 @@ public sealed partial class ArchitectureGuardTests
         ("Elsa.Workbench", "Elsa.Modularity.Tests")
     ];
 
+    /// <summary>The configuration this test assembly was built in, which is the one whose production assemblies it reads.</summary>
+    private static string BuildConfiguration { get; } =
+        Path.GetFileName(Path.GetDirectoryName(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)))!;
+
     [Fact]
     public void InternalsVisibleTo_grants_go_only_to_the_granting_domains_test_assemblies()
     {
-        var violations = InternalsVisibleToGrants.Violations(RepoRoot, InternalsVisibleToExceptions);
+        var violations = InternalsVisibleToGrants.Violations(RepoRoot, BuildConfiguration, InternalsVisibleToExceptions);
 
         Assert.True(violations.Count == 0,
             "InternalsVisibleTo may name only the granting project's own domain's test assemblies:" + Environment.NewLine +
             string.Join(Environment.NewLine, violations));
     }
 
-    /// <summary>Pins that the sweep reads the real grants, so the guard above going green means "checked".</summary>
+    /// <summary>Pins that the guard reads the real compiled grants, so its going green means "checked".</summary>
     [Fact]
-    public void The_grant_sweep_finds_the_repositorys_existing_grants()
+    public void The_compiled_grant_sweep_finds_the_repositorys_existing_grants()
     {
-        var grants = InternalsVisibleToGrants.Find(RepoRoot).Select(grant => (grant.Project, grant.Target)).ToHashSet();
+        var grants = InternalsVisibleToGrants.FindCompiled(RepoRoot, BuildConfiguration).Select(grant => (grant.Project, grant.Target)).ToHashSet();
 
         Assert.Contains(("Elsa.Cli.Worker", "Elsa.Cli.Tests"), grants);
         Assert.Contains(("Elsa.Persistence.EntityFramework", "Elsa.Persistence.EntityFramework.Tests"), grants);
@@ -42,7 +46,33 @@ public sealed partial class ArchitectureGuardTests
         Assert.Contains(("Elsa.Workbench", "Elsa.Modularity.Tests"), grants);
     }
 
-    /// <summary>The detector itself, against a sandbox repository holding one grant of every kind it must judge.</summary>
+    /// <summary>
+    /// The compiled reader sees a grant however its source spelled it: through a using alias, with a constant, with a
+    /// concatenation, with <c>nameof</c>, or with a public key after the name.
+    /// </summary>
+    [Fact]
+    public void A_compiled_grant_is_read_whatever_form_its_source_took()
+    {
+        using var sandbox = new GrantSandbox();
+        var assembly = sandbox.Assembly(
+            "Essentials/src/Tasks/Elsa.Tasks/bin/Release/net10.0/Elsa.Tasks.dll",
+            """
+            using Grant = System.Runtime.CompilerServices.InternalsVisibleToAttribute;
+
+            [assembly: Grant(Names.Events + ".Tests")]
+            [assembly: System.Runtime.CompilerServices.InternalsVisibleTo(nameof(Elsa) + ".Tasks.Tests")]
+            [assembly: System.Runtime.CompilerServices.InternalsVisibleToAttribute("Elsa.Signed.Tests, PublicKey=0024000004800000940000000602000000240000525341310004000001000100c547cac37abd99c8db225ef2f6c8a3602f3b3606cc9891605d02baa56104f4cfc0734aa39b93bf7852f7d9266654753cc297e7d2edfe0bac1cdcf9f717241550e0a7b191195b7667bb4f64bcb8e2121380fd1d9d46ad2d92d2d15605093924cceaf74c4861eff62abf69b9291ed0a340e113be11e6a7d3113e92484cf7045cc7")]
+
+            internal static class Names { public const string Events = "Elsa.Events"; }
+            namespace Elsa { internal static class Marker { } }
+            """);
+
+        Assert.Equal(
+            ["Elsa.Events.Tests", "Elsa.Signed.Tests", "Elsa.Tasks.Tests"],
+            InternalsVisibleToGrants.CompiledTargets(assembly).Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>The detector itself, against a sandbox repository with built assemblies holding one grant of every kind.</summary>
     [Fact]
     public void Each_kind_of_grant_is_judged_by_domain()
     {
@@ -51,34 +81,74 @@ public sealed partial class ArchitectureGuardTests
         sandbox.Project("Essentials/tests/Events/Tests/Elsa.Events.Tests.csproj");
         sandbox.Project("Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj");
         sandbox.Project("Essentials/tests/Modularity/Tests/Elsa.Modularity.Tests.csproj");
+
+        // Declared in the project file for one target; the other grant has no declaration the scan can see.
         sandbox.Project(
             "Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj",
-            """<ItemGroup><InternalsVisibleTo Include="Elsa.Tasks.Tests" /><InternalsVisibleTo Include="Elsa.Events.Tests" /></ItemGroup>""");
+            """<ItemGroup><InternalsVisibleTo Include="Elsa.Tasks.Tests" /></ItemGroup>""");
+        sandbox.Assembly(
+            "Essentials/src/Tasks/Elsa.Tasks/bin/Release/net10.0/Elsa.Tasks.dll",
+            """
+            using Grant = System.Runtime.CompilerServices.InternalsVisibleToAttribute;
+            [assembly: Grant("Elsa.Tasks.Tests")]
+            [assembly: Grant(Names.Events + ".Tests")]
+            internal static class Names { public const string Events = "Elsa.Events"; }
+            """);
+
+        // A computed argument in source, compiled into a grant to a production project.
+        const string computed =
+            """
+            [assembly: System.Runtime.CompilerServices.InternalsVisibleTo(Names.Target)]
+            internal static class Names { public const string Target = "Elsa." + nameof(Tasks); }
+            namespace Tasks { internal static class Marker { } }
+            """;
         sandbox.Project("Essentials/src/Events/Elsa.Events/Elsa.Events.csproj");
-        sandbox.File("Essentials/src/Events/Elsa.Events/AssemblyInfo.cs", """[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Elsa.Tasks")]""");
-        sandbox.File("Essentials/src/Events/Elsa.Events/Commented.cs", """// [assembly: InternalsVisibleTo("Elsa.Tasks")]""");
-        sandbox.File("Essentials/src/Events/Elsa.Events/Quoted.cs", """class Quoted { const string Text = "[assembly: InternalsVisibleTo(\"Elsa.Tasks\")]"; }""");
-        sandbox.Project(
-            "Essentials/src/Locking/Core/Elsa.Locking.Core.csproj",
-            """<ItemGroup><AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo"><_Parameter1>Elsa.Unknown.Tests</_Parameter1></AssemblyAttribute></ItemGroup>""");
-        sandbox.Project(
-            "Essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj",
-            """<ItemGroup><InternalsVisibleTo Include="Elsa.Workflows.Runtime.Tests" /></ItemGroup>""");
+        sandbox.File("Essentials/src/Events/Elsa.Events/AssemblyInfo.cs", computed);
+        sandbox.Assembly("Essentials/src/Events/Elsa.Events/bin/Release/net10.0/Elsa.Events.dll", computed);
+
+        // A production project that was never built.
+        sandbox.Project("Essentials/src/Locking/Core/Elsa.Locking.Core.csproj");
+
+        sandbox.Project("Essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj");
+        sandbox.Assembly(
+            "Essentials/src/Workflows/Design/Core/bin/Release/net10.0/Elsa.Workflows.Design.Core.dll",
+            """[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Elsa.Workflows.Runtime.Tests")]""");
+
         sandbox.Project(
             "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
             """<ItemGroup><InternalsVisibleTo Include="Elsa.Modularity.Tests" /><InternalsVisibleTo Include="Elsa.Tasks.Tests" /></ItemGroup>""");
+        sandbox.Assembly(
+            "Essentials/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll",
+            """
+            [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Elsa.Modularity.Tests")]
+            [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Elsa.Tasks.Tests")]
+            """);
+
+        // A test project's grants are read from source: decoys in a comment and a string are no grant, and a
+        // computed argument fails closed.
+        sandbox.File("Essentials/tests/Tasks/Tests/Commented.cs", """// [assembly: InternalsVisibleTo("Elsa.Tasks")]""");
+        sandbox.File("Essentials/tests/Tasks/Tests/Quoted.cs", """class Quoted { const string Text = "[assembly: InternalsVisibleTo(\"Elsa.Tasks\")]"; }""");
+        sandbox.File(
+            "Essentials/tests/Tasks/Tests/Grants.cs",
+            """
+            using Opens = System.Runtime.CompilerServices.InternalsVisibleToAttribute;
+            [assembly: Opens(Names.Target)]
+            static class Names { public const string Target = "Elsa.Other"; }
+            """);
+
         sandbox.File("Directory.Build.props", """<Project><ItemGroup><InternalsVisibleTo Include="Elsa.Tasks.Tests" /></ItemGroup></Project>""");
 
-        var violations = InternalsVisibleToGrants.Violations(sandbox.Root, InternalsVisibleToExceptions);
+        var violations = InternalsVisibleToGrants.Violations(sandbox.Root, "Release", InternalsVisibleToExceptions);
 
         Assert.Equal(
         [
             "Directory.Build.props declares InternalsVisibleTo for every project that imports it; declare it in the granting project instead",
-            "Elsa.Events -> Elsa.Tasks (Essentials/src/Events/Elsa.Events/AssemblyInfo.cs): Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj is not a test project; a project never opens its internals to another production project",
-            "Elsa.Locking.Core -> Elsa.Unknown.Tests (Essentials/src/Locking/Core/Elsa.Locking.Core.csproj): names no project of this repository",
-            "Elsa.Tasks -> Elsa.Events.Tests (Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj): Essentials/tests/Events/Tests/Elsa.Events.Tests.csproj tests domain 'Events', not the granting project's domain 'Tasks'",
+            "Elsa.Events -> Elsa.Tasks (Essentials/src/Events/Elsa.Events/AssemblyInfo.cs, computed argument): Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj is not a test project; a project never opens its internals to another production project",
+            "Elsa.Locking.Core: no compiled assembly at Essentials/src/Locking/Core/bin/Release/net10.0/Elsa.Locking.Core.dll; build it first (the Architecture tests build every production project), because its grants are read from it",
+            "Elsa.Tasks -> Elsa.Events.Tests (compiled into Essentials/src/Tasks/Elsa.Tasks/bin/Release/net10.0/Elsa.Tasks.dll; not declared in the project file or its own sources, so a linked file, an imported build file or a computed argument): Essentials/tests/Events/Tests/Elsa.Events.Tests.csproj tests domain 'Events', not the granting project's domain 'Tasks'",
+            "Elsa.Tasks.Tests (Essentials/tests/Tasks/Tests/Grants.cs): an InternalsVisibleTo argument that is not a string literal cannot be judged; write the assembly name as a literal",
             "Elsa.Workbench -> Elsa.Tasks.Tests (Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj): Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj belongs to no domain, so it has no own test assemblies to grant to",
-            "Elsa.Workflows.Design.Core -> Elsa.Workflows.Runtime.Tests (Essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj): Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj tests domain 'Workflows.Runtime', not the granting project's domain 'Workflows.Design'",
+            "Elsa.Workflows.Design.Core -> Elsa.Workflows.Runtime.Tests (compiled into Essentials/src/Workflows/Design/Core/bin/Release/net10.0/Elsa.Workflows.Design.Core.dll; not declared in the project file or its own sources, so a linked file, an imported build file or a computed argument): Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj tests domain 'Workflows.Runtime', not the granting project's domain 'Workflows.Design'",
         ],
             violations);
     }
@@ -91,23 +161,33 @@ public sealed partial class ArchitectureGuardTests
     [InlineData("Extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj", "Extensions/ExtensionBuilder")]
     [InlineData("Extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj", "Extensions/ExtensionBuilder")]
     [InlineData("Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj", null)]
+    [InlineData("Essentials/build/Analyzers/Elsa.Architecture.Analyzers.csproj", null)]
     [InlineData("tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj", null)]
-    public void A_path_maps_to_its_constitution_domain(string path, string? domain) =>
+    public void A_path_maps_to_its_domain(string path, string? domain) =>
         Assert.Equal(domain, ElsaDomains.Of(path));
 
-    /// <summary>A throwaway repository tree for the detector proof, cleaned up on dispose.</summary>
+    /// <summary>A throwaway repository tree for the detector proofs, cleaned up on dispose.</summary>
     private sealed class GrantSandbox : IDisposable
     {
         public string Root { get; } = Directory.CreateTempSubdirectory("elsa-ivt-guard-").FullName;
 
         public void Project(string relativePath, string items = "") =>
-            File($"{relativePath}", $"""<Project Sdk="Microsoft.NET.Sdk">{items}</Project>""");
+            File(relativePath, $"""<Project Sdk="Microsoft.NET.Sdk">{items}</Project>""");
 
         public void File(string relativePath, string content)
         {
             var path = Path.Join(Root, relativePath);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             System.IO.File.WriteAllText(path, content);
+        }
+
+        /// <summary>Compiles <paramref name="source"/> into the built assembly at <paramref name="relativePath"/>.</summary>
+        public string Assembly(string relativePath, string source)
+        {
+            var path = Path.Join(Root, relativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            System.IO.File.WriteAllBytes(path, FixtureCompiler.Compile(Path.GetFileNameWithoutExtension(path), source));
+            return path;
         }
 
         public void Dispose() => Directory.Delete(Root, recursive: true);

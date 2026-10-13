@@ -5,11 +5,11 @@ using static Elsa.Architecture.Tests.RepoPaths;
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Holds public API tracking together (framework §2.23.3). A project tracks its public surface by setting
-/// <c>&lt;ElsaTrackPublicApi&gt;true&lt;/ElsaTrackPublicApi&gt;</c> in its own project file; the root
-/// <c>Directory.Build.props</c> then adds PublicApiAnalyzers and the project's <c>PublicAPI.Shipped.txt</c> and
-/// <c>PublicAPI.Unshipped.txt</c>. The three must move together: an opt-in without its files, or files without the
-/// opt-in, would leave the surface untracked while looking tracked.
+/// Holds public API tracking together, so every change to a tracked public surface is a reviewed diff. A project tracks
+/// its public surface by setting <c>&lt;ElsaTrackPublicApi&gt;true&lt;/ElsaTrackPublicApi&gt;</c> in its own project
+/// file; the root <c>Directory.Build.props</c> then adds PublicApiAnalyzers and the project's
+/// <c>PublicAPI.Shipped.txt</c> and <c>PublicAPI.Unshipped.txt</c>. The three must move together: an opt-in without its
+/// files, or files without the opt-in, would leave the surface untracked while looking tracked.
 /// </summary>
 /// <remarks>
 /// "Has the analyzer" is read from the project's committed <c>packages.lock.json</c>, which CI's locked restore holds to
@@ -151,9 +151,6 @@ public sealed class PublicApiFilesGuardTests
             var project = XDocument.Load(projectPath);
             var optIn = project.Descendants().Where(element => element.Name.LocalName == OptIn).ToArray();
             var lockFile = Path.Join(directory, "packages.lock.json");
-            var isProduction = relativeDirectory.StartsWith("Essentials/src/", StringComparison.Ordinal) ||
-                               (relativeDirectory.StartsWith("Extensions/", StringComparison.Ordinal) && !ElsaDomains.IsTestPath(relativeDirectory) &&
-                                relativeDirectory.Split('/') is [_, _, "src", ..]);
 
             return new ProjectApiState(
                 Path.GetFileNameWithoutExtension(projectPath),
@@ -163,7 +160,7 @@ public sealed class PublicApiFilesGuardTests
                 HasShipped: File.Exists(Path.Join(directory, Shipped)),
                 HasUnshipped: File.Exists(Path.Join(directory, Unshipped)),
                 LockListsAnalyzer: File.Exists(lockFile) && File.ReadAllText(lockFile).Contains($"\"{AnalyzerPackage}\"", StringComparison.Ordinal),
-                IsPackableProduction: isProduction && !string.Equals(
+                IsPackableProduction: ModuleRoots.IsProductionPath(relativeDirectory) && !string.Equals(
                     project.Descendants().LastOrDefault(element => element.Name.LocalName == "IsPackable")?.Value.Trim(),
                     "false",
                     StringComparison.OrdinalIgnoreCase));

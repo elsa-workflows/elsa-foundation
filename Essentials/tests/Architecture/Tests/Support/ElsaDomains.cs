@@ -1,16 +1,15 @@
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// The one way these guards decide which Elsa constitution §E2.1 domain a path belongs to, so the
-/// InternalsVisibleTo rule, the feature-class rule and any per-domain activation agree on what "the same domain"
-/// means.
+/// The one way these guards decide which Elsa domain a path belongs to, so the InternalsVisibleTo rule, the
+/// feature-class rule and any per-domain activation agree on what "the same domain" means.
 /// </summary>
 /// <remarks>
 /// <para>
 /// A domain is the folder directly under <c>Essentials/src</c> or <c>Essentials/tests</c>, so production code and its
 /// tests map to the same key. <c>Workflows</c> is the exception: <c>Workflows.Design</c>, <c>Workflows.Runtime</c>,
-/// <c>Workflows.Publishing</c> and the other <c>Workflows.*</c> folders are separate §E2.1 domains, so the key takes
-/// one more segment. An extension is its own domain, keyed <c>Extensions/&lt;name&gt;</c> for both its <c>src</c> and
+/// <c>Workflows.Publishing</c> and the other <c>Workflows.*</c> folders are separate domains, so the key takes one
+/// more segment. An extension is its own domain, keyed <c>Extensions/&lt;name&gt;</c> for both its <c>src</c> and
 /// <c>tests</c> roots, so it never collides with an Essentials domain that shares its name.
 /// </para>
 /// <para>
@@ -38,9 +37,4 @@ internal static class ElsaDomains
 
         return null;
     }
-
-    /// <summary>Whether a repository-relative path lies in a test root (<c>Essentials/tests</c> or <c>Extensions/*/tests</c>).</summary>
-    internal static bool IsTestPath(string relativePath) =>
-        relativePath.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries) is
-            ["Essentials", "tests", ..] or ["Extensions", _, "tests", ..];
 }
