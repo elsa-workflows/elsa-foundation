@@ -212,6 +212,17 @@ dotnet_diagnostic.CA1727.severity = none
 # driven by an analyzer that cannot tell a contract from an implementation.
 dotnet_diagnostic.CA1515.severity = none
 
+#### Retired terms (Elsa.Architecture.Analyzers) ####
+#
+# Each domain's internal-by-default change bans its retired terms by adding a section for its folder, for example:
+#
+#   [Essentials/src/Tasks/**.cs]
+#   elsa_naming.retired_terms = Pump|Pumps=Worker
+#
+# The value is a comma-separated list of entries; an entry lists a term's spellings separated by "|", then "=" and
+# the replacement the error message suggests. A spelling matches whole PascalCase words of a type or namespace name.
+# No domain is activated yet.
+
 #### Generated code ####
 
 [**/Migrations/*.cs]

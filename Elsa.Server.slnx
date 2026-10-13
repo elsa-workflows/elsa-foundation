@@ -116,6 +116,9 @@
     <Project Path="Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj" />
     <Project Path="Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj" />
   </Folder>
+  <Folder Name="/Essentials/src/Architecture/">
+    <Project Path="Essentials/src/Architecture/Analyzers/Elsa.Architecture.Analyzers.csproj" />
+  </Folder>
   <Folder Name="/Essentials/src/Attention/">
     <Project Path="Essentials/src/Attention/Core/Elsa.Attention.Core.csproj" />
     <Project Path="Essentials/src/Attention/Api/Elsa.Attention.Api.csproj" />
@@ -395,6 +398,9 @@
   </Folder>
   <Folder Name="/Essentials/tests/Architecture/">
     <Project Path="Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/tests/Architecture/Analyzers/">
+    <Project Path="Essentials/tests/Architecture/Analyzers/Tests/Elsa.Architecture.Analyzers.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Architecture/ExtensionBoundary/">
     <Project Path="Essentials/tests/Architecture/ExtensionBoundary/Tests/Elsa.Architecture.ExtensionBoundary.Tests.csproj" />

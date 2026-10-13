@@ -1,184 +1,206 @@
+using System.Xml.Linq;
 using Xunit;
 using static Elsa.Architecture.Tests.RepoPaths;
 
 namespace Elsa.Architecture.Tests;
 
 /// <summary>
-/// Keeps PublicApiAnalyzers' declared-API files where issue #2078 put them: every Line A project carries
-/// both <c>PublicAPI.Shipped.txt</c> and <c>PublicAPI.Unshipped.txt</c>, and no Line B project carries
-/// either, because <c>Directory.Build.props</c> wires the analyzer and its <c>AdditionalFiles</c> off
-/// <c>$(ElsaVersionLine) == 'A'</c> alone.
+/// Holds public API tracking together (framework §2.23.3). A project tracks its public surface by setting
+/// <c>&lt;ElsaTrackPublicApi&gt;true&lt;/ElsaTrackPublicApi&gt;</c> in its own project file; the root
+/// <c>Directory.Build.props</c> then adds PublicApiAnalyzers and the project's <c>PublicAPI.Shipped.txt</c> and
+/// <c>PublicAPI.Unshipped.txt</c>. The three must move together: an opt-in without its files, or files without the
+/// opt-in, would leave the surface untracked while looking tracked.
 /// </summary>
 /// <remarks>
-/// Line A membership is read from <c>VersionLines.props</c> via <see cref="VersionLines.LineAMembers"/>, the
-/// same source <see cref="LineAClosureGuardTests"/> uses, rather than restated here. The sweep covers every
-/// backend production root <see cref="ModuleRoots.Production"/> resolves — Essentials source/apps and each
-/// extension's source tree — while Studio remains outside the backend inventory.
+/// "Has the analyzer" is read from the project's committed <c>packages.lock.json</c>, which CI's locked restore holds to
+/// what the project actually restores: if the wiring stopped adding the analyzer, the lock file would have to lose it
+/// too, and this guard would see that.
 /// </remarks>
 public sealed class PublicApiFilesGuardTests
 {
-    private static IReadOnlyList<string> LineAMembers { get; } = VersionLines.LineAMembers(RepoRoot);
+    private const string OptIn = "ElsaTrackPublicApi";
+    private const string Shipped = "PublicAPI.Shipped.txt";
+    private const string Unshipped = "PublicAPI.Unshipped.txt";
+    private const string AnalyzerPackage = "Microsoft.CodeAnalysis.PublicApiAnalyzers";
 
-    /// <summary>Every Elsa project under <c>src/</c>, by name, with the directory its <c>.csproj</c> lives in.</summary>
-    private static IReadOnlyDictionary<string, string> ElsaProjectDirectories { get; } = LoadElsaProjectDirectories(RepoRoot);
-
-    private static IReadOnlyDictionary<string, string> LineADirectories { get; } =
-        ElsaProjectDirectories.Where(project => LineAMembers.Contains(project.Key, StringComparer.OrdinalIgnoreCase))
-            .ToDictionary(project => project.Key, project => project.Value, StringComparer.OrdinalIgnoreCase);
-
-    private static IReadOnlyDictionary<string, string> LineBDirectories { get; } =
-        ElsaProjectDirectories.Where(project => !LineAMembers.Contains(project.Key, StringComparer.OrdinalIgnoreCase))
-            .ToDictionary(project => project.Key, project => project.Value, StringComparer.OrdinalIgnoreCase);
+    private static IReadOnlyList<ProjectApiState> Projects { get; } = Inspect(RepoRoot);
 
     [Fact]
-    public void Every_line_a_project_has_both_publicapi_files()
+    public void Every_project_that_tracks_its_public_api_has_both_files_and_the_analyzer()
     {
-        var missing = MissingPublicApiFiles(LineADirectories);
+        var violations = IncompleteTracking(Projects);
 
-        Assert.True(missing.Count == 0,
-            "Every Line A project must carry PublicAPI.Shipped.txt and PublicAPI.Unshipped.txt (#2078). " +
-            $"Missing from: {string.Join(", ", missing)}.");
+        Assert.True(violations.Count == 0,
+            $"A project that sets {OptIn} must carry {Shipped}, {Unshipped} and the analyzer, and set the opt-in " +
+            $"unconditionally:{Environment.NewLine}{string.Join(Environment.NewLine, violations)}");
     }
 
     [Fact]
-    public void No_line_b_project_has_publicapi_files()
+    public void Every_project_with_a_publicapi_file_tracks_its_public_api()
     {
-        var unexpected = ProjectsWithPublicApiFiles(LineBDirectories);
+        var violations = UntrackedFiles(Projects);
 
-        Assert.True(unexpected.Count == 0,
-            "Only Line A projects carry PublicAPI.Shipped.txt/PublicAPI.Unshipped.txt (#2078); a Line B " +
-            $"project should never gain them. Found on: {string.Join(", ", unexpected)}.");
+        Assert.True(violations.Count == 0,
+            $"A project carrying {Shipped} or {Unshipped} must set {OptIn}, or the files track nothing: " +
+            string.Join(", ", violations));
+    }
+
+    [Fact]
+    public void Only_packable_production_projects_track_their_public_api()
+    {
+        var violations = TrackingOutsidePackableProduction(Projects);
+
+        Assert.True(violations.Count == 0,
+            $"Only a packable project under Essentials/src or Extensions/*/src has a public surface to track: {string.Join(", ", violations)}");
     }
 
     /// <summary>
-    /// Pins that the sweep is not vacuous: it names more than ten Elsa projects outside Line A, and it found
-    /// at least one under Essentials source/apps and extension source roots <see cref="ModuleRoots.Production"/> resolves.
+    /// Pins that the sweep is not vacuous: it reads test and production projects alike, and it sees the projects that
+    /// track today.
     /// </summary>
     [Fact]
-    public void The_scan_covers_a_nontrivial_line_b_universe_across_every_backend_source_root()
+    public void The_sweep_covers_every_module_root_and_sees_the_tracking_projects()
     {
-        Assert.NotEmpty(LineAMembers);
-        Assert.True(LineBDirectories.Count > LineAMembers.Count,
-            $"Expected more Line B Elsa projects than the {LineAMembers.Count} Line A members, to prove this " +
-            $"guard checks a real, non-trivial set; found {LineBDirectories.Count}.");
-
-        var essentialsRoot = Path.Join(RepoRoot, "Essentials", "src");
-        var extensionsRoot = Path.Join(RepoRoot, "Extensions");
-        var appsRoot = Path.Join(RepoRoot, "Essentials", "apps");
-
-        Assert.Contains(LineBDirectories.Values, dir => dir.StartsWith(essentialsRoot, StringComparison.Ordinal));
-        Assert.Contains(LineBDirectories.Values, dir => dir.StartsWith(extensionsRoot, StringComparison.Ordinal));
-        Assert.Contains(LineBDirectories.Values, dir => dir.StartsWith(appsRoot, StringComparison.Ordinal));
+        Assert.Contains(Projects, project => project is { Name: "Elsa.Primitives", Tracks: true });
+        Assert.Contains(Projects, project => project is { Name: "Elsa.Events.Core", Tracks: true });
+        Assert.Contains(Projects, project => project.RelativeDirectory.StartsWith("Essentials/tests/", StringComparison.Ordinal));
+        Assert.Contains(Projects, project => project.RelativeDirectory.StartsWith("Essentials/apps/", StringComparison.Ordinal));
+        Assert.Contains(Projects, project => project.RelativeDirectory.StartsWith("Extensions/", StringComparison.Ordinal));
+        Assert.True(Projects.Count(project => !project.Tracks) > Projects.Count(project => project.Tracks),
+            "Expected untracked projects (tests at least) to outnumber tracked ones; the sweep may have stopped finding them.");
     }
 
-    /// <summary>The detectors themselves, so the two guards above going green means "checked" rather than "skipped".</summary>
+    /// <summary>The three detectors, against a sandbox of projects in every state they must tell apart.</summary>
     [Fact]
-    public void A_line_a_project_missing_either_file_is_flagged()
+    public void Each_inconsistent_state_is_flagged_and_the_consistent_one_is_not()
     {
-        using var sandbox = new TempSandbox();
+        using var sandbox = new Sandbox();
+        sandbox.Project("Essentials/src/Good/Core", tracks: true, shipped: true, unshipped: true, lockedAnalyzer: true);
+        sandbox.Project("Essentials/src/MissingUnshipped/Core", tracks: true, shipped: true, unshipped: false, lockedAnalyzer: true);
+        sandbox.Project("Essentials/src/NoAnalyzer/Core", tracks: true, shipped: true, unshipped: true, lockedAnalyzer: false);
+        sandbox.Project("Essentials/src/Conditional/Core", tracks: true, shipped: true, unshipped: true, lockedAnalyzer: true, conditional: true);
+        sandbox.Project("Essentials/src/FilesOnly/Core", tracks: false, shipped: true, unshipped: false, lockedAnalyzer: false);
+        sandbox.Project("Essentials/src/Untracked/Core", tracks: false, shipped: false, unshipped: false, lockedAnalyzer: false);
+        sandbox.Project("Essentials/tests/Good/Tests", tracks: true, shipped: true, unshipped: true, lockedAnalyzer: true);
+        sandbox.Project("Essentials/src/Hidden/Core", tracks: true, shipped: true, unshipped: true, lockedAnalyzer: true, notPackable: true);
 
-        var complete = sandbox.CreateProjectDirectory("Complete");
-        File.WriteAllText(Path.Join(complete, "PublicAPI.Shipped.txt"), "#nullable enable\n");
-        File.WriteAllText(Path.Join(complete, "PublicAPI.Unshipped.txt"), "#nullable enable\n");
-
-        var missingUnshipped = sandbox.CreateProjectDirectory("MissingUnshipped");
-        File.WriteAllText(Path.Join(missingUnshipped, "PublicAPI.Shipped.txt"), "#nullable enable\n");
-
-        var missingBoth = sandbox.CreateProjectDirectory("MissingBoth");
-
-        var directories = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["Elsa.Complete.Core"] = complete,
-            ["Elsa.MissingUnshipped.Core"] = missingUnshipped,
-            ["Elsa.MissingBoth.Core"] = missingBoth,
-        };
+        var projects = Inspect(sandbox.Root);
 
         Assert.Equal(
-            ["Elsa.MissingBoth.Core", "Elsa.MissingUnshipped.Core"],
-            MissingPublicApiFiles(directories));
-
-        Assert.Empty(MissingPublicApiFiles(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["Elsa.Complete.Core"] = complete
-        }));
+        [
+            "Elsa.Conditional.Core: sets ElsaTrackPublicApi under a Condition",
+            "Elsa.MissingUnshipped.Core: missing PublicAPI.Unshipped.txt",
+            "Elsa.NoAnalyzer.Core: its packages.lock.json does not list Microsoft.CodeAnalysis.PublicApiAnalyzers",
+        ],
+            IncompleteTracking(projects));
+        Assert.Equal(["Elsa.FilesOnly.Core"], UntrackedFiles(projects));
+        Assert.Equal(["Elsa.Good.Tests", "Elsa.Hidden.Core"], TrackingOutsidePackableProduction(projects));
     }
 
-    [Fact]
-    public void A_line_b_project_carrying_either_file_is_flagged()
+    private static IReadOnlyList<string> IncompleteTracking(IEnumerable<ProjectApiState> projects) =>
+    [
+        .. projects.Where(project => project.Tracks).SelectMany(project => new[]
+            {
+                project.OptInIsConditional ? $"{project.Name}: sets {OptIn} under a Condition" : null,
+                project.HasShipped ? null : $"{project.Name}: missing {Shipped}",
+                project.HasUnshipped ? null : $"{project.Name}: missing {Unshipped}",
+                project.LockListsAnalyzer ? null : $"{project.Name}: its packages.lock.json does not list {AnalyzerPackage}",
+            })
+            .OfType<string>()
+            .Order(StringComparer.Ordinal)
+    ];
+
+    private static IReadOnlyList<string> UntrackedFiles(IEnumerable<ProjectApiState> projects) =>
+    [
+        .. projects.Where(project => !project.Tracks && (project.HasShipped || project.HasUnshipped))
+            .Select(project => project.Name)
+            .Order(StringComparer.Ordinal)
+    ];
+
+    private static IReadOnlyList<string> TrackingOutsidePackableProduction(IEnumerable<ProjectApiState> projects) =>
+    [
+        .. projects.Where(project => project.Tracks && !project.IsPackableProduction)
+            .Select(project => project.Name)
+            .Order(StringComparer.Ordinal)
+    ];
+
+    /// <summary>Every project under <see cref="ModuleRoots.All"/> of <paramref name="repoRoot"/>, with its tracking state.</summary>
+    private static IReadOnlyList<ProjectApiState> Inspect(string repoRoot) =>
+    [
+        .. ModuleRoots.Resolve(repoRoot, ModuleRoots.All)
+            .SelectMany(root => Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories))
+            .Where(path => !IsBuildOutput(repoRoot, path))
+            .Select(path => ProjectApiState.Read(repoRoot, path))
+            .OrderBy(project => project.Name, StringComparer.Ordinal)
+    ];
+
+    private sealed record ProjectApiState(
+        string Name,
+        string RelativeDirectory,
+        bool Tracks,
+        bool OptInIsConditional,
+        bool HasShipped,
+        bool HasUnshipped,
+        bool LockListsAnalyzer,
+        bool IsPackableProduction)
     {
-        using var sandbox = new TempSandbox();
-
-        var clean = sandbox.CreateProjectDirectory("Clean");
-
-        var carriesShipped = sandbox.CreateProjectDirectory("CarriesShipped");
-        File.WriteAllText(Path.Join(carriesShipped, "PublicAPI.Shipped.txt"), "#nullable enable\n");
-
-        var carriesUnshipped = sandbox.CreateProjectDirectory("CarriesUnshipped");
-        File.WriteAllText(Path.Join(carriesUnshipped, "PublicAPI.Unshipped.txt"), "#nullable enable\n");
-
-        var directories = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        public static ProjectApiState Read(string repoRoot, string projectPath)
         {
-            ["Elsa.Clean"] = clean,
-            ["Elsa.CarriesShipped"] = carriesShipped,
-            ["Elsa.CarriesUnshipped"] = carriesUnshipped,
-        };
+            var directory = Path.GetDirectoryName(projectPath)!;
+            var relativeDirectory = Path.GetRelativePath(repoRoot, directory).Replace('\\', '/') + "/";
+            var project = XDocument.Load(projectPath);
+            var optIn = project.Descendants().Where(element => element.Name.LocalName == OptIn).ToArray();
+            var lockFile = Path.Join(directory, "packages.lock.json");
+            var isProduction = relativeDirectory.StartsWith("Essentials/src/", StringComparison.Ordinal) ||
+                               (relativeDirectory.StartsWith("Extensions/", StringComparison.Ordinal) && !ElsaDomains.IsTestPath(relativeDirectory) &&
+                                relativeDirectory.Split('/') is [_, _, "src", ..]);
 
-        Assert.Equal(
-            ["Elsa.CarriesShipped", "Elsa.CarriesUnshipped"],
-            ProjectsWithPublicApiFiles(directories));
-
-        Assert.Empty(ProjectsWithPublicApiFiles(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["Elsa.Clean"] = clean
-        }));
+            return new ProjectApiState(
+                Path.GetFileNameWithoutExtension(projectPath),
+                relativeDirectory,
+                Tracks: optIn.Any(element => string.Equals(element.Value.Trim(), "true", StringComparison.OrdinalIgnoreCase)),
+                OptInIsConditional: optIn.Any(element => element.AncestorsAndSelf().Any(ancestor => ancestor.Attribute("Condition") is not null)),
+                HasShipped: File.Exists(Path.Join(directory, Shipped)),
+                HasUnshipped: File.Exists(Path.Join(directory, Unshipped)),
+                LockListsAnalyzer: File.Exists(lockFile) && File.ReadAllText(lockFile).Contains($"\"{AnalyzerPackage}\"", StringComparison.Ordinal),
+                IsPackableProduction: isProduction && !string.Equals(
+                    project.Descendants().LastOrDefault(element => element.Name.LocalName == "IsPackable")?.Value.Trim(),
+                    "false",
+                    StringComparison.OrdinalIgnoreCase));
+        }
     }
 
-    /// <summary>Every named project directory missing PublicAPI.Shipped.txt or PublicAPI.Unshipped.txt, by name.</summary>
-    private static IReadOnlyList<string> MissingPublicApiFiles(IReadOnlyDictionary<string, string> directories) =>
-        [
-            .. directories
-                .Where(project => !HasBothPublicApiFiles(project.Value))
-                .Select(project => project.Key)
-                .Order(StringComparer.Ordinal)
-        ];
-
-    /// <summary>Every named project directory carrying either PublicAPI file, by name.</summary>
-    private static IReadOnlyList<string> ProjectsWithPublicApiFiles(IReadOnlyDictionary<string, string> directories) =>
-        [
-            .. directories
-                .Where(project => HasEitherPublicApiFile(project.Value))
-                .Select(project => project.Key)
-                .Order(StringComparer.Ordinal)
-        ];
-
-    private static bool HasBothPublicApiFiles(string projectDirectory) =>
-        File.Exists(Path.Join(projectDirectory, "PublicAPI.Shipped.txt")) &&
-        File.Exists(Path.Join(projectDirectory, "PublicAPI.Unshipped.txt"));
-
-    private static bool HasEitherPublicApiFile(string projectDirectory) =>
-        File.Exists(Path.Join(projectDirectory, "PublicAPI.Shipped.txt")) ||
-        File.Exists(Path.Join(projectDirectory, "PublicAPI.Unshipped.txt"));
-
-    /// <summary>Every Elsa project under <see cref="ModuleRoots.Production"/>, by name, mapped to its directory.</summary>
-    private static IReadOnlyDictionary<string, string> LoadElsaProjectDirectories(string repoRoot) =>
-        ProjectGraph.ElsaProjectPaths(repoRoot)
-            .ToDictionary(
-                path => Path.GetFileNameWithoutExtension(path)!,
-                path => Path.GetDirectoryName(Path.GetFullPath(path))!,
-                StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>A throwaway directory tree for the detector-proof tests, cleaned up on dispose.</summary>
-    private sealed class TempSandbox : IDisposable
+    /// <summary>A throwaway module tree for the detector proof, cleaned up on dispose.</summary>
+    private sealed class Sandbox : IDisposable
     {
-        private readonly string _root = Directory.CreateTempSubdirectory("elsa-publicapi-guard-").FullName;
+        public string Root { get; } = Directory.CreateTempSubdirectory("elsa-publicapi-guard-").FullName;
 
-        public string CreateProjectDirectory(string name)
+        public void Project(
+            string relativeDirectory,
+            bool tracks,
+            bool shipped,
+            bool unshipped,
+            bool lockedAnalyzer,
+            bool conditional = false,
+            bool notPackable = false)
         {
-            var path = Path.Join(_root, name);
-            Directory.CreateDirectory(path);
-            return path;
+            var directory = Path.Join(Root, relativeDirectory);
+            Directory.CreateDirectory(directory);
+            var segments = relativeDirectory.Split('/');
+            var name = $"Elsa.{segments[2]}.{segments[^1]}";
+            var condition = conditional ? " Condition=\"'$(Configuration)' == 'Release'\"" : string.Empty;
+            var properties = (tracks ? $"<{OptIn}>true</{OptIn}>" : string.Empty) + (notPackable ? "<IsPackable>false</IsPackable>" : string.Empty);
+
+            File.WriteAllText(Path.Join(directory, $"{name}.csproj"),
+                $"""<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup{condition}>{properties}</PropertyGroup></Project>""");
+            if (shipped)
+                File.WriteAllText(Path.Join(directory, Shipped), "#nullable enable\n");
+            if (unshipped)
+                File.WriteAllText(Path.Join(directory, Unshipped), "#nullable enable\n");
+            File.WriteAllText(Path.Join(directory, "packages.lock.json"),
+                lockedAnalyzer ? $$"""{ "dependencies": { "net10.0": { "{{AnalyzerPackage}}": { "type": "Direct" } } } }""" : "{}");
         }
 
-        public void Dispose() => Directory.Delete(_root, recursive: true);
+        public void Dispose() => Directory.Delete(Root, recursive: true);
     }
 }

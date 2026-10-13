@@ -135,6 +135,13 @@ Jargon in public and internal type names is renamed before GA, one term per batc
 with each domain's D3 internalisation so no type is renamed twice. Old names are banned by an analyzer. The suffix rules in framework §2.6.1 and Elsa §E6 R4 follow the rename:
 `…Extension` replaces `…Contributor`, domain by domain; both suffixes are accepted until the rename completes.
 
+**Owner amendment, 13 October 2026 (#2591):** the analyzer is `Elsa.Architecture.Analyzers`, which every production
+project compiles with. It reports a retired term in any type name, public or internal (`ELSANAME001`), and in any
+namespace (`ELSANAME002`), naming the replacement. A term is banned domain by domain, not repository-wide: each
+domain's realignment adds a section for its folder to the root `.editorconfig` (key `elsa_naming.retired_terms`, for
+example `Pump|Pumps=Worker`), so a term that a domain not yet realigned still uses does not break the build. A list
+the analyzer cannot parse is itself an error (`ELSANAME003`).
+
 | Today | Becomes |
 |---|---|
 | Stimulus | Signal |

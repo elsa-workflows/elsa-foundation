@@ -2407,6 +2407,25 @@
       ]
     },
     {
+      "path": "Essentials/src/Architecture/Analyzers/Elsa.Architecture.Analyzers.csproj",
+      "name": "Elsa.Architecture.Analyzers",
+      "kind": "source",
+      "domain": "Elsa.Architecture",
+      "sub_domain": "Analyzers",
+      "role": "feature/implementation",
+      "declared_target_framework": "netstandard2.0",
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "external",
+          "id": "Microsoft.CodeAnalysis.CSharp",
+          "version": "5.0.0"
+        }
+      ]
+    },
+    {
       "path": "Essentials/src/Attention/Api/Elsa.Attention.Api.csproj",
       "name": "Elsa.Attention.Api",
       "kind": "source",
@@ -11507,6 +11526,50 @@
           "type": "internal",
           "id": "Elsa.Api.Compatibility.Testing",
           "path": "Essentials/tests/Api/Compatibility/Testing/Elsa.Api.Compatibility.Testing.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
+    },
+    {
+      "path": "Essentials/tests/Architecture/Analyzers/Tests/Elsa.Architecture.Analyzers.Tests.csproj",
+      "name": "Elsa.Architecture.Analyzers.Tests",
+      "kind": "test",
+      "domain": "Elsa.Architecture",
+      "sub_domain": "Analyzers.Tests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Architecture.Analyzers",
+          "path": "Essentials/src/Architecture/Analyzers/Elsa.Architecture.Analyzers.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.CodeAnalysis.CSharp",
+          "version": "5.0.0"
         },
         {
           "type": "external",

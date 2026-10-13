@@ -609,20 +609,28 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// Directory.Build.props's Line A PublicApiAnalyzers wiring (#2078) is the one declared exception. Its
-    /// Condition reads $(ElsaVersionLine), a property that same file computes from $(MSBuildProjectName)
-    /// alone (VersionLines.props) - never from $(Configuration) - so the Release and Debug restore graphs
-    /// this guard reads already resolve it identically. It cannot hide a package from either one.
+    /// The declared exceptions, both in the root Directory.Build.props: the PublicApiAnalyzers reference a project opts
+    /// into with ElsaTrackPublicApi, and the naming analyzer every production project compiles with. Neither condition
+    /// reads $(Configuration): one reads a property the project file sets unconditionally, the other the project's
+    /// location and name. The Release and Debug restore graphs this guard reads therefore resolve both identically, and
+    /// neither can hide a package or project from one of them. An exception matches on path, element, Include and the
+    /// exact condition text, so another reference placed under the same condition is still an offender.
     /// </summary>
-    private static readonly (string RelativePath, string ElementName, string Condition) AdmittedConditionalDependency =
-        ("Directory.Build.props", "PackageReference", "'$(ElsaVersionLine)' == 'A'");
+    private static readonly (string RelativePath, string ElementName, string Include, string Condition)[] AdmittedConditionalDependencies =
+    [
+        ("Directory.Build.props", "PackageReference", "Microsoft.CodeAnalysis.PublicApiAnalyzers", "'$(ElsaTrackPublicApi)' == 'true'"),
+        ("Directory.Build.props", "ProjectReference", "$(MSBuildThisFileDirectory)Essentials/src/Architecture/Analyzers/Elsa.Architecture.Analyzers.csproj",
+            "'$(ElsaIsProductionProject)' == 'true' and '$(MSBuildProjectName)' != 'Elsa.Architecture.Analyzers'"),
+    ];
 
     private static bool IsAdmittedConditionalDependency(string relativePath, XElement element) =>
-        relativePath.Replace('\\', '/') == AdmittedConditionalDependency.RelativePath &&
-        element.Name.LocalName == AdmittedConditionalDependency.ElementName &&
-        element.AncestorsAndSelf()
-            .SelectMany(ancestor => ancestor.Attributes())
-            .Any(attribute => attribute.Name.LocalName == "Condition" && attribute.Value == AdmittedConditionalDependency.Condition);
+        AdmittedConditionalDependencies.Any(admitted =>
+            relativePath.Replace('\\', '/') == admitted.RelativePath &&
+            element.Name.LocalName == admitted.ElementName &&
+            element.Attribute("Include")?.Value == admitted.Include &&
+            element.AncestorsAndSelf()
+                .SelectMany(ancestor => ancestor.Attributes())
+                .Any(attribute => attribute.Name.LocalName == "Condition" && attribute.Value == admitted.Condition));
 
     [Theory]
     [InlineData("<Project><ItemGroup Condition=\"'$(Configuration)' == 'Debug'\"><PackageReference Include=\"Contoso.Persistence\" /></ItemGroup></Project>")]
@@ -634,34 +642,29 @@ public sealed class EfCoreDependencyGuardTests
     }
 
     /// <summary>
-    /// The allowlist admits exactly the Line A PublicApiAnalyzers reference - same path, element, and
-    /// condition text - and nothing else: a different path, a different element, or a different condition
-    /// on the same element all still count as an offender.
+    /// The allowlist admits exactly the two declared references - same path, element, Include and condition text - and
+    /// nothing else: a different path, element, Include or condition still counts as an offender.
     /// </summary>
     [Fact]
-    public void Only_the_declared_line_a_analyzer_reference_is_admitted_as_a_conditional_dependency()
+    public void Only_the_declared_analyzer_references_are_admitted_as_conditional_dependencies()
     {
-        var admitted = XDocument.Parse(
-            "<Project><ItemGroup Condition=\"'$(ElsaVersionLine)' == 'A'\">" +
-            "<PackageReference Include=\"Microsoft.CodeAnalysis.PublicApiAnalyzers\" /></ItemGroup></Project>")
-            .Descendants("PackageReference").Single();
+        const string trackingCondition = "'$(ElsaTrackPublicApi)' == 'true'";
+        const string productionCondition = "'$(ElsaIsProductionProject)' == 'true' and '$(MSBuildProjectName)' != 'Elsa.Architecture.Analyzers'";
+        const string analyzerProject = "$(MSBuildThisFileDirectory)Essentials/src/Architecture/Analyzers/Elsa.Architecture.Analyzers.csproj";
 
-        Assert.True(IsAdmittedConditionalDependency("Directory.Build.props", admitted));
-        Assert.False(IsAdmittedConditionalDependency("VersionLines.props", admitted));
+        Assert.True(IsAdmittedConditionalDependency("Directory.Build.props", Reference("PackageReference", "Microsoft.CodeAnalysis.PublicApiAnalyzers", trackingCondition)));
+        Assert.True(IsAdmittedConditionalDependency("Directory.Build.props", Reference("ProjectReference", analyzerProject, productionCondition)));
 
-        var otherElement = XDocument.Parse(
-            "<Project><ItemGroup Condition=\"'$(ElsaVersionLine)' == 'A'\">" +
-            "<ProjectReference Include=\"Contoso.csproj\" /></ItemGroup></Project>")
-            .Descendants("ProjectReference").Single();
+        Assert.False(IsAdmittedConditionalDependency("VersionLines.props", Reference("PackageReference", "Microsoft.CodeAnalysis.PublicApiAnalyzers", trackingCondition)));
+        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", Reference("ProjectReference", "Contoso.csproj", trackingCondition)));
+        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", Reference("PackageReference", "Contoso.Persistence", trackingCondition)));
+        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", Reference("ProjectReference", "Contoso.csproj", productionCondition)));
+        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", Reference("PackageReference", "Microsoft.CodeAnalysis.PublicApiAnalyzers", "'$(Configuration)' == 'Debug'")));
+        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", Reference("PackageReference", "Microsoft.CodeAnalysis.PublicApiAnalyzers", "'$(ElsaVersionLine)' == 'A'")));
 
-        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", otherElement));
-
-        var otherCondition = XDocument.Parse(
-            "<Project><ItemGroup Condition=\"'$(Configuration)' == 'Debug'\">" +
-            "<PackageReference Include=\"Microsoft.CodeAnalysis.PublicApiAnalyzers\" /></ItemGroup></Project>")
-            .Descendants("PackageReference").Single();
-
-        Assert.False(IsAdmittedConditionalDependency("Directory.Build.props", otherCondition));
+        static XElement Reference(string element, string include, string condition) =>
+            XDocument.Parse($"<Project><ItemGroup Condition=\"{condition}\"><{element} Include=\"{include}\" /></ItemGroup></Project>")
+                .Descendants(element).Single();
     }
 
     private static Dictionary<string, Project> LoadModuleProjects()
