@@ -37,7 +37,7 @@
   --transition-slow: 0.3s ease;
   
   /* Theme colors — Classic light until ThemeProvider applies the selected theme. */
-  --primary: oklch(0.51 0.148 237);
+  --primary: oklch(0.5 0.148 237);
   --primary-foreground: oklch(0.99 0 0);
   --secondary: oklch(0.97 0.012 250);
   --secondary-foreground: oklch(0.208 0.012 250);
@@ -65,8 +65,8 @@
   --sidebar-active: oklch(0.954 0.018 239);
   --sidebar-active-foreground: oklch(0.4 0.14 237);
   
-  --ring: oklch(0.51 0.148 237);
-  --chart-1: oklch(0.51 0.148 237);
+  --ring: oklch(0.5 0.148 237);
+  --chart-1: oklch(0.5 0.148 237);
   --chart-2: oklch(0.62 0.18 264);
   --chart-3: oklch(0.74 0.12 175);
   --chart-4: oklch(0.72 0.18 60);

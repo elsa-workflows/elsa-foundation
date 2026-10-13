@@ -8,16 +8,35 @@ import { parseOklch, read, ruleDeclarations } from "./themeTestUtils";
 const tokensCss = read("../app/ui/tokens.css");
 const classic = getTheme("classic")!;
 
-/** WCAG 2 contrast ratio between two `oklch(L C H)` colours, via OKLab → linear sRGB. */
-function contrast(first: string, second: string) {
-  const [a, b] = [luminance(first), luminance(second)].sort((x, y) => y - x);
+/** WCAG 2 contrast. Strings are `oklch(L C H)`; numbers are already relative luminance. */
+function contrast(first: string | number, second: string | number) {
+  const [a, b] = [typeof first === "number" ? first : luminance(first), typeof second === "number" ? second : luminance(second)]
+    .sort((x, y) => y - x);
   return (a + 0.05) / (b + 0.05);
 }
 
-function luminance(color: string) {
-  const match = color.match(/^oklch\(([\d.]+) ([\d.]+) ([\d.]+)\)$/);
-  if (!match) throw new Error(`Expected an oklch() colour, received ${color}`);
-  const [lightness, chroma, hue] = match.slice(1).map(Number);
+/** Relative luminance of `color-mix(in srgb, first amount, second)`. */
+function mixSrgb(first: string, second: string, amount: number) {
+  const a = linearToSrgb(oklchToLinear(first));
+  const b = linearToSrgb(oklchToLinear(second));
+  return luminanceOf({
+    r: srgbToLinear(amount * a.r + (1 - amount) * b.r),
+    g: srgbToLinear(amount * a.g + (1 - amount) * b.g),
+    b: srgbToLinear(amount * a.b + (1 - amount) * b.b)
+  });
+}
+
+function linearToSrgb(c: { r: number; g: number; b: number }) {
+  const enc = (v: number) => (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055);
+  return { r: enc(c.r), g: enc(c.g), b: enc(c.b) };
+}
+
+function srgbToLinear(v: number) {
+  return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+}
+
+function oklchToLinear(color: string) {
+  const { lightness, chroma, hue } = parseOklch(color);
   const radians = (hue * Math.PI) / 180;
   const okA = chroma * Math.cos(radians);
   const okB = chroma * Math.sin(radians);
@@ -25,10 +44,19 @@ function luminance(color: string) {
   const m = (lightness - 0.1055613458 * okA - 0.0638541728 * okB) ** 3;
   const s = (lightness - 0.0894841775 * okA - 1.291485548 * okB) ** 3;
   const clamp = (value: number) => Math.min(1, Math.max(0, value));
-  const red = clamp(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s);
-  const green = clamp(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s);
-  const blue = clamp(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s);
-  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+  return {
+    r: clamp(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+    g: clamp(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+    b: clamp(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s)
+  };
+}
+
+function luminanceOf(lin: { r: number; g: number; b: number }) {
+  return 0.2126 * lin.r + 0.7152 * lin.g + 0.0722 * lin.b;
+}
+
+function luminance(color: string) {
+  return luminanceOf(oklchToLinear(color));
 }
 
 describe("Classic palette", () => {
@@ -47,7 +75,7 @@ describe("Classic palette", () => {
   it("darkens Light's sky fill so white button text meets AA, matching Elsa 3's identity", () => {
     const light = parseOklch(getThemeModeDefinition(classic, "light")!.primary);
 
-    expect(light.lightness).toBe(0.51);
+    expect(light.lightness).toBe(0.5);
     expect(light.chroma).toBeGreaterThan(0.12);
     expect(getThemeModeDefinition(classic, "light")!.primaryForeground).toBe("oklch(0.99 0 0)");
   });
@@ -62,6 +90,8 @@ describe("Classic palette", () => {
     expect(contrast(light.primary, light.sidebar)).toBeGreaterThanOrEqual(floor);
     expect(contrast(light.primary, light.muted)).toBeGreaterThanOrEqual(floor);
     expect(contrast(light.primary, light.accent)).toBeGreaterThanOrEqual(floor);
+    // `--studio-accent-soft` is 10% primary over the card. L 0.51 sat at 4.50; L 0.50 leaves margin.
+    expect(contrast(light.primary, mixSrgb(light.primary, light.card, 0.1))).toBeGreaterThan(4.6);
   });
 
   it("is a white page with a pale slate sidebar and cards one step off white", () => {
