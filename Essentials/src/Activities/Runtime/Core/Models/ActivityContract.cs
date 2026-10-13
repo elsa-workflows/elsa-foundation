@@ -415,7 +415,8 @@ public enum SideEffectProfile
     /// The activity is pure/deterministic between checkpoint boundaries (in-workflow routing, compute, variable
     /// transforms): re-executing it on replay produces byte-identical state and no observable effect. Its
     /// attempt-claim checkpoint may be deferred and folded forward into the next commit in every persistence mode, so
-    /// under Balanced or Ephemeral a hot loop of such activities collapses to a single commit.
+    /// a hot loop of such activities folds into one commit per cap's worth of activities under Balanced, and into a
+    /// single commit under Ephemeral when nothing else in the loop commits.
     /// </summary>
     ReplaySafe
 }

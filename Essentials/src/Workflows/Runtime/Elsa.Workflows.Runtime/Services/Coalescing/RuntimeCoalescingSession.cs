@@ -81,7 +81,8 @@ public sealed class RuntimeCoalescingSession
         Mode = mode.Mode;
         HasDurableRecord = mode.RunHasRecord;
         RecordCompletion = options.RecordCompletion;
-        // Durable commits once per activity whatever the host's Balanced cap is; Ephemeral has no intermediate commits.
+        // Durable commits once per activity whatever the host's Balanced cap is. Ephemeral has no cap: it commits only at
+        // boundaries, however many activities it folds.
         MaxActivitiesPerCommit = Mode switch
         {
             PersistenceMode.Durable => 1,
@@ -101,8 +102,8 @@ public sealed class RuntimeCoalescingSession
 
     /// <summary>
     /// The most activities one segment folds before the next new activity forces an intermediate commit: one under
-    /// Durable, the host's setting under Balanced, and <see langword="null"/> under Ephemeral, which has no
-    /// intermediate commits.
+    /// Durable, the host's setting under Balanced, and <see langword="null"/> under Ephemeral, whose intermediate commits
+    /// come only from boundaries, never from a count of activities.
     /// </summary>
     public int? MaxActivitiesPerCommit { get; }
 

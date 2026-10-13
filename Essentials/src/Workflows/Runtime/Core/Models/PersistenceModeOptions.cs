@@ -12,9 +12,9 @@ public sealed class PersistenceModeOptions
 
     /// <summary>
     /// Maximum number of activities whose work Balanced folds into one commit. Durable commits once per activity
-    /// whatever this is. Ephemeral has no such limit: it folds until the run suspends, faults or is cancelled, until an
-    /// activity that is not ReplaySafe is about to run, or until the pass ends, so a long pass that meets none of these
-    /// holds its work in memory. The checkpoint that would bring another activity into a segment that already holds this
+    /// whatever this is. Ephemeral has no such limit: it folds until the run suspends, faults or is cancelled, until it
+    /// dispatches a child workflow, until an activity that is not ReplaySafe is about to run, or until the pass ends, so
+    /// a long pass that meets none of these holds its work in memory. The checkpoint that would bring another activity into a segment that already holds this
     /// many forces an intermediate commit, and the next segment starts empty, so a long loop keeps folding at one commit
     /// per window instead of degrading to per-checkpoint persistence.
     /// Bounds both the work a crash repeats and the memory a segment holds. Must be greater than zero. Default is 50.

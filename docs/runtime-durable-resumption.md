@@ -334,7 +334,8 @@ has the machinery for this (`AddPersistenceModes`, called by `WorkflowsRuntimeAp
 registered its stores); the run's mode decides the segment size. It is decided once, when the run is started: the start
 dispatcher writes the workflow's choice, or the host default when it chose none, onto the start command, which the
 scheduler queue keeps until the run's first commit records the mode on the run. Every drain resolves the mode from that
-record, or before it from the start, so a run driven again before anything was committed keeps its mode. A host
+record, or before it from the start the queue holds, so a run driven again before anything was committed keeps its
+mode. The queue holds a start's first delivery, so a start delivered again with another mode does not change it. A host
 composed without the machinery cannot run any mode, so it refuses the run before anything runs.
 
 **Governing invariant — the durable scheduler queue never advances past the last flushed state.** Within a
@@ -380,8 +381,9 @@ durable attempt boundary), so a replayable hot loop longer than the cap keeps fo
 instead of degrading to per-checkpoint persistence. The cap bounds both replay cost (a crash re-runs at most one window past the last flush) and memory.
 Continuation outbox items persisted durably by a cap flush keep delivering from the overlay for the next segment; the
 session writes their overlay outcome back to the durable outbox store at the next flush, so no durable `Pending`
-residue survives the drain to be redelivered by a later sweep. Ephemeral has no cap: a long run that never suspends,
-faults or completes holds its working set in memory.
+residue survives the drain to be redelivered by a later sweep. Ephemeral has no cap: a long pass that meets none of its
+commit points (a suspension, fault or cancellation, a child dispatch, an activity that is not safe to repeat, the end of
+the pass) holds its working set in memory.
 
 **The crash-replay window and at-least-once semantics.** A crash mid-segment loses the buffered-but-unflushed
 checkpoints, but they are **replayable from the last flushed commit + durable queue redelivery** — the honest
