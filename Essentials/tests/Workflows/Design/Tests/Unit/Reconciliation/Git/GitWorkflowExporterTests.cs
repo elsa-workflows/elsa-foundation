@@ -1,3 +1,4 @@
+using Elsa.Tasks.Testing;
 using Elsa.Workflows.Design.Reconciliation.Git.Options;
 using Elsa.Workflows.Design.Reconciliation.Git.Services;
 using Elsa.Workflows.Design.Reconciliation.Git.Startup;
@@ -87,7 +88,7 @@ public sealed class GitWorkflowExporterTests : GitExportTest
         Publish("wf-refused", "Refused");
         AddVersion("wf-refused", "1.0.0", CredentialBoundAs("Literal"));
         var node = Writer();
-        var executor = ComposedTaskExecutor.Over(new InMemoryDistributedLockProvider());
+        var executor = TaskServices.Executor(new InMemoryDistributedLockProvider());
 
         Assert.Null(await Record.ExceptionAsync(() =>
             executor.ExecuteTaskAsync(new GitWorkflowExportStartupTask(node.Exporter), CancellationToken.None)));

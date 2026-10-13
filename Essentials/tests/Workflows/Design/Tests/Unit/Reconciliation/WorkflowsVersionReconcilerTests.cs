@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Threading.Channels;
 using Elsa.Events.Core.Contracts;
+using Elsa.Tasks.Testing;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Enums;
@@ -544,7 +545,7 @@ public sealed class WorkflowsVersionReconcilerTests
         var reconciler = NewReconciler(
             sender, new StubDefinitionStore(), new StubVersionStore(),
             new SpyMaterializeDefinitionCommand(), new SpyMaterializeVersionCommand(), DuplicateHandling.Skip);
-        var executor = ComposedTaskExecutor.Over(new InMemoryDistributedLockProvider());
+        var executor = TaskServices.Executor(new InMemoryDistributedLockProvider());
 
         Assert.Null(await Record.ExceptionAsync(() =>
             executor.ExecuteTaskAsync(new WorkflowsVersionReconcilerStartupTask(reconciler), CancellationToken.None)));

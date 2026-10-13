@@ -1,11 +1,8 @@
-using CShells;
 using Elsa.Locking.Core;
 using Elsa.Tasks.Core;
 using Elsa.Tasks.Core.Attributes;
-using Elsa.Tasks;
+using Elsa.Tasks.Testing;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Locking.Database.ProviderTests;
 
@@ -101,18 +98,8 @@ public abstract class DatabaseLockTests(LockDatabase database) : IAsyncDisposabl
             await node.DisposeAsync();
     }
 
-    /// <summary>A shell's task executor, as <see cref="TasksFeature"/> composes it, over a lock provider of its own node.</summary>
-    private ITaskExecutor Executor(string shellName)
-    {
-        var services = new ServiceCollection();
-        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
-        services.AddSingleton(Node());
-        services.AddSingleton(new ShellSettings(shellName));
-        new TasksFeature().ConfigureServices(services);
-        var shell = services.BuildServiceProvider();
-        _nodes.Add(shell);
-        return shell.GetRequiredService<ITaskExecutor>();
-    }
+    /// <summary>A shell's task executor, as the Tasks feature composes it, over a lock provider of its own node.</summary>
+    private ITaskExecutor Executor(string shellName) => TaskServices.Executor(Node(), shellName);
 
     private IDistributedLockProvider Node()
     {

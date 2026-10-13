@@ -2,7 +2,7 @@ using Elsa.Activities.Design.Core.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Services;
 using Elsa.Locking.Core;
 using Elsa.Tasks.Core;
-using Elsa.Workflows.Design.Tests.Infrastructure;
+using Elsa.Tasks.Testing;
 using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Design.Reconciliation.Git.Contracts;
 using Elsa.Workflows.Design.Reconciliation.Git.Startup;
@@ -23,7 +23,7 @@ public sealed class NodeLocalReconcilerStartupTaskTests
     private readonly ITaskExecutor _executor;
 
     public NodeLocalReconcilerStartupTaskTests() =>
-        _executor = ComposedTaskExecutor.Over(_locks);
+        _executor = TaskServices.Executor(_locks);
 
     [Fact]
     public async Task The_activity_version_reconciler_runs_while_another_node_holds_every_lock()

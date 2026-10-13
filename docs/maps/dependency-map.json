@@ -14168,6 +14168,11 @@
           "path": "Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Tasks.Testing",
+          "path": "Essentials/tests/Tasks/Testing/Elsa.Tasks.Testing.csproj"
+        },
+        {
           "type": "external",
           "id": "Microsoft.Extensions.DependencyInjection",
           "version": "10.0.10"
@@ -14950,6 +14955,11 @@
           "type": "internal",
           "id": "Elsa.Tasks",
           "path": "Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Tasks.Testing",
+          "path": "Essentials/tests/Tasks/Testing/Elsa.Tasks.Testing.csproj"
         },
         {
           "type": "external",
@@ -17438,6 +17448,35 @@
       ]
     },
     {
+      "path": "Essentials/tests/Tasks/Testing/Elsa.Tasks.Testing.csproj",
+      "name": "Elsa.Tasks.Testing",
+      "kind": "test",
+      "domain": "Elsa.Tasks",
+      "sub_domain": "Testing",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Tasks",
+          "path": "Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        }
+      ]
+    },
+    {
       "path": "Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj",
       "name": "Elsa.Tasks.Tests",
       "kind": "test",
@@ -17468,6 +17507,11 @@
           "type": "internal",
           "id": "Elsa.Tasks.Schedules",
           "path": "Essentials/src/Tasks/Schedules/Elsa.Tasks.Schedules.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Tasks.Testing",
+          "path": "Essentials/tests/Tasks/Testing/Elsa.Tasks.Testing.csproj"
         },
         {
           "type": "external",
@@ -18236,6 +18280,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Design.Validations",
           "path": "Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/Elsa.Workflows.Design.Validations.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Tasks.Testing",
+          "path": "Essentials/tests/Tasks/Testing/Elsa.Tasks.Testing.csproj"
         },
         {
           "type": "internal",
@@ -19707,6 +19756,11 @@
           "type": "internal",
           "id": "Elsa.Activities.Testing",
           "path": "Essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Tasks.Testing",
+          "path": "Essentials/tests/Tasks/Testing/Elsa.Tasks.Testing.csproj"
         },
         {
           "type": "external",

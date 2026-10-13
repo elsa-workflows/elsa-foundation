@@ -1,5 +1,6 @@
 using Elsa.Tasks.Core;
 using Elsa.Tasks.Core.Attributes;
+using Elsa.Tasks.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Tasks.Tests;

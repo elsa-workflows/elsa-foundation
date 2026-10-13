@@ -1,11 +1,10 @@
-using CShells;
 using Elsa.Events.Channels;
 using Elsa.Events.Contexts;
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Tasks.Core;
-using Elsa.Tasks;
+using Elsa.Tasks.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Events.Tests;
@@ -103,18 +102,12 @@ internal static class EventTestHosts
     /// </summary>
     public static ServiceProvider BuildProductionLikeProvider(IEventPublisher eventPublisher)
     {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddSingleton<IDistributedLockProvider, NoOpLockProvider>();
+        // TasksFeature (shell-singleton manager and executor), as the shared task test support composes it.
+        var services = TaskServices.Compose(new NoOpLockProvider());
 
         // EventsFeature lifetimes.
         services.AddSingleton<IEventChannel, EventChannel>();
         services.AddSingleton(eventPublisher);
-
-        // TasksFeature (shell-singleton manager and executor). A shell container has its ShellSettings; this one stands
-        // in for it.
-        services.AddSingleton(new ShellSettings("default"));
-        new TasksFeature().ConfigureServices(services);
         services.AddSingleton<IBackgroundTask, BackgroundEventPublisher>();
 
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });

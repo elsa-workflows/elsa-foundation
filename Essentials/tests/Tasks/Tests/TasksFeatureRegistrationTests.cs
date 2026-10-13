@@ -1,6 +1,7 @@
 using CShells.Lifecycle;
 using Elsa.Tasks.Core;
 using Elsa.Tasks.Services;
+using Elsa.Tasks.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 

@@ -20,6 +20,7 @@
     <!-- [RequiresSchemaVersion], which the executor reads from a task class (#2192). -->
     <ProjectReference Include="..\..\..\src\Cluster\Core\Elsa.Cluster.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Tasks\Schedules\Elsa.Tasks.Schedules.csproj" />
+    <ProjectReference Include="..\Testing\Elsa.Tasks.Testing.csproj" />
   </ItemGroup>
 
   <ItemGroup>

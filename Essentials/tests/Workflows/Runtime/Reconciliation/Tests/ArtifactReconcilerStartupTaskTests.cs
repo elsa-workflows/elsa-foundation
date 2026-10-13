@@ -1,11 +1,9 @@
-using CShells;
 using Elsa.Locking.Core;
-using Elsa.Tasks;
 using Elsa.Tasks.Core;
+using Elsa.Tasks.Testing;
 using Elsa.Workflows.Runtime.Reconciliation.Contracts;
 using Elsa.Workflows.Runtime.Reconciliation.Core.Models;
 using Elsa.Workflows.Runtime.Reconciliation.Startup;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -27,13 +25,7 @@ public sealed class ArtifactReconcilerStartupTaskTests
 
     public ArtifactReconcilerStartupTaskTests()
     {
-        // The executor as the shell composes it, through TasksFeature.
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddSingleton<IDistributedLockProvider>(_locks);
-        services.AddSingleton(new ShellSettings("default"));
-        new TasksFeature().ConfigureServices(services);
-        _executor = services.BuildServiceProvider().GetRequiredService<ITaskExecutor>();
+        _executor = TaskServices.Executor(_locks);
         _task = new WorkflowArtifactReconcilerStartupTask(_reconciler, NullLogger<WorkflowArtifactReconcilerStartupTask>.Instance);
     }
 
