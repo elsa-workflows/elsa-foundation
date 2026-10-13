@@ -108,7 +108,7 @@
     {
       "suite": "command-cost",
       "project": "Essentials/tests/Activities/Http/CommandCost/Tests/Elsa.Activities.Http.CommandCost.Tests.csproj",
-      "require": ""
+      "require": "ELSA_COMMAND_COST_REQUIRE_MEASUREMENT"
     },
     {
       "suite": "locking-database",

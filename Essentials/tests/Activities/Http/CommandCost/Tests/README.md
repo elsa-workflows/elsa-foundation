@@ -7,8 +7,10 @@ Nothing is timed.
 
 ## Running it
 
-Every test skips unless `ELSA_COMMAND_COST_OUT` names an output directory, so neither the fast lane nor the nightly
-container lane measures anything by default.
+Every test skips unless `ELSA_COMMAND_COST_OUT` names an output directory, or `ELSA_COMMAND_COST_REQUIRE_MEASUREMENT`
+is `1` or `true`, in which case the output goes to a new temporary directory. The fast lane never measures. The nightly
+EF container lane does: its `command-cost` leg arms `ELSA_COMMAND_COST_REQUIRE_MEASUREMENT` (the suite's `require` in
+`tools/ci/ef-suites.json`), so it runs every measurement and its checks rather than reporting two skips.
 
 ```bash
 ELSA_COMMAND_COST_OUT=/tmp/command-cost \

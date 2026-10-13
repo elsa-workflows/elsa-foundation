@@ -1,5 +1,6 @@
 // Measures where each EF command of a workflow run comes from. Opt-in: every test skips unless ELSA_COMMAND_COST_OUT
-// names a directory, where the measured runs, one TSV of commands per run and summary.md are written. See README.md.
+// names a directory, where the measured runs, one TSV of commands per run and summary.md are written, or
+// ELSA_COMMAND_COST_REQUIRE_MEASUREMENT is 1 or true, as on the nightly EF container leg. See README.md.
 using Elsa.Activities.Http.IntegrationTests;
 using Xunit.Abstractions;
 
@@ -12,8 +13,18 @@ internal static class CommandCostMeasurement
 {
     public const string OutputVariable = "ELSA_COMMAND_COST_OUT";
 
+    /// <summary>
+    /// Armed (1 or true) by the nightly EF container leg, through <c>tools/ci/ef-suites.json</c>: measure even without an
+    /// output directory, into a temporary one, so the leg proves the tool still measures instead of reporting two skips.
+    /// </summary>
+    public const string RequireVariable = "ELSA_COMMAND_COST_REQUIRE_MEASUREMENT";
+
+    private static readonly Lazy<string> TemporaryDirectory = new(() => Directory.CreateTempSubdirectory("elsa-command-cost-").FullName);
+
     public static string? OutputDirectory =>
-        Environment.GetEnvironmentVariable(OutputVariable) is { Length: > 0 } directory ? Path.GetFullPath(directory) : null;
+        Environment.GetEnvironmentVariable(OutputVariable) is { Length: > 0 } directory ? Path.GetFullPath(directory)
+        : Environment.GetEnvironmentVariable(RequireVariable) is "1" or "true" ? TemporaryDirectory.Value
+        : null;
 }
 
 [CollectionDefinition(Name)]
@@ -40,7 +51,9 @@ public sealed class CommandCostMeasurementTests(CommandCostPostgreSqlServer post
     private async Task MeasureAsync(IMeasuredDatabase database)
     {
         var directory = CommandCostMeasurement.OutputDirectory;
-        Skip.If(directory is null, $"Set {CommandCostMeasurement.OutputVariable} to an output directory to measure EF command cost.");
+        Skip.If(directory is null,
+            $"Set {CommandCostMeasurement.OutputVariable} to an output directory, or {CommandCostMeasurement.RequireVariable} to 1, to measure EF command cost.");
+        output.WriteLine($"Measuring into {directory}.");
 
         CommandCostReport.ClearRuns(directory!, database.Provider);
         var runs = new List<CommandCostRun>();

@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- Opt-in measurement of where each EF command of a workflow run comes from, on SQLite and on PostgreSQL. Every
-       test skips unless ELSA_COMMAND_COST_OUT names an output directory, so neither the fast lane nor the nightly
-       container lane measures anything by default. See README.md. -->
+       test skips unless ELSA_COMMAND_COST_OUT names an output directory or ELSA_COMMAND_COST_REQUIRE_MEASUREMENT is
+       armed, which the nightly EF container leg does; the fast lane never measures. See README.md. -->
   <PropertyGroup>
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
