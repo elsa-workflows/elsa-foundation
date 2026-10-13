@@ -1,6 +1,7 @@
 using CShells.Features;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Elsa.Studio.Preferences.Api;
 using Elsa.Studio.Preferences.Core.Contracts;
 using Elsa.Studio.Preferences.Core.Services;
 using Microsoft.Extensions.DependencyInjection;

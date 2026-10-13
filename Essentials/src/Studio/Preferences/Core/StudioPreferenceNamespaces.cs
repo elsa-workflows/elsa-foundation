@@ -35,12 +35,3 @@ public sealed class AttentionPreferenceNamespace : ObjectPreferenceNamespace
     public override string Name => StudioPreferenceNamespaces.Attention;
     public override int MaxBytes => DefaultMaxBytes;
 }
-
-public sealed class HomeLayoutPreferenceNamespace : ObjectPreferenceNamespace
-{
-    public const int DefaultMaxBytes = 64 * 1024;
-    public override string Name => StudioPreferenceNamespaces.HomeLayout;
-    public override int MaxBytes => DefaultMaxBytes;
-
-    public override bool Validate(JsonElement value) => StudioHomeLayout.IsValid(value);
-}
