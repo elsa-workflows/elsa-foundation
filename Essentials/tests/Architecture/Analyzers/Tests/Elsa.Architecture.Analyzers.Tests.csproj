@@ -13,7 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\..\src\Architecture\Analyzers\Elsa.Architecture.Analyzers.csproj" />
+    <ProjectReference Include="..\..\..\..\build\Analyzers\Elsa.Architecture.Analyzers.csproj" />
   </ItemGroup>
 
 </Project>

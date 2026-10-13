@@ -32,17 +32,6 @@ public sealed class ValueFlowArchitectureTests(ITestOutputHelper output)
             string.Join(Environment.NewLine, violations.Select(FormatEdge)));
     }
 
-    /// <summary>
-    /// The projects the compiler loads rather than any assembly references: the Design code-generation envelope, and
-    /// the naming analyzer every production project compiles with through an analyzer-only reference
-    /// (ReferenceOutputAssembly="false"). Each may take Roslyn privately; nothing reaches a runtime assembly through them.
-    /// </summary>
-    private static readonly HashSet<string> CompilerComponents = new(StringComparer.Ordinal)
-    {
-        "Elsa.Workflows.Design.CodeGeneration",
-        "Elsa.Architecture.Analyzers"
-    };
-
     [Fact]
     public void RoslynAndGeneratedAuthoringCarriers_RemainOutsideRuntime()
     {
@@ -50,7 +39,7 @@ public sealed class ValueFlowArchitectureTests(ITestOutputHelper output)
         var roslynPackageViolations = projects
             .SelectMany(project => PackageReferences(project)
                 .Where(package => package.Name.StartsWith("Microsoft.CodeAnalysis", StringComparison.Ordinal))
-                .Where(package => !CompilerComponents.Contains(project.Name) || !package.PrivateAssetsAll)
+                .Where(package => project.Name != "Elsa.Workflows.Design.CodeGeneration" || !package.PrivateAssetsAll)
                 .Select(package => $"{project.Name} -> {package.Name} (PrivateAssets=all: {package.PrivateAssetsAll})"))
             .ToArray();
         var runtimeGeneratorReferences = projects

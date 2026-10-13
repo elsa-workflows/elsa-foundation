@@ -14,8 +14,8 @@
       - Essentials/src/Workflows/Design/CodeGeneration targets netstandard2.0 as a
         Roslyn source generator and pins its own TargetFramework/ImplicitUsings.
 
-      - Essentials/src/Architecture/Analyzers targets netstandard2.0 as the Roslyn
-        naming analyzer and pins its own TargetFramework/ImplicitUsings.
+      - Essentials/build/Analyzers targets netstandard2.0 as the Roslyn naming
+        analyzer and pins its own TargetFramework/ImplicitUsings.
 
       - The former src/essentials/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore
         tree was retired with issue #1482 together with its frozen oracle and ratchet.
@@ -152,30 +152,41 @@
 
   <!--
     Naming analyzer. Every production project (Essentials/src, Essentials/apps and Extensions/<name>/src)
-    compiles with Essentials/src/Architecture/Analyzers, which refuses retired terms in type and namespace
-    names. Which terms apply is configured per domain in the root .editorconfig (key
-    elsa_naming.retired_terms); a file no section configures is held to nothing.
+    compiles with Essentials/build/Analyzers, which refuses retired terms in type and namespace names. Which
+    terms apply is configured per domain in the root .editorconfig (key elsa_naming.retired_terms); a file no
+    section configures is held to nothing. The analyzer lives outside the module roots on purpose: it is build
+    tooling, not a domain or a production project, and every Docker build context that copies Essentials/
+    reaches it.
 
     OutputItemType="Analyzer" with ReferenceOutputAssembly="false" hands the analyzer to the compiler
-    without referencing its assembly, and PrivateAssets="all" keeps it out of every packed nuspec. The
-    analyzer project itself is excluded so it does not reference itself.
+    without referencing its assembly, and PrivateAssets="all" keeps it out of every packed nuspec. A build
+    context that lacks the analyzer project would only warn (MSB9008) and compile without it, so
+    ElsaRequireNamingAnalyzer turns that into an error.
 
-    The condition reads the project's location and name, never $(Configuration), so the Release and Debug
-    restore graphs agree; EfCoreDependencyGuardTests admits exactly this condition.
+    The condition reads the project's location, never $(Configuration), so the Release and Debug restore
+    graphs agree; EfCoreDependencyGuardTests admits exactly this condition. ProductionPathAgreementTests
+    holds the location test to the one the architecture guards use.
   -->
   <PropertyGroup>
+    <_ElsaNamingAnalyzerProject>$(MSBuildThisFileDirectory)Essentials/build/Analyzers/Elsa.Architecture.Analyzers.csproj</_ElsaNamingAnalyzerProject>
     <_ElsaProjectDirectoryFromRoot>$([MSBuild]::MakeRelative('$(MSBuildThisFileDirectory)', '$(MSBuildProjectDirectory)/'))</_ElsaProjectDirectoryFromRoot>
     <_ElsaProjectDirectoryFromRoot>$(_ElsaProjectDirectoryFromRoot.Replace('\', '/'))</_ElsaProjectDirectoryFromRoot>
     <ElsaIsProductionProject>false</ElsaIsProductionProject>
     <ElsaIsProductionProject Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('$(_ElsaProjectDirectoryFromRoot)', '^(Essentials/(src|apps)|Extensions/[^/]+/src)/'))">true</ElsaIsProductionProject>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(ElsaIsProductionProject)' == 'true' and '$(MSBuildProjectName)' != 'Elsa.Architecture.Analyzers'">
-    <ProjectReference Include="$(MSBuildThisFileDirectory)Essentials/src/Architecture/Analyzers/Elsa.Architecture.Analyzers.csproj"
+  <ItemGroup Condition="'$(ElsaIsProductionProject)' == 'true'">
+    <ProjectReference Include="$(_ElsaNamingAnalyzerProject)"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false"
                       PrivateAssets="all" />
   </ItemGroup>
+
+  <Target Name="ElsaRequireNamingAnalyzer" BeforeTargets="BeforeBuild"
+          Condition="'$(ElsaIsProductionProject)' == 'true' and !Exists('$(_ElsaNamingAnalyzerProject)')">
+    <Error Code="ELSABUILD001"
+           Text="$(MSBuildProjectName) is a production project, so it compiles with the naming analyzer, but $(_ElsaNamingAnalyzerProject) is not here. A Docker build context or partial checkout that leaves out Essentials/build/Analyzers would otherwise build without the analyzer, with only an MSB9008 warning." />
+  </Target>
 
   <!--
     Static analysis. The repository had no .editorconfig and no analyzer settings

@@ -74,6 +74,9 @@
     <Project Path="Essentials/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj" />
     <Project Path="Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj" />
   </Folder>
+  <Folder Name="/Essentials/build/">
+    <Project Path="Essentials/build/Analyzers/Elsa.Architecture.Analyzers.csproj" />
+  </Folder>
   <Folder Name="/Essentials/src/">
     <Project Path="Essentials/src/Git/Elsa.Git.csproj" />
   </Folder>
@@ -115,9 +118,6 @@
   <Folder Name="/Essentials/src/Activities/Runtime/">
     <Project Path="Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj" />
     <Project Path="Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj" />
-  </Folder>
-  <Folder Name="/Essentials/src/Architecture/">
-    <Project Path="Essentials/src/Architecture/Analyzers/Elsa.Architecture.Analyzers.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Attention/">
     <Project Path="Essentials/src/Attention/Core/Elsa.Attention.Core.csproj" />

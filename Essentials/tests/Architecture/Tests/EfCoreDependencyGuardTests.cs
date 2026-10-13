@@ -612,15 +612,14 @@ public sealed class EfCoreDependencyGuardTests
     /// The declared exceptions, both in the root Directory.Build.props: the PublicApiAnalyzers reference a project opts
     /// into with ElsaTrackPublicApi, and the naming analyzer every production project compiles with. Neither condition
     /// reads $(Configuration): one reads a property the project file sets unconditionally, the other the project's
-    /// location and name. The Release and Debug restore graphs this guard reads therefore resolve both identically, and
+    /// location. The Release and Debug restore graphs this guard reads therefore resolve both identically, and
     /// neither can hide a package or project from one of them. An exception matches on path, element, Include and the
     /// exact condition text, so another reference placed under the same condition is still an offender.
     /// </summary>
     private static readonly (string RelativePath, string ElementName, string Include, string Condition)[] AdmittedConditionalDependencies =
     [
         ("Directory.Build.props", "PackageReference", "Microsoft.CodeAnalysis.PublicApiAnalyzers", "'$(ElsaTrackPublicApi)' == 'true'"),
-        ("Directory.Build.props", "ProjectReference", "$(MSBuildThisFileDirectory)Essentials/src/Architecture/Analyzers/Elsa.Architecture.Analyzers.csproj",
-            "'$(ElsaIsProductionProject)' == 'true' and '$(MSBuildProjectName)' != 'Elsa.Architecture.Analyzers'"),
+        ("Directory.Build.props", "ProjectReference", "$(_ElsaNamingAnalyzerProject)", "'$(ElsaIsProductionProject)' == 'true'"),
     ];
 
     private static bool IsAdmittedConditionalDependency(string relativePath, XElement element) =>
@@ -649,8 +648,8 @@ public sealed class EfCoreDependencyGuardTests
     public void Only_the_declared_analyzer_references_are_admitted_as_conditional_dependencies()
     {
         const string trackingCondition = "'$(ElsaTrackPublicApi)' == 'true'";
-        const string productionCondition = "'$(ElsaIsProductionProject)' == 'true' and '$(MSBuildProjectName)' != 'Elsa.Architecture.Analyzers'";
-        const string analyzerProject = "$(MSBuildThisFileDirectory)Essentials/src/Architecture/Analyzers/Elsa.Architecture.Analyzers.csproj";
+        const string productionCondition = "'$(ElsaIsProductionProject)' == 'true'";
+        const string analyzerProject = "$(_ElsaNamingAnalyzerProject)";
 
         Assert.True(IsAdmittedConditionalDependency("Directory.Build.props", Reference("PackageReference", "Microsoft.CodeAnalysis.PublicApiAnalyzers", trackingCondition)));
         Assert.True(IsAdmittedConditionalDependency("Directory.Build.props", Reference("ProjectReference", analyzerProject, productionCondition)));
