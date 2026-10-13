@@ -596,7 +596,7 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   const initialMaximized = getInitialBoolean(bottomPanelMaximizedStorageKey, false);
   const [height, setHeight] = useState(getInitialBottomPanelHeight);
   const [activePanelId, setActivePanelId] = useState(getInitialActiveBottomPanelId);
-  const [collapsed, setCollapsed] = useState(() => !initialMaximized && getInitialBottomPanelCollapsed());
+  const [collapsed, setCollapsed] = useState(() => !initialMaximized && getInitialBoolean(bottomPanelCollapsedStorageKey, true));
   const [maximized, setMaximized] = useState(() => initialMaximized);
   const activePanel = panels.find(panel => panel.id === activePanelId) ?? panels[0];
   // `activePanel` is `panels.find(...) ?? panels[0]`, so it is always a member of `panels`.
@@ -1089,15 +1089,6 @@ function getInitialActiveBottomPanelId() {
   }
 
   return window.localStorage.getItem(activeBottomPanelStorageKey) ?? "";
-}
-
-function getInitialBottomPanelCollapsed() {
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  const value = window.localStorage.getItem(bottomPanelCollapsedStorageKey);
-  return value === null ? window.innerWidth <= 640 : value === "true";
 }
 
 function getInitialBoolean(storageKey: string, fallback: boolean) {
