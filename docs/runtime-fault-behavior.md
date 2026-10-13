@@ -1,25 +1,42 @@
-# Runtime fault behavior map
+# What happens when something fails at runtime
 
-> **Audience:** engineers working on or reading the Elsa 4 runtime.
-> **Purpose:** answer "what happens when an activity throws" and "what happens when a handler throws"
-> from one place, and keep the two apart. They are different paths with different outcomes, and
-> conflating them is the specific mistake this doc exists to prevent.
-> **Knowledge role:** worked reference. It describes behavior and the decisions behind it; it is not a
-> registration inventory. Canonical short definitions live in
-> [`docs/glossary/elsa.md`](glossary/elsa.md), and the extension-point contracts live in
-> [`Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
+**Who this is for:** contributors working on, or reading, the Elsa 4 runtime.
 
-## Why this doc exists
+There are two kinds of failure, and they take **different paths with different outcomes**:
 
-Reading `WorkflowSchedulerDrainer` end to end tells you almost nothing about what a fault does to a
-workflow. Every collaborator that decides an outcome sits behind an interface the drain loop does not
-name: the activity fault is caught inside a work handler, the decision to terminate the workflow is
-made by an authored strategy applied by a drain observer, and a handler crash is projected into an
-incident by a different drain observer. That separation is deliberate. It also means a careful reader
-working from the hot path reaches the wrong conclusion, which is what happened to three of the seven
-findings in the execution model comparison that produced backlog item D1 (issue #1226).
+- **Path A, an activity throws.** Your activity code (or its input, or its construction) fails. This is a normal, expected failure of the *workflow*.
+- **Path B, a handler throws.** One of the runtime's own small step handlers fails. This is a failure of the *engine* while running one step.
 
-So this map starts from the observer list and the defaults, not from the loop.
+Mixing the two up is the most common mistake when reading the runtime code, so this page keeps them apart.
+
+```mermaid
+flowchart TB
+    subgraph A["Path A: an activity throws"]
+        A1[Caught inside the step handler] --> A2[Incident recorded, activity Faulted]
+        A2 --> A3[Drain keeps going]
+        A3 --> A4[At the end: the workflow's incident strategy decides]
+        A4 --> A5["Default: workflow Faulted"]
+    end
+    subgraph B["Path B: a handler throws"]
+        B1[Caught by the drain loop] --> B2[Step removed from queue, poison record written]
+        B2 --> B3[Drain stops]
+        B3 --> B4[Poison record shown as a blocking incident]
+        B4 --> B5["Default: workflow stays Running, needs an operator"]
+    end
+```
+
+## Words you will meet
+
+| Word | Meaning |
+|---|---|
+| Incident | A saved record of a failure. *Blocking* incidents hold the run up; *Open* ones do not. Recording an incident does not by itself end the workflow. |
+| Resolution outcome | What was decided about an incident. *Empty (null)* means nobody has decided yet; everything downstream keys off that. |
+| Incident strategy | The per-workflow rule that decides what an activity fault does to the run. It is fixed into the executable when you publish. |
+| Drain | Working through a run's queued steps until none are left. |
+| Quiescence | The point where the drain and outbox delivery have nothing left to do for this run. |
+| Drain observer | A component that runs after a drain finishes and reacts to its result. Fault outcomes are decided here, not in the loop. |
+| Poison record | A saved note that one queued step made its handler fail. |
+| Ack | Removing a finished step from the queue. |
 
 ## The short answer
 
@@ -33,8 +50,10 @@ So this map starts from the observer list and the defaults, not from the loop.
 | Activity state | `Faulted` with a fault sub-status | untouched, it stays whatever it was |
 | Retried by default | no | no (`NoopRuntimeDomainRetryPolicy` returns an explicit `DoNotRetry`) |
 
-The single most load-bearing difference: an activity fault never reaches the drainer's fault arm, and
+**The key difference:** an activity fault never reaches the drainer's fault arm, and
 a handler fault never reaches the incident strategy.
+
+> **Why read the observers, not the loop?** Reading the drain loop end to end tells you almost nothing about what a fault does to a workflow. Every collaborator that decides an outcome sits behind an interface the loop does not name: the activity fault is caught inside a step handler, the decision to end the workflow is made by an authored strategy applied by a drain observer, and a handler crash becomes an incident through a different drain observer. That separation is deliberate, so this page starts from the observers and the defaults.
 
 ## Path A: an activity throws
 
@@ -89,7 +108,7 @@ if (result.StopReason != RuntimeSchedulerDrainStopReason.Quiesced)
 Quiescence is decided by `WorkflowDrainOrchestrator.DrainSchedulerAndPostCommitWorkAsync`: the drain
 plus post-commit outbox delivery cycle until a cycle delivers nothing and no continuation of the execution
 is left in another deliverer's hands or undrained in its queue (#2225, see
-[A live drain's continuation in the sweep's hands](runtime-durable-resumption.md#a-live-drains-continuation-in-the-sweeps-hands-2225)).
+[durable resumption](runtime-durable-resumption.md)).
 The observer then collects
 blocking incidents that have no resolution outcome **and** carry an `ActivityExecutionId`, and hands
 them to `IncidentResolutionBatchExecutor`.
@@ -114,14 +133,14 @@ discarded and `FaultWorkflow` is applied to a fresh staging context. Both fallba
 with system source `IncidentStrategyFailure` plus a `phase` metadata entry, so a fault-by-fallback is
 distinguishable from a fault the strategy actually chose.
 
-Note that quiescence is measured by outbox delivery, not by the scheduler queue being empty, and the
-two can disagree. `WorkflowSchedulerDrainer`'s loop has four exits: the queue runs dry, an item faults,
-an item pauses, or the per-drain work-item budget (`RuntimeSchedulerDrainRequest.MaxWorkItems`,
-unbounded by default) is exhausted. Budget exhaustion is not a distinct stop reason anywhere. The
-drainer reports no explicit reason, `RuntimeSchedulerDrainResult` infers `Quiesced` from an
-all-completed item set, and the aggregate reason the observers actually see is seeded `Quiesced` by the
-orchestrator and never reconsiders the budget. So a budget-truncated drain looks exactly like a settled
-one, and the strategy is applied while work is still queued.
+> **Good to know: a budget-truncated drain looks settled.** Quiescence is measured by outbox delivery, not by the scheduler queue being empty, and the
+> two can disagree. `WorkflowSchedulerDrainer`'s loop has four exits: the queue runs dry, an item faults,
+> an item pauses, or the per-drain work-item budget (`RuntimeSchedulerDrainRequest.MaxWorkItems`,
+> unbounded by default) is exhausted. Budget exhaustion is not a distinct stop reason anywhere. The
+> drainer reports no explicit reason, `RuntimeSchedulerDrainResult` infers `Quiesced` from an
+> all-completed item set, and the aggregate reason the observers actually see is seeded `Quiesced` by the
+> orchestrator and never reconsiders the budget. So a budget-truncated drain looks exactly like a settled
+> one, and the strategy is applied while work is still queued.
 
 ### The backstop, and when it takes over
 
@@ -143,7 +162,7 @@ When it does fault the workflow, it also walks each incident activity's ancestor
 non-terminal ancestors `Faulted` with sub-status `BlockingIncident`, so an enclosing container does not
 sit `Running` under a dead workflow. Sibling branches are not touched.
 
-### One special case worth knowing
+### Special case: the activity could not be activated
 
 An activation failure (`ArtifactActivationFailed`, classified by `ActivityActivationFailureHandler`)
 is recorded differently at the source: the activity is left `Waiting` rather than `Faulted`, and the
@@ -230,27 +249,9 @@ than quiescing and because its intervention outcome is already decided. Activity
 it was, typically `Scheduled` or `Running`; an attributable activity gains the incident association
 and an inspection projection in the same `IncidentRecorded` checkpoint.
 
-### A poisoned first checkpoint
+### Exception: a poisoned first checkpoint
 
-In the A1 revision (`e59c9393e6f2b01e6e43686cea04da9767b21aef`),
-`EfWorkflowExecutableStore.TryAcquireRootWriteLeaseAsync` read and rewrote the shared per-artifact
-coordination row's lease dictionary. Concurrent starts of the same artifact competed on its revision;
-exhausting the optimistic-concurrency retries threw `Runtime coordination changed concurrently.` before
-`EfRuntimeCheckpointCommitStore` could write the `WorkflowStarted` checkpoint. This is a coordination
-revision conflict, not evidence of `SQLITE_BUSY` or `SQLITE_LOCKED`. [Spec 200](../specs/200-root-write-lease-rows/spec.md)
-replaced those shared lease writes with independent rows (#2539); the early-failure visibility contract
-below still needs to hold if a first checkpoint fails.
-
-`PoisonedFirstCheckpointContractTests.First_checkpoint_coordination_failure_is_poisoned_and_projected_durably`
-replays that exhausted-retry failure through `IWorkflowExecutableRootWriteLeaseManager` before the first
-write callback. The real checkpoint handler and scheduler drainer then produce the durable poison record.
-The SQLite test checks that no execution, incident, run-health projection, or checkpoint marker was written,
-then runs the observer and reads the faulted execution, blocking incident, and incident-bearing run-health
-projection through a fresh context. A repeated observer notification must not duplicate them. The seam
-reproduces the historical failure boundary deterministically; it does not recreate the removed shared-row
-race or explain the other cancelled requests reported separately in #2536.
-
-The one exception is a poisoned first checkpoint (#2537). The execution never reached a checkpoint, so it
+A poisoned first checkpoint is the one case where Path B does fault the workflow (#2537). The execution never reached a checkpoint, so it
 has no workflow to leave non-terminal, and a durable provider refuses an incident without its workflow and
 run-health projection. Before this, such a run appeared nowhere: not in the instance list, not as an
 incident. When the drain ran this execution's start command, the observer now builds the execution from
@@ -274,6 +275,24 @@ Instance summaries distinguish historical totals from current Open/Blocking and 
 Resolved/Suppressed records remain history. The API advertises health filtering through its additive
 capability relation; the filter applies before authorized total counts and cursor paging. Studio uses
 this current health to show intervention cues without rewriting workflow or activity lifecycle.
+
+> **Good to know: how this was found and how it is tested.** In the A1 revision (`e59c9393e6f2b01e6e43686cea04da9767b21aef`),
+> `EfWorkflowExecutableStore.TryAcquireRootWriteLeaseAsync` read and rewrote the shared per-artifact
+> coordination row's lease dictionary. Concurrent starts of the same artifact competed on its revision;
+> exhausting the optimistic-concurrency retries threw `Runtime coordination changed concurrently.` before
+> `EfRuntimeCheckpointCommitStore` could write the `WorkflowStarted` checkpoint. This is a coordination
+> revision conflict, not evidence of `SQLITE_BUSY` or `SQLITE_LOCKED`. [Spec 200](../specs/200-root-write-lease-rows/spec.md)
+> replaced those shared lease writes with independent rows (#2539); the early-failure visibility contract
+> described here still needs to hold if a first checkpoint fails.
+>
+> `PoisonedFirstCheckpointContractTests.First_checkpoint_coordination_failure_is_poisoned_and_projected_durably`
+> replays that exhausted-retry failure through `IWorkflowExecutableRootWriteLeaseManager` before the first
+> write callback. The real checkpoint handler and scheduler drainer then produce the durable poison record.
+> The SQLite test checks that no execution, incident, run-health projection, or checkpoint marker was written,
+> then runs the observer and reads the faulted execution, blocking incident, and incident-bearing run-health
+> projection through a fresh context. A repeated observer notification must not duplicate them. The seam
+> reproduces the historical failure boundary deterministically; it does not recreate the removed shared-row
+> race or explain the other cancelled requests reported separately in #2536.
 
 So the honest one-line answer to "what happens by default when a handler faults" is: **the work item
 is dropped from the queue, parked as poisoned with no retry, and surfaced as a blocking critical
@@ -323,7 +342,7 @@ reported as above, `ChildStartExecutor` fails the start permanently, and the dis
 `DispatchFailed` rather than through the child's outcome. Any other failure, such as a lost lease, a
 concurrency conflict, or an infrastructure fault, faults nothing here, because a retry can still succeed.
 
-## The observer chain
+## The order observers run in
 
 Observers run in registration order inside `WorkflowDrainOrchestrator.NotifyObserversAsync`, after the
 drain has finished (and after the coalescing flush, on a coalescing host). The order is load-bearing
@@ -372,7 +391,7 @@ The incident strategy is different in kind: it is not a single registered defaul
 reference pinned into the executable at publish, resolved against the strategy catalog at runtime.
 Changing the catalog default only affects workflows published afterwards.
 
-## Where each claim comes from
+## Where this lives in the code
 
 | Claim | Source |
 | --- | --- |
@@ -424,11 +443,8 @@ Behavioral guards worth reading alongside the code:
 
 ## Not covered here
 
-- Retention, resolution APIs, and the operator surfaces that act on an incident once it exists.
-- The drain and claim protocol itself. See [durable resumption](runtime-durable-resumption.md) for
-  crash windows and redelivery, ADR 0029 for the execution pipeline, ADR 0031 for the burst drain, and
-  [persistence modes](../website/docs/essentials/persistence-modes.md) for when checkpoints are committed.
-- Cancellation. A cancel is not a fault on either path and is committed by its own checkpoint service.
-- Child-fault propagation to a parent fork/join. The invoke handler rides a parent-evaluation work item
-  on the incident checkpoint so a join resolves deterministically instead of waiting for a completion
-  that never arrives; the joining semantics belong with the container activities, not here.
+## Background
+
+This page grew out of backlog item **D1** (issue #1226): three of the seven findings in the execution-model comparison that produced it reached the wrong conclusion by reading the drain loop instead of the observers. Related history: the required poison store (#1271), checkpoint-rule faulting (#1780, #1799), the poisoned first checkpoint (#2536, #2537, #2539, spec 200), drain/continuation settlement (#2225), secret masking (spec 188), and the planned registration inventory (#1230, backlog item C2). ADR 0029 covers the execution pipeline and ADR 0031 the burst drain.
+
+Related: [Elsa glossary](glossary/elsa.md) · [Runtime extension points](../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) · [How a workflow executes](how-a-workflow-executes.md) · [Durable resumption](runtime-durable-resumption.md)
