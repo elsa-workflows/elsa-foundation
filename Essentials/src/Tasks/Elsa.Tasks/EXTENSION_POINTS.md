@@ -1,6 +1,6 @@
 # Extension points — Tasks domain
 
-The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Tasks` — the composition root where `TasksFeature` registers `TaskManager`, `TaskExecutor`, and `TopologicalTaskSorter`. Two sections apply.
+The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Tasks`, the composition root where `TasksFeature` registers `TaskManager`, `TaskExecutor` and `TopologicalTaskSorter`, all internal to it. Two sections apply.
 
 ---
 
@@ -15,10 +15,9 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Tasks` — the co
   `StopShellTasksTerminator` stops them at the mirrored `Start`-phase teardown point, before later
   terminators flush stores and before the shell provider is disposed. `TaskManager.DisposeAsync`
   awaits the same idempotent stop operation as a fallback.
-- **Override:** `services.Replace(ServiceDescriptor.Singleton<ITaskManager, MyManager>())`. Implement
-  `IStoppableTaskManager` as an additive capability when the replacement owns shell-lifetime work that
-  must stop before provider disposal; existing `ITaskManager` implementations remain compatible and
-  otherwise keep their previous DI-disposal behavior.
+- **Override:** `services.Replace(ServiceDescriptor.Singleton<ITaskManager, MyManager>())`. A replacement implements
+  both members: `StartExecutingRegisteredTasks` when the shell activates, and `StopExecutingRegisteredTasks`, which
+  `StopShellTasksTerminator` calls before the shell provider is disposed.
 
 ### `ITaskExecutor` *(Core — `Elsa.Tasks.Core`)*
 - **Default impl:** `TaskExecutor` (this feature). It applies what a task class declares, in this order:
@@ -61,11 +60,10 @@ The whole guarantee, and nothing more (#2192):
 - It is meant for startup tasks. On a background or recurring task, each start, run and stop takes the lock the same
   way, which serializes the calls but elects no leader.
 
-### `ITopologicalTaskSorter` *(Core — `Elsa.Tasks.Core`)*
-- **Default impl:** `TopologicalTaskSorter` (this feature) — orders startup tasks respecting `[TaskDependency]` + `[Order]` attributes.
-- **Override:** `services.Replace(...)` to provide a custom ordering strategy.
-
-> **Note:** `ITaskStateManager` is created internally by `TaskManager` and is not DI-registered — it is not an override seam.
+### Startup task order
+`TaskManager` orders startup tasks by `[Order]`, then by `[TaskDependency]` through the internal `TopologicalTaskSorter`,
+which it requires: without the sorter's registration, starting the tasks fails instead of running them unordered. The
+order is not an override seam, and neither is `TaskStateManager`, which `TaskManager` creates for itself.
 
 ---
 
@@ -86,9 +84,9 @@ The whole guarantee, and nothing more (#2192):
 - `Elsa.Workflows.Design.Reconciliation.Git` — `GitWorkflowExportStartupTask` *(cross-domain; runs on every Writer node without a lock, because its fence is the fast-forward-only push, #2197)*
 
 ### `IRecurringTask : ITask` *(Core — `Elsa.Tasks.Core`)*
-- **Kind:** Contributor — run on a schedule. Configure schedule via `ITaskSchedule` (`Elsa.Tasks.Schedules`).
+- **Kind:** Contributor, run on the schedule its `GetSchedule()` returns, an `ITaskSchedule` (`Elsa.Tasks.Core`).
 - **Signature:** `ValueTask ExecuteAsync(CancellationToken cancellationToken);`
-- **Register:** `services.AddScoped<IRecurringTask, MyTask>()`. Configure interval via `RecurringTaskSchedule.ConfigureTask<T>(TimeSpan)` / `(string cronExpression)`.
+- **Register:** `services.AddScoped<IRecurringTask, MyTask>()`. For the schedule, derive from `BackoffSweepWorkerTask`, whose interval widens on failure, or implement `ITaskSchedule`; the schedule classes in `Elsa.Tasks.Schedules` are internal.
 
 ### `IBackgroundTask : ITask` *(Core — `Elsa.Tasks.Core`)*
 - **Kind:** Contributor — long-running background work (hosted service lifecycle).
@@ -122,6 +120,6 @@ The eight shipped workers live in other domains: `RuntimeResumptionPumpTask`, `D
 
 ## Cross-references
 
-- `ITaskSchedule` for recurring task schedules lives in `Elsa.Tasks.Schedules`.
-- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- `ITaskSchedule` lives in `Elsa.Tasks.Core`; the schedule classes in `Elsa.Tasks.Schedules` are internal.
+- Repo-wide index: [`EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.2 + §2.22.1.

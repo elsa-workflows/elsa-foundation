@@ -1,5 +1,4 @@
 using Elsa.Tasks.Core;
-using Elsa.Tasks.Schedules;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Extensions;
@@ -246,15 +245,15 @@ public sealed class RuntimeResumptionPumpTaskTests
         Assert.DoesNotContain(logger.Entries, entry => entry.EventId.Name == "WorkflowTestScopeCleanupFailed");
     }
 
+    /// <summary>The schedule comes from the Tasks base class, whose own tests pin its type.</summary>
     [Fact]
-    public void GetSchedule_ReturnsAdaptiveSchedule()
+    public async Task GetSchedule_SchedulesAnExecution()
     {
         var pump = CreatePump(new FakeResumptionService(), new RuntimeResumptionOptions());
 
-        var schedule = pump.GetSchedule();
+        await using var execution = pump.GetSchedule().ScheduleExecution(() => Task.CompletedTask);
 
-        var adaptive = Assert.IsType<AdaptiveIntervalSchedule>(schedule);
-        Assert.NotNull(adaptive.ScheduleExecution(() => Task.CompletedTask));
+        Assert.NotNull(execution);
     }
 
     [Fact]

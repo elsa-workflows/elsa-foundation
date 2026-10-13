@@ -1,6 +1,6 @@
 namespace Elsa.Tasks.Schedules.Expressions;
 
-public sealed class IntervalExpression
+internal sealed class IntervalExpression
 {
     public IntervalExpression(IntervalExpressionType intervalExpressionType, string expression)
     {

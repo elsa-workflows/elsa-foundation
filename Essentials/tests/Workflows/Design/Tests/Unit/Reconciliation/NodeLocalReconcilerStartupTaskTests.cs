@@ -1,14 +1,12 @@
-using CShells;
 using Elsa.Activities.Design.Core.Reconciliation;
 using Elsa.Activities.Design.Reconciliation.Services;
 using Elsa.Locking.Core;
 using Elsa.Tasks.Core;
-using Elsa.Tasks.Services;
+using Elsa.Workflows.Design.Tests.Infrastructure;
 using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Design.Reconciliation.Git.Contracts;
 using Elsa.Workflows.Design.Reconciliation.Git.Startup;
 using Elsa.Workflows.Design.Reconciliation.Services;
-using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation;
@@ -22,10 +20,10 @@ namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation;
 public sealed class NodeLocalReconcilerStartupTaskTests
 {
     private readonly HeldEverywhereLockProvider _locks = new();
-    private readonly TaskExecutor _executor;
+    private readonly ITaskExecutor _executor;
 
     public NodeLocalReconcilerStartupTaskTests() =>
-        _executor = new TaskExecutor(_locks, NullLogger<TaskExecutor>.Instance, new ShellSettings("default"));
+        _executor = ComposedTaskExecutor.Over(_locks);
 
     [Fact]
     public async Task The_activity_version_reconciler_runs_while_another_node_holds_every_lock()

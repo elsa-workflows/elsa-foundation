@@ -1,26 +1,19 @@
-using CShells;
 using CShells.Lifecycle;
-using Elsa.Locking.Core;
-using Elsa.Tasks;
 using Elsa.Tasks.Core;
 using Elsa.Tasks.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Elsa.Architecture.Tests;
+namespace Elsa.Tasks.Tests;
 
 public sealed class TasksFeatureRegistrationTests
 {
-    // Kept beside the composition test: ordering, the terminator's lifecycle phase and order.
+    // The shell lifecycle the feature registers: the initializer, and the terminator with its phase and order.
     [Fact]
     public async Task TasksFeature_RegistersShellLifecycleThatStartsAndStopsTasks()
     {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddSingleton(new ShellSettings("t"));
-        services.AddSingleton<IDistributedLockProvider, UnusedLockProvider>(); // the locking feature supplies it in a real shell
-
-        new TasksFeature().ConfigureServices(services);
+        // The locking feature supplies the lock provider in a real shell.
+        var services = TaskServices.Compose(new UnusedLockProvider(), shellName: "t");
 
         Assert.Contains(services, d => d.ImplementationType == typeof(RunShellTasksInitializer));
         Assert.Contains(services, d =>
@@ -38,17 +31,5 @@ public sealed class TasksFeatureRegistrationTests
         await using var scope = provider.CreateAsyncScope();
         Assert.NotNull(scope.ServiceProvider.GetService<ITaskManager>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<TaskExecutor>());
-    }
-
-    private sealed class UnusedLockProvider : IDistributedLockProvider
-    {
-        public IDistributedSynchronizationHandle? TryAcquireLock(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public ValueTask<IDistributedSynchronizationHandle?> TryAcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
-
-        public ValueTask<IDistributedSynchronizationHandle> AcquireLockAsync(string name, TimeSpan? timeout = null, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
     }
 }

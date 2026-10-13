@@ -5,7 +5,7 @@ using Elsa.Events.Core.Contracts;
 using Elsa.Events.Strategies;
 using Elsa.Locking.Core;
 using Elsa.Tasks.Core;
-using Elsa.Tasks.Services;
+using Elsa.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Events.Tests;
@@ -95,7 +95,7 @@ internal sealed class NoOpLockProvider : IDistributedLockProvider
 internal static class EventTestHosts
 {
     /// <summary>
-    /// Builds a provider that mirrors the production DI lifetimes from <c>TasksFeature</c> +
+    /// Builds a provider with the production DI lifetimes of <c>TasksFeature</c>, composed by the feature itself, and
     /// <c>EventsFeature</c>: a singleton <see cref="IEventChannel"/> + singleton
     /// <see cref="BackgroundEventPublisher"/> managed by a shell-singleton <see cref="ITaskManager"/>.
     /// <c>ValidateScopes</c> is on so a captive-dependency regression (a singleton capturing a scoped
@@ -111,13 +111,11 @@ internal static class EventTestHosts
         services.AddSingleton<IEventChannel, EventChannel>();
         services.AddSingleton(eventPublisher);
 
-        // TasksFeature lifetimes (shell-singleton). A shell container has its ShellSettings; this one stands in for it.
+        // TasksFeature (shell-singleton manager and executor). A shell container has its ShellSettings; this one stands
+        // in for it.
         services.AddSingleton(new ShellSettings("default"));
-        services.AddSingleton<TaskExecutor>();
-        services.AddSingleton<ITaskExecutor>(sp => sp.GetRequiredService<TaskExecutor>());
-        services.AddSingleton<IBackgroundTaskStarter>(sp => sp.GetRequiredService<TaskExecutor>());
+        new TasksFeature().ConfigureServices(services);
         services.AddSingleton<IBackgroundTask, BackgroundEventPublisher>();
-        services.AddSingleton<ITaskManager, TaskManager>();
 
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
     }

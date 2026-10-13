@@ -12,6 +12,16 @@ public sealed class BackoffSweepWorkerTaskTests
         Assert.Throws<ArgumentNullException>(() => new NullLoggerWorker());
     }
 
+    /// <summary>Every derived worker gets its schedule from the base: an adaptive interval schedule over the current sweep interval.</summary>
+    [Fact]
+    public async Task GetSchedule_ReturnsAnAdaptiveIntervalSchedule()
+    {
+        var schedule = Assert.IsType<AdaptiveIntervalSchedule>(new TestWorker().GetSchedule());
+
+        await using var execution = schedule.ScheduleExecution(() => Task.CompletedTask);
+        Assert.NotNull(execution);
+    }
+
     [Fact]
     public async Task ExecuteAsync_HandledFailure_WidensThenCleanSweepResets()
     {
