@@ -94,7 +94,8 @@ public sealed class ActivityAuthoringCatalogReader(
                 new Dictionary<string, ActivityArgumentValue>(StringComparer.Ordinal),
                 new Dictionary<string, ActivityArgumentValue>(StringComparer.Ordinal),
                 structure),
-            Provenance: new ActivityAuthoringProvenanceView(version.SourceKind, version.SourceId, featureId));
+            Provenance: new ActivityAuthoringProvenanceView(version.SourceKind, version.SourceId, featureId),
+            IconName: ActivityIconName.ReadFromFacets(version.DesignFacets));
     }
 
     private static ActivityInputDescriptorView ToView(InputDefinition input) =>

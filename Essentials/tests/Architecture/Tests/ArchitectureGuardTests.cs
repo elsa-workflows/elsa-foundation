@@ -566,6 +566,8 @@ public sealed partial class ArchitectureGuardTests
     {
         // The CLR scanner tests read this assembly's name ("Elsa.Activities.Design.Tests.ClrFixture") and its activities' type names.
         ["Elsa.Activities.Design.Tests.ClrFixture"] = "Essentials/tests/Activities/Design/Fixtures/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj",
+        // Icon fixtures live in their own assembly so CLR reconciliation still counts the original eighteen.
+        ["Elsa.Activities.Design.Tests.ClrIconFixture"] = "Essentials/tests/Activities/Design/Fixtures/ClrIconFixture/Elsa.Activities.Design.Tests.ClrIconFixture.csproj",
         // Beside the library it tests, as Elsa.Cluster.Tests sits beside Elsa.Cluster.Testing.
         ["Elsa.Api.Compatibility.Testing.Tests"] = "Essentials/tests/Api/Compatibility/Tests/Elsa.Api.Compatibility.Testing.Tests.csproj",
     };

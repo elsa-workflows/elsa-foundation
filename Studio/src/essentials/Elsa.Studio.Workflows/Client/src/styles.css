@@ -3722,6 +3722,15 @@ html[data-theme-appearance="high-contrast"] .wf-node[data-trigger-enabled="true"
   color: var(--wf-accent);
 }
 
+.wf-node-icon img,
+.wf-activity-icon img,
+.wf-activity-icon-asset {
+  width: 15px;
+  height: 15px;
+  display: block;
+  object-fit: contain;
+}
+
 .wf-node[data-icon="terminal"] .wf-node-icon,
 .wf-node[data-tone="terminal"] .wf-node-icon,
 .wf-node-icon[data-tone="terminal"] {

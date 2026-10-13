@@ -130,6 +130,25 @@ public sealed class HashMismatchTests
     }
 
     [Fact]
+    public async Task SameVersionAddingOrChangingTheActivityIconFacet_DoesNotThrowHashMismatch()
+    {
+        var store = new InMemoryReconcilerHarness.CatalogStore();
+
+        await InMemoryReconcilerHarness.BuildReconciler(store, Source(Model())).Reconcile(CancellationToken.None);
+        Assert.Single(store.Versions);
+
+        await InMemoryReconcilerHarness.BuildReconciler(
+            store,
+            Source(Model(designFacets: [ActivityIconName.ToFacet("Rocket")!]))).Reconcile(CancellationToken.None);
+
+        await InMemoryReconcilerHarness.BuildReconciler(
+            store,
+            Source(Model(designFacets: [ActivityIconName.ToFacet("Mail")!]))).Reconcile(CancellationToken.None);
+
+        Assert.Single(store.Versions);
+    }
+
+    [Fact]
     public async Task SameVersionSameContent_ThrowsWhenDuplicateHandlingIsUnknown()
     {
         // An out-of-range DuplicateHandling value (a future member, or an unchecked cast) must not
@@ -154,7 +173,8 @@ public sealed class HashMismatchTests
         string description = "same",
         string version = "1.0.0",
         string descriptorAlias = "Object",
-        IReadOnlyCollection<InputDefinition>? inputs = null) =>
+        IReadOnlyCollection<InputDefinition>? inputs = null,
+        IReadOnlyCollection<ActivityDesignFacet>? designFacets = null) =>
         new(
             Id: null,
             Version: version,
@@ -169,7 +189,7 @@ public sealed class HashMismatchTests
             Descriptor: new ClrActivityDescriptor(descriptorAlias),
             Inputs: inputs ?? [],
             Outputs: [],
-            DesignFacets: []);
+            DesignFacets: designFacets ?? []);
 
     private static InputDefinition Input(bool isNullable) =>
         new(

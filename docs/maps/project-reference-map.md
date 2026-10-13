@@ -7,8 +7,8 @@ Records direct project references only.
 ## Summary
 
 - Source projects: 141
-- Test projects: 142
-- Direct project references: 1487
+- Test projects: 143
+- Direct project references: 1489
 
 ## Projects
 
@@ -151,9 +151,10 @@ Records direct project references only.
 | [Elsa.Activities.ControlFlow.Tests](../../Essentials/tests/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj) | test | Elsa.Activities | - | false | Elsa.Activities.ControlFlow<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Sequence<br>Elsa.Activities.Testing<br>Elsa.Events<br>Elsa.Expressions<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Jint<br>Elsa.Serialization.Core<br>Elsa.Serialization.SystemText<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.JavaScript |
 | [Elsa.Activities.Design.Api.Tests](../../Essentials/tests/Activities/Design/Api/Tests/Elsa.Activities.Design.Api.Tests.csproj) | test | Elsa.Activities | - | false | Elsa.Activities.Design.Api<br>Elsa.Testing |
 | [Elsa.Activities.Design.Tests.ClrFixture](../../Essentials/tests/Activities/Design/Fixtures/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj) | test | Elsa.Activities | - | false | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Activities.Design.Tests.ClrIconFixture](../../Essentials/tests/Activities/Design/Fixtures/ClrIconFixture/Elsa.Activities.Design.Tests.ClrIconFixture.csproj) | test | Elsa.Activities | - | false | Elsa.Activities.Runtime.Core |
 | [Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests](../../Essentials/tests/Activities/Design/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Activities | net10.0 | false | Elsa.Activities.Design.Persistence.EntityFrameworkCore |
 | [Elsa.Activities.Design.Persistence.EntityFrameworkCore.Tests](../../Essentials/tests/Activities/Design/Persistence/EntityFrameworkCore/Tests/Elsa.Activities.Design.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Activities | - | false | Elsa.Activities.Design.Persistence.EntityFrameworkCore |
-| [Elsa.Activities.Design.Tests](../../Essentials/tests/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj) | test | Elsa.Activities | - | false | Elsa.Activities.Bpmn<br>Elsa.Activities.ControlFlow<br>Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.Design.Reconciliation.Json<br>Elsa.Activities.Design.Tests.ClrFixture<br>Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Activities.Flowchart<br>Elsa.Activities.Graph.Runtime<br>Elsa.Activities.Http<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Scheduling<br>Elsa.Activities.Scripting<br>Elsa.Activities.Sequence<br>Elsa.Api.Compatibility.Testing<br>Elsa.Events.Core<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.SystemText<br>Elsa.Testing<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Publishing.Core |
+| [Elsa.Activities.Design.Tests](../../Essentials/tests/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj) | test | Elsa.Activities | - | false | Elsa.Activities.Bpmn<br>Elsa.Activities.ControlFlow<br>Elsa.Activities.Design.Api<br>Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Activities.Design.Reconciliation<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.Design.Reconciliation.Json<br>Elsa.Activities.Design.Tests.ClrFixture<br>Elsa.Activities.Design.Tests.ClrIconFixture<br>Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Activities.Flowchart<br>Elsa.Activities.Graph.Runtime<br>Elsa.Activities.Http<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Scheduling<br>Elsa.Activities.Scripting<br>Elsa.Activities.Sequence<br>Elsa.Api.Compatibility.Testing<br>Elsa.Events.Core<br>Elsa.Primitives<br>Elsa.Primitives.Hosting<br>Elsa.Serialization.SystemText<br>Elsa.Testing<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Publishing.Core |
 | [Elsa.Activities.DispatchWorkflow.Tests](../../Essentials/tests/Activities/DispatchWorkflow/Tests/Elsa.Activities.DispatchWorkflow.Tests.csproj) | test | Elsa.Activities | - | false | Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.DispatchWorkflow.Design<br>Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Activities.Primitives<br>Elsa.Activities.Runtime<br>Elsa.Activities.Testing<br>Elsa.Events<br>Elsa.Expressions<br>Elsa.Serialization.SystemText<br>Elsa.Testing<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Publishing<br>Elsa.Workflows.Publishing.Api<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Resumption |
 | [Elsa.Activities.Flowchart.Tests](../../Essentials/tests/Activities/Flowchart/Tests/Elsa.Activities.Flowchart.Tests.csproj) | test | Elsa.Activities | - | false | Elsa.Activities.Flowchart<br>Elsa.Activities.Graph.Runtime<br>Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Activities.Testing<br>Elsa.Workflows.Runtime.Api<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Graph.Tests](../../Essentials/tests/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj) | test | Elsa.Activities | - | false | Elsa.Activities.Graph.Design<br>Elsa.Activities.Graph.Runtime<br>Elsa.Activities.Runtime<br>Elsa.Workflows.Publishing.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Api |
@@ -302,7 +303,7 @@ Records direct project references only.
 
 | Domain | Source projects | Test projects |
 |---|---:|---:|
-| Elsa.Activities | 22 | 20 |
+| Elsa.Activities | 22 | 21 |
 | Elsa.Agent | 5 | 1 |
 | Elsa.Api | 2 | 3 |
 | Elsa.Architecture | 0 | 3 |

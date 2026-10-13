@@ -84,6 +84,34 @@ public sealed class HasherTests
     }
 
     [Fact]
+    public void Hash_IsStable_WhenOnlyTheActivityIconFacetChanges()
+    {
+        var hasher = new DefaultActivityDefinitionHasher();
+        var (def, _) = MakeFixture();
+
+        var withoutIcon = NewVersion(def, designFacets: [Facet("elsa.test.shape", """{ "value": "A" }""")]);
+        var withIcon = NewVersion(def, designFacets:
+        [
+            Facet("elsa.test.shape", """{ "value": "A" }"""),
+            new ActivityDesignFacet(
+                ActivityIconName.FacetKind,
+                ActivityIconName.FacetSchemaVersion,
+                JsonSerializer.SerializeToElement(new { iconName = "Rocket" }))
+        ]);
+        var changedIcon = NewVersion(def, designFacets:
+        [
+            Facet("elsa.test.shape", """{ "value": "A" }"""),
+            new ActivityDesignFacet(
+                ActivityIconName.FacetKind,
+                ActivityIconName.FacetSchemaVersion,
+                JsonSerializer.SerializeToElement(new { iconName = "Mail" }))
+        ]);
+
+        Assert.Equal(hasher.Hash(def, withoutIcon), hasher.Hash(def, withIcon));
+        Assert.Equal(hasher.Hash(def, withIcon), hasher.Hash(def, changedIcon));
+    }
+
+    [Fact]
     public void Hash_IsStable_AcrossVersionDifferences()
     {
         // Version is row identity, not projected content. The reconciler uses it to find the row;

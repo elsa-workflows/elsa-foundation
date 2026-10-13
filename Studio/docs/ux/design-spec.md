@@ -158,16 +158,26 @@ description, pinned mark and body stay visible (content first).
 
 `exists`: one resolver, `resolveActivityIcon` in `activityIcons.ts`, used by the designer
 palette, canvas nodes, and the run-view timeline. Order: catalog `icon` kind token, then
-catalog `iconName` (a mapped lucide export or kebab name), then the activity type key, then
-the category icon, then `executionType === trigger`. An `icon` / `iconName` that is not a
-known kind and not in the lucide map is ignored so the later steps still run.
-`renderActivityIcon` (in `activityIconView.tsx`) lazy-loads the lucide table from
+catalog `iconName` (any lucide export or kebab name, `asset:<package>/<path>`, or
+`ext:<name>`), then the activity type key, then the category icon, then
+`executionType === trigger`. An `icon` / `iconName` that is not a known kind, not a
+well-formed lucide / asset / extension name, or is unsafe is ignored so the later steps
+still run. `renderActivityIcon` (in `activityIconView.tsx`) lazy-loads the lucide table from
 `activityIconGlyphs.tsx` so the Workflows entry and landing paths stay inside the bundle
-budget; a rejected chunk load keeps the placeholder. Extensions call
-`loadActivityIconRegistry` then `registerActivityIconGlyphs`.
+budget; a rejected chunk load or a throwing glyph keeps the placeholder. Unmapped lucide
+names load on demand and show the category placeholder briefly while the import resolves;
+`asset:` values render as an `<img>` (they cannot follow tone tokens) resolved against the
+Studio host base path; `ext:` values resolve through the public `registerActivityIcons`
+registry in `@elsa-workflows/studio-sdk` (optionally also on
+`api.workflowDesigner.registerActivityIcons` — callers must guard when the host omits it),
+matching names case-insensitively and re-rendering if the icon is registered after first paint.
+A failed load falls back to the category / type icon and never takes down the palette or canvas.
+CLR activities set the catalog value with `[Activity(Icon = …)]`. The facet is presentation
+only and is excluded from the descriptor hash.
 Palette rows and canvas nodes set `data-tone` from `resolveActivityIconTone` and colour
 through `--wf-activity-*`, which honour the host override `--studio-wf-activity-*` and then
-`--studio-success` / `--studio-accent` / `--studio-warning` / `--studio-danger`.
+`--studio-success` / `--studio-accent` / `--studio-warning` / `--studio-danger`. Lucide and
+registered React icons should use `currentColor` so they follow those tone tokens.
 
 `target, phase 4`: `iconColor` from the catalog is still unused; category tone wins so icons
 track the theme instead of a per-descriptor hex.
