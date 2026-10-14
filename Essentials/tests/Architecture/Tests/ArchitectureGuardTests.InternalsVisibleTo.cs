@@ -110,14 +110,14 @@ public sealed partial class ArchitectureGuardTests
     public void Each_kind_of_grant_is_judged_by_domain()
     {
         using var sandbox = new GrantSandbox();
-        sandbox.Project("Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj");
-        sandbox.Project("Essentials/tests/Events/Tests/Elsa.Events.Tests.csproj");
+        sandbox.Project(GrantProjects.TasksTests);
+        sandbox.Project(GrantProjects.EventsTests);
         sandbox.Project("Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj");
-        sandbox.Project("Essentials/tests/Modularity/Tests/Elsa.Modularity.Tests.csproj");
+        sandbox.Project(GrantProjects.ModularityTests);
 
         // Declared in the project file for one target; the other grant has no declaration the scan can see.
         sandbox.Project(
-            "Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj",
+            GrantProjects.Tasks,
             """<ItemGroup><InternalsVisibleTo Include="Elsa.Tasks.Tests" /></ItemGroup>""");
         sandbox.Assembly(
             "Essentials/src/Tasks/Elsa.Tasks/bin/Release/net10.0/Elsa.Tasks.dll",
@@ -135,20 +135,20 @@ public sealed partial class ArchitectureGuardTests
             internal static class Names { public const string Target = "Elsa." + nameof(Tasks); }
             namespace Tasks { internal static class Marker { } }
             """;
-        sandbox.Project("Essentials/src/Events/Elsa.Events/Elsa.Events.csproj");
+        sandbox.Project(GrantProjects.Events);
         sandbox.File("Essentials/src/Events/Elsa.Events/AssemblyInfo.cs", computed);
         sandbox.Assembly("Essentials/src/Events/Elsa.Events/bin/Release/net10.0/Elsa.Events.dll", computed);
 
         // A production project that was never built.
         sandbox.Project("Essentials/src/Locking/Core/Elsa.Locking.Core.csproj");
 
-        sandbox.Project("Essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj");
+        sandbox.Project(GrantProjects.DesignCore);
         sandbox.Assembly(
             "Essentials/src/Workflows/Design/Core/bin/Release/net10.0/Elsa.Workflows.Design.Core.dll",
             """[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Elsa.Workflows.Runtime.Tests")]""");
 
         sandbox.Project(
-            "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
+            GrantProjects.Workbench,
             """<ItemGroup><InternalsVisibleTo Include="Elsa.Modularity.Tests" /><InternalsVisibleTo Include="Elsa.Tasks.Tests" /></ItemGroup>""");
         sandbox.Assembly(
             "Essentials/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll",
@@ -244,15 +244,15 @@ public sealed partial class ArchitectureGuardTests
     }
 
     [Theory]
-    [InlineData("Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj", "Tasks")]
-    [InlineData("Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj", "Tasks")]
-    [InlineData("Essentials/src/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj", "Workflows.Runtime")]
+    [InlineData(GrantProjects.Tasks, "Tasks")]
+    [InlineData(GrantProjects.TasksTests, "Tasks")]
+    [InlineData(GrantProjects.RuntimeHttp, "Workflows.Runtime")]
     [InlineData("Essentials/tests/Workflows/Runtime/Http/Tests/Elsa.Workflows.Runtime.Http.Tests.csproj", "Workflows.Runtime")]
-    [InlineData("Extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj", "Extensions/ExtensionBuilder")]
+    [InlineData(GrantProjects.ExtensionBuilderApi, "Extensions/ExtensionBuilder")]
     [InlineData("Extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj", "Extensions/ExtensionBuilder")]
-    [InlineData("Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj", null)]
+    [InlineData(GrantProjects.Workbench, null)]
     [InlineData("Essentials/build/Analyzers/Elsa.Architecture.Analyzers.csproj", null)]
-    [InlineData("tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj", null)]
+    [InlineData(GrantProjects.MapsGenerator, null)]
     public void A_path_maps_to_its_domain(string path, string? domain) =>
         Assert.Equal(domain, ElsaDomains.Of(path));
 
