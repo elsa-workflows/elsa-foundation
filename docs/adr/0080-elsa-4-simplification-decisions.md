@@ -114,11 +114,27 @@ activities are ReplaySafe, it dispatches no child, and it is not cancelled, alte
   assembly. Framework §2.23.3 is amended.
 - Public types are: contracts users implement or call, models crossing a package boundary, activities, feature
   classes, options and entry points.
+- Whether a type is public depends on what it means to someone building on Elsa: a host or application author, an
+  activity author, a module or extension author, or a persistence-provider author. The categories above are the
+  parts of a package those people work with. Two arguments do not count: "another project in the solution uses it,
+  so it stays public", and "nothing outside its project uses it, so it goes internal".
+- When a sibling Elsa production project needs a type, the sibling test decides: would a third party writing the
+  same kind of package need it too? If yes, the type is an extension point and is public. If no, it stays internal
+  and the owning project grants `InternalsVisibleTo` to that sibling, within the same domain only. A need from a
+  project in another domain means the type is an extension point or is in the wrong place; it never gets a
+  cross-domain grant.
 - An interface exists only where more than one implementation is meaningful or where it is a documented extension
   point. Framework §2.5 is amended: a collaborator becomes a contract when it becomes an extension point, not
   before.
 - PublicApiAnalyzers runs on every packable project; a change to the public surface is a reviewed diff.
-- Target: fewer than 1,500 public types.
+
+**Owner amendment, 14 October 2026:** decisions taken while delivering D3
+([#2591](https://github.com/elsa-workflows/elsa-foundation/issues/2591#issuecomment-6163682967)). There is no numeric
+target. The original "fewer than 1,500 public types" is withdrawn: the public-type count stays a reported metric
+(`tools/quality-metrics`), never a goal. The rule above on what makes a type public, and the sibling test, were added
+by the same decision. Framework §2.23.3 is amended again (constitution 6.1.0): a production project may now grant
+`InternalsVisibleTo` to a production project of its own domain, which 6.0.1 refused, and never to one in another
+domain. Domains 1 and 2, already realigned, are audited again under this rule in a separate change.
 
 ### D4 — Pre-GA cleanup
 
@@ -205,8 +221,9 @@ analyzer-only, which NuGet leaves out of the consumers' restore graphs, so no ex
   `needs-triage` and `auto-product` and never `ready-for-agent`. Deciding what gets built stays a maintainer
   decision. Each run records its candidates and near misses on the `product-scout-ledger` issue.
 - Program metrics (public types, projects, test LOC, EF commands per reference workflow, glossary size,
-  `[Obsolete]` count, code citations) are reported weekly. If fewer than half of the filed issues are promoted
-  after four weeks, or the metrics do not move, the routines are paused and their prompts revised.
+  `[Obsolete]` count, code citations) are reported weekly. The public-type count is reported, not targeted (D3).
+  If fewer than half of the filed issues are promoted after four weeks, or the metrics do not move, the routines are
+  paused and their prompts revised.
 
 ## Consequences
 
