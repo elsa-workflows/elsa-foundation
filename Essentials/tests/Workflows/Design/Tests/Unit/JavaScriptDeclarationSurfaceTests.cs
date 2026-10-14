@@ -1,7 +1,6 @@
 using System.Text.Json;
 using Elsa.Events;
 using Elsa.Expressions.JavaScript.Rendering;
-using Elsa.Expressions.JavaScript.Rendering.Core.Constants;
 using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
 using Elsa.Testing;
 using Elsa.Workflows.Design.JavaScript;
@@ -9,25 +8,19 @@ using Elsa.Workflows.Design.JavaScript.Contributors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Elsa.Workflows.Design.Tests.Unit;
 
 public sealed class JavaScriptDeclarationSurfaceTests
 {
-    private static readonly string[] TypeDeclarationKeywords =
-        [DeclarationKeywords.Class, DeclarationKeywords.Enum, DeclarationKeywords.Interface, DeclarationKeywords.Type];
-
     [Fact]
     public async Task Workflow_design_renders_only_the_readonly_args_global_for_binding_pure_expressions()
     {
         var document = await RenderDeclarationsAsync();
 
-        // The rendering feature's own contributor declares types; every global the composed surface declares is args.
-        var globals = document.ReplaceLineEndings("\n").Split('\n')
-            .Where(line => line.StartsWith("declare ", StringComparison.Ordinal) && !TypeDeclarationKeywords.Contains(line.Split(' ')[1]))
-            .ToArray();
-        Assert.Equal(["declare const args: Readonly<Record<string, any>>;"], globals);
+        Assert.Equal("declare const args: Readonly<Record<string, any>>;\n", document.ReplaceLineEndings("\n"));
     }
 
     // Kept beside the composition test: asserts what the feature must not register (removed ambient contributors).
@@ -55,8 +48,9 @@ public sealed class JavaScriptDeclarationSurfaceTests
     }
 
     /// <summary>
-    /// The declarations document as the public rendering endpoint serves it, over the workflow design and rendering
-    /// features. The document factory and renderer behind the endpoint are internal to the rendering feature.
+    /// The declarations document as the public rendering endpoint serves it when the workflow design feature is its only
+    /// contributor: the rendering feature's own contributors are removed before the workflow design feature is added. The
+    /// document factory and renderer behind the endpoint are internal to the rendering feature.
     /// </summary>
     private static async Task<string> RenderDeclarationsAsync()
     {
@@ -66,6 +60,7 @@ public sealed class JavaScriptDeclarationSurfaceTests
         new EventsFeature().ConfigureServices(services);
         new JavaScriptRenderingFeature().ConfigureServices(services);
         new JavaScriptRenderingEndpointsFeature().ConfigureServices(services);
+        services.RemoveAll<IJavaScriptDeclarationContributor>();
         new JavaScriptWorkflowsDesignFeature().ConfigureServices(services);
         await using var provider = services.BuildServiceProvider();
 
