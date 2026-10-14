@@ -8,7 +8,8 @@ namespace Elsa.Architecture.Tests;
 
 /// <summary>
 /// Finds every <c>InternalsVisibleTo</c> grant under a repository root and judges each against the rule that an
-/// assembly opens its internals only to its own domain's test assemblies.
+/// assembly opens its internals only within its own domain: to that domain's test assemblies and, from a production
+/// assembly, to that domain's production assemblies.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -139,6 +140,11 @@ internal static class InternalsVisibleToGrants
         return Path.Join(Path.GetDirectoryName(projectPath), "bin", configuration, framework, $"{AssemblyName(projectPath)}.dll");
     }
 
+    /// <summary>
+    /// A grant may name a test assembly of the granting project's own domain and, from a production project, a production
+    /// project of that same domain (the sibling test, judged at review, decides whether the type should be public instead).
+    /// Everything else is refused, and a project in no domain has nothing it may grant to.
+    /// </summary>
     private static string? Judge(Grant grant, IReadOnlyDictionary<string, string> assemblies)
     {
         var granting = $"{grant.Project} -> {grant.Target} ({grant.DeclaredIn})";
@@ -146,17 +152,24 @@ internal static class InternalsVisibleToGrants
         if (!assemblies.TryGetValue(grant.Target!, out var targetPath))
             return $"{granting}: names no project of this repository";
 
-        if (!ModuleRoots.IsTestPath(targetPath))
-            return $"{granting}: {targetPath} is not a test project; a project never opens its internals to another production project";
+        var targetIsTest = ModuleRoots.IsTestPath(targetPath);
+        if (!targetIsTest && ModuleRoots.IsTestPath(grant.ProjectPath))
+            return $"{granting}: {targetPath} is a production project; a test project never opens its internals to production code";
 
+        // Checked before the comparison: two projects in no domain must not pass as two projects in the same one.
         var ownDomain = ElsaDomains.Of(grant.ProjectPath);
         if (ownDomain is null)
-            return $"{granting}: {grant.ProjectPath} belongs to no domain, so it has no own test assemblies to grant to";
+            return $"{granting}: {grant.ProjectPath} belongs to no domain, so it has no own test assemblies or same-domain projects to grant to";
 
         var targetDomain = ElsaDomains.Of(targetPath);
-        return targetDomain == ownDomain
-            ? null
-            : $"{granting}: {targetPath} tests domain '{targetDomain}', not the granting project's domain '{ownDomain}'";
+        if (targetDomain == ownDomain)
+            return null;
+
+        return targetIsTest
+            ? $"{granting}: {targetPath} tests domain '{targetDomain}', not the granting project's domain '{ownDomain}'"
+            : $"{granting}: {targetPath} is in {(targetDomain is null ? "no domain" : $"domain '{targetDomain}'")}, not the granting project's " +
+              $"domain '{ownDomain}'; a production project opens its internals only to production projects of its own domain, so make " +
+              "the type a public extension point, or move it to where it is needed";
     }
 
     /// <summary>Where a compiled grant is declared, as far as the source scan can tell.</summary>

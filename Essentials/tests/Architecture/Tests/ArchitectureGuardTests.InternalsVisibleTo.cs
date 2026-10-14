@@ -5,8 +5,10 @@ namespace Elsa.Architecture.Tests;
 
 /// <summary>
 /// Implementations are internal and are tested by their own domain's test assemblies, which reach them through
-/// <c>InternalsVisibleTo</c>. A project never opens its internals to another production project, and never to the tests
-/// of another domain: either would let code outside the domain depend on what the domain is free to change.
+/// <c>InternalsVisibleTo</c>. A production project may also open its internals to a production project of its own domain,
+/// for plumbing a third party writing the same kind of package would not need (the sibling test, judged at review). A
+/// project never opens them to a project of another domain, production or test: that would let code outside the domain
+/// depend on what the domain is free to change, so such a need makes the type a public extension point or moves it.
 /// </summary>
 public sealed partial class ArchitectureGuardTests
 {
@@ -25,12 +27,13 @@ public sealed partial class ArchitectureGuardTests
         Path.GetFileName(Path.GetDirectoryName(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)))!;
 
     [Fact]
-    public void InternalsVisibleTo_grants_go_only_to_the_granting_domains_test_assemblies()
+    public void InternalsVisibleTo_grants_stay_within_the_granting_domain()
     {
         var violations = InternalsVisibleToGrants.Violations(RepoRoot, BuildConfiguration, InternalsVisibleToExceptions);
 
         Assert.True(violations.Count == 0,
-            "InternalsVisibleTo may name only the granting project's own domain's test assemblies:" + Environment.NewLine +
+            "InternalsVisibleTo may name only the granting project's own domain's test assemblies and, from a production " +
+            "project, its own domain's production projects:" + Environment.NewLine +
             string.Join(Environment.NewLine, violations));
     }
 
@@ -180,14 +183,64 @@ public sealed partial class ArchitectureGuardTests
         [
             "Directory.Build.props declares InternalsVisibleTo for every project that imports it; declare it in the granting project instead",
             "Elsa.Caching.Core: the compiled assembly at Essentials/src/Caching/Core/bin/Release/net10.0/Elsa.Caching.Core.dll is older than Essentials/src/Caching/Core/Cache.cs; build it again, because a stale assembly can hide a grant or report one that is gone",
-            "Elsa.Events -> Elsa.Tasks (Essentials/src/Events/Elsa.Events/AssemblyInfo.cs, computed argument): Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj is not a test project; a project never opens its internals to another production project",
+            "Elsa.Events -> Elsa.Tasks (Essentials/src/Events/Elsa.Events/AssemblyInfo.cs, computed argument): Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj is in domain 'Tasks', not the granting project's domain 'Events'; a production project opens its internals only to production projects of its own domain, so make the type a public extension point, or move it to where it is needed",
             "Elsa.Locking.Core: no compiled assembly at Essentials/src/Locking/Core/bin/Release/net10.0/Elsa.Locking.Core.dll; build it first (the Architecture tests build every production project), because its grants are read from it",
             "Elsa.Tasks -> Elsa.Events.Tests (compiled into Essentials/src/Tasks/Elsa.Tasks/bin/Release/net10.0/Elsa.Tasks.dll; not declared in the project file or its own sources, so a linked file, an imported build file or a computed argument): Essentials/tests/Events/Tests/Elsa.Events.Tests.csproj tests domain 'Events', not the granting project's domain 'Tasks'",
             "Elsa.Tasks.Tests (Essentials/tests/Tasks/Tests/Grants.cs): an InternalsVisibleTo argument that is not a string literal cannot be judged; write the assembly name as a literal",
-            "Elsa.Workbench -> Elsa.Tasks.Tests (Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj): Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj belongs to no domain, so it has no own test assemblies to grant to",
+            "Elsa.Workbench -> Elsa.Tasks.Tests (Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj): Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj belongs to no domain, so it has no own test assemblies or same-domain projects to grant to",
             "Elsa.Workflows.Design.Core -> Elsa.Workflows.Runtime.Tests (compiled into Essentials/src/Workflows/Design/Core/bin/Release/net10.0/Elsa.Workflows.Design.Core.dll; not declared in the project file or its own sources, so a linked file, an imported build file or a computed argument): Essentials/tests/Workflows/Runtime/Tests/Elsa.Workflows.Runtime.Tests.csproj tests domain 'Workflows.Runtime', not the granting project's domain 'Workflows.Design'",
         ],
             violations);
+    }
+
+    /// <summary>The rule, one grant at a time, in a sandbox holding only the granting project and the project it names.</summary>
+    [Theory]
+    [InlineData(GrantProjects.TasksCore, GrantProjects.Tasks)]
+    [InlineData(GrantProjects.RuntimeHttp, GrantProjects.Runtime)]
+    [InlineData(GrantProjects.ExtensionBuilderCore, GrantProjects.ExtensionBuilderApi)]
+    [InlineData(GrantProjects.Tasks, GrantProjects.TasksTests)]
+    [InlineData(GrantProjects.Workbench, GrantProjects.ModularityTests)]
+    public void A_grant_the_rule_admits_is_not_reported(string grantor, string grantee) =>
+        Assert.Empty(ViolationsOfOneGrant(grantor, grantee));
+
+    [Theory]
+    [InlineData(GrantProjects.Events, GrantProjects.Tasks, "is in domain 'Tasks', not the granting project's domain 'Events'; a production project opens its internals only to production projects of its own domain, so make the type a public extension point, or move it")]
+    [InlineData(GrantProjects.DesignCore, GrantProjects.Runtime, "is in domain 'Workflows.Runtime', not the granting project's domain 'Workflows.Design'")]
+    [InlineData(GrantProjects.ExtensionBuilderApi, GrantProjects.Tasks, "is in domain 'Tasks', not the granting project's domain 'Extensions/ExtensionBuilder'")]
+    [InlineData(GrantProjects.Tasks, GrantProjects.Workbench, "is in no domain, not the granting project's domain 'Tasks'")]
+    [InlineData(GrantProjects.Workbench, GrantProjects.FoundationHost, "belongs to no domain, so it has no own test assemblies or same-domain projects to grant to")]
+    [InlineData(GrantProjects.Tasks, GrantProjects.EventsTests, "tests domain 'Events', not the granting project's domain 'Tasks'")]
+    [InlineData(GrantProjects.Workbench, GrantProjects.TasksTests, "belongs to no domain, so it has no own test assemblies or same-domain projects to grant to")]
+    [InlineData(GrantProjects.TasksTests, GrantProjects.Tasks, "is a production project; a test project never opens its internals to production code")]
+    [InlineData(GrantProjects.Tasks, GrantProjects.MapsGenerator, "names no project of this repository")]
+    public void A_grant_the_rule_refuses_is_reported_with_its_reason(string grantor, string grantee, string reason) =>
+        Assert.Contains(reason, Assert.Single(ViolationsOfOneGrant(grantor, grantee)));
+
+    private static IReadOnlyList<string> ViolationsOfOneGrant(string grantor, string grantee)
+    {
+        using var sandbox = new GrantSandbox();
+        sandbox.BuiltProject(grantee);
+        sandbox.BuiltProject(grantor, $"""[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("{Path.GetFileNameWithoutExtension(grantee)}")]""");
+        return InternalsVisibleToGrants.Violations(sandbox.Root, "Release", InternalsVisibleToExceptions);
+    }
+
+    /// <summary>Sandbox paths for the one-grant proofs, each where the repository keeps a project of that kind.</summary>
+    private static class GrantProjects
+    {
+        public const string Tasks = "Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj";
+        public const string TasksCore = "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj";
+        public const string TasksTests = "Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj";
+        public const string Events = "Essentials/src/Events/Elsa.Events/Elsa.Events.csproj";
+        public const string EventsTests = "Essentials/tests/Events/Tests/Elsa.Events.Tests.csproj";
+        public const string DesignCore = "Essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj";
+        public const string Runtime = "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj";
+        public const string RuntimeHttp = "Essentials/src/Workflows/Runtime/Http/Elsa.Workflows.Runtime.Http.csproj";
+        public const string ExtensionBuilderApi = "Extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj";
+        public const string ExtensionBuilderCore = "Extensions/ExtensionBuilder/src/Core/Elsa.ExtensionBuilder.Core.csproj";
+        public const string ModularityTests = "Essentials/tests/Modularity/Tests/Elsa.Modularity.Tests.csproj";
+        public const string Workbench = "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj";
+        public const string FoundationHost = "Essentials/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj";
+        public const string MapsGenerator = "tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj";
     }
 
     [Theory]
@@ -210,6 +263,20 @@ public sealed partial class ArchitectureGuardTests
 
         public void Project(string relativePath, string items = "") =>
             File(relativePath, $"""<Project Sdk="Microsoft.NET.Sdk">{items}</Project>""");
+
+        /// <summary>
+        /// A project whose one source file is <paramref name="source"/>. A production project also gets the assembly a
+        /// build would produce, written last so it is not stale, because the guard reads a production project's grants
+        /// from it; a test project's grants are read from its source.
+        /// </summary>
+        public void BuiltProject(string relativePath, string source = "")
+        {
+            var directory = Path.GetDirectoryName(relativePath)!;
+            Project(relativePath);
+            File(Path.Join(directory, "Source.cs"), source);
+            if (ModuleRoots.IsProductionPath(relativePath))
+                Assembly(Path.Join(directory, "bin", "Release", "net10.0", Path.GetFileNameWithoutExtension(relativePath) + ".dll"), source);
+        }
 
         public void File(string relativePath, string content)
         {
