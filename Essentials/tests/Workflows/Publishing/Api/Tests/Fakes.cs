@@ -1,3 +1,4 @@
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Publishing.Services;
 using System.Linq.Expressions;
 using System.Text.Json;
@@ -11,7 +12,6 @@ using Elsa.Primitives.Entities;
 using Elsa.Primitives.Models;
 using Elsa.Primitives.Persistence;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Publishing.Api.Contracts;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Configuration;
@@ -38,7 +38,7 @@ internal static class TestWellKnownTypeRegistry
 {
     public static IWellKnownTypeRegistry Create()
     {
-        var registry = new WellKnownTypeRegistry();
+        var registry = SerializationServices.TypeRegistry();
         registry.RegisterType(typeof(string), "String");
         registry.RegisterType(typeof(int), "Int32");
         registry.RegisterType(typeof(bool), "Boolean");

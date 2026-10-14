@@ -5,7 +5,7 @@ using Elsa.Expressions.JsonConverters;
 using Elsa.Expressions.Models;
 using Elsa.Expressions.Services;
 using Elsa.Serialization.Core.Exceptions;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -24,7 +24,7 @@ public sealed class UnknownAliasRoundTripTests
     public UnknownAliasRoundTripTests()
     {
         var registry = TestRegistry.SeededWithPrimitives();
-        var objectConverter = new ObjectConverter(new ServiceCollection().BuildServiceProvider());
+        var objectConverter = SerializationServices.ObjectConverter();
         IVariableMapper mapper = new VariableMapper(registry, objectConverter, new VariableDefaultValueFormatter(), NullLogger<VariableMapper>.Instance);
 
         // Mirror the production payload serializer: camelCase + string enum names (CollectionKind serializes by name).

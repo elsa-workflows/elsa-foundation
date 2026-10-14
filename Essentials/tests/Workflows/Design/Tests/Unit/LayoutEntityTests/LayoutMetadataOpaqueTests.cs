@@ -2,7 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText.JsonConverters;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Xunit;
 
@@ -24,7 +24,7 @@ public sealed class LayoutMetadataOpaqueTests
     // The deterministic payload serializer — the one that sorts every string-keyed dictionary,
     // including object-valued ones. A JsonElement is the only shape it leaves verbatim, which is exactly why
     // the opaque bag is stored as a JsonElement rather than a Dictionary.
-    private readonly JsonPayloadSerializer _serializer = CreateSerializer();
+    private readonly IPayloadSerializer _serializer = CreateSerializer();
 
     private static DesignMetadataRecord RecordWith(string bagJson) =>
         new("node-1", 10, 20, AdditionalProperties: JsonSerializer.Deserialize<JsonElement>(bagJson));
@@ -76,10 +76,10 @@ public sealed class LayoutMetadataOpaqueTests
             $"Expected the dictionary to be key-sorted, but was: {json}");
     }
 
-    private static JsonPayloadSerializer CreateSerializer()
+    private static IPayloadSerializer CreateSerializer()
     {
         var registry = new JsonPayloadConverterRegistry();
         registry.RegisterAll(new JsonConverter[] { new JsonStringEnumConverter() });
-        return new JsonPayloadSerializer(registry);
+        return SerializationServices.PayloadSerializer(registry);
     }
 }

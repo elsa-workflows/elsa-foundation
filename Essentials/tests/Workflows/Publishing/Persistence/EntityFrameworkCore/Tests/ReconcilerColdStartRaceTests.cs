@@ -16,7 +16,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Identity;
 using Elsa.Primitives.Versioning;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
@@ -276,7 +276,7 @@ internal static class WorkflowReconciliationPass
     public const string DefinitionId = "wf-cold-start";
     public const string Version = "1.0.0";
     public static readonly string VersionId = WorkflowReconciliationVersionIds.For(DefinitionId, SemVer.ToSortKey(Version));
-    public static readonly IPayloadSerializer Serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+    public static readonly IPayloadSerializer Serializer = SerializationServices.PayloadSerializer();
 
     public static async Task RunAsync(
         PublishingNativeProvider provider,
@@ -429,7 +429,7 @@ internal sealed class ReconcilerColdStartRace(PublishingNativeProvider provider,
 
     internal static ExecutableNodeCompiler CreateNodeCompiler()
     {
-        var types = new WellKnownTypeRegistry();
+        var types = SerializationServices.TypeRegistry();
         var outputs = new RuntimeOutputCaptureCompiler(new RuntimeDurableValueStorageDriverRegistry([new JsonRuntimeDurableValueStorageDriver()]));
         return new ExecutableNodeCompiler(new DefaultActivityStructureService([]), types, new RuntimeInputBindingCompiler(types), outputs);
     }

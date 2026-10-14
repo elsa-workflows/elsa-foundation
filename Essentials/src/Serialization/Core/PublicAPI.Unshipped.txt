@@ -13,9 +13,6 @@ Elsa.Serialization.Core.Exceptions.TypeConversionException.TargetType.get -> Sys
 Elsa.Serialization.Core.Exceptions.TypeConversionException.TypeConversionException(string! message, object! value, System.Type! targetType) -> void
 Elsa.Serialization.Core.Exceptions.TypeConversionException.TypeConversionException(string! message, object! value, System.Type! targetType, System.Exception! innerException) -> void
 Elsa.Serialization.Core.Exceptions.TypeConversionException.Value.get -> object!
-Elsa.Serialization.Core.ExcludingJsonTypeInfoResolver
-Elsa.Serialization.Core.ExcludingJsonTypeInfoResolver.ExcludingJsonTypeInfoResolver(System.Collections.Generic.IEnumerable<string!>! excludedMembers, System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver? inner = null) -> void
-Elsa.Serialization.Core.ExcludingJsonTypeInfoResolver.GetTypeInfo(System.Type! type, System.Text.Json.JsonSerializerOptions! options) -> System.Text.Json.Serialization.Metadata.JsonTypeInfo?
 Elsa.Serialization.Core.IJsonConverterSource
 Elsa.Serialization.Core.IJsonConverterSource.GetConverters() -> System.Collections.Generic.IEnumerable<System.Text.Json.Serialization.JsonConverter!>!
 Elsa.Serialization.Core.IJsonIslandTypeHandler

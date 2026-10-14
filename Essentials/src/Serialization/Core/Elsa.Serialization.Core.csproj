@@ -9,4 +9,8 @@
     <ProjectReference Include="..\..\Events\Core\Elsa.Events.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Serialization.Tests" />
+  </ItemGroup>
+
 </Project>

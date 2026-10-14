@@ -1,8 +1,8 @@
 using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
-using Elsa.Serialization.SystemText.Services;
 using Elsa.Serialization.Core;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Validations;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
@@ -112,11 +112,11 @@ internal static class ReusableActivityImportFixtures
     }
 
     /// <summary>The payload serializer the design stores write workflow state with.</summary>
-    public static IPayloadSerializer PayloadSerializer() => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+    public static IPayloadSerializer PayloadSerializer() => SerializationServices.PayloadSerializer();
 
-    private static WellKnownTypeRegistry TypeRegistry()
+    private static IWellKnownTypeRegistry TypeRegistry()
     {
-        var registry = new WellKnownTypeRegistry();
+        var registry = SerializationServices.TypeRegistry();
         registry.RegisterType(typeof(string), "String");
         registry.RegisterType(typeof(object), "Object");
         return registry;

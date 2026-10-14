@@ -3,7 +3,8 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Cluster.Core.Contracts;
 using Elsa.Cluster.Core.Models;
 using Elsa.Cluster.Testing.Runtime;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Core;
+using Elsa.Serialization.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 
@@ -78,9 +79,9 @@ internal sealed class ApproveActivity
 {
     public const string Alias = "Acme.Approve";
 
-    public static WellKnownTypeRegistry Registry()
+    public static IWellKnownTypeRegistry Registry()
     {
-        var registry = new WellKnownTypeRegistry();
+        var registry = SerializationServices.TypeRegistry();
         registry.RegisterType(typeof(ApproveActivity), Alias);
         return registry;
     }
