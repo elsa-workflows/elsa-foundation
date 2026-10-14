@@ -30,11 +30,13 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 | [Elsa 4 Website and Documentation](https://github.com/elsa-workflows/elsa-foundation/issues/2495) | Active in parallel | Foundation-owned documentation and GitBook | Sipke | #2498 source setup and hosted qualification; preserve Elsa 3 publishing |
 | [Elsa 4 Simplification](elsa-4-simplification.md) | Active | Whole product: tests, API, language, structure, docs | Sipke | Program #2559, ADR 0080 |
 | [Runtime Efficiency](runtime-efficiency.md) | Active | Runtime database access, persistence modes, concurrent correctness | Sipke | Program #2531; persistence-mode epic #2564 |
+| [BPMN Engine](bpmn-engine.md) | Active; owner exception, 14 October | BPMN composite, interchange, shared `valence-works/bpmn` core | Sipke | #2735 switch to `Bpmn.Semantics`; #2736 refuse degraded imports |
 
 The [11 October owner amendment to ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus)
 reactivates existing #2501 and #2495 as named exceptions to parking and the two-program cap.
 Their linked issues are the current charters and decision records; reuse their existing queues.
-This does not reactivate other parked goals or authorize new programs. The remaining goals below retain
+The [14 October owner amendment](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) adds BPMN Engine as a third named exception.
+Neither amendment reactivates any other parked goal or authorizes new programs. The remaining goals below retain
 their own status and decisions, including the 2026-11-21 review for parked work unless separately superseded.
 
 | Goal | Status |
@@ -58,7 +60,6 @@ their own status and decisions, including the 2026-11-21 review for parked work 
 | [Workspace Split Readiness](workspace-split-readiness.md) | Parked |
 | [Diagnostics Observability Readiness](diagnostics-observability-readiness.md) | Parked |
 | [Elsa 4 Architecture Review Remediation](elsa-4-review-remediation.md) | Folded into Elsa 4 Simplification |
-| [BPMN Engine](bpmn-engine.md) | Parked |
 | [First-Request / Cold-Start Readiness](first-request-cold-start-readiness.md) | Superseded |
 
 ## Goal File Rules
