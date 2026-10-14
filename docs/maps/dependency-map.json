@@ -11160,6 +11160,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Expressions.Testing",
+          "path": "Essentials/tests/Expressions/Testing/Elsa.Expressions.Testing.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Serialization.Testing",
           "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
         },
@@ -14407,6 +14412,40 @@
       ]
     },
     {
+      "path": "Essentials/tests/Expressions/Testing/Elsa.Expressions.Testing.csproj",
+      "name": "Elsa.Expressions.Testing",
+      "kind": "test",
+      "domain": "Elsa.Expressions",
+      "sub_domain": "Testing",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Expressions",
+          "path": "Essentials/src/Expressions/Elsa.Expressions/Elsa.Expressions.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Expressions.JavaScript",
+          "path": "Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/Elsa.Expressions.JavaScript.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        }
+      ]
+    },
+    {
       "path": "Essentials/tests/Expressions/Tests/Elsa.Expressions.Tests.csproj",
       "name": "Elsa.Expressions.Tests",
       "kind": "test",
@@ -14422,6 +14461,11 @@
           "type": "internal",
           "id": "Elsa.Activities.Design.Core",
           "path": "Essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Events",
+          "path": "Essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
         },
         {
           "type": "internal",
@@ -18398,6 +18442,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Design.Validations",
           "path": "Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/Elsa.Workflows.Design.Validations.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Expressions.Testing",
+          "path": "Essentials/tests/Expressions/Testing/Elsa.Expressions.Testing.csproj"
         },
         {
           "type": "internal",

@@ -351,6 +351,17 @@
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.10, )"
         }
       },
+      "elsa.expressions": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.30, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )"
+        }
+      },
       "elsa.expressions.core": {
         "type": "Project",
         "dependencies": {
@@ -392,6 +403,15 @@
         "type": "Project",
         "dependencies": {
           "Elsa.Events.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.expressions.testing": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Expressions": "[4.0.0-dev, )",
+          "Elsa.Expressions.JavaScript": "[4.0.0-dev, )",
+          "Microsoft.Extensions.DependencyInjection": "[10.0.10, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )"
         }
       },
       "elsa.foundation.identity": {

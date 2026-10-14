@@ -1,6 +1,6 @@
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
-using Elsa.Expressions.Models;
+using Elsa.Expressions.Testing;
 using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests;
@@ -20,7 +20,7 @@ public sealed class ContainerScopedVariableIsolationTests
     private static VariableScope ContainerExecution(string executionId, IReadOnlyDictionary<string, object?>? initialValues = null) =>
         new(
             ContainerNodeId,
-            new Dictionary<string, IVariable> { ["var-counter"] = new Variable("Counter", 0) },
+            new Dictionary<string, IVariable> { ["var-counter"] = ExpressionServices.Variable("Counter", 0) },
             parent: null,
             executionId: executionId,
             initialValues: initialValues);

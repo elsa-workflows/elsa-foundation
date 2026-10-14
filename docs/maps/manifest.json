@@ -4,9 +4,9 @@
   "freshness_rule": "Maps are fresh when regenerating them reproduces every committed file byte for byte. Verify with: dotnet run --project tools/maps/Elsa.Maps.Generator -- check.",
   "counts": {
     "source_projects": 141,
-    "test_projects": 145,
-    "direct_project_references": 1516,
-    "direct_package_references": 1353,
+    "test_projects": 146,
+    "direct_project_references": 1521,
+    "direct_package_references": 1355,
     "feature_classes": 107,
     "specs": 234
   },
