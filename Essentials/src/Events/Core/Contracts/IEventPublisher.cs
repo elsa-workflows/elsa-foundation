@@ -16,7 +16,7 @@ namespace Elsa.Events.Core.Contracts;
 /// level. This strategy-selecting surface is retained for callers that need explicit control.
 /// </para>
 /// </remarks>
-public interface IEventPublisher
+internal interface IEventPublisher
 {
     Task Publish(IEvent @event, IEventPublishingStrategy? strategy = null, CancellationToken cancellationToken = default);
 }

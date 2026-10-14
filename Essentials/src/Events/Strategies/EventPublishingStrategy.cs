@@ -8,7 +8,7 @@ namespace Elsa.Events.Strategies;
 /// a strategy from DI. Most call sites should prefer the intent-revealing
 /// <c>IInlineEventPublisher</c> / <c>IDeferredEventPublisher</c> faces over selecting a strategy here.
 /// </summary>
-public static class EventPublishingStrategy
+internal static class EventPublishingStrategy
 {
     /// <summary>Default. Awaited; handlers run in sequence; a throw CAN break the caller.</summary>
     public static readonly IEventPublishingStrategy Sequential = new SequentialProcessingStrategy();

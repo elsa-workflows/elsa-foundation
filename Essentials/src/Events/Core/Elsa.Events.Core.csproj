@@ -12,4 +12,10 @@
     <ProjectReference Include="..\..\Pipelines\Core\Elsa.Pipelines.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Events" />
+    <InternalsVisibleTo Include="Elsa.Events.Strategies" />
+    <InternalsVisibleTo Include="Elsa.Events.Tests" />
+  </ItemGroup>
+
 </Project>

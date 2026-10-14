@@ -21,10 +21,10 @@ public class EventsFeature : IShellFeature
 {
     /// <summary>
     /// Default strategy applied when an <see cref="IEventPublisher.Publish"/> call doesn't pass
-    /// an explicit strategy. Sequential by design: synchronous, awaited, fail-fast. Override to
-    /// change the default; pass a strategy per-call to override a single publish.
+    /// an explicit strategy. Sequential by design: synchronous, awaited, fail-fast. The inline and
+    /// deferred publishers always pass their own strategy, so only a direct publish uses this.
     /// </summary>
-    public IEventPublishingStrategy DefaultEventPublishingStrategy { get; set; } = EventPublishingStrategy.Sequential;
+    internal IEventPublishingStrategy DefaultEventPublishingStrategy { get; set; } = EventPublishingStrategy.Sequential;
 
     public void ConfigureServices(IServiceCollection services)
     {
