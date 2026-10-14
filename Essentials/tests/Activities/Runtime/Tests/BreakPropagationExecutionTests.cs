@@ -294,7 +294,7 @@ public sealed class BreakPropagationExecutionTests
             literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
     }
 
-    private static IPayloadSerializer Serializer => SerializationServices.PayloadSerializer();
+    private static readonly IPayloadSerializer Serializer = SerializationServices.PayloadSerializer();
 
     /// <summary>
     /// Deterministic condition evaluator that returns <c>true</c> for its first <c>passes</c> evaluations

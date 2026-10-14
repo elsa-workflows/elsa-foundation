@@ -108,11 +108,12 @@ public sealed class DistributedRuntimeNode : IAsyncDisposable
             services.AddSingleton(consumer);
         services.AddSingleton<IRuntimeDurableValueStorageDriverRegistry>(new FixedDriverRegistry(setup.StorageDrivers));
         services.AddSingleton(setup.TypeRegistry);
+        var serializer = SerializationServices.PayloadSerializer();
         services.AddScoped<IRuntimeRequirementChecker>(sp => new RuntimeRequirementChecker(
             sp.GetServices<IRuntimeActivityConsumerCapability>(),
             sp.GetRequiredService<IRuntimeDurableValueStorageDriverRegistry>(),
             sp.GetRequiredService<IWellKnownTypeRegistry>(),
-            SerializationServices.PayloadSerializer()));
+            serializer));
         services.AddSingleton(sp => new FencedCommandExecutor(
             new RuntimeExecutionOwnershipService(shared.Liveness, clock, sp.GetRequiredService<RuntimeExecutionOwnershipOptions>()),
             shared.Executions));

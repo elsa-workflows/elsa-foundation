@@ -246,7 +246,7 @@ public sealed class ForEachRuntimeTests
     private static string[] ConsoleLines(string output) =>
         output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
 
-    private static IPayloadSerializer Serializer => SerializationServices.PayloadSerializer();
+    private static readonly IPayloadSerializer Serializer = SerializationServices.PayloadSerializer();
 
     private sealed record ForEachDescriptor;
 }

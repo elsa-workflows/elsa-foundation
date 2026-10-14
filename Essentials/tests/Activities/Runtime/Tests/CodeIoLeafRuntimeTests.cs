@@ -225,5 +225,5 @@ public sealed class CodeIoLeafRuntimeTests
             source: RuntimeInputBindingSource.Expression,
             expression: new RuntimeExpressionBinding(WellKnownExpressionDescriptorTypes.Object, JsonSerializer.Serialize(value)));
 
-    private static IPayloadSerializer Serializer => SerializationServices.PayloadSerializer();
+    private static readonly IPayloadSerializer Serializer = SerializationServices.PayloadSerializer();
 }
