@@ -124,7 +124,7 @@ side comes in User Story 3.
 **Independent Test**: a body with one sibling suspended on a bookmark and one waiting on a durable timer leaves
 nothing in either store after `Complete`, on in-memory and on EF Sqlite.
 
-- [ ] T014 [US2] Create `Essentials/tests/Activities/Behavioral/Tests/GraphBoundaryCompleteDurableCancellationTests.cs`. The boundary's Flowchart body forks into:
+- [X] T014 [US2] Create `Essentials/tests/Activities/Behavioral/Tests/GraphBoundaryCompleteDurableCancellationTests.cs`. The boundary's Flowchart body forks into:
   - branch A, an activity that suspends on a bookmark (reuse the bookmark probe or `Event` used in existing Behavioral drives);
   - branch B, a durable-timer activity from `Elsa.Activities.Scheduling`;
   - branch C, `Complete(done-early)`.
@@ -137,8 +137,8 @@ nothing in either store after `Complete`, on in-memory and on EF Sqlite.
   - advancing time past the timer's due time and sweeping (`SweepUntilQuietAsync`) runs nothing in the body;
   - resuming with the old bookmark's stimulus resumes nothing;
   - the parent workflow's sibling branch outside the boundary keeps its own bookmark (FR-012).
-- [ ] T015 [US2] Parameterize T014 over two store setups: the default in-memory harness, and EF Sqlite using the setup from `Essentials/tests/Activities/Scheduling/Tests/DurableTimerRestartCrashTests.cs` (~L176-200: `AddRuntimeEntityFrameworkCore` with provider `Sqlite`, `AddEfModuleMigrations<RuntimeDbContext>("Sqlite")`, `DurableTimerPumpTask`). Add the needed project reference to `Essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj` only if it is missing. Clear only the test's own SQLite pool at teardown.
-- [ ] T016 [US2] Run both variants. If a store keeps state, fix the cancellation path through `RequestChildSubtreeCancellation` in `GraphActivity.cs`. Do not touch Flowchart, Parallel or `finish`; those belong to #2752.
+- [X] T015 [US2] Parameterize T014 over two store setups: the default in-memory harness, and EF Sqlite using the setup from `Essentials/tests/Activities/Scheduling/Tests/DurableTimerRestartCrashTests.cs` (~L176-200: `AddRuntimeEntityFrameworkCore` with provider `Sqlite`, `AddEfModuleMigrations<RuntimeDbContext>("Sqlite")`, `DurableTimerPumpTask`). Add the needed project reference to `Essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj` only if it is missing. Clear only the test's own SQLite pool at teardown.
+- [X] T016 [US2] Run both variants. If a store keeps state, fix the cancellation path through `RequestChildSubtreeCancellation` in `GraphActivity.cs`. Do not touch Flowchart, Parallel or `finish`; those belong to #2752.
 
 **Checkpoint**: SC-002 is proven on both stores.
 
