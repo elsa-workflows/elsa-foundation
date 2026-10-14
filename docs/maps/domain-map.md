@@ -9,7 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 141
 - Test projects: 146
 - Domains: 32
-- Direct cross-domain references: 1000
+- Direct cross-domain references: 1001
 
 ## Domains
 
@@ -294,7 +294,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Tests](../../Essentials/tests/Studio/Preferences/Persistence/EntityFrameworkCore/Tests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Studio | Preferences.Persistence.EntityFrameworkCore.Tests | test | Elsa.Studio.Preferences.Core<br>Elsa.Studio.Preferences.Persistence.EntityFrameworkCore |
 | [Elsa.Studio.Preferences.Tests](../../Essentials/tests/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj) | test | Elsa.Studio | Preferences.Tests | test | Elsa.Api.AspNetCore<br>Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Studio.Preferences.Api<br>Elsa.Studio.Preferences.Core<br>Elsa.Testing |
 | [Elsa.Tasks.Testing](../../Essentials/tests/Tasks/Testing/Elsa.Tasks.Testing.csproj) | test | Elsa.Tasks | Testing | test | Elsa.Tasks |
-| [Elsa.Tasks.Tests](../../Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj) | test | Elsa.Tasks | Tests | test | Elsa.Cluster.Core<br>Elsa.Locking.Core<br>Elsa.Tasks<br>Elsa.Tasks.Schedules<br>Elsa.Tasks.Testing |
+| [Elsa.Tasks.Tests](../../Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj) | test | Elsa.Tasks | Tests | test | Elsa.Cluster.Core<br>Elsa.Locking.Core<br>Elsa.Tasks<br>Elsa.Tasks.Schedules<br>Elsa.Tasks.Testing<br>Elsa.Testing |
 | [Elsa.Testing](../../Essentials/tests/Testing/Elsa.Testing.csproj) | test | Elsa.Testing | (root) | test | Elsa.Primitives |
 | [Elsa.Versioning.Calculator.Tests](../../Essentials/tests/Versioning/Calculator/Tests/Elsa.Versioning.Calculator.Tests.csproj) | test | Elsa.Versioning | Calculator.Tests | test | Elsa.Versioning.Calculator |
 | [Elsa.Versioning.Publisher.Tests](../../Essentials/tests/Versioning/Publisher/Tests/Elsa.Versioning.Publisher.Tests.csproj) | test | Elsa.Versioning | Publisher.Tests | test | Elsa.Versioning.Publisher |
@@ -942,6 +942,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Tasks.Schedules](../../Essentials/src/Tasks/Schedules/Elsa.Tasks.Schedules.csproj) | Elsa.Tasks | [Elsa.Primitives](../../Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Tasks.Tests](../../Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj) | Elsa.Tasks | [Elsa.Cluster.Core](../../Essentials/src/Cluster/Core/Elsa.Cluster.Core.csproj) | Elsa.Cluster |
 | [Elsa.Tasks.Tests](../../Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj) | Elsa.Tasks | [Elsa.Locking.Core](../../Essentials/src/Locking/Core/Elsa.Locking.Core.csproj) | Elsa.Locking |
+| [Elsa.Tasks.Tests](../../Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj) | Elsa.Tasks | [Elsa.Testing](../../Essentials/tests/Testing/Elsa.Testing.csproj) | Elsa.Testing |
 | [Elsa.Testing](../../Essentials/tests/Testing/Elsa.Testing.csproj) | Elsa.Testing | [Elsa.Primitives](../../Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Workbench](../../Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj) | Elsa.Workbench | [Elsa.Activities.Bpmn](../../Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj) | Elsa.Activities |
 | [Elsa.Workbench](../../Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj) | Elsa.Workbench | [Elsa.Activities.Bpmn.Interchange](../../Essentials/src/Activities/Bpmn/Interchange/Elsa.Activities.Bpmn.Interchange.csproj) | Elsa.Activities |
