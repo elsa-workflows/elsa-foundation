@@ -62,6 +62,8 @@ Elsa.Primitives.Exceptions.SchemaWriteRefusedException.RequiredVersion.get -> st
 Elsa.Primitives.Exceptions.SchemaWriteRefusedException.SchemaWriteRefusedException(string! family, string! writeVersion, string! requiredVersion, string! message) -> void
 Elsa.Primitives.Exceptions.SchemaWriteRefusedException.SchemaWriteRefusedException(string! family, string! writeVersion, string! requiredVersion, string! message, string! code) -> void
 Elsa.Primitives.Exceptions.SchemaWriteRefusedException.WriteVersion.get -> string!
+Elsa.Primitives.Extensions.StringExtensions
+Elsa.Primitives.Extensions.TypeExtensions
 Elsa.Primitives.Identity.IdentityGeneratorKind
 Elsa.Primitives.Identity.IdentityGeneratorKind.Guid = 3 -> Elsa.Primitives.Identity.IdentityGeneratorKind
 Elsa.Primitives.Identity.IdentityGeneratorKind.Short = 1 -> Elsa.Primitives.Identity.IdentityGeneratorKind
@@ -187,6 +189,23 @@ override Elsa.Primitives.Versioning.SemVer.ToString() -> string!
 static Elsa.Primitives.Diagnostics.ObservationalTelemetryScope.Start(System.Diagnostics.ActivitySource! source, string! name) -> Elsa.Primitives.Diagnostics.ObservationalTelemetryScope!
 static Elsa.Primitives.Diagnostics.ObservationalTelemetryScope.Start(System.Func<System.Diagnostics.ActivitySource!>! sourceFactory, string! name) -> Elsa.Primitives.Diagnostics.ObservationalTelemetryScope!
 static Elsa.Primitives.Exceptions.EntityNotFoundException.ForEntity(System.Type! entityType, string! id) -> Elsa.Primitives.Exceptions.EntityNotFoundException!
+static Elsa.Primitives.Extensions.StringExtensions.Camelize(this string! value) -> string!
+static Elsa.Primitives.Extensions.StringExtensions.GetLoadedType(this string! typeName) -> System.Type!
+static Elsa.Primitives.Extensions.StringExtensions.Humanize(this string! value) -> string!
+static Elsa.Primitives.Extensions.StringExtensions.Pascalize(this string! value) -> string!
+static Elsa.Primitives.Extensions.TypeExtensions.GetCollectionElementType(this System.Type! type) -> System.Type!
+static Elsa.Primitives.Extensions.TypeExtensions.GetDefaultValue(this System.Type! type) -> object?
+static Elsa.Primitives.Extensions.TypeExtensions.GetMethods(this System.Type! source, string![]! names) -> System.Reflection.MethodInfo![]!
+static Elsa.Primitives.Extensions.TypeExtensions.GetSanitizedFullName(this System.Type! type) -> string!
+static Elsa.Primitives.Extensions.TypeExtensions.GetSimpleAssemblyQualifiedName(this System.Type! type) -> string!
+static Elsa.Primitives.Extensions.TypeExtensions.GetTypeOfNullable(this System.Type! type) -> System.Type!
+static Elsa.Primitives.Extensions.TypeExtensions.InvokeAndUnwrap<T>(this System.Reflection.MethodBase! method, object! target, object![]! args) -> T!
+static Elsa.Primitives.Extensions.TypeExtensions.InvokeAndUnwrapValueTask<T>(this System.Reflection.MethodBase! method, object! target, object![]! args) -> System.Threading.Tasks.ValueTask<T>
+static Elsa.Primitives.Extensions.TypeExtensions.IsCollectionType(this System.Type! type) -> bool
+static Elsa.Primitives.Extensions.TypeExtensions.IsGenericType(this System.Type! type, System.Type! genericType) -> bool
+static Elsa.Primitives.Extensions.TypeExtensions.IsNullableType(this System.Type! type) -> bool
+static Elsa.Primitives.Extensions.TypeExtensions.IsNumericType(this System.Type! type) -> bool
+static Elsa.Primitives.Extensions.TypeExtensions.MakeCollectionType(this System.Type! type) -> System.Type!
 static Elsa.Primitives.Identity.ShortIdentityGenerator.Generate(System.DateTimeOffset utcNow) -> string!
 static Elsa.Primitives.Models.ClrActivityDescriptor.operator !=(Elsa.Primitives.Models.ClrActivityDescriptor? left, Elsa.Primitives.Models.ClrActivityDescriptor? right) -> bool
 static Elsa.Primitives.Models.ClrActivityDescriptor.operator ==(Elsa.Primitives.Models.ClrActivityDescriptor? left, Elsa.Primitives.Models.ClrActivityDescriptor? right) -> bool

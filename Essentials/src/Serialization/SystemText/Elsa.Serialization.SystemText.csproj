@@ -26,9 +26,4 @@
     <InternalsVisibleTo Include="Elsa.Serialization.Tests" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- Internal helpers owned by Elsa.Primitives, compiled here from source so they need not be public. -->
-    <Compile Include="..\..\Primitives\Primitives\Extensions\TypeExtensions.cs" Link="Shared\TypeExtensions.cs" />
-  </ItemGroup>
-
 </Project>

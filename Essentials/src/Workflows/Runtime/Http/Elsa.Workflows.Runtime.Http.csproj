@@ -18,10 +18,4 @@
     <ProjectReference Include="..\Core\Elsa.Workflows.Runtime.Core.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- Internal helpers owned by Elsa.Primitives, compiled here from source so they need not be public. -->
-    <Compile Include="..\..\..\Primitives\Primitives\Extensions\StringExtensions.cs" Link="Shared\StringExtensions.cs" />
-    <Compile Include="..\..\..\Primitives\Primitives\Extensions\TypeExtensions.cs" Link="Shared\TypeExtensions.cs" />
-  </ItemGroup>
-
 </Project>
