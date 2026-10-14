@@ -70,14 +70,14 @@ FR-018, FR-019).
 
 ### Implementation for User Story 1
 
-- [ ] T008 [P] [US1] Add `CompleteOutcomes` (`IReadOnlyList<GraphActivityCompleteOutcomeDescriptor>`, record `(string ReferenceKey, string BoundaryOutcomeName)`) to `Essentials/src/Activities/Graph/Runtime/Models/GraphActivityDescriptor.cs`. Add it through an additional `[JsonConstructor]` overload, keeping the existing constructors, as was done for `OutcomeMappings` (L41-55). Validate that reference keys are unique and names are non-blank. Default to empty when the JSON property is absent.
-- [ ] T009 [P] [US1] Create `Essentials/src/Activities/Graph/Runtime/Activities/Complete.cs`:
+- [X] T008 [P] [US1] Add `CompleteOutcomes` (`IReadOnlyList<GraphActivityCompleteOutcomeDescriptor>`, record `(string ReferenceKey, string BoundaryOutcomeName)`) to `Essentials/src/Activities/Graph/Runtime/Models/GraphActivityDescriptor.cs`. Add it through an additional `[JsonConstructor]` overload, keeping the existing constructors, as was done for `OutcomeMappings` (L41-55). Validate that reference keys are unique and names are non-blank. Default to empty when the JSON property is absent.
+- [X] T009 [P] [US1] Create `Essentials/src/Activities/Graph/Runtime/Activities/Complete.cs`:
   - `public sealed class Complete : StructuralActivity, IRuntimeStructuralActivity` with `[ActivityInput(Key = "outcome")] public string? Outcome { get; set; }`, `[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]`, no child slots and no `[ActivityOutcome]`.
   - `ExecuteStructureAsync` returns `RuntimeStructuralContinuation.Faulted(new ActivityFault("activity.graph.complete.outcome-required", …))` when `Outcome` is blank.
   - Otherwise it calls `RequestAncestorNotification(WellKnownRuntimeActivityConsumers.GraphActivity, "elsa.graph.complete", { ["outcome"] = Outcome })` and returns `RuntimeStructuralContinuation.Complete()`.
   - Put the notification code and payload key in an internal constants class `Essentials/src/Activities/Graph/Runtime/GraphCompleteNotification.cs`, shared with `GraphActivity`.
   - XML-doc the nearest-boundary semantics and point to `contracts/complete-activity.md`.
-- [ ] T010 [US1] Extend `Essentials/src/Activities/Graph/Runtime/Activities/GraphActivity.cs`:
+- [X] T010 [US1] Extend `Essentials/src/Activities/Graph/Runtime/Activities/GraphActivity.cs`:
   - Implement `IRuntimeActivityChildNotificationHandler.OnChildNotifiedAsync`. For code `elsa.graph.complete`:
     - resolve `payload["outcome"]` in `Descriptor.CompleteOutcomes`, or return `Faulted(activity.graph.complete.outcome-unknown)`;
     - set `_selectedOutcomeName`;
@@ -86,7 +86,7 @@ FR-018, FR-019).
   - Any other code returns `Defer`.
   - In `OnChildCompletedAsync`, when `OutcomeMappings` is empty and `CompleteOutcomes` is not, return `Faulted(activity.graph.entry-completed-without-mapping)`.
   - In `PrepareCompletionCheckpointAsync` (L198-201), use `_selectedOutcomeName` whenever it is set, before the `OutcomeMappings.Count == 0 ? Done` fallback.
-- [ ] T011 [US1] Add unit tests for the descriptor and `GraphActivity` in `Essentials/tests/Activities/Graph/Tests/GraphActivityExecutionTests.cs`. Cover:
+- [X] T011 [US1] Add unit tests for the descriptor and `GraphActivity` in `Essentials/tests/Activities/Graph/Tests/GraphActivityExecutionTests.cs`. Cover:
   - descriptor JSON without `completeOutcomes` deserializes with an empty list and round-trips byte-identically;
   - a duplicate reference key throws;
   - the notification with a known key selects the name and requests cancellation of the entry execution;

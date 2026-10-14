@@ -144,6 +144,97 @@ public sealed class GraphActivityExecutionTests : IDisposable
     }
 
     [Fact]
+    public void Descriptor_WithoutCompleteOutcomesDeserializesEmpty()
+    {
+        var json = JsonSerializer.SerializeToElement(Descriptor(), WebJson);
+        var withoutField = JsonSerializer.Deserialize<JsonElement>(
+            json.GetRawText().Replace(",\"completeOutcomes\":[]", "", StringComparison.Ordinal));
+
+        var descriptor = withoutField.Deserialize<GraphActivityDescriptor>(WebJson)!;
+
+        Assert.False(withoutField.TryGetProperty("completeOutcomes", out _));
+        Assert.Empty(descriptor.CompleteOutcomes);
+    }
+
+    [Fact]
+    public void Descriptor_RejectsDuplicateCompleteOutcomeReferenceKeys()
+    {
+        Assert.Throws<ArgumentException>(() => Descriptor(completeOutcomes: [new("fail", "Failed"), new("fail", "Other")]));
+    }
+
+    [Fact]
+    public async Task CompleteNotification_SelectsTheOutcomeAndCancelsTheEntrySubtree()
+    {
+        var descriptor = Descriptor(completeOutcomes: [new("fail", "Failed"), new("succeed", "Succeeded")]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"),
+            [new RuntimeLiveChildActivity("entry-execution", "entry", ActivityExecutionStatus.Running)]);
+
+        var continuation = await graph.OnChildNotifiedAsync(context, CompleteNotification("fail"));
+        var preparation = await graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch);
+
+        Assert.Equal("Failed", continuation.OutcomeName);
+        Assert.Equal("Failed", Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Outcome);
+        var cancellation = Assert.Single(context.GetChildSubtreeCancellationRequests());
+        Assert.Equal("entry-execution", cancellation.ChildActivityExecutionId);
+    }
+
+    [Fact]
+    public async Task CompleteNotification_SelectsTheOutcomeAlongsideOutcomeMappings()
+    {
+        var descriptor = Descriptor(
+            outcomeMappings: [new("Approved", "Accepted")],
+            completeOutcomes: [new("fail", "Failed")]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"));
+
+        await graph.OnChildNotifiedAsync(context, CompleteNotification("fail"));
+        var preparation = await graph.PrepareCompletionCheckpointAsync(context, [], DateTimeOffset.UnixEpoch);
+
+        Assert.Equal("Failed", Assert.IsAssignableFrom<IActivityCompletionTransition>(preparation.Transition).Outcome);
+    }
+
+    [Fact]
+    public async Task CompleteNotification_FaultsOnAnUndeclaredReferenceKey()
+    {
+        var descriptor = Descriptor(completeOutcomes: [new("fail", "Failed")]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"));
+
+        var continuation = await graph.OnChildNotifiedAsync(context, CompleteNotification("unknown"));
+
+        Assert.Equal(GraphActivity.CompleteOutcomeUnknownFaultCode, continuation.Fault!.Code);
+        Assert.Empty(context.GetChildSubtreeCancellationRequests());
+    }
+
+    [Fact]
+    public async Task OtherNotificationCodes_LeaveTheBoundaryDeferred()
+    {
+        var descriptor = Descriptor(completeOutcomes: [new("fail", "Failed")]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"));
+
+        var continuation = await graph.OnChildNotifiedAsync(
+            context,
+            new ActivityChildNotifiedContext("child-execution", "child", "something-else"));
+
+        Assert.True(continuation.IsDeferred);
+    }
+
+    [Fact]
+    public async Task NaturalCompletion_FaultsWhenOnlyCompleteNodesSelectOutcomes()
+    {
+        var descriptor = Descriptor(completeOutcomes: [new("fail", "Failed")]);
+        var graph = NewGraph(descriptor);
+        var context = Context(graph, BoundaryNode(descriptor, [Node("entry")]), State("outer-execution"));
+
+        var continuation = await graph.OnChildCompletedAsync(
+            new ActivityChildCompletedContext(context, "entry-execution", "entry", [ActivityOutcomes.Done]));
+
+        Assert.Equal(GraphActivity.EntryCompletedWithoutMappingFaultCode, continuation.Fault!.Code);
+    }
+
+    [Fact]
     public async Task Execute_RejectsAnEntryThatIsOnlyANestedDescendant()
     {
         var descriptor = Descriptor();
@@ -426,7 +517,8 @@ public sealed class GraphActivityExecutionTests : IDisposable
     private SimpleActivityExecutionContext Context(
         GraphActivity graph,
         ExecutableNode node,
-        ActivityExecutionState state) =>
+        ActivityExecutionState state,
+        IReadOnlyCollection<RuntimeLiveChildActivity>? liveChildActivities = null) =>
         new(
             graph,
             CancellationToken.None,
@@ -434,7 +526,15 @@ public sealed class GraphActivityExecutionTests : IDisposable
             new WorkflowExecutableIdentity("artifact", "workflow", "workflow-version", "1", "sha256:workflow"),
             schedulerWorkItem: null,
             executableNode: node,
-            activityExecutionState: state);
+            activityExecutionState: state,
+            liveChildActivities: liveChildActivities);
+
+    private static ActivityChildNotifiedContext CompleteNotification(string referenceKey) =>
+        new(
+            "complete-execution",
+            "complete",
+            "elsa.graph.complete",
+            payload: JsonSerializer.SerializeToElement(new Dictionary<string, string> { ["outcome"] = referenceKey }));
 
     private GraphActivity NewGraph(GraphActivityDescriptor descriptor) =>
         new(
@@ -529,7 +629,8 @@ public sealed class GraphActivityExecutionTests : IDisposable
         IReadOnlyList<GraphActivityOutputDescriptor>? outputs = null,
         IReadOnlyList<GraphActivityOutputMappingDescriptor>? outputMappings = null,
         IReadOnlyCollection<string>? requiredOutputReferenceKeys = null,
-        IReadOnlyList<GraphActivityOutcomeMappingDescriptor>? outcomeMappings = null) =>
+        IReadOnlyList<GraphActivityOutcomeMappingDescriptor>? outcomeMappings = null,
+        IReadOnlyList<GraphActivityCompleteOutcomeDescriptor>? completeOutcomes = null) =>
         new(
             "definition-1",
             "definition-version-1",
@@ -543,7 +644,8 @@ public sealed class GraphActivityExecutionTests : IDisposable
             outputMappings: outputMappings ?? [],
             requiredInputReferenceKeys: [],
             requiredOutputReferenceKeys: requiredOutputReferenceKeys?.ToArray() ?? [],
-            outcomeMappings: outcomeMappings);
+            outcomeMappings: outcomeMappings,
+            completeOutcomes: completeOutcomes);
 
     private static GraphActivityInputDescriptor Input(
         string referenceKey,
