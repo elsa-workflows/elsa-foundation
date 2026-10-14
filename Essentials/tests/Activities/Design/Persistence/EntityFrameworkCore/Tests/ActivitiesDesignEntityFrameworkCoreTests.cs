@@ -528,7 +528,7 @@ public sealed class ActivitiesDesignEntityFrameworkCoreTests
     public async Task Sqlite_draft_create_rejects_an_authoring_update_between_read_and_fence()
     {
         await using var database = new TemporarySqliteDatabase("draft-create-fence");
-        var connectionString = new SqliteConnectionStringBuilder { DataSource = database.Path, Mode = SqliteOpenMode.ReadWriteCreate, Cache = SqliteCacheMode.Shared }.ToString();
+        var connectionString = database.ConnectionStringWith("Mode=ReadWriteCreate;Cache=Shared");
         await using var keeper = new SqliteConnection(connectionString);
         await keeper.OpenAsync();
         await using var journal = keeper.CreateCommand();

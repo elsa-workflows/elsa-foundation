@@ -210,7 +210,7 @@ public sealed class SecretsEfModuleMigrationTests
         public async ValueTask DisposeAsync()
         {
             await Provider.DisposeAsync();
-            TemporarySqliteDatabase.ClearPoolAndDeleteFiles(Path);
+            TemporarySqliteDatabase.ClearPoolAndDeleteFiles(ConnectionString);
         }
     }
 }

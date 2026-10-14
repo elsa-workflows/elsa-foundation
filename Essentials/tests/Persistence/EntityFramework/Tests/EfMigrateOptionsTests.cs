@@ -1,7 +1,6 @@
 using CShells.DependencyInjection;
 using CShells.Features;
 using CShells.Lifecycle;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -198,7 +197,6 @@ public sealed class EfMigrateOptionsTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
         foreach (var file in new[] { databasePath, $"{databasePath}-wal", $"{databasePath}-shm" })
             File.Delete(file);
     }

@@ -982,8 +982,8 @@ public sealed class EfWorkflowDesignPersistenceTests
     public async Task Concurrent_unique_marker_race_reports_winner_and_replayed_loser_and_publishes_once()
     {
         await using var database = new TemporarySqliteDatabase("workflow-design-race");
-        var path = database.Path;
-        await using (var setupConnection = new SqliteConnection($"Data Source={path};Default Timeout=30"))
+        var connectionString = database.ConnectionStringWith("Default Timeout=30");
+        await using (var setupConnection = new SqliteConnection(connectionString))
         {
             await setupConnection.OpenAsync();
             await using var setup = Create(setupConnection);
@@ -992,8 +992,8 @@ public sealed class EfWorkflowDesignPersistenceTests
             await setup.SaveChangesAsync();
         }
 
-        await using var firstConnection = new SqliteConnection($"Data Source={path};Default Timeout=30");
-        await using var secondConnection = new SqliteConnection($"Data Source={path};Default Timeout=30");
+        await using var firstConnection = new SqliteConnection(connectionString);
+        await using var secondConnection = new SqliteConnection(connectionString);
         await firstConnection.OpenAsync();
         await secondConnection.OpenAsync();
         await using var firstDb = Create(firstConnection);
@@ -1025,8 +1025,8 @@ public sealed class EfWorkflowDesignPersistenceTests
     public async Task Concurrent_add_version_unique_identity_is_reported_as_a_version_conflict()
     {
         await using var database = new TemporarySqliteDatabase("workflow-design-version-race");
-        var path = database.Path;
-        await using (var setupConnection = new SqliteConnection($"Data Source={path};Default Timeout=30"))
+        var connectionString = database.ConnectionStringWith("Default Timeout=30");
+        await using (var setupConnection = new SqliteConnection(connectionString))
         {
             await setupConnection.OpenAsync();
             await using var setup = Create(setupConnection);
@@ -1035,8 +1035,8 @@ public sealed class EfWorkflowDesignPersistenceTests
             await setup.SaveChangesAsync();
         }
 
-        await using var firstConnection = new SqliteConnection($"Data Source={path};Default Timeout=30");
-        await using var secondConnection = new SqliteConnection($"Data Source={path};Default Timeout=30");
+        await using var firstConnection = new SqliteConnection(connectionString);
+        await using var secondConnection = new SqliteConnection(connectionString);
         await firstConnection.OpenAsync();
         await secondConnection.OpenAsync();
         await using var firstDb = Create(firstConnection);

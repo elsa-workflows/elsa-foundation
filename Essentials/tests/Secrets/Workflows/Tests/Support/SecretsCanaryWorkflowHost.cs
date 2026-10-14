@@ -698,7 +698,6 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
         finally
         {
             Spans.Dispose();
-            SqliteConnection.ClearAllPools();
             DeleteQuietly(_root);
         }
     }
