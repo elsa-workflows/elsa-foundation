@@ -9,7 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 141
 - Test projects: 146
 - Domains: 32
-- Direct cross-domain references: 999
+- Direct cross-domain references: 1000
 
 ## Domains
 
@@ -251,7 +251,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Events.Tests](../../Essentials/tests/Events/Tests/Elsa.Events.Tests.csproj) | test | Elsa.Events | Tests | test | Elsa.Events<br>Elsa.Events.Core<br>Elsa.Events.Strategies<br>Elsa.Locking.Core<br>Elsa.Tasks<br>Elsa.Tasks.Core<br>Elsa.Tasks.Testing |
 | [Elsa.Expressions.Api.Tests](../../Essentials/tests/Expressions/Api/Tests/Elsa.Expressions.Api.Tests.csproj) | test | Elsa.Expressions | Api.Tests | test | Elsa.Expressions.Api<br>Elsa.Testing |
 | [Elsa.Expressions.JavaScript.Jint.Tests](../../Essentials/tests/Expressions/JavaScript/Jint/Tests/Elsa.Expressions.JavaScript.Jint.Tests.csproj) | test | Elsa.Expressions | JavaScript.Jint.Tests | test | Elsa.Expressions<br>Elsa.Expressions.Core<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Jint<br>Elsa.Expressions.Liquid |
-| [Elsa.Expressions.Testing](../../Essentials/tests/Expressions/Testing/Elsa.Expressions.Testing.csproj) | test | Elsa.Expressions | Testing | test | Elsa.Expressions<br>Elsa.Expressions.JavaScript |
+| [Elsa.Expressions.Testing](../../Essentials/tests/Expressions/Testing/Elsa.Expressions.Testing.csproj) | test | Elsa.Expressions | Testing | test | Elsa.Expressions<br>Elsa.Expressions.JavaScript<br>Elsa.Serialization.Testing |
 | [Elsa.Expressions.Tests](../../Essentials/tests/Expressions/Tests/Elsa.Expressions.Tests.csproj) | test | Elsa.Expressions | Tests | test | Elsa.Activities.Design.Core<br>Elsa.Events<br>Elsa.Expressions<br>Elsa.Expressions.Core<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.Liquid<br>Elsa.Primitives<br>Elsa.Serialization.SystemText<br>Elsa.Serialization.Testing |
 | [Elsa.Foundation.DataProtection.EntityFrameworkCore.ProviderTests](../../Essentials/tests/Foundation/DataProtection/EntityFrameworkCore/ProviderTests/Elsa.Foundation.DataProtection.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Foundation | DataProtection.EntityFrameworkCore.ProviderTests | test | Elsa.Foundation.DataProtection.EntityFrameworkCore |
 | [Elsa.Foundation.DataProtection.EntityFrameworkCore.Tests](../../Essentials/tests/Foundation/DataProtection/EntityFrameworkCore/Tests/Elsa.Foundation.DataProtection.EntityFrameworkCore.Tests.csproj) | test | Elsa.Foundation | DataProtection.EntityFrameworkCore.Tests | test | Elsa.Cluster.EntityFrameworkCore<br>Elsa.Foundation.DataProtection.EntityFrameworkCore |
@@ -733,6 +733,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Expressions.JavaScript.Rendering.Core](../../Essentials/src/Expressions/JavaScript/Rendering/Core/Elsa.Expressions.JavaScript.Rendering.Core.csproj) | Elsa.Expressions | [Elsa.Events.Core](../../Essentials/src/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events |
 | [Elsa.Expressions.Liquid](../../Essentials/src/Expressions/Liquid/Elsa.Expressions.Liquid.csproj) | Elsa.Expressions | [Elsa.Events.Core](../../Essentials/src/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events |
 | [Elsa.Expressions.Liquid](../../Essentials/src/Expressions/Liquid/Elsa.Expressions.Liquid.csproj) | Elsa.Expressions | [Elsa.Serialization.Core](../../Essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj) | Elsa.Serialization |
+| [Elsa.Expressions.Testing](../../Essentials/tests/Expressions/Testing/Elsa.Expressions.Testing.csproj) | Elsa.Expressions | [Elsa.Serialization.Testing](../../Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj) | Elsa.Serialization |
 | [Elsa.Expressions.Tests](../../Essentials/tests/Expressions/Tests/Elsa.Expressions.Tests.csproj) | Elsa.Expressions | [Elsa.Activities.Design.Core](../../Essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj) | Elsa.Activities |
 | [Elsa.Expressions.Tests](../../Essentials/tests/Expressions/Tests/Elsa.Expressions.Tests.csproj) | Elsa.Expressions | [Elsa.Events](../../Essentials/src/Events/Elsa.Events/Elsa.Events.csproj) | Elsa.Events |
 | [Elsa.Expressions.Tests](../../Essentials/tests/Expressions/Tests/Elsa.Expressions.Tests.csproj) | Elsa.Expressions | [Elsa.Primitives](../../Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |

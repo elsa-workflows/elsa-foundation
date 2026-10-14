@@ -433,8 +433,8 @@
         "dependencies": {
           "Elsa.Expressions": "[4.0.0-dev, )",
           "Elsa.Expressions.JavaScript": "[4.0.0-dev, )",
-          "Microsoft.Extensions.DependencyInjection": "[10.0.10, )",
-          "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )"
+          "Elsa.Serialization.Testing": "[1.0.0, )",
+          "Microsoft.Extensions.DependencyInjection": "[10.0.10, )"
         }
       },
       "elsa.foundation.identity": {

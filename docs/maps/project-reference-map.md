@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 141
 - Test projects: 146
-- Direct project references: 1521
+- Direct project references: 1522
 
 ## Projects
 
@@ -213,7 +213,7 @@ Records direct project references only.
 | [Elsa.Events.Tests](../../Essentials/tests/Events/Tests/Elsa.Events.Tests.csproj) | test | Elsa.Events | - | false | Elsa.Events<br>Elsa.Events.Core<br>Elsa.Events.Strategies<br>Elsa.Locking.Core<br>Elsa.Tasks<br>Elsa.Tasks.Core<br>Elsa.Tasks.Testing |
 | [Elsa.Expressions.Api.Tests](../../Essentials/tests/Expressions/Api/Tests/Elsa.Expressions.Api.Tests.csproj) | test | Elsa.Expressions | - | false | Elsa.Expressions.Api<br>Elsa.Testing |
 | [Elsa.Expressions.JavaScript.Jint.Tests](../../Essentials/tests/Expressions/JavaScript/Jint/Tests/Elsa.Expressions.JavaScript.Jint.Tests.csproj) | test | Elsa.Expressions | - | false | Elsa.Expressions<br>Elsa.Expressions.Core<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.JavaScript.Jint<br>Elsa.Expressions.Liquid |
-| [Elsa.Expressions.Testing](../../Essentials/tests/Expressions/Testing/Elsa.Expressions.Testing.csproj) | test | Elsa.Expressions | - | false | Elsa.Expressions<br>Elsa.Expressions.JavaScript |
+| [Elsa.Expressions.Testing](../../Essentials/tests/Expressions/Testing/Elsa.Expressions.Testing.csproj) | test | Elsa.Expressions | - | false | Elsa.Expressions<br>Elsa.Expressions.JavaScript<br>Elsa.Serialization.Testing |
 | [Elsa.Expressions.Tests](../../Essentials/tests/Expressions/Tests/Elsa.Expressions.Tests.csproj) | test | Elsa.Expressions | - | false | Elsa.Activities.Design.Core<br>Elsa.Events<br>Elsa.Expressions<br>Elsa.Expressions.Core<br>Elsa.Expressions.JavaScript<br>Elsa.Expressions.JavaScript.Core<br>Elsa.Expressions.Liquid<br>Elsa.Primitives<br>Elsa.Serialization.SystemText<br>Elsa.Serialization.Testing |
 | [Elsa.Foundation.DataProtection.EntityFrameworkCore.ProviderTests](../../Essentials/tests/Foundation/DataProtection/EntityFrameworkCore/ProviderTests/Elsa.Foundation.DataProtection.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Foundation | - | false | Elsa.Foundation.DataProtection.EntityFrameworkCore |
 | [Elsa.Foundation.DataProtection.EntityFrameworkCore.Tests](../../Essentials/tests/Foundation/DataProtection/EntityFrameworkCore/Tests/Elsa.Foundation.DataProtection.EntityFrameworkCore.Tests.csproj) | test | Elsa.Foundation | - | false | Elsa.Cluster.EntityFrameworkCore<br>Elsa.Foundation.DataProtection.EntityFrameworkCore |
