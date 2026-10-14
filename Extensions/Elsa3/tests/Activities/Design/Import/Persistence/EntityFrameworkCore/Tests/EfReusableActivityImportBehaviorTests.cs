@@ -667,7 +667,7 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
         finally
         {
             await other.DisposeAsync();
-            TemporarySqliteDatabase.ClearPoolAndDeleteFiles(otherPath);
+            TemporarySqliteDatabase.ClearPoolAndDeleteFiles(SqliteImportHarness.ConnectionStringFor(otherPath));
         }
     }
 
