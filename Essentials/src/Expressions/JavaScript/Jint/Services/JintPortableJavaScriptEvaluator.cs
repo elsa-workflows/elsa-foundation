@@ -87,5 +87,5 @@ internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> f
 /// deterministic binding sandbox withholds. Carries the actionable message; the original Jint error is the inner
 /// exception.
 /// </summary>
-internal sealed class JavaScriptBindingEvaluationException(string message, Exception innerException)
+public sealed class JavaScriptBindingEvaluationException(string message, Exception innerException)
     : InvalidOperationException(message, innerException);
