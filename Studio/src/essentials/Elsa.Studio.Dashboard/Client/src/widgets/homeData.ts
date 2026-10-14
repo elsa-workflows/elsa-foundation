@@ -96,7 +96,7 @@ export async function homeHasRun(api: ElsaStudioModuleApi, signal: AbortSignal) 
 }
 
 export function navigateStudioPath(href: string) {
-  requestStudioNavigation(window.location.pathname, href);
+  if (!requestStudioNavigation(window.location.pathname, href)) return;
   window.history.pushState({}, "", href);
   window.dispatchEvent(new PopStateEvent("popstate"));
 }

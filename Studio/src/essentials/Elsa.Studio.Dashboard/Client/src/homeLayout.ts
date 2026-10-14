@@ -81,7 +81,9 @@ function studioFeatureSlug(value: string): string | null {
   if (!trimmed) return null;
   if (!trimmed.includes(".")) return kebabToken(trimmed);
   if (!trimmed.toLowerCase().startsWith(studioModulePrefix)) return null;
-  return kebabToken(trimmed.slice(trimmed.lastIndexOf(".") + 1));
+  const rest = trimmed.slice(studioModulePrefix.length);
+  if (!rest || rest.includes(".")) return null;
+  return kebabToken(rest);
 }
 
 function kebabToken(value: string): string {

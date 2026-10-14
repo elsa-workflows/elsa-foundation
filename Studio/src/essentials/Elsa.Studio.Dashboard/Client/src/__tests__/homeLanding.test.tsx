@@ -26,6 +26,7 @@ describe("Home default landing", () => {
     expect(homeFeatureTokensMatch("user-tasks", "workflows")).toBe(false);
     expect(homeFeatureTokensMatch("workflows", "Elsa.Studio.Dashboard")).toBe(false);
     expect(homeFeatureTokensMatch("workflows", "Elsa.Studio.WorkflowsX")).toBe(false);
+    expect(homeFeatureTokensMatch("workflows", "Elsa.Studio.Other.Workflows")).toBe(false);
     expect(homeFeatureTokensMatch("workflows", "Contoso.Workflows")).toBe(false);
   });
 

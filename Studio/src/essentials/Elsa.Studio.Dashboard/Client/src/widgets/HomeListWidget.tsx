@@ -64,7 +64,7 @@ export function NeedsAttentionWidget({ snapshot }: StudioDashboardWidgetBodyProp
       items={(snapshot ?? []).map(item => ({
         id: item.id,
         label: item.name,
-        href: "/workflows/instances?incidentHealth=active",
+        href: `/workflows/instances/${encodeURIComponent(item.id)}`,
         status: item.status
       }))}
       emptyTitle="All clear"
