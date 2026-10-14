@@ -63,7 +63,7 @@ code.
 | Page header | `target, phase 1` | Eyebrow, title, one-line description, actions. One `primary` button (see Principles). |
 | Lists | `target, phase 2` | A single filter row (search + segmented status + "More filters"), then the grid, then the pager. Filters apply live. |
 | Designer | `exists` | Palette / canvas / inspector. |
-| Designer tabs | `target, phase 1` | Tab labels never truncate: they collapse to icon + tooltip below the width they need. |
+| Designer tabs | `exists` for inspector / Runtime / Artifacts panel tabs (wrap + `title`, no ellipsis); remaining collapse-to-icon is `target, phase 1` | Tab labels never truncate. The inspector panel tabs wrap and keep a `title` plus keyboard access. Below the width they need they should collapse to icon + tooltip. |
 | Designer header | `exists` | Save, Review & publish and Run are all visible. None uses `StudioButton`. Run is the filled action (`.wf-run-button` uses `--studio-accent`). Review & publish is outlined (`.wf-review-button`). |
 | Designer header primary | `target, phase 1` | Review & publish becomes the one `primary` action; Save and Run become `default` (or `ghost`). |
 

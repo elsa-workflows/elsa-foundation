@@ -82,11 +82,59 @@ describe("Runtime-pinned workflow instance rendering", () => {
       activityVersionId: "executable-missing:Example.Root@1.0.0"
     });
     expect(projected.id).toBe("draft:synthetic");
+    expect(projected.definition.name).toBe("definition-1");
     expect(projected.activityPresentation).toEqual([{
       nodeId: "authored-root",
       displayName: "Frozen root",
       description: "Published wording"
     }]);
+  });
+
+  it("projects a workflow display name onto the pinned executable instead of the raw definition id", () => {
+    const executable = {
+      artifactId: "artifact-pinned",
+      artifactHash: "sha256:pinned",
+      createdAt: "2026-07-01T00:00:00Z",
+      rootActivityType: "Example.Root",
+      rootActivityVersion: "1.0.0",
+      nodeCount: 1,
+      resumeTargetCount: 0,
+      rootActivity: {
+        executableNodeId: "exec-root",
+        authoredActivityId: "authored-root",
+        activityType: "Example.Root",
+        activityTypeVersion: "1.0.0",
+        inputBindings: [],
+        childSlots: []
+      },
+      chosenReference: {
+        sourceReferenceId: "reference-1",
+        selection: "requested",
+        layout: [],
+        activityPresentation: []
+      },
+      references: []
+    } satisfies WorkflowExecutableDetails;
+    const details = {
+      instance: {
+        workflowExecutionId: "execution-1",
+        artifactId: "artifact-pinned",
+        artifactVersion: "3.0.0",
+        artifactHash: "sha256:pinned",
+        definitionId: "definition-1",
+        definitionVersionId: "draft:synthetic",
+        status: "Running",
+        createdAt: "2026-07-01T00:00:00Z",
+        activityCount: 0,
+        incidentCount: 0
+      },
+      activities: [],
+      incidents: []
+    } satisfies WorkflowInstanceDetails;
+
+    const projected = projectPinnedExecutable(executable, details, [], undefined, "Order fulfillment");
+    expect(projected.definition.name).toBe("Order fulfillment");
+    expect(projected.definition.id).toBe("definition-1");
   });
 
   it("focuses only an outer activity execution that exists in the loaded Runtime Evidence", () => {
