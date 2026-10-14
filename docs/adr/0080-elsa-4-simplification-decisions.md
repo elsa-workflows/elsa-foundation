@@ -110,8 +110,8 @@ activities are ReplaySafe, it dispatches no child, and it is not cancelled, alte
 
 ### D3 — Internal by default
 
-- Implementations are `internal sealed`. Tests reach them through `InternalsVisibleTo` to their own test
-  assembly. Framework §2.23.3 is amended.
+- Implementations are `internal sealed`. Tests reach them through `InternalsVisibleTo` to their own domain's
+  test assemblies. Framework §2.23.3 is amended.
 - Public types are: contracts users implement or call, models crossing a package boundary, activities, feature
   classes, options and entry points.
 - Whether a type is public depends on what it means to someone building on Elsa: a host or application author, an
@@ -148,7 +148,7 @@ domain. Domains 1 and 2, already realigned, are audited again under this rule in
 ### D5 — Plain language, renamed now
 
 Jargon in public and internal type names is renamed before GA, one term per batch in a freeze window, paired
-with each domain's D3 internalisation so no type is renamed twice. Old names are banned by an analyzer. The suffix rules in framework §2.6.1 and Elsa §E6 R4 follow the rename:
+with each domain's D3 internalization so no type is renamed twice. Old names are banned by an analyzer. The suffix rules in framework §2.6.1 and Elsa §E6 R4 follow the rename:
 `…Extension` replaces `…Contributor`, domain by domain; both suffixes are accepted until the rename completes.
 
 | Today | Becomes |
@@ -230,7 +230,6 @@ analyzer-only, which NuGet leaves out of the consumers' restore graphs, so no ex
 - Framework constitution 4.0.1 → 5.0.0 (MAJOR: §2.5, §2.21.1 and §2.23 rules removed or redefined). Elsa
   constitution 4.2.0 → 5.0.0 (MAJOR: §E5's two-line gate suspended until GA, §E6 R4 suffix follows D5, §2.21.1
   summary updated).
-- Breaking changes (renames, internalisation, migration squash, mode names) are accepted because nothing has
+- Breaking changes (renames, internalization, migration squash, mode names) are accepted because nothing has
   shipped. They become far more expensive after GA, so they come first.
 - Existing tests that assert on documentation or source text are deleted, not migrated.
-- Elsa 3 users lose the familiar term "stimulus"; the migration guide maps it.
