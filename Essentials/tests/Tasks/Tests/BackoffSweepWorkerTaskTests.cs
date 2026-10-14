@@ -22,7 +22,7 @@ public sealed class BackoffSweepWorkerTaskTests
         var worker = new TestWorker { Fail = () => new InvalidOperationException("boom") };
         var schedule = Assert.IsType<AdaptiveIntervalSchedule>(worker.GetSchedule());
         await using var execution = schedule.ScheduleExecution(() => Task.CompletedTask);
-        var nextWait = ScheduledExecutions.NextWait(execution);
+        var nextWait = Assert.IsType<ScheduledTaskExecution>(execution).Interval;
         Assert.Equal(TimeSpan.FromSeconds(1), nextWait());
 
         await worker.ExecuteAsync(CancellationToken.None);

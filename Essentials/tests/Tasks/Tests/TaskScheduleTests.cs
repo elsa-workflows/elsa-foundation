@@ -1,5 +1,8 @@
-using Elsa.Primitives.Contracts;
+using Cronos;
+using Elsa.Tasks.Core;
 using Elsa.Tasks.Schedules;
+using Elsa.Testing;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Elsa.Tasks.Tests;
@@ -7,14 +10,15 @@ namespace Elsa.Tasks.Tests;
 /// <summary>The schedules a recurring task that is not a backoff sweep returns from <c>GetSchedule</c>.</summary>
 public sealed class TaskScheduleTests
 {
-    private static readonly ISystemClock Clock = new FixedClock(new DateTimeOffset(2026, 1, 1, 0, 0, 59, TimeSpan.Zero));
+    private readonly FakeSystemClock _clock = new(new DateTimeOffset(2026, 1, 1, 0, 0, 59, TimeSpan.Zero));
+    private readonly RecordingLogger _logger = new();
 
     [Fact]
     public async Task Every_waits_the_interval_before_each_run()
     {
         await using var execution = TaskSchedule.Every(TimeSpan.FromMinutes(5), NullLogger.Instance).ScheduleExecution(NoWork);
 
-        Assert.Equal(TimeSpan.FromMinutes(5), ScheduledExecutions.NextWait(execution)());
+        Assert.Equal(TimeSpan.FromMinutes(5), NextWait(execution));
     }
 
     [Theory]
@@ -23,29 +27,112 @@ public sealed class TaskScheduleTests
     public void Every_refuses_an_interval_that_is_not_positive(int seconds) =>
         Assert.Throws<ArgumentOutOfRangeException>(() => TaskSchedule.Every(TimeSpan.FromSeconds(seconds), NullLogger.Instance));
 
+    // System.Threading.Timer refuses a due time above about 49.7 days.
+    [Fact]
+    public async Task Every_schedules_an_interval_longer_than_a_timer_can_hold()
+    {
+        await using var execution = TaskSchedule.Every(TimeSpan.FromDays(60), NullLogger.Instance).ScheduleExecution(NoWork);
+
+        Assert.Equal(TimeSpan.FromDays(60), NextWait(execution));
+    }
+
     [Fact]
     public async Task Cron_waits_until_the_next_occurrence_after_the_clocks_now()
     {
-        await using var execution = TaskSchedule.Cron("*/15 * * * *", Clock, NullLogger.Instance).ScheduleExecution(NoWork);
+        await using var execution = TaskSchedule.Cron("*/15 * * * *", _clock, NullLogger.Instance).ScheduleExecution(NoWork);
 
         // 00:00:59 to 00:15:00.
-        Assert.Equal(new TimeSpan(0, 14, 1), ScheduledExecutions.NextWait(execution)());
+        Assert.Equal(new TimeSpan(0, 14, 1), NextWait(execution));
+    }
+
+    [Fact]
+    public async Task Cron_schedules_a_yearly_expression()
+    {
+        await using var execution = TaskSchedule.Cron("0 0 1 1 *", _clock, NullLogger.Instance).ScheduleExecution(NoWork);
+
+        // 2026-01-01 00:00:59 to 2027-01-01 00:00:00.
+        Assert.Equal(TimeSpan.FromDays(365) - TimeSpan.FromSeconds(59), NextWait(execution));
     }
 
     [Theory]
     [InlineData("every minute")]
     [InlineData("0 * * * * *")] // six fields: seconds are not part of the standard format
     public void Cron_refuses_an_expression_that_is_not_five_field_cron(string expression) =>
-        Assert.ThrowsAny<FormatException>(() => TaskSchedule.Cron(expression, Clock, NullLogger.Instance));
+        Assert.ThrowsAny<FormatException>(() => TaskSchedule.Cron(expression, _clock, NullLogger.Instance));
 
     [Fact]
     public void Cron_refuses_an_expression_that_never_occurs() =>
-        Assert.Throws<ArgumentException>(() => TaskSchedule.Cron("0 0 30 2 *", Clock, NullLogger.Instance));
+        Assert.Throws<ArgumentException>(() => TaskSchedule.Cron("0 0 30 2 *", _clock, NullLogger.Instance));
+
+    // TaskSchedule.Cron refuses such an expression up front, so the schedule is built directly.
+    [Fact]
+    public async Task Cron_with_no_further_occurrence_stops_scheduling_and_says_so()
+    {
+        var schedule = new CronSchedule(_clock, CronExpression.Parse("0 0 30 2 *"), _logger);
+        await using var execution = schedule.ScheduleExecution(NoWork);
+
+        var warning = Assert.Single(_logger.Warnings);
+        Assert.Contains("0 0 30 2 *", warning.Message);
+        Assert.Equal(Timeout.InfiniteTimeSpan, NextWait(execution));
+    }
+
+    [Fact]
+    public async Task A_failure_to_schedule_the_next_run_is_logged()
+    {
+        var reads = 0;
+        var ran = new TaskCompletionSource();
+        await using var execution = new ScheduledTaskExecution(
+            () => { ran.TrySetResult(); return Task.CompletedTask; },
+            () => ++reads == 1 ? TimeSpan.FromMilliseconds(1) : throw new InvalidOperationException("no next run"),
+            _logger);
+
+        await ran.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var error = await WaitForErrorAsync();
+
+        Assert.IsType<InvalidOperationException>(error.Exception);
+    }
+
+    [Fact]
+    public void A_wait_longer_than_a_timer_can_hold_is_armed_in_parts() =>
+        Assert.Equal(ScheduledTaskExecution.MaxTimerWait, ScheduledTaskExecution.NextArm(TimeSpan.FromDays(60)));
+
+    // A non-null arm means the timer is re-armed instead of the action running.
+    [Theory]
+    [InlineData(1L)]
+    [InlineData(TimeSpan.TicksPerMillisecond)]
+    [InlineData(TimeSpan.TicksPerDay * 11)]
+    public void A_wait_with_time_left_never_runs_early(long remainingTicks)
+    {
+        var arm = ScheduledTaskExecution.NextArm(TimeSpan.FromTicks(remainingTicks));
+
+        Assert.NotNull(arm);
+        Assert.InRange(arm.Value, TimeSpan.FromTicks(remainingTicks), ScheduledTaskExecution.MaxTimerWait);
+    }
+
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(-1L)]
+    public void A_wait_with_no_time_left_runs_now(long remainingTicks) =>
+        Assert.Null(ScheduledTaskExecution.NextArm(TimeSpan.FromTicks(remainingTicks)));
+
+    [Fact]
+    public void A_wait_that_never_ends_never_arms() =>
+        Assert.Equal(Timeout.InfiniteTimeSpan, ScheduledTaskExecution.NextArm(Timeout.InfiniteTimeSpan));
+
+    private async Task<LogEntry> WaitForErrorAsync()
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (_logger.Entries.FirstOrDefault(entry => entry.Level == LogLevel.Error) is { } error)
+                return error;
+            await Task.Delay(10);
+        }
+
+        throw new TimeoutException("No error was logged.");
+    }
+
+    private static TimeSpan NextWait(IScheduledTaskExecution execution) => Assert.IsType<ScheduledTaskExecution>(execution).Interval();
 
     private static Task NoWork() => Task.CompletedTask;
-
-    private sealed class FixedClock(DateTimeOffset utcNow) : ISystemClock
-    {
-        public DateTimeOffset UtcNow => utcNow;
-    }
 }

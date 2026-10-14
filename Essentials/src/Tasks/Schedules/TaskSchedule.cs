@@ -10,8 +10,9 @@ namespace Elsa.Tasks.Schedules;
 /// interval or a cron expression.
 /// </summary>
 /// <remarks>
-/// The task manager logs a run that fails. The logger given here records only what escapes that, so a run can never
-/// fail without a trace.
+/// The task manager logs a run that fails. The logger given here records what escapes that, so a run can never fail
+/// without a trace. It also records a failure to schedule the next run and, for <see cref="Cron"/>, an expression
+/// that has no further occurrence, after which the task does not run again.
 /// </remarks>
 public static class TaskSchedule
 {
