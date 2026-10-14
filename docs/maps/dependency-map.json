@@ -9421,6 +9421,11 @@
           "path": "Essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
+        },
+        {
           "type": "external",
           "id": "Microsoft.Extensions.DependencyInjection",
           "version": "10.0.10"
@@ -17268,6 +17273,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Events",
+          "path": "Essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Primitives",
           "path": "Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj"
         },
@@ -17280,6 +17290,11 @@
           "type": "internal",
           "id": "Elsa.Serialization.SystemText",
           "path": "Essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
         },
         {
           "type": "external",
