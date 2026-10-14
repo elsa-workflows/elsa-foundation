@@ -194,25 +194,25 @@ publishing a plain workflow containing `Complete` fails with `Graph/CompleteOuts
 
 **Goal**: FR-015 and SC-003. Nothing that validates today changes.
 
-- [ ] T024 [US4] Add a regression test in `Essentials/tests/Activities/Graph/Tests/GraphActivityProviderTests.cs`: every existing schema-1 and schema-2 fixture manifest in the file produces the same diagnostics and the same compiled payload bytes as before (snapshot taken at T001's commit). Extend T004(d) with an EF Sqlite queue variant so the ordering gate is proven on both queues.
-- [ ] T025 [US4] Update the catalog contract surfaces:
+- [X] T024 [US4] Add a regression test in `Essentials/tests/Activities/Graph/Tests/GraphActivityProviderTests.cs`: every existing schema-1 and schema-2 fixture manifest in the file produces the same diagnostics and the same compiled payload bytes as before (snapshot taken at T001's commit). Extend T004(d) with an EF Sqlite queue variant so the ordering gate is proven on both queues.
+- [X] T025 [US4] Update the catalog contract surfaces:
   - add `Elsa.Activities.Graph.Runtime.Activities.Complete` to `Essentials/tests/Activities/Design/Tests/Contracts/activity-contract-surface.baseline.json`, regenerating it with the test's documented update mechanism rather than by hand where one exists;
   - add it to `Essentials/tests/Activities/Behavioral/Tests/Infrastructure/ActivityContractInventory.cs`, and to `Essentials/tests/Activities/Behavioral/Tests/ActivityCoverageTests.cs` if that list requires it;
   - check what outcomes facet the scanner emits for an activity without `[ActivityOutcome]`, and record the finding in the PR (Studio follow-up only, per D8).
-- [ ] T026 [US4] Run `Essentials/tests/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj`, `Essentials/tests/Architecture/Tests` (the §E2.2 Runtime-no-Design guard and the feature composition test), and the four suites in [quickstart.md](quickstart.md).
+- [X] T026 [US4] Run `Essentials/tests/Activities/Design/Tests/Elsa.Activities.Design.Tests.csproj`, `Essentials/tests/Architecture/Tests` (the §E2.2 Runtime-no-Design guard and the feature composition test), and the four suites in [quickstart.md](quickstart.md).
 
 ---
 
 ## Phase 7: Polish and cross-cutting concerns
 
-- [ ] T027 [P] Create `e2e-tests/reusable-activities/Test-ReusableActivityComplete.ps1`, modelled on `Test-ReusableActivityOutcomeLimit.ps1` and `_ReusableCommon.ps1`:
+- [X] T027 [P] Create `e2e-tests/reusable-activities/Test-ReusableActivityComplete.ps1`, modelled on `Test-ReusableActivityOutcomeLimit.ps1` and `_ReusableCommon.ps1`:
   - publish a schema-2 reusable activity with outcomes `succeed` and `fail`, whose Flowchart body branches to `Complete(succeed)` or `Complete(fail)` on an input, with no `outcomeMappings`;
   - run it from a parent Flowchart for both inputs and assert that only the matching branch runs;
   - assert that publishing `Complete(unknown)` is rejected with `activity.graph.complete.outcome-unknown`;
   - assert that promoting a plain workflow containing `Complete` is rejected with `Graph/CompleteOutsideGraph`;
   - list it in `e2e-tests/reusable-activities/README.md`.
-- [ ] T028 [P] Document the emitter contract (FR-021) in `docs/reference/activity-definition-authoring-composition.md`: add a section "Ending a reusable activity from any depth" summarising [contracts/complete-activity.md](contracts/complete-activity.md) (type key, input key, literal rule, reachability rule, diagnostics, run-time semantics, `Break` unchanged), with a link to spec 237. Add a one-line pointer on the "Graph activity" entry in `docs/glossary/elsa.md`.
-- [ ] T029 [P] Update the extension-point catalogs (§2.22):
+- [X] T028 [P] Document the emitter contract (FR-021) in `docs/reference/activity-definition-authoring-composition.md`: add a section "Ending a reusable activity from any depth" summarising [contracts/complete-activity.md](contracts/complete-activity.md) (type key, input key, literal rule, reachability rule, diagnostics, run-time semantics, `Break` unchanged), with a link to spec 237. Add a one-line pointer on the "Graph activity" entry in `docs/glossary/elsa.md`.
+- [X] T029 [P] Update the extension-point catalogs (§2.22):
   - `Essentials/src/Activities/Graph/Runtime/EXTENSION_POINTS.md`: the `Complete` activity, and `GraphActivity` as a child-notification handler for `elsa.graph.complete`;
   - `Essentials/src/Activities/Graph/Design/EXTENSION_POINTS.md`: the `CompleteOutsideGraphDraftValidator` as an `IDraftValidator` known implementation (cross-domain), the provider's `IActivityDefinitionLookup` dependency, and a fix to the stale schema row so it lists `1` and `2`;
   - the Workflows Runtime Core catalog that documents `IRuntimeActivityExecutionContext`: the new `RequestAncestorNotification` member;

@@ -31,7 +31,8 @@ public sealed class Complete : StructuralActivity, IRuntimeStructuralActivity
 
     /// <summary>The reference key of the enclosing reusable activity's boundary outcome to complete with.</summary>
     [ActivityInput(Key = "outcome")]
-    public string? Outcome { get; set; }
+    [Required]
+    public string Outcome { get; set; } = null!;
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
