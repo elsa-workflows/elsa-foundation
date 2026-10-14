@@ -90,4 +90,122 @@ internal static class ParentNotificationEvaluation
 
         return workItems;
     }
+
+    /// <summary>
+    /// Builds one notify work item per staged ancestor notification, each addressed to the nearest committed ancestor
+    /// whose executable node has the requested consumer key. The walk follows <c>ParentActivityExecutionId</c> from
+    /// the requester's parent upward, the same committed chain <c>RuntimeContainerScopeService</c> walks, so no
+    /// composite in between can intercept it. Only an initial structural execution that completes may stage one; the
+    /// items carry the source work item's own sequence so they order ahead of the requester's completion work item
+    /// (sequence + 1) on every queue. Throws <see cref="AncestorNotificationTargetNotFoundException"/> when no ancestor
+    /// matches. Returns an empty list when nothing was staged.
+    /// </summary>
+    public static async ValueTask<IReadOnlyList<RuntimeSchedulerWorkItem>> BuildAncestorAsync(
+        IActivityExecutionStateStore activityExecutionStateStore,
+        TimeProvider timeProvider,
+        RuntimeSchedulerWorkItem sourceWorkItem,
+        WorkflowExecutable executable,
+        ActivityExecutionState notifyingState,
+        IReadOnlyCollection<RuntimeAncestorNotificationRequest> requests,
+        RuntimeStructuralContinuation continuation,
+        CancellationToken cancellationToken)
+    {
+        if (requests.Count == 0)
+            return [];
+
+        if (continuation.Kind != RuntimeStructuralContinuationKind.Complete)
+            throw new InvalidOperationException("An ancestor notification can only accompany a structural decision that completes the requesting activity.");
+
+        var notifyingActivityExecutionId = notifyingState.Execution.ActivityExecutionId;
+        var notifyingExecutableNodeId = notifyingState.Execution.ExecutableNodeId;
+        var workItems = new List<RuntimeSchedulerWorkItem>(requests.Count);
+        var ordinal = 0;
+        foreach (var request in requests)
+        {
+            var ancestorState = await FindNearestAncestorAsync(
+                activityExecutionStateStore,
+                sourceWorkItem.WorkflowExecutionId,
+                executable,
+                notifyingState,
+                request.AncestorConsumerKey,
+                cancellationToken)
+                ?? throw new AncestorNotificationTargetNotFoundException(notifyingExecutableNodeId, request.AncestorConsumerKey);
+
+            var suffix = $"notify-ancestor:{ordinal}";
+            var now = timeProvider.GetUtcNow();
+            var payload = new RuntimeNotifyParentCommandPayload(
+                executable.Identity,
+                ancestorState.Execution.ExecutableNodeId,
+                ancestorState.Execution.ActivityExecutionId,
+                ancestorState.ParentActivityExecutionId,
+                ancestorState.BranchId,
+                notifyingActivityExecutionId,
+                notifyingExecutableNodeId,
+                notifyingState.IterationId,
+                request.Code,
+                request.Payload,
+                RuntimeNotifyParentCommandPayload.NotifyParentReason);
+
+            var commandMetadata = sourceWorkItem.CommandMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+            commandMetadata[RuntimeMetadataKeys.ParentActivityExecutionId] = ancestorState.Execution.ActivityExecutionId;
+
+            workItems.Add(new RuntimeSchedulerWorkItem(
+                workItemId: RuntimeChainId.Derive(sourceWorkItem.WorkItemId, suffix),
+                workflowExecutionId: sourceWorkItem.WorkflowExecutionId,
+                commandId: RuntimeChainId.Derive(sourceWorkItem.CommandId, suffix),
+                commandKind: WorkflowExecutionCommandKind.NotifyParentActivity,
+                envelopeId: sourceWorkItem.EnvelopeId,
+                idempotencyKey: RuntimeChainId.Derive(sourceWorkItem.IdempotencyKey, suffix),
+                enqueuedAt: now,
+                recordedAt: now,
+                sequence: sourceWorkItem.Sequence,
+                payload: JsonSerializer.SerializeToElement(payload),
+                commandMetadata: commandMetadata,
+                envelopeMetadata: sourceWorkItem.EnvelopeMetadata,
+                executionScopeId: ancestorState.ExecutionScopeId ?? ancestorState.Provenance.ExecutionScopeId,
+                attempt: ancestorState.Attempt ?? ancestorState.Provenance.Attempt));
+
+            ordinal++;
+        }
+
+        return workItems;
+    }
+
+    private static async ValueTask<ActivityExecutionState?> FindNearestAncestorAsync(
+        IActivityExecutionStateStore activityExecutionStateStore,
+        string workflowExecutionId,
+        WorkflowExecutable executable,
+        ActivityExecutionState notifyingState,
+        string ancestorConsumerKey,
+        CancellationToken cancellationToken)
+    {
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var ancestorId = notifyingState.ParentActivityExecutionId;
+        while (ancestorId is not null && visited.Add(ancestorId))
+        {
+            var ancestor = await activityExecutionStateStore.FindAsync(workflowExecutionId, ancestorId, cancellationToken)
+                ?? throw new InvalidOperationException($"Ancestor notification references missing activity execution '{ancestorId}' for workflow execution '{workflowExecutionId}'.");
+
+            if (executable.NodesById.TryGetValue(ancestor.Execution.ExecutableNodeId, out var node) &&
+                StringComparer.Ordinal.Equals(node.Descriptor.ConsumerKey, ancestorConsumerKey))
+                return ancestor;
+
+            ancestorId = ancestor.ParentActivityExecutionId;
+        }
+
+        return null;
+    }
+}
+
+/// <summary>
+/// Raised while building an ancestor notification when no committed ancestor has the requested consumer key. The
+/// invoke handler turns it into the requesting activity's fault, coded <see cref="FaultCode"/>.
+/// </summary>
+internal sealed class AncestorNotificationTargetNotFoundException(string executableNodeId, string ancestorConsumerKey)
+    : Exception($"Activity '{executableNodeId}' requested an ancestor notification, but no enclosing activity with consumer '{ancestorConsumerKey}' was found.")
+{
+    public const string FaultCode = "runtime.ancestor-notification.target-not-found";
+
+    public string ExecutableNodeId { get; } = executableNodeId;
+    public string AncestorConsumerKey { get; } = ancestorConsumerKey;
 }
