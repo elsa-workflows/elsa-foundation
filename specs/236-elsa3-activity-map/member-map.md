@@ -21,7 +21,7 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 | **R5 Narrowed contract** | Elsa 4 accepts a narrower value (literal only, string only, JSON only, int instead of enum, secret reference only) | Converted when the bound value provably fits, judged by its literal value or its declared Elsa 3 `typeName`; otherwise **unconvertible** |
 | **R6 No counterpart** | Activity, or a use of it, that Elsa 4 cannot express | **Unconvertible** |
 | **R7 Structure** | Structure Elsa 4 needs but Elsa 3 does not carry | Converted; generated deterministically |
-| **R8 Graph-level** | Outcomes, connections, joins, forks, start node | The map carries the data; #2705 applies it. Until then a Flowchart with connections reports "graph connections unsupported" |
+| **R8 Graph-level** | Outcomes, connections, joins, forks, start node | The map carries the data; #2705 applies it. Until then every Flowchart (with or without connections), FlowFork, FlowJoin and Start reports "graph conversion pending"; children are still converted per node |
 | **R9 Display only** | Member with no behaviour | Removed without a diagnostic. Only the members listed under R9 below |
 | **W Runtime difference** | Converted faithfully by contract, but Elsa 4 behaves differently at run time in a way the JSON cannot reveal | Converted with a **Warning** diagnostic naming the difference (one per node per difference) |
 
@@ -91,8 +91,8 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 | FlowSwitch.Cases `[{label, condition}]` | `cases[{match}]` + synthesized `Value` | R7 (as Switch) | 1 |
 | FlowSwitch.Mode | — | R3 (as Switch.Mode) | 1 (MatchFirst) |
 | FlowSwitch outcomes labels, `Default` | match values, `Default` | R1 | 3 connections |
-| FlowFork | graph level | R8 (#2705); until then "requires graph restructuring" | 4 |
-| FlowJoin.Mode (WaitAny default, WaitAll, WaitAllActive) | per-node join policy | R8 (#2705); until then "requires graph restructuring" | 7 |
+| FlowFork | graph level | R8 (#2705); until then "graph conversion pending" | 4 |
+| FlowJoin.Mode (WaitAny default, WaitAll, WaitAllActive) | per-node join policy | R8 (#2705); until then "graph conversion pending" | 7 |
 
 ## Primitives, terminals and intrinsics
 
@@ -111,7 +111,7 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 | SetName.Value | `elsa.intrinsic.set-instance-name@1` `value` | R1; empty or unbound → unconvertible (required) | 1 |
 | Finish | `elsa.intrinsic.finish@1` | R1 + R2 (`outcome = "Done"`) | 0 |
 | Complete.Outcomes in a plain workflow | finish `outcome` | Only when the node is in the workflow's root flowchart and `Outcomes` is absent or one literal string; otherwise R6 | 1 |
-| Complete.Outcomes in a reusable workflow | graph boundary outcome (manifest `outcomeMappings`, schema 2) | Never finish (that would end the calling workflow). The outcome must reach the graph boundary; the plan establishes how Elsa 4 expresses it. If it cannot, R6 with its own code and an engine gap issue | 1 (`fail`/`succeed`) |
+| Complete.Outcomes in a reusable workflow | graph boundary outcome (manifest `outcomeMappings`, schema 2) | Never finish (that would end the calling workflow). The outcome must reach the graph boundary. Elsa 4 cannot express this today (graph boundary outcomes come only from the direct root activity); engine gap #2750, on which spec 236's implementation waits | 1 (`fail`/`succeed`) |
 | End in a plain workflow | finish | Only when the node is in the workflow's root flowchart; otherwise R6 | 0 |
 | End in a reusable workflow | graph completion with `Done` | As Complete in a reusable workflow, with outcome `Done` | 0 |
 | Start | Flowchart `startNodeId` | R8 (#2705) | 0 |

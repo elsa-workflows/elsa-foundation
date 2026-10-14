@@ -151,8 +151,8 @@ rebuilt activity. When the team stops converting Elsa 3 workflows, they delete t
 **Why this priority**: Real Elsa 3 estates use custom activities, but built-ins come first.
 
 **Independent Test**: Reconcile a test assembly with one activity marked as replacing `Acme.SendInvoice`; convert a
-node of that Elsa 3 type and check it resolves to the rebuilt activity; remove the mark, reconcile, and the node
-reports "unmapped activity type".
+node of that Elsa 3 type and check it resolves to the rebuilt activity; remove the mark in a new activity version,
+reconcile, and the node reports "unmapped activity type".
 
 **Acceptance Scenarios**:
 
@@ -217,8 +217,10 @@ produces for the same definition.
   the converter does not evaluate expressions.
 - Elsa 3 JSON keys are camelCase while most Elsa 4 input keys are PascalCase and are matched ordinally at publication;
   the converter emits the exact Elsa 4 key.
-- Flowchart `Connections`, excessive nesting and two properties binding one input also return diagnostics instead of
-  throwing. #2705 replaces the connections diagnostic with real support.
+- Every Flowchart node, with or without connections, reports "graph conversion pending" until #2705: a native Elsa 4
+  Flowchart structure needs connections and a start node, which are #2705's. Its children are still converted per
+  node (FR-006), so #2705 adds only the graph. Excessive nesting and two properties binding one input also return
+  diagnostics instead of throwing.
 - Cancellation still throws `OperationCanceledException`.
 
 ## Requirements *(mandatory)*
@@ -267,7 +269,7 @@ produces for the same definition.
   dependence. Any change to it changes converter output, so it is subject to spec 235's converter revision rule (R
   bump plus golden-output re-record). This spec does not introduce R.
 - **FR-006**: The map MUST be usable per node, independently of the workflow-level importer, so that a Flowchart
-  importer (#2705) can map Flowchart child nodes and replace the "requires graph restructuring" outcome for FlowFork
+  importer (#2705) can map Flowchart child nodes and replace the "graph conversion pending" outcome for FlowFork
   and FlowJoin.
 
 **Resolution**
@@ -279,7 +281,10 @@ produces for the same definition.
   catalog (build metadata ignored for ordering). The Elsa 3 node's integer version MUST NOT select the Elsa 4 version.
 - **FR-009**: An Elsa 4 CLR activity MUST be able to declare, by an attribute on its class, one or more Elsa 3 type
   names it replaces. CLR reconciliation MUST record the declaration in the catalog so the converter can find it
-  without loading assemblies. Removing the attribute and reconciling again MUST end the alias for new conversions.
+  without loading assemblies. Because the declaration is part of the activity version's content, adding or removing
+  it requires a new activity version (otherwise reconciliation refuses the changed content, by design); the converter
+  reads the declaration from each definition's highest version only, so removing it in a new version ends the alias
+  for new conversions.
   Two activities claiming one Elsa 3 type MUST yield "ambiguous activity alias".
 - **FR-010**: For an aliased or verbatim-key activity, Elsa 3 properties MUST bind to Elsa 4 members by name,
   case-insensitively; a leftover property is "unknown member".
@@ -294,7 +299,7 @@ produces for the same definition.
 - **FR-013**: New codes MUST be added for at least: unmapped activity type, ambiguous activity alias, no Elsa 4
   counterpart, activity version unavailable, unknown member, member semantics changed, value outside the Elsa 4
   contract (R5), captured output not representable (R4), removed input bound to a non-default value (R3), required
-  input unbound, unsupported mode (Switch, End/Complete), requires graph restructuring, graph connections unsupported,
+  input unbound, unsupported mode (Switch, End/Complete), graph conversion pending (Flowchart, FlowFork, FlowJoin, Start),
   nesting too deep, duplicate input binding, and one Warning code per runtime difference (W). Existing `VF-IMP-*` and
   `ELS3-REUSABLE-*` codes MUST be kept where they already apply. Codes MUST follow the existing `ELS3-<AREA>-<REASON>`
   form.
@@ -376,13 +381,14 @@ produces for the same definition.
   and most use Elsa 3 JavaScript host functions the rewriter refuses (#2717). Some also use activities with no Elsa 4
   counterpart (ParallelForEach, BulkDispatchWorkflows) or a Switch mode set by an expression; those stay unconvertible
   by design and are reported.
-- #2705 replaces the "graph connections unsupported" and "requires graph restructuring" outcomes and uses FR-006 and
+- #2705 replaces the "graph conversion pending" outcome and uses FR-006 and
   FR-015.
 
-- **Possible engine gap (hold condition).** If the plan finds that Elsa 4 cannot carry a `Complete`/`End` outcome from
-  inside a reusable workflow to the graph activity's boundary outcome (FR-004e), an engine gap issue is filed and this
-  spec's implementation waits until that gap is resolved, rather than shipping that case as unconvertible
-  (maintainer decision, 2026-10-14).
+- **Engine gap: implementation on hold.** Planning research confirmed that Elsa 4 cannot carry a `Complete`/`End`
+  outcome from inside a reusable workflow to the graph activity's boundary outcome (FR-004e): a graph activity takes its
+  boundary outcome only from its direct root activity, and a Flowchart root completes only with `Done` or `Break`.
+  The gap is [#2750](https://github.com/elsa-workflows/elsa-foundation/issues/2750). By maintainer decision
+  (2026-10-14), this spec's implementation waits for #2750 rather than shipping that case as unconvertible.
 
 ## Out of Scope
 
