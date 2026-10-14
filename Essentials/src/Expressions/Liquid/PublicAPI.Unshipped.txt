@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Expressions.Liquid.LiquidExpressionsFeature
+Elsa.Expressions.Liquid.LiquidExpressionsFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Expressions.Liquid.LiquidExpressionsFeature.LiquidExpressionsFeature() -> void

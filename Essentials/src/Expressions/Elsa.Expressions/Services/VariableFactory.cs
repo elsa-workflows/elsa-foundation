@@ -4,7 +4,7 @@ using Elsa.Expressions.Models;
 namespace Elsa.Expressions.Services;
 
 /// <inheritdoc />
-public sealed class VariableFactory : IVariableFactory
+internal sealed class VariableFactory : IVariableFactory
 {
     /// <inheritdoc />
     public IVariable Create(string name, object? value = null, string? id = null)

@@ -1,6 +1,6 @@
 namespace Elsa.Expressions.Core.Contracts;
 
-public interface IExpression
+internal interface IExpression
 {
     /// <summary>
     /// Gets or sets the expression type.

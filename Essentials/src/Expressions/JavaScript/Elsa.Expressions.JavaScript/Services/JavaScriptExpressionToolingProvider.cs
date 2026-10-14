@@ -8,7 +8,7 @@ using System.Text.RegularExpressions;
 namespace Elsa.Expressions.JavaScript.Services;
 
 /// <summary>Metadata-only JavaScript authoring assistance; it parses source but never loads Jint or evaluates it.</summary>
-public sealed partial class JavaScriptExpressionToolingProvider : IExpressionToolingProvider
+internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionToolingProvider
 {
     public ExpressionToolingCapabilities DeclaredCapabilities { get; } = new(
         SupportsCompletions: true,

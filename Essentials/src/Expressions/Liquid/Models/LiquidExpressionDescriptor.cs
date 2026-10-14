@@ -4,7 +4,7 @@ using System.Reflection;
 
 namespace Elsa.Expressions.Liquid.Models;
 
-public sealed class LiquidExpressionDescriptor : IExpressionDescriptor
+internal sealed class LiquidExpressionDescriptor : IExpressionDescriptor
 {
     public LiquidExpressionDescriptor()
     {

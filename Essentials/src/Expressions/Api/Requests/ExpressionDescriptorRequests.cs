@@ -3,6 +3,6 @@ using Elsa.Mediator.Core.Contracts;
 
 namespace Elsa.Expressions.Api.Requests;
 
-public sealed record ListExpressionDescriptors : IRequest<ExpressionDescriptorsResponse>;
+internal sealed record ListExpressionDescriptors : IRequest<ExpressionDescriptorsResponse>;
 
-public sealed record ListVariableTypeDescriptors : IRequest<VariableTypeDescriptorsResponse>;
+internal sealed record ListVariableTypeDescriptors : IRequest<VariableTypeDescriptorsResponse>;

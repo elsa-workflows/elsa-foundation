@@ -12,7 +12,7 @@ using Microsoft.Extensions.Hosting;
 namespace Elsa.Expressions.JavaScript.Rendering;
 
 /// <summary>Maps the JavaScript declaration rendering surface using ordinary ASP.NET Core endpoints.</summary>
-public static class JavaScriptRenderingApi
+internal static class JavaScriptRenderingApi
 {
     internal const string OwnerId = "Elsa.Expressions.JavaScript.Rendering";
 

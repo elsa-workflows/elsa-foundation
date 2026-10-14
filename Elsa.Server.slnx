@@ -474,6 +474,7 @@
     <Project Path="Essentials/tests/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Expressions/">
+    <Project Path="Essentials/tests/Expressions/Testing/Elsa.Expressions.Testing.csproj" />
     <Project Path="Essentials/tests/Expressions/Tests/Elsa.Expressions.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Foundation/" />

@@ -24,7 +24,6 @@ using Elsa.Diagnostics.StructuredLogs.Endpoints;
 using Elsa.Expressions;
 using Elsa.Expressions.Api;
 using Elsa.Expressions.Api.Models;
-using Elsa.Expressions.Api.Requests;
 using Elsa.Foundation.Identity;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Extensions;
@@ -503,7 +502,7 @@ public sealed class DomainManagementApiCompositionTests
             StructuredLogsApi.MapStructuredLogsApi(app);
             StudioPreferencesApi.MapStudioPreferencesApi(app);
             if (includeExpressions)
-                ExpressionsApi.MapExpressionsApi(app);
+                new ExpressionsApiFeature().MapEndpoints(app, app.Environment);
             app.Use(async (context, next) =>
             {
                 context.User = new ClaimsPrincipal(new ClaimsIdentity(
@@ -560,8 +559,8 @@ public sealed class DomainManagementApiCompositionTests
     {
         public async Task<T> Send<T>(IRequest<T> request, CancellationToken cancellationToken = default) where T : notnull
         {
-            if (request is ListExpressionDescriptors expressionDescriptors)
-                return await HandleExpressionDescriptors<T>(expressionDescriptors, cancellationToken);
+            if (typeof(T) == typeof(ExpressionDescriptorsResponse))
+                return await HandleWithRegisteredHandler(request, cancellationToken);
             if (request is GetActivityAuthoringCapabilities authoringCapabilities)
             {
                 var handler = services.GetRequiredService<
@@ -583,12 +582,13 @@ public sealed class DomainManagementApiCompositionTests
             return (T)response;
         }
 
-        private async Task<T> HandleExpressionDescriptors<T>(
-            ListExpressionDescriptors request,
-            CancellationToken cancellationToken) where T : notnull
+        // The expressions request and its handler are internal to their API, so the journey forwards the request to
+        // whichever handler the expressions feature registered for it.
+        private async Task<T> HandleWithRegisteredHandler<T>(IRequest<T> request, CancellationToken cancellationToken) where T : notnull
         {
-            var handler = services.GetRequiredService<IRequestHandler<ListExpressionDescriptors, ExpressionDescriptorsResponse>>();
-            return (T)(object)await handler.Handle(request, cancellationToken);
+            var handlerType = typeof(IRequestHandler<,>).MakeGenericType(request.GetType(), typeof(T));
+            var handler = services.GetRequiredService(handlerType);
+            return await (Task<T>)handlerType.GetMethod("Handle")!.Invoke(handler, [request, cancellationToken])!;
         }
     }
 

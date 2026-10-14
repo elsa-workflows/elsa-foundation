@@ -2,7 +2,7 @@ using Elsa.Api.Capabilities.Models;
 
 namespace Elsa.Expressions.Api.Capabilities;
 
-public static class ExpressionsApiCapabilities
+internal static class ExpressionsApiCapabilities
 {
     public const string CapabilityId = "elsa.api.expressions";
     public const string SourceFeatureId = "ExpressionsApi";

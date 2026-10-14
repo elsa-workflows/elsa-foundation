@@ -6,7 +6,7 @@ using Microsoft.Extensions.Hosting;
 namespace Elsa.Expressions.Api;
 
 /// <summary>Maps the expression descriptor surfaces using ordinary ASP.NET Core endpoints.</summary>
-public static class ExpressionsApi
+internal static class ExpressionsApi
 {
     internal const string OwnerId = "Elsa.Expressions.Api";
 
