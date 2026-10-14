@@ -44,6 +44,78 @@ test("copies and pastes with Ctrl/Cmd shortcuts and ignores them in a text field
   await expect(page.getByRole("button", { name: "Notify buyer (copy 2)", exact: true })).toBeVisible();
 });
 
+async function selectNotifyBuyer(page: import("@playwright/test").Page) {
+  const node = page.locator(".wf-canvas .react-flow__node[data-id='write-one']");
+  await expect(node).toBeVisible({ timeout: 15_000 });
+  await node.focus();
+  await page.keyboard.press("Enter");
+  await expect(node).toHaveAttribute("aria-pressed", "true");
+}
+
+async function dispatchCanvasShortcut(page: import("@playwright/test").Page, key: "c" | "v" | "d" | "z") {
+  const node = page.locator(".wf-canvas .react-flow__node[data-id='write-one']");
+  await node.evaluate((element, pressed) => {
+    element.dispatchEvent(new KeyboardEvent("keydown", {
+      key: pressed,
+      code: `Key${pressed.toUpperCase()}`,
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+      composed: true
+    }));
+  }, key);
+}
+
+test("duplicate in the real editor undoes in a single step", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto("/?mode=activity-duplicate-editor&theme=light");
+
+  await expect(page.locator(".wf-canvas .wf-node").filter({ hasText: "Notify buyer" })).toBeVisible({ timeout: 15_000 });
+  const startingCount = await page.locator(".wf-canvas .wf-node").count();
+
+  await selectNotifyBuyer(page);
+  await expect(page.getByRole("complementary", { name: /inspector/i })).toContainText("write-one");
+  await dispatchCanvasShortcut(page, "d");
+  await expect(page.locator(".wf-editor-save-status")).toContainText("Duplicated 1 activity.");
+  await expect(page.locator(".wf-canvas .wf-node").filter({ hasText: "Notify buyer (copy)" })).toBeVisible();
+  await expect(page.locator(".wf-canvas .wf-node")).toHaveCount(startingCount + 1);
+
+  await dispatchCanvasShortcut(page, "z");
+  await expect(page.locator(".wf-canvas .wf-node").filter({ hasText: "Notify buyer (copy)" })).toHaveCount(0);
+  await expect(page.locator(".wf-canvas .wf-node")).toHaveCount(startingCount);
+});
+
+test("Ctrl+D does nothing while the designer code editor is focused", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto("/?mode=activity-duplicate-editor&theme=light");
+
+  await expect(page.locator(".wf-canvas .wf-node").filter({ hasText: "Notify buyer" })).toBeVisible({ timeout: 15_000 });
+  await selectNotifyBuyer(page);
+  await expect(page.getByRole("complementary", { name: /inspector/i })).toContainText("Text");
+
+  const syntaxTrigger = page.getByRole("button", { name: /expression syntax/i }).first();
+  if (await syntaxTrigger.isVisible()) {
+    const current = await syntaxTrigger.textContent();
+    if (!current?.includes("JavaScript")) {
+      await syntaxTrigger.click();
+      await page.getByRole("option", { name: "JavaScript" }).click();
+    }
+  }
+
+  const codeEditor = page.locator("[data-studio-code-editor]");
+  await expect(codeEditor).toBeVisible({ timeout: 15_000 });
+  await codeEditor.click();
+  const editorSurface = page.locator("[data-studio-code-editor] .cm-content, [data-studio-code-editor] textarea").first();
+  await editorSurface.focus();
+  await expect(editorSurface).toBeFocused();
+
+  const startingCount = await page.locator(".wf-canvas .wf-node").count();
+  await page.keyboard.press("Control+d");
+  await expect(page.locator(".wf-canvas .wf-node")).toHaveCount(startingCount);
+  await expect(page.locator(".wf-canvas .wf-node").filter({ hasText: "Notify buyer (copy)" })).toHaveCount(0);
+  await expect(page.locator(".wf-editor-save-status")).not.toContainText("Duplicated");
+});
+
 test("activity duplicate menu has no critical or serious automated accessibility violations", async ({ page }) => {
   await page.goto("/?mode=activity-duplicate&theme=light");
   await page.getByRole("button", { name: "Notify buyer", exact: true }).click({ button: "right" });

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import type { ActivityCatalogItem, WorkflowDraft } from "../workflowTypes";
 import { resolveScope, type ScopeFrame } from "../workflowAdapter";
 import type { WorkflowDraftRecipe } from "./workflowDocument";
 import {
-  applyActivityDuplicatePlan,
-  planActivityDuplicate,
+  pasteActivitiesIntoDraft,
   snapshotSelectedActivities,
   type ActivityClipboardSnapshot
 } from "./duplicateActivities";
@@ -16,7 +16,8 @@ interface ActivityClipboardParams {
   selectedNodeIds: string[];
   disabled: boolean;
   definitionId: string;
-  editDraftAndSelect(recipe: WorkflowDraftRecipe, selectedNodeId: string | null): void;
+  editDraft(recipe: WorkflowDraftRecipe): void;
+  select(selectedNodeId: string | null): void;
   setStatus(value: string): void;
 }
 
@@ -27,7 +28,8 @@ export function useActivityClipboard({
   selectedNodeIds,
   disabled,
   definitionId,
-  editDraftAndSelect,
+  editDraft,
+  select,
   setStatus
 }: ActivityClipboardParams) {
   const clipboardRef = useRef<ActivityClipboardSnapshot | null>(null);
@@ -55,23 +57,32 @@ export function useActivityClipboard({
   }, [catalogByVersion, disabled, draft, frames]);
 
   const applySnapshot = useCallback((snapshot: ActivityClipboardSnapshot, status: string) => {
-    if (!draft) return false;
-    const plan = planActivityDuplicate({
-      snapshot,
-      draft,
-      frames,
-      catalog: catalogByVersion
+    if (disabled) return false;
+    let selectedNodeId: string | null = null;
+    let applied = false;
+    // Window-level keydown is outside React's event system, so the document reducer
+    // is scheduled instead of flushed. preventDefault and the status line need the
+    // recipe result in this turn.
+    flushSync(() => {
+      editDraft(({ draft: current, frames: currentFrames }) => {
+        if (!current) return null;
+        const result = pasteActivitiesIntoDraft({
+          draft: current,
+          frames: currentFrames,
+          snapshot,
+          catalog: catalogByVersion
+        });
+        if (!result) return null;
+        selectedNodeId = result.selectedNodeIds[0] ?? null;
+        applied = true;
+        return result.draft;
+      });
     });
-    if (!plan) return false;
-    editDraftAndSelect(
-      ({ draft: current, frames: currentFrames }) => current
-        ? applyActivityDuplicatePlan(current, currentFrames, plan, catalogByVersion)
-        : null,
-      plan.selectedNodeIds[0] ?? null
-    );
+    if (!applied) return false;
+    select(selectedNodeId);
     setStatus(status);
     return true;
-  }, [catalogByVersion, draft, editDraftAndSelect, frames, setStatus]);
+  }, [catalogByVersion, disabled, editDraft, select, setStatus]);
 
   const copy = useCallback(() => {
     const snapshot = snapshotFrom(selectedNodeIds);

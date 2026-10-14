@@ -3,6 +3,7 @@ import {
   indexActivityPresentation,
   resolveActivityLabel
 } from "../activityPresentation";
+import { flowchartStructureKind } from "../flowchartStartNode";
 import {
   collectActivityNodeIds,
   replaceSlotActivities,
@@ -148,6 +149,10 @@ export function planActivityDuplicate(options: {
     const sourceActivity = findCopiedActivity(options.snapshot.activities, from, options.catalog);
     if (!sourceActivity) continue;
     const sourcePresentation = presentationBySource.get(from);
+    if (!topLevelIds.has(from)) {
+      if (sourcePresentation) presentation.push({ ...sourcePresentation, nodeId: to });
+      continue;
+    }
     const catalogItem = resolveCatalogItem(sourceActivity, options.catalog);
     const label = resolveActivityLabel(
       sourcePresentation,
@@ -201,7 +206,7 @@ export function applyActivityDuplicatePlan(
   if (!scope || scope.slot.cardinality !== "many") return null;
 
   let nextOwner = replaceSlotActivities(scope.owner, scope.slot, [...scope.slot.activities, ...plan.activities]);
-  if (plan.siblingConnections.length > 0) {
+  if (plan.siblingConnections.length > 0 && nextOwner.structure?.kind === flowchartStructureKind) {
     const connections = [...readFlowchartConnections(nextOwner), ...plan.siblingConnections];
     nextOwner = {
       ...nextOwner,
@@ -385,8 +390,9 @@ function readNestedActivities(activity: ActivityNode): ActivityNode[] {
   const nested: ActivityNode[] = [];
   if (Array.isArray(payload.activities)) nested.push(...payload.activities.filter(isActivityNode));
   if (isActivityNode(payload.body)) nested.push(payload.body);
-  for (const value of Object.values(payload)) {
-    if (isActivityNode(value) && value !== payload.body) nested.push(value);
+  for (const [key, value] of Object.entries(payload)) {
+    if (key === "activities" || key === "body") continue;
+    if (isActivityNode(value)) nested.push(value);
     else if (Array.isArray(value)) nested.push(...value.filter(isActivityNode));
   }
   return nested;

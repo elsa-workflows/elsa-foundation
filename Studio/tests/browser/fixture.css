@@ -247,3 +247,9 @@ body {
   background-image: radial-gradient(circle, color-mix(in srgb, var(--studio-border, var(--border)) 70%, transparent) 1px, transparent 1px);
   background-size: 18px 18px;
 }
+
+.activity-duplicate-editor,
+.activity-duplicate-editor .wf-editor {
+  height: 100vh;
+  width: 100vw;
+}

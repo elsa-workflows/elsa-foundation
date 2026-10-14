@@ -38,7 +38,8 @@ import {
   findAiAction,
   getDraftSignature,
   groupActivityPalette,
-  isWorkflowEditorKeyboardTarget,
+  hasNonCollapsedTextSelection,
+  isActivityClipboardShortcutBlocked,
   normalizeWorkflowError
 } from "./editorHelpers";
 import { ActivityCanvasContextMenu } from "./ActivityCanvasContextMenu";
@@ -390,7 +391,8 @@ export function WorkflowEditor({
     selectedNodeIds: selectedCanvasNodeIds,
     disabled: isUnsupportedDesigner || !canAddActivitiesToCanvas,
     definitionId,
-    editDraftAndSelect,
+    editDraft,
+    select,
     setStatus
   });
 
@@ -539,26 +541,25 @@ export function WorkflowEditor({
     return null;
   }, [draft, loadDraft]);
 
+  const editorRootRef = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (canvasView !== "designer") return;
       if (!(event.metaKey || event.ctrlKey)) return;
-      const target = event.target as HTMLElement | null;
-      if (isWorkflowEditorKeyboardTarget(target)) return;
+      if (isActivityClipboardShortcutBlocked(event.target, editorRootRef.current)) return;
       const clipboardShortcut = matchActivityClipboardShortcut(event);
       if (clipboardShortcut === "copy") {
-        event.preventDefault();
-        copySelectedActivities();
+        if (hasNonCollapsedTextSelection()) return;
+        if (copySelectedActivities()) event.preventDefault();
         return;
       }
       if (clipboardShortcut === "paste") {
-        event.preventDefault();
-        pasteCopiedActivities();
+        if (pasteCopiedActivities()) event.preventDefault();
         return;
       }
       if (clipboardShortcut === "duplicate") {
-        event.preventDefault();
-        duplicateSelectedActivities();
+        if (duplicateSelectedActivities()) event.preventDefault();
         return;
       }
       const key = event.key.toLowerCase();
@@ -571,8 +572,8 @@ export function WorkflowEditor({
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [canvasView, copySelectedActivities, duplicateSelectedActivities, pasteCopiedActivities, undo, redo]);
 
   // Enter a slot from the inspector list or a canvas slot badge, along the planned frame path: a slot
@@ -1019,7 +1020,7 @@ export function WorkflowEditor({
   ];
 
   return (
-    <section className="wf-editor">
+    <section ref={editorRootRef} className="wf-editor" data-studio-workflow-editor="">
       <WorkflowEditorToolbar
         name={details.definition.name}
         status={visibleStatus}

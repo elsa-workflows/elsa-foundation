@@ -2,7 +2,14 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StudioAiContributionApi } from "@elsa-workflows/studio-sdk";
-import { describeWorkflowError, isWorkflowEditorKeyboardTarget, normalizeWorkflowError } from "../workflow-editor/editorHelpers";
+import {
+  describeWorkflowError,
+  hasNonCollapsedTextSelection,
+  isActivityClipboardShortcutBlocked,
+  isWorkflowEditorKeyboardTarget,
+  isWorkflowEditorOverlayOpen,
+  normalizeWorkflowError
+} from "../workflow-editor/editorHelpers";
 import { WorkflowAlert } from "../workflow-editor/WorkflowAlert";
 import { WorkflowRuntimePanel } from "../workflow-editor/editorPanels";
 import { useAiProviderAvailability } from "../workflow-editor/useAiProviderAvailability";
@@ -111,6 +118,71 @@ describe("isWorkflowEditorKeyboardTarget", () => {
     expect(isWorkflowEditorKeyboardTarget(editable)).toBe(true);
     expect(isWorkflowEditorKeyboardTarget(button)).toBe(false);
     expect(isWorkflowEditorKeyboardTarget(null)).toBe(false);
+    expect(isWorkflowEditorKeyboardTarget(window)).toBe(false);
+    expect(isWorkflowEditorKeyboardTarget(document)).toBe(false);
+  });
+});
+
+describe("activity clipboard shortcut gating", () => {
+  it("blocks shortcuts while a dialog or menu is open", () => {
+    const designer = document.createElement("section");
+    const canvas = document.createElement("div");
+    designer.appendChild(canvas);
+    document.body.appendChild(designer);
+
+    expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(false);
+
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    dialog.getBoundingClientRect = () => ({
+      x: 0, y: 0, top: 0, left: 0, right: 240, bottom: 160, width: 240, height: 160, toJSON: () => ({})
+    });
+    const dialogButton = document.createElement("button");
+    dialog.appendChild(dialogButton);
+    document.body.appendChild(dialog);
+
+    expect(isWorkflowEditorOverlayOpen()).toBe(true);
+    expect(isActivityClipboardShortcutBlocked(dialogButton, designer)).toBe(true);
+    expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(true);
+
+    dialog.style.display = "none";
+    expect(isWorkflowEditorOverlayOpen()).toBe(false);
+    expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(false);
+
+    dialog.remove();
+    designer.remove();
+  });
+
+  it("blocks shortcuts whose target is outside the designer", () => {
+    const designer = document.createElement("section");
+    const outside = document.createElement("button");
+    document.body.appendChild(designer);
+    document.body.appendChild(outside);
+
+    expect(isActivityClipboardShortcutBlocked(outside, designer)).toBe(true);
+    expect(isActivityClipboardShortcutBlocked(document.body, designer)).toBe(false);
+    expect(isActivityClipboardShortcutBlocked(window, designer)).toBe(false);
+    expect(isActivityClipboardShortcutBlocked(document, designer)).toBe(false);
+
+    designer.remove();
+    outside.remove();
+  });
+
+  it("detects a non-collapsed text selection", () => {
+    const paragraph = document.createElement("p");
+    paragraph.textContent = "Validation failed";
+    document.body.appendChild(paragraph);
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+
+    expect(hasNonCollapsedTextSelection()).toBe(true);
+
+    selection?.removeAllRanges();
+    expect(hasNonCollapsedTextSelection()).toBe(false);
+    paragraph.remove();
   });
 });
 

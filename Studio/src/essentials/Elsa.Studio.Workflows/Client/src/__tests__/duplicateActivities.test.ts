@@ -14,6 +14,8 @@ import {
   forEachActivity,
   forEachNode,
   leafNode,
+  sequenceActivity,
+  sequenceNode,
   writeLine
 } from "./fixtures";
 import type { ActivityNode, WorkflowDraft } from "../workflowTypes";
@@ -21,15 +23,17 @@ import type { ActivityNode, WorkflowDraft } from "../workflowTypes";
 const catalog = new Map([
   [writeLine.activityVersionId, writeLine],
   [flowchartActivity.activityVersionId, flowchartActivity],
-  [forEachActivity.activityVersionId, forEachActivity]
+  [forEachActivity.activityVersionId, forEachActivity],
+  [sequenceActivity.activityVersionId, sequenceActivity]
 ]);
 
 function sequentialIds() {
   let index = 0;
-  return (prefix: string, usedIds: Set<string>) => {
-    index += 1;
-    return allocateActivityNodeId(prefix, usedIds, () => `copy${index}`);
-  };
+  return (prefix: string, usedIds: Set<string>) =>
+    allocateActivityNodeId(prefix, usedIds, () => {
+      index += 1;
+      return `copy${index}`;
+    });
 }
 
 function draftOf(root: ActivityNode, extras: Partial<WorkflowDraft> = {}): WorkflowDraft {
@@ -216,8 +220,7 @@ describe("in-workflow activity duplicate remapping", () => {
     expect(result!.draft.activityPresentation?.map(record => record.displayName)).toEqual([
       "Start here",
       "Flowchart (copy)",
-      "Start here (copy)",
-      "Write Line (copy)"
+      "Start here"
     ]);
     const allIds = copies.flatMap(activity => [
       activity.nodeId,
@@ -280,6 +283,66 @@ describe("in-workflow activity duplicate remapping", () => {
       .toEqual(["write-one", "write-two"]);
     expect((next!.state.rootActivity?.structure?.payload.activities as ActivityNode[]).map(activity => activity.nodeId))
       .toEqual(["write-one", "write-two", "writeone-copy1", "writetwo-copy2"]);
+  });
+
+  it("does not write a connections list when pasting into a Sequence", () => {
+    const left = leafNode("left");
+    const right = leafNode("right");
+    const flowchart = connectedFlowchart([left, right], [{ from: "left", to: "right", id: "kept" }]);
+    const snapshot = snapshotSelectedActivities({
+      selectedNodeIds: ["left", "right"],
+      scopeActivities: [left, right],
+      scopeOwner: flowchart,
+      catalog,
+      layout: [],
+      presentation: []
+    });
+    expect(snapshot?.siblingConnections).toHaveLength(1);
+
+    const sequence = sequenceNode("sequence-root", [leafNode("existing")]);
+    const result = pasteActivitiesIntoDraft({
+      draft: draftOf(sequence),
+      frames: [],
+      snapshot: snapshot!,
+      catalog,
+      allocateId: sequentialIds()
+    });
+
+    const payload = result!.draft.state.rootActivity?.structure?.payload as Record<string, unknown>;
+    expect(Object.prototype.hasOwnProperty.call(payload, "connections")).toBe(false);
+    expect((payload.activities as ActivityNode[]).map(activity => activity.nodeId))
+      .toEqual(["existing", "left-copy1", "right-copy2"]);
+  });
+
+  it("assigns unique names when the same snapshot is pasted into the latest draft twice", () => {
+    const root = flowchartNode("flow-root", [leafNode("write-one")]);
+    const snapshot = snapshotSelectedActivities({
+      selectedNodeIds: ["write-one"],
+      scopeActivities: [leafNode("write-one")],
+      scopeOwner: root,
+      catalog,
+      layout: [],
+      presentation: []
+    });
+    const first = pasteActivitiesIntoDraft({
+      draft: draftOf(root),
+      frames: [],
+      snapshot: snapshot!,
+      catalog,
+      allocateId: sequentialIds()
+    });
+    const second = pasteActivitiesIntoDraft({
+      draft: first!.draft,
+      frames: [],
+      snapshot: snapshot!,
+      catalog,
+      allocateId: sequentialIds()
+    });
+
+    expect(second!.draft.activityPresentation?.map(record => record.displayName)).toEqual([
+      "Write Line (copy)",
+      "Write Line (copy 2)"
+    ]);
   });
 
   it("returns null when nothing in the current scope is selected", () => {
