@@ -1,4 +1,4 @@
 #nullable enable
 Elsa.Events.EventsFeature
-Elsa.Events.EventsFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 Elsa.Events.EventsFeature.EventsFeature() -> void
+virtual Elsa.Events.EventsFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

@@ -31,7 +31,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Events` — the c
 
 A publisher picks how an event is dispatched by the contract it depends on. Each runs on a publishing strategy from `Elsa.Events.Strategies`; the strategies, `IEventPublisher` and `IEventChannel` are internal to the Events domain, so a custom strategy is not an extension point.
 
-| Contract | Strategy | Behaviour | Use when |
+| Contract | Strategy | Behavior | Use when |
 |---|---|---|---|
 | **`IInlineEventPublisher`** | Sequential | Publisher awaits the full dispatch chain synchronously. Handler exceptions propagate to the publisher. | The publisher needs to read back contributions (`DraftValidating`). |
 | **`IDeferredEventPublisher`** | Background | Event is enqueued on the internal event channel; `BackgroundEventPublisher` drains asynchronously. Publisher returns before handlers run. Each handler is isolated: a failing handler is logged and the remaining handlers of the same event still run. | Notification / observation (`DraftCreated`, `DraftValidated`). One subscriber failure must not break others. |
