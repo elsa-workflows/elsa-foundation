@@ -6,7 +6,7 @@ using Elsa.Expressions.JavaScript.Core.Contracts;
 namespace Elsa.Expressions.JavaScript.Services;
 
 /// <summary>Routes canonical JavaScript definitions to the isolated engine implementation.</summary>
-public sealed class PortableJavaScriptExpressionHandler(IPortableJavaScriptEvaluator evaluator) : IPortableExpressionHandler
+internal sealed class PortableJavaScriptExpressionHandler(IPortableJavaScriptEvaluator evaluator) : IPortableExpressionHandler
 {
     public string Language => "JavaScript";
 

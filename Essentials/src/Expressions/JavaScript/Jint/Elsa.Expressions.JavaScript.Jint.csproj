@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Jint" />
     <PackageReference Include="Microsoft.Extensions.Options" />
@@ -9,6 +13,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Core\Elsa.Expressions.JavaScript.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Expressions.JavaScript.Jint.Tests" />
   </ItemGroup>
 
 </Project>

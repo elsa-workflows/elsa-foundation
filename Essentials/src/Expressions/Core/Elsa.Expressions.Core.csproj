@@ -8,4 +8,8 @@
     <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Expressions.Tests" />
+  </ItemGroup>
+
 </Project>

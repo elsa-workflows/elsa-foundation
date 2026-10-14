@@ -1,0 +1,14 @@
+#nullable enable
+const Elsa.Expressions.JavaScript.Core.Models.JavaScriptExpressionDescriptor.JavaScriptExpressionTypeName = "JavaScript" -> string!
+const Elsa.Expressions.JavaScript.Core.Models.JavaScriptExpressionDescriptor.MonacoLanguagePropertyKey = "MonacoLanguage" -> string!
+Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptScriptEvaluator
+Elsa.Expressions.JavaScript.Core.Contracts.IJavaScriptScriptEvaluator.EvaluateAsync(Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest! request) -> System.Threading.Tasks.ValueTask<System.Text.Json.JsonElement?>
+Elsa.Expressions.JavaScript.Core.Contracts.IPortableJavaScriptEvaluator
+Elsa.Expressions.JavaScript.Core.Contracts.IPortableJavaScriptEvaluator.EvaluateAsync(Elsa.Expressions.Core.Models.ExpressionEvaluationRequest! request) -> System.Threading.Tasks.ValueTask<System.Text.Json.JsonElement>
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.Arguments.get -> System.Text.Json.JsonElement
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.CancellationToken.get -> System.Threading.CancellationToken
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.JavaScriptScriptEvaluationRequest(string! source, System.Text.Json.JsonElement arguments, System.Threading.CancellationToken cancellationToken) -> void
+Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.Source.get -> string!
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptExpressionDescriptor
+Elsa.Expressions.JavaScript.Core.Models.JavaScriptExpressionDescriptor.JavaScriptExpressionDescriptor() -> void

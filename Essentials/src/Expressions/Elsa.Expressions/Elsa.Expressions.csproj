@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+
 	<ItemGroup>
 		<PackageReference Include="CShells.Abstractions" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
@@ -12,5 +16,9 @@
 	  <ProjectReference Include="..\..\Serialization\Core\Elsa.Serialization.Core.csproj" />
 	  <ProjectReference Include="..\..\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
 	</ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Expressions.Tests" />
+  </ItemGroup>
 
 </Project>

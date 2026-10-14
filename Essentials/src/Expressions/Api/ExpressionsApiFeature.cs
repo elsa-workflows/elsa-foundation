@@ -22,7 +22,7 @@ namespace Elsa.Expressions.Api;
     DisplayName = "Expressions API",
     Description = "Canonical management-client endpoints for expression and variable-type descriptors.",
     DependsOn = new object[] { "Expressions", "ApiCapabilities" })]
-public sealed class ExpressionsApiFeature : IWebShellFeature
+public class ExpressionsApiFeature : IWebShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {

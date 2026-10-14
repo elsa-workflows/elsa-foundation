@@ -8,7 +8,7 @@ namespace Elsa.Expressions.JavaScript.Rendering.Handlers;
 /// Single handler for <see cref="DeclarationsDocumentGenerating"/>. Iterates every registered
 /// <see cref="IJavaScriptDeclarationContributor"/> and lets each contribute to the rendering context.
 /// </summary>
-public sealed class BuildDeclarationsDocument(IEnumerable<IJavaScriptDeclarationContributor> contributors)
+internal sealed class BuildDeclarationsDocument(IEnumerable<IJavaScriptDeclarationContributor> contributors)
     : IEventHandler<DeclarationsDocumentGenerating>
 {
     public async Task Handle(DeclarationsDocumentGenerating domainEvent, CancellationToken cancellationToken)
