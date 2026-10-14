@@ -144,6 +144,7 @@ completed actions become toasts.
 | Fit / zoom | `exists` | xyflow `Controls` on the same canvases. |
 | Empty-canvas add | `exists` | `.wf-empty-canvas-add`; editorial layout also has **Add step**. |
 | Save-state indicator | `exists` | `.wf-editor-save-status` in the Designer header (pending spinner / saved check). |
+| Duplicate / copy-paste | `exists` | In-workflow only. Ctrl/Cmd+C and Ctrl/Cmd+V copy the selected activities; Duplicate is on the node context menu and Ctrl/Cmd+D. Fresh ids and names, offset position, one undo step, nested containers remapped. Cross-workflow clipboard and graph-editor paste are later slices. |
 | Node toolbar | `target, phase 3` | Hover/selection toolbar on the node (not a permanent chrome bar). |
 
 ## Home
