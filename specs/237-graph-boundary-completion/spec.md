@@ -142,6 +142,7 @@ behave identically after this change.
 
 - **Two Complete nodes race**: two branches of a Parallel inside the same graph reach Complete in the same drain. The first exit committed decides the outcome; the later one is ignored and does not fault the workflow.
 - **Complete and natural completion race**: the entry completes naturally while a Complete is pending. Whichever commits first wins; the other is ignored.
+- **Body ends naturally but only Complete nodes reach the outcomes**: a reusable activity with no outcome mappings, whose outcomes are all reached by Complete nodes, has a path that ends without reaching one. The boundary faults with a diagnostic saying the body ended without selecting an outcome; it never invents `Done`.
 - **Missing required output**: the graph exits early before a required public output's source variable is set. The boundary completion faults, as it does for natural completion with a missing required output (spec 221 FR-037).
 - **Complete inside a nested reusable activity's loop**: the loop does not consume it; the nearest reusable activity, the inner one, completes.
 - **Break and Complete in the same body**: `Break` keeps its current meaning (ends the nearest loop or bubbles up as `Break`); Complete is independent of it.
