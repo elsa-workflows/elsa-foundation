@@ -84,7 +84,7 @@ class WorkflowGuardTests(unittest.TestCase):
         cases = [("workflow_run", event, result, event in {"push", "workflow_dispatch"} and result == "success")
                  for event in ("push", "workflow_dispatch", "release")
                  for result in ("success", "failure", "skipped")]
-        cases += [("pull_request", "", "", True), ("workflow_dispatch", "", "", True), ("push", "", "success", False)]
+        cases += [("pull_request", "", "", False), ("workflow_dispatch", "", "", True), ("push", "", "success", False)]
         for name, source, conclusion, expected in cases:
             with self.subTest(name=name, source=source, conclusion=conclusion), tempfile.TemporaryDirectory() as temporary:
                 output = Path(temporary) / "github-output"
@@ -125,7 +125,7 @@ class WorkflowGuardTests(unittest.TestCase):
         self.assertIn("if: ${{ github.event_name != 'release' }}", packages)
         self.assertIn("github.event_name == 'push' || github.event_name == 'workflow_dispatch'", packages)
         self.assertIn("run: python3 tools/contributor-checkpoints/workflow_guards.py docker-admission", docker)
-        self.assertIn("tools/contributor-checkpoints/**", docker)
+        self.assertFalse("pull_request:" in docker, "docker.yml must not build images on pull requests (#2751)")
         self.assertIn("event=push&head_sha=$commit", docker)
         self.assertIn("event=workflow_dispatch&head_sha=$commit", docker)
         self.assertIn("format('ineligible-{0}', github.run_id)", docker)
