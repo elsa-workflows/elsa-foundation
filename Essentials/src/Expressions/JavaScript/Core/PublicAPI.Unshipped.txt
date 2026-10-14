@@ -8,3 +8,5 @@ Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.Arg
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.CancellationToken.get -> System.Threading.CancellationToken
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.JavaScriptScriptEvaluationRequest(string! source, System.Text.Json.JsonElement arguments, System.Threading.CancellationToken cancellationToken) -> void
 Elsa.Expressions.JavaScript.Core.Contracts.JavaScriptScriptEvaluationRequest.Source.get -> string!
+Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptBindingEvaluationException
+Elsa.Expressions.JavaScript.Core.Exceptions.JavaScriptBindingEvaluationException.JavaScriptBindingEvaluationException(string! message, System.Exception! innerException) -> void
