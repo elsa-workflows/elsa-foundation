@@ -121,7 +121,7 @@ artifact rather than planning again, so a queued image build never races Package
 builder can only build the branch's current tip. The images refuse a feed package that needs a newer shared Elsa
 package than they carry ([Foundation host feeds](host-feeds/pinning-and-closures.md#why-a-declared-dependency-can-go-missing)).
 To build one locally, compute the versions and pass them as the `ELSA_PACKAGE_VERSIONS` build arg, gzipped and
-base64-encoded as `.github/workflows/docker.yml`'s pull-request path does:
+base64-encoded as `.github/workflows/docker.yml`'s `versions` job encodes the file it downloads:
 
 ```bash
 dotnet run --project tools/versioning/Elsa.Versioning.Publisher -- \

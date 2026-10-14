@@ -37,7 +37,7 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
 
     public Task DisposeAsync()
     {
-        SqliteConnection.ClearAllPools();
+        SqliteConnection.ClearPool(new SqliteConnection(Connection));
         foreach (var file in new[] { _file, _file + "-journal", _file + "-wal", _file + "-shm" })
             File.Delete(file);
         return Task.CompletedTask;
@@ -283,7 +283,6 @@ public sealed class EfToolingFinalizationTests : IAsyncLifetime
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
             File.Delete(notADatabase);
         }
     }

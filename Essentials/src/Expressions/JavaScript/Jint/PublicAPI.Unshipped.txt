@@ -1,0 +1,52 @@
+#nullable enable
+Elsa.Expressions.JavaScript.Jint.JintFeature
+Elsa.Expressions.JavaScript.Jint.JintFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Expressions.JavaScript.Jint.JintFeature.ExecutionTimeout.get -> System.TimeSpan?
+Elsa.Expressions.JavaScript.Jint.JintFeature.ExecutionTimeout.set -> void
+Elsa.Expressions.JavaScript.Jint.JintFeature.JintFeature() -> void
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxArrayLength.get -> uint?
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxArrayLength.set -> void
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxInputBytes.get -> int
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxInputBytes.set -> void
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxInputDepth.get -> int
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxInputDepth.set -> void
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxInputNodes.get -> int
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxInputNodes.set -> void
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxMemoryBytes.get -> long?
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxMemoryBytes.set -> void
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxRecursionDepth.get -> int?
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxRecursionDepth.set -> void
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxResultBytes.get -> int
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxResultBytes.set -> void
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxResultDepth.get -> int
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxResultDepth.set -> void
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxResultNodes.get -> int
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxResultNodes.set -> void
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxStatements.get -> int?
+Elsa.Expressions.JavaScript.Jint.JintFeature.MaxStatements.set -> void
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.ExecutionTimeout.get -> System.TimeSpan?
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.ExecutionTimeout.set -> void
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.FeatureOptions() -> void
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxArrayLength.get -> uint?
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxArrayLength.set -> void
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxInputBytes.get -> int
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxInputBytes.set -> void
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxInputDepth.get -> int
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxInputDepth.set -> void
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxInputNodes.get -> int
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxInputNodes.set -> void
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxMemoryBytes.get -> long?
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxMemoryBytes.set -> void
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxRecursionDepth.get -> int?
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxRecursionDepth.set -> void
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxResultBytes.get -> int
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxResultBytes.set -> void
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxResultDepth.get -> int
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxResultDepth.set -> void
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxResultNodes.get -> int
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxResultNodes.set -> void
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxStatements.get -> int?
+Elsa.Expressions.JavaScript.Jint.Options.FeatureOptions.MaxStatements.set -> void
+Elsa.Expressions.JavaScript.Jint.Services.JavaScriptBindingEvaluationException
+Elsa.Expressions.JavaScript.Jint.Services.JavaScriptBindingEvaluationException.JavaScriptBindingEvaluationException(string! message, System.Exception! innerException) -> void

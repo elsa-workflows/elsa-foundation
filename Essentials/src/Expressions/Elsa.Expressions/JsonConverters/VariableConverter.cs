@@ -10,7 +10,7 @@ namespace Elsa.Expressions.JsonConverters;
 /// Serializes <see cref="Type"/> objects to a simple alias representing said type.
 /// </summary>
 /// <inheritdoc />
-public sealed class VariableConverter(IVariableMapper variableMapper) : JsonConverter<IVariable>
+internal sealed class VariableConverter(IVariableMapper variableMapper) : JsonConverter<IVariable>
 {
     private JsonSerializerOptions? _options;
 

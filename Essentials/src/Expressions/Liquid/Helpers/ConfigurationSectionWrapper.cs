@@ -2,7 +2,7 @@ using Microsoft.Extensions.Configuration;
 
 namespace Elsa.Expressions.Liquid.Helpers;
 
-public sealed class ConfigurationSectionWrapper(IConfigurationSection section)
+internal sealed class ConfigurationSectionWrapper(IConfigurationSection section)
 {
     public override string ToString() => section.Value!;
 

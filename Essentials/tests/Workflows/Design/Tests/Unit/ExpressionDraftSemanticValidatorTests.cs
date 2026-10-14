@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
-using Elsa.Expressions.JavaScript.Services;
+using Elsa.Expressions.Testing;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
@@ -145,7 +145,7 @@ public sealed class ExpressionDraftSemanticValidatorTests
     [Fact]
     public async Task Real_JavaScript_provider_rejects_balanced_invalid_grammar_for_full_draft_gates()
     {
-        var result = await Validate(new JavaScriptExpressionToolingProvider(), StateWith("const = 1;"));
+        var result = await Validate(ExpressionServices.JavaScriptToolingProvider(), StateWith("const = 1;"));
 
         Assert.Equal(ExpressionDraftValidationState.Errors, result.State);
         var diagnostic = Assert.Single(result.Diagnostics);
@@ -156,7 +156,7 @@ public sealed class ExpressionDraftSemanticValidatorTests
     [Fact]
     public async Task Real_JavaScript_provider_rejects_empty_source_for_full_draft_gates()
     {
-        var result = await Validate(new JavaScriptExpressionToolingProvider(), StateWith(string.Empty));
+        var result = await Validate(ExpressionServices.JavaScriptToolingProvider(), StateWith(string.Empty));
 
         Assert.Equal(ExpressionDraftValidationState.Errors, result.State);
         var diagnostic = Assert.Single(result.Diagnostics);
@@ -167,7 +167,7 @@ public sealed class ExpressionDraftSemanticValidatorTests
     [Fact]
     public async Task A_case_variant_expression_type_still_reaches_the_real_provider()
     {
-        var result = await Validate(new JavaScriptExpressionToolingProvider(), StateWith("const = 1;", "javascript"));
+        var result = await Validate(ExpressionServices.JavaScriptToolingProvider(), StateWith("const = 1;", "javascript"));
 
         Assert.Equal(ExpressionDraftValidationState.Errors, result.State);
         Assert.Equal("JavaScript/Syntax", Assert.Single(result.Diagnostics).Code);

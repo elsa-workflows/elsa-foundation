@@ -38,6 +38,7 @@
     <ProjectReference Include="..\..\Testing\Elsa.Activities.Testing.csproj" />
     <ProjectReference Include="..\..\..\Testing\Elsa.Testing.csproj" />
     <ProjectReference Include="..\..\..\Serialization\Testing\Elsa.Serialization.Testing.csproj" />
+    <ProjectReference Include="..\..\..\Expressions\Testing\Elsa.Expressions.Testing.csproj" />
   </ItemGroup>
 
 </Project>

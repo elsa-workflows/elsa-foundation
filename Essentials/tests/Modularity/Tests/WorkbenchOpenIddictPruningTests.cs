@@ -1,6 +1,5 @@
 using System.Reflection;
 using Elsa.Workbench;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -36,7 +35,7 @@ public sealed class WorkbenchOpenIddictPruningTests : IAsyncLifetime
     public async Task DisposeAsync()
     {
         await _provider.DisposeAsync();
-        SqliteConnection.ClearAllPools();
+        WorkbenchOpenIddictTestHost.ClearStorePool(Path.Join(_directory.FullName, "tokens.db"));
         _directory.Delete(recursive: true);
     }
 
@@ -148,7 +147,7 @@ public sealed class WorkbenchOpenIddictPruningTests : IAsyncLifetime
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
+            WorkbenchOpenIddictTestHost.ClearStorePool(Path.Join(unmigrated.FullName, "tokens.db"));
             unmigrated.Delete(recursive: true);
         }
     }

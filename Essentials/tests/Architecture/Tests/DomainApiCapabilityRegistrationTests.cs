@@ -4,7 +4,6 @@ using Elsa.Activities.Design.Api;
 using Elsa.Activities.Design.Api.Capabilities;
 using Elsa.Api.Capabilities.Models;
 using Elsa.Expressions.Api;
-using Elsa.Expressions.Api.Capabilities;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Api;
@@ -29,7 +28,15 @@ public sealed class DomainApiCapabilityRegistrationTests
     {
         { typeof(WorkflowsDesignApiFeature), WorkflowDesignApiCapabilities.StaticDeclaration },
         { typeof(ActivitiesDesignApiFeature), ActivityDesignApiCapabilities.StaticDeclaration },
-        { typeof(ExpressionsApiFeature), ExpressionsApiCapabilities.StaticDeclaration },
+        // The expressions declaration is internal to its API, so its wire values are stated here.
+        {
+            typeof(ExpressionsApiFeature),
+            new ApiCapabilityDeclaration(
+                "elsa.api.expressions",
+                1,
+                [new("expression-descriptors", "expressions/descriptors"), new("variable-types", "expressions/variable-types")],
+                "ExpressionsApi")
+        },
         { typeof(WorkflowsPublishingApiFeature), PublishingApiCapabilities.StaticDeclaration },
         { typeof(WorkflowsRuntimeApiFeature), RuntimeApiCapabilities.StaticDeclaration }
     };
@@ -50,7 +57,7 @@ public sealed class DomainApiCapabilityRegistrationTests
                 .Select(descriptor => descriptor.ImplementationInstance)
                 .OfType<ApiCapabilityDeclaration>());
 
-        Assert.Equal(expected, declaration);
+        Assert.Equivalent(expected, declaration, strict: true);
         Assert.All(declaration.Links, link =>
         {
             Assert.False(link.Href.StartsWith('/'));

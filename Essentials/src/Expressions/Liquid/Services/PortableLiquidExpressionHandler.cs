@@ -10,7 +10,7 @@ namespace Elsa.Expressions.Liquid.Services;
 /// <summary>
 /// Evaluates pure Liquid bindings from their complete, explicitly declared JSON parameter snapshot.
 /// </summary>
-public sealed class PortableLiquidExpressionHandler(FluidParser parser) : IPortableExpressionHandler
+internal sealed class PortableLiquidExpressionHandler(FluidParser parser) : IPortableExpressionHandler
 {
     private static readonly HashSet<string> NumericAliases =
     [
