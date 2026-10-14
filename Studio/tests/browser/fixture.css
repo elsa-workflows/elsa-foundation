@@ -236,3 +236,14 @@ body {
   flex: 1;
   padding: 16px;
 }
+
+.activity-duplicate-fixture .wf-page-header {
+  padding: 20px 24px 8px;
+}
+
+.activity-duplicate-canvas {
+  min-height: 720px;
+  background-color: var(--studio-surface, var(--background));
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--studio-border, var(--border)) 70%, transparent) 1px, transparent 1px);
+  background-size: 18px 18px;
+}

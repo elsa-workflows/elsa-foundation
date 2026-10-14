@@ -41,6 +41,9 @@ import {
   isWorkflowEditorKeyboardTarget,
   normalizeWorkflowError
 } from "./editorHelpers";
+import { ActivityCanvasContextMenu } from "./ActivityCanvasContextMenu";
+import { matchActivityClipboardShortcut } from "./duplicateActivities";
+import { useActivityClipboard } from "./useActivityClipboard";
 import { WorkflowAlert } from "./WorkflowAlert";
 import { WorkflowEditorToolbar } from "./WorkflowEditorToolbar";
 import { ConnectMenu } from "./graph";
@@ -369,6 +372,27 @@ export function WorkflowEditor({
     onPaletteDragEnd,
     onPalettePointerDown
   } = canvas;
+  const selectedCanvasNodeIds = useMemo(() => {
+    const selected = nodes.filter(node => node.selected).map(node => node.id);
+    return selected.length > 0 ? selected : (selectedNodeId ? [selectedNodeId] : []);
+  }, [nodes, selectedNodeId]);
+  const {
+    copy: copySelectedActivities,
+    paste: pasteCopiedActivities,
+    duplicate: duplicateSelectedActivities,
+    contextMenu: activityContextMenu,
+    openContextMenu: openActivityContextMenu,
+    closeContextMenu: closeActivityContextMenu
+  } = useActivityClipboard({
+    draft,
+    frames,
+    catalogByVersion,
+    selectedNodeIds: selectedCanvasNodeIds,
+    disabled: isUnsupportedDesigner || !canAddActivitiesToCanvas,
+    definitionId,
+    editDraftAndSelect,
+    setStatus
+  });
 
   // Inside a slot (breadcrumb non-empty) whose resolved slot is empty, show a guided picker instead of a
   // blank grid. Root-level empty canvas keeps its own affordances (the flowchart "Add activity" button or
@@ -521,6 +545,22 @@ export function WorkflowEditor({
       if (!(event.metaKey || event.ctrlKey)) return;
       const target = event.target as HTMLElement | null;
       if (isWorkflowEditorKeyboardTarget(target)) return;
+      const clipboardShortcut = matchActivityClipboardShortcut(event);
+      if (clipboardShortcut === "copy") {
+        event.preventDefault();
+        copySelectedActivities();
+        return;
+      }
+      if (clipboardShortcut === "paste") {
+        event.preventDefault();
+        pasteCopiedActivities();
+        return;
+      }
+      if (clipboardShortcut === "duplicate") {
+        event.preventDefault();
+        duplicateSelectedActivities();
+        return;
+      }
       const key = event.key.toLowerCase();
       if (key === "z" && !event.shiftKey) {
         event.preventDefault();
@@ -533,7 +573,7 @@ export function WorkflowEditor({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [canvasView, undo, redo]);
+  }, [canvasView, copySelectedActivities, duplicateSelectedActivities, pasteCopiedActivities, undo, redo]);
 
   // Enter a slot from the inspector list or a canvas slot badge, along the planned frame path: a slot
   // holding a single canvas container is descended THROUGH (the canvas shows the container's contents),
@@ -1194,8 +1234,25 @@ export function WorkflowEditor({
               onDragOver: onCanvasDragOver,
               onDragLeave: onCanvasDragLeave,
               onDrop: onCanvasDrop,
-              onPaneClick: () => select(null),
-              onNodeClick: (_, node) => select(node.id),
+              onPaneClick: () => {
+                closeActivityContextMenu();
+                select(null);
+              },
+              onPaneContextMenu: event => {
+                event.preventDefault();
+                closeActivityContextMenu();
+              },
+              onNodeClick: (_, node) => {
+                closeActivityContextMenu();
+                select(node.id);
+              },
+              onNodeContextMenu: isUnsupportedDesigner ? undefined : (event, node) => {
+                event.preventDefault();
+                const selectedIds = nodes.filter(candidate => candidate.selected).map(candidate => candidate.id);
+                const nodeIds = selectedIds.includes(node.id) ? selectedIds : [node.id];
+                if (!selectedIds.includes(node.id)) select(node.id);
+                openActivityContextMenu(event.clientX, event.clientY, nodeIds);
+              },
               onNodeDragStop: isUnsupportedDesigner ? undefined : commitLayout,
               nodesConnectable: canCreateActivityFromPort,
               nodesDraggable: !isUnsupportedDesigner,
@@ -1223,6 +1280,14 @@ export function WorkflowEditor({
                 activities={paletteCatalog}
                 onPick={onConnectMenuPick}
                 onClose={() => setConnectMenu(null)}
+              />
+            ) : null}
+            {activityContextMenu ? (
+              <ActivityCanvasContextMenu
+                x={activityContextMenu.x}
+                y={activityContextMenu.y}
+                onDuplicate={() => duplicateSelectedActivities(activityContextMenu.nodeIds)}
+                onClose={closeActivityContextMenu}
               />
             ) : null}
             </>}

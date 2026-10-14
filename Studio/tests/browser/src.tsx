@@ -91,6 +91,7 @@ const activityInspectorTabsFixture = searchParams.get("mode") === "activity-insp
 const publicationReviewFixture = searchParams.get("mode") === "publication-review";
 const activityGraphAuthoringFixture = searchParams.get("mode") === "activity-definition-graph-authoring";
 const activityIconsFixture = searchParams.get("mode") === "activity-icons";
+const activityDuplicateFixture = searchParams.get("mode") === "activity-duplicate";
 const navPlacementFixture = searchParams.get("mode") === "nav-placement";
 const navBeforeFixture = searchParams.get("mode") === "nav-before";
 const homeFixture = searchParams.get("mode") === "home" || searchParams.get("mode") === "home-before";
@@ -1593,12 +1594,12 @@ function browserVersion(
 // writes the chosen theme palette onto <html> itself, the way the provider does at runtime.
 // Activity-icon shots default to Classic light — Studio 4's default theme.
 const darkVariant = searchParams.get("theme") === "dark";
-const fixtureTheme = activityIconsFixture ? "classic" : "meridian";
+const fixtureTheme = activityIconsFixture || activityDuplicateFixture ? "classic" : "meridian";
 if (!navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture && !homeFixture) {
   document.documentElement.dataset.theme = fixtureTheme;
   document.documentElement.dataset.themeLayout = "classic";
   document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
-  if (darkVariant || activityIconsFixture) {
+  if (darkVariant || activityIconsFixture || activityDuplicateFixture) {
     const palette = getTheme(fixtureTheme)![darkVariant ? "dark" : "light"];
     for (const token of themeTokenNames) {
       document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
@@ -1638,6 +1639,11 @@ async function renderRequestedFixture() {
   if (homeFixture) {
     const { HomeFixture } = await import("./homeFixture");
     root.render(<HomeFixture />);
+    return;
+  }
+  if (activityDuplicateFixture) {
+    const { ActivityDuplicateFixture } = await import("./activityDuplicateFixture");
+    root.render(<ActivityDuplicateFixture />);
     return;
   }
 
