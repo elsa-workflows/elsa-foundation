@@ -20,10 +20,10 @@ public static class TaskSchedule
     /// Runs the task one <paramref name="interval"/> after the schedule starts, and then one <paramref name="interval"/>
     /// after each run ends.
     /// </summary>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="interval"/> is zero or negative.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="interval"/> is shorter than one millisecond.</exception>
     public static ITaskSchedule Every(TimeSpan interval, ILogger logger)
     {
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(interval, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfLessThan(interval, TimeSpan.FromMilliseconds(1));
         ArgumentNullException.ThrowIfNull(logger);
         return new IntervalSchedule(interval, logger);
     }

@@ -2,15 +2,7 @@ using System.Text;
 
 namespace Elsa.Primitives.Extensions;
 
-/// <summary>
-/// General string helpers with no Elsa meaning.
-/// </summary>
-/// <remarks>
-/// Projects in other domains that use these compile this file themselves through a linked <c>Compile</c> item, so each
-/// gets its own internal copy and none depends on the others' internals. Keep it free of anything but the base class
-/// library.
-/// </remarks>
-internal static class StringExtensions
+public static class StringExtensions
 {
     // Initialisms that read better fully uppercased than title-cased. Kept deliberately small: only
     // tokens that commonly appear title-cased or lowercased in a member name yet should render as an
@@ -104,7 +96,7 @@ internal static class StringExtensions
 
     /// <summary>
     /// Resolves a <see cref="Type"/> from its name. First tries <see cref="Type.GetType(string)"/> (which only
-    /// searches the calling assembly, the one compiling this file, and corelib); when that returns null — the common
+    /// searches the calling assembly, <c>Elsa.Primitives</c>, and corelib); when that returns null — the common
     /// case for an unqualified name whose type lives in some other loaded assembly — it falls back to scanning
     /// every assembly currently loaded into the app domain and returns the first match. Throws when the type still
     /// cannot be resolved.

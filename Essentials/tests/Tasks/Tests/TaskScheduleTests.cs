@@ -21,11 +21,22 @@ public sealed class TaskScheduleTests
         Assert.Equal(TimeSpan.FromMinutes(5), NextWait(execution));
     }
 
+    // A timer truncates a due time to whole milliseconds, so a shorter interval would run the task back to back.
     [Theory]
-    [InlineData(0)]
-    [InlineData(-1)]
-    public void Every_refuses_an_interval_that_is_not_positive(int seconds) =>
-        Assert.Throws<ArgumentOutOfRangeException>(() => TaskSchedule.Every(TimeSpan.FromSeconds(seconds), NullLogger.Instance));
+    [InlineData(0L)]
+    [InlineData(-TimeSpan.TicksPerSecond)]
+    [InlineData(1L)]
+    [InlineData(999 * TimeSpan.TicksPerMicrosecond)]
+    public void Every_refuses_an_interval_shorter_than_a_millisecond(long ticks) =>
+        Assert.Throws<ArgumentOutOfRangeException>(() => TaskSchedule.Every(TimeSpan.FromTicks(ticks), NullLogger.Instance));
+
+    [Fact]
+    public async Task Every_accepts_an_interval_of_one_millisecond()
+    {
+        await using var execution = TaskSchedule.Every(TimeSpan.FromMilliseconds(1), NullLogger.Instance).ScheduleExecution(NoWork);
+
+        Assert.Equal(TimeSpan.FromMilliseconds(1), NextWait(execution));
+    }
 
     // System.Threading.Timer refuses a due time above about 49.7 days.
     [Fact]
