@@ -58,24 +58,34 @@ export function isHomeWidgetFeatureEnabled(
     ? [widget.requiresFeature]
     : [...(widget.requiresFeature ?? [])];
   if (required.length === 0) return true;
-  if (!enabledFeatures) return true;
+  if (!enabledFeatures) return false;
   const available = [...enabledFeatures];
   return required.every(feature => available.some(enabled => homeFeatureTokensMatch(feature, enabled)));
 }
 
-/** `workflows` matches `Elsa.Studio.Workflows`; `user-tasks` matches `Elsa.Studio.UserTasks`. */
+const studioModulePrefix = "elsa.studio.";
+
+/** Slugs match only `Elsa.Studio.*` assembly ids. `workflows` matches `Elsa.Studio.Workflows`, not `Contoso.Workflows`. */
 export function homeFeatureTokensMatch(required: string, enabled: string): boolean {
-  const wanted = homeFeatureTokens(required);
-  const granted = homeFeatureTokens(enabled);
-  return [...wanted].some(token => granted.has(token));
+  const want = required.trim();
+  const have = enabled.trim();
+  if (!want || !have) return false;
+  if (want.toLowerCase() === have.toLowerCase()) return true;
+  const wantSlug = studioFeatureSlug(want);
+  const haveSlug = studioFeatureSlug(have);
+  return wantSlug != null && haveSlug != null && wantSlug === haveSlug;
 }
 
-function homeFeatureTokens(value: string): Set<string> {
+function studioFeatureSlug(value: string): string | null {
   const trimmed = value.trim();
-  if (!trimmed) return new Set();
-  const last = trimmed.split(".").pop() ?? trimmed;
-  const kebab = last.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
-  return new Set([trimmed.toLowerCase(), last.toLowerCase(), kebab, kebab.replace(/-/g, "")]);
+  if (!trimmed) return null;
+  if (!trimmed.includes(".")) return kebabToken(trimmed);
+  if (!trimmed.toLowerCase().startsWith(studioModulePrefix)) return null;
+  return kebabToken(trimmed.slice(trimmed.lastIndexOf(".") + 1));
+}
+
+function kebabToken(value: string): string {
+  return value.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
 }
 
 export function defaultHomeLayoutDocument(): HomeLayoutDocument {

@@ -2,7 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { describe, expect, it } from "vitest";
-import { builtInHomeLayout, homeFeatureTokensMatch } from "../homeLayout";
+import { builtInHomeLayout, homeFeatureTokensMatch, isHomeWidgetFeatureEnabled } from "../homeLayout";
 import { GetStartedWidget, homeDocsLinks } from "../widgets/GetStartedWidget";
 import { QuickActionsWidget, RecentRunsWidget, RecentWorkflowsWidget, TasksWidget } from "../widgets/HomeListWidget";
 import { runStatusTone } from "../widgets/homeData";
@@ -22,8 +22,16 @@ describe("Home default landing", () => {
   it("matches Studio module assembly ids to feature slugs", () => {
     expect(homeFeatureTokensMatch("workflows", "Elsa.Studio.Workflows")).toBe(true);
     expect(homeFeatureTokensMatch("user-tasks", "Elsa.Studio.UserTasks")).toBe(true);
+    expect(homeFeatureTokensMatch("Elsa.Studio.Workflows", "workflows")).toBe(true);
     expect(homeFeatureTokensMatch("user-tasks", "workflows")).toBe(false);
     expect(homeFeatureTokensMatch("workflows", "Elsa.Studio.Dashboard")).toBe(false);
+    expect(homeFeatureTokensMatch("workflows", "Elsa.Studio.WorkflowsX")).toBe(false);
+    expect(homeFeatureTokensMatch("workflows", "Contoso.Workflows")).toBe(false);
+  });
+
+  it("fails closed when enabledFeatures is omitted", () => {
+    expect(isHomeWidgetFeatureEnabled({ requiresFeature: "workflows" }, undefined)).toBe(false);
+    expect(isHomeWidgetFeatureEnabled({}, undefined)).toBe(true);
   });
 
   it("maps run status to semantic tones", () => {
@@ -51,7 +59,7 @@ describe("Home default landing", () => {
         <QuickActionsWidget />
         <RecentWorkflowsWidget snapshot={[]} settings={undefined} size="medium" />
         <RecentRunsWidget snapshot={[{ id: "run-1", name: "Orders", status: "Completed" }]} settings={undefined} size="medium" />
-        <TasksWidget snapshot={[]} settings={undefined} size="medium" />
+        <TasksWidget />
       </div>
     );
     expect(host.textContent).toContain("Create a workflow");
@@ -60,7 +68,7 @@ describe("Home default landing", () => {
     expect(host.textContent).toContain("Orders");
     expect(host.textContent).toContain("Completed");
     expect(host.querySelector('[data-tone="success"]')?.textContent).toBe("Completed");
-    expect(host.textContent).toContain("No tasks waiting");
+    expect(host.textContent).toContain("Assigned work lives in Tasks.");
     expect(host.textContent).toContain("Open tasks");
     host.unmount();
   });

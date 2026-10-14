@@ -127,9 +127,9 @@ function createHomeApi(): ElsaStudioModuleApi {
           <h4 id="home-docs-title">Documentation</h4>
           <p>Guides for Studio and your next workflow.</p>
           <ul>
-            <li><a href="https://v4.elsaworkflows.io/essentials/quickstart" target="_blank" rel="noreferrer">Try Elsa locally</a></li>
-            <li><a href="https://v4.elsaworkflows.io/essentials/first-workflow" target="_blank" rel="noreferrer">Your first workflow</a></li>
-            <li><a href="https://v4.elsaworkflows.io/studio" target="_blank" rel="noreferrer">Elsa Studio</a></li>
+            <li><a href="https://v4.elsaworkflows.io/essentials/essentials/quickstart" target="_blank" rel="noreferrer">Try Elsa locally</a></li>
+            <li><a href="https://v4.elsaworkflows.io/essentials/essentials/first-workflow" target="_blank" rel="noreferrer">Your first workflow</a></li>
+            <li><a href="https://v4.elsaworkflows.io/studio/studio" target="_blank" rel="noreferrer">Elsa Studio</a></li>
           </ul>
         </section>
       </div>

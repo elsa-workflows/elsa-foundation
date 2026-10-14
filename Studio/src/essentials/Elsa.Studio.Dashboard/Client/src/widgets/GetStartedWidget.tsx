@@ -17,9 +17,9 @@ export interface GetStartedStep {
 }
 
 export const homeDocsLinks = [
-  { title: "Try Elsa locally", href: "https://v4.elsaworkflows.io/essentials/quickstart" },
-  { title: "Your first workflow", href: "https://v4.elsaworkflows.io/essentials/first-workflow" },
-  { title: "Elsa Studio", href: "https://v4.elsaworkflows.io/studio" }
+  { title: "Try Elsa locally", href: "https://v4.elsaworkflows.io/essentials/essentials/quickstart" },
+  { title: "Your first workflow", href: "https://v4.elsaworkflows.io/essentials/essentials/first-workflow" },
+  { title: "Elsa Studio", href: "https://v4.elsaworkflows.io/studio/studio" }
 ] as const;
 
 export function getStartedSteps(snapshot: GetStartedSnapshot | undefined): GetStartedStep[] {

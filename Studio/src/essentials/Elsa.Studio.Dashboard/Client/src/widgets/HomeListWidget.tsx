@@ -73,18 +73,21 @@ export function NeedsAttentionWidget({ snapshot }: StudioDashboardWidgetBodyProp
   );
 }
 
-export function TasksWidget({ snapshot }: StudioDashboardWidgetBodyProps<HomeWorkflowSummary[], unknown>) {
+export function TasksWidget() {
   return (
-    <HomeLinkList
-      items={(snapshot ?? []).map(item => ({
-        id: item.id,
-        label: item.name,
-        href: `/tasks/${encodeURIComponent(item.id)}`
-      }))}
-      emptyTitle="No tasks waiting"
-      emptyDescription="Assigned work will show up here when user tasks are enabled."
-      emptyAction={{ href: "/tasks", label: "Open tasks" }}
-    />
+    <div className="home-empty" role="status">
+      <strong>Open tasks</strong>
+      <span>Assigned work lives in Tasks.</span>
+      <a
+        href="/tasks"
+        onClick={event => {
+          event.preventDefault();
+          navigateStudioPath("/tasks");
+        }}
+      >
+        Open tasks
+      </a>
+    </div>
   );
 }
 

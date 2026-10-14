@@ -95,7 +95,7 @@ export function registerCoreHomeWidgets(api: ElsaStudioModuleApi) {
     id: homeWidgetIds.tasks,
     moduleId: "Elsa.Studio.Dashboard",
     title: "Tasks",
-    description: "Work waiting on a person.",
+    description: "Open the Tasks inbox.",
     core: true,
     requiresFeature: "user-tasks",
     defaultVisible: true,
