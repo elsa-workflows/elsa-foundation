@@ -337,7 +337,7 @@ public sealed class WriteHttpResponseExecutionTests
             ? new ValueTypeDescriptor(reference.Alias, reference.CollectionKind)
             : throw new InvalidOperationException($"Could not describe '{type}'.");
 
-    private static IPayloadSerializer Serializer => TestPayloadSerializers.NewPayloadSerializer();
+    private static readonly IPayloadSerializer Serializer = SerializationServices.PayloadSerializer();
 
     private static async Task<JsonElement> ActivateAndProjectAsync(
         ExecutableNode node,

@@ -8,6 +8,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.SystemText;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
@@ -117,7 +118,7 @@ public sealed class BpmnDecisionDrive : IActivityDrive
 
     private static ExecutableNode NewDecisionNode(string nodeId, string outcome, params string[] declaredOutcomes)
     {
-        var serializer = TestPayloadSerializers.NewPayloadSerializer();
+        var serializer = SerializationServices.PayloadSerializer();
         var stringType = new ValueTypeDescriptor("String");
         var payload = ClrConstruction.Payload(serializer, typeof(BpmnDecision));
         var contract = new ActivityContract(
