@@ -125,8 +125,7 @@ expected code and location, and no exception escapes.
    converted, **Then** the result fails with the "unknown member" code naming node and property.
 4. **Given** a `SendHttpRequest` node whose `ParsedContent` output is captured, **When** it is converted, **Then**
    the result fails with the "member semantics changed" code, because Elsa 4's `ResponseBody` is a raw string.
-5. **Given** a `FlowFork` or `FlowJoin` node, **When** it is converted, **Then** the result fails with the "requires
-   graph restructuring" code, which #2705 can later replace with a graph rewrite.
+5. **Given** a `FlowFork` or `FlowJoin` node, **When** it is converted, **Then** the result fails with the "graph conversion pending" code, which #2705 can later replace with a graph rewrite.
 6. **Given** a mapped type whose Elsa 4 key has no version in the catalog, **When** it is converted, **Then** the
    result fails with the "activity version unavailable" code naming the Elsa 4 key.
 7. **Given** a definition hitting several causes, **When** it is converted, **Then** every cause is reported, in a
