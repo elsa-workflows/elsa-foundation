@@ -7,7 +7,12 @@ namespace Elsa.Primitives.Extensions;
 /// <summary>
 /// Extends <see cref="Type"/> with additional methods.
 /// </summary>
-public static class TypeExtensions
+/// <remarks>
+/// Projects in other domains that use these compile this file themselves through a linked <c>Compile</c> item, so each
+/// gets its own internal copy and none depends on the others' internals. Keep it free of anything but the base class
+/// library.
+/// </remarks>
+internal static class TypeExtensions
 {
     private static readonly ConcurrentDictionary<Type, string> SimpleAssemblyQualifiedTypeNameCache = new();
 

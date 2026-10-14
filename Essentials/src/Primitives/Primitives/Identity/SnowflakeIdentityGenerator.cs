@@ -14,7 +14,7 @@ namespace Elsa.Primitives.Identity;
 /// The generator is scoped and supplies the (scoped) clock to the singleton <see cref="SnowflakeIdentitySequence"/>,
 /// which owns the shared monotonic state.
 /// </remarks>
-public sealed class SnowflakeIdentityGenerator(ISystemClock systemClock, SnowflakeIdentitySequence sequence) : IIdentityGenerator
+internal sealed class SnowflakeIdentityGenerator(ISystemClock systemClock, SnowflakeIdentitySequence sequence) : IIdentityGenerator
 {
     public string Generate() => Base62.Encode((ulong)sequence.Next(systemClock));
 }

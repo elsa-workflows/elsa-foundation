@@ -13,10 +13,10 @@ using Elsa.Activities.Design.Reconciliation.Handlers;
 using Elsa.Activities.Design.Reconciliation.Options;
 using Elsa.Activities.Design.Reconciliation.Services;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Primitives.Identity;
 using Elsa.Primitives.Versioning;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.Testing;
+using Elsa.Testing;
 using Elsa.Workflows.Design.Core.Reconciliation;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
@@ -293,7 +293,7 @@ internal static class WorkflowReconciliationPass
             writer = new RecordingAtomicWriter(writer, writes);
         var definitions = new EfWorkflowDefinitionStore(context, access);
         var versions = new EfWorkflowDefinitionVersionStore(context, Serializer, definitions, access);
-        var identities = new GuidIdentityGenerator();
+        var identities = new TestIdentityGenerator();
         var source = new StaticWorkflowSource(new WorkflowVersionReconciliationModel(
             DefinitionId, "Cold start", null, Version, new([], null, [], [], null), Deleted: deletedInSource));
         await new WorkflowsVersionReconciler(
@@ -395,7 +395,7 @@ internal sealed class ReconcilerColdStartRace(PublishingNativeProvider provider,
             CreateNodeCompiler(),
             TimeProvider.System,
             NullLogger<SourceOwnedActivityVersionPublisher>.Instance);
-        var identities = new GuidIdentityGenerator();
+        var identities = new TestIdentityGenerator();
         var hasher = new DefaultActivityDefinitionHasher();
         await new ActivityVersionReconciler(
             NullLogger<ActivityVersionReconciler>.Instance,
