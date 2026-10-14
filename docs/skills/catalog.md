@@ -117,7 +117,7 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 3. **Verify every finding adversarially before acting on it.** A finding is a claim until it is traced to a specific file and line and paired with a concrete failure scenario: which inputs or state produce which wrong behavior. Discard everything else, including plausible-sounding claims, because an unverified finding costs a fix round and can leave the code worse. Audit each claim against the code itself, not against the reviewer's report or the diff summary: re-reading your own reasoning confirms nothing that writing it did not already assume. Where a finding says a guard is missing or too weak, mutation-test the guard before trusting either the guard or the finding — break the thing the guard claims to catch and confirm it goes red. A guard that stays green under that mutation is itself the finding.
 4. **Apply the surviving findings, then re-establish evidence.** Rebuild, and re-run the affected suites as whole test projects rather than filtered subsets; compare what executed against what exists, because a green summary line reports only the tests that ran. If files or project references changed, refresh the generated maps with `dotnet run --project tools/maps/Elsa.Maps.Generator -- all` and stage every changed map by explicit path, `docs/maps/manifest.json` included, per [Generated maps](../contributing/generated-maps.md). Use [Refresh Generated Maps](#refresh-generated-maps) for the narrower refreshes.
 5. **Loop on the new diff.** Re-derive the diff against the same base and repeat from step 2 against the new head, since fixes are unreviewed code. Stop when a round produces no surviving findings, or at a stated iteration cap; three rounds is a reasonable default. Reaching the cap is an unconverged result and must be reported as one, not as a pass.
-6. **Only then consider merging,** through [Merge Gate](#merge-gate). Convergence of the review loop is not itself a merge decision.
+6. **Only then consider merging,** through [Merge Gate](#merge-gate). Convergence of the review loop is not itself a merge decision. Per [Issue Bus Lite](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#review-and-merge-rules), only the Code Review app merges, and never a pull request it authored or committed to; an author running this loop stops at the posted evidence.
 
 **Output:** per round, the surviving findings with file, line, and failure scenario; the claims that were discarded and which verification step they failed; and the fixes applied. At the end, whether the loop converged or hit its cap, followed by the merge decision and its evidence.
 
@@ -125,21 +125,21 @@ The validation compares `.claude/skills/elsa-*/SKILL.md` against this catalog an
 
 **Use when:** a branch is about to be merged, whether or not it came through the review loop.
 
-**Workflow:** refusing to merge is the default. Merging is what a fully green gate unlocks, so treat every item below as required and stop and report when any of them does not hold. This is the gate described in [Merging](../contributing/merging.md#program-bookkeeping).
+**Workflow:** refusing to merge is the default. A fully green gate is the evidence a pull request must carry, not permission to merge: per [Issue Bus Lite](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#review-and-merge-rules), only the Code Review app (`elsa-4-code-review[bot]`) merges, after a non-author approval on the exact head commit and green CI, and an author never merges its own pull request. Treat every item below as required and stop and report when any of them does not hold. This is the evidence described in [Merging](../contributing/merging.md#pr-evidence).
 
 - **Build** the solution.
 - **Affected suites** pass, run as whole test projects.
-- **Architecture guard** passes: `dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj`.
+- **Architecture guard** passes: run `bash tools/architecture/restore-ci-project-graph.sh`, then `dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj`.
 - **Generated-maps check** passes: `dotnet run --project tools/maps/Elsa.Maps.Generator -- check`.
 - **Diff review** is complete and its surviving findings are resolved.
 - **Bite-proof** wherever the change claims a behavioral difference: revert the fix, or mutate the code the new test covers, show the test going red, then restore and show it green. A test that passes both before and after the change proves nothing about the change.
-- **Evidence posted as a pull-request comment before the merge**, written so a human can check it without rerunning anything: the commands, their results, the executed test counts, and the bite-proof's red-then-green transition. That comment is the notification of record. No comment, no merge — this holds for your own pull request as much as for a peer session's.
+- **Evidence posted as a pull-request comment before the merge**, written so a human can check it without rerunning anything: the commands, their results, the executed test counts, and the bite-proof's red-then-green transition. That comment is the notification of record. No comment, no merge.
 - **Required checks are green on the head commit.** No required check may be red. An empty or missing check list is not green: a pull request that cannot merge cleanly runs no workflows at all, so no reported checks means the gate never ran.
 - **Not a draft.** Mark the pull request ready and let the gate run against it; do not merge a draft.
 - **Stacked pull requests merge base-first.** A child cannot merge before its base, and merging out of order rewrites what the child's diff means.
 - **A red gate is a stop even when its cause is outside this branch.** A regression already present on the base, an infrastructure failure, or an unrelated flake blocks the merge exactly like a defect in the change does. Report what is red, where it came from, and what would clear it. Do not merge past it and do not restamp it as unrelated.
 
-**Output:** either the posted evidence comment followed by the merge, or a refusal that names the failing item, its cause, and what would clear it.
+**Output:** the posted evidence comment, followed by the merge only when the Code Review app runs the gate on a pull request it did not author; or a refusal that names the failing item, its cause, and what would clear it.
 
 ## Quality Routine Skills
 

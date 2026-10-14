@@ -33,7 +33,9 @@ A branch lives as long as its pull request.
 
 - **Never swept:** `main`, `publish-state`, `release/*`, `rc/*` and any protected branch. A branch that
   must live longer than its PR (a demo, an integration line) needs an open PR or one of those patterns.
-- Naming is unchanged and not enforced; the sweep reads PR state, not names.
+- Agents name branches `agent/<worker>/<issue>-<slug>`, per
+  [Issue Bus Lite](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#work). The sweep does not
+  enforce names; it reads PR state.
   [Packages](../../.github/workflows/packages.yml) runs on pushes to `main` only; a branch gets CI
   through its PR.
 
@@ -44,8 +46,9 @@ An open issue is a commitment someone can act on, not a log entry.
 - **Every open issue has a state:** one triage label (`needs-triage`, `needs-info`, `ready-for-agent`,
   `ready-for-human`) or, for program-tracked work, a `status:*` label. Programs and epics are exempt.
   `wontfix` issues are closed. See [triage labels](../agents/triage-labels.md).
-- **Agents file new issues as `needs-triage`.** Only a maintainer promotes an issue to a `ready-*` state.
-  The exception is the [UX QA routine](../skills/catalog.md#ux-qa-routine). It may file a defect as
+- **Owner exception: agents file new issues as `needs-triage`.** Only a maintainer promotes an issue to a
+  `ready-*` state. The one exception to that rule is the [UX QA routine](../skills/catalog.md#ux-qa-routine), also
+  an owner exception. It may file a defect as
   `ready-for-agent` when a second agent reproduced it, its fix needs no design choice, and the repository is
   under the cap.
 - **Progress goes on the existing record.** Checkpoints, receipts and gate evidence belong in PR
@@ -55,7 +58,7 @@ An open issue is a commitment someone can act on, not a log entry.
   issues. A program labelled `status:parked` stays open but does not count toward the cap, and gets no
   new child issues until it is reactivated. At the cap, add scope to the existing parent instead of
   filing more.
-  The [11 October owner amendment](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) makes named
+  Owner exception: the [11 October owner amendment](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) makes named
   exceptions for existing consolidation #2501 and website/docs #2495. Keep those programs active under
   their existing queues; do not re-park them solely to meet the cap. This does not raise the general cap
   or authorize more programs, cleanup or changes to enforcement settings.
@@ -97,20 +100,20 @@ GITHUB_REPOSITORY=elsa-workflows/elsa-foundation bash tools/repo-hygiene/hygiene
 
 ## Claims
 
-Moved from `AGENTS.md` (#2578); `AGENTS.md` keeps the short form.
+Moved from `AGENTS.md` (#2578); `AGENTS.md` keeps the short form. Claims follow the org-wide
+[Issue Bus Lite](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#claim) protocol, which wins over
+this section on conflict.
 
 Several agent sessions run against this repository at once, in separate worktrees. Two sessions that pick the same unit will not see each other in git: a branch does not exist anywhere shared until it is pushed, so a clean check at session start proves nothing about what another session began a minute later.
 
-Claim the unit on its issue before writing code when one of these is true:
+1. Before claiming, read the issue's comments and the open PRs that reference it. If someone already has an open PR for the issue, stop.
+2. Comment exactly `claim: <worker> starting`, where the worker is `codex`, `claude`, `cursor` or your app slug. When you post through the owner's account, start the comment with your role tag, for example `[Claude] claim: claude starting`.
+3. Re-read the comments. The earliest claim that hasn't been abandoned wins. If it isn't yours, comment `claim-abandoned` and leave the issue alone.
+4. If you won, assign yourself and remove `ready-for-agent`. Assignment plus the missing label is the claim.
+5. Branch `agent/<worker>/<issue>-<slug>` off the issue's target branch.
 
-- The task names an issue or PR number.
-- The task is one slice of a unit that was split into slices, whether or not the other slices are assigned.
-- The user says another session is working on a related slice. Ask what else that session owns before starting.
+See [Issue tracker](../agents/issue-tracker.md) for the commands.
 
-The claim is one comment naming the worktree and the exact scope being taken. Before posting it, read the issue's comments and the open PRs that reference it. If another session already claimed that scope, stop and tell the user rather than building a second copy. See [Issue tracker](../agents/issue-tracker.md) for the commands.
+Re-check for competing work before committing, not only at session start. That check is the backstop that catches a session which started after you did. When a unit is split into slices, prefer giving one session the whole stack, or naming an owner per slice in the issue, over relying on claims alone.
 
-Release the claim when the session ends: comment when the work ships, and comment when it is abandoned, so the next session does not read a stale claim as live work.
-
-Re-check for competing work before committing, not only at session start. That check is the backstop that catches a session which started after you did.
-
-A claim is advisory. It narrows the window rather than closing it, and two sessions starting within the same minute still race. When a unit is split into slices, prefer giving one session the whole stack, or naming an owner per slice in the issue, over relying on claims alone.
+To give up, comment `blocked: <reason>`, add `blocked` (or `needs:decision` when a decision is missing), and unassign yourself. Leave the branch and any draft PR for the next worker.

@@ -2,6 +2,10 @@
 
 This file is the AI-provider-neutral front door for AI agents and engineers working in `elsa-foundation`. It routes; the detail lives in [docs/contributing/](docs/contributing/).
 
+## Agent protocol
+
+The org-wide [AGENTS.md](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md) is the protocol for finding, claiming, branching, opening PRs, review and merge ([Issue Bus Lite](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#issue-bus-lite)). If this file or a doc it links conflicts with the org file, the org file wins, unless the repo note names an explicit owner exception. Everything below is a repo-specific note, such as structure, builds and the build-slot wrapper, generated maps, the constitution and the evidence a PR must carry here.
+
 ## Repository intent
 
 `elsa-foundation` is the transitional Elsa foundation workspace. It contains the main Elsa domain core libraries, default foundation implementations, Speckit specs, and architecture knowledge needed to guide the Elsa modular refactor.
@@ -21,7 +25,8 @@ Use the narrowest source that answers the task.
 | Quality gates, invariants, allowed exceptions, ratification | `.specify/memory/constitution-framework.md` and `.specify/memory/constitution.md` |
 | Domain and architecture terms | `docs/glossary/` |
 | Task workflows and skill descriptions | `docs/skills/catalog.md` |
-| Contributor workflow: claims, merging, generated maps, task paths, review checklist | `docs/contributing/` |
+| Agent protocol: finding, claiming, branches, PRs, review and merge | [org AGENTS.md](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md) |
+| Repo contributor notes: claim detail, PR gate evidence, generated maps, task paths, review checklist | `docs/contributing/` |
 | Personal workflow/model preferences | `.agent-prefs/` for local selections; `docs/reference/` for committed catalogs/templates |
 | Shared backlog, program-goal bucket registry, stewardship, active objectives, roadmap notes | `docs/program-goals/` |
 | Repo navigation, extension points, dependency/test maps | `docs/maps/` and `EXTENSION_POINTS.md` |
@@ -37,7 +42,7 @@ Do not duplicate concept explanations in new docs. Link to the canonical glossar
 
 ## Concurrent work claims
 
-Several agent sessions run against this repository at once, in separate worktrees, and a branch is invisible to other sessions until it is pushed. Claim the unit on its issue before writing code when the task names an issue or PR, when it is one slice of a split unit, or when the user says another session works on a related slice. Read the issue's comments and the open PRs that reference it first; if another session already claimed that scope, stop and tell the user. Re-check for competing work before committing, not only at session start. Release the claim when the work ships or is abandoned. Detail: [Claims](docs/contributing/repository-hygiene.md#claims); commands: [Issue tracker](docs/agents/issue-tracker.md).
+Claim, branch and hand off as [Issue Bus Lite](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#issue-bus-lite) says: comment `claim: <worker> starting`, re-read, and if the earliest unabandoned claim is yours, assign yourself and remove `ready-for-agent`. When you post through the owner's account, start every comment with your role tag, for example `[Claude] claim: claude starting`. Branch `agent/<worker>/<issue>-<slug>`. Several sessions run here at once in separate worktrees, so re-check the issue and its open PRs before committing. Repo detail: [Claims](docs/contributing/repository-hygiene.md#claims); commands: [Issue tracker](docs/agents/issue-tracker.md).
 
 ## Branch and issue hygiene
 
@@ -45,8 +50,8 @@ Follow [Repository hygiene](docs/contributing/repository-hygiene.md). In short:
 
 - Push a branch only when opening its PR (draft is fine) in the same session; otherwise keep the work local.
 - Never restore a branch deleted on merge; its work is in `main`. Restore a swept branch from its `archive/` tag only when a maintainer asks to resume that work, and open its PR in the same session.
-- File new issues as `needs-triage` only. The one exception is the [UX QA routine](docs/skills/catalog.md#ux-qa-routine), which files reproduced defects as `ready-for-agent`. Put checkpoints, receipts and evidence on the PR or the issue being worked, never in a new issue.
-- Respect the caps and named owner exceptions in [Repository hygiene](docs/contributing/repository-hygiene.md#issues): normally at most 2 active programs and 20 `ready-for-agent` issues. The 11 October exception reactivates existing #2501 and #2495; it does not authorize more programs. At the cap, extend the existing parent instead of filing more.
+- Owner exception: file new issues as `needs-triage` only. The one exception to that rule is the [UX QA routine](docs/skills/catalog.md#ux-qa-routine), which files reproduced defects as `ready-for-agent`. Put checkpoints, receipts and evidence on the PR or the issue being worked, never in a new issue.
+- Respect the caps and named owner exceptions in [Repository hygiene](docs/contributing/repository-hygiene.md#issues): normally at most 2 active programs and 20 `ready-for-agent` issues. The 11 October owner exception reactivates existing #2501 and #2495; it does not authorize more programs. At the cap, extend the existing parent instead of filing more.
 - Before closing an issue as not planned, run `git log origin/main -E --grep '(^|[^[:alnum:]_./-])#<number>([^0-9]|$)'`. If its work landed, close it as completed and name the commit or PR.
 
 ## Builds on a shared machine
@@ -60,7 +65,7 @@ Parallel sessions on one machine compete for the same CPU. Four concurrent solut
 
 ## Program bookkeeping
 
-Comment on the program issue at every state transition and merge only on a green gate with a PR evidence comment; see [Merging](docs/contributing/merging.md#program-bookkeeping).
+Comment on the program issue at every state transition. Every PR carries this repo's gate evidence as a PR comment; that evidence is required for review, not permission to merge. Merging follows [Issue Bus Lite](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#review-and-merge-rules): only the Code Review app merges, and an author never merges its own PR. See [Program bookkeeping](docs/contributing/merging.md#program-bookkeeping) and [PR evidence](docs/contributing/merging.md#pr-evidence).
 
 ## Post-merge gates
 
