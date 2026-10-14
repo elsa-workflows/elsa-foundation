@@ -114,7 +114,10 @@ Invoke-Step "Complete(unknown) is refused at publication" {
     if (-not $refused) { throw "A reusable activity with Complete(unknown) was published." }
 }
 
-Invoke-Step "Complete in a plain workflow is refused at publication" {
+# The headless submit endpoint creates a version without running draft validators (as for every IDraftValidator,
+# e.g. Switch duplicate cases), so the rule is asserted where it is enforced: the submitted draft's validation
+# errors, which also block promoting that draft. An unenclosed Complete that still runs faults at run time.
+Invoke-Step "Complete in a plain workflow fails draft validation" {
     $token = Get-Random -Max 999999
     $exit = New-ActivityNode -NodeId "exit" -VersionId $completeVersion -Inputs @(
         (New-LiteralInput -ReferenceKey "outcome" -Value "fail")
@@ -126,13 +129,11 @@ Invoke-Step "Complete in a plain workflow is refused at publication" {
     }
     $root = New-ActivityNode -NodeId "root" -VersionId $flowchartVersion -Structure $structure
     $definition = Submit-Workflow -Ctx $ctx -Name "CompleteOutsideGraph-$token" -RootActivity $root
-    $refused = $false
-    try { Publish-WorkflowVersion -Ctx $ctx -VersionId $definition.version.id | Out-Null }
-    catch {
-        if ("$($_.Exception.Message) $($_.ErrorDetails.Message)" -notlike "*Graph/CompleteOutsideGraph*") { throw }
-        $refused = $true
+    $validations = Invoke-RestMethod "$($ctx.BaseUrl)/design/workflows/drafts/$($definition.draftId)/validations" -WebSession $ctx.Session
+    $errors = @($validations.errors | Where-Object { $_.code -eq "Graph/CompleteOutsideGraph" -and $_.nodeId -eq "exit" })
+    if ($errors.Count -ne 1) {
+        throw "Expected one Graph/CompleteOutsideGraph error on node 'exit'; got: $($validations.errors | ConvertTo-Json -Compress)"
     }
-    if (-not $refused) { throw "A plain workflow containing Complete was published." }
 }
 
 Write-Host ""

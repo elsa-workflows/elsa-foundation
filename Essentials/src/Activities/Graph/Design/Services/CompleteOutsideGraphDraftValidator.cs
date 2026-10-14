@@ -28,7 +28,7 @@ public sealed class CompleteOutsideGraphDraftValidator(
                 continue;
 
             var version = await activityDefinitionLookup.FindVersion(node.ActivityVersionId, cancellationToken);
-            if (version is null || !StringComparer.Ordinal.Equals(version.Definition.ActivityTypeKey, GraphActivityProvider.CompleteActivityTypeKey))
+            if (version is null || !StringComparer.Ordinal.Equals(version.DefinitionId, GraphActivityProvider.CompleteDefinitionId))
                 continue;
 
             errors.Add(new ValidationError(

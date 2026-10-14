@@ -55,7 +55,7 @@ This is the contract that emitters (Studio, spec 236's converter, REST clients) 
 | `activity.graph.complete.outcome-unknown` | Publish: names no emitted boundary outcome. Run time: the descriptor has no such key (safety net). |
 | `activity.graph.complete.schema-unsupported` | Publish: `Complete` in a schema-1 body |
 | `activity.graph.outcome-mapping-required` | Publish: an emitted outcome is reached by neither a mapping nor a `Complete` node |
-| `Graph/CompleteOutsideGraph` | Workflow draft validation and promotion: `Complete` in a plain workflow |
+| `Graph/CompleteOutsideGraph` | Workflow draft validation and draft promotion: `Complete` in a plain workflow. The headless `definitions/submit` endpoint runs no draft validators, so a submitted plain workflow relies on the run-time fault below. |
 | `activity.graph.complete.outcome-required` | Run time: blank `outcome` |
 | `runtime.ancestor-notification.target-not-found` | Run time: no enclosing graph boundary |
 | `activity.graph.entry-completed-without-mapping` | Run time: natural completion with no mapping, in a body whose outcomes come only from `Complete` |

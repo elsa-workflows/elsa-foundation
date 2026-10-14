@@ -180,7 +180,7 @@ behave identically after this change.
 - **FR-013**: Publishing a reusable activity MUST reject any Complete node in its body whose outcome is not a single literal naming an emitted boundary outcome, with a diagnostic that names the node and the offending value.
 - **FR-014**: For schema-2 manifests, an emitted boundary outcome MUST count as reachable when at least one outcome mapping or at least one Complete node in the body names it. The rule that every emitted outcome must be reachable otherwise stays.
 - **FR-015**: Every schema-1 and schema-2 manifest that validates today MUST still validate and MUST compile to a runtime descriptor with the same behaviour.
-- **FR-016**: Validating or publishing a workflow that is not a reusable activity body MUST reject any Complete node it contains, with a diagnostic that names the node.
+- **FR-016**: Validating a workflow definition draft, and promoting it to a version, MUST reject any Complete node it contains, with a diagnostic that names the node. The headless `definitions/submit` endpoint does not run draft validators for any rule today; there the runtime fault of FR-018 is the backstop.
 - **FR-017**: Schema-1 manifests MUST reject any Complete node in their body. Schema 1 stays frozen, as spec 138 kept it; an author who needs an early exit migrates the draft to schema 2.
 
 **Runtime safety net**

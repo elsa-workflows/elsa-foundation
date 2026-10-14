@@ -32,7 +32,11 @@ public sealed class GraphActivityProvider(
     public const string CompleteActivityTypeKey = "Elsa.Activities.Graph.Runtime.Activities.Complete";
 
     private const string CompleteOutcomeInputKey = "outcome";
-    private static readonly string CompleteDefinitionId = ActivityCatalogStableIds.DefinitionId(CompleteActivityTypeKey)!;
+    /// <summary>
+    /// The catalog definition id of <see cref="CompleteActivityTypeKey"/>: CLR catalog rows derive it from the type key, so
+    /// a version is recognised by its own definition id without loading the definition.
+    /// </summary>
+    public static readonly string CompleteDefinitionId = ActivityCatalogStableIds.DefinitionId(CompleteActivityTypeKey)!;
 
     public const string Key = "elsa.activity-graph";
     public const string Fingerprint = "elsa.activity-graph/compiler/2.0.0";
@@ -549,7 +553,7 @@ public sealed class GraphActivityProvider(
         foreach (var node in nodes)
         {
             var version = await lookup.FindVersion(node.ActivityVersionId, cancellationToken);
-            if (version is not null && StringComparer.Ordinal.Equals(version.Definition.ActivityTypeKey, CompleteActivityTypeKey))
+            if (version is not null && StringComparer.Ordinal.Equals(version.DefinitionId, CompleteDefinitionId))
                 completeNodes.Add(node);
         }
 

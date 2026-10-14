@@ -45,7 +45,7 @@ internal sealed class TypeKeyActivityCatalog : IActivityDefinitionLookup
     {
         public string Id { get; } = id;
         public string Version => "1.0.0";
-        public string DefinitionId => Definition.Id;
+        public string DefinitionId => Elsa.Activities.Design.Core.Reconciliation.ActivityCatalogStableIds.DefinitionId(Definition.ActivityTypeKey)!;
         public string ProviderKey => "test.provider";
         public string ProviderSchemaVersion => "1";
         public string ConsumerKey => "test.consumer";
