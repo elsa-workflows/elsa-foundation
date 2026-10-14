@@ -61,6 +61,14 @@ admits isolated source moves, imports and consolidation validation against captu
 Fresh source capture and live cutover require delta reconciliation and renewed coordination. No global
 freeze, cleanup or publisher activation is enacted by this amendment.
 
+**Owner amendment, 14 October 2026:** the [BPMN Engine](../program-goals/bpmn-engine.md) program is reactivated
+now instead of on 21 November. It is a named exception to D0's parking and the two-program cap, like the
+11 October exceptions. Its first units are moving Elsa 4's BPMN runtime onto the `Bpmn.Semantics` package
+([#2735](https://github.com/elsa-workflows/elsa-foundation/issues/2735), finishing ADR 0063) and refusing BPMN
+models whose meaning changed on import ([#2736](https://github.com/elsa-workflows/elsa-foundation/issues/2736)).
+The remaining decisions in this ADR apply to that work as to any other, including D3's public-surface rules
+and D7's human merge for runtime and persistence PRs.
+
 ### D1 — Risk-based testing
 
 - Test observable behaviour at the cheapest level that proves it; unit-test logic that carries real risk.
