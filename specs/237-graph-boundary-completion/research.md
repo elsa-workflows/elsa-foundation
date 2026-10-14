@@ -162,7 +162,7 @@ not change (FR-015). `GraphActivityDescriptor` gains the field through an additi
 
 **Decision**: Graph.Design registers an `IDraftValidator`, `CompleteOutsideGraphDraftValidator`. It resolves each
 draft node's version through `IActivityDefinitionLookup` and returns a `ValidationError` for every `Complete` node
-(type `graph.complete.outside-graph`).
+(type `Graph/CompleteOutsideGraph`).
 
 - `IDraftValidator` runs only for workflow definition drafts, never for activity-graph bodies, which are validated by
   the provider. So it cannot misfire on a graph body.

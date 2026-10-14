@@ -68,5 +68,5 @@ node.
 
 ## Workflow definition draft (design, new rule)
 
-- `CompleteOutsideGraphDraftValidator` returns a `ValidationError` with type `graph.complete.outside-graph` for each
+- `CompleteOutsideGraphDraftValidator` returns a `ValidationError` with type `Graph/CompleteOutsideGraph` for each
   `Complete` node in a workflow definition draft. Promotion is blocked while the error exists.

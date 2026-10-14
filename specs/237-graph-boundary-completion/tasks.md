@@ -150,21 +150,21 @@ nothing in either store after `Complete`, on in-memory and on EF Sqlite.
 (FR-013–FR-017, FR-016, SC-004).
 
 **Independent Test**: publishing `Complete(unknown)` fails with `activity.graph.complete.outcome-unknown`;
-publishing a plain workflow containing `Complete` fails with `graph.complete.outside-graph`.
+publishing a plain workflow containing `Complete` fails with `Graph/CompleteOutsideGraph`.
 
-- [ ] T017 [US3] In `Essentials/src/Activities/Graph/Design/Services/GraphActivityProvider.cs`, add `IActivityDefinitionLookup` (from `Essentials/src/Activities/Design/Core/Contracts/IActivityDefinitionLookup.cs`) as a constructor dependency, and add an internal `CompleteNodeDetector`:
+- [X] T017 [US3] In `Essentials/src/Activities/Graph/Design/Services/GraphActivityProvider.cs`, add `IActivityDefinitionLookup` (from `Essentials/src/Activities/Design/Core/Contracts/IActivityDefinitionLookup.cs`) as a constructor dependency, and add an internal `CompleteNodeDetector`:
   - At compile time, a node is a `Complete` when its resolved dependency's `DefinitionId == ActivityCatalogStableIds.DefinitionId("Elsa.Activities.Graph.Runtime.Activities.Complete")`. Cache the stable id in a static field.
   - At draft time, a node is a `Complete` when `IActivityDefinitionLookup` resolves its `activityVersionId` to that type key. An unresolved version id is treated as "not a `Complete`".
   - Update `GraphActivitiesDesignFeature.cs` registration if the constructor change needs it, and update the test constructor helpers in `Essentials/tests/Activities/Graph/Tests/GraphActivityProviderTests.cs` (and `ActivityProviderConformanceTests.cs`) with a fake lookup.
-- [ ] T018 [US3] Add the validation rules in `GraphActivityProvider.cs`:
+- [X] T018 [US3] Add the validation rules in `GraphActivityProvider.cs`:
   - read each `Complete` node's `outcome` input from `node.Activity.Inputs` (`ArgumentState`/`ArgumentValue`); require exactly one entry whose `ExpressionType` is `Literal` and whose value is a non-blank JSON string, else `activity.graph.complete.outcome-literal-required` at `node.JsonPointer + "/inputs"`;
   - require the value to name an emitted contract outcome reference key, else `activity.graph.complete.outcome-unknown`;
   - in schema 1, report every `Complete` node as `activity.graph.complete.schema-unsupported`;
   - change `ValidateBoundaryOutcomeMappings` (L431-483) to take the set of reference keys named by `Complete` nodes, so `activity.graph.outcome-mapping-required` fires only when neither a mapping nor a `Complete` node names the outcome.
   
   Run these rules from both `ValidateAsync` and `CompileAsync`, so publication is exact.
-- [ ] T019 [US3] Emit `completeOutcomes: [{ referenceKey, boundaryOutcomeName }]` in `BuildBoundaryPayload` (L916-996) for schema 2, **only** when at least one `Complete` node exists. Order entries by reference key ordinally, list each key once, and resolve names through the contract outcomes as `outcomeMappings` does (L925-932). Leave `CompilerFingerprint` and `RuntimeDescriptorSchemaVersion` unchanged.
-- [ ] T020 [US3] Add provider tests in `Essentials/tests/Activities/Graph/Tests/GraphActivityProviderTests.cs`, using the existing `CreateSchemaTwoManifest`, `OutcomeContract` and `CreateDependency` helpers. Pass the `Complete` stable definition id for `Complete` occurrences. Cover:
+- [X] T019 [US3] Emit `completeOutcomes: [{ referenceKey, boundaryOutcomeName }]` in `BuildBoundaryPayload` (L916-996) for schema 2, **only** when at least one `Complete` node exists. Order entries by reference key ordinally, list each key once, and resolve names through the contract outcomes as `outcomeMappings` does (L925-932). Leave `CompilerFingerprint` and `RuntimeDescriptorSchemaVersion` unchanged.
+- [X] T020 [US3] Add provider tests in `Essentials/tests/Activities/Graph/Tests/GraphActivityProviderTests.cs`, using the existing `CreateSchemaTwoManifest`, `OutcomeContract` and `CreateDependency` helpers. Pass the `Complete` stable definition id for `Complete` occurrences. Cover:
   - a Theory over the four new codes;
   - an outcome reached only by `Complete` passes;
   - an outcome reached by neither still fails with `outcome-mapping-required`;
@@ -172,19 +172,19 @@ publishing a plain workflow containing `Complete` fails with `graph.complete.out
   - the compiled payload contains `completeOutcomes` with resolved names;
   - a graph without `Complete` compiles to a payload byte-identical to the current output (capture it before T019 and compare);
   - draft-time `ValidateAsync` detects `Complete` through the fake lookup.
-- [ ] T021 [P] [US3] Create `Essentials/src/Activities/Graph/Design/Services/CompleteOutsideGraphDraftValidator.cs`, an internal `IDraftValidator`:
-  - for each node of the workflow definition draft, resolve the version through `IActivityDefinitionLookup` and return `ValidationError(path, "graph.complete.outside-graph", …)` for every `Complete` node;
+- [X] T021 [P] [US3] Create `Essentials/src/Activities/Graph/Design/Services/CompleteOutsideGraphDraftValidator.cs`, an internal `IDraftValidator`:
+  - for each node of the workflow definition draft, resolve the version through `IActivityDefinitionLookup` and return `ValidationError(path, "Graph/CompleteOutsideGraph", …)` for every `Complete` node;
   - follow `Essentials/src/Activities/ControlFlow/Switch/Internal/SwitchDuplicateCaseValidator.cs` for the draft traversal and path format;
   - add the `ProjectReference` to `Essentials/src/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj` in `Essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj`;
   - register it with `services.AddScoped<IDraftValidator, CompleteOutsideGraphDraftValidator>()` in `Essentials/src/Activities/Graph/Design/GraphActivitiesDesignFeature.cs`;
   - update `packages.lock.json` if restore changes it.
-- [ ] T022 [US3] Add `Essentials/tests/Activities/Graph/Tests/CompleteOutsideGraphDraftValidatorTests.cs`, modelled on `Essentials/tests/Activities/ControlFlow/Tests/Switch/SwitchDuplicateCaseValidatorTests.cs`. Cover:
+- [X] T022 [US3] Add `Essentials/tests/Activities/Graph/Tests/CompleteOutsideGraphDraftValidatorTests.cs`, modelled on `Essentials/tests/Activities/ControlFlow/Tests/Switch/SwitchDuplicateCaseValidatorTests.cs`. Cover:
   - a root-level `Complete` is reported;
   - a `Complete` nested in a Flowchart is reported;
   - a draft with no `Complete` returns nothing;
   - an unresolvable version is ignored;
   - a registration test that `GraphActivitiesDesignFeature` adds the validator as an `IDraftValidator` (§2.23.1; this is the one new logic-relevant registration).
-- [ ] T023 [US3] Run `Essentials/tests/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj` and confirm the end-to-end compile path: extend one T012 case to build its descriptor through `GraphActivityProvider.CompileAsync` plus placement, instead of a hand-made descriptor, if the Behavioral drive supports it. Otherwise cover the path in the e2e script (T027).
+- [X] T023 [US3] Run `Essentials/tests/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj` and confirm the end-to-end compile path: extend one T012 case to build its descriptor through `GraphActivityProvider.CompileAsync` plus placement, instead of a hand-made descriptor, if the Behavioral drive supports it. Otherwise cover the path in the e2e script (T027).
 
 **Checkpoint**: invalid placements are rejected before run time, and valid graphs compile `completeOutcomes`.
 
@@ -209,7 +209,7 @@ publishing a plain workflow containing `Complete` fails with `graph.complete.out
   - publish a schema-2 reusable activity with outcomes `succeed` and `fail`, whose Flowchart body branches to `Complete(succeed)` or `Complete(fail)` on an input, with no `outcomeMappings`;
   - run it from a parent Flowchart for both inputs and assert that only the matching branch runs;
   - assert that publishing `Complete(unknown)` is rejected with `activity.graph.complete.outcome-unknown`;
-  - assert that promoting a plain workflow containing `Complete` is rejected with `graph.complete.outside-graph`;
+  - assert that promoting a plain workflow containing `Complete` is rejected with `Graph/CompleteOutsideGraph`;
   - list it in `e2e-tests/reusable-activities/README.md`.
 - [ ] T028 [P] Document the emitter contract (FR-021) in `docs/reference/activity-definition-authoring-composition.md`: add a section "Ending a reusable activity from any depth" summarising [contracts/complete-activity.md](contracts/complete-activity.md) (type key, input key, literal rule, reachability rule, diagnostics, run-time semantics, `Break` unchanged), with a link to spec 237. Add a one-line pointer on the "Graph activity" entry in `docs/glossary/elsa.md`.
 - [ ] T029 [P] Update the extension-point catalogs (§2.22):

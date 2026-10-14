@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Activities.Design.Core.Reconciliation;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Graph.Design.Models;
 using Elsa.Activities.Runtime.Core.Models;
@@ -14,6 +15,7 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using DesignActivityContract = Elsa.Activities.Design.Core.Models.ActivityContract;
 using Elsa.Primitives.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Activities.Graph.Design.Services;
 
@@ -23,8 +25,15 @@ namespace Elsa.Activities.Graph.Design.Services;
 /// </summary>
 public sealed class GraphActivityProvider(
     IActivityStructureService activityStructureService,
-    ActivityContractAuthoringValidator contractCapabilities) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer
+    ActivityContractAuthoringValidator contractCapabilities,
+    IServiceScopeFactory? scopeFactory = null) : IActivityProvider, IActivityTemplateProviderCompiler, IActivityTemplateDependencyDiscoverer
 {
+    /// <summary>The catalog type key of the activity that ends the nearest graph boundary from any depth (spec 237).</summary>
+    public const string CompleteActivityTypeKey = "Elsa.Activities.Graph.Runtime.Activities.Complete";
+
+    private const string CompleteOutcomeInputKey = "outcome";
+    private static readonly string CompleteDefinitionId = ActivityCatalogStableIds.DefinitionId(CompleteActivityTypeKey)!;
+
     public const string Key = "elsa.activity-graph";
     public const string Fingerprint = "elsa.activity-graph/compiler/2.0.0";
     public const string RuntimeConsumerKey = "elsa.graph-activity";
@@ -80,7 +89,7 @@ public sealed class GraphActivityProvider(
             diagnostics));
     }
 
-    public ValueTask<IReadOnlyList<ActivityDiagnostic>> ValidateAsync(
+    public async ValueTask<IReadOnlyList<ActivityDiagnostic>> ValidateAsync(
         ActivityProviderManifest manifest,
         DesignActivityContract contract,
         CancellationToken cancellationToken = default)
@@ -89,9 +98,13 @@ public sealed class GraphActivityProvider(
         var subject = ProposalSubject();
         var diagnostics = ReadManifest(manifest, subject, out var graph).ToList();
         if (graph is not null)
-            ValidateGraph(graph, contract, subject, diagnostics);
+        {
+            // A draft has no resolved dependencies yet, so Complete nodes are recognised through the catalog.
+            var completeNodes = await FindCompleteNodesInCatalogAsync(EnumerateNodes(graph.RootActivity), cancellationToken);
+            ValidateGraph(graph, contract, subject, diagnostics, completeNodes);
+        }
 
-        return ValueTask.FromResult(ActivityDiagnosticOrderer.Order(diagnostics));
+        return ActivityDiagnosticOrderer.Order(diagnostics);
     }
 
     public ValueTask<ActivityTemplateCompilation> CompileAsync(
@@ -106,11 +119,13 @@ public sealed class GraphActivityProvider(
             Revision: request.Revision);
         var diagnostics = ReadManifest(request.Provider, subject, out var graph).ToList();
         IReadOnlyList<GraphNode> nodes = [];
+        IReadOnlyList<GraphNode> completeNodes = [];
 
         if (graph is not null)
         {
-            ValidateGraph(graph, request.Contract, subject, diagnostics);
             nodes = EnumerateNodes(graph.RootActivity);
+            completeNodes = FindCompleteNodes(nodes, request.ResolvedDirectDependencies);
+            ValidateGraph(graph, request.Contract, subject, diagnostics, completeNodes);
             ValidateDependencies(nodes, request.ResolvedDirectDependencies, subject, diagnostics);
             ValidateDeclaredStructures(nodes, request.ResolvedDirectDependencies, subject, diagnostics);
             ValidateOutcomeMappings(graph, nodes, request.ResolvedDirectDependencies, subject, diagnostics);
@@ -124,7 +139,7 @@ public sealed class GraphActivityProvider(
             .OrderBy(x => x.OccurrenceId, StringComparer.Ordinal)
             .ThenBy(x => x.VersionId, StringComparer.Ordinal)
             .ToArray();
-        var descriptorPayload = BuildBoundaryPayload(graph, request.Contract, nodes, directDependencies);
+        var descriptorPayload = BuildBoundaryPayload(graph, request.Contract, nodes, directDependencies, completeNodes);
         var runtimeContract = BuildRuntimeContract(request, descriptorPayload);
         var executableRoot = new ExecutableNode(
             "graph-boundary",
@@ -311,7 +326,8 @@ public sealed class GraphActivityProvider(
         ActivityGraphManifest graph,
         DesignActivityContract contract,
         ActivityDiagnosticSubject subject,
-        ICollection<ActivityDiagnostic> diagnostics)
+        ICollection<ActivityDiagnostic> diagnostics,
+        IReadOnlyList<GraphNode> completeNodes)
     {
         var candidates = EnumerateNodeCandidates(graph.RootActivity);
         foreach (var candidate in candidates)
@@ -425,12 +441,125 @@ public sealed class GraphActivityProvider(
         }
 
         if (StringComparer.Ordinal.Equals(graph.ManifestSchemaVersion, ActivityGraphManifest.MultipleOutcomesSchemaVersion))
-            ValidateBoundaryOutcomeMappings(graph, emittedOutcomes, subject, diagnostics);
+        {
+            var completeReferenceKeys = ValidateCompleteNodes(completeNodes, emittedOutcomes, subject, diagnostics);
+            ValidateBoundaryOutcomeMappings(graph, emittedOutcomes, completeReferenceKeys, subject, diagnostics);
+        }
+        else
+        {
+            // Schema 1 stays frozen (spec 237 FR-017): an early exit needs schema 2.
+            foreach (var node in completeNodes)
+            {
+                diagnostics.Add(Diagnostic(
+                    "activity.graph.complete.schema-unsupported",
+                    $"Complete node '{node.NodeId}' requires graph schema 2.",
+                    subject,
+                    node.JsonPointer,
+                    node.NodeId));
+            }
+        }
+    }
+
+    // Every Complete node names exactly one emitted boundary outcome by reference key, as a literal. Returns the
+    // reference keys the valid nodes name, which count as reaching those outcomes.
+    private static IReadOnlySet<string> ValidateCompleteNodes(
+        IReadOnlyList<GraphNode> completeNodes,
+        IReadOnlyCollection<ActivityOutcomeContract> emittedOutcomes,
+        ActivityDiagnosticSubject subject,
+        ICollection<ActivityDiagnostic> diagnostics)
+    {
+        var emittedReferenceKeys = emittedOutcomes.Select(x => x.ReferenceKey).ToHashSet(StringComparer.Ordinal);
+        var reached = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var node in completeNodes)
+        {
+            var referenceKey = ReadCompleteOutcome(node);
+            if (referenceKey is null)
+            {
+                diagnostics.Add(Diagnostic(
+                    "activity.graph.complete.outcome-literal-required",
+                    $"Complete node '{node.NodeId}' must set '{CompleteOutcomeInputKey}' to one literal boundary outcome reference key.",
+                    subject,
+                    $"{node.JsonPointer}/inputs",
+                    node.NodeId));
+                continue;
+            }
+
+            if (!emittedReferenceKeys.Contains(referenceKey))
+            {
+                diagnostics.Add(Diagnostic(
+                    "activity.graph.complete.outcome-unknown",
+                    $"Complete node '{node.NodeId}' names boundary outcome '{referenceKey}', which is not an emitted public outcome.",
+                    subject,
+                    $"{node.JsonPointer}/inputs",
+                    referenceKey));
+                continue;
+            }
+
+            reached.Add(referenceKey);
+        }
+
+        return reached;
+    }
+
+    private static string? ReadCompleteOutcome(GraphNode node)
+    {
+        var inputs = node.Activity.Inputs
+            .Where(x => StringComparer.Ordinal.Equals(x.ReferenceKey, CompleteOutcomeInputKey))
+            .ToArray();
+        if (inputs.Length != 1 || !string.Equals(inputs[0].Value.ExpressionType, "Literal", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var value = inputs[0].Value.Value switch
+        {
+            JsonElement { ValueKind: JsonValueKind.String } element => element.GetString(),
+            string text => text,
+            _ => null
+        };
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    // At compile time each node carries its exact resolved dependency; CLR catalog rows have a definition id derived
+    // from their type key.
+    private static IReadOnlyList<GraphNode> FindCompleteNodes(
+        IReadOnlyList<GraphNode> nodes,
+        IReadOnlyList<ActivityResolvedDependency> dependencies)
+    {
+        var completeOccurrences = dependencies
+            .Where(x => StringComparer.Ordinal.Equals(x.DefinitionId, CompleteDefinitionId))
+            .Select(x => x.OccurrenceId)
+            .ToHashSet(StringComparer.Ordinal);
+        return nodes.Where(x => completeOccurrences.Contains(x.NodeId)).ToArray();
+    }
+
+    // A draft is validated before dependencies are resolved, so the catalog maps each node's version to its type key.
+    // A version the catalog cannot resolve is treated as not a Complete node; compilation re-checks exactly.
+    private async ValueTask<IReadOnlyList<GraphNode>> FindCompleteNodesInCatalogAsync(
+        IReadOnlyList<GraphNode> nodes,
+        CancellationToken cancellationToken)
+    {
+        if (scopeFactory is null || nodes.Count == 0)
+            return [];
+
+        await using var scope = scopeFactory.CreateAsyncScope();
+        var lookup = scope.ServiceProvider.GetService<IActivityDefinitionLookup>();
+        if (lookup is null)
+            return [];
+
+        var completeNodes = new List<GraphNode>();
+        foreach (var node in nodes)
+        {
+            var version = await lookup.FindVersion(node.ActivityVersionId, cancellationToken);
+            if (version is not null && StringComparer.Ordinal.Equals(version.Definition.ActivityTypeKey, CompleteActivityTypeKey))
+                completeNodes.Add(node);
+        }
+
+        return completeNodes;
     }
 
     private static void ValidateBoundaryOutcomeMappings(
         ActivityGraphManifest graph,
         IReadOnlyCollection<ActivityOutcomeContract> emittedOutcomes,
+        IReadOnlySet<string> completeReferenceKeys,
         ActivityDiagnosticSubject subject,
         ICollection<ActivityDiagnostic> diagnostics)
     {
@@ -459,12 +588,14 @@ public sealed class GraphActivityProvider(
 
         foreach (var outcome in emittedOutcomes)
         {
-            if (!graph.OutcomeMappings.Any(x =>
+            // An outcome a Complete node selects is reachable without a mapping (spec 237 FR-014).
+            if (!completeReferenceKeys.Contains(outcome.ReferenceKey) &&
+                !graph.OutcomeMappings.Any(x =>
                     StringComparer.Ordinal.Equals(x.BoundaryOutcomeReferenceKey, outcome.ReferenceKey)))
             {
                 diagnostics.Add(Diagnostic(
                     "activity.graph.outcome-mapping-required",
-                    $"Emitted public boundary outcome '{outcome.ReferenceKey}' must have at least one mapping.",
+                    $"Emitted public boundary outcome '{outcome.ReferenceKey}' must have at least one mapping or Complete node.",
                     subject,
                     "/outcomeMappings",
                     outcome.ReferenceKey));
@@ -917,7 +1048,8 @@ public sealed class GraphActivityProvider(
         ActivityGraphManifest graph,
         DesignActivityContract contract,
         IReadOnlyList<GraphNode> nodes,
-        IReadOnlyList<ActivityResolvedDependency> dependencies)
+        IReadOnlyList<ActivityResolvedDependency> dependencies,
+        IReadOnlyList<GraphNode> completeNodes)
     {
         var nodesByOccurrence = nodes.ToDictionary(x => x.NodeId, StringComparer.Ordinal);
         var entryOccurrenceId = nodes.OrderBy(x => x.Depth).ThenBy(x => x.JsonPointer, StringComparer.Ordinal).First().NodeId;
@@ -992,6 +1124,24 @@ public sealed class GraphActivityProvider(
 
         var schemaTwoPayload = JsonNode.Parse(payload.GetRawText())!.AsObject();
         schemaTwoPayload["outcomeMappings"] = JsonSerializer.SerializeToNode(outcomeMappings, serializerOptions);
+
+        // Written only when the body has a Complete node, so every other graph compiles to the same bytes as before.
+        if (completeNodes.Count != 0)
+        {
+            var completeOutcomes = completeNodes
+                .Select(ReadCompleteOutcome)
+                .OfType<string>()
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .Select(referenceKey => new
+                {
+                    referenceKey,
+                    boundaryOutcomeName = boundaryOutcomes[referenceKey].Name
+                })
+                .ToArray();
+            schemaTwoPayload["completeOutcomes"] = JsonSerializer.SerializeToNode(completeOutcomes, serializerOptions);
+        }
+
         return Canonicalize(JsonSerializer.SerializeToElement(schemaTwoPayload, serializerOptions));
     }
 
