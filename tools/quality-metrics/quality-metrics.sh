@@ -75,7 +75,7 @@ cat <<MD
 
 | Metric | Value | Target |
 |---|---|---|
-| Public types in \`Essentials/src\` (excluding migrations) | $public_types of $all_types ($pct%) | < 1,500 |
+| Public types in \`Essentials/src\` (excluding migrations) | $public_types of $all_types ($pct%) | none, reported only (ADR 0080 D3) |
 | Production projects | $prod_projects | ~100 |
 | Test LOC / test methods | $test_loc / $test_methods | trend down |
 | \`[Obsolete]\` members in backend source | $obsolete | 0 |
