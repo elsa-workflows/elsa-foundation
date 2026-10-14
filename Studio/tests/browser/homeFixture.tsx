@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { AnonymousAuthProvider, type ElsaStudioModuleApi, type StudioDashboardWidgetContribution } from "@elsa-workflows/studio-sdk";
+import { StatusChip } from "@elsa-workflows/studio-ui";
 import { ShellFrame, getStudioNavigation } from "../../src/apps/Elsa.Studio.Web/Client/src/app/App";
 import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
 import { writeAppearancePreferences } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/appearance";
@@ -12,9 +13,11 @@ import "../../src/essentials/Elsa.Studio.Dashboard/Client/src/styles.css";
 const searchParams = new URLSearchParams(window.location.search);
 const edit = searchParams.get("edit") === "1";
 const before = searchParams.get("mode") === "home-before";
+const dark = searchParams.get("theme") === "dark";
+const appearance = dark ? "dark" : "light";
 
 const moduleNavigation: StudioNavigationContribution[] = [
-  { id: "home", label: before ? "Dashboard" : "Home", path: "/dashboard", order: 10, placement: "main" },
+  { id: "home", label: "Home", path: "/dashboard", order: 10, placement: "main" },
   { id: "workflows", label: "Workflows", path: "/workflows/definitions", order: 20, placement: "main" },
   { id: "workflows-runs", label: "Runs", path: "/workflows/instances", order: 30, placement: "main" }
 ];
@@ -32,7 +35,7 @@ function widget(overrides: Partial<StudioDashboardWidgetContribution>): StudioDa
   };
 }
 
-function createHomeApi(): ElsaStudioModuleApi {
+function createWidgetHost() {
   const items: StudioDashboardWidgetContribution[] = [];
   const widgets = {
     add: (item: StudioDashboardWidgetContribution) => { items.push(item); },
@@ -48,53 +51,17 @@ function createHomeApi(): ElsaStudioModuleApi {
   const api = {
     host: { baseUrl: "https://studio.example", hostVersion: "1", sdkVersion: "1", http: {} },
     backend: { baseUrl: "https://backend.example", http: { getJson: notFound, putJson: async (_url: string, body: { value: unknown }) => ({ source: "local", namespace: "home-layout", schemaVersion: 1, value: body.value }), deleteJson: async () => ({}) } },
-    runtime: { hostId: "browser-home", dashboard: { defaultRefreshIntervalMs: 300_000, widgetTimeoutMs: 10_000 }, enabledFeatures: ["workflows"] },
+    runtime: { hostId: "browser-home", dashboard: { defaultRefreshIntervalMs: 300_000, widgetTimeoutMs: 10_000 }, enabledFeatures: ["Elsa.Studio.Workflows"] },
     navigation: { add() {}, list: () => [], compose: () => [], slot: widgets.slot },
     routes: { add() {}, list: () => [], compose: () => [], slot: widgets.slot },
     dashboardWidgets: widgets,
     homeWidgets: widgets,
     settingEditors: { add() {}, list: () => [], compose: () => [], slot: widgets.slot }
   } as unknown as ElsaStudioModuleApi;
+  return { api, widgets };
+}
 
-  api.dashboardWidgets.add(widget({
-    id: "home.get-started",
-    title: "Get started",
-    defaultSize: "full",
-    supportedSizes: ["full"],
-    core: true,
-    component: () => (
-      <div className="home-get-started">
-        <p className="home-get-started-progress">1 of 3 done</p>
-        <ol className="home-get-started-steps">
-          <li data-done="true">Create a workflow</li>
-          <li data-done="false">Run it</li>
-          <li data-done="false">See what happened</li>
-        </ol>
-        <a className="home-get-started-cta" href="/workflows/instances">Run it</a>
-      </div>
-    )
-  }));
-  api.dashboardWidgets.add(widget({
-    id: "home.recent-workflows",
-    title: "Recent workflows",
-    core: true,
-    component: () => <ul className="home-widget-list"><li><a href="/workflows/definitions/orders">Orders</a></li></ul>
-  }));
-  api.dashboardWidgets.add(widget({
-    id: "home.needs-attention",
-    title: "Needs attention",
-    core: true,
-    component: () => <p className="home-widget-empty">All clear — nothing needs attention.</p>
-  }));
-  api.dashboardWidgets.add(widget({
-    id: "home.recent-runs",
-    title: "Recent runs",
-    defaultSize: "full",
-    supportedSizes: ["full"],
-    core: true,
-    component: () => <ul className="home-widget-list"><li><a href="/workflows/instances/run-1">Orders · Completed</a></li></ul>
-  }));
-
+function seedLayout(api: ElsaStudioModuleApi, widgetIds: string[]) {
   const scope = {
     studioHostId: api.runtime.hostId ?? "default",
     backendBaseUrl: api.backend.baseUrl,
@@ -106,57 +73,152 @@ function createHomeApi(): ElsaStudioModuleApi {
     namespace: "home-layout",
     schemaVersion: 1,
     value: {
-      widgets: [
-        { id: "home.get-started", size: "full", visible: true },
-        { id: "home.recent-workflows", size: "medium", visible: true },
-        { id: "home.needs-attention", size: "medium", visible: true },
-        { id: "home.recent-runs", size: "full", visible: true }
-      ]
+      widgets: widgetIds.map(id => ({ id, size: id === "home.get-started" ? "full" : "medium", visible: true }))
     }
   }));
+}
+
+/** Empty Home at main fbfc347: feature-gated widgets never rendered, so only Get started showed. */
+function createEmptyHomeApi(): ElsaStudioModuleApi {
+  const { api } = createWidgetHost();
+  api.dashboardWidgets.add(widget({
+    id: "home.get-started",
+    title: "Get started",
+    description: "Create a workflow, run it, and see what happened.",
+    defaultSize: "full",
+    supportedSizes: ["full"],
+    core: true,
+    component: () => (
+      <div className="home-get-started">
+        <p className="home-get-started-progress">2 of 3 done</p>
+        <ol className="home-get-started-steps">
+          <li data-done="true">Create a workflow</li>
+          <li data-done="true">Run it</li>
+          <li data-done="false">See what happened</li>
+        </ol>
+        <a className="home-get-started-cta" href="/workflows/instances">See what happened</a>
+      </div>
+    )
+  }));
+  seedLayout(api, ["home.get-started"]);
+  return api;
+}
+
+function createHomeApi(): ElsaStudioModuleApi {
+  const { api } = createWidgetHost();
+
+  api.dashboardWidgets.add(widget({
+    id: "home.get-started",
+    title: "Get started",
+    description: "Create a workflow, run it, and see what happened.",
+    defaultSize: "full",
+    supportedSizes: ["full"],
+    core: true,
+    component: () => (
+      <div className="home-get-started">
+        <p className="home-get-started-progress">2 of 3 done</p>
+        <ol className="home-get-started-steps">
+          <li data-done="true">Create a workflow</li>
+          <li data-done="true">Run it</li>
+          <li data-done="false">See what happened</li>
+        </ol>
+        <a className="home-get-started-cta" href="/workflows/instances">See what happened</a>
+        <section className="home-docs" aria-labelledby="home-docs-title">
+          <h4 id="home-docs-title">Documentation</h4>
+          <p>Guides for Studio and your next workflow.</p>
+          <ul>
+            <li><a href="https://v4.elsaworkflows.io/essentials/quickstart" target="_blank" rel="noreferrer">Try Elsa locally</a></li>
+            <li><a href="https://v4.elsaworkflows.io/essentials/first-workflow" target="_blank" rel="noreferrer">Your first workflow</a></li>
+            <li><a href="https://v4.elsaworkflows.io/studio" target="_blank" rel="noreferrer">Elsa Studio</a></li>
+          </ul>
+        </section>
+      </div>
+    )
+  }));
+  api.dashboardWidgets.add(widget({
+    id: "home.quick-actions",
+    title: "Quick actions",
+    description: "Create a workflow or open the designer.",
+    core: true,
+    requiresFeature: "workflows",
+    component: () => (
+      <ul className="home-quick-actions">
+        <li><a href="/workflows/definitions">Create a workflow</a></li>
+        <li><a href="/workflows/definitions">Open the designer</a></li>
+      </ul>
+    )
+  }));
+  api.dashboardWidgets.add(widget({
+    id: "home.recent-workflows",
+    title: "Recent workflows",
+    description: "The latest workflow definitions.",
+    core: true,
+    requiresFeature: "workflows",
+    component: () => <ul className="home-widget-list"><li><a href="/workflows/definitions/orders"><span>Orders</span></a></li></ul>
+  }));
+  api.dashboardWidgets.add(widget({
+    id: "home.recent-runs",
+    title: "Recent runs",
+    description: "The latest workflow executions and their status.",
+    core: true,
+    requiresFeature: "workflows",
+    component: () => (
+      <ul className="home-widget-list">
+        <li>
+          <a href="/workflows/instances/run-1">
+            <span>Orders</span>
+            <StatusChip tone="success">Completed</StatusChip>
+          </a>
+        </li>
+      </ul>
+    )
+  }));
+  api.dashboardWidgets.add(widget({
+    id: "home.needs-attention",
+    title: "Needs attention",
+    description: "Failed, faulted, incident-bearing and long-waiting runs.",
+    core: true,
+    requiresFeature: "workflows",
+    component: () => (
+      <div className="home-empty" role="status">
+        <strong>All clear</strong>
+        <span>Nothing needs attention.</span>
+      </div>
+    )
+  }));
+  api.dashboardWidgets.add(widget({
+    id: "home.tasks",
+    title: "Tasks",
+    requiresFeature: "user-tasks",
+    core: true,
+    component: () => <span>Task inbox</span>
+  }));
+
+  seedLayout(api, [
+    "home.get-started",
+    "home.quick-actions",
+    "home.recent-workflows",
+    "home.recent-runs",
+    "home.needs-attention",
+    "home.tasks"
+  ]);
   return api;
 }
 
 export function HomeFixture() {
-  writeAppearancePreferences({ themeId: "classic", mode: "light", navigation: "left" });
+  writeAppearancePreferences({ themeId: "classic", mode: appearance, navigation: "left" });
   const navigation = getStudioNavigation(moduleNavigation);
-  const api = createHomeApi();
+  const api = before ? createEmptyHomeApi() : createHomeApi();
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", "classic");
-    document.documentElement.setAttribute("data-theme-mode", "light");
-    document.documentElement.setAttribute("data-theme-appearance", "light");
+    document.documentElement.setAttribute("data-theme-mode", appearance);
+    document.documentElement.setAttribute("data-theme-appearance", appearance);
     if (edit) {
       const editButton = [...document.querySelectorAll("button")].find(item => item.textContent?.includes("Edit home"));
       editButton?.click();
     }
   }, []);
-
-  if (before) {
-    return (
-      <ThemeProvider>
-        <ShellFrame navigation={navigation} panels={[]} path="/dashboard" title="Dashboard" backendBaseUrl="https://backend.example/" onNavigate={() => undefined}>
-          <section className="dashboard-page">
-            <header className="dashboard-page-header">
-              <div><h2>Dashboard</h2><p>Prioritized work and operational summaries from Studio modules.</p></div>
-            </header>
-            <div className="dashboard-grid">
-              <article className="dashboard-widget" data-size="full" aria-labelledby="before-title">
-                <header className="dashboard-widget-header">
-                  <div><h3 id="before-title">Workflow portfolio</h3></div>
-                  <div className="dashboard-widget-actions" aria-label="Workflow portfolio controls">
-                    <button type="button">Move</button>
-                    <button type="button">Hide</button>
-                  </div>
-                </header>
-                <div className="dashboard-widget-body">Active definitions: 3</div>
-              </article>
-            </div>
-          </section>
-        </ShellFrame>
-      </ThemeProvider>
-    );
-  }
 
   return (
     <ThemeProvider>

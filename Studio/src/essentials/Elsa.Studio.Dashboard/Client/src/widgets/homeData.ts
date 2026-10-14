@@ -1,4 +1,4 @@
-import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import { requestStudioNavigation, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 
 export interface HomeWorkflowSummary {
   id: string;
@@ -93,4 +93,29 @@ export async function homeHasWorkflow(api: ElsaStudioModuleApi, signal: AbortSig
 
 export async function homeHasRun(api: ElsaStudioModuleApi, signal: AbortSignal) {
   return (await loadRecentRuns(api, signal)).length > 0;
+}
+
+export function navigateStudioPath(href: string) {
+  requestStudioNavigation(window.location.pathname, href);
+  window.history.pushState({}, "", href);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
+export function runStatusTone(status: string | undefined): "neutral" | "success" | "warning" | "danger" | "accent" {
+  switch ((status ?? "").trim().toLowerCase()) {
+    case "completed":
+    case "finished":
+      return "success";
+    case "faulted":
+    case "failed":
+      return "danger";
+    case "running":
+    case "executing":
+      return "accent";
+    case "suspended":
+    case "waiting":
+      return "warning";
+    default:
+      return "neutral";
+  }
 }

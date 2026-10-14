@@ -4,7 +4,9 @@
 
 ## Widgets
 
-Modules contribute widgets with `registerHomeWidget` (or the `homeWidgets` / `dashboardWidgets` alias) in `@elsa-workflows/studio-sdk`. A widget is offered only when its `requiresFeature` list is enabled and the session holds any declared permissions. Unregistered ids (a disabled module, a widget the session cannot see) stay in the saved layout and are skipped at render time.
+Modules contribute widgets with `registerHomeWidget` (or the `homeWidgets` / `dashboardWidgets` alias) in `@elsa-workflows/studio-sdk`. A widget is offered only when its `requiresFeature` list is enabled and the session holds any declared permissions. Feature slugs match module assembly ids (`workflows` matches `Elsa.Studio.Workflows`; `user-tasks` matches `Elsa.Studio.UserTasks`). Unregistered ids (a disabled module, a widget the session cannot see) stay in the saved layout and are skipped at render time.
+
+The built-in default landing is Get started (with docs links), Quick actions, Recent workflows, Recent runs, Needs attention, and Tasks. Tasks is registered and in the default layout, but it only renders when user tasks are enabled.
 
 ## Layout persistence
 

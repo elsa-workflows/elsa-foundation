@@ -1,6 +1,31 @@
 import React from "react";
-import { requestStudioNavigation, type StudioDashboardWidgetBodyProps } from "@elsa-workflows/studio-sdk";
+import { type StudioDashboardWidgetBodyProps } from "@elsa-workflows/studio-sdk";
+import { StatusChip } from "@elsa-workflows/studio-ui";
 import type { HomeRunSummary, HomeWorkflowSummary } from "./homeData";
+import { navigateStudioPath, runStatusTone } from "./homeData";
+
+export function QuickActionsWidget() {
+  return (
+    <ul className="home-quick-actions">
+      <li>
+        <a
+          href="/workflows/definitions"
+          onClick={event => { event.preventDefault(); navigateStudioPath("/workflows/definitions"); }}
+        >
+          Create a workflow
+        </a>
+      </li>
+      <li>
+        <a
+          href="/workflows/definitions"
+          onClick={event => { event.preventDefault(); navigateStudioPath("/workflows/definitions"); }}
+        >
+          Open the designer
+        </a>
+      </li>
+    </ul>
+  );
+}
 
 export function RecentWorkflowsWidget({ snapshot }: StudioDashboardWidgetBodyProps<HomeWorkflowSummary[], unknown>) {
   return (
@@ -10,7 +35,9 @@ export function RecentWorkflowsWidget({ snapshot }: StudioDashboardWidgetBodyPro
         label: item.name,
         href: `/workflows/definitions/${encodeURIComponent(item.id)}`
       }))}
-      empty="No workflows yet. Create one to see it here."
+      emptyTitle="No workflows yet"
+      emptyDescription="Create a workflow definition to see it here."
+      emptyAction={{ href: "/workflows/definitions", label: "Create a workflow" }}
     />
   );
 }
@@ -20,10 +47,13 @@ export function RecentRunsWidget({ snapshot }: StudioDashboardWidgetBodyProps<Ho
     <HomeLinkList
       items={(snapshot ?? []).map(item => ({
         id: item.id,
-        label: item.status ? `${item.name} · ${item.status}` : item.name,
-        href: `/workflows/instances/${encodeURIComponent(item.id)}`
+        label: item.name,
+        href: `/workflows/instances/${encodeURIComponent(item.id)}`,
+        status: item.status
       }))}
-      empty="No runs yet. Run a workflow to see it here."
+      emptyTitle="No runs yet"
+      emptyDescription="Run a workflow to see its status here."
+      emptyAction={{ href: "/workflows/definitions", label: "Open the designer" }}
     />
   );
 }
@@ -33,16 +63,61 @@ export function NeedsAttentionWidget({ snapshot }: StudioDashboardWidgetBodyProp
     <HomeLinkList
       items={(snapshot ?? []).map(item => ({
         id: item.id,
-        label: item.status ? `${item.name} · ${item.status}` : item.name,
-        href: `/workflows/instances?incidentHealth=active`
+        label: item.name,
+        href: "/workflows/instances?incidentHealth=active",
+        status: item.status
       }))}
-      empty="All clear — nothing needs attention."
+      emptyTitle="All clear"
+      emptyDescription="Nothing needs attention."
     />
   );
 }
 
-function HomeLinkList({ items, empty }: { items: Array<{ id: string; label: string; href: string }>; empty: string }) {
-  if (!items.length) return <p className="home-widget-empty">{empty}</p>;
+export function TasksWidget({ snapshot }: StudioDashboardWidgetBodyProps<HomeWorkflowSummary[], unknown>) {
+  return (
+    <HomeLinkList
+      items={(snapshot ?? []).map(item => ({
+        id: item.id,
+        label: item.name,
+        href: `/tasks/${encodeURIComponent(item.id)}`
+      }))}
+      emptyTitle="No tasks waiting"
+      emptyDescription="Assigned work will show up here when user tasks are enabled."
+      emptyAction={{ href: "/tasks", label: "Open tasks" }}
+    />
+  );
+}
+
+function HomeLinkList({
+  items,
+  emptyTitle,
+  emptyDescription,
+  emptyAction
+}: {
+  items: Array<{ id: string; label: string; href: string; status?: string }>;
+  emptyTitle: string;
+  emptyDescription: string;
+  emptyAction?: { href: string; label: string };
+}) {
+  if (!items.length) {
+    return (
+      <div className="home-empty" role="status">
+        <strong>{emptyTitle}</strong>
+        <span>{emptyDescription}</span>
+        {emptyAction ? (
+          <a
+            href={emptyAction.href}
+            onClick={event => {
+              event.preventDefault();
+              navigateStudioPath(emptyAction.href);
+            }}
+          >
+            {emptyAction.label}
+          </a>
+        ) : null}
+      </div>
+    );
+  }
   return (
     <ul className="home-widget-list">
       {items.map(item => (
@@ -51,12 +126,11 @@ function HomeLinkList({ items, empty }: { items: Array<{ id: string; label: stri
             href={item.href}
             onClick={event => {
               event.preventDefault();
-              requestStudioNavigation(window.location.pathname, item.href);
-              window.history.pushState({}, "", item.href);
-              window.dispatchEvent(new PopStateEvent("popstate"));
+              navigateStudioPath(item.href);
             }}
           >
-            {item.label}
+            <span>{item.label}</span>
+            {item.status ? <StatusChip tone={runStatusTone(item.status)}>{item.status}</StatusChip> : null}
           </a>
         </li>
       ))}

@@ -38,9 +38,11 @@ export interface HomeLayoutDocument {
 export const builtInHomeLayout: HomeLayoutValue = {
   widgets: [
     { id: homeWidgetIds.getStarted, size: "full", visible: true },
+    { id: homeWidgetIds.quickActions, size: "medium", visible: true },
     { id: homeWidgetIds.recentWorkflows, size: "medium", visible: true },
+    { id: homeWidgetIds.recentRuns, size: "medium", visible: true },
     { id: homeWidgetIds.needsAttention, size: "medium", visible: true },
-    { id: homeWidgetIds.recentRuns, size: "full", visible: true }
+    { id: homeWidgetIds.tasks, size: "medium", visible: true }
   ]
 };
 
@@ -57,8 +59,23 @@ export function isHomeWidgetFeatureEnabled(
     : [...(widget.requiresFeature ?? [])];
   if (required.length === 0) return true;
   if (!enabledFeatures) return true;
-  const available = new Set([...enabledFeatures]);
-  return required.every(feature => available.has(feature));
+  const available = [...enabledFeatures];
+  return required.every(feature => available.some(enabled => homeFeatureTokensMatch(feature, enabled)));
+}
+
+/** `workflows` matches `Elsa.Studio.Workflows`; `user-tasks` matches `Elsa.Studio.UserTasks`. */
+export function homeFeatureTokensMatch(required: string, enabled: string): boolean {
+  const wanted = homeFeatureTokens(required);
+  const granted = homeFeatureTokens(enabled);
+  return [...wanted].some(token => granted.has(token));
+}
+
+function homeFeatureTokens(value: string): Set<string> {
+  const trimmed = value.trim();
+  if (!trimmed) return new Set();
+  const last = trimmed.split(".").pop() ?? trimmed;
+  const kebab = last.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+  return new Set([trimmed.toLowerCase(), last.toLowerCase(), kebab, kebab.replace(/-/g, "")]);
 }
 
 export function defaultHomeLayoutDocument(): HomeLayoutDocument {

@@ -9,9 +9,11 @@ import { homeHasRun, homeHasWorkflow, loadNeedsAttention, loadRecentRuns, loadRe
 import type { GetStartedSnapshot } from "./GetStartedWidget";
 
 const GetStartedWidget = lazy(() => import("./GetStartedWidget").then(module => ({ default: module.GetStartedWidget })));
+const QuickActionsWidget = lazy(() => import("./HomeListWidget").then(module => ({ default: module.QuickActionsWidget })));
 const RecentWorkflowsWidget = lazy(() => import("./HomeListWidget").then(module => ({ default: module.RecentWorkflowsWidget })));
 const RecentRunsWidget = lazy(() => import("./HomeListWidget").then(module => ({ default: module.RecentRunsWidget })));
 const NeedsAttentionWidget = lazy(() => import("./HomeListWidget").then(module => ({ default: module.NeedsAttentionWidget })));
+const TasksWidget = lazy(() => import("./HomeListWidget").then(module => ({ default: module.TasksWidget })));
 
 export function registerCoreHomeWidgets(api: ElsaStudioModuleApi) {
   registerHomeWidget(api, {
@@ -32,6 +34,19 @@ export function registerCoreHomeWidgets(api: ElsaStudioModuleApi) {
   });
 
   registerHomeWidget(api, {
+    id: homeWidgetIds.quickActions,
+    moduleId: "Elsa.Studio.Dashboard",
+    title: "Quick actions",
+    description: "Create a workflow or open the designer.",
+    core: true,
+    requiresFeature: "workflows",
+    defaultVisible: true,
+    defaultSize: "M",
+    supportedSizes: ["S", "M", "wide"],
+    component: QuickActionsWidget
+  });
+
+  registerHomeWidget(api, {
     id: homeWidgetIds.recentWorkflows,
     moduleId: "Elsa.Studio.Dashboard",
     title: "Recent workflows",
@@ -43,9 +58,22 @@ export function registerCoreHomeWidgets(api: ElsaStudioModuleApi) {
     supportedSizes: ["S", "M", "wide"],
     minimumRefreshIntervalMs: 60_000,
     load: ({ signal }) => loadRecentWorkflows(api, signal),
-    isEmpty: snapshot => !snapshot?.length,
-    emptyState: { title: "No workflows yet", description: "Create a workflow to see it here." },
     component: RecentWorkflowsWidget
+  });
+
+  registerHomeWidget(api, {
+    id: homeWidgetIds.recentRuns,
+    moduleId: "Elsa.Studio.Dashboard",
+    title: "Recent runs",
+    description: "The latest workflow executions and their status.",
+    core: true,
+    requiresFeature: "workflows",
+    defaultVisible: true,
+    defaultSize: "M",
+    supportedSizes: ["M", "wide", "L"],
+    minimumRefreshIntervalMs: 60_000,
+    load: ({ signal }) => loadRecentRuns(api, signal),
+    component: RecentRunsWidget
   });
 
   registerHomeWidget(api, {
@@ -60,25 +88,19 @@ export function registerCoreHomeWidgets(api: ElsaStudioModuleApi) {
     supportedSizes: ["S", "M", "wide", "L"],
     minimumRefreshIntervalMs: 60_000,
     load: ({ signal }) => loadNeedsAttention(api, signal),
-    isEmpty: snapshot => !snapshot?.length,
-    emptyState: { title: "All clear", description: "Nothing needs attention." },
     component: NeedsAttentionWidget
   });
 
   registerHomeWidget(api, {
-    id: homeWidgetIds.recentRuns,
+    id: homeWidgetIds.tasks,
     moduleId: "Elsa.Studio.Dashboard",
-    title: "Recent runs",
-    description: "The latest workflow executions.",
+    title: "Tasks",
+    description: "Work waiting on a person.",
     core: true,
-    requiresFeature: "workflows",
+    requiresFeature: "user-tasks",
     defaultVisible: true,
-    defaultSize: "L",
-    supportedSizes: ["M", "wide", "L"],
-    minimumRefreshIntervalMs: 60_000,
-    load: ({ signal }) => loadRecentRuns(api, signal),
-    isEmpty: snapshot => !snapshot?.length,
-    emptyState: { title: "No runs yet", description: "Run a workflow to see it here." },
-    component: RecentRunsWidget
+    defaultSize: "M",
+    supportedSizes: ["S", "M", "wide"],
+    component: TasksWidget
   });
 }
