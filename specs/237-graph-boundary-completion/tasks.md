@@ -218,7 +218,7 @@ publishing a plain workflow containing `Complete` fails with `Graph/CompleteOuts
   - the Workflows Runtime Core catalog that documents `IRuntimeActivityExecutionContext`: the new `RequestAncestorNotification` member;
   - the root `EXTENSION_POINTS.md`, if its index rows change.
 - [X] T030 Refresh generated maps with `dotnet run --project tools/maps/Elsa.Maps.Generator -- all`, then inspect `git diff --stat docs/`. On Windows, `-- check` always reports stale because of CRLF, so judge freshness from the diff. Stage only the maps this unit actually changed, by explicit path, including `docs/maps/manifest.json`.
-- [ ] T031 Set `specs/237-graph-boundary-completion/spec.md` `**Status**:` to `In progress` when implementation starts. Set it to `Implemented` in the PR that merges, per `docs/reference/spec-lifecycle.md`.
+- [X] T031 Set `specs/237-graph-boundary-completion/spec.md` `**Status**:` to `In progress` when implementation starts. Set it to `Implemented` in the PR that merges, per `docs/reference/spec-lifecycle.md`.
 - [X] T032 Run the regression e2e scripts `e2e-tests/reusable-activities/Test-ReusableActivityOutcomeLimit.ps1`, `Test-ReusableActivity.ps1`, `Test-ReusableActivityDeep.ps1` and `Test-ReusableActivityComplete.ps1` against a server started from source, and record the results as evidence on the PR (SC-003, SC-005).
 - [ ] T033 Re-check for competing work on #2750 before committing. Open the PR (draft is fine) when pushing, comment the PR link on #2750, and comment on #2706 that spec 237 defines the construct, linking `contracts/complete-activity.md`.
 

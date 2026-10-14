@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-14
 
-**Status**: In progress — implementation on branch `237-graph-boundary-completion`
+**Status**: Implemented — PR for #2750 (also fixes #2756)
 
 **Input**: GitHub issue [#2750](https://github.com/elsa-workflows/elsa-foundation/issues/2750), "Graph activities: let a descendant node complete the nearest graph boundary with a chosen outcome", plus the maintainer interview of 2026-10-14 recorded under [Decisions](#decisions).
 
