@@ -678,58 +678,6 @@ export function isRejectedTestRun(testRun: WorkflowTestRunView) {
   return testRun.status.toLowerCase() === "rejected";
 }
 
-export const workflowEditorOverlaySelector = "[role='dialog'], [aria-modal='true'], [role='menu'], .wf-connect-menu";
-
-export function isWorkflowEditorKeyboardTarget(target: EventTarget | null) {
-  if (!(target instanceof Element)) return false;
-  return (target instanceof HTMLElement && target.isContentEditable)
-    || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)
-    || Boolean(target.closest("[contenteditable='true']"))
-    || Boolean(target.closest("[data-studio-code-editor]"));
-}
-
-export function isWorkflowEditorOverlayTarget(target: EventTarget | null) {
-  return target instanceof Element && Boolean(target.closest(workflowEditorOverlaySelector));
-}
-
-export function isWorkflowEditorOverlayOpen(root: ParentNode = document) {
-  return Array.from(root.querySelectorAll(workflowEditorOverlaySelector)).some(isVisibleOverlay);
-}
-
-function isVisibleOverlay(element: Element) {
-  if (!(element instanceof HTMLElement) || element.hidden || element.getAttribute("aria-hidden") === "true") {
-    return false;
-  }
-  const style = window.getComputedStyle(element);
-  if (style.display === "none" || style.visibility === "hidden") return false;
-  const rect = element.getBoundingClientRect();
-  return rect.width > 0 && rect.height > 0;
-}
-
-export function isActivityClipboardShortcutBlocked(
-  target: EventTarget | null,
-  designer: HTMLElement | null = null
-) {
-  if (isWorkflowEditorKeyboardTarget(target)) return true;
-  if (isWorkflowEditorOverlayOpen()) return true;
-  if (!(target instanceof Element)) return false;
-  if (isWorkflowEditorOverlayTarget(target)) return true;
-  if (
-    designer
-    && target !== document.body
-    && target !== document.documentElement
-    && !designer.contains(target)
-  ) {
-    return true;
-  }
-  return false;
-}
-
-export function hasNonCollapsedTextSelection() {
-  const selection = window.getSelection();
-  return !!selection && !selection.isCollapsed && selection.toString().length > 0;
-}
-
 export function formatWorkflowVersionLoadError(error: string) {
   try {
     const payload = JSON.parse(error) as { error?: unknown };

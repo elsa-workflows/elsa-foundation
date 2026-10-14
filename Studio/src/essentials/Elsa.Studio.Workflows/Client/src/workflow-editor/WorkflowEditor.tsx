@@ -38,10 +38,13 @@ import {
   findAiAction,
   getDraftSignature,
   groupActivityPalette,
-  hasNonCollapsedTextSelection,
-  isActivityClipboardShortcutBlocked,
   normalizeWorkflowError
 } from "./editorHelpers";
+import {
+  hasNonCollapsedTextSelection,
+  isActivityClipboardShortcutBlocked,
+  isWorkflowEditorKeyboardTarget
+} from "./activityClipboardShortcuts";
 import { ActivityCanvasContextMenu } from "./ActivityCanvasContextMenu";
 import { matchActivityClipboardShortcut } from "./duplicateActivities";
 import { useActivityClipboard } from "./useActivityClipboard";
@@ -547,21 +550,24 @@ export function WorkflowEditor({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (canvasView !== "designer") return;
       if (!(event.metaKey || event.ctrlKey)) return;
-      if (isActivityClipboardShortcutBlocked(event.target, editorRootRef.current)) return;
       const clipboardShortcut = matchActivityClipboardShortcut(event);
       if (clipboardShortcut === "copy") {
+        if (isActivityClipboardShortcutBlocked(event.target, editorRootRef.current)) return;
         if (hasNonCollapsedTextSelection()) return;
         if (copySelectedActivities()) event.preventDefault();
         return;
       }
       if (clipboardShortcut === "paste") {
+        if (isActivityClipboardShortcutBlocked(event.target, editorRootRef.current)) return;
         if (pasteCopiedActivities()) event.preventDefault();
         return;
       }
       if (clipboardShortcut === "duplicate") {
+        if (isActivityClipboardShortcutBlocked(event.target, editorRootRef.current)) return;
         if (duplicateSelectedActivities()) event.preventDefault();
         return;
       }
+      if (isWorkflowEditorKeyboardTarget(event.target)) return;
       const key = event.key.toLowerCase();
       if (key === "z" && !event.shiftKey) {
         event.preventDefault();

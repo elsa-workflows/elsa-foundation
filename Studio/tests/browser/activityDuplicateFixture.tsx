@@ -7,7 +7,7 @@ import {
   snapshotSelectedActivities,
   type ActivityClipboardSnapshot
 } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/duplicateActivities";
-import { isWorkflowEditorKeyboardTarget } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorHelpers";
+import { isWorkflowEditorKeyboardTarget } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/activityClipboardShortcuts";
 import { WorkflowActivityNode } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/graph";
 import { indexActivityPresentation, resolveActivityLabel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityPresentation";
 import {

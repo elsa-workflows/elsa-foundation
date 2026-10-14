@@ -4,12 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { StudioAiContributionApi } from "@elsa-workflows/studio-sdk";
 import {
   describeWorkflowError,
+  normalizeWorkflowError
+} from "../workflow-editor/editorHelpers";
+import {
   hasNonCollapsedTextSelection,
   isActivityClipboardShortcutBlocked,
   isWorkflowEditorKeyboardTarget,
-  isWorkflowEditorOverlayOpen,
-  normalizeWorkflowError
-} from "../workflow-editor/editorHelpers";
+  isWorkflowEditorOverlayOpen
+} from "../workflow-editor/activityClipboardShortcuts";
 import { WorkflowAlert } from "../workflow-editor/WorkflowAlert";
 import { WorkflowRuntimePanel } from "../workflow-editor/editorPanels";
 import { useAiProviderAvailability } from "../workflow-editor/useAiProviderAvailability";
@@ -139,17 +141,49 @@ describe("activity clipboard shortcut gating", () => {
     });
     const dialogButton = document.createElement("button");
     dialog.appendChild(dialogButton);
-    document.body.appendChild(dialog);
+    designer.appendChild(dialog);
 
-    expect(isWorkflowEditorOverlayOpen()).toBe(true);
+    expect(isWorkflowEditorOverlayOpen(designer)).toBe(true);
     expect(isActivityClipboardShortcutBlocked(dialogButton, designer)).toBe(true);
     expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(true);
 
     dialog.style.display = "none";
-    expect(isWorkflowEditorOverlayOpen()).toBe(false);
+    expect(isWorkflowEditorOverlayOpen(designer)).toBe(false);
     expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(false);
 
     dialog.remove();
+    designer.remove();
+  });
+
+  it("does not treat a menu outside the designer as an open designer overlay", () => {
+    const designer = document.createElement("section");
+    const canvas = document.createElement("div");
+    designer.appendChild(canvas);
+    document.body.appendChild(designer);
+
+    const shellMenu = document.createElement("div");
+    shellMenu.setAttribute("role", "menu");
+    shellMenu.getBoundingClientRect = () => ({
+      x: 0, y: 0, top: 0, left: 0, right: 180, bottom: 80, width: 180, height: 80, toJSON: () => ({})
+    });
+    document.body.appendChild(shellMenu);
+
+    expect(isWorkflowEditorOverlayOpen(designer)).toBe(false);
+    expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(false);
+
+    const portalMenu = document.createElement("div");
+    portalMenu.className = "wf-editor-actions-popover";
+    portalMenu.setAttribute("role", "menu");
+    portalMenu.getBoundingClientRect = () => ({
+      x: 0, y: 0, top: 0, left: 0, right: 200, bottom: 120, width: 200, height: 120, toJSON: () => ({})
+    });
+    document.body.appendChild(portalMenu);
+
+    expect(isWorkflowEditorOverlayOpen(designer)).toBe(true);
+    expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(true);
+
+    shellMenu.remove();
+    portalMenu.remove();
     designer.remove();
   });
 
