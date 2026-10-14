@@ -149,6 +149,28 @@ public sealed class HashMismatchTests
     }
 
     [Fact]
+    public async Task SameVersionChangingOnlyTheInputTier_LeavesThePersistedHashUnchanged()
+    {
+        var store = new InMemoryReconcilerHarness.CatalogStore();
+        var unset = Input(isNullable: false);
+
+        await InMemoryReconcilerHarness.BuildReconciler(store, Source(Model(inputs: [unset]))).Reconcile(CancellationToken.None);
+        var first = Assert.Single(store.Versions);
+        var hash = first.Hash;
+
+        await InMemoryReconcilerHarness.BuildReconciler(
+            store,
+            Source(Model(inputs: [unset with { Tier = ActivityInputTiers.Essential }]))).Reconcile(CancellationToken.None);
+
+        await InMemoryReconcilerHarness.BuildReconciler(
+            store,
+            Source(Model(inputs: [unset with { Tier = ActivityInputTiers.Optional }]))).Reconcile(CancellationToken.None);
+
+        var persisted = Assert.Single(store.Versions);
+        Assert.Equal(hash, persisted.Hash);
+    }
+
+    [Fact]
     public async Task SameVersionSameContent_ThrowsWhenDuplicateHandlingIsUnknown()
     {
         // An out-of-range DuplicateHandling value (a future member, or an unchecked cast) must not

@@ -38,16 +38,15 @@ public sealed class ActivityAuthoringCatalogTierTests
     }
 
     [Fact]
-    public async Task Catalog_wire_leaves_unset_tier_nullish_and_writes_a_declared_tier()
+    public async Task Catalog_wire_writes_explicit_null_tier_when_unset()
     {
         var view = await ListAsync(Input("label"), Input("timeout") with { Tier = ActivityInputTiers.Optional });
         var json = JsonNode.Parse(JsonSerializer.Serialize(view, ActivitiesDesignWire.Context.GetTypeInfo(typeof(ActivityAuthoringCatalogView))!))!;
         var inputs = json["activities"]!.AsArray().Single(activity => (string?)activity!["activityTypeKey"] == "Acme.Activities.CallService")!["inputs"]!.AsArray();
 
-        var unset = inputs.Single(input => (string?)input!["referenceKey"] == "label")!["tier"];
-        Assert.True(
-            unset is null || unset is JsonValue { } value && value.GetValueKind() == JsonValueKind.Null,
-            "Unset tier must be omitted or JSON null so the client applies its own default.");
+        var unset = inputs.Single(input => (string?)input!["referenceKey"] == "label")!.AsObject();
+        Assert.True(unset.TryGetPropertyValue("tier", out var unsetTier), "Unset tier must be present on the wire as an explicit null.");
+        Assert.Null(unsetTier);
         Assert.Equal(ActivityInputTiers.Optional, (string?)inputs.Single(input => (string?)input!["referenceKey"] == "timeout")!["tier"]);
     }
 
