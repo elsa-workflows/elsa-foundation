@@ -27,7 +27,7 @@ public class ExpressionsApiFeature : IWebShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddElsaEndpoints();
-        services.AddRequestHandlersFrom(GetType().Assembly);
+        services.AddRequestHandlersFrom(typeof(ExpressionsApiFeature).Assembly);
         services.AddDynamicEndpointApiExplorerRefresh();
         services.AddApiCapability(ExpressionsApiCapabilities.StaticDeclaration);
         services.AddPermissionContributor<ExpressionsPermissionContributor>();
