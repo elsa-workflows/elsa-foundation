@@ -9,7 +9,7 @@
 | Kind | Structural activity with no child slots |
 | Input | `outcome`: string, required, literal only. It names a boundary outcome **reference key** of the enclosing reusable activity. |
 | Outcomes | None declared. Its own completion never routes. |
-| Side-effect profile | Replay-safe |
+| Side-effect profile | Default (not ReplaySafe): it stages a durable notification, so re-running it is not indistinguishable from running it once |
 
 **State transitions** (its own activity execution): `Running`, then `Completed`. That happens in the same commit
 that stages the ancestor notification. If no enclosing boundary is found, or `outcome` is blank, the execution goes

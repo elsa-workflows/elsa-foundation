@@ -95,7 +95,7 @@ FR-018, FR-019).
   - natural completion with no mappings and non-empty `CompleteOutcomes` faults with `activity.graph.entry-completed-without-mapping`;
   - `PrepareCompletionCheckpointAsync` returns the selected exit outcome when `OutcomeMappings` is empty;
   - all existing tests in the file still pass unchanged.
-- [ ] T012 [US1] Add engine-driven exit tests in `Essentials/tests/Activities/Behavioral/Tests/GraphBoundaryCompleteTests.cs`, building on `Essentials/tests/Activities/Behavioral/Tests/Drives/GraphActivityDrive.cs`, with a pinned descriptor carrying `CompleteOutcomes`. One test for each:
+- [X] T012 [US1] Add engine-driven exit tests in `Essentials/tests/Activities/Behavioral/Tests/GraphBoundaryCompleteTests.cs`, building on `Essentials/tests/Activities/Behavioral/Tests/Drives/GraphActivityDrive.cs`, with a pinned descriptor carrying `CompleteOutcomes`. One test for each:
   - `Complete` under Flowchart → the boundary outcome is `fail` and the parent routes only `fail`;
   - under Sequence → later steps never run;
   - under If and under Switch;
@@ -109,7 +109,7 @@ FR-018, FR-019).
   - output mappings are captured at exit, and a missing required output faults the boundary;
   - two Parallel branches reach `Complete` → the first committed outcome wins and the workflow does not fault;
   - `Complete` placed directly in a workflow with no boundary → faults with `runtime.ancestor-notification.target-not-found` and the workflow is not finished.
-- [ ] T013 [US1] Run `Essentials/tests/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj` and `Essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj`. Fix failures in the production code, not by weakening the assertions.
+- [X] T013 [US1] Run `Essentials/tests/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj` and `Essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj`. Fix failures in the production code, not by weakening the assertions.
 
 **Checkpoint**: User Story 1 works at run time when a pinned descriptor carries `CompleteOutcomes`. The design
 side comes in User Story 3.

@@ -29,7 +29,7 @@ namespace Elsa.Activities.Behavioral;
 /// </summary>
 public sealed class GraphBoundaryCompleteTests
 {
-    private const string BoundaryNodeId = "node-boundary";
+    internal const string BoundaryNodeId = "node-boundary";
     private const string TemplateHash = "sha256:graph-template";
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -363,7 +363,7 @@ public sealed class GraphBoundaryCompleteTests
         return await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(parent), allowPendingWorkOnTerminalCompletion: allowPendingWork);
     }
 
-    private static WorkflowExecutionHarness NewHarness() =>
+    internal static WorkflowExecutionHarness NewHarness() =>
         WorkflowExecutionHarness.Create()
             .WithFeature(services => new GraphActivitiesRuntimeFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
@@ -371,15 +371,15 @@ public sealed class GraphBoundaryCompleteTests
             .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
             .Build(Enumerable.Range(1, 64).Select(index => $"actexec-{index}"));
 
-    private static ExecutableNode Probe(string nodeId, string? outcome = null) =>
+    internal static ExecutableNode Probe(string nodeId, string? outcome = null) =>
         outcome is null
             ? WorkflowExecutionHarness.NewProbeNode(nodeId)
             : WorkflowExecutionHarness.NewProbeNode(nodeId, [outcome]);
 
-    private static ExecutableNode CompleteNode(string nodeId, string referenceKey) =>
+    internal static ExecutableNode CompleteNode(string nodeId, string referenceKey) =>
         Nodes.Leaf(nodeId, typeof(Complete), new Dictionary<string, object?> { ["outcome"] = referenceKey });
 
-    private static ExecutableNode Sequence(string nodeId, params ExecutableNode[] steps) =>
+    internal static ExecutableNode Sequence(string nodeId, params ExecutableNode[] steps) =>
         Nodes.Structural(
             nodeId,
             typeof(SequenceActivity),
@@ -399,7 +399,7 @@ public sealed class GraphBoundaryCompleteTests
 
     // Mirrors what the publish compiler pins for a graph boundary (see GraphActivityDrive), extended with the
     // compiled Complete outcomes.
-    private static ExecutableNode Boundary(
+    internal static ExecutableNode Boundary(
         ExecutableNode entry,
         IReadOnlyList<GraphActivityOutcomeMappingDescriptor>? outcomeMappings = null,
         IReadOnlyList<GraphActivityCompleteOutcomeDescriptor>? completeOutcomes = null,

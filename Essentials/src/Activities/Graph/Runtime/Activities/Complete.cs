@@ -2,7 +2,6 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
-using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -25,7 +24,6 @@ namespace Elsa.Activities.Graph.Runtime.Activities;
 /// See <c>specs/237-graph-boundary-completion/contracts/complete-activity.md</c> for the emitter contract.
 /// </para>
 /// </remarks>
-[ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class Complete : StructuralActivity, IRuntimeStructuralActivity
 {
     /// <summary>The fault code when <see cref="Outcome"/> is blank at run time.</summary>
