@@ -82,7 +82,8 @@ public sealed class GraphBoundaryCompleteTests
     }
 
     [Fact]
-    public async Task ProbeNestedFlowchartWithoutGraph()
+    // #2756: the inner Flowchart's own path id used to leak to the outer Flowchart through command metadata.
+    public async Task NestedFlowchart_InnerCompletionContinuesTheOuterFlowchart()
     {
         await using var harness = NewHarness();
         var inner = Nodes.Structural(
