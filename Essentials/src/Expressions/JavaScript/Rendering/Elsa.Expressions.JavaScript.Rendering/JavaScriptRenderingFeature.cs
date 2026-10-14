@@ -33,7 +33,7 @@ public class JavaScriptRenderingFeature : IShellFeature
 
     public IEnumerable<JavaScriptVariableDeclaration> VariableDeclarations { get; set; } = [];
 
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         services
             .AddEventHandler<DeclarationsDocumentGenerating, BuildDeclarationsDocument>()

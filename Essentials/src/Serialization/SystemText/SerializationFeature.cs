@@ -20,7 +20,7 @@ namespace Elsa.Serialization.SystemText;
     Description = "Provides JSON-based payload serialization. Features contribute JsonConverters through IJsonConverterSource, collected once at startup.")]
 public class SerializationFeature : IShellFeature
 {
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         services
             .AddSingleton<IPayloadSerializer, JsonPayloadSerializer>()
