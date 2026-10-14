@@ -15,4 +15,8 @@
     <ProjectReference Include="..\Core\Elsa.Expressions.JavaScript.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Expressions.JavaScript.Jint.Tests" />
+  </ItemGroup>
+
 </Project>

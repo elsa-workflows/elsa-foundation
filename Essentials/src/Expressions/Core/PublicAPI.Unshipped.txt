@@ -28,8 +28,6 @@ Elsa.Expressions.Core.Contracts.IExpressionDescriptorRegistry.AddRange(System.Co
 Elsa.Expressions.Core.Contracts.IExpressionDescriptorRegistry.Find(string! type) -> Elsa.Expressions.Core.Contracts.IExpressionDescriptor?
 Elsa.Expressions.Core.Contracts.IExpressionDescriptorRegistry.Find(System.Func<Elsa.Expressions.Core.Contracts.IExpressionDescriptor!, bool>! predicate) -> Elsa.Expressions.Core.Contracts.IExpressionDescriptor?
 Elsa.Expressions.Core.Contracts.IExpressionDescriptorRegistry.ListAll() -> System.Collections.Generic.IEnumerable<Elsa.Expressions.Core.Contracts.IExpressionDescriptor!>!
-Elsa.Expressions.Core.Contracts.IExpressionEvaluatorOptions
-Elsa.Expressions.Core.Contracts.IExpressionEvaluatorOptions.Arguments.get -> System.Collections.Generic.IDictionary<string!, object!>!
 Elsa.Expressions.Core.Contracts.IExpressionToolingProvider
 Elsa.Expressions.Core.Contracts.IExpressionToolingProvider.DeclaredCapabilities.get -> Elsa.Expressions.Core.Models.ExpressionToolingCapabilities!
 Elsa.Expressions.Core.Contracts.IExpressionToolingProvider.ExpressionType.get -> string!
@@ -59,12 +57,6 @@ Elsa.Expressions.Core.Contracts.IVariable<TValue>
 Elsa.Expressions.Core.Contracts.IVariable<TValue>.WithId(string! id) -> Elsa.Expressions.Core.Contracts.IVariable<TValue>!
 Elsa.Expressions.Core.Contracts.IVariable<TValue>.WithName(string! name) -> Elsa.Expressions.Core.Contracts.IVariable<TValue>!
 Elsa.Expressions.Core.Contracts.IVariable<TValue>.WithValue(TValue value) -> Elsa.Expressions.Core.Contracts.IVariable<TValue>!
-Elsa.Expressions.Core.Contracts.IVariableFactory
-Elsa.Expressions.Core.Contracts.IVariableFactory.Create(string! name, object? value = null, string? id = null) -> Elsa.Expressions.Core.Contracts.IVariable!
-Elsa.Expressions.Core.Contracts.IVariableFactory.Create<T>(string! name, T value, string? id = null) -> Elsa.Expressions.Core.Contracts.IVariable<T>!
-Elsa.Expressions.Core.Contracts.IVariableMapper
-Elsa.Expressions.Core.Contracts.IVariableMapper.Map(Elsa.Expressions.Core.Contracts.IVariable! source) -> Elsa.Expressions.Core.Models.VariableDefinition!
-Elsa.Expressions.Core.Contracts.IVariableMapper.Map(Elsa.Expressions.Core.Models.VariableDefinition! source) -> Elsa.Expressions.Core.Contracts.IVariable!
 Elsa.Expressions.Core.Contracts.IVariableTypeDescriptorCatalog
 Elsa.Expressions.Core.Contracts.IVariableTypeDescriptorCatalog.GetDescriptors() -> System.Collections.Generic.IEnumerable<Elsa.Expressions.Core.Models.TypeDescriptor!>!
 Elsa.Expressions.Core.Contracts.IVariableTypeDescriptorCatalog.GetDescriptorsByCategory() -> System.Collections.Generic.IEnumerable<System.Linq.IGrouping<string!, Elsa.Expressions.Core.Models.TypeDescriptor!>!>!
@@ -72,7 +64,6 @@ Elsa.Expressions.Core.Contracts.IVariableTypeDescriptorProvider
 Elsa.Expressions.Core.Contracts.IVariableTypeDescriptorProvider.GetDescriptors() -> System.Collections.Generic.IEnumerable<Elsa.Expressions.Core.Models.TypeDescriptor!>!
 Elsa.Expressions.Core.Exceptions.ArgumentDefinitionDeserializationException
 Elsa.Expressions.Core.Exceptions.ArgumentDefinitionDeserializationException.ArgumentDefinitionDeserializationException(string! message, System.Exception! innerException) -> void
-Elsa.Expressions.Core.Helpers.DynamicValueMaterializer
 Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding
 Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.ActivityResultExpressionParameterBinding(string! producerNodeId, string! projectionKey, bool isOptional = false) -> void
 Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? other) -> bool
@@ -604,7 +595,6 @@ override sealed Elsa.Expressions.Core.Models.WorkflowRequestExpressionParameterB
 static Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.operator !=(Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities? left, Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities? right) -> bool
 static Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.operator ==(Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities? left, Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities? right) -> bool
 static Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities.Resolve(string! profile) -> Elsa.Expressions.Core.Contracts.ExpressionEvaluationCapabilities!
-static Elsa.Expressions.Core.Helpers.DynamicValueMaterializer.Materialize(object? value) -> object?
 static Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.operator !=(Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? left, Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? right) -> bool
 static Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.operator ==(Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? left, Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding? right) -> bool
 static Elsa.Expressions.Core.Models.ArgumentValue.operator !=(Elsa.Expressions.Core.Models.ArgumentValue? left, Elsa.Expressions.Core.Models.ArgumentValue? right) -> bool

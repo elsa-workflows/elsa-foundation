@@ -1,8 +1,9 @@
 ﻿using CShells.Features;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Elsa.Expressions.JavaScript.Rendering.Contracts;
 using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
-using Elsa.Expressions.JavaScript.Rendering.Core.Events;
 using Elsa.Expressions.JavaScript.Rendering.Core.Models;
+using Elsa.Expressions.JavaScript.Rendering.Events;
 using Elsa.Expressions.JavaScript.Rendering.Handlers;
 using Elsa.Expressions.JavaScript.Rendering.Services;
 using Elsa.Expressions.JavaScript.Rendering.Contributors;

@@ -1,8 +1,8 @@
 ﻿using Elsa.Expressions.Core.Models;
 
-namespace Elsa.Expressions.JavaScript.Core.Models;
+namespace Elsa.Expressions.JavaScript.Models;
 
-public sealed class JavaScriptExpressionDescriptor : ExpressionDescriptor
+internal sealed class JavaScriptExpressionDescriptor : ExpressionDescriptor
 {
     public const string JavaScriptExpressionTypeName = "JavaScript";
     public const string MonacoLanguagePropertyKey = "MonacoLanguage";

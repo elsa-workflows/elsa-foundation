@@ -1,8 +1,13 @@
+using System.Text.Json;
+using Elsa.Events;
 using Elsa.Expressions.JavaScript.Rendering;
+using Elsa.Expressions.JavaScript.Rendering.Core.Constants;
 using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
-using Elsa.Expressions.JavaScript.Rendering.Core.Models;
+using Elsa.Testing;
 using Elsa.Workflows.Design.JavaScript;
 using Elsa.Workflows.Design.JavaScript.Contributors;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -10,20 +15,19 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 
 public sealed class JavaScriptDeclarationSurfaceTests
 {
+    private static readonly string[] TypeDeclarationKeywords =
+        [DeclarationKeywords.Class, DeclarationKeywords.Enum, DeclarationKeywords.Interface, DeclarationKeywords.Type];
+
     [Fact]
     public async Task Workflow_design_renders_only_the_readonly_args_global_for_binding_pure_expressions()
     {
-        var services = new ServiceCollection();
-        new JavaScriptWorkflowsDesignFeature().ConfigureServices(services);
-        new JavaScriptRenderingFeature().ConfigureServices(services);
-        await using var provider = services.BuildServiceProvider();
-        var workflowContributor = new BindingPureArgsDeclarationContributor();
-        var context = new RecordingContributionContext();
+        var document = await RenderDeclarationsAsync();
 
-        await workflowContributor.Contribute(context, CancellationToken.None);
-        var rendered = provider.GetRequiredService<IJavaScriptDeclarationsDocumentRenderer>().Render(context.Document);
-
-        Assert.Equal("declare const args: Readonly<Record<string, any>>;\n", rendered.ReplaceLineEndings("\n"));
+        // The rendering feature's own contributor declares types; every global the composed surface declares is args.
+        var globals = document.ReplaceLineEndings("\n").Split('\n')
+            .Where(line => line.StartsWith("declare ", StringComparison.Ordinal) && !TypeDeclarationKeywords.Contains(line.Split(' ')[1]))
+            .ToArray();
+        Assert.Equal(["declare const args: Readonly<Record<string, any>>;"], globals);
     }
 
     // Kept beside the composition test: asserts what the feature must not register (removed ambient contributors).
@@ -50,21 +54,33 @@ public sealed class JavaScriptDeclarationSurfaceTests
         Assert.Empty(feature.VariableDeclarations);
     }
 
-    private sealed class RecordingContributionContext : IJavaScriptDeclarationsContributionContext
+    /// <summary>
+    /// The declarations document as the public rendering endpoint serves it, over the workflow design and rendering
+    /// features. The document factory and renderer behind the endpoint are internal to the rendering feature.
+    /// </summary>
+    private static async Task<string> RenderDeclarationsAsync()
     {
-        private readonly List<JavaScriptFunctionDeclaration> _functions = [];
-        private readonly List<JavaScriptTypeDeclaration> _types = [];
-        private readonly List<JavaScriptVariableDeclaration> _variables = [];
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddRouting();
+        new EventsFeature().ConfigureServices(services);
+        new JavaScriptRenderingFeature().ConfigureServices(services);
+        new JavaScriptRenderingEndpointsFeature().ConfigureServices(services);
+        new JavaScriptWorkflowsDesignFeature().ConfigureServices(services);
+        await using var provider = services.BuildServiceProvider();
 
-        public JavaScriptDeclarationsDocument Document => new()
-        {
-            Functions = _functions,
-            Types = _types,
-            Variables = _variables
-        };
+        var routes = new TestEndpointRouteBuilder(provider);
+        new JavaScriptRenderingEndpointsFeature().MapEndpoints(routes, environment: null);
+        var endpoint = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>()
+            .Single(candidate => candidate.RoutePattern.RawText == "javascript/documents/render");
 
-        public void AddVariable(JavaScriptVariableDeclaration declaration) => _variables.Add(declaration);
-        public void AddType(JavaScriptTypeDeclaration declaration) => _types.Add(declaration);
-        public void AddFunction(JavaScriptFunctionDeclaration declaration) => _functions.Add(declaration);
+        await using var scope = provider.CreateAsyncScope();
+        var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider, Response = { Body = new MemoryStream() } };
+        await endpoint.RequestDelegate!(context);
+
+        context.Response.Body.Position = 0;
+        using var response = await JsonDocument.ParseAsync(context.Response.Body);
+        Assert.True(response.RootElement.GetProperty("success").GetBoolean(), response.RootElement.ToString());
+        return response.RootElement.GetProperty("document").GetString()!;
     }
 }
