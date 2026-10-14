@@ -70,6 +70,8 @@ Elsa.Expressions.Core.Contracts.IVariableTypeDescriptorCatalog.GetDescriptors() 
 Elsa.Expressions.Core.Contracts.IVariableTypeDescriptorCatalog.GetDescriptorsByCategory() -> System.Collections.Generic.IEnumerable<System.Linq.IGrouping<string!, Elsa.Expressions.Core.Models.TypeDescriptor!>!>!
 Elsa.Expressions.Core.Contracts.IVariableTypeDescriptorProvider
 Elsa.Expressions.Core.Contracts.IVariableTypeDescriptorProvider.GetDescriptors() -> System.Collections.Generic.IEnumerable<Elsa.Expressions.Core.Models.TypeDescriptor!>!
+Elsa.Expressions.Core.Exceptions.ArgumentDefinitionDeserializationException
+Elsa.Expressions.Core.Exceptions.ArgumentDefinitionDeserializationException.ArgumentDefinitionDeserializationException(string! message, System.Exception! innerException) -> void
 Elsa.Expressions.Core.Helpers.DynamicValueMaterializer
 Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding
 Elsa.Expressions.Core.Models.ActivityResultExpressionParameterBinding.ActivityResultExpressionParameterBinding(string! producerNodeId, string! projectionKey, bool isOptional = false) -> void
