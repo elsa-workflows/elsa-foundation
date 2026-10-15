@@ -139,7 +139,7 @@ internal static class PermissionBypassScanner
             .Where(entry => entry.Method.GetMethodBody()?.GetILAsByteArray() is { Length: > 0 })
             .ToArray();
         var contributedKeys = ContributedPermissionKeys(types);
-        var state = new ScanState([.. NamedPermissionConstants(types), .. contributedKeys]);
+        var state = new ScanState([.. NamedPermissionConstants(types), .. contributedKeys.Where(IsNamespacedKey)]);
 
         // What one method learns (an alias, a returned value, a sink parameter) can change what an earlier
         // method passes, so sweep until nothing new is learned; the findings of the last sweep, which saw it all, are
@@ -193,12 +193,11 @@ internal static class PermissionBypassScanner
     }
 
     /// <summary>
-    /// The namespaced keys every <see cref="IPermissionContributor"/> in the scanned assemblies contributes to the
-    /// permission catalog. Each contributor is constructed and asked, so the keys are exactly what the catalog will
-    /// hold, however the contributor builds them; one that cannot be constructed fails the scan rather than being
-    /// skipped.
+    /// The keys every <see cref="IPermissionContributor"/> in <paramref name="types"/> contributes to the permission
+    /// catalog. Each contributor is constructed and asked, so the keys are exactly what the catalog will hold, however the
+    /// contributor builds them; one that cannot be constructed fails the scan rather than being skipped.
     /// </summary>
-    private static HashSet<string> ContributedPermissionKeys(IEnumerable<Type> types)
+    internal static HashSet<string> ContributedPermissionKeys(IEnumerable<Type> types)
     {
         var keys = new HashSet<string>(StringComparer.Ordinal);
         foreach (var type in types.Where(type => type is { IsClass: true, IsAbstract: false } && typeof(IPermissionContributor).IsAssignableFrom(type)))
@@ -215,7 +214,7 @@ internal static class PermissionBypassScanner
                     "declares. Give it a parameterless constructor or teach the scan how to build it.", exception);
             }
 
-            keys.UnionWith(contributor.Contribute().Select(permission => permission.Key).Where(IsNamespacedKey));
+            keys.UnionWith(contributor.Contribute().Select(permission => permission.Key));
         }
 
         return keys;
