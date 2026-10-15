@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "4a1df9773cdc635bfd735f62293e9821d9163c0f",
+  "last_publish_commit": "4b902aaa2980ab49c4d47bd7f5589ff507fe01bb",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -44,8 +44,8 @@
     },
     {
       "package_id": "Elsa.Activities.Design.Reconciliation.Clr",
-      "version": "4.0.9-preview",
-      "commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c"
+      "version": "4.0.10-preview",
+      "commit": "4b902aaa2980ab49c4d47bd7f5589ff507fe01bb"
     },
     {
       "package_id": "Elsa.Activities.Design.Reconciliation.Json",
@@ -94,8 +94,8 @@
     },
     {
       "package_id": "Elsa.Activities.Runtime.Core",
-      "version": "4.0.12-preview",
-      "commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c"
+      "version": "4.0.13-preview",
+      "commit": "4b902aaa2980ab49c4d47bd7f5589ff507fe01bb"
     },
     {
       "package_id": "Elsa.Activities.Scheduling",
@@ -669,23 +669,23 @@
     },
     {
       "package_id": "Elsa3.Activities.Design.Import",
-      "version": "4.0.11-preview",
-      "commit": "d2acadc1c7eda9f2de3f35d481493ae4896cdb04"
+      "version": "4.0.12-preview",
+      "commit": "4b902aaa2980ab49c4d47bd7f5589ff507fe01bb"
     },
     {
       "package_id": "Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore",
-      "version": "4.0.18-preview",
-      "commit": "d2acadc1c7eda9f2de3f35d481493ae4896cdb04"
+      "version": "4.0.19-preview",
+      "commit": "4b902aaa2980ab49c4d47bd7f5589ff507fe01bb"
     },
     {
       "package_id": "Elsa3.Mapping",
-      "version": "4.0.10-preview",
-      "commit": "d2acadc1c7eda9f2de3f35d481493ae4896cdb04"
+      "version": "4.0.11-preview",
+      "commit": "4b902aaa2980ab49c4d47bd7f5589ff507fe01bb"
     },
     {
       "package_id": "Elsa3.Models",
-      "version": "4.0.5-preview",
-      "commit": "d2acadc1c7eda9f2de3f35d481493ae4896cdb04"
+      "version": "4.0.6-preview",
+      "commit": "4b902aaa2980ab49c4d47bd7f5589ff507fe01bb"
     },
     {
       "package_id": "dotnet-elsa",
