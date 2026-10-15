@@ -1,0 +1,6 @@
+#nullable enable
+Elsa.Primitives.Hosting.Extensions.IdentityGeneratorServiceCollectionExtensions
+Elsa.Primitives.Hosting.PrimitivesFeature
+Elsa.Primitives.Hosting.PrimitivesFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Primitives.Hosting.PrimitivesFeature.PrimitivesFeature() -> void
+static Elsa.Primitives.Hosting.Extensions.IdentityGeneratorServiceCollectionExtensions.AddIdentityGenerator(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Elsa.Primitives.Identity.IdentityGeneratorKind kind, System.Action<Elsa.Primitives.Identity.SnowflakeIdentityGeneratorOptions!>? configureSnowflake = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

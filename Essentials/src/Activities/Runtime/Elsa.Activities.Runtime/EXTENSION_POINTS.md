@@ -29,6 +29,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 - **Usage:** declares a stable runtime resume target ID. Workflow compile/publish can copy the ID into a runtime executable artifact's resume-target table. Durable bookmarks store this ID, not the C# method name.
 - **Related runtime seam:** `IBookmarkResumeResolver` in `Elsa.Workflows.Runtime.Core`.
 
+### `ActivityAttribute` *(Core — `Elsa.Activities.Runtime.Core`)*
+- **Kind:** Declaration surface (activity author contract).
+- **Signature:** `[Activity(Icon = "Rocket" | "git-branch" | "asset:Package.Id/icons/name.svg" | "ext:slack")]` on an activity class.
+- **Usage:** optional designer icon. CLR reconciliation copies a valid value onto an `elsa.activity-icon` design facet; the authoring catalog exposes it as `iconName`. Accepted forms are a lucide export or kebab name, `asset:<package>/<path>` for a static web asset in the extension package, or `ext:<name>` for a React icon registered on the Studio client via `registerActivityIcons`. An unknown, empty or unsafe value is ignored so the designer keeps its type/category fallback. The facet is presentation only and is excluded from the descriptor hash, so adding or changing an icon does not throw `ActivityVersionHashMismatchException`.
+- **Related design seam:** `ActivityIconName` in `Elsa.Activities.Design.Core`; Studio `registerActivityIcons` in `@elsa-workflows/studio-sdk`.
+
 ### `TriggerActivityAttribute` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Declaration surface (activity author contract).
 - **Signature:** `[TriggerActivity]` on an activity class that can start a workflow from an external stimulus.
@@ -38,7 +44,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 ### `RefusesSecretBindingAttribute` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Declaration surface (activity author contract).
 - **Signature:** `[RefusesSecretBinding("InputKey", SecretBindingRefusalReason.PersistedByActivity | FixedAtPublish | EchoedToOutput)]` on an activity class, once per input (`AllowMultiple`, inherited).
-- **Usage:** an activity author must apply it to every input whose value the activity copies into its own persisted state (`PersistedByActivity`), that a publish-time reader needs as a literal (`FixedAtPublish`), or that the activity returns in its result or copies into a fault (`EchoedToOutput`). Publication refuses a secret reference on such an input with `VF-ACT-012`, naming the node, the input and the reason. The marker is read by reflection over the activity's CLR type at publish and is never written into the activity catalog, so adding it changes no catalog hash.
+- **Usage:** an activity author must apply it to every input whose value the activity copies into its own persisted state (`PersistedByActivity`), that a publish-time reader needs as a literal (`FixedAtPublish`), or that the activity returns in its result, writes out of the workflow (for example to the console or an HTTP response) or copies into a fault (`EchoedToOutput`). Publication refuses a secret reference on such an input with `VF-ACT-012`, naming the node, the input and the reason. The marker is read by reflection over the activity's CLR type at publish and is never written into the activity catalog, so adding it changes no catalog hash.
 - **Related runtime seam:** `SecretBindingDiagnostics` in `Elsa.Workflows.Runtime.Core` owns the `VF-ACT-012` message for each `SecretBindingRefusalReason`.
 
 ### `ActivityInputAttribute.IsSensitive` / `ActivityInputAttribute.IsCredential` *(Core — `Elsa.Activities.Runtime.Core`)*
@@ -82,5 +88,5 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 
 ## Cross-references
 
-- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.22.1; Elsa §E2.2 (no Runtime → Design dependency).

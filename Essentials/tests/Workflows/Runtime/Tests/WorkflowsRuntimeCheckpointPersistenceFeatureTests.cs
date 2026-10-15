@@ -69,7 +69,7 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
         Assert.Same(selectedProvider, provider.GetRequiredService<CoalescingInner<IRuntimeCheckpointCommitStore>>().Value);
         Assert.NotNull(provider.GetService<IRuntimeCoalescingDrainScopeFactory>());
         using var scope = provider.CreateScope();
-        Assert.Equal(PersistenceMode.Balanced, scope.ServiceProvider.GetRequiredService<IRuntimePersistenceModeResolver>().Resolve(executable: null));
+        Assert.Equal(PersistenceMode.Balanced, scope.ServiceProvider.GetRequiredService<IRuntimePersistenceModeResolver>().Resolve(RuntimePersistenceModeResolverTests.Executable(null)));
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
         Assert.Same(selectedProvider, provider.GetRequiredService<CoalescingInner<IRuntimeCheckpointCommitStore>>().Value);
         Assert.NotNull(provider.GetService<IRuntimeCoalescingDrainScopeFactory>());
         using var scope = provider.CreateScope();
-        Assert.Equal(PersistenceMode.Durable, scope.ServiceProvider.GetRequiredService<IRuntimePersistenceModeResolver>().Resolve(executable: null));
+        Assert.Equal(PersistenceMode.Durable, scope.ServiceProvider.GetRequiredService<IRuntimePersistenceModeResolver>().Resolve(RuntimePersistenceModeResolverTests.Executable(null)));
     }
 
     [Theory]
@@ -136,20 +136,12 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public async Task SessionUsesTheHostCapAndBothReadSettings(
-        bool coalesceDurableValueReads,
-        bool coalesceInspectionReads)
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SessionUsesTheHostCapAndReadSetting(bool coalesceDurableValueReads)
     {
         var services = CreateRuntimeServices();
-        services.AddPersistenceModes(options =>
-        {
-            options.CoalesceInspectionReads = coalesceInspectionReads;
-            options.CoalesceDurableValueReads = coalesceDurableValueReads;
-        });
+        services.AddPersistenceModes(options => options.CoalesceDurableValueReads = coalesceDurableValueReads);
 
         using var provider = services.BuildServiceProvider();
         var hostOptions = provider.GetRequiredService<PersistenceModeOptions>();
@@ -158,9 +150,7 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
 
         Assert.Equal(hostOptions.MaxActivitiesPerCommit, scope.Session.MaxActivitiesPerCommit);
         Assert.Equal(coalesceDurableValueReads, scope.Session.CoalesceDurableValueReads);
-        Assert.Equal(coalesceInspectionReads, scope.Session.CoalesceInspectionReads);
         Assert.Equal(coalesceDurableValueReads, hostOptions.CoalesceDurableValueReads);
-        Assert.Equal(coalesceInspectionReads, hostOptions.CoalesceInspectionReads);
     }
 
     [Fact]
@@ -173,8 +163,31 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeatureTests
 
         var exception = Assert.Throws<InvalidOperationException>(() => feature.ConfigureServices(CreateRuntimeServices()));
 
-        Assert.Contains("WorkflowsRuntimeCheckpointPersistence", exception.Message);
         Assert.Contains("999", exception.Message);
+        Assert.Contains("Durable, Balanced, Ephemeral", exception.Message);
+    }
+
+    [Fact]
+    public void A_feature_that_extends_it_registers_the_settings_and_its_own_services()
+    {
+        var services = CreateRuntimeServices();
+
+        new ExtendedCheckpointPersistenceFeature { Mode = PersistenceMode.Ephemeral }.ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.Equal(PersistenceMode.Ephemeral, provider.GetRequiredService<PersistenceModeOptions>().Mode);
+        Assert.NotNull(provider.GetService<ExtendedCheckpointPersistenceFeature.Marker>());
+    }
+
+    private sealed class ExtendedCheckpointPersistenceFeature : WorkflowsRuntimeCheckpointPersistenceFeature
+    {
+        public override void ConfigureServices(IServiceCollection services)
+        {
+            base.ConfigureServices(services);
+            services.AddSingleton<Marker>();
+        }
+
+        public sealed class Marker;
     }
 
     [Theory]

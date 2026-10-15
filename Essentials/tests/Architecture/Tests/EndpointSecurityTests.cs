@@ -41,7 +41,7 @@ public sealed class EndpointSecurityTests
     [
         typeof(Elsa.Workflows.Design.Api.Authorization.WorkflowDesignPermissions).Assembly,
         typeof(Elsa.Activities.Design.Api.Authorization.ActivityDesignPermissions).Assembly,
-        typeof(Elsa.Expressions.Api.Authorization.ExpressionsPermissions).Assembly,
+        typeof(Elsa.Expressions.Api.ExpressionsApiFeature).Assembly,
         typeof(Elsa.Workflows.Publishing.Api.Authorization.WorkflowPublishingPermissions).Assembly,
         typeof(Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions).Assembly,
         typeof(Elsa.Api.Capabilities.Authorization.ApiCapabilitiesPermissions).Assembly,
@@ -51,7 +51,7 @@ public sealed class EndpointSecurityTests
 
     /// <summary>
     /// Reads a declared permission constant by its fully-qualified "Namespace.Type.Field" name.
-    /// Reflection is used because two owners declare their permissions as <c>internal</c>; the guard
+    /// Reflection is used because some owners declare their permissions as <c>internal</c>; the guard
     /// should check the real declaration rather than force an accessibility change to suit a test.
     /// </summary>
     private static string ReadDeclaredPermission(string qualifiedField)

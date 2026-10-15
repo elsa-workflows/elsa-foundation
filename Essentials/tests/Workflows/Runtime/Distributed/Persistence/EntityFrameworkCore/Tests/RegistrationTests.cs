@@ -664,7 +664,7 @@ public sealed class RegistrationTests
         return tables.ToArray();
     }
 
-    private static void DeleteSqliteFiles(string path) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles(path);
+    private static void DeleteSqliteFiles(string path) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles($"Data Source={path}");
 
     private sealed class DerivedExecutionPlacementFeature : DistributedRuntimeExecutionPlacementEntityFrameworkCoreFeature
     {

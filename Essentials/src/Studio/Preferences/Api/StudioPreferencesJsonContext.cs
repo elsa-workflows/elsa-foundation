@@ -1,3 +1,4 @@
+using Elsa.Studio.Preferences.Api.Models;
 using Elsa.Studio.Preferences.Core.Models;
 using System.Text.Json.Serialization;
 
@@ -13,4 +14,6 @@ namespace Elsa.Studio.Preferences.Api;
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(StudioPreferenceDocument))]
+[JsonSerializable(typeof(HomeLayoutDocument))]
+[JsonSerializable(typeof(PutHomeLayoutRequest))]
 internal partial class StudioPreferencesJsonContext : JsonSerializerContext;

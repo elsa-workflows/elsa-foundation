@@ -7,11 +7,11 @@ import {
   descriptorAlias,
   friendlyTypeLabel,
   generateUniqueName,
+  isPersistenceMode,
   literalDefault,
   makeArgumentType,
   readArgumentType,
   readIncidentStrategyReference,
-  readPersistenceMode,
   readStoredPersistenceMode,
   readStringField,
   readVariableDefault,
@@ -58,13 +58,12 @@ describe("incident strategy options", () => {
 });
 
 describe("persistence mode option", () => {
-  it("reads only the exact mode names and keeps the raw stored value readable", () => {
-    expect(readPersistenceMode({ persistenceMode: "Ephemeral" })).toBe("Ephemeral");
-    expect(readPersistenceMode({ persistenceMode: "balanced" })).toBeNull();
-    expect(readPersistenceMode({ persistenceMode: "Coalesced" })).toBeNull();
+  it("recognizes only the exact mode names and keeps the raw stored value readable", () => {
+    expect(isPersistenceMode(readStoredPersistenceMode({ persistenceMode: "Ephemeral" }))).toBe(true);
+    expect(isPersistenceMode(readStoredPersistenceMode({ persistenceMode: "balanced" }))).toBe(false);
     expect(readStoredPersistenceMode({ persistenceMode: "Coalesced" })).toBe("Coalesced");
-    expect(readPersistenceMode({})).toBeNull();
-    expect(readPersistenceMode(null)).toBeNull();
+    expect(readStoredPersistenceMode({})).toBeNull();
+    expect(readStoredPersistenceMode(null)).toBeNull();
   });
 
   it("sets a mode without losing sibling strategy options", () => {

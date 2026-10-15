@@ -40,6 +40,6 @@ internal sealed class SqliteImportHarness : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await Database.DisposeAsync();
-        TemporarySqliteDatabase.ClearPoolAndDeleteFiles(path);
+        TemporarySqliteDatabase.ClearPoolAndDeleteFiles(ConnectionStringFor(path));
     }
 }

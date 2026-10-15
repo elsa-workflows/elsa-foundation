@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.Text.Json;
 using Elsa.Expressions.Core.Contracts;
-using Elsa.Expressions.Core.Helpers;
 using Elsa.Expressions.Core.Models;
+using Elsa.Expressions.Liquid.Helpers;
 using Fluid;
 
 namespace Elsa.Expressions.Liquid.Services;
@@ -10,7 +10,7 @@ namespace Elsa.Expressions.Liquid.Services;
 /// <summary>
 /// Evaluates pure Liquid bindings from their complete, explicitly declared JSON parameter snapshot.
 /// </summary>
-public sealed class PortableLiquidExpressionHandler(FluidParser parser) : IPortableExpressionHandler
+internal sealed class PortableLiquidExpressionHandler(FluidParser parser) : IPortableExpressionHandler
 {
     private static readonly HashSet<string> NumericAliases =
     [

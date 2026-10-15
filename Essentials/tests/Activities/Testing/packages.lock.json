@@ -297,6 +297,14 @@
           "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )"
         }
       },
+      "elsa.serialization.testing": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Serialization.SystemText": "[4.0.0-dev, )",
+          "Microsoft.Extensions.DependencyInjection": "[10.0.10, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )"
+        }
+      },
       "elsa.tasks.core": {
         "type": "Project",
         "dependencies": {

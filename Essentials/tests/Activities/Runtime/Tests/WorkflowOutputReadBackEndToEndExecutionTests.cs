@@ -118,7 +118,7 @@ public sealed class WorkflowOutputReadBackEndToEndExecutionTests
             provider.GetRequiredService<IDurableValueStateStore>(),
             provider.GetRequiredService<IRuntimePayloadCapturePolicy>(),
             new AllowAllActivityExecutionInspectionAuthorizationContext(),
-            new Elsa.Workflows.Runtime.Api.Coalescing.RuntimePersistenceModeInspector([]));
+            new Elsa.Workflows.Runtime.Api.Coalescing.RuntimePersistenceModeInspector([new PersistenceModeOptions()]));
         var view = await readService.GetAsync(new GetWorkflowInstance(workflowExecutionId), CancellationToken.None);
 
         Assert.NotNull(view);

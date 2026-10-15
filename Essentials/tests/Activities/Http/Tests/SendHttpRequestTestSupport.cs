@@ -7,7 +7,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.SystemText;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -160,8 +160,7 @@ internal static class SendHttpRequestTestSupport
             ? new ValueTypeDescriptor(reference.Alias, reference.CollectionKind)
             : throw new InvalidOperationException($"Could not describe '{type}'.");
 
-    internal static Elsa.Serialization.Core.IPayloadSerializer Serializer =>
-        TestPayloadSerializers.NewPayloadSerializer();
+    internal static readonly Elsa.Serialization.Core.IPayloadSerializer Serializer = SerializationServices.PayloadSerializer();
 
     internal sealed class StubHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler
     {

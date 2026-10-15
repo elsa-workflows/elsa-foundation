@@ -8,7 +8,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Resolvers;
 using Elsa.Workflows.Runtime.Services.Values;
@@ -20,7 +20,7 @@ internal static class TypedActivityTestActivation
 {
     public static RuntimeActivityInputMaterializer CreateMaterializer()
     {
-        var registry = new WellKnownTypeRegistry();
+        var registry = SerializationServices.TypeRegistry();
         registry.RegisterType(typeof(string), "String");
         return new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), registry);
     }
@@ -32,9 +32,9 @@ internal static class TypedActivityTestActivation
     {
         var activityType = typeof(TActivity);
         var alias = TypeAliasConvention.CanonicalAlias(activityType);
-        var registry = new WellKnownTypeRegistry();
+        var registry = SerializationServices.TypeRegistry();
         registry.RegisterType(activityType, alias);
-        var serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+        var serializer = SerializationServices.PayloadSerializer();
         var contractInputs = activityType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .Select(property => (Property: property, Attribute: property.GetCustomAttribute<ActivityInputAttribute>(inherit: true)))
             .Where(item => item.Attribute is not null)

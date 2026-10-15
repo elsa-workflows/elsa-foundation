@@ -1,6 +1,6 @@
 using Elsa.Expressions.Services;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 
 namespace Elsa.Expressions.Tests.Unit;
 
@@ -13,7 +13,7 @@ internal static class TestRegistry
 {
     public static IWellKnownTypeRegistry SeededWithPrimitives()
     {
-        var registry = new WellKnownTypeRegistry();
+        var registry = SerializationServices.TypeRegistry();
         foreach (var descriptor in new DefaultVariableTypeDescriptorProvider().GetDescriptors())
             registry.RegisterType(descriptor.ClrType, descriptor.Alias);
         return registry;

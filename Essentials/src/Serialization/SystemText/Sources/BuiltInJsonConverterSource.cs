@@ -9,7 +9,7 @@ namespace Elsa.Serialization.SystemText.Sources;
 /// Contributes the built-in <see cref="JsonConverter"/> set shipped by the Serialization
 /// feature: enum-as-string, TimeSpan, Type converter (the registry-alias type discriminator).
 /// </summary>
-public sealed class BuiltInJsonConverterSource(TypeJsonConverter typeJsonConverter) : IJsonConverterSource
+internal sealed class BuiltInJsonConverterSource(TypeJsonConverter typeJsonConverter) : IJsonConverterSource
 {
     public IEnumerable<JsonConverter> GetConverters()
     {

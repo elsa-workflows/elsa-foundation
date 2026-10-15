@@ -8,6 +8,6 @@ namespace Elsa.Expressions.Liquid.Helpers;
 /// 
 /// e.g. {{ LiquidPropertyAccessor.MyPropertyName }} (MyPropertyName will be passed as the identifier argument to the factory)
 /// </summary>
-public sealed class LiquidPropertyAccessor(Func<string, Task<FluidValue>> getter) : LiquidObjectAccessor<FluidValue>(getter!)
+internal sealed class LiquidPropertyAccessor(Func<string, Task<FluidValue>> getter) : LiquidObjectAccessor<FluidValue>(getter!)
 {
 }

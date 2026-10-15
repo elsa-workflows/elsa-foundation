@@ -179,8 +179,10 @@ internal sealed class ActivationGuardHarness : IDisposable
 
     public void Dispose()
     {
-        // The pool holds the files open, and a pooled handle outlives the context that opened it.
-        SqliteConnection.ClearAllPools();
+        // The pool holds the files open, and a pooled handle outlives the context that opened it. Only this harness's
+        // pools: clearing every pool can dispose a connection another test is opening (#2185).
+        foreach (var database in Directory.EnumerateFiles(_root.FullName, "*.db", SearchOption.AllDirectories))
+            SqliteConnection.ClearPool(new SqliteConnection(ConnectionTo(database)));
         try
         {
             _root.Delete(recursive: true);

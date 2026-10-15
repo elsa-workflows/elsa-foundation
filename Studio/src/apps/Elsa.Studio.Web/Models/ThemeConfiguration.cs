@@ -21,7 +21,7 @@ public class ThemeConfiguration
     public string ThemesMode { get; set; } = "AddToBuiltIns";
 
     /// <summary>
-    /// Default theme ID to select on first load (e.g., "meridian").
+    /// Default theme ID to select on first load (e.g., "classic").
     /// </summary>
     public string? DefaultThemeId { get; set; }
 }

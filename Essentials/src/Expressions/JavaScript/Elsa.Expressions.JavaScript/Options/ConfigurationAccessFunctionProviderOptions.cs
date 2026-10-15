@@ -1,6 +1,6 @@
 ﻿namespace Elsa.Expressions.JavaScript.Options;
 
-public class ConfigurationAccessFunctionProviderOptions
+internal class ConfigurationAccessFunctionProviderOptions
 {
     public bool AllowConfigurationAccess { get; set; } = false;
 

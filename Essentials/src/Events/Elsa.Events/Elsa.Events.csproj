@@ -1,5 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
@@ -12,6 +16,10 @@
     <ProjectReference Include="..\..\Pipelines\Core\Elsa.Pipelines.Core.csproj" />
     <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />
     <ProjectReference Include="..\..\Tasks\Core\Elsa.Tasks.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Events.Tests" />
   </ItemGroup>
 
 </Project>

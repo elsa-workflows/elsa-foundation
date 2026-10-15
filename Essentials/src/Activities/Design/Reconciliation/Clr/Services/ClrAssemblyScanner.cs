@@ -49,6 +49,7 @@ public sealed class ClrAssemblyScanner(
     private static readonly string ActivityChildSlotAttributeFullName = typeof(ActivityChildSlotAttribute).FullName!;
     private static readonly string ActivityOutcomeAttributeFullName = typeof(ActivityOutcomeAttribute).FullName!;
     private static readonly string ActivityValueOutcomesAttributeFullName = typeof(ActivityValueOutcomesAttribute).FullName!;
+    private static readonly string ActivityAttributeFullName = typeof(ActivityAttribute).FullName!;
     private static readonly string RefusesSecretBindingAttributeFullName = typeof(RefusesSecretBindingAttribute).FullName!;
     private static readonly string StringTypeFullName = typeof(string).FullName!;
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
@@ -249,7 +250,34 @@ public sealed class ClrAssemblyScanner(
         if (outcomesFacet is not null)
             facets.Add(outcomesFacet);
 
+        var iconFacet = BuildIconFacet(type);
+        if (iconFacet is not null)
+            facets.Add(iconFacet);
+
         return facets;
+    }
+
+    /// <summary>
+    /// Reads <see cref="ActivityAttribute.Icon"/> from <paramref name="type"/> or a base class
+    /// (MetadataLoadContext does not honour <c>Inherited = true</c>) and, when the value is an
+    /// accepted lucide / <c>asset:</c> / <c>ext:</c> name, emits the catalog icon facet.
+    /// </summary>
+    private static ActivityDesignFacet? BuildIconFacet(Type type)
+    {
+        for (var current = (Type?)type; current is not null; current = current.BaseType)
+        {
+            var attribute = current.GetCustomAttributesData()
+                .FirstOrDefault(candidate => candidate.AttributeType.FullName == ActivityAttributeFullName);
+            if (attribute is null)
+                continue;
+
+            var icon = ReadNamedStringArgument(attribute, nameof(ActivityAttribute.Icon));
+            var facet = ActivityIconName.ToFacet(icon);
+            if (facet is not null)
+                return facet;
+        }
+
+        return null;
     }
 
     /// <summary>

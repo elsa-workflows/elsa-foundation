@@ -18,28 +18,28 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Events` — the c
 
 ### `IEvent` *(Core — `Elsa.Events.Core`)*
 - **Kind:** Marker interface — implement to define an event type. Typically a `sealed record`.
-- No registration needed; passed to `IEventPublisher.Publish(...)`.
+- No registration needed; passed to `IInlineEventPublisher.Publish(...)` or `IDeferredEventPublisher.Publish(...)`.
 
-### `IEventMiddleware` *(Core — `Elsa.Events.Core`)*
-- **Kind:** Contributor (event pipeline middleware). Composes the event dispatch pipeline.
-- **Signature:** `ValueTask InvokeAsync(EventContext context, Func<EventContext, ValueTask> next);`
-- **Register:** via `UseMiddleware<TMiddleware>()` on the event pipeline builder.
+### `IEventMiddleware` *(Core, `Elsa.Events.Core`)*
+- **Kind:** Contributor (event pipeline middleware). Runs in front of handler dispatch.
+- **Signature:** `ValueTask Invoke(IEventContext context)`. The constructor receives the next step, `PipelineDelegate<IEventContext> next`; its other parameters come from the `UseMiddleware` arguments or the service provider.
+- **Register:** `IEventPipeline.Setup(builder => builder.UseMiddleware<TMiddleware>())`, with `UseMiddleware` from `Elsa.Events.Core.Extensions`. `Setup` replaces any earlier composition and always ends the pipeline with the handler invoker, after the supplied middleware, so a setup cannot drop dispatch. Middleware runs in registration order; one that does not call `next` stops the event before any handler sees it.
 
 ---
 
-## Publishing strategies
+## Delivery: inline or deferred
 
-Defined in `Elsa.Events.Strategies`. Each strategy determines how the published event is dispatched:
+A publisher picks how an event is dispatched by the contract it depends on. Each runs on a publishing strategy from `Elsa.Events.Strategies`; the strategies, `IEventPublisher` and `IEventChannel` are internal to the Events domain, so a custom strategy is not an extension point.
 
-| Strategy | Behaviour | Use when |
-|---|---|---|
-| **Sequential** (default) | Publisher awaits the full dispatch chain synchronously. Handler exceptions propagate to the publisher. | The publisher needs to read back contributions (`DraftValidating`). |
-| **Background** | Event is enqueued on `IEventChannel`; `BackgroundEventPublisher` drains asynchronously. Publisher returns before handlers run. Each handler is isolated: a failing handler is logged and the remaining handlers of the same event still run. | Notification / observation (`DraftCreated`, `DraftValidated`). One subscriber failure must not break others. |
+| Contract | Strategy | Behavior | Use when |
+|---|---|---|---|
+| **`IInlineEventPublisher`** | Sequential | Publisher awaits the full dispatch chain synchronously. Handler exceptions propagate to the publisher. | The publisher needs to read back contributions (`DraftValidating`). |
+| **`IDeferredEventPublisher`** | Background | Event is enqueued on the internal event channel; `BackgroundEventPublisher` drains asynchronously. Publisher returns before handlers run. Each handler is isolated: a failing handler is logged and the remaining handlers of the same event still run. | Notification / observation (`DraftCreated`, `DraftValidated`). One subscriber failure must not break others. |
 
 ---
 
 ## Cross-references
 
-- Pipeline middleware shape: [`Elsa.Pipelines.Core/EXTENSION_POINTS.md`](../Elsa.Pipelines.Core/EXTENSION_POINTS.md).
-- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- Pipeline middleware shape: [`Pipelines/Core/EXTENSION_POINTS.md`](../../Pipelines/Core/EXTENSION_POINTS.md).
+- Repo-wide index: [`EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.6 + §2.22.1 + §2.24.2.

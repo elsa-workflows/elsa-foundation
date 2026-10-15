@@ -1,3 +1,4 @@
+import { ActivityIconsFixture } from "./activityIconsFixture";
 import { ActivityInputEvidenceFixture } from "./activityInputEvidenceFixture";
 import React, { lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -89,6 +90,14 @@ const versionChangeFixture = searchParams.get("mode") === "version-change";
 const activityInspectorTabsFixture = searchParams.get("mode") === "activity-inspector-tabs";
 const publicationReviewFixture = searchParams.get("mode") === "publication-review";
 const activityGraphAuthoringFixture = searchParams.get("mode") === "activity-definition-graph-authoring";
+const activityIconsFixture = searchParams.get("mode") === "activity-icons";
+const activityDuplicateFixture = searchParams.get("mode") === "activity-duplicate";
+const activityDuplicateEditorFixture = searchParams.get("mode") === "activity-duplicate-editor";
+const navPlacementFixture = searchParams.get("mode") === "nav-placement";
+const navBeforeFixture = searchParams.get("mode") === "nav-before";
+const homeFixture = searchParams.get("mode") === "home" || searchParams.get("mode") === "home-before";
+const settingsBeforeFixture = searchParams.get("mode") === "settings-before";
+const settingsFixture = searchParams.get("mode") === "settings";
 const expressionCodeIntelligenceFixture = searchParams.get("mode") === "expression-code-intelligence";
 const expressionToolingUnavailable = searchParams.get("tooling") === "unavailable";
 const expressionFieldCount = Math.max(1, Math.min(50, Number(searchParams.get("fields") ?? 1)));
@@ -161,7 +170,7 @@ function ActivityDefinitionRoutesFixture() {
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
   return path.startsWith("/workflows/activity-definitions/upgrades")
-    ? <ActivityUpgradeWorkbenchPage context={endpointContext} />
+    ? <ActivityUpgradeWorkbenchPage context={endpointContext} navigateToStudioPath={navigate} />
     : <QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={endpointContext} activityEditors={() => [activityGraphImplementationEditorContribution]} runtime={{ identity: { tenantId: "browser-tenant", subject: "browser-author" }, activityDefinitions: { localRecovery: { enabled: true, ttlMinutes: 30 } } }} navigateToStudioPath={navigate} /></QueryClientProvider>;
 }
 
@@ -1583,19 +1592,72 @@ function browserVersion(
 }
 
 // `?theme=dark` is the second visual variant the specs cover. The fixture has no ThemeProvider, so it
-// writes Meridian's dark palette onto <html> itself, the way the provider does at runtime.
+// writes the chosen theme palette onto <html> itself, the way the provider does at runtime.
+// Activity-icon shots default to Classic light — Studio 4's default theme.
 const darkVariant = searchParams.get("theme") === "dark";
-document.documentElement.dataset.theme = "meridian";
-document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
-if (darkVariant) {
-  const palette = getTheme("meridian")!.dark;
-  for (const token of themeTokenNames) {
-    document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
+const fixtureTheme = activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture ? "classic" : "meridian";
+if (!navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture && !homeFixture) {
+  document.documentElement.dataset.theme = fixtureTheme;
+  document.documentElement.dataset.themeLayout = "classic";
+  document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
+  if (darkVariant || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture) {
+    const palette = getTheme(fixtureTheme)![darkVariant ? "dark" : "light"];
+    for (const token of themeTokenNames) {
+      document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
+    }
   }
 }
-createRoot(document.getElementById("root")!).render(
-  searchParams.get("mode") === "workflow-toolbar"
+if (activityIconsFixture && searchParams.get("host-override") === "1") {
+  document.documentElement.style.setProperty("--studio-wf-activity-terminal", "rgb(255, 17, 0)");
+  document.documentElement.style.setProperty("--studio-wf-activity-composite", "rgb(124, 58, 237)");
+  document.documentElement.style.setProperty("--studio-wf-activity-runtime", "rgb(234, 88, 12)");
+  document.documentElement.style.setProperty("--studio-wf-activity-trigger", "rgb(219, 39, 119)");
+}
+
+const root = createRoot(document.getElementById("root")!);
+
+async function renderRequestedFixture() {
+  if (navBeforeFixture) {
+    const { NavBeforeFixture } = await import("./navBeforeFixture");
+    root.render(<NavBeforeFixture />);
+    return;
+  }
+  if (settingsBeforeFixture) {
+    const { SettingsBeforeFixture } = await import("./settingsBeforeFixture");
+    root.render(<SettingsBeforeFixture />);
+    return;
+  }
+  if (settingsFixture) {
+    const { SettingsFixture } = await import("./settingsFixture");
+    root.render(<SettingsFixture />);
+    return;
+  }
+  if (navPlacementFixture) {
+    const { NavPlacementFixture } = await import("./navPlacementFixture");
+    root.render(<NavPlacementFixture />);
+    return;
+  }
+  if (homeFixture) {
+    const { HomeFixture } = await import("./homeFixture");
+    root.render(<HomeFixture />);
+    return;
+  }
+  if (activityDuplicateFixture) {
+    const { ActivityDuplicateFixture } = await import("./activityDuplicateFixture");
+    root.render(<ActivityDuplicateFixture />);
+    return;
+  }
+  if (activityDuplicateEditorFixture) {
+    const { ActivityDuplicateEditorFixture } = await import("./activityDuplicateEditorFixture");
+    root.render(<ActivityDuplicateEditorFixture />);
+    return;
+  }
+
+  root.render(
+    searchParams.get("mode") === "workflow-toolbar"
     ? <WorkflowToolbarFixture />
+    : activityIconsFixture
+    ? <ActivityIconsFixture />
     : publicationReviewFixture
     ? <PublicationReviewFixture />
     : activityGraphAuthoringFixture
@@ -1621,4 +1683,7 @@ createRoot(document.getElementById("root")!).render(
             : moveDefinitionsFixture
               ? <MoveDefinitionsFixture />
               : <Fixture />
-);
+  );
+}
+
+void renderRequestedFixture();

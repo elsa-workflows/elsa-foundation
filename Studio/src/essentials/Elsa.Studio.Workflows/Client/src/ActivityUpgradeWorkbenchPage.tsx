@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ActivityUpgradePlanReview } from "./ActivityUpgradePlanReview";
@@ -53,7 +53,13 @@ const rootKindOptions: Array<{ value: ActivityUpgradeRootKind; label: string }> 
   { value: "WorkflowVersion", label: "Workflow Version" }
 ];
 
-export function ActivityUpgradeWorkbenchPage({ context }: { context: StudioEndpointContext }) {
+export function ActivityUpgradeWorkbenchPage({
+  context,
+  navigateToStudioPath = defaultStudioPathNavigation
+}: {
+  context: StudioEndpointContext;
+  navigateToStudioPath?(path: string): void;
+}) {
   const locationSeed = useMemo(readLocationSeed, []);
   const persisted = useMemo(readSession, []);
   const [draft, setDraft] = useState(() => createActivityUpgradeDraft(locationSeed));
@@ -328,6 +334,7 @@ export function ActivityUpgradeWorkbenchPage({ context }: { context: StudioEndpo
       planId={plan?.planId ?? awaitingResult.planId}
       values={publicationVersions}
       refreshing={busy === "refresh"}
+      onOpenDraft={navigateToStudioPath}
       onChange={(draftId, value) => setPublicationVersions(current => ({ ...current, [draftId]: value }))}
       onRefresh={() => void refreshSuccessor(awaitingResult)}
     /> : null}
@@ -435,6 +442,7 @@ function PublicationHandoff({
   planId,
   values,
   refreshing,
+  onOpenDraft,
   onChange,
   onRefresh
 }: {
@@ -442,26 +450,37 @@ function PublicationHandoff({
   planId: string;
   values: Record<string, string>;
   refreshing: boolean;
+  onOpenDraft(path: string): void;
   onChange(draftId: string, value: string): void;
   onRefresh(): void;
 }) {
   return <section className="au-handoff" aria-labelledby="activity-upgrade-handoff">
     <header><span>Publication handoff</span><h2 id="activity-upgrade-handoff">Awaiting separately reviewed publication</h2><p>Publish each exact child draft in its normal editor. Then enter the actual immutable version returned by publication to create a successor plan.</p></header>
     <div className="ad-inline-status" role="status" aria-live="polite">Publication handoff ready for {result.awaitingPublications.length} exact child draft{result.awaitingPublications.length === 1 ? "" : "s"}. No draft was published automatically.</div>
-    <div className="au-handoff-list">{result.awaitingPublications.map(handoff => <HandoffRow key={handoff.draftId} handoff={handoff} planId={planId} value={values[handoff.draftId] ?? ""} onChange={value => onChange(handoff.draftId, value)} />)}</div>
+    <div className="au-handoff-list">{result.awaitingPublications.map(handoff => <HandoffRow key={handoff.draftId} handoff={handoff} planId={planId} value={values[handoff.draftId] ?? ""} onOpenDraft={onOpenDraft} onChange={value => onChange(handoff.draftId, value)} />)}</div>
     <footer><span>Refresh never guesses a version or rewrites this predecessor plan.</span><button type="button" className="ad-primary-action" onClick={onRefresh} disabled={refreshing}>{refreshing ? "Creating successor…" : "Refresh successor plan"}</button></footer>
   </section>;
 }
 
-function HandoffRow({ handoff, planId, value, onChange }: { handoff: ActivityUpgradePublicationHandoff; planId: string; value: string; onChange(value: string): void }) {
+function HandoffRow({ handoff, planId, value, onOpenDraft, onChange }: { handoff: ActivityUpgradePublicationHandoff; planId: string; value: string; onOpenDraft(path: string): void; onChange(value: string): void }) {
   const href = handoff.draftKind === "ActivityDraft"
     ? `/workflows/activity-definitions?definition=${encodeURIComponent(handoff.definitionId)}&section=editor&draft=${encodeURIComponent(handoff.draftId)}&returnPlan=${encodeURIComponent(planId)}`
     : `/workflows/definitions?definition=${encodeURIComponent(handoff.definitionId)}&draft=${encodeURIComponent(handoff.draftId)}&returnPlan=${encodeURIComponent(planId)}`;
+  const openDraft = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    onOpenDraft(href);
+  };
   return <article>
     <div><strong>{handoff.draftKind}</strong><code>{handoff.draftId}</code><span>Revision {handoff.revision} · required by {handoff.requiredByStageIds.join(", ")}</span></div>
-    <a href={href}>Open next required draft</a>
+    <a href={href} onClick={openDraft}>Open next required draft</a>
     <label><span>Actual published version</span><input aria-label={`Published version for ${handoff.draftId}`} value={value} onChange={event => onChange(event.target.value)} placeholder="Exact immutable version ID" /></label>
   </article>;
+}
+
+function defaultStudioPathNavigation(path: string) {
+  window.history.pushState({}, "", path);
+  window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
 function readLocationSeed() {

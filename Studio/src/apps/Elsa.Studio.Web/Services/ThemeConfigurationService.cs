@@ -79,7 +79,7 @@ internal sealed class ThemeConfigurationService
                 var json = await File.ReadAllTextAsync(themePath, cancellationToken);
                 var response = JsonSerializer.Deserialize<ThemesCollectionResponse>(json, JsonOptions);
                 if (response?.Themes != null)
-                    themes.AddRange(response.Themes);
+                    themes.AddRange(DropReservedBuiltInIds(response.Themes, themePath));
                 _logger.LogInformation("Loaded {Count} custom themes from file", themes.Count);
             }
             catch (Exception ex)
@@ -99,7 +99,7 @@ internal sealed class ThemeConfigurationService
                     var json = await File.ReadAllTextAsync(file, cancellationToken);
                     var response = JsonSerializer.Deserialize<ThemesCollectionResponse>(json, JsonOptions);
                     if (response?.Themes != null)
-                        themes.AddRange(response.Themes);
+                        themes.AddRange(DropReservedBuiltInIds(response.Themes, file));
                 }
                 catch (Exception ex)
                 {
@@ -110,6 +110,28 @@ internal sealed class ThemeConfigurationService
         }
 
         return themes.ToArray();
+    }
+
+    /// <summary>
+    /// Built-in IDs are reserved. A directory theme that reuses one is skipped so the built-in wins.
+    /// </summary>
+    private IEnumerable<StudioThemeDefinition> DropReservedBuiltInIds(IEnumerable<StudioThemeDefinition> loaded, string source)
+    {
+        foreach (var theme in loaded)
+        {
+            if (theme is null)
+                continue;
+            if (ElsaThemeStoreApi.BuiltInThemeIds.Contains(theme.Id))
+            {
+                _logger.LogWarning(
+                    "Skipping custom theme '{ThemeId}' from {Source}: that ID is reserved for a built-in theme.",
+                    theme.Id,
+                    source);
+                continue;
+            }
+
+            yield return theme;
+        }
     }
 }
 

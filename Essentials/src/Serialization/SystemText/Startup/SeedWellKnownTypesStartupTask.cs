@@ -10,7 +10,7 @@ namespace Elsa.Serialization.SystemText.Startup;
 /// each <c>(Alias, ClrType)</c> pair. This is the single registration site for the framework primitives,
 /// so the design-time picker catalog and the runtime resolution authority can never drift.
 /// </summary>
-public sealed class SeedWellKnownTypesStartupTask(
+internal sealed class SeedWellKnownTypesStartupTask(
     IEnumerable<IVariableTypeDescriptorProvider> providers,
     IWellKnownTypeRegistry wellKnownTypeRegistry)
     : IStartupTask

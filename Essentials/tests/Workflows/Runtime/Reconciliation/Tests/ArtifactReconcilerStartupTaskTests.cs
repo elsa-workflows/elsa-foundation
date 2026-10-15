@@ -1,6 +1,6 @@
-using CShells;
 using Elsa.Locking.Core;
-using Elsa.Tasks.Services;
+using Elsa.Tasks.Core;
+using Elsa.Tasks.Testing;
 using Elsa.Workflows.Runtime.Reconciliation.Contracts;
 using Elsa.Workflows.Runtime.Reconciliation.Core.Models;
 using Elsa.Workflows.Runtime.Reconciliation.Startup;
@@ -20,12 +20,12 @@ public sealed class ArtifactReconcilerStartupTaskTests
 
     private readonly SequencedLockProvider _locks = new();
     private readonly SpyArtifactReconciler _reconciler = new();
-    private readonly TaskExecutor _executor;
+    private readonly ITaskExecutor _executor;
     private readonly WorkflowArtifactReconcilerStartupTask _task;
 
     public ArtifactReconcilerStartupTaskTests()
     {
-        _executor = new TaskExecutor(_locks, NullLogger<TaskExecutor>.Instance, new ShellSettings("default"));
+        _executor = TaskServices.Executor(_locks);
         _task = new WorkflowArtifactReconcilerStartupTask(_reconciler, NullLogger<WorkflowArtifactReconcilerStartupTask>.Instance);
     }
 

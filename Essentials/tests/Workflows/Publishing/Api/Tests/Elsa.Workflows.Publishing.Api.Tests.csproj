@@ -55,6 +55,7 @@
     <ProjectReference Include="..\..\..\..\..\src\Mediator\Core\Elsa.Mediator.Core.csproj" />
     <ProjectReference Include="..\..\..\..\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\Testing\Elsa.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\Serialization\Testing\Elsa.Serialization.Testing.csproj" />
     <ProjectReference Include="..\..\..\..\..\src\Workflows\Design\CodeGeneration\Elsa.Workflows.Design.CodeGeneration.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />

@@ -18,8 +18,7 @@ internal sealed record ResponseReplayCommitGateOptions(
     string TargetArtifactId,
     string TargetArtifactHash,
     string EndpointNodeId,
-    string ResponseNodeId,
-    bool GateAtResponseActivityStarted);
+    string ResponseNodeId);
 
 internal sealed record ResponseReplayClaimCorrelation(
     string WorkflowExecutionId,
@@ -113,13 +112,6 @@ internal sealed class ResponseReplayCommitGateStore(
         RuntimeCheckpointPersistenceDecision decision,
         CancellationToken cancellationToken = default)
     {
-        // Activity-count caps no longer guarantee a flush at ActivityStarted. For the external-input
-        // recovery proof, explicitly flush this checkpoint through the real persistence store before
-        // stopping the process. This isolates payload rehydration from cap-counting behaviour.
-        if (options.GateAtResponseActivityStarted && IsTargetResponseActivityStarted(commit, out _, out _))
-            decision = new RuntimeCheckpointPersistenceDecision(
-                RuntimeCheckpointPersistenceMode.Immediate, "Test-only external-input crash boundary.");
-
         var result = await inner.CommitAsync(commit, decision, cancellationToken);
 
         if (IsTargetEndpointClaim(commit, out var claim))
@@ -159,86 +151,6 @@ internal sealed class ResponseReplayCommitGateStore(
             {
                 throw new InvalidOperationException("The response-replay gate observed the target endpoint claim more than once.");
             }
-        }
-
-        if (options.GateAtResponseActivityStarted &&
-            IsTargetResponseActivityStarted(commit, out var startedState, out var startedCorrelation))
-        {
-            var session = sessionAccessor?.Current
-                ?? throw new InvalidOperationException("The external-input ActivityStarted commit returned without an ambient coalescing session.");
-            if (session.IsActive || session.HasBufferedChanges)
-                throw new InvalidOperationException("The external-input ActivityStarted commit did not flush and end its persistence-mode session.");
-
-            var bodyInput = startedState.InputSnapshot?.Values.GetValueOrDefault("Body")
-                ?? throw new InvalidOperationException("The external-input ActivityStarted state has no Body input snapshot.");
-            var bodyReference = bodyInput.ExternalReference;
-            if (bodyInput.Presence != ValuePresence.Present || bodyInput.InlineValue is not null ||
-                bodyInput.Policy.Storage != DurableValueStorage.External ||
-                bodyReference is null ||
-                !StringComparer.Ordinal.Equals(bodyReference.StorageProfile, ResponseReplayFileExternalPayloadStoreProfile.Name))
-                throw new InvalidOperationException("The external-input ActivityStarted state does not carry the expected file-backed External Body reference.");
-
-            var invokeIntent = commit.PostCommitIntents.SingleOrDefault(intent =>
-                StringComparer.Ordinal.Equals(intent.Kind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork) &&
-                StringComparer.Ordinal.Equals(intent.WorkflowExecutionId, commit.WorkflowExecutionId) &&
-                StringComparer.Ordinal.Equals(intent.ActivityExecutionId, startedState.Execution.ActivityExecutionId))
-                ?? throw new InvalidOperationException("The external-input ActivityStarted commit has no matching InvokeActivity post-commit intent.");
-            var invokeWorkItem = invokeIntent.MaterializedSchedulerWorkItem
-                ?? throw new InvalidOperationException("The external-input ActivityStarted intent has no materialized InvokeActivity work item.");
-            var invokePayload = invokeWorkItem.Payload?.Deserialize<RuntimeInvokeActivityCommandPayload>()
-                ?? throw new InvalidOperationException("The external-input ActivityStarted intent has no InvokeActivity payload.");
-            if (commit.Checkpoint.Name != RuntimeCheckpointNames.ActivityStarted ||
-                invokeWorkItem.CommandKind != WorkflowExecutionCommandKind.InvokeActivity ||
-                !StringComparer.Ordinal.Equals(invokeWorkItem.WorkflowExecutionId, commit.WorkflowExecutionId) ||
-                !StringComparer.Ordinal.Equals(invokePayload.ActivityExecutionId, startedState.Execution.ActivityExecutionId) ||
-                !StringComparer.Ordinal.Equals(invokePayload.ExecutableNodeId, options.ResponseNodeId) ||
-                !StringComparer.Ordinal.Equals(invokePayload.PinnedExecutable.ArtifactId, startedCorrelation.ArtifactId) ||
-                !StringComparer.Ordinal.Equals(invokePayload.PinnedExecutable.ArtifactHash, startedCorrelation.ArtifactHash))
-                throw new InvalidOperationException("The external-input ActivityStarted continuation does not target the pinned response activity and execution.");
-
-            if (!gateState.TryObserveResponse())
-                throw new InvalidOperationException("The response-replay gate observed more than one external-input ActivityStarted boundary.");
-
-            await channel.SendAsync("response-activity-started", new
-            {
-                commitId = commit.CommitId,
-                checkpointId = commit.Checkpoint.CheckpointId,
-                checkpointName = commit.Checkpoint.Name,
-                executionId = startedCorrelation.WorkflowExecutionId,
-                artifactId = startedCorrelation.ArtifactId,
-                artifactHash = startedCorrelation.ArtifactHash,
-                endpointNodeId = startedCorrelation.EndpointNodeId,
-                endpointActivityExecutionId = startedCorrelation.ActivityExecutionId,
-                responseNodeId = startedState.Execution.AuthoredActivityId,
-                responseActivityExecutionId = startedState.Execution.ActivityExecutionId,
-                responseStatus = startedState.Status.ToString(),
-                responseInputBody = new
-                {
-                    presence = bodyInput.Presence.ToString(),
-                    inlineValuePresent = bodyInput.InlineValue.HasValue,
-                    storage = bodyInput.Policy.Storage.ToString(),
-                    storageProfile = bodyReference.StorageProfile,
-                    locator = bodyReference.Locator,
-                    typeAlias = bodyInput.Type.Alias,
-                    collectionKind = bodyInput.Type.CollectionKind.ToString(),
-                    schemaVersion = bodyInput.Type.SchemaVersion,
-                    schema = bodyInput.Type.Schema?.GetRawText(),
-                    metadata = bodyReference.Metadata
-                },
-                invokeIntentId = invokeIntent.IntentId,
-                invokeOutboxItemId = RuntimePostCommitOutboxIdentity.CreateLogicalValue(commit.CommitId, invokeIntent.IntentId),
-                invokeWorkItemId = invokeWorkItem.WorkItemId,
-                invokeCommandKind = invokeWorkItem.CommandKind.ToString(),
-                sessionActive = session.IsActive,
-                sessionAppliesToExecution = session.AppliesTo(commit.WorkflowExecutionId),
-                activityCount = session.ActivityCount,
-                decision = decision.Mode.ToString()
-            }, cancellationToken);
-
-            // The parent independently verifies the persisted ActivityStarted state, external file reference, and
-            // Pending InvokeActivity outbox before acknowledging the kill window. The barrier never releases the child.
-            await channel.WaitForCommandAsync("external-input-window-confirmed", cancellationToken);
-            await Task.Delay(Timeout.InfiniteTimeSpan, CancellationToken.None);
         }
 
         if (IsTargetResponseCompletion(commit, out var responseState, out var correlation))
@@ -370,43 +282,6 @@ internal sealed class ResponseReplayCommitGateStore(
         return true;
     }
 
-    private bool IsTargetResponseActivityStarted(
-        RuntimeCheckpointCommit commit,
-        out ActivityExecutionState responseState,
-        out ResponseReplayClaimCorrelation correlation)
-    {
-        responseState = null!;
-        correlation = null!;
-        var observedClaim = gateState.Claim;
-        if (observedClaim is null ||
-            !StringComparer.Ordinal.Equals(observedClaim.ArtifactId, options.TargetArtifactId) ||
-            !StringComparer.Ordinal.Equals(observedClaim.ArtifactHash, options.TargetArtifactHash) ||
-            !StringComparer.Ordinal.Equals(observedClaim.EndpointNodeId, options.EndpointNodeId) ||
-            !StringComparer.Ordinal.Equals(commit.WorkflowExecutionId, observedClaim.WorkflowExecutionId) ||
-            !StringComparer.Ordinal.Equals(commit.Checkpoint.Name, RuntimeCheckpointNames.ActivityStarted) ||
-            !commit.Metadata.TryGetValue(RuntimeMetadataKeys.ExecutableArtifactId, out var artifactId) ||
-            !StringComparer.Ordinal.Equals(artifactId, options.TargetArtifactId) ||
-            !commit.Metadata.TryGetValue(RuntimeMetadataKeys.ExecutableArtifactHash, out var artifactHash) ||
-            !StringComparer.Ordinal.Equals(artifactHash, options.TargetArtifactHash) ||
-            !commit.Metadata.TryGetValue(RuntimeMetadataKeys.ExecutableNodeId, out var nodeId) ||
-            !StringComparer.Ordinal.Equals(nodeId, options.ResponseNodeId) ||
-            !commit.Metadata.TryGetValue(RuntimeMetadataKeys.ActivityExecutionId, out var activityExecutionId))
-            return false;
-
-        var match = commit.StateChanges.ActivityExecutions.SingleOrDefault(change =>
-            change.Operation == RuntimeStateChangeOperation.Upsert &&
-            StringComparer.Ordinal.Equals(change.State.Execution.ActivityExecutionId, activityExecutionId) &&
-            StringComparer.Ordinal.Equals(change.State.Execution.AuthoredActivityId, options.ResponseNodeId) &&
-            change.State.Status == ActivityExecutionStatus.Running &&
-            change.State.InputSnapshot is not null);
-        if (match?.State is not { } state)
-            return false;
-
-        responseState = state;
-        correlation = observedClaim;
-        return true;
-    }
-
     private sealed record ClaimIdentity(string ActivityExecutionId, string WorkItemId, string CommandId, string AttemptId);
 }
 
@@ -422,7 +297,6 @@ public sealed class ResponseReplayCommitGateFeature : IShellFeature, IPostConfig
     public string TargetArtifactHash { get; set; } = string.Empty;
     public string EndpointNodeId { get; set; } = "http-in";
     public string ResponseNodeId { get; set; } = "write-response";
-    public bool GateAtResponseActivityStarted { get; set; }
 
     public void ConfigureServices(IServiceCollection services)
     {
@@ -431,8 +305,7 @@ public sealed class ResponseReplayCommitGateFeature : IShellFeature, IPostConfig
             TargetArtifactId,
             TargetArtifactHash,
             EndpointNodeId,
-            ResponseNodeId,
-            GateAtResponseActivityStarted);
+            ResponseNodeId);
         if (string.IsNullOrWhiteSpace(options.PipeName) ||
             string.IsNullOrWhiteSpace(options.TargetArtifactId) ||
             string.IsNullOrWhiteSpace(options.TargetArtifactHash))

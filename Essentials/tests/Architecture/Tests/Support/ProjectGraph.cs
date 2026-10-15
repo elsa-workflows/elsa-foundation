@@ -40,4 +40,46 @@ internal static class ProjectGraph
                 [.. ReferencedProjectPaths(project.Key).Select(namesByPath.GetValueOrDefault).OfType<string>()],
             StringComparer.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// The projects the root <c>Directory.Build.props</c> adds as a <c>ProjectReference</c> to the projects importing it
+    /// (today the naming analyzer, which every production project compiles with), as full paths. They are part of every
+    /// production project's graph without appearing in any project file, so a sweep over project files alone misses them.
+    /// </summary>
+    internal static IReadOnlyList<string> BuildWideProjectReferences(string repoRoot)
+    {
+        var props = XDocument.Load(Path.Join(repoRoot, "Directory.Build.props"));
+        var properties = props.Descendants()
+            .Where(element => element.Parent?.Name.LocalName == "PropertyGroup")
+            .GroupBy(element => element.Name.LocalName, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Last().Value.Trim(), StringComparer.Ordinal);
+
+        return
+        [
+            .. props.Descendants()
+                .Where(element => element.Name.LocalName == "ProjectReference")
+                .Select(element => element.Attribute("Include")?.Value)
+                .OfType<string>()
+                .Select(include => Path.GetFullPath(Expand(include)))
+        ];
+
+        string Expand(string value)
+        {
+            for (var depth = 0; value.Contains("$(", StringComparison.Ordinal); depth++)
+            {
+                if (depth > 8)
+                    throw new InvalidOperationException($"Directory.Build.props: '{value}' does not resolve to a path.");
+
+                value = System.Text.RegularExpressions.Regex.Replace(value, @"\$\((?<name>[A-Za-z_][A-Za-z0-9_]*)\)", match =>
+                    match.Groups["name"].Value == "MSBuildThisFileDirectory"
+                        ? repoRoot + Path.DirectorySeparatorChar
+                        : properties.TryGetValue(match.Groups["name"].Value, out var property)
+                            ? property
+                            : throw new InvalidOperationException(
+                                $"Directory.Build.props: a ProjectReference uses $({match.Groups["name"].Value}), which this file does not define."));
+            }
+
+            return value.Replace('/', Path.DirectorySeparatorChar);
+        }
+    }
 }

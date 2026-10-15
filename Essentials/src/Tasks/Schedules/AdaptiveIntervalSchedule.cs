@@ -12,7 +12,7 @@ namespace Elsa.Tasks.Schedules;
 /// machinery is needed here. This is the adaptive sibling of <see cref="IntervalSchedule"/>, which pins one
 /// fixed interval for the lifetime of the schedule.
 /// </remarks>
-public sealed class AdaptiveIntervalSchedule(Func<TimeSpan> intervalProvider, ILogger? logger = null) : ITaskSchedule
+internal sealed class AdaptiveIntervalSchedule(Func<TimeSpan> intervalProvider, ILogger? logger = null) : ITaskSchedule
 {
     public IScheduledTaskExecution ScheduleExecution(Func<Task> action) =>
         new ScheduledTaskExecution(action, intervalProvider, logger);

@@ -1,5 +1,5 @@
 {
-  "writeline-sequence": { "Durable": 320, "Balanced": 98, "Ephemeral": 98 },
-  "http-reference": { "Durable": 195, "Balanced": 101, "Ephemeral": 101 },
-  "fork-join-resume": { "Durable": 241, "Balanced": 174, "Ephemeral": 174 }
+  "writeline-sequence": { "Durable": 321, "Balanced": 99, "Ephemeral": 99 },
+  "http-reference": { "Durable": 196, "Balanced": 102, "Ephemeral": 102 },
+  "fork-join-resume": { "Durable": 242, "Balanced": 175, "Ephemeral": 175 }
 }

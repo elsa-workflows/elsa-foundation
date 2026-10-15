@@ -74,13 +74,15 @@ export function register(api: ElsaStudioModuleApi) {
       title: "Workflows",
       path: "/workflows/definitions",
       iconColor: "#0ea5e9",
+      placement: "main",
+      order: 20,
       items: [
-        { id: "workflows-definitions", title: "Workflow Definitions", path: "/workflows/definitions", iconColor: "#0ea5e9" },
-        { id: "workflows-activity-definitions", title: "Activity Definitions", path: "/workflows/activity-definitions", iconColor: "#0ea5e9" },
-        { title: "Executables", path: "/workflows/executables", iconColor: "#0ea5e9" },
-        { title: "Runs", path: "/workflows/instances", iconColor: "#0ea5e9" },
-        { title: "Runtime Diagnostics", path: "/workflows/runtime-diagnostics", iconColor: "#0ea5e9" },
-        { title: "Activity Availability", path: "/workflows/activity-availability", iconColor: "#0ea5e9" }
+        { id: "workflows-definitions", title: "Workflows", path: "/workflows/definitions", iconColor: "#0ea5e9", placement: "main", order: 20 },
+        { id: "workflows-runs", title: "Runs", path: "/workflows/instances", iconColor: "#0ea5e9", placement: "main", order: 30 },
+        { id: "workflows-executables", title: "Executables", path: "/workflows/executables", iconColor: "#0ea5e9", placement: "more", order: 10 },
+        { id: "workflows-activity-definitions", title: "Activity definitions", path: "/workflows/activity-definitions", iconColor: "#0ea5e9", placement: "more", order: 20 },
+        { id: "workflows-runtime-diagnostics", title: "Runtime diagnostics", path: "/workflows/runtime-diagnostics", iconColor: "#0ea5e9", placement: "more", order: 40 },
+        { id: "workflows-activity-availability", title: "Activity availability", path: "/workflows/activity-availability", iconColor: "#0ea5e9", placement: "more", order: 50 }
       ]
     },
     routes: [
@@ -94,7 +96,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-activity-upgrades",
         path: "/workflows/activity-definitions/upgrades",
         label: "Activity Definition upgrades",
-        component: () => deferred("Activity Definition upgrades", <ActivityUpgradeWorkbenchPage context={api.backend} />)
+        component: ({ navigate }) => deferred("Activity Definition upgrades", <ActivityUpgradeWorkbenchPage context={api.backend} navigateToStudioPath={navigate} />)
       },
       {
         id: "workflows-activity-definitions",

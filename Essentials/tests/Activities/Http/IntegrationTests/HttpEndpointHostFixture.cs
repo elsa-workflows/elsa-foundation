@@ -128,6 +128,25 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     }
 
     /// <summary>
+    /// As <see cref="StartDurableSqliteAsync"/>, over an empty database of any EF provider the caller owns, such as a
+    /// PostgreSQL database created for one run. The host's module migrator installs the schema.
+    /// </summary>
+    public static Task<HttpEndpointHostFixture> StartDurableAsync(
+        string provider,
+        string connectionString,
+        PersistenceMode persistenceMode,
+        int maxActivitiesPerCommit,
+        Action<IServiceCollection>? configureServices = null,
+        bool recordCompletion = true) =>
+        StartAsync(
+            services =>
+            {
+                configureServices?.Invoke(services);
+                AddDurableEf(services, provider, connectionString, persistenceMode, maxActivitiesPerCommit, recordCompletion);
+            },
+            databaseDirectory: null);
+
+    /// <summary>
     /// Starts one node of a multi-node deployment (#2190): its own host, so its own route table, observers and
     /// convergence pump, over the EF Core SQLite database at <paramref name="databasePath"/> that the other nodes share.
     /// The caller owns the database. The pump runs only once <see cref="StartRouteTableConvergence"/> is called, so a
@@ -147,18 +166,27 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         string databasePath,
         PersistenceMode persistenceMode,
         int maxActivitiesPerCommit,
+        bool recordCompletion) =>
+        AddDurableEf(services, "Sqlite", $"Data Source={databasePath};Pooling=False", persistenceMode, maxActivitiesPerCommit, recordCompletion);
+
+    private static void AddDurableEf(
+        IServiceCollection services,
+        string provider,
+        string connectionString,
+        PersistenceMode persistenceMode,
+        int maxActivitiesPerCommit,
         bool recordCompletion)
     {
         // Durable composition refuses the ephemeral development signer, so the fixture supplies the
         // stable recovery-continuation key a real durable host configures.
         services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
         {
-            Provider = "Sqlite",
-            ConnectionString = $"Data Source={databasePath};Pooling=False",
+            Provider = provider,
+            ConnectionString = connectionString,
             RecoveryContinuationSigningKey = "http-endpoint-fixture-recovery-signing-key-32-bytes",
             HierarchyCursorSigningKey = "http-endpoint-fixture-hierarchy-signing-key-32-bytes"
         });
-        services.AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
+        services.AddEfModuleMigrations<RuntimeDbContext>(provider);
 
         // The settings feature registers the host's mode; the persistence-mode services are added once every store is
         // registered, as a composed shell adds them.

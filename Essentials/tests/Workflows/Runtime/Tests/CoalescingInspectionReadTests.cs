@@ -11,69 +11,57 @@ using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
-// Store-read coalescing for the inspection store: the coalescing overlay serves the projection the session already
-// recorded for an activity execution, and otherwise memoizes the DURABLE BASELINE per activity execution, so
-// mid-segment BuildProjectionAsync calls stop paying a durable FindAsync per checkpoint while every read, every flushed
-// checkpoint commit, and every flushed inspection document stays byte-identical to the control without the memo
-// (CoalesceInspectionReads = false).
+// Inspection reads during a folding session: the overlay serves the projection the session already recorded for an
+// activity execution, so each activity's durable row is read at most once per drain, and a later build merges onto what
+// the session recorded rather than onto the durable baseline.
 public sealed class CoalescingInspectionReadTests
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 22, 12, 0, 0, TimeSpan.Zero);
     private const string WorkflowExecutionId = "wfexec-1";
 
     [Fact]
-    public async Task InspectionReads_AreByteIdenticalWithAndWithoutTheMemo_AndReadEachActivityOnce()
+    public async Task InspectionReads_ReadEachActivitysDurableRowOnce_AndBuildOnWhatTheSessionRecorded()
     {
-        var control = await RunScenarioAsync(coalesceInspectionReads: false);
-        var memoized = await RunScenarioAsync(coalesceInspectionReads: true);
-
-        // Byte-identical guardrails, OFF path as the control: every projection the accumulator built, every checkpoint
-        // commit that reached the durable store, and the final durable inspection documents.
-        Assert.Equal(control.BuiltProjections, memoized.BuiltProjections);
-        Assert.Equal(control.FlushedCommits, memoized.FlushedCommits);
-        Assert.Equal(control.FinalDurableProjections, memoized.FinalDurableProjections);
+        var run = await RunScenarioAsync();
 
         // A build first takes the projection the session already recorded for its activity, so of the seven builds only
-        // the first build of each activity reads the store: actexec-1, actexec-2 and actexec-prior once each, with or
-        // without the memo. Segment 2 builds onto what segment 1 recorded for actexec-1.
-        Assert.Equal(7, control.BuildCount);
-        Assert.Equal(3, control.DurableReadCount);
-        Assert.Equal(3, memoized.DurableReadCount);
+        // the first build of each activity reads the store: actexec-1, actexec-2 and actexec-prior once each. Segment 2
+        // builds onto what segment 1 recorded for actexec-1, across the durable flush between them.
+        Assert.Equal(7, run.BuildCount);
+        Assert.Equal(3, run.DurableReadCount);
+        Assert.Equal(3, run.FinalDurableProjections.Count);
     }
 
     [Fact]
-    public async Task WithoutActiveSession_OverlayIsPassThrough_EvenWithMemoEnabled()
+    public async Task WithoutActiveSession_OverlayIsPassThrough()
     {
         var durable = new InMemoryActivityExecutionInspectionStore();
-        var options = new PersistenceModeOptions { CoalesceInspectionReads = true };
-        var session = new RuntimeCoalescingSession(WorkflowExecutionId, new InMemoryWorkflowSchedulerWorkQueue(), options);
+        var session = new RuntimeCoalescingSession(WorkflowExecutionId, new InMemoryWorkflowSchedulerWorkQueue(), new PersistenceModeOptions());
         session.Deactivate();
         var counting = new CountingInspectionStore(durable);
         var overlay = new CoalescingActivityExecutionInspectionStore(
             new CoalescingInner<IActivityExecutionInspectionStore>(counting),
-            new FixedCoalescingSessionAccessor(session),
-            options);
+            new FixedCoalescingSessionAccessor(session));
 
         Assert.Null(await overlay.FindAsync(WorkflowExecutionId, "actexec-1"));
         Assert.Null(await overlay.FindAsync(WorkflowExecutionId, "actexec-1"));
 
-        // A deactivated session never serves the memo, so out-of-drain readers (and post-terminal reads) keep hitting
-        // the durable store directly.
+        // A deactivated session serves nothing, so out-of-drain readers (and post-terminal reads) keep hitting the
+        // durable store directly.
         Assert.Equal(2, counting.FindCount);
     }
 
-    private static async Task<ScenarioResult> RunScenarioAsync(bool coalesceInspectionReads)
+    private static async Task<ScenarioResult> RunScenarioAsync()
     {
         var durableInspections = new InMemoryActivityExecutionInspectionStore();
         var countingInspections = new CountingInspectionStore(durableInspections);
         var innerCommits = new InMemoryRuntimeCheckpointCommitStore(activityExecutionInspectionWriter: durableInspections);
-        var options = new PersistenceModeOptions { CoalesceInspectionReads = coalesceInspectionReads };
-        var session = new RuntimeCoalescingSession(WorkflowExecutionId, new InMemoryWorkflowSchedulerWorkQueue(), options);
+        var session = new RuntimeCoalescingSession(WorkflowExecutionId, new InMemoryWorkflowSchedulerWorkQueue(), new PersistenceModeOptions());
         var accessor = new FixedCoalescingSessionAccessor(session);
         var commitStore = new CoalescingRuntimeCheckpointCommitStore(
             new CoalescingInner<IRuntimeCheckpointCommitStore>(innerCommits), accessor);
         var overlay = new CoalescingActivityExecutionInspectionStore(
-            new CoalescingInner<IActivityExecutionInspectionStore>(countingInspections), accessor, options);
+            new CoalescingInner<IActivityExecutionInspectionStore>(countingInspections), accessor);
         var accumulator = new RuntimeActivityExecutionInspectionAccumulator(overlay);
 
         // A projection flushed by an earlier drain: its build below must take the Merge path off the durable row.
@@ -96,16 +84,15 @@ public sealed class CoalescingInspectionReadTests
                 new(RuntimeCheckpointPersistenceMode.Deferred));
         }
 
-        // Segment 1: two builds per activity — the first build of each pair is the intermediate the fold discards,
-        // and its durable read is what the memo absorbs on the second build.
+        // Segment 1: two builds per activity. The first build of each pair is the intermediate the fold discards; the
+        // second builds onto it.
         await HopAsync("actexec-1", ActivityExecutionStatus.Running, 2);
         await HopAsync("actexec-1", ActivityExecutionStatus.Completed, 2);
         await HopAsync("actexec-2", ActivityExecutionStatus.Running, 3);
         await HopAsync("actexec-2", ActivityExecutionStatus.Completed, 3);
         await HopAsync("actexec-prior", ActivityExecutionStatus.Completed, 1);
 
-        // Mid-drain attempt boundary: flushes the folded segment durably and keeps the session active. The flush must
-        // invalidate the memo so a later read of an activity the session has not recorded observes the flushed rows.
+        // Mid-drain attempt boundary: flushes the folded segment durably and keeps the session active.
         checkpoint++;
         await commitStore.CommitAsync(
             NewCommit(checkpoint, RuntimeCheckpointNames.ActivityAttemptClaimed),

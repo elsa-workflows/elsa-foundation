@@ -3,7 +3,7 @@ using Elsa.Tasks.Core;
 
 namespace Elsa.Tasks.Services;
 
-public sealed class RunShellTasksInitializer(ITaskManager taskManager) : IShellInitializer
+internal sealed class RunShellTasksInitializer(ITaskManager taskManager) : IShellInitializer
 {
     public async Task InitializeAsync(CancellationToken cancellationToken)
     {

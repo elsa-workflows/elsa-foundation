@@ -520,7 +520,7 @@ public sealed class StudioPreferenceEntityFrameworkCoreTests
     private static string TemporaryDatabasePath() =>
         Path.Join(Path.GetTempPath(), $"elsa-studio-preferences-{Guid.NewGuid():N}.db");
 
-    private static void DeleteDatabaseFiles(string databasePath) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles(databasePath);
+    private static void DeleteDatabaseFiles(string databasePath) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles($"Data Source={databasePath}");
 
     private sealed class SqliteFixture : IAsyncDisposable
     {

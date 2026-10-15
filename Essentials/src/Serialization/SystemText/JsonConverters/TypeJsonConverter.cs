@@ -22,7 +22,7 @@ namespace Elsa.Serialization.SystemText.JsonConverters;
 /// and <c>VariableMapper</c>).
 /// </para>
 /// </remarks>
-public sealed class TypeJsonConverter(IWellKnownTypeRegistry wellKnownTypeRegistry, ILogger<TypeJsonConverter> logger) : JsonConverter<Type>
+internal sealed class TypeJsonConverter(IWellKnownTypeRegistry wellKnownTypeRegistry, ILogger<TypeJsonConverter> logger) : JsonConverter<Type>
 {
     // Parameterless-logger overload keeps existing test/DI call sites that construct the converter with only the
     // registry working without each having to thread a logger through.

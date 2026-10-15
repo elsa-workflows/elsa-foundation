@@ -1,4 +1,5 @@
 using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Core.Models;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -17,7 +18,8 @@ namespace Elsa.Activities.Design.Persistence.Core.Services;
 /// canonical sorted-key serialisation that the payload serializer does not produce, and the JSON is
 /// consumed only here (it is never persisted or read by another component — only the SHA-256 is).
 /// Excluded from the hash: <c>LastModifiedAt</c>/<c>CreatedAt</c>/<c>RowNumber</c>, provenance,
-/// identity fields such as <c>Id</c> and <c>Version</c>, and any nested versions on the parent.
+/// identity fields such as <c>Id</c> and <c>Version</c>, nested versions on the parent, and the
+/// presentation-only <c>elsa.activity-icon</c> design facet.
 /// </remarks>
 public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
 {
@@ -71,8 +73,11 @@ public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
         v.ExecutionType,
         v.Inputs,
         v.Outputs,
-        v.DesignFacets,
+        DesignFacets = ExcludePresentationFacets(v.DesignFacets),
     };
+
+    private static IEnumerable<ActivityDesignFacet> ExcludePresentationFacets(IEnumerable<ActivityDesignFacet> facets) =>
+        facets.Where(facet => !string.Equals(facet.Kind, ActivityIconName.FacetKind, StringComparison.Ordinal));
 
     private static string Canonicalise(string json)
     {

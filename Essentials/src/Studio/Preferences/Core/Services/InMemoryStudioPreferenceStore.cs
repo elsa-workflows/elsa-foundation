@@ -41,5 +41,12 @@ public sealed class InMemoryStudioPreferenceStore : IStudioPreferenceStore
         }
     }
 
+    public ValueTask<bool> DeleteAsync(StudioPreferenceKey key, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (_syncRoot)
+            return ValueTask.FromResult(_documents.Remove(key));
+    }
+
     private static int ParseRevision(string revision) => int.Parse(revision.AsSpan("rev-".Length));
 }

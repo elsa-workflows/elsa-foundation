@@ -1,6 +1,6 @@
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Exceptions;
 using Elsa.Expressions.Core.Models;
-using Elsa.Serialization.Core.Exceptions;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -10,7 +10,7 @@ namespace Elsa.Expressions.JsonConverters;
 /// Serializes <see cref="Type"/> objects to a simple alias representing said type.
 /// </summary>
 /// <inheritdoc />
-public sealed class VariableConverter(IVariableMapper variableMapper) : JsonConverter<IVariable>
+internal sealed class VariableConverter(IVariableMapper variableMapper) : JsonConverter<IVariable>
 {
     private JsonSerializerOptions? _options;
 

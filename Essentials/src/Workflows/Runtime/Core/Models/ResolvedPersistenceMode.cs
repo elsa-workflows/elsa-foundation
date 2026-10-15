@@ -1,9 +1,9 @@
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 /// <summary>
-/// The persistence mode a run executes under: the mode it recorded at start, the mode its workflow chose, or the host
-/// default when it chose none. Suspension, bookmark, fault and cancellation checkpoints are committed whatever the mode
-/// says.
+/// The persistence mode a run executes under: the mode it recorded at its first commit, or before that the mode its
+/// start carries, which is its workflow's choice or the host default when it chose none. Suspension, bookmark, fault
+/// and cancellation checkpoints are committed whatever the mode says.
 /// </summary>
 /// <param name="Mode">The effective mode.</param>
 /// <param name="RunHasRecord">

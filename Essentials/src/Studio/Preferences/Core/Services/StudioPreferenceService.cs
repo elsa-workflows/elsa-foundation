@@ -62,6 +62,13 @@ public sealed class StudioPreferenceService(
         };
     }
 
+    public async ValueTask<bool> DeleteAsync(StudioPreferenceKey key, CancellationToken cancellationToken = default)
+    {
+        ValidateScope(key);
+        var definition = RequireNamespace(key.Namespace);
+        return await store.DeleteAsync(key with { Namespace = definition.Name }, cancellationToken);
+    }
+
     private IStudioPreferenceNamespace RequireNamespace(string name) =>
         namespaces.Find(name) ?? throw new StudioPreferenceNamespaceNotFoundException(name);
 

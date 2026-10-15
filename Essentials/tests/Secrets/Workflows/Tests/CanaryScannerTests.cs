@@ -97,7 +97,6 @@ public sealed class CanaryScannerTests : IDisposable
 
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
         _directory.Delete(recursive: true);
     }
 

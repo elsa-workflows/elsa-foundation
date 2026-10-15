@@ -18,7 +18,7 @@ namespace Elsa.Serialization.SystemText.JsonConverters;
 /// System.Text.Json reject it for the other shapes with a converter-incompatibility exception. Every shape is
 /// materialized as a <see cref="Dictionary{TKey,TValue}"/> on read, which is assignable to all three.
 /// </remarks>
-public sealed class DeterministicDictionaryConverter<TDictionary, TValue> : JsonConverter<TDictionary>
+internal sealed class DeterministicDictionaryConverter<TDictionary, TValue> : JsonConverter<TDictionary>
     where TDictionary : IEnumerable<KeyValuePair<string, TValue>>
 {
     /// <inheritdoc />

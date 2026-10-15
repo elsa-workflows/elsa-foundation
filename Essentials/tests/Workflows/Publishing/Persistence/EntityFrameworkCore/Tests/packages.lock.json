@@ -720,6 +720,12 @@
           "Elsa.Tasks.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.serialization.testing": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Serialization.SystemText": "[4.0.0-dev, )"
+        }
+      },
       "elsa.tasks.core": {
         "type": "Project"
       },

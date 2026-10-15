@@ -64,10 +64,6 @@ public sealed partial class ArchitectureGuardTests
             "Elsa.Attention.Core.AttentionContributorRegistration",
             "Elsa.Attention.Core.AttentionContributorRegistry"
         ],
-        ["Elsa.Mediator.Core"] =
-        [
-            "Elsa.Mediator.Core.Models.MessageContext`1"
-        ],
         ["Elsa.Pipelines.Core"] =
         [
             "Elsa.Pipelines.Core.PipelineBuilder`1"

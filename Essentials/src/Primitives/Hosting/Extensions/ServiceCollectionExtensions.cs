@@ -2,7 +2,7 @@
 
 namespace Elsa.Primitives.Hosting.Extensions;
 
-public static class ServiceCollectionExtensions
+internal static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddAsInterfaces<TImplementation>(this IServiceCollection services, ServiceLifetime serviceLifetime = ServiceLifetime.Scoped)
         where TImplementation : class

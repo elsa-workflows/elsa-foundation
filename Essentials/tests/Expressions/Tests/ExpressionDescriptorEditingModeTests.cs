@@ -1,5 +1,5 @@
 using Elsa.Expressions.Core.Models;
-using Elsa.Expressions.JavaScript.Core.Models;
+using Elsa.Expressions.JavaScript.Models;
 using Elsa.Expressions.Liquid.Models;
 using Elsa.Expressions.Services;
 using Xunit;

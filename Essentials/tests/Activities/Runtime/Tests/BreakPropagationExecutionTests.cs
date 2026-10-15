@@ -10,7 +10,7 @@ using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -294,7 +294,7 @@ public sealed class BreakPropagationExecutionTests
             literal: ValueEnvelope.Inline(type, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
     }
 
-    private static IPayloadSerializer Serializer => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+    private static readonly IPayloadSerializer Serializer = SerializationServices.PayloadSerializer();
 
     /// <summary>
     /// Deterministic condition evaluator that returns <c>true</c> for its first <c>passes</c> evaluations

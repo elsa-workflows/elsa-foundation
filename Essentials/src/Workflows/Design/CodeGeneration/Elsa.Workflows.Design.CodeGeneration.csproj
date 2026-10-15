@@ -14,6 +14,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- One implementation of the activity stable id formula: compiled from source here because a netstandard2.0 generator cannot reference Elsa.Activities.Design.Core. -->
+    <Compile Include="..\..\..\Activities\Design\Core\Reconciliation\ActivityStableIdFormula.cs" Link="Shared\ActivityStableIdFormula.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
   </ItemGroup>
 

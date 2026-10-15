@@ -596,7 +596,7 @@ public sealed class FeatureCompositionTests
             }
 
             factory.Recordings.SingleOrDefault(recording => recording.Shell == shell)?.Complete();
-            if (_active.GetValueOrDefault(shell)?.ServiceProvider.GetService<ITaskManager>() is IStoppableTaskManager tasks)
+            if (_active.GetValueOrDefault(shell)?.ServiceProvider.GetService<ITaskManager>() is { } tasks)
                 await tasks.StopExecutingRegisteredTasks();
         }
 

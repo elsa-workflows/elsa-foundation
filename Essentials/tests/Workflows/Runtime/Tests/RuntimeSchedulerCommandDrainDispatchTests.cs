@@ -308,6 +308,32 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
     }
 
     [Fact]
+    public async Task ProcessAsync_BoundsTheCyclesOfEachCommandsDrain_SoAResumedRunStartsAFreshCount()
+    {
+        // A run that suspends and is resumed drains once for its start and once for the resume. Each drain here takes
+        // three cycles (two that deliver a continuation and one that quiesces) under a bound of three: a count carried
+        // from the first drain into the second would exceed the bound there.
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var drainer = new DequeuingSchedulerDrainer(queue, _now);
+        var outbox = new CountdownPostCommitOutboxProcessor();
+        var processor = NewProcessor(
+            queue,
+            drainer,
+            new ImmediateWorkflowSchedulerDrainPolicy(),
+            [],
+            new FakeTimeProvider(_now),
+            outbox,
+            new WorkflowDrainOrchestratorOptions(maxDrainCycles: 3, outboxDeliveryBatchSize: 1));
+
+        outbox.Deliver(2);
+        await processor.ProcessAsync(NewEnvelope(1));
+        outbox.Deliver(2);
+        await processor.ProcessAsync(NewEnvelope(2));
+
+        Assert.Equal(6, drainer.Requests.Count);
+    }
+
+    [Fact]
     public async Task ProcessAsync_AttemptsAllObserversBeforeReportingObserverFailures()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
@@ -560,7 +586,8 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
                 outbox,
                 new InMemoryWorkflowSchedulerWorkQueue(),
                 options,
-                NonFoldingDrainScopeFactory.Instance),
+                NonFoldingDrainScopeFactory.Instance,
+                persistenceModeResolver: NonFoldingDrainScopeFactory.Resolver),
             timeProvider);
     }
 
@@ -818,6 +845,25 @@ public sealed class RuntimeSchedulerCommandDrainDispatchTests
                     RequestedDeliveryResultStatus: RuntimePostCommitOutboxStatus.Delivered,
                     FailureMessage: null)
             ]));
+    }
+
+    // Delivers one continuation per call until the count it was given runs out.
+    private sealed class CountdownPostCommitOutboxProcessor : IRuntimePostCommitOutboxProcessor
+    {
+        private int _remaining;
+
+        public void Deliver(int count) => _remaining = count;
+
+        public ValueTask<RuntimePostCommitOutboxProcessResult> ProcessAsync(
+            RuntimePostCommitOutboxProcessRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            if (_remaining == 0)
+                return EmptyPostCommitOutboxProcessor.Instance.ProcessAsync(request, cancellationToken);
+
+            _remaining--;
+            return AlwaysDeliveringPostCommitOutboxProcessor.Instance.ProcessAsync(request, cancellationToken);
+        }
     }
 
     private sealed class EmptyPostCommitOutboxProcessor : IRuntimePostCommitOutboxProcessor

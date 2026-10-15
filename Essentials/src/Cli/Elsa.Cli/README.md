@@ -286,7 +286,7 @@ per package, verbatim, and exits 3:
   the tool's. When the same cycle also refused a module for its capability, that refusal is listed beside
   it under its own stage, so both are fixed from one run.
 
-See [the feeds guide](../../../../docs/foundation-host-feeds.md#what-fails-loudly).
+See [the feeds guide](../../../../docs/host-feeds/failure-modes.md#what-fails-loudly).
 
 On success the run prints one line on stderr — how many packages were installed, where, and which state
 file records them — and then proceeds exactly as if the state file had been there all along.

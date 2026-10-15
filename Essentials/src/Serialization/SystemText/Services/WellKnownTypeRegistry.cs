@@ -5,7 +5,7 @@ using Elsa.Serialization.Core.Exceptions;
 namespace Elsa.Serialization.SystemText.Services;
 
 /// <inheritdoc />
-public sealed class WellKnownTypeRegistry : IWellKnownTypeRegistry
+internal sealed class WellKnownTypeRegistry : IWellKnownTypeRegistry
 {
     /// <summary>
     /// The canonical set of bare (non-dotted) aliases the framework owns. These are the BCL primitive
