@@ -8,7 +8,7 @@ namespace Elsa.Serialization.Testing;
 
 /// <summary>
 /// Serialization services as the public <see cref="SerializationFeature"/> composes them, for tests in any domain. No
-/// startup task runs, so no converter is contributed unless the caller supplies a registry or runs the startup itself.
+/// startup task runs, so no converter is contributed unless the caller runs the startup itself.
 /// </summary>
 /// <remarks>
 /// Each shortcut composes its own container and hands out one service from it without disposing the container, because
@@ -19,9 +19,9 @@ namespace Elsa.Serialization.Testing;
 /// </remarks>
 public static class SerializationServices
 {
-    /// <summary>A payload serializer over <paramref name="converters"/>, or over an empty converter registry.</summary>
-    public static IPayloadSerializer PayloadSerializer(JsonPayloadConverterRegistry? converters = null) =>
-        Compose(converters).BuildServiceProvider().GetRequiredService<IPayloadSerializer>();
+    /// <summary>A payload serializer over an empty converter registry.</summary>
+    public static IPayloadSerializer PayloadSerializer() =>
+        Compose().BuildServiceProvider().GetRequiredService<IPayloadSerializer>();
 
     /// <summary>An empty well-known type registry.</summary>
     public static IWellKnownTypeRegistry TypeRegistry() =>
@@ -32,20 +32,15 @@ public static class SerializationServices
         Compose().BuildServiceProvider().GetRequiredService<IObjectConverter>();
 
     /// <summary>
-    /// The services of <see cref="SerializationFeature"/>, logging to nowhere, over <paramref name="converters"/> when
-    /// given. Callers add their own services before building, and own the provider they build.
+    /// The services of <see cref="SerializationFeature"/>, logging to nowhere. Callers add their own services before
+    /// building, and own the provider they build.
     /// </summary>
-    public static ServiceCollection Compose(JsonPayloadConverterRegistry? converters = null)
+    public static ServiceCollection Compose()
     {
         var services = new ServiceCollection();
         services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
         services.AddSingleton(typeof(ILogger<>), typeof(Logger<>));
         new SerializationFeature().ConfigureServices(services);
-
-        // Registered after the feature's own registry, so it is the one the serializer resolves.
-        if (converters is not null)
-            services.AddSingleton(converters);
-
         return services;
     }
 }

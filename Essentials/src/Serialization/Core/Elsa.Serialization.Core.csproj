@@ -10,6 +10,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Serialization.SystemText" />
     <InternalsVisibleTo Include="Elsa.Serialization.Tests" />
   </ItemGroup>
 

@@ -26,27 +26,8 @@ Elsa.Expressions.JavaScript.Rendering.Core.Contracts.IJavaScriptDeclarationsCont
 Elsa.Expressions.JavaScript.Rendering.Core.Contracts.IJavaScriptDeclarationsContributionContext.AddFunction(Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptFunctionDeclaration! declaration) -> void
 Elsa.Expressions.JavaScript.Rendering.Core.Contracts.IJavaScriptDeclarationsContributionContext.AddType(Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptTypeDeclaration! declaration) -> void
 Elsa.Expressions.JavaScript.Rendering.Core.Contracts.IJavaScriptDeclarationsContributionContext.AddVariable(Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptVariableDeclaration! declaration) -> void
-Elsa.Expressions.JavaScript.Rendering.Core.Contracts.IJavaScriptDeclarationsDocumentFactory
-Elsa.Expressions.JavaScript.Rendering.Core.Contracts.IJavaScriptDeclarationsDocumentFactory.Create(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptDeclarationsDocument!>
-Elsa.Expressions.JavaScript.Rendering.Core.Contracts.IJavaScriptDeclarationsDocumentRenderer
-Elsa.Expressions.JavaScript.Rendering.Core.Contracts.IJavaScriptDeclarationsDocumentRenderer.Render(Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptDeclarationsDocument! typeDocument) -> string!
 Elsa.Expressions.JavaScript.Rendering.Core.Contracts.IJavaScriptTypeDeclarationFactory
 Elsa.Expressions.JavaScript.Rendering.Core.Contracts.IJavaScriptTypeDeclarationFactory.Create(System.Type! type) -> Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptTypeDeclaration!
-Elsa.Expressions.JavaScript.Rendering.Core.Events.DeclarationsDocumentGenerating
-Elsa.Expressions.JavaScript.Rendering.Core.Events.DeclarationsDocumentGenerating.<Clone>$() -> Elsa.Expressions.JavaScript.Rendering.Core.Events.DeclarationsDocumentGenerating!
-Elsa.Expressions.JavaScript.Rendering.Core.Events.DeclarationsDocumentGenerating.Context.get -> Elsa.Expressions.JavaScript.Rendering.Core.Contracts.IJavaScriptDeclarationsContributionContext!
-Elsa.Expressions.JavaScript.Rendering.Core.Events.DeclarationsDocumentGenerating.Context.init -> void
-Elsa.Expressions.JavaScript.Rendering.Core.Events.DeclarationsDocumentGenerating.DeclarationsDocumentGenerating(Elsa.Expressions.JavaScript.Rendering.Core.Contracts.IJavaScriptDeclarationsContributionContext! Context) -> void
-Elsa.Expressions.JavaScript.Rendering.Core.Events.DeclarationsDocumentGenerating.Deconstruct(out Elsa.Expressions.JavaScript.Rendering.Core.Contracts.IJavaScriptDeclarationsContributionContext! Context) -> void
-Elsa.Expressions.JavaScript.Rendering.Core.Events.DeclarationsDocumentGenerating.Equals(Elsa.Expressions.JavaScript.Rendering.Core.Events.DeclarationsDocumentGenerating? other) -> bool
-Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptDeclarationsDocument
-Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptDeclarationsDocument.Functions.get -> System.Collections.Generic.IEnumerable<Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptFunctionDeclaration!>!
-Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptDeclarationsDocument.Functions.set -> void
-Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptDeclarationsDocument.JavaScriptDeclarationsDocument() -> void
-Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptDeclarationsDocument.Types.get -> System.Collections.Generic.IEnumerable<Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptTypeDeclaration!>!
-Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptDeclarationsDocument.Types.set -> void
-Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptDeclarationsDocument.Variables.get -> System.Collections.Generic.IEnumerable<Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptVariableDeclaration!>!
-Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptDeclarationsDocument.Variables.set -> void
 Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptFunctionDeclaration
 Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptFunctionDeclaration.JavaScriptFunctionDeclaration() -> void
 Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptFunctionDeclaration.JavaScriptFunctionDeclaration(string! name, string! returnType) -> void
@@ -105,10 +86,5 @@ Elsa.Expressions.JavaScript.Rendering.Core.Options.JavaScriptDeclarationOptions.
 Elsa.Expressions.JavaScript.Rendering.Core.Options.JavaScriptDeclarationOptions.JavaScriptDeclarationOptions() -> void
 Elsa.Expressions.JavaScript.Rendering.Core.Options.JavaScriptDeclarationOptions.TypeDeclarations.get -> System.Collections.Generic.ICollection<Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptTypeDeclaration!>!
 Elsa.Expressions.JavaScript.Rendering.Core.Options.JavaScriptDeclarationOptions.VariableDeclarations.get -> System.Collections.Generic.ICollection<Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptVariableDeclaration!>!
-override Elsa.Expressions.JavaScript.Rendering.Core.Events.DeclarationsDocumentGenerating.Equals(object? obj) -> bool
-override Elsa.Expressions.JavaScript.Rendering.Core.Events.DeclarationsDocumentGenerating.GetHashCode() -> int
-override Elsa.Expressions.JavaScript.Rendering.Core.Events.DeclarationsDocumentGenerating.ToString() -> string!
 static Elsa.Expressions.JavaScript.Rendering.Core.Constants.DeclarationKeywords.GetDeclarationKeyword(System.Type! type) -> string!
-static Elsa.Expressions.JavaScript.Rendering.Core.Events.DeclarationsDocumentGenerating.operator !=(Elsa.Expressions.JavaScript.Rendering.Core.Events.DeclarationsDocumentGenerating? left, Elsa.Expressions.JavaScript.Rendering.Core.Events.DeclarationsDocumentGenerating? right) -> bool
-static Elsa.Expressions.JavaScript.Rendering.Core.Events.DeclarationsDocumentGenerating.operator ==(Elsa.Expressions.JavaScript.Rendering.Core.Events.DeclarationsDocumentGenerating? left, Elsa.Expressions.JavaScript.Rendering.Core.Events.DeclarationsDocumentGenerating? right) -> bool
 static Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptPropertyDeclaration.TextProperty(string! name, bool isOptional = false) -> Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptPropertyDeclaration!

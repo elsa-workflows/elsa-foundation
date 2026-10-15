@@ -7,8 +7,8 @@ namespace Elsa.Events.Core.Contracts;
 /// validation gate, entity saving/loading, expression-evaluation hooks).
 /// </summary>
 /// <remarks>
-/// Depending on this contract (rather than on the general <see cref="IEventPublisher"/> plus a
-/// caller-supplied strategy) makes deferred delivery unrepresentable at the dependency level: a
+/// Depending on this contract rather than on <see cref="IDeferredEventPublisher"/> makes deferred
+/// delivery unrepresentable at the dependency level: a
 /// site that needs handler effects back cannot accidentally be handed a fire-and-forget publisher.
 /// </remarks>
 public interface IInlineEventPublisher

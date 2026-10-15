@@ -1,4 +1,3 @@
-using System.Reflection;
 using Elsa.Tasks.Schedules;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -22,11 +21,8 @@ public sealed class BackoffSweepWorkerTaskTests
     {
         var worker = new TestWorker { Fail = () => new InvalidOperationException("boom") };
         var schedule = Assert.IsType<AdaptiveIntervalSchedule>(worker.GetSchedule());
-        await using var execution = Assert.IsType<ScheduledTaskExecution>(schedule.ScheduleExecution(() => Task.CompletedTask));
-        // The interval the execution re-arms its timer with after every run.
-        var nextWait = (Func<TimeSpan>)typeof(ScheduledTaskExecution)
-            .GetField("_interval", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .GetValue(execution)!;
+        await using var execution = schedule.ScheduleExecution(() => Task.CompletedTask);
+        var nextWait = Assert.IsType<ScheduledTaskExecution>(execution).Interval;
         Assert.Equal(TimeSpan.FromSeconds(1), nextWait());
 
         await worker.ExecuteAsync(CancellationToken.None);
