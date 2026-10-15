@@ -5,7 +5,6 @@ import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDe
 import { listActivities } from "../api/activityDesign";
 import type { ActivityCatalogItem, DefinitionListState, WorkflowDefinitionDetails, WorkflowDefinitionSummary } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
-import { resolveDefinitionPublicationStatus } from "./definitionPublicationStatus";
 import { getDialogs } from "./dialogs";
 import { defaultDefinitionPageSize } from "./constants";
 import type { CreateWorkflowDraft } from "./editorTypes";
@@ -21,6 +20,8 @@ import {
 } from "./workflowDefinitionBrowseLocation";
 import "./workflowFolders.css";
 
+const loadDefinitionStatusBadge = import("./DefinitionStatusBadge");
+const DefinitionStatusBadge = lazy(() => loadDefinitionStatusBadge.then(module => ({ default: module.DefinitionStatusBadge })));
 const MoveWorkflowDefinitionsDialog = lazy(() =>
   import("./MoveWorkflowDefinitionsDialog").then(module => ({ default: module.MoveWorkflowDefinitionsDialog }))
 );
@@ -418,7 +419,8 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
       ) : null}
       {state === "ready" && (definitions.length > 0 || page > 1) ? (
         <>
-          {definitions.length > 0 ? <div className="wf-grid" role="table" aria-label="Workflow definitions">
+          {definitions.length > 0 ? <Suspense fallback={<WfListSkeleton />}>
+            <div className="wf-grid" role="table" aria-label="Workflow definitions">
             <div className="wf-grid-head" role="row">
               <label className="wf-row-select">
                 <input
@@ -437,7 +439,6 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
             </div>
             {definitions.map(definition => {
               const isDeleted = Boolean(definition.deletedAt);
-              const publication = resolveDefinitionPublicationStatus(definition);
               return (
               <div
                 className="wf-grid-row"
@@ -472,12 +473,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
                 <span>{definition.latestVersion ?? "No version"}</span>
                 <span>
                   {listState === "deleted" ? formatDate(definition.deletedAt) : (
-                    <>
-                      <span className="wf-status-badge" data-status={isDeleted || publication === "retired" ? "cancelled" : publication === "draft" || publication === "retracted" ? "suspended" : "completed"}>
-                        {publication === "retracted" ? "Retracted" : publication === "retired" ? "Retired" : isDeleted ? "Deleted" : publication === "draft" ? "Draft" : "Published"}
-                      </span>
-                      {publication === "published-with-draft" ? <small>Newer draft</small> : isDeleted ? <small>{formatDate(definition.deletedAt)}</small> : null}
-                    </>
+                    <DefinitionStatusBadge definition={definition} />
                   )}
                 </span>
                 <span>{formatDate(definition.lastModifiedAt)}</span>
@@ -501,7 +497,8 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
               </div>
               );
             })}
-          </div> : null}
+          </div>
+          </Suspense> : null}
           <DefinitionPager
             page={page}
             pageSize={pageSize}

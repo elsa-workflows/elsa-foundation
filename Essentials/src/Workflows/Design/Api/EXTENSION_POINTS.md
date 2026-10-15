@@ -41,7 +41,7 @@ Summary: `IUpdateDraftCommand`, `ICreateDraftCommand`, `ICloneDraftFromVersionCo
 
 ### `IWorkflowDefinitionPublicationStateLookup` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
 - **Signature:** `ListByDefinitionIdsAsync(workflowDefinitionIds)` — one `WorkflowDefinitionPublicationState` per id (`Draft`, `Published`, `Retracted`, `Retired`).
-- **Default impl:** none in Design. Publishing registers `WorkflowDefinitionPublicationStateLookup`. Design list/detail endpoints take it as an optional constructor argument; absence leaves `publicationState` unset so a design-only host still works.
+- **Default impl:** none in Design. Publishing registers `WorkflowDefinitionPublicationStateLookup`. Design list/detail endpoints take it as an optional constructor argument; absence leaves `publicationState` unset so a design-only host still works. Live and empty slots cover Published and Retracted on every store. Retired-without-a-slot needs `IPublicationRecordStore.ListByDefinitionIdsAsync`; the in-memory journal implements it, the EF ledger does not (no definition-id hash).
 - **Override:** `services.Replace(ServiceDescriptor.Scoped<IWorkflowDefinitionPublicationStateLookup, MyLookup>())`. Do not add a Design.Api → Publishing project reference; the lookup is the bridge.
 
 ### Domain-model abstractions
