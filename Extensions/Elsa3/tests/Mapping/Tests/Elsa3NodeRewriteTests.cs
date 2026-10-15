@@ -137,6 +137,7 @@ public sealed class Elsa3NodeRewriteTests
         var diagnostic = Assert.Single(result.Diagnostics);
         Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, diagnostic.Code);
         Assert.Contains("'same'", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Equal("$.root.activities[0].cases[1]", diagnostic.Path);
     }
 
     [Fact]
@@ -176,7 +177,8 @@ public sealed class Elsa3NodeRewriteTests
         var diagnostic = Assert.Single(result.Diagnostics);
         Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, diagnostic.Code);
         Assert.Contains("'case1'", diagnostic.Message, StringComparison.Ordinal);
-        Assert.Contains("cases[1].condition", diagnostic.Path, StringComparison.Ordinal);
+        Assert.Equal("$.root.activities[0].cases[1].condition", diagnostic.Path);
+        Assert.Equal("cases", diagnostic.Metadata["Property"]);
     }
 
     private static Task<Elsa3MigrationResult<Elsa3.Mapping.Conversion.Elsa3ConvertedDefinition>> ConvertForkAsync(JsonElement joinMode)

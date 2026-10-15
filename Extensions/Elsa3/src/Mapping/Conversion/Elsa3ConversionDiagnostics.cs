@@ -14,8 +14,9 @@ internal static class Elsa3ConversionDiagnostics
         string code,
         string message,
         string guidance,
-        string? property = null) =>
-        Create(Elsa3MigrationDiagnosticSeverity.Error, plan, node, code, message, guidance, property);
+        string? property = null,
+        string? withinProperty = null) =>
+        Create(Elsa3MigrationDiagnosticSeverity.Error, plan, node, code, message, guidance, property, withinProperty);
 
     public static Elsa3MigrationDiagnostic Warning(
         Elsa3ConversionPlan plan,
@@ -23,8 +24,9 @@ internal static class Elsa3ConversionDiagnostics
         string code,
         string message,
         string guidance,
-        string? property = null) =>
-        Create(Elsa3MigrationDiagnosticSeverity.Warning, plan, node, code, message, guidance, property);
+        string? property = null,
+        string? withinProperty = null) =>
+        Create(Elsa3MigrationDiagnosticSeverity.Warning, plan, node, code, message, guidance, property, withinProperty);
 
     /// <summary>A definition-level diagnostic (no node), for reusable-workflow outcomes and the like.</summary>
     public static Elsa3MigrationDiagnostic ForDefinition(
@@ -49,14 +51,16 @@ internal static class Elsa3ConversionDiagnostics
         string code,
         string message,
         string guidance,
-        string? property)
+        string? property,
+        string? withinProperty)
     {
         var metadata = Metadata(plan);
         metadata["ActivityNodeId"] = NodeId(node.Node);
         metadata["Elsa3Type"] = node.Node.Type ?? string.Empty;
         if (property is not null)
             metadata["Property"] = property;
-        var path = property is null ? node.JsonPath : $"{node.JsonPath}{FormatProperty(property)}";
+        // withinProperty continues the path inside the property's value, such as "[1].condition" for a switch case.
+        var path = property is null ? node.JsonPath : $"{node.JsonPath}{FormatProperty(property)}{withinProperty}";
         return new Elsa3MigrationDiagnostic(severity, code, message, path, guidance, metadata);
     }
 

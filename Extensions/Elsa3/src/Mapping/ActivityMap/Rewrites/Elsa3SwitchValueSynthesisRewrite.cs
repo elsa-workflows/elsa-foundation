@@ -47,7 +47,7 @@ internal sealed class Elsa3SwitchValueSynthesisRewrite : IElsa3NodeRewrite
         var index = 0;
         foreach (var @case in cases.EnumerateArray())
         {
-            var casePath = $"{casesProperty}[{index}]";
+            var caseIndex = $"[{index}]";
             var label = @case.TryGetProperty("label", out var labelElement) && labelElement.ValueKind == JsonValueKind.String
                 ? labelElement.GetString()
                 : null;
@@ -58,7 +58,8 @@ internal sealed class Elsa3SwitchValueSynthesisRewrite : IElsa3NodeRewrite
                         ? $"Switch case {index} has no label; Elsa 4 keys each case by its label."
                         : $"Switch label '{label}' is used by more than one case; Elsa 4 requires distinct case labels.",
                     "Give every case a distinct label.",
-                    casePath);
+                    casesProperty,
+                    caseIndex);
                 index++;
                 continue;
             }
@@ -68,7 +69,8 @@ internal sealed class Elsa3SwitchValueSynthesisRewrite : IElsa3NodeRewrite
                 context.Error(UnsupportedMode,
                     $"The condition of switch case '{label}' {reason}, so it cannot be combined into one Elsa 4 value.",
                     "Write the case condition as one JavaScript expression.",
-                    $"{casePath}.condition");
+                    casesProperty,
+                    $"{caseIndex}.condition");
                 index++;
                 continue;
             }

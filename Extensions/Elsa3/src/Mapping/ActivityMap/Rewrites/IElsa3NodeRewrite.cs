@@ -77,14 +77,17 @@ internal sealed class Elsa3RewriteContext(
 
     public void SetProperty(string key, JsonElement value) => Activity.AdditionalProperties[key] = value;
 
-    public void Error(string code, string message, string guidance, string? property = null)
+    /// <param name="property">The Elsa 3 property the diagnostic is about.</param>
+    /// <param name="withinProperty">The path inside that property's value, such as <c>[1].condition</c>.</param>
+    public void Error(string code, string message, string guidance, string? property = null, string? withinProperty = null)
     {
         Node.Failed = true;
-        Plan.Diagnostics.Add(Elsa3ConversionDiagnostics.Error(Plan, Node, code, message, guidance, property));
+        Plan.Diagnostics.Add(Elsa3ConversionDiagnostics.Error(Plan, Node, code, message, guidance, property, withinProperty));
     }
 
-    public void Warning(string code, string message, string guidance, string? property = null) =>
-        Plan.Diagnostics.Add(Elsa3ConversionDiagnostics.Warning(Plan, Node, code, message, guidance, property));
+    /// <inheritdoc cref="Error"/>
+    public void Warning(string code, string message, string guidance, string? property = null, string? withinProperty = null) =>
+        Plan.Diagnostics.Add(Elsa3ConversionDiagnostics.Warning(Plan, Node, code, message, guidance, property, withinProperty));
 
     /// <summary>The node's ancestors, nearest first.</summary>
     public IEnumerable<Elsa3NodePlan> Ancestors()
