@@ -123,6 +123,60 @@ describe("isWorkflowEditorKeyboardTarget", () => {
     expect(isWorkflowEditorKeyboardTarget(window)).toBe(false);
     expect(isWorkflowEditorKeyboardTarget(document)).toBe(false);
   });
+
+  it("walks the keydown composedPath through a shadow tree into the code editor", () => {
+    const editor = document.createElement("section");
+    editor.dataset.studioCodeEditor = "true";
+    const host = document.createElement("div");
+    editor.appendChild(host);
+    document.body.appendChild(editor);
+    const inner = document.createElement("span");
+    host.attachShadow({ mode: "open" }).appendChild(inner);
+
+    let blocked: boolean | undefined;
+    const listener = (event: KeyboardEvent) => {
+      blocked = isActivityClipboardShortcutBlocked(event, editor);
+    };
+    window.addEventListener("keydown", listener, true);
+    inner.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "d",
+      ctrlKey: true,
+      bubbles: true,
+      composed: true
+    }));
+    window.removeEventListener("keydown", listener, true);
+
+    expect(blocked).toBe(true);
+    editor.remove();
+  });
+
+  it("treats Monaco and text-node targets as editor-owned without reading document.activeElement", () => {
+    const monaco = document.createElement("div");
+    monaco.className = "monaco-editor";
+    const inputArea = document.createElement("textarea");
+    inputArea.className = "inputarea";
+    monaco.appendChild(inputArea);
+    document.body.appendChild(monaco);
+
+    const editor = document.createElement("section");
+    editor.dataset.studioCodeEditor = "true";
+    const token = document.createElement("span");
+    token.appendChild(document.createTextNode("buyer.email"));
+    editor.appendChild(token);
+    document.body.appendChild(editor);
+
+    const previouslyFocused = document.createElement("button");
+    document.body.appendChild(previouslyFocused);
+    previouslyFocused.focus();
+
+    expect(isWorkflowEditorKeyboardTarget(inputArea)).toBe(true);
+    expect(isWorkflowEditorKeyboardTarget(token.firstChild)).toBe(true);
+    expect(document.activeElement).toBe(previouslyFocused);
+
+    monaco.remove();
+    editor.remove();
+    previouslyFocused.remove();
+  });
 });
 
 describe("activity clipboard shortcut gating", () => {

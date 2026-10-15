@@ -75,6 +75,8 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
       ?? new EditorView({ state: entry.state, parent: container });
     activeCodeMirrorViews.add(view);
     viewRef.current = view;
+    container.dataset.studioCodeEditorSurface = "codemirror";
+    markCodeEditorReady(container, true);
     view.dispatch({
       effects: entry.presentation.reconfigure(presentationExtensions(props.profile))
     });
@@ -83,6 +85,7 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
     void loadLanguageSupport(view, props.document.language, entry);
 
     return () => {
+      markCodeEditorReady(container, false);
       entry.runtime.tabEscapeArmed = false;
       entry.state = view.state;
       setStudioCodeEditorSessionEntry(props.session, props.document.uri, entry);
@@ -141,6 +144,13 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
       style={{ minHeight: props.minHeight }}
     />
   );
+}
+
+function markCodeEditorReady(element: HTMLElement | null, ready: boolean) {
+  const root = element?.closest("[data-studio-code-editor]");
+  if (!(root instanceof HTMLElement)) return;
+  if (ready) root.dataset.studioCodeEditorReady = "true";
+  else delete root.dataset.studioCodeEditorReady;
 }
 
 function claimCompactView(entry: CodeMirrorSessionEntry, profile: StudioCodeEditorEngineProps["profile"], container: HTMLElement) {

@@ -19,7 +19,9 @@ export function FallbackCodeEditor({
   const tabEscapeArmed = useRef(false);
 
   useEffect(() => {
+    markCodeEditorReady(inputRef.current, true);
     if (autoFocus) inputRef.current?.focus();
+    return () => markCodeEditorReady(inputRef.current, false);
   }, [autoFocus]);
 
   const handleChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
@@ -65,6 +67,7 @@ export function FallbackCodeEditor({
       aria-label={ariaLabel}
       aria-readonly={readOnly}
       className={`studio-code-editor-input studio-code-editor-input-${profile}`}
+      data-studio-code-editor-surface="fallback"
       readOnly={readOnly}
       spellCheck={false}
       autoCapitalize="off"
@@ -77,6 +80,13 @@ export function FallbackCodeEditor({
       onKeyDown={handleKeyDown}
     />
   );
+}
+
+function markCodeEditorReady(element: HTMLElement | null, ready: boolean) {
+  const root = element?.closest("[data-studio-code-editor]");
+  if (!(root instanceof HTMLElement)) return;
+  if (ready) root.dataset.studioCodeEditorReady = "true";
+  else delete root.dataset.studioCodeEditorReady;
 }
 
 function applyTabIndent(

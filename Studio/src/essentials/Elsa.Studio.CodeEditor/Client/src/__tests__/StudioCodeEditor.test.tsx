@@ -256,6 +256,7 @@ describe("StudioCodeEditor", () => {
     expect(container.querySelector(".studio-code-editor-header")?.textContent).toContain("JavaScript");
     expect(container.querySelector(".studio-code-editor")?.getAttribute("data-theme")).toBe("dark");
     expect(container.querySelector(".studio-code-editor")?.getAttribute("data-studio-code-editor")).toBe("true");
+    expect(container.querySelector(".studio-code-editor")?.getAttribute("data-studio-code-editor-ready")).toBe("true");
     expect(container.querySelector(".cm-gutters")).toBeTruthy();
     unmount();
   }, 20000);

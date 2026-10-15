@@ -1,13 +1,10 @@
 export const workflowEditorOverlaySelector = "[role='dialog'], [aria-modal='true'], [role='menu'], .wf-connect-menu";
 
 const designerOwnedOverlaySelector = ".wf-connect-menu, .wf-dialog, .wf-dialog-backdrop, .wf-editor-actions-popover";
+const monacoEditorSelector = ".monaco-editor, .monaco-mouse-cursor-text, textarea.inputarea";
 
-export function isWorkflowEditorKeyboardTarget(target: EventTarget | null) {
-  if (!(target instanceof Element)) return false;
-  return (target instanceof HTMLElement && target.isContentEditable)
-    || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)
-    || Boolean(target.closest("[contenteditable='true']"))
-    || Boolean(target.closest("[data-studio-code-editor]"));
+export function isWorkflowEditorKeyboardTarget(targetOrEvent: EventTarget | Event | null) {
+  return collectShortcutNodes(targetOrEvent).some(isEditableOrCodeEditorNode);
 }
 
 export function isWorkflowEditorOverlayTarget(target: EventTarget | null) {
@@ -36,11 +33,12 @@ function isVisibleOverlay(element: Element) {
 }
 
 export function isActivityClipboardShortcutBlocked(
-  target: EventTarget | null,
+  targetOrEvent: EventTarget | Event | null,
   designer: HTMLElement | null = null
 ) {
-  if (isWorkflowEditorKeyboardTarget(target)) return true;
+  if (isWorkflowEditorKeyboardTarget(targetOrEvent)) return true;
   if (isWorkflowEditorOverlayOpen(designer)) return true;
+  const target = resolvePrimaryTarget(targetOrEvent);
   if (!(target instanceof Element)) return false;
   if (isWorkflowEditorOverlayTarget(target) && isDesignerOwnedOverlay(target, designer)) return true;
   if (
@@ -57,4 +55,35 @@ export function isActivityClipboardShortcutBlocked(
 export function hasNonCollapsedTextSelection() {
   const selection = window.getSelection();
   return !!selection && !selection.isCollapsed && selection.toString().length > 0;
+}
+
+function collectShortcutNodes(targetOrEvent: EventTarget | Event | null): EventTarget[] {
+  if (targetOrEvent instanceof Event) {
+    const path = typeof targetOrEvent.composedPath === "function" ? targetOrEvent.composedPath() : [];
+    if (path.length > 0) return path;
+    return targetOrEvent.target != null ? [targetOrEvent.target] : [];
+  }
+  return targetOrEvent != null ? [targetOrEvent] : [];
+}
+
+function resolvePrimaryTarget(targetOrEvent: EventTarget | Event | null): EventTarget | null {
+  if (targetOrEvent instanceof Event) return targetOrEvent.target;
+  return targetOrEvent;
+}
+
+function isEditableOrCodeEditorNode(node: EventTarget | null) {
+  const element = asElement(node);
+  if (!element) return false;
+  if (element instanceof HTMLElement && element.isContentEditable) return true;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(element.tagName)) return true;
+  if (element.closest("[contenteditable='true']")) return true;
+  if (element.closest("[data-studio-code-editor]")) return true;
+  if (element.closest(monacoEditorSelector)) return true;
+  return false;
+}
+
+function asElement(node: EventTarget | null): Element | null {
+  if (node instanceof Element) return node;
+  if (typeof Text !== "undefined" && node instanceof Text) return node.parentElement;
+  return null;
 }
