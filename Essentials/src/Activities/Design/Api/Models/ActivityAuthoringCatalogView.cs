@@ -87,7 +87,8 @@ public sealed record ActivityInputDescriptorView(
     JsonElement? UiSpecifications,
     bool IsSensitive,
     bool IsCredential,
-    string? Tier = null);
+    string? Tier = null,
+    string? ConnectionType = null);
 
 public sealed record ActivityOutputDescriptorView(
     string Name,

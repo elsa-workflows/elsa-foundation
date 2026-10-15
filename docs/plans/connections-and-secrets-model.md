@@ -1,6 +1,6 @@
 # Connections and Secrets: conceptual model
 
-**Status:** Proposed. Decisions D1-D10 below were made in review on 2026-09-30; the rest of the document is still a proposal. Nothing is built.
+**Status:** Phase 1 implemented in `elsa-foundation` (issue #2729). Decisions D1–D10 were made in review on 2026-09-30. Phase 0 (Secrets + the interim `SendHttpRequest.Authorization` input) shipped earlier; phase 1 replaces that input with the `http` connection. OAuth as a scheme remains phase 2; the callback route is reserved.
 **Date:** 2026-09-30
 **Scope:** `elsa-foundation` (backend, SDK) and `elsa-foundation-studio` (designer UI)
 **Follow-ups if accepted:** one ADR (next free number is 0072, but 0001/0002/0003/0050/0062 have been reused, so check for collisions), glossary entries in `docs/glossary/elsa.md` and Studio `CONTEXT.md`, then Speckit specs per phase.

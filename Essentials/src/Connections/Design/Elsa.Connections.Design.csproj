@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Elsa.Connections\Elsa.Connections.csproj" />
+    <ProjectReference Include="..\Core\Elsa.Connections.Core.csproj" />
+    <ProjectReference Include="..\..\Activities\Design\Core\Elsa.Activities.Design.Core.csproj" />
+    <ProjectReference Include="..\..\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
+    <ProjectReference Include="..\..\Workflows\Design\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
+    <ProjectReference Include="..\..\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net.Http;
+using Elsa.Activities.Http.Connections;
 using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Http.Options;
 using Elsa.Activities.Runtime.Core.Attributes;
@@ -24,8 +25,9 @@ namespace Elsa.Activities.Http.Activities;
 /// response always returns one complete <see cref="SendHttpRequestResult"/>, and the completion
 /// <em>outcome</em> encodes the branch so a workflow can react without faulting.
 /// A transport failure emits <see cref="HttpActivityOutcomes.Failed"/> and a timeout emits
-/// <see cref="HttpActivityOutcomes.Timeout"/>; only a genuine misconfiguration (a missing URL, or an <see cref="Authorization"/> value holding a line break) or an external
-/// cancellation of the workflow faults the activity.
+/// <see cref="HttpActivityOutcomes.Timeout"/>; only a genuine misconfiguration (a missing URL) or an external
+/// cancellation of the workflow faults the activity. A bound http connection that cannot be applied raises
+/// the typed connection fault from the composed applicator.
 /// </para>
 /// <para>
 /// <b>Outcome mapping.</b> When <see cref="ExpectedStatusCodes"/> is supplied, each configured code becomes an
@@ -42,6 +44,11 @@ namespace Elsa.Activities.Http.Activities;
 /// workflow's own cancellation: a timeout cancels only this request, whereas a workflow cancellation
 /// propagates as a normal cancellation.
 /// </para>
+/// <para>
+/// <b>Connection.</b> Optional <see cref="Connection"/> is an http service connection. Credentials live on the
+/// connection, never on this activity. The composed <see cref="IHttpConnectionApplicator"/> attaches them at
+/// send time after <see cref="RequestHeaders"/> so the connection wins over an authored Authorization header.
+/// </para>
 /// </remarks>
 // Static base outcomes. When ExpectedStatusCodes is authored, the compiler adds one outcome per code plus
 // "Unmatched status code" (derived from the input via ActivityValueOutcomes); Done is the no-codes success branch.
@@ -51,7 +58,8 @@ namespace Elsa.Activities.Http.Activities;
 [ActivityValueOutcomes(nameof(ExpectedStatusCodes), UnmatchedOutcome = HttpActivityOutcomes.UnmatchedStatusCode)]
 public sealed class SendHttpRequest(
     IHttpClientFactory httpClientFactory,
-    IOptions<HttpActivityOptions> httpActivityOptions) : Activity<SendHttpRequestResult>
+    IOptions<HttpActivityOptions> httpActivityOptions,
+    IHttpConnectionApplicator connectionApplicator) : Activity<SendHttpRequestResult>
 {
     /// <summary>The absolute request URL. Required.</summary>
     [ActivityInput(Key = nameof(Url), Tier = InputTier.Essential)]
@@ -75,19 +83,17 @@ public sealed class SendHttpRequest(
     public IDictionary<string, string>? RequestHeaders { get; set; }
 
     /// <summary>
-    /// Optional credential for the request's <c>Authorization</c> header. A credential input: an author
-    /// binds a stored secret to it and writes no literal, so the definition holds the secret reference and the value is
-    /// resolved when the activity runs. A value with non-whitespace content is sent verbatim as the whole header value
-    /// (for example <c>Bearer</c>, a space and a token), because the activity adds no scheme, and it replaces an
-    /// <c>Authorization</c> entry in <see cref="RequestHeaders"/> whatever that entry's letter case. When it is unbound,
-    /// empty or whitespace only, <see cref="RequestHeaders"/> applies unchanged. A value containing a carriage return or
-    /// a line feed faults the activity before any request is sent, with a message that names the input and not the
-    /// value, because a header value cannot hold a line break. The activity's own result is built from the response
-    /// only, so this value is not part of it; a server that reflects the value in its response puts it into the
-    /// result. The value goes to whatever <see cref="Url"/> resolves to. Phase 1's http Connection replaces this input.
+    /// Optional http service connection. The binding holds a <see cref="ConnectionReference"/> (name and type
+    /// only). Credentials resolve through the connection at send time and never enter workflow state.
     /// </summary>
-    [ActivityInput(Key = nameof(Authorization), DisplayName = "Authorization", IsCredential = true, Tier = InputTier.Optional)]
-    public string? Authorization { get; set; }
+    [ActivityInput(
+        Key = nameof(Connection),
+        DisplayName = "Connection",
+        UIHint = "connection-picker",
+        DefaultSyntax = "Connection",
+        Tier = InputTier.Optional)]
+    [ActivityConnection(ConnectionType = "http")]
+    public ConnectionReference? Connection { get; set; }
 
     /// <summary>Optional set of status codes that should branch on the matching numeric outcome; others branch on <c>Unmatched</c>.</summary>
     [ActivityInput(Key = nameof(ExpectedStatusCodes), Tier = InputTier.Optional)]
@@ -108,6 +114,7 @@ public sealed class SendHttpRequest(
         using var request = new HttpRequestMessage(new HttpMethod(method), url);
         AddHeaders(request);
         AddContent(request);
+        await connectionApplicator.ApplyAsync(request, Connection, context, context.CancellationToken);
 
         var effectiveTimeout = Timeout is { } t && t > TimeSpan.Zero ? t : httpActivityOptions.Value.DefaultTimeout;
 
@@ -140,27 +147,13 @@ public sealed class SendHttpRequest(
         }
     }
 
-    private const string AuthorizationHeaderName = "Authorization";
-
     private void AddHeaders(HttpRequestMessage request)
     {
-        if (RequestHeaders is not null)
-        {
-            foreach (var (name, value) in RequestHeaders)
-                request.Headers.TryAddWithoutValidation(name, value);
-        }
-
-        // Applied after RequestHeaders so the credential input wins. TryAddWithoutValidation never throws, so the
-        // value cannot reach exception text through header validation; it also accepts a line break, which would put a
-        // second header on the wire, so a value holding one is refused here with a message that omits the value.
-        if (string.IsNullOrWhiteSpace(Authorization))
+        if (RequestHeaders is null)
             return;
 
-        if (Authorization.AsSpan().IndexOfAny('\r', '\n') >= 0)
-            throw new InvalidOperationException("SendHttpRequest's Authorization input contains a carriage return or a line feed, which a header value cannot hold.");
-
-        request.Headers.Remove(AuthorizationHeaderName);
-        request.Headers.TryAddWithoutValidation(AuthorizationHeaderName, Authorization);
+        foreach (var (name, value) in RequestHeaders)
+            request.Headers.TryAddWithoutValidation(name, value);
     }
 
     private void AddContent(HttpRequestMessage request)

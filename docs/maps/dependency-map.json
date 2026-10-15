@@ -295,6 +295,31 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Connections.Api",
+          "path": "Essentials/src/Connections/Api/Elsa.Connections.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Core",
+          "path": "Essentials/src/Connections/Core/Elsa.Connections.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Design",
+          "path": "Essentials/src/Connections/Design/Elsa.Connections.Design.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections",
+          "path": "Essentials/src/Connections/Elsa.Connections/Elsa.Connections.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Workflows",
+          "path": "Essentials/src/Connections/Workflows/Elsa.Connections.Workflows.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Diagnostics.ConsoleLogStreaming",
           "path": "Essentials/src/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj"
         },
@@ -2896,6 +2921,371 @@
         {
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
+        }
+      ]
+    },
+    {
+      "path": "Essentials/src/Connections/Api/Elsa.Connections.Api.csproj",
+      "name": "Elsa.Connections.Api",
+      "kind": "source",
+      "domain": "Elsa.Connections",
+      "sub_domain": "Api",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Connections.Api",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Api.AspNetCore",
+          "path": "Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Core",
+          "path": "Essentials/src/Connections/Core/Elsa.Connections.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections",
+          "path": "Essentials/src/Connections/Elsa.Connections/Elsa.Connections.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.Core",
+          "path": "Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity",
+          "path": "Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.30"
+        },
+        {
+          "type": "external",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.30"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.AspNetCore.OpenApi",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.OpenApi",
+          "version": "2.7.5"
+        }
+      ]
+    },
+    {
+      "path": "Essentials/src/Connections/Core/Elsa.Connections.Core.csproj",
+      "name": "Elsa.Connections.Core",
+      "kind": "source",
+      "domain": "Elsa.Connections",
+      "sub_domain": "Core",
+      "role": "contract",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Connections.Core",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Primitives",
+          "path": "Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj"
+        }
+      ]
+    },
+    {
+      "path": "Essentials/src/Connections/Design/Elsa.Connections.Design.csproj",
+      "name": "Elsa.Connections.Design",
+      "kind": "source",
+      "domain": "Elsa.Connections",
+      "sub_domain": "Design",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Connections.Design",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Design.Core",
+          "path": "Essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Core",
+          "path": "Essentials/src/Connections/Core/Elsa.Connections.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections",
+          "path": "Essentials/src/Connections/Elsa.Connections/Elsa.Connections.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Core",
+          "path": "Essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Validations.Core",
+          "path": "Essentials/src/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Core",
+          "path": "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.30"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
+        }
+      ]
+    },
+    {
+      "path": "Essentials/src/Connections/Elsa.Connections/Elsa.Connections.csproj",
+      "name": "Elsa.Connections",
+      "kind": "source",
+      "domain": "Elsa.Connections",
+      "sub_domain": "(root)",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Connections",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Runtime.Core",
+          "path": "Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Core",
+          "path": "Essentials/src/Connections/Core/Elsa.Connections.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Expressions.Core",
+          "path": "Essentials/src/Expressions/Core/Elsa.Expressions.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Secrets.Core",
+          "path": "Essentials/src/Secrets/Core/Elsa.Secrets.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.30"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.10"
+        }
+      ]
+    },
+    {
+      "path": "Essentials/src/Connections/Workflows/Elsa.Connections.Workflows.csproj",
+      "name": "Elsa.Connections.Workflows",
+      "kind": "source",
+      "domain": "Elsa.Connections",
+      "sub_domain": "Workflows",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Connections.Workflows",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Http",
+          "path": "Essentials/src/Activities/Http/Elsa.Activities.Http.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Core",
+          "path": "Essentials/src/Connections/Core/Elsa.Connections.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections",
+          "path": "Essentials/src/Connections/Elsa.Connections/Elsa.Connections.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Core",
+          "path": "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.30"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.30"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Configuration.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
           "version": "10.0.10"
         },
         {
@@ -11990,6 +12380,31 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Connections.Api",
+          "path": "Essentials/src/Connections/Api/Elsa.Connections.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Core",
+          "path": "Essentials/src/Connections/Core/Elsa.Connections.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Design",
+          "path": "Essentials/src/Connections/Design/Elsa.Connections.Design.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections",
+          "path": "Essentials/src/Connections/Elsa.Connections/Elsa.Connections.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Workflows",
+          "path": "Essentials/src/Connections/Workflows/Elsa.Connections.Workflows.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Diagnostics.ConsoleLogStreaming",
           "path": "Essentials/src/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj"
         },
@@ -13629,6 +14044,110 @@
           "type": "internal",
           "id": "Elsa.Cluster.Testing",
           "path": "Essentials/tests/Cluster/Testing/Elsa.Cluster.Testing.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.TimeProvider.Testing",
+          "version": "10.8.0"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
+    },
+    {
+      "path": "Essentials/tests/Connections/Tests/Elsa.Connections.Tests.csproj",
+      "name": "Elsa.Connections.Tests",
+      "kind": "test",
+      "domain": "Elsa.Connections",
+      "sub_domain": "Tests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Http",
+          "path": "Essentials/src/Activities/Http/Elsa.Activities.Http.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Api",
+          "path": "Essentials/src/Connections/Api/Elsa.Connections.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Core",
+          "path": "Essentials/src/Connections/Core/Elsa.Connections.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Design",
+          "path": "Essentials/src/Connections/Design/Elsa.Connections.Design.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections",
+          "path": "Essentials/src/Connections/Elsa.Connections/Elsa.Connections.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Workflows",
+          "path": "Essentials/src/Connections/Workflows/Elsa.Connections.Workflows.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Expressions",
+          "path": "Essentials/src/Expressions/Elsa.Expressions/Elsa.Expressions.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Secrets.Core",
+          "path": "Essentials/src/Secrets/Core/Elsa.Secrets.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Secrets",
+          "path": "Essentials/src/Secrets/Elsa.Secrets/Elsa.Secrets.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime",
+          "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Configuration",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Logging",
+          "version": "10.0.10"
         },
         {
           "type": "external",
@@ -17116,6 +17635,26 @@
           "type": "internal",
           "id": "Elsa.Api.Capabilities",
           "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Core",
+          "path": "Essentials/src/Connections/Core/Elsa.Connections.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Design",
+          "path": "Essentials/src/Connections/Design/Elsa.Connections.Design.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections",
+          "path": "Essentials/src/Connections/Elsa.Connections/Elsa.Connections.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Connections.Workflows",
+          "path": "Essentials/src/Connections/Workflows/Elsa.Connections.Workflows.csproj"
         },
         {
           "type": "internal",

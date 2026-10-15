@@ -1,6 +1,7 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
 using Elsa.Activities.Http.Activities;
+using Elsa.Activities.Http.Connections;
 using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Http.Options;
@@ -71,6 +72,7 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
             .RemoveAllLoggers()
             .AddLogger<HttpActivityClientLogger>();
         services.TryAddSingleton<HttpActivityClientLogger>();
+        services.TryAddScoped<IHttpConnectionApplicator, UnboundHttpConnectionApplicator>();
 
         // Contribute the HttpEndpoint start-trigger's stimulus provider so the publish-time trigger
         // extractor can recognize published HttpEndpoint nodes and index them. Enumerable so other activity

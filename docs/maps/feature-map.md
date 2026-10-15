@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 107
+- Discovered feature classes: 111
 
 ## Features
 
@@ -39,6 +39,10 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | ApiCapabilitiesFeature | direct IWebShellFeature | Elsa.Api.Capabilities | IWebShellFeature | [ApiCapabilitiesFeature.cs](../../Essentials/src/Api/Capabilities/ApiCapabilitiesFeature.cs) |
 | AttentionApiFeature | direct IWebShellFeature | Elsa.Attention.Api | IWebShellFeature | [AttentionApiFeature.cs](../../Essentials/src/Attention/Api/AttentionApiFeature.cs) |
 | MemoryCacheFeature | direct IShellFeature | Elsa.Caching.Memory | IShellFeature | [MemoryCacheFeature.cs](../../Essentials/src/Caching/Memory/MemoryCacheFeature.cs) |
+| ConnectionsFeature | direct IShellFeature | Elsa.Connections | IShellFeature | [ConnectionsFeature.cs](../../Essentials/src/Connections/Elsa.Connections/Features/ConnectionsFeature.cs) |
+| ConnectionsApiFeature | direct IWebShellFeature | Elsa.Connections.Api | IWebShellFeature | [ConnectionsApiFeature.cs](../../Essentials/src/Connections/Api/Features/ConnectionsApiFeature.cs) |
+| ConnectionsDesignFeature | direct IShellFeature | Elsa.Connections.Design | IShellFeature | [ConnectionsDesignFeature.cs](../../Essentials/src/Connections/Design/Features/ConnectionsDesignFeature.cs) |
+| ConnectionsWorkflowsFeature | direct IShellFeature | Elsa.Connections.Workflows | IShellFeature | [ConnectionsWorkflowsFeature.cs](../../Essentials/src/Connections/Workflows/Features/ConnectionsWorkflowsFeature.cs) |
 | OpenTelemetryFeature | direct IWebShellFeature | Elsa.Diagnostics.OpenTelemetry | IWebShellFeature | [OpenTelemetryFeature.cs](../../Essentials/src/Diagnostics/OpenTelemetry/Elsa.Diagnostics.OpenTelemetry/OpenTelemetryFeature.cs) |
 | EfOpenTelemetryFeature | direct IShellFeature | Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore | IShellFeature | [EfOpenTelemetryFeature.cs](../../Essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/EfOpenTelemetryFeature.cs) |
 | StructuredLogsFeature | direct IWebShellFeature | Elsa.Diagnostics.StructuredLogs | IWebShellFeature | [StructuredLogsFeature.cs](../../Essentials/src/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs/StructuredLogsFeature.cs) |

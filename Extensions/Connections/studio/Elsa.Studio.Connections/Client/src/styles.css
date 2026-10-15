@@ -1,0 +1,80 @@
+.connections-shell,
+.connections-modal,
+.connection-picker-editor {
+  --connections-bg: var(--studio-bg, var(--background, #f8fafc));
+  --connections-surface: var(--studio-surface, var(--surface, #fff));
+  --connections-text: var(--studio-text, var(--text, #111827));
+  --connections-text-muted: var(--studio-text-muted, var(--muted, #64748b));
+  --connections-border: var(--studio-border, #cbd5e1);
+  --connections-accent: var(--studio-accent, var(--accent, #0f172a));
+  --connections-accent-text: var(--studio-accent-text, #fff);
+  --connections-radius: var(--studio-radius, 6px);
+  --connections-body-size: var(--studio-body-size, 13px);
+}
+
+.connections-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  color: var(--connections-text);
+  background: var(--connections-bg);
+  font-size: var(--connections-body-size);
+}
+
+.connections-shell header p,
+.connection-picker-editor p {
+  color: var(--connections-text-muted);
+}
+
+.connections-toolbar,
+.connections-actions,
+.connections-layout {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.connections-layout ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-width: 16rem;
+}
+
+.connections-layout button,
+.connections-toolbar button,
+.connections-modal button,
+.connection-picker-editor button,
+.connections-toolbar input,
+.connections-modal input,
+.connections-modal select,
+.connection-picker-editor select {
+  border: 1px solid var(--connections-border);
+  border-radius: var(--connections-radius);
+  background: var(--connections-surface);
+  color: var(--connections-text);
+}
+
+.connections-toolbar button,
+.connections-actions button,
+.connections-modal button[type="submit"] {
+  background: var(--connections-accent);
+  color: var(--connections-accent-text);
+}
+
+.connections-modal {
+  position: fixed;
+  inset: auto 1.5rem 1.5rem auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: var(--connections-surface);
+  border: 1px solid var(--connections-border);
+  border-radius: var(--connections-radius);
+}
+
+.connection-picker-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}

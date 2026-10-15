@@ -203,7 +203,9 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // from the presentation-only elsa.activity-icon facet (ActivityIconName).
         // It moved again when ActivityInputDescriptorView gained Tier, the presentation-only disclosure
         // group (essential / optional / setting) projected from InputDefinition.Tier.
-        Assert.Equal("5ef979cf4c3a0ec39c773bde4cb7b11e1ec1cecdf1031a222b04af4c749a1164", PublicShapeHash(ContractTypes));
+        // It moved again when ActivityInputDescriptorView gained ConnectionType, the required connection
+        // type projected from [ActivityConnection] (#2729).
+        Assert.Equal("9be513a3e52ac705d99342414be2e172f04c96586e618d07c2ddd0792bb787e7", PublicShapeHash(ContractTypes));
     }
 
     [Fact]

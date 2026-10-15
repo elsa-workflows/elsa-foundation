@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>
+      Workflow runtime adapter for service connections: resolves a bound http connection at send time
+      and applies the selected authentication scheme, registering revealed credentials with
+      IRuntimeSecretMask.
+    </Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Elsa.Connections\Elsa.Connections.csproj" />
+    <ProjectReference Include="..\Core\Elsa.Connections.Core.csproj" />
+    <ProjectReference Include="..\..\Activities\Http\Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="..\..\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+  </ItemGroup>
+
+</Project>
