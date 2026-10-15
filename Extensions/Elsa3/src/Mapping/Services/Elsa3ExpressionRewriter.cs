@@ -74,6 +74,7 @@ public sealed class Elsa3ExpressionRewriter
         }
 
         var analyzer = new JavaScriptAnalyzer(resolve);
+        analyzer.CollectDeclarations(script);
         analyzer.Visit(script);
         if (analyzer.Issues.Count > 0)
             return Elsa3ExpressionRewriteResult.Failure(analyzer.Issues);
@@ -340,8 +341,65 @@ public sealed class Elsa3ExpressionRewriter
             $"JavaScript uses '{name}', which the Elsa 4 JavaScript engine does not provide.",
             "Supply the value as a pinned input or compute it in an activity before import.");
 
-        private static bool IsNondeterministicMember(Node node) =>
+        /// <summary>
+        /// Names the script declares itself (variables, functions, parameters, catch variables, classes). A reference to
+        /// one of them is a local value, not an Elsa 3 global, wherever it is declared.
+        /// </summary>
+        private readonly HashSet<string> _declared = new(StringComparer.Ordinal);
+
+        private bool IsNondeterministicMember(Node node) =>
             node is MemberExpression member && IsNondeterministicCall(member);
+
+        private bool IsUnavailableGlobal(string name) => ElsaThreeGlobals.Contains(name) && !_declared.Contains(name);
+
+        public void CollectDeclarations(Node node)
+        {
+            switch (node)
+            {
+                case VariableDeclarator declarator:
+                    CollectBindings(declarator.Id);
+                    break;
+                case IFunction function:
+                    if (function.Id is { } functionId)
+                        CollectBindings(functionId);
+                    foreach (var parameter in function.Params)
+                        CollectBindings(parameter);
+                    break;
+                case CatchClause { Param: { } caught }:
+                    CollectBindings(caught);
+                    break;
+                case IClass { Id: { } classId }:
+                    CollectBindings(classId);
+                    break;
+            }
+
+            foreach (var child in node.ChildNodes)
+                CollectDeclarations(child);
+        }
+
+        private void CollectBindings(Node? pattern)
+        {
+            switch (pattern)
+            {
+                case Identifier identifier:
+                    _declared.Add(identifier.Name);
+                    break;
+                case ArrayPattern array:
+                    foreach (var element in array.Elements)
+                        CollectBindings(element);
+                    break;
+                case ObjectPattern objectPattern:
+                    foreach (var property in objectPattern.Properties)
+                        CollectBindings(property is Property { } bound ? bound.Value : property);
+                    break;
+                case AssignmentPattern assigned:
+                    CollectBindings(assigned.Left);
+                    break;
+                case RestElement rest:
+                    CollectBindings(rest.Argument);
+                    break;
+            }
+        }
 
         public Dictionary<string, ExpressionParameterBinding> Parameters { get; } = new(StringComparer.Ordinal);
         public List<SourceEdit> Edits { get; } = [];
@@ -404,22 +462,21 @@ public sealed class Elsa3ExpressionRewriter
                 }
             }
 
-            if (node is NewExpression { Callee: Identifier constructed } && ElsaThreeGlobals.Contains(constructed.Name))
+            if (node is NewExpression { Callee: Identifier constructed } && IsUnavailableGlobal(constructed.Name))
             {
                 Issues.Add(UnavailableGlobal(constructed.Name));
                 return;
             }
 
-            if (node is MemberExpression { Object: Identifier global } && ElsaThreeGlobals.Contains(global.Name) &&
+            if (node is MemberExpression { Object: Identifier global } && IsUnavailableGlobal(global.Name) &&
                 !IsNondeterministicMember(node))
             {
                 Issues.Add(UnavailableGlobal(global.Name));
                 return;
             }
 
-            // A bare reference too, such as Date.now without a call or moment passed as a value. Not '_', which is also
-            // a common parameter name; its library use (_.map) is caught as a member above.
-            if (node is Identifier bareGlobal && ElsaThreeGlobals.Contains(bareGlobal.Name) && bareGlobal.Name != "_")
+            // A bare reference too, such as Date.now without a call or moment passed as a value.
+            if (node is Identifier bareGlobal && IsUnavailableGlobal(bareGlobal.Name))
             {
                 Issues.Add(UnavailableGlobal(bareGlobal.Name));
                 return;
@@ -536,8 +593,8 @@ public sealed class Elsa3ExpressionRewriter
             return false;
         }
 
-        private static bool IsNondeterministicCall(MemberExpression member) =>
-            member.Object is Identifier root &&
+        private bool IsNondeterministicCall(MemberExpression member) =>
+            member.Object is Identifier root && !_declared.Contains(root.Name) &&
             member.Property is Identifier property &&
             ((root.Name.Equals("Math", StringComparison.Ordinal) && property.Name.Equals("random", StringComparison.Ordinal)) ||
              (root.Name.Equals("Date", StringComparison.Ordinal) && property.Name.Equals("now", StringComparison.Ordinal)) ||

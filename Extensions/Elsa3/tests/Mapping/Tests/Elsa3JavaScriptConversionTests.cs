@@ -39,6 +39,11 @@ public sealed class Elsa3JavaScriptConversionTests
     [InlineData("({ Date: 1 }).Date")]
     [InlineData("[1].map(_ => 2)[0]")]
     [InlineData("'a'.length")]
+    [InlineData("var Date = 1; Date + 1")]
+    [InlineData("[1].map(function (moment) { return moment; })[0]")]
+    [InlineData("(({ DateTime }) => DateTime.Now)({ DateTime: { Now: 1 } })")]
+    [InlineData("var _ = { map: 1 }; _.map")]
+    [InlineData("(() => { try { return 1; } catch (Guid) { return Guid.message; } })()")]
     public async Task Names_that_only_look_like_elsa3_globals_convert(string expression)
     {
         var result = await ConvertTextAsync(expression);
