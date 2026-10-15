@@ -251,7 +251,9 @@ green on the exact head commit. Actionable findings are fixed in new commits and
 rounds; if blocking findings remain after the sixth, the PR is escalated to the maintainer with
 `blocked: review loop exhausted` and `needs:decision`. D7's human-merge cases are dropped, and so is the 14 October
 note's reference to D7's human merge. D7's pause after a reverted auto-merge is kept, as the owner confirmed on
-15 October: while #2559 carries `auto-merge-paused`, routine PRs request no Code Review. The fixer routine never merges
+15 October ([record](https://github.com/elsa-workflows/elsa-foundation/pull/2766#issuecomment-6199163408)), which
+overrides the Lead summary's listing of the pause among the dropped items: while #2559 carries `auto-merge-paused`,
+routine PRs request no Code Review. The fixer routine never merges
 its own PRs and no longer merges through `elsa-auto-review-merge`; it requests review and stops. Routine PRs carry
 the `auto-fix` label, which replaces the `claude/auto-fix-*` branch prefix as the way the routine finds its own PRs
 and their reverts.
