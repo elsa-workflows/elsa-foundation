@@ -13,15 +13,16 @@ public sealed class HttpAuthenticatorTests
     [Fact]
     public async Task Bearer_PrefixesScheme_AndRefusesDisallowedHost()
     {
+        var token = NewCredential("tok");
         var authenticator = new BearerHttpRequestAuthenticator();
         var allowed = new FakeResolvedConnection(
             HttpAuthSchemes.Bearer,
             AllowedHostsPolicy.Fixed("api.example"),
-            ("token", "abc123"));
+            ("token", token));
 
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.example/v1");
         await authenticator.ApplyAsync(request, allowed);
-        Assert.Equal("Bearer abc123", request.Headers.GetValues("Authorization").Single());
+        Assert.Equal($"Bearer {token}", request.Headers.GetValues("Authorization").Single());
 
         using var refused = new HttpRequestMessage(HttpMethod.Get, "https://evil.example/v1");
         var ex = await Assert.ThrowsAsync<ConnectionUnavailableException>(() => authenticator.ApplyAsync(refused, allowed).AsTask());
@@ -32,8 +33,8 @@ public sealed class HttpAuthenticatorTests
     [Fact]
     public async Task Basic_SetsAuthorizationHeader()
     {
-        var username = $"u{Guid.NewGuid():N}";
-        var password = $"p{Guid.NewGuid():N}";
+        var username = NewCredential("u");
+        var password = NewCredential("p");
         var authenticator = new BasicHttpRequestAuthenticator();
         var connection = new FakeResolvedConnection(
             HttpAuthSchemes.Basic,
@@ -50,11 +51,12 @@ public sealed class HttpAuthenticatorTests
     [Fact]
     public async Task Apply_RequiresHttpsUnlessAllowInsecureHttpIsSet()
     {
+        var token = NewCredential("tok");
         var authenticator = new BearerHttpRequestAuthenticator();
         var connection = new FakeResolvedConnection(
             HttpAuthSchemes.Bearer,
             AllowedHostsPolicy.Any,
-            ("token", "abc123"));
+            ("token", token));
 
         using var insecure = new HttpRequestMessage(HttpMethod.Get, "http://api.example/v1");
         var refused = await Assert.ThrowsAsync<ConnectionUnavailableException>(() => authenticator.ApplyAsync(insecure, connection).AsTask());
@@ -63,21 +65,22 @@ public sealed class HttpAuthenticatorTests
         var optedIn = new FakeResolvedConnection(
             HttpAuthSchemes.Bearer,
             AllowedHostsPolicy.Any,
-            ("token", "abc123"),
+            ("token", token),
             settings: new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowInsecureHttp] = "true" });
         using var allowed = new HttpRequestMessage(HttpMethod.Get, "http://api.example/v1");
         await authenticator.ApplyAsync(allowed, optedIn);
-        Assert.Equal("Bearer abc123", allowed.Headers.GetValues("Authorization").Single());
+        Assert.Equal($"Bearer {token}", allowed.Headers.GetValues("Authorization").Single());
     }
 
     [Fact]
     public async Task ApiKey_QueryPlacement_PutsKeyOnUri()
     {
+        var apiKey = NewCredential("key");
         var authenticator = new ApiKeyHttpRequestAuthenticator();
         var connection = new FakeResolvedConnection(
             HttpAuthSchemes.ApiKey,
             AllowedHostsPolicy.Any,
-            ("apiKey", "key-9"),
+            ("apiKey", apiKey),
             settings: new Dictionary<string, string>
             {
                 [HttpConnectionSettingKeys.ApiKeyPlacement] = ApiKeyPlacements.Query,
@@ -86,23 +89,26 @@ public sealed class HttpAuthenticatorTests
 
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://example.test/resource");
         await authenticator.ApplyAsync(request, connection);
-        Assert.Contains("api_key=key-9", request.RequestUri!.Query, StringComparison.Ordinal);
+        Assert.Contains($"api_key={apiKey}", request.RequestUri!.Query, StringComparison.Ordinal);
         Assert.False(request.Headers.Contains("Authorization"));
     }
 
     [Fact]
     public async Task Bearer_RefusesCredentialWithLineBreak()
     {
+        var token = $"{NewCredential("tok")}\r\nX-Injected: 1";
         var authenticator = new BearerHttpRequestAuthenticator();
         var connection = new FakeResolvedConnection(
             HttpAuthSchemes.Bearer,
             AllowedHostsPolicy.Any,
-            ("token", "abc\r\nX-Injected: 1"));
+            ("token", token));
 
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://example.test/");
         await Assert.ThrowsAsync<InvalidOperationException>(() => authenticator.ApplyAsync(request, connection).AsTask());
         Assert.False(request.Headers.Contains("Authorization"));
     }
+
+    private static string NewCredential(string prefix) => $"{prefix}{Guid.NewGuid():N}";
 
     private sealed class FakeResolvedConnection : IResolvedConnection
     {
