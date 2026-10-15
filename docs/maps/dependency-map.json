@@ -12355,6 +12355,16 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Integrations.Connectors.OAuth2",
+          "path": "Extensions/Integrations/src/Connectors/OAuth2/Elsa.Integrations.Connectors.OAuth2.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Integrations.Sdk",
+          "path": "Extensions/Integrations/src/Sdk/Elsa.Integrations.Sdk.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Maps.Generator",
           "path": "tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj"
         },
@@ -21303,6 +21313,158 @@
         {
           "type": "external",
           "id": "Microsoft.AspNetCore.TestHost",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.NET.Test.Sdk",
+          "version": "18.0.0"
+        },
+        {
+          "type": "external",
+          "id": "coverlet.collector",
+          "version": "6.0.2"
+        },
+        {
+          "type": "external",
+          "id": "xunit",
+          "version": "2.9.3"
+        },
+        {
+          "type": "external",
+          "id": "xunit.runner.visualstudio",
+          "version": "3.1.5"
+        }
+      ]
+    },
+    {
+      "path": "Extensions/Integrations/src/Connectors/OAuth2/Elsa.Integrations.Connectors.OAuth2.csproj",
+      "name": "Elsa.Integrations.Connectors.OAuth2",
+      "kind": "source",
+      "domain": "Elsa.Integrations",
+      "sub_domain": "Connectors.OAuth2",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Integrations.Connectors.OAuth2",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Secrets.Core",
+          "path": "Essentials/src/Secrets/Core/Elsa.Secrets.Core.csproj"
+        }
+      ]
+    },
+    {
+      "path": "Extensions/Integrations/src/Sdk/Elsa.Integrations.Sdk.csproj",
+      "name": "Elsa.Integrations.Sdk",
+      "kind": "source",
+      "domain": "Elsa.Integrations",
+      "sub_domain": "Sdk",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Http",
+          "path": "Essentials/src/Activities/Http/Elsa.Activities.Http.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Runtime.Core",
+          "path": "Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Primitives",
+          "path": "Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Secrets.Core",
+          "path": "Essentials/src/Secrets/Core/Elsa.Secrets.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Core",
+          "path": "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Http",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        }
+      ]
+    },
+    {
+      "path": "Extensions/Integrations/tests/Connectors/OAuth2/Tests/Elsa.Integrations.Connectors.OAuth2.Tests.csproj",
+      "name": "Elsa.Integrations.Connectors.OAuth2.Tests",
+      "kind": "test",
+      "domain": "Elsa.Integrations",
+      "sub_domain": "Connectors.OAuth2.Tests",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Http",
+          "path": "Essentials/src/Activities/Http/Elsa.Activities.Http.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Runtime.Core",
+          "path": "Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Integrations.Connectors.OAuth2",
+          "path": "Extensions/Integrations/src/Connectors/OAuth2/Elsa.Integrations.Connectors.OAuth2.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Integrations.Sdk",
+          "path": "Extensions/Integrations/src/Sdk/Elsa.Integrations.Sdk.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.AspNetCore.TestHost",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Http",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Logging",
           "version": "10.0.10"
         },
         {

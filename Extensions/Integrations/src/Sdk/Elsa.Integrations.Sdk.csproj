@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    STUB for elsa-workflows/elsa-foundation#2726. Not packable and not a public surface:
+    types are internal; only Elsa.Integrations.Connectors.OAuth2.Tests sees them.
+    No Elsa.Integrations.Sdk package is produced until #2726 lands.
+    Reuses foundation activity, secret and HTTP contracts. No parallel manifest catalog,
+    no parallel ISecretStore, no Elsa 3 shims (ADR 0045).
+    Delete this project and PackageReference the real SDK when #2726 lands.
+  -->
+
+  <PropertyGroup>
+    <Description>Non-packable STUB of Elsa.Integrations.Sdk (#2726). Test-only until the real SDK lands. Not a NuGet package.</Description>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Integrations.Connectors.OAuth2.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\Essentials\src\Activities\Http\Elsa.Activities.Http.csproj" />
+    <ProjectReference Include="..\..\..\..\Essentials\src\Activities\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Essentials\src\Primitives\Primitives\Elsa.Primitives.csproj" />
+    <ProjectReference Include="..\..\..\..\Essentials\src\Secrets\Core\Elsa.Secrets.Core.csproj" />
+    <ProjectReference Include="..\..\..\..\Essentials\src\Workflows\Runtime\Core\Elsa.Workflows.Runtime.Core.csproj" />
+  </ItemGroup>
+
+</Project>
