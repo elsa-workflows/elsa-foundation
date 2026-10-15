@@ -25,9 +25,10 @@ the unpinned `:latest` commands here are not that recorded run.
 > stack ([`docker-compose.images.yml`](../docker/compose/docker-compose.images.yml)) runs
 > `Production` instead, because `shells.Production.json` blanks those defaults and they must be
 > supplied as environment variables: `RecoveryContinuationSigningKey`, `HierarchyCursorSigningKey`,
-> Secrets `EncryptionKey`, OpenIddict `SigningKey`, and `SeedAdminPassword`. Development also keeps
-> the code-default `AutoMigrate` policy (`appsettings.Production.json` sets `Validate`). This page
-> does not claim a recorded runtime verification of the Development CLI path.
+> Secrets `EncryptionKey`, OpenIddict `SigningKey`, and `SeedAdminPassword`. Development keeps the
+> code-default `AutoMigrate` policy. The published-image stack runs `Production` but overrides
+> `appsettings.Production.json`'s `Validate` setting with `AutoMigrate`. This page does not claim a
+> recorded runtime verification of the Development CLI path.
 
 > **Demo only.** The login is the demo admin seeded by the image's built-in `shells.json`
 > (`admin` / `Password123!`). The credentials and API key on this page are demo values: do not
