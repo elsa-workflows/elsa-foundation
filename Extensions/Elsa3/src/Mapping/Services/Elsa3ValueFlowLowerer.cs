@@ -15,11 +15,12 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     public IReadOnlyList<Elsa3MigrationDiagnostic> Lower(
         Elsa3WorkflowDefinition definition,
         Elsa3MemoryReferenceInventory inventory,
-        Elsa3WorkflowDefinitionImportInput input)
+        IReadOnlyDictionary<string, string> diagnosticMetadata)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(inventory);
-        ArgumentNullException.ThrowIfNull(input);
+        ArgumentNullException.ThrowIfNull(diagnosticMetadata);
+        var input = new DiagnosticScope(diagnosticMetadata, definition.DefinitionId);
 
         var diagnostics = new List<Elsa3MigrationDiagnostic>();
         var properties = CollectProperties(definition.Root, inventory).ToArray();
@@ -233,7 +234,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
 
     private void LowerExpression(
         Elsa3WorkflowDefinition definition,
-        Elsa3WorkflowDefinitionImportInput input,
+        DiagnosticScope input,
         ActivityProperty property,
         IReadOnlyList<Elsa3MemoryOccurrence> outputs,
         IReadOnlyDictionary<string, int> nodeOrder,
@@ -368,7 +369,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         IReadOnlyDictionary<string, Elsa3Variable[]> variablesById,
         IReadOnlyDictionary<string, Elsa3MemoryOccurrence[]> outputsByMemory,
         List<Elsa3MigrationDiagnostic> diagnostics,
-        Elsa3WorkflowDefinitionImportInput input)
+        DiagnosticScope input)
     {
         var candidates = inventory.Occurrences
             .Where(occurrence => occurrence.Direction == Elsa3PropertyDirection.Input && occurrence.Expression is null)
@@ -548,7 +549,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     }
 
     private static Elsa3MigrationDiagnostic CreateDiagnostic(
-        Elsa3WorkflowDefinitionImportInput input,
+        DiagnosticScope input,
         ActivityProperty property,
         string code,
         string message,
@@ -567,7 +568,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             memoryReferenceId);
 
     private static Elsa3MigrationDiagnostic CreateDiagnostic(
-        Elsa3WorkflowDefinitionImportInput input,
+        DiagnosticScope input,
         Elsa3MemoryOccurrence occurrence,
         string code,
         string message,
@@ -586,7 +587,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             memoryReferenceId);
 
     private static Elsa3MigrationDiagnostic CreateDiagnostic(
-        Elsa3WorkflowDefinitionImportInput input,
+        DiagnosticScope input,
         string activityNodeId,
         string activityPath,
         string stablePropertyKey,
@@ -597,13 +598,10 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         string? memoryReferenceId)
     {
         var metadata = input.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        metadata["InputKind"] = input.InputKind.ToString();
-        metadata["DefinitionId"] = input.Definition.DefinitionId;
+        metadata["DefinitionId"] = input.DefinitionId;
         metadata["ActivityNodeId"] = activityNodeId;
         metadata["ActivityPath"] = activityPath;
         metadata["StablePropertyKey"] = stablePropertyKey;
-        if (input.SourceName is not null)
-            metadata["SourceName"] = input.SourceName;
         if (memoryReferenceId is not null)
             metadata["MemoryReferenceId"] = memoryReferenceId;
 
@@ -649,6 +647,9 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         Elsa3Expression? Expression,
         Elsa3PropertyContract? InputContract,
         IReadOnlyList<Elsa3MemoryOccurrence> Occurrences);
+
+    /// <summary>The caller's diagnostic metadata (input kind, source name, plan item, …) and the definition id.</summary>
+    private sealed record DiagnosticScope(IReadOnlyDictionary<string, string> Metadata, string DefinitionId);
 
     private sealed record ReferenceEdge(Elsa3MemoryOccurrence Producer, Elsa3MemoryOccurrence Consumer);
 

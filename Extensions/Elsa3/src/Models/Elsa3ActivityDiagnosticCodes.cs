@@ -1,0 +1,87 @@
+namespace Elsa3.Models;
+
+/// <summary>
+/// Stable codes the Elsa 3 activity conversion reports. <c>ELS3-ACTIVITY-*</c> codes are errors: the item is not
+/// converted. <c>ELS3-BEHAVIOUR-*</c> codes are warnings: the item converts, but Elsa 4 behaves differently at run time
+/// in a way the JSON cannot reveal. A code is never renamed or reused; spec 235 skips and reports items by code.
+/// </summary>
+public static class Elsa3ActivityDiagnosticCodes
+{
+    /// <summary>The node's type is not in the built-in map, not claimed by a replaced-type alias and not a catalog key.</summary>
+    public const string UnmappedType = "ELS3-ACTIVITY-UNMAPPED-TYPE";
+
+    /// <summary>Two activity definitions' highest versions claim to replace the same Elsa 3 type.</summary>
+    public const string AmbiguousAlias = "ELS3-ACTIVITY-AMBIGUOUS-ALIAS";
+
+    /// <summary>The activity, or this use of it, has no Elsa 4 counterpart.</summary>
+    public const string NoCounterpart = "ELS3-ACTIVITY-NO-COUNTERPART";
+
+    /// <summary>The target type key has no valid-SemVer version in the catalog.</summary>
+    public const string VersionUnavailable = "ELS3-ACTIVITY-VERSION-UNAVAILABLE";
+
+    /// <summary>A property is neither a mapped Elsa 3 member nor a declared Elsa 4 member.</summary>
+    public const string UnknownMember = "ELS3-ACTIVITY-UNKNOWN-MEMBER";
+
+    /// <summary>A captured member whose Elsa 4 counterpart has different semantics.</summary>
+    public const string MemberSemanticsChanged = "ELS3-ACTIVITY-MEMBER-SEMANTICS-CHANGED";
+
+    /// <summary>A value does not provably fit the narrower Elsa 4 contract.</summary>
+    public const string ValueOutsideContract = "ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT";
+
+    /// <summary>A captured output has no Elsa 4 counterpart and no exact projection.</summary>
+    public const string OutputNotRepresentable = "ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE";
+
+    /// <summary>An input with no Elsa 4 counterpart is bound to a non-default value or an expression.</summary>
+    public const string RemovedInputBound = "ELS3-ACTIVITY-REMOVED-INPUT-BOUND";
+
+    /// <summary>A required Elsa 4 input would stay unbound.</summary>
+    public const string RequiredInputUnbound = "ELS3-ACTIVITY-REQUIRED-INPUT-UNBOUND";
+
+    /// <summary>A mode or placement Elsa 4 cannot express (Switch MatchAny, misplaced or multi-outcome Complete/End, …).</summary>
+    public const string UnsupportedMode = "ELS3-ACTIVITY-UNSUPPORTED-MODE";
+
+    /// <summary>Flowchart, FlowFork, FlowJoin and Start need graph conversion, which #2705 owns.</summary>
+    public const string GraphConversionPending = "ELS3-ACTIVITY-GRAPH-CONVERSION-PENDING";
+
+    /// <summary>Activities nest deeper than the conversion supports.</summary>
+    public const string NestingTooDeep = "ELS3-ACTIVITY-NESTING-TOO-DEEP";
+
+    /// <summary>Two properties bind one input, or one property matches two inputs.</summary>
+    public const string DuplicateInputBinding = "ELS3-ACTIVITY-DUPLICATE-INPUT-BINDING";
+
+    /// <summary>HttpEndpoint.ParsedContent: Elsa 4 does not parse form posts, and text becomes a string.</summary>
+    public const string FormPostNotParsed = "ELS3-BEHAVIOUR-FORM-POST-NOT-PARSED";
+
+    /// <summary>HttpEndpoint.RequestSizeLimit: an oversized request has no outcome in Elsa 4.</summary>
+    public const string RequestSizeNoOutcome = "ELS3-BEHAVIOUR-REQUEST-SIZE-NO-OUTCOME";
+
+    /// <summary>SendHttpRequest outcomes: Done no longer co-fires, and non-2xx goes to Failed.</summary>
+    public const string HttpOutcomeSingle = "ELS3-BEHAVIOUR-HTTP-OUTCOME-SINGLE";
+
+    /// <summary>SendHttpRequest: Elsa 4 does not validate the Authorization header.</summary>
+    public const string AuthHeaderUnvalidated = "ELS3-BEHAVIOUR-AUTH-HEADER-UNVALIDATED";
+
+    /// <summary>While.Condition is re-read only from persisted state.</summary>
+    public const string WhilePersistedCondition = "ELS3-BEHAVIOUR-WHILE-PERSISTED-CONDITION";
+
+    /// <summary>For.Step 0 faults in Elsa 4.</summary>
+    public const string ForZeroStepFaults = "ELS3-BEHAVIOUR-FOR-ZERO-STEP-FAULTS";
+
+    /// <summary>Break does not cross Parallel or Fork branches in Elsa 4.</summary>
+    public const string BreakStopsAtParallel = "ELS3-BEHAVIOUR-BREAK-STOPS-AT-PARALLEL";
+
+    /// <summary>Fork WaitAny: cancellation of the losing branches is not verified to match.</summary>
+    public const string ForkWaitAnyCancellation = "ELS3-BEHAVIOUR-FORK-WAIT-ANY-CANCELLATION";
+
+    /// <summary>ExecuteWorkflow becomes a durable dispatch instead of an in-process call.</summary>
+    public const string ExecuteWorkflowDurable = "ELS3-BEHAVIOUR-EXECUTE-WORKFLOW-DURABLE";
+
+    /// <summary>RunJavaScript.PossibleOutcomes: routing is by return value.</summary>
+    public const string ScriptOutcomeRouting = "ELS3-BEHAVIOUR-SCRIPT-OUTCOME-ROUTING";
+
+    /// <summary>A reusable workflow's Complete names an outcome the definition does not declare; it is declared anyway.</summary>
+    public const string OutcomeUndeclared = "ELS3-BEHAVIOUR-OUTCOME-UNDECLARED";
+
+    /// <summary>A reusable workflow's declared outcome is reached by no Complete; it is dropped from the contract.</summary>
+    public const string OutcomeUnreached = "ELS3-BEHAVIOUR-OUTCOME-UNREACHED";
+}

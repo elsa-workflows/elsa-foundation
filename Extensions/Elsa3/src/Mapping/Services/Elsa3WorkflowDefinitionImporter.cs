@@ -51,7 +51,7 @@ public sealed class Elsa3WorkflowDefinitionImporter : IElsa3WorkflowDefinitionIm
                                  .Deserialize<Elsa3WorkflowDefinition>()
                              ?? throw new JsonException("Elsa 3 workflow definition clone produced no value.");
             var inventory = await _memoryReferenceGraph.CollectAsync(definition.Root, cancellationToken);
-            var diagnostics = _valueFlowLowerer.Lower(definition, inventory, input);
+            var diagnostics = _valueFlowLowerer.Lower(definition, inventory, BuildDiagnosticMetadata(input));
             if (diagnostics.Any(diagnostic => diagnostic.IsError))
                 return Elsa3MigrationResult<IWorkflowDefinitionVersion>.Failure(diagnostics);
 
