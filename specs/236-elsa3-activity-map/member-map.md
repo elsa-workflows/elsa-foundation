@@ -111,9 +111,10 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 | SetName.Value | `elsa.intrinsic.set-instance-name@1` `value` | R1; empty or unbound → unconvertible (required) | 1 |
 | Finish | `elsa.intrinsic.finish@1` | R1 + R2 (`outcome = "Done"`) | 0 |
 | Complete.Outcomes in a plain workflow | finish `outcome` | Only when the node is in the workflow's root flowchart and `Outcomes` is absent or one literal string; otherwise R6 | 1 |
-| Complete.Outcomes in a reusable workflow | graph boundary outcome (manifest `outcomeMappings`, schema 2) | Never finish (that would end the calling workflow). The outcome must reach the graph boundary. Elsa 4 cannot express this today (graph boundary outcomes come only from the direct root activity); engine gap #2750, on which spec 236's implementation waits | 1 (`fail`/`succeed`) |
+| Complete.Outcomes in a reusable workflow | `Elsa.Activities.Graph.Runtime.Activities.Complete` `outcome` (spec 237); manifest schema 2 | Never finish (that would end the calling workflow). At any depth, absent/empty or one literal string → one `Complete` node with that outcome's reference key (`Done` → `done`, otherwise verbatim); the outcome is declared as an emitted contract outcome. Several outcomes or an expression → R6 (`UNSUPPORTED-MODE`). An outcome the definition does not declare → **W** (`OUTCOME-UNDECLARED`). See "Complete and End in reusable workflows" | 1 (`fail`/`succeed`) |
 | End in a plain workflow | finish | Only when the node is in the workflow's root flowchart; otherwise R6 | 0 |
-| End in a reusable workflow | graph completion with `Done` | As Complete in a reusable workflow, with outcome `Done` | 0 |
+| End in a reusable workflow | `Complete` with `outcome = "done"` | At any depth | 0 |
+| Reusable workflow's declared `Outcomes` | contract outcomes | `Done` is always declared (natural completion). A declared outcome that no `Complete` reaches is dropped → **W** (`OUTCOME-UNREACHED`) | — |
 | Start | Flowchart `startNodeId` | R8 (#2705) | 0 |
 | Inline, DynamicActivity, NotFoundActivity, StateMachine | — | R6 | 0 |
 | Workflow, CompositeWithResult as a node | — | R6 (a workflow-as-activity reference is a reusable reference, handled by the collection plan) | 0 |
@@ -222,3 +223,30 @@ own workflow outputs, instead of the null outputs it sets today.
 
 Both changes alter the content of the materializer's `BuildGraphManifest` and `BuildWrapperState` without restructuring
 them (spec FR-019).
+
+## Complete and End in reusable workflows
+
+In Elsa 3, `Complete` inside a workflow-as-activity completes the composite with its outcomes, from any depth, and the
+caller follows the matching ports. `End` completes it with `Done`. Elsa 4's `Complete` activity (spec 237) has the
+same reach: it ends the nearest reusable activity from any depth, through loops and `Parallel`, and cancels the rest of
+the body. It takes exactly one literal outcome, named by the boundary outcome's **reference key**.
+
+The conversion, for a reusable workflow (plan D-1 to D-7; data-model §7a):
+
+1. Each `Complete` with no outcome, or one literal outcome, and each `End`, becomes one `Complete` node. The node's
+   `outcome` is the key from the outcome key rule: `Done` → `done`, anything else verbatim.
+2. The manifest is schema 2. Its `outcomeMappings` hold exactly `done → done`, so a body that ends without reaching a
+   `Complete` still completes with `Done`, as in Elsa 3.
+3. The contract outcomes are `Done` plus every outcome a `Complete` names. Contract names are the Elsa 3 strings
+   verbatim, so caller ports keep their Elsa 3 names.
+4. Unconvertible (`ELS3-ACTIVITY-UNSUPPORTED-MODE`):
+   - several outcomes, because Elsa 4 completes with one;
+   - an outcome set by an expression;
+   - `"done"` used alongside `"Done"`.
+5. Warnings:
+   - `ELS3-BEHAVIOUR-OUTCOME-UNDECLARED`: a `Complete` names an outcome the definition did not declare. It is
+     declared anyway, because Elsa 3 emitted it.
+   - `ELS3-BEHAVIOUR-OUTCOME-UNREACHED`: a declared outcome that no `Complete` reaches is dropped from the contract,
+     so it gets no caller port.
+
+`Break` is unaffected: it still maps to `Break` (row above), and no `Complete`/`End` is lowered onto it.

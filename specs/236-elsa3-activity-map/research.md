@@ -4,12 +4,31 @@ Verified against `origin/main` 6768753c7 (Elsa 4) and elsa-core `5b0c2d73` (Elsa
 
 ## R-1 A `Complete`/`End` outcome inside a reusable workflow → graph boundary outcome
 
-**Decision**: Engine gap. Filed as [#2750](https://github.com/elsa-workflows/elsa-foundation/issues/2750); spec 236's
-implementation waits for it (maintainer decision, 2026-10-14). The plan designs the converter so the case plugs in
-once #2750 defines the construct (`Elsa3BoundaryOutcomeRewrite`, data-model §6). Until then it is the only member-map
-row without an implementable target.
+**Decision (2026-10-15, supersedes the 2026-10-14 hold)**: emit spec 237's `Complete` activity. Spec 237
+([#2750](https://github.com/elsa-workflows/elsa-foundation/issues/2750), PR #2791, merged 2026-10-15 as `4764f246a`)
+adds the catalog activity `Elsa.Activities.Graph.Runtime.Activities.Complete`. It has one required input, `outcome`:
+one literal boundary-outcome reference key. It ends the nearest reusable activity from any depth, through every
+composite, and durably cancels the rest of the body. An Elsa 3 `Complete`/`End` in a reusable workflow becomes one such
+node, wherever it sits (`TerminalPlacement`, data-model §6). The conversion choices are recorded as D-1 to D-10 in
+plan.md, "Complete and End conversion decisions".
 
-**Findings**:
+**Verified on main `4764f246a`** (`specs/237-graph-boundary-completion/contracts/complete-activity.md`):
+
+- The type key and input are `Essentials/src/Activities/Graph/Runtime/Activities/Complete.cs` (`[ActivityInput(Key = "outcome")]`,
+  `[Required]`).
+- Publish validation applies in `GraphActivityProvider`:
+  - `Complete` in a schema-1 body → `activity.graph.complete.schema-unsupported`;
+  - a non-literal or unknown key → `outcome-literal-required` / `outcome-unknown`;
+  - an emitted outcome reached by neither a mapping nor a `Complete` → `activity.graph.outcome-mapping-required`.
+- Schema 1 also requires exactly one emitted outcome, `done`.
+- At run time `GraphActivity` resolves the key through the compiled descriptor's `CompleteOutcomes`.
+- With no `outcomeMappings`, a body that ends without reaching a `Complete` faults
+  (`activity.graph.entry-completed-without-mapping`). D-5 avoids this.
+- A `Complete` in a plain workflow fails draft validation (`Graph/CompleteOutsideGraph`) and faults at run time.
+- Outcome reference keys and names have no format rule. Matching is ordinal. Names are what the runtime emits and what
+  caller ports bind to.
+
+**Findings that led to #2750** (historical, 2026-10-14):
 
 - `GraphActivity` schedules only its entry node and accepts completion only from it. The boundary outcome is the
   entry's single outcome, translated through schema-2 `outcomeMappings`
@@ -20,9 +39,14 @@ row without an implementable target.
 - `control` completes only its own node; `return` completes with `Done`; `finish` ends the whole workflow.
 - Specs 138 (L112) and 221 (FR-038) deferred "explicit return / descendant completion" on purpose.
 
-**Alternatives considered**: a `Break` → mapped boundary outcome rewrite. Rejected: it carries at most one non-Done
-outcome, a loop body swallows `Break`, a real Elsa 3 `Break` would be conflated with it, and a Flowchart still waits
-for its other paths unless `Break` fires. Partial support conflicts with the maintainer's "faithful or hold" decision.
+**Alternatives considered**:
+
+- A `Break` → mapped boundary outcome rewrite. Rejected: it carries at most one non-Done outcome, a loop body swallows
+  `Break`, a real Elsa 3 `Break` would be conflated with it, and a Flowchart still waits for its other paths unless
+  `Break` fires. Partial support conflicts with the maintainer's "faithful or hold" decision.
+  - **Superseded (2026-10-15, D-8).** `Complete` removes the reason this alternative existed, and nothing in this
+    spec maps a `Complete`/`End` onto `Break`. An Elsa 3 `Break` still converts to Elsa 4 `Break`, with
+    `ELS3-BEHAVIOUR-BREAK-STOPS-AT-PARALLEL`. Spec 237 leaves `Break` unchanged and unrelated to `Complete`.
 
 ## R-2 Custom-activity alias: attribute, recording, query
 
@@ -211,3 +235,40 @@ lower to the Elsa 4 scoped variables (`currentItem`, `currentIndex`, `index`) wi
   `ReusableActivityImportIdentity`-style hashing, never from GUIDs or time.
 - Diagnostics are ordered by (definition id, JSON path, code).
 - Catalog dependence is recorded in the spec's "Dependencies and notes for spec 235".
+
+## R-10 Imported reusable activities are never published (found 2026-10-15)
+
+**Decision**: split out to [#2796](https://github.com/elsa-workflows/elsa-foundation/issues/2796) (maintainer decision,
+2026-10-15). Spec 236 produces a correct schema-2 manifest and contract. It proves them by running
+`GraphActivityProvider.ValidateAsync` and `CompileAsync` over converted output in tests. It does not change how the
+collection import persists or publishes.
+
+**Findings** (on `4764f246a`):
+
+- The materializer writes the catalog row directly:
+  - `DescriptorPayload` is the design manifest (`{rootActivity, variables, outputMappings}`);
+  - `ProviderSchemaVersion = "1"`;
+  - `DesignFacets = []`.
+  `EfReusableActivityImportCommand` writes no `ActivityDefinitionVersionPublication`.
+- The contract (inputs, outputs, outcomes) lives on the publication (`ReusableActivityEntities.cs` L78-118). Callers
+  read outcome ports from the `elsa.outcomes` facet, which the publisher writes for emitted outcomes only
+  (`ActivityDefinitionPublisher.cs` L779-794). An imported version therefore has no persisted outcome source.
+- The manifest becomes a `GraphActivityDescriptor` only at activity publish (`ActivityTemplateCompiler` →
+  `GraphActivityProvider.CompileAsync` → `BuildBoundaryPayload`).
+- A version with no publication is compiled as a raw row (`WorkflowExecutableCompiler.cs` L145-152). Its raw manifest
+  lacks the descriptor's required `definitionId`, `templateHash` and entry node (`GraphActivityDescriptor.cs` L90-96).
+  So imported reusables do not run as graphs today, with or without `Complete`.
+- No provider validation runs on the import path.
+
+**Consequences for this spec**:
+
+- `Elsa3ConvertedDefinition` returns the contract outcomes (`BoundaryOutcomes`, data-model §7) next to the manifest
+  content. Persisting them is #2796's work.
+- The materializer moves to schema 2 (`ProviderSchemaVersion = "2"`, manifest `outcomeMappings`). It writes nothing
+  else new.
+- SC-006 is a run-time criterion. Here it is proven at compile level (the compiled descriptor carries the output and
+  outcome mappings). It is proven at run time once #2796 lands.
+
+**Alternatives considered**: widening spec 236 to publish through `ActivityDefinitionPublisher` (rejected: a different
+bounded context, the Import package and publishing, much larger scope); holding spec 236 again (rejected: the
+converter's output is independently verifiable).

@@ -5,11 +5,13 @@
 **Input**: Feature specification from `specs/236-elsa3-activity-map/spec.md` and the decision record
 [member-map.md](member-map.md)
 
-> **Implementation on hold.** Research R-1 confirmed an engine gap: an Elsa 3 `Complete`/`End` inside a reusable
-> workflow cannot reach the graph activity's boundary outcome in Elsa 4. Filed as
-> [#2750](https://github.com/elsa-workflows/elsa-foundation/issues/2750). By maintainer decision (2026-10-14), this
-> spec is implemented only once #2750 is resolved. The plan is complete apart from the one strategy that consumes
-> #2750's construct (data-model §6 `TerminalPlacement`, reusable branch).
+> **Unblocked (2026-10-15).** The engine gap from research R-1 ([#2750](https://github.com/elsa-workflows/elsa-foundation/issues/2750))
+> is resolved by spec 237's `Complete` activity (PR #2791, merged as `4764f246a`). The branch is merged with that
+> main. A converted reusable workflow emits `Complete` for Elsa 3 `Complete`/`End`; the decisions are D-1 to D-10
+> below.
+>
+> Imported reusable activities are still never published, so they do not run as graphs yet (research R-10). That is
+> split out to [#2796](https://github.com/elsa-workflows/elsa-foundation/issues/2796) and does not block this spec.
 
 ## Summary
 
@@ -30,6 +32,12 @@
 - Containers must get their target's **native** structure, because the current opaque Elsa 3 structure never runs
   (research R-6).
 - Reusable workflows need `outputMappings` and output variables, plus wrapper output propagation (FR-004e).
+
+**Two more, found when resuming on 2026-10-15.**
+- A reusable workflow's `Complete`/`End` become spec 237 `Complete` nodes in a schema-2 graph whose contract
+  declares the outcomes (D-1 to D-7).
+- The collection import never publishes, so imported reusables do not run (R-10, split out to #2796). This spec proves
+  its reusable output by provider validation and compilation in tests.
 
 **One small Essentials change.** A generic `[ReplacesActivityType]` attribute, recorded by the CLR scanner as a design
 facet (research R-2).
@@ -53,6 +61,11 @@ facet (research R-2).
 - xunit only (constitutional; no FluentAssertions).
 - `Extensions/Elsa3/tests/Mapping/Tests` gets the coverage fixture, a real-catalog fixture built with the CLR scanner
   over the Elsa 4 activity assemblies, and theory tests per diagnostic code.
+- The real catalog includes the `Elsa.Activities.Graph.Runtime` assembly, so `Complete` resolves like any CLR activity.
+- Converted reusable output goes through `GraphActivityProvider.ValidateAsync` and `CompileAsync` with its derived
+  contract (R-10). This needs a test-only reference from `Elsa3.Mapping.Tests` to `Elsa.Activities.Graph.Design`.
+  The production Mapping project gains no Graph reference: it emits the type key and resolves the version from the
+  catalog.
 - `Essentials/tests/Activities/Design/Tests` covers the scanner facet.
 - The EF import tests cover the collection path.
 
@@ -74,7 +87,7 @@ version pick per distinct Elsa 3 type (cached). Conversion stays linear in node 
 - 67 Elsa 3 activity classes in five modules, plus SetOutput.
 - Roughly 130 member rules.
 - 8 node-rewrite strategies.
-- 15 error codes and 10 warning codes.
+- 14 error codes and 12 warning codes.
 - JTest corpus: 36 definitions.
 
 ## Constitution Check
@@ -86,7 +99,7 @@ version pick per distinct Elsa 3 type (cached). Conversion stays linear in node 
 |---|---|---|
 | §E2.7 Elsa 3 behind the import boundary (`Elsa3MigrationBoundaryTests`, runtime guard) | PASS | Essentials gains only a generic attribute and facet with no Elsa 3 name or reference. All Elsa 3 knowledge stays in `Elsa3.*` (R-2) |
 | §E2.2 Runtime takes no Design reference | PASS | No Runtime project changes. `Elsa.Activities.Runtime.Core` gains an attribute only |
-| §E2.6 published artifact always runs | PASS, improves | Native structures replace the opaque kind, so converted containers execute (R-6) |
+| §E2.6 published artifact always runs | PASS, improves | Native structures replace the opaque kind, so converted containers execute (R-6). Imported reusables are not published artifacts at all today; #2796 owns that (R-10) |
 | §E2.8 catalog as source of truth; Model X | PASS | The alias is read from the catalog, never from assemblies. Hash discipline is respected: alias changes need a version bump, as documented. No operational sibling |
 | §E2.9 (provisional) `ActivityNode` gets no generic child collection | PASS | Children go into native structure payloads, as Elsa 4 authoring does |
 | §E5 versioning | PASS | No Line A project touched. Additive record members only |
@@ -154,7 +167,9 @@ Extensions/Elsa3/src/Mapping/
 ├── Services/Elsa3MemoryReferenceGraph.cs                   # uses resolver
 ├── Services/Elsa3ValueFlowLowerer.cs                       # metadata dictionary instead of import input (R-8)
 ├── Services/Elsa3WorkflowDefinitionImporter.cs             # calls the converter
-├── Services/Elsa3ReusableActivityImportMaterializer.cs     # calls the converter; manifest outputMappings + wrapper outputs (content only)
+├── Services/Elsa3ReusableActivityImportMaterializer.cs     # calls the converter; schema 2, manifest outputMappings + outcomeMappings, wrapper outputs (content only)
+├── Conversion/Elsa3OutcomeKey.cs                           # D-4 outcome key rule
+├── ActivityMap/Rewrites/Elsa3TerminalPlacementRewrite.cs   # D-1 to D-3, both branches
 ├── Elsa3MappingFeature.cs, EXTENSION_POINTS.md, README.md
 Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/
 ├── Models/ReusableActivityImportPlan.cs                    # + Warnings on mutation and apply result (R-7)
@@ -169,7 +184,8 @@ Extensions/Elsa3/tests/Mapping/Tests/
 ├── Elsa3BuiltInConversionTests.cs                          # US1, SC-002
 ├── Elsa3ConversionDiagnosticsTests.cs                      # US2, SC-003 (theory per code)
 ├── Elsa3ReplacedActivityTypeTests.cs                       # US3
-├── Elsa3CollectionLoweringTests.cs                         # US4, SC-004, SC-006
+├── Elsa3CollectionLoweringTests.cs                         # US4, SC-004, SC-006 (compile level)
+├── Elsa3ReusableTerminalTests.cs                           # D-1 to D-7, provider validate + compile
 └── (existing tests: stub lookups replaced by real keys)
 ```
 
@@ -193,7 +209,8 @@ Extensions/Elsa3/tests/Mapping/Tests/
    - Essentials attribute and scanner facet with tests.
    - Alias index.
 4. **Normalizer, native structure builder and rewrite strategies.**
-   - `TerminalPlacement` reusable branch waits for #2750.
+   - `TerminalPlacement`, both branches: the plain workflow emits `finish`; the reusable workflow emits `Complete`
+     (D-1 to D-4). `BoundaryOutcomes` and the `done → done` outcome mapping are assembled per D-5 to D-7.
    - Wire `Elsa3ActivityToState` and `Elsa3MemoryReferenceGraph` to them, removing every input-caused throw.
 5. **The converter (FR-015).** Single-definition import moves onto it; existing tests are migrated to real keys.
 6. **Collection path.**
@@ -201,8 +218,29 @@ Extensions/Elsa3/tests/Mapping/Tests/
    - Replacements.
    - Warnings channel.
    - `outputMappings`, output variables and wrapper outputs.
+   - Schema 2: `ProviderSchemaVersion = "2"`, manifest `outcomeMappings`.
+   - Provider validate and compile proof for converted reusables (R-10). No publication; that is #2796.
    - Native-structure credential walk; retire the opaque structure.
 7. **Docs.** EXTENSION_POINTS / README / glossary. Run the quickstart.
+
+## Complete and End conversion decisions (maintainer interview, 2026-10-15)
+
+| # | Decision | Rationale |
+|---|---|---|
+| D-1 | In a reusable workflow, an Elsa 3 `Complete`/`End` at **any depth** becomes one `Elsa.Activities.Graph.Runtime.Activities.Complete` node, input `outcome` = one literal reference key. Its version is resolved from the catalog like any CLR activity. Never `finish`. | Spec 237's contract. Like Elsa 3, it ends the composite from any depth, so the plain-workflow "root flowchart only" limit does not apply here. |
+| D-2 | A `Complete` with **several outcomes**, or an outcome set by an expression → `ELS3-ACTIVITY-UNSUPPORTED-MODE`. No outcome, or a one-element list → one outcome. | Elsa 4 completes with one literal outcome; faithful or refuse. |
+| D-3 | `End` in a reusable workflow → `Complete` with `outcome = "done"`. In a plain workflow it is unchanged: `finish` in the root flowchart, else `UNSUPPORTED-MODE`. | Elsa 3 `End` completes the composite with `Done`. |
+| D-4 | Outcome keys: the contract **name** is the Elsa 3 string verbatim, so caller ports match. The **reference key** is the same string, except `"Done"` → `done`. Matching is ordinal. `"done"` used alongside `"Done"` → `UNSUPPORTED-MODE`. | No key format rule exists; `done` is Elsa 4's natural-outcome key. |
+| D-5 | Every converted reusable workflow is **schema 2**. It declares `done`/`Done` emitted, with `outcomeMappings = [done → done]`. | A body that ends without reaching a `Complete` completes with `Done`, as in Elsa 3, and avoids `entry-completed-without-mapping`. |
+| D-6 | A `Complete` naming an outcome the definition does not declare: the outcome is declared emitted, plus `ELS3-BEHAVIOUR-OUTCOME-UNDECLARED`. | Elsa 3 emitted it at run time. |
+| D-7 | A declared outcome (other than `Done`) that no `Complete` reaches is **dropped** from the contract, plus `ELS3-BEHAVIOUR-OUTCOME-UNREACHED`. | Schema 2 rejects an emitted outcome with no source. A non-emitted outcome gets no caller port either (the publisher's `elsa.outcomes` facet keeps emitted only), so the warning makes the dead port visible. |
+| D-8 | Break-based ideas are dropped. Research R-1's "Break → mapped boundary outcome" alternative is marked superseded. Elsa 3 `Break` still maps to `Break` with `BREAK-STOPS-AT-PARALLEL`. | `Complete` replaces the reason for it; spec 237 keeps `Break` unrelated. |
+| D-9 | Import publication is split out to #2796. This spec proves reusable output with `GraphActivityProvider.ValidateAsync` + `CompileAsync` in tests. SC-006's run-time check follows #2796. | Keeps this spec in the Elsa 3 mapping context (R-10). |
+| D-10 | The reserved `ELS3-ACTIVITY-BOUNDARY-OUTCOME-UNSUPPORTED` is removed. | Never released, so the never-reuse rule is not affected. |
+
+**Caveat that stays.** Most Elsa 3 reusable workflows have a Flowchart root, which reports
+`ELS3-ACTIVITY-GRAPH-CONVERSION-PENDING` until #2705. Until then, `Complete` emission is exercised end to end with
+non-Flowchart containers (Sequence, loops, Parallel) and reaches real Flowchart-based definitions once #2705 lands.
 
 ## Complexity Tracking
 

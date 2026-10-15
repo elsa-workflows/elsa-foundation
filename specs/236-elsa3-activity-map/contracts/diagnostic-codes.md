@@ -24,8 +24,7 @@ skips and reports by code, so a code is never renamed or reused. Each diagnostic
 | `OutputNotRepresentable` | `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE` | R4 output captured and no exact projection exists | FR-004 |
 | `RemovedInputBound` | `ELS3-ACTIVITY-REMOVED-INPUT-BOUND` | R3 input absent in Elsa 4 but bound to a non-default value or an expression | FR-004 |
 | `RequiredInputUnbound` | `ELS3-ACTIVITY-REQUIRED-INPUT-UNBOUND` | a required Elsa 4 input would stay unbound | FR-004c |
-| `UnsupportedMode` | `ELS3-ACTIVITY-UNSUPPORTED-MODE` | Switch/FlowSwitch MatchAny or expression mode; End/Complete outside the equivalent placement; multi-value Complete | FR-004a |
-| `BoundaryOutcomeUnsupported` | `ELS3-ACTIVITY-BOUNDARY-OUTCOME-UNSUPPORTED` | reserved for Complete/End in a reusable workflow; not raised while implementation waits for #2750 | FR-004e |
+| `UnsupportedMode` | `ELS3-ACTIVITY-UNSUPPORTED-MODE` | Switch/FlowSwitch MatchAny or expression mode; End/Complete in a plain workflow outside the root flowchart; Complete with several outcomes or an expression outcome; `"done"` alongside `"Done"` in a reusable workflow | FR-004a, FR-004e |
 | `GraphConversionPending` | `ELS3-ACTIVITY-GRAPH-CONVERSION-PENDING` | Flowchart, FlowFork, FlowJoin, Start: graph conversion is #2705's | FR-001, FR-006 |
 | `NestingTooDeep` | `ELS3-ACTIVITY-NESTING-TOO-DEEP` | deeper than `MaxNestingDepth` (formerly `ArgumentException`) | FR-012 |
 | `DuplicateInputBinding` | `ELS3-ACTIVITY-DUPLICATE-INPUT-BINDING` | two properties bind one input, or one property matches two (formerly `ArgumentException`) | FR-012 |
@@ -44,6 +43,11 @@ skips and reports by code, so a code is never renamed or reused. Each diagnostic
 | `ForkWaitAnyCancellation` | `ELS3-BEHAVIOUR-FORK-WAIT-ANY-CANCELLATION` | Fork.JoinMode WaitAny |
 | `ExecuteWorkflowDurable` | `ELS3-BEHAVIOUR-EXECUTE-WORKFLOW-DURABLE` | ExecuteWorkflow |
 | `ScriptOutcomeRouting` | `ELS3-BEHAVIOUR-SCRIPT-OUTCOME-ROUTING` | RunJavaScript.PossibleOutcomes |
+| `OutcomeUndeclared` | `ELS3-BEHAVIOUR-OUTCOME-UNDECLARED` | Complete in a reusable workflow names an outcome the definition's `Outcomes` does not declare; it is declared in the contract |
+| `OutcomeUnreached` | `ELS3-BEHAVIOUR-OUTCOME-UNREACHED` | a reusable workflow's declared outcome (other than `Done`) that no Complete reaches; dropped from the contract, so callers get no port for it |
+
+`BoundaryOutcomeUnsupported` (`ELS3-ACTIVITY-BOUNDARY-OUTCOME-UNSUPPORTED`) was reserved while #2750 was open. It was
+never released, so it is removed rather than retired (plan D-10).
 
 The coverage test asserts that every `BehaviourWarning` the map declares is one of these constants, and that every
 constant is used by at least one map entry.

@@ -255,8 +255,9 @@ produces for the same definition.
   a synthesized graph variable, and the graph manifest's `outputMappings` MUST map each declared output to its
   variable. The direct-start wrapper MUST carry the graph activity's outputs into its workflow outputs
   (member-map.md, "SetOutput in reusable workflows"). `Complete` and `End` inside a reusable workflow MUST NOT become
-  the finish intrinsic; their outcome MUST reach the graph activity's boundary outcome. If Elsa 4 cannot express that
-  (settled in the plan), the item is unconvertible with its own code.
+  the finish intrinsic; their outcome MUST reach the graph activity's boundary outcome. Where Elsa 4 cannot express
+  that (several outcomes, or an outcome set by an expression; settled in the plan, D-2), the item is unconvertible
+  with `ELS3-ACTIVITY-UNSUPPORTED-MODE`.
 - **FR-004b**: For each node that uses a member or activity marked **W** in member-map.md, conversion MUST emit one
   Warning diagnostic per documented runtime difference, with a stable code naming the difference. Warnings do not make
   the item unconvertible.
@@ -341,7 +342,8 @@ produces for the same definition.
 
 - **SC-006**: A reusable workflow that sets a declared output with `SetOutput`, used as an activity by another
   workflow, gives the calling workflow that output value after conversion, and leaves the calling workflow's own
-  outputs unchanged.
+  outputs unchanged. Within this spec it is proven at compile level (provider validation and compilation of the
+  converted reusable workflow). The run-time check is proven once #2796 publishes imported reusables.
 
 - **SC-001**: Every activity and member in member-map.md is classified by the map; the coverage test reports 0
   unclassified.
@@ -383,11 +385,14 @@ produces for the same definition.
 - #2705 replaces the "graph conversion pending" outcome and uses FR-006 and
   FR-015.
 
-- **Engine gap: implementation on hold.** Planning research confirmed that Elsa 4 cannot carry a `Complete`/`End`
-  outcome from inside a reusable workflow to the graph activity's boundary outcome (FR-004e): a graph activity takes its
-  boundary outcome only from its direct root activity, and a Flowchart root completes only with `Done` or `Break`.
-  The gap is [#2750](https://github.com/elsa-workflows/elsa-foundation/issues/2750). By maintainer decision
-  (2026-10-14), this spec's implementation waits for #2750 rather than shipping that case as unconvertible.
+- **Engine gap #2750: resolved.** Planning found that Elsa 4 could not carry a `Complete`/`End` outcome from inside a
+  reusable workflow to the graph activity's boundary outcome (FR-004e). Implementation was held for
+  [#2750](https://github.com/elsa-workflows/elsa-foundation/issues/2750) (maintainer decision, 2026-10-14). Spec 237
+  (PR #2791, merged 2026-10-15) added the `Complete` activity, which this spec emits (plan D-1 to D-10).
+- **Imported reusables are not yet published.** The collection import writes catalog rows without a publication, so
+  imported reusable activities do not run as graphs until
+  [#2796](https://github.com/elsa-workflows/elsa-foundation/issues/2796) (research R-10). This spec verifies its
+  reusable output by provider validation and compilation. SC-006's run-time check is met when #2796 lands.
 
 ## Out of Scope
 

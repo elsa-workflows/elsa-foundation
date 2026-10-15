@@ -23,7 +23,9 @@ public interface IElsa3DefinitionConverter
 - Output and diagnostics are deterministic for the same input and catalog content (FR-020).
 - Diagnostics are complete and ordered by (JSON path, code) (FR-014).
 - `IsReusable = true` applies the reusable-workflow rules: `SetOutput` → output variables plus `OutputMappings`
-  (FR-004e). `Complete`/`End` boundary outcomes wait for #2750.
+  (FR-004e). `Complete`/`End` become spec 237 `Complete` nodes, with `BoundaryOutcomes` and
+  `OutcomeMappings = [done → done]` (data-model §7a). The caller persists these. The collection import cannot persist
+  the contract outcomes until #2796.
 
 **Callers**:
 

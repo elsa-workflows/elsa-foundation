@@ -80,7 +80,7 @@ The resolver caches by Elsa 3 type name for the conversion scope.
 | `SwitchValueSynthesis` | Switch, FlowSwitch | MatchFirst only: emits `Value` returning the label of the first true case; `cases[].match` = label |
 | `VariableReference` | SetVariable | Elsa 3 `variable{id}` → `VariableReference(referenceKey, declaringScopeId)` with the declaring scope computed from where the variable is declared |
 | `ReusableOutputWrite` | SetOutput | In a reusable workflow, a declared output becomes the `set` intrinsic on the synthesized output variable (§8); otherwise the `set-output` intrinsic |
-| `TerminalPlacement` | Complete, End | Plain workflow, root flowchart, ≤ 1 literal outcome → `finish`; reusable workflow → boundary outcome (**waits for #2750**); else `ELS3-ACTIVITY-UNSUPPORTED-MODE` |
+| `TerminalPlacement` | Complete, End | **Plain workflow**: root flowchart, ≤ 1 literal outcome → `finish`; else `ELS3-ACTIVITY-UNSUPPORTED-MODE`. **Reusable workflow**: at any depth, one `Elsa.Activities.Graph.Runtime.Activities.Complete` node with literal `outcome` = the outcome's reference key (§7a); End → `done`; several outcomes, an expression or a key collision → `ELS3-ACTIVITY-UNSUPPORTED-MODE`. Records each literal outcome for §7a |
 | `ExecuteWorkflowAsDispatch` | ExecuteWorkflow | `DispatchWorkflow` with `WaitForCompletion = true` |
 | `ParallelBranchNames` | Parallel, Fork | Branch `name` = `Branch {n}` (1-based document order); JoinMode → `threshold` |
 | `LoopVariableReferences` | For, ForEach | Registers the loop's scoped variables for lowering (`index`; `currentItem`, `currentIndex`) |
@@ -97,7 +97,28 @@ The resolver caches by Elsa 3 type name for the conversion scope.
 **`Elsa3ConvertedDefinition`**:
 - `State` (`WorkflowDefinitionState`);
 - `OutputMappings` (`IReadOnlyList<Elsa3GraphOutputMapping>`; empty for a plain workflow);
-- `BoundaryOutcomes` (empty until #2750).
+- `BoundaryOutcomes` (`IReadOnlyList<ActivityOutcomeContract>`; empty for a plain workflow; §7a);
+- `OutcomeMappings` (`IReadOnlyList<Elsa3GraphOutcomeMapping>`: `SourceOutcomeReferenceKey`,
+  `BoundaryOutcomeReferenceKey`; for a reusable workflow always exactly `done → done`; §7a).
+
+## 7a. Boundary outcomes of a reusable workflow (plan D-4 to D-7)
+
+Outcome key rule (`Elsa3OutcomeKey`), for an Elsa 3 outcome string `s`:
+- `s` is `"Done"` (ordinal) → reference key `done`, name `Done`;
+- otherwise → reference key `s`, name `s` (verbatim, ordinal, case-sensitive).
+
+Two distinct Elsa 3 strings that give the same reference key (only `"done"` and `"Done"`) make each `Complete`/`End`
+naming either unconvertible (`ELS3-ACTIVITY-UNSUPPORTED-MODE`).
+
+`BoundaryOutcomes` is built in ordinal reference-key order:
+1. `done`/`Done`, emitted, always (D-5).
+2. Each outcome a converted `Complete` names, emitted. If the definition's `Outcomes` list does not declare it, one
+   `ELS3-BEHAVIOUR-OUTCOME-UNDECLARED` Warning is raised per `Complete` node (D-6).
+3. Each outcome in `Elsa3WorkflowDefinition.Outcomes` that no `Complete` reaches, other than `Done`, is **left out**,
+   with one `ELS3-BEHAVIOUR-OUTCOME-UNREACHED` Warning per outcome on the definition (D-7).
+
+This matches the provider's schema-2 rules by construction: every emitted outcome is `done` (mapped) or named by a
+`Complete` node.
 
 Returned inside the existing `Elsa3MigrationResult<Elsa3ConvertedDefinition>`:
 - `Success` carries Warnings;
