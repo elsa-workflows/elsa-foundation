@@ -107,7 +107,7 @@ this section on conflict.
 Several agent sessions run against this repository at once, in separate worktrees. Two sessions that pick the same unit will not see each other in git: a branch does not exist anywhere shared until it is pushed, so a clean check at session start proves nothing about what another session began a minute later.
 
 1. Before claiming, read the issue's comments and the open PRs that reference it. If someone already has an open PR for the issue, stop.
-2. Comment exactly `claim: <worker> starting`, where the worker is `codex`, `claude`, `cursor` or your app slug. When you post through the owner's account, start the comment with your role tag, for example `[Claude] claim: claude starting`.
+2. Comment exactly `claim: <worker> starting`, where the worker is `codex`, `claude`, `cursor` or your app slug, for example `claim: claude starting` when posting as `elsa-workflows-claude[bot]`. Only when you post through the owner's account does your role tag come first, for example `[Claude] claim: claude starting`.
 3. Re-read the comments. The earliest claim that hasn't been abandoned wins. If it isn't yours, comment `claim-abandoned` and leave the issue alone.
 4. If you won, assign yourself and remove `ready-for-agent`. Assignment plus the missing label is the claim.
 5. Branch `agent/<worker>/<issue>-<slug>` off the issue's target branch.

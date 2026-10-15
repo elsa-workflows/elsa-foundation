@@ -244,10 +244,12 @@ analyzer-only, which NuGet leaves out of the consumers' restore graphs, so no ex
 **Owner amendment, 15 October 2026:** the fixer routine follows the org-wide
 [Issue Bus Lite](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#issue-bus-lite) protocol
 ([#2765](https://github.com/elsa-workflows/elsa-foundation/issues/2765)). Its PRs are not auto-merged by the routine
-and it no longer merges through `elsa-auto-review-merge`. They are merged by the Code Review app
-(`elsa-4-code-review[bot]`), after a non-author approval on the exact head commit and green CI. Routine PRs carry the
-`auto-fix` label, which replaces the `claude/auto-fix-*` branch prefix as the way the routine finds its own PRs and
-their reverts. The remaining D7 decisions are unchanged.
+and it no longer merges through `elsa-auto-review-merge`. The routine requests review, and the Code Review app
+(`elsa-workflows-review-bot[bot]`) approves and merges once a review round leaves no actionable findings and CI is
+green on the exact head commit. D7's human-merge cases (runtime and persistence code, public renames, and the PRs
+for UX QA defects) are dropped: those PRs follow the same Code Review loop, including the 14 October note's
+reference to them. Routine PRs carry the `auto-fix` label, which replaces the `claude/auto-fix-*` branch prefix as
+the way the routine finds its own PRs and their reverts. The remaining D7 decisions are unchanged.
 
 ## Consequences
 

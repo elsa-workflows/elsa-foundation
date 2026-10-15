@@ -6,7 +6,7 @@ Moved from `AGENTS.md` (#2578). Claiming, PRs, review and merge follow the org-w
 
 When work belongs to a program, the GitHub issue is the public, legible record of progress. The program's project board Status alone is not enough.
 
-- Comment on the issue at every state transition: the claim (`claim: <worker> starting`), the PR (`pr: <url>`), each review round and its outcome, and merged or closed. When you post through the owner's account, start each comment with your role tag, for example `[Claude]`.
+- Comment on the issue at every state transition: the claim (`claim: <worker> starting`), the PR (`pr: <url>`), each review round and its outcome, and merged or closed. Post as your agent's app (Claude sessions as `elsa-workflows-claude[bot]`, Codex as `elsa-workflows-codex[bot]`) with no role prefix. Only when you post through the owner's account does your role tag come first, for example `[Claude]`.
 - Keep the program's project board Status and any labels in sync at the same time.
 - Throttle concurrent agent sessions on one program to two or three.
 
@@ -27,10 +27,12 @@ Every PR carries this evidence. It is what a reviewer checks, not permission to 
 These steps restate [Issue Bus Lite](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#review-and-merge-rules) for convenience; the org file governs.
 
 - An author never reviews, approves or merges its own PR, or one it committed to.
-- Only the Code Review app (`elsa-4-code-review[bot]`) merges, after a separate, non-author approval on the exact head commit and green CI. New commits after an approval need a fresh approval.
-- Fix review feedback in new commits, without force-pushing, and reply `Fixed in <sha>` or `Won't fix: <reason>` on each thread. After 3 rounds, a human is brought in.
-- When a stop condition in the org file applies, comment `blocked: <reason>`, add `blocked` (or `needs:decision` when a decision is missing) and unassign yourself.
-- Mention agents only by their `@vw-*` handles.
+- Request review by commenting `@elsa-workflows-bot review` on the PR. The one blocking reviewer is Code Review, posting as `elsa-workflows-review-bot[bot]`. Other reviews (CodeRabbit, spec or standards agents) are advisory; only findings Code Review adopts block.
+- Review is a loop. Fix actionable findings in new commits, without force-pushing, and reply `Fixed in <sha>` or `Won't fix: <reason>` on each thread; Code Review then reviews again. When a round leaves no actionable findings and CI is green on the exact head commit, Code Review approves and merges by itself. New commits after an approval need a fresh approval.
+- After 6 rounds with blocking findings left, comment `blocked: review loop exhausted` and add `needs:decision`; that escalates to Sipke.
+- Owner exception: an explicit instruction from Sipke in an agent session counts for that one action only. Record it in the PR, for example `merged on Sipke's instruction`.
+- Fallback: while Code Review is unavailable, Sipke may approve and merge manually; agents wait, and no author merges its own PR.
+- When a stop condition in the org file applies, comment `blocked: <reason>`, add `blocked` (or `needs:decision` when a decision is missing) and unassign yourself. Red checks on the base branch count only when they are required checks.
 
 ## Post-merge gates
 

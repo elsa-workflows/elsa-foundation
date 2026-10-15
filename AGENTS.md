@@ -42,7 +42,7 @@ Do not duplicate concept explanations in new docs. Link to the canonical glossar
 
 ## Concurrent work claims
 
-Claim, branch and hand off as [Issue Bus Lite](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#issue-bus-lite) says: comment `claim: <worker> starting`, re-read, and if the earliest unabandoned claim is yours, assign yourself and remove `ready-for-agent`. When you post through the owner's account, start every comment with your role tag, for example `[Claude] claim: claude starting`. Branch `agent/<worker>/<issue>-<slug>`. Several sessions run here at once in separate worktrees, so re-check the issue and its open PRs before committing. Repo detail: [Claims](docs/contributing/repository-hygiene.md#claims); commands: [Issue tracker](docs/agents/issue-tracker.md).
+Claim, branch and hand off as [Issue Bus Lite](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#issue-bus-lite) says: comment `claim: <worker> starting`, re-read, and if the earliest unabandoned claim is yours, assign yourself and remove `ready-for-agent`. Claude sessions post as `elsa-workflows-claude[bot]` and Codex sessions as `elsa-workflows-codex[bot]`, with no role prefix, so a Claude claim is `claim: claude starting`. Only when you post through the owner's account does your role tag come first, for example `[Claude] claim: claude starting`. Branch `agent/<worker>/<issue>-<slug>`. Several sessions run here at once in separate worktrees, so re-check the issue and its open PRs before committing. Repo detail: [Claims](docs/contributing/repository-hygiene.md#claims); commands: [Issue tracker](docs/agents/issue-tracker.md).
 
 ## Branch and issue hygiene
 
@@ -65,7 +65,7 @@ Parallel sessions on one machine compete for the same CPU. Four concurrent solut
 
 ## Program bookkeeping
 
-Comment on the program issue at every state transition. Every PR carries this repo's gate evidence as a PR comment; that evidence is required for review, not permission to merge. Merging follows [Issue Bus Lite](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#review-and-merge-rules): only the Code Review app merges, and an author never merges its own PR. See [Program bookkeeping](docs/contributing/merging.md#program-bookkeeping) and [PR evidence](docs/contributing/merging.md#pr-evidence).
+Comment on the program issue at every state transition. Every PR carries this repo's gate evidence as a PR comment; that evidence is required for review, not permission to merge. Merging follows [Issue Bus Lite](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#review-and-merge-rules): request review with `@elsa-workflows-bot review`, Code Review (`elsa-workflows-review-bot[bot]`) approves and merges, and an author never merges its own PR. See [Program bookkeeping](docs/contributing/merging.md#program-bookkeeping) and [PR evidence](docs/contributing/merging.md#pr-evidence).
 
 ## Post-merge gates
 
