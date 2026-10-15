@@ -43,7 +43,7 @@ public sealed class If : StructuralActivity, IRuntimeStructuralActivity, IRuntim
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
-        var navigator = IfNavigator.From(runtimeContext.ExecutableNode);
+        var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(IfNavigator.From);
         var branch = navigator.Select(Condition);
 
         if (branch is null)
@@ -68,7 +68,7 @@ public sealed class If : StructuralActivity, IRuntimeStructuralActivity, IRuntim
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        var navigator = IfNavigator.From(runtimeContext.ExecutableNode);
+        var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(IfNavigator.From);
 
         // Validate the completed child is one of this If's branches before deciding the outcome.
         var condition = ResolveCompletedBranchCondition(navigator, context.CompletedChildExecutableNodeId);

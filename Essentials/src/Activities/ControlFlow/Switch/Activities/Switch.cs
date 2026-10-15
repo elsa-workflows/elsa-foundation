@@ -55,7 +55,7 @@ public sealed class Switch : StructuralActivity, IRuntimeStructuralActivity, IRu
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
-        var navigator = SwitchNavigator.From(runtimeContext.ExecutableNode);
+        var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(SwitchNavigator.From);
         var branch = navigator.Select(Value);
 
         if (branch is null)
@@ -80,7 +80,7 @@ public sealed class Switch : StructuralActivity, IRuntimeStructuralActivity, IRu
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        var navigator = SwitchNavigator.From(runtimeContext.ExecutableNode);
+        var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(SwitchNavigator.From);
 
         // Validate the completed child is one of this Switch's branches before deciding the outcome.
         var outcome = navigator.OutcomeFor(context.CompletedChildExecutableNodeId);
