@@ -92,7 +92,8 @@ internal static class ImportFixtures
         var scope = services.BuildServiceProvider().CreateScope();
         return new(
             scope.ServiceProvider.GetRequiredService<IElsa3DefinitionConverter>(),
-            scope.ServiceProvider.GetRequiredService<Elsa3ArgumentDefinitionToInputOutput>());
+            scope.ServiceProvider.GetRequiredService<Elsa3ArgumentDefinitionToInputOutput>(),
+            scope.ServiceProvider.GetRequiredService<IActivityDefinitionLookup>());
     }
 
     /// <summary>Materializes a scoped, keyed mutation the way the importer hands it to the command.</summary>

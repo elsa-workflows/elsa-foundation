@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Expressions.Core.Models;
@@ -19,8 +20,13 @@ namespace Elsa3.Mapping.Services;
 /// </summary>
 public sealed class Elsa3ReusableActivityImportMaterializer(
     IElsa3DefinitionConverter converter,
-    Elsa3ArgumentDefinitionToInputOutput argumentMapper) : IReusableActivityImportMaterializer
+    Elsa3ArgumentDefinitionToInputOutput argumentMapper,
+    IActivityDefinitionLookup activityLookup) : IReusableActivityImportMaterializer
 {
+    private const string SequenceTypeKey = "Elsa.Activities.Sequence.Activities.Sequence";
+    private const string SequenceStructureKind = "elsa.sequence.structure";
+    private const string StructureSchemaVersion = "1.0.0";
+
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public async ValueTask<ReusableActivityImportMutation> MaterializeAsync(
@@ -52,6 +58,7 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
         var activities = new List<ImportedReusableActivity>();
         var workflows = new List<ImportedWorkflow>();
         var failures = new List<Elsa3MigrationDiagnostic>();
+        var warnings = new List<Elsa3MigrationDiagnostic>();
 
         foreach (var item in selection.OrderBy(x => x.SourceVersionId, StringComparer.Ordinal))
         {
@@ -67,13 +74,15 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
                 continue;
             }
 
-            var mappedState = conversion.Value!.State;
+            warnings.AddRange(conversion.Diagnostics.Where(diagnostic => !diagnostic.IsError));
+            var converted = conversion.Value!;
+            var mappedState = converted.State;
             if (item.IsReusable)
             {
                 var head = headByDefinition[source.DefinitionId];
                 var lineage = canonicalByDefinition[source.DefinitionId];
-                activities.Add(BuildActivity(item, source, lineage, sourceById[head.SourceVersionId], head.ActivityDefinitionVersionId!, mappedState));
-                workflows.Add(BuildWorkflow(item, source, lineage, BuildWrapperState(item, mappedState)));
+                activities.Add(BuildActivity(item, source, lineage, sourceById[head.SourceVersionId], head.ActivityDefinitionVersionId!, converted));
+                workflows.Add(BuildWorkflow(item, source, lineage, await BuildWrapperStateAsync(item, mappedState, cancellationToken)));
             }
             else
             {
@@ -92,7 +101,8 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             plan.CollectionId,
             selection.Select(x => x.SourceVersionId).Order(StringComparer.Ordinal).ToArray(),
             activities.OrderBy(x => x.Definition.Id, StringComparer.Ordinal).ToArray(),
-            workflows.OrderBy(x => x.Version.Id, StringComparer.Ordinal).ToArray());
+            workflows.OrderBy(x => x.Version.Id, StringComparer.Ordinal).ToArray(),
+            Warnings: warnings);
     }
 
     private static IReadOnlyDictionary<string, string> DiagnosticMetadata(ReusableActivityImportItem item) =>
@@ -129,8 +139,9 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
         Elsa3WorkflowDefinition lineage,
         Elsa3WorkflowDefinition headSource,
         string headVersionId,
-        WorkflowDefinitionState mappedState)
+        Elsa3ConvertedDefinition converted)
     {
+        var mappedState = converted.State;
         var definitionId = item.ActivityDefinitionId!;
         var versionId = item.ActivityDefinitionVersionId!;
         var definition = new ActivityDefinition
@@ -143,12 +154,13 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             CreatedAt = lineage.CreatedAt,
             LastModifiedAt = lineage.CreatedAt
         };
-        var payload = BuildGraphManifest(mappedState);
+        var payload = BuildGraphManifest(converted);
         var version = new ActivityDefinitionVersion($"{source.Version}.0.0", definitionId)
         {
             Id = versionId,
             ProviderKey = "elsa.activity-graph",
-            ProviderSchemaVersion = "1",
+            // Schema 2: the contract may declare several boundary outcomes, reached through Complete nodes (D-5).
+            ProviderSchemaVersion = "2",
             ConsumerKey = "elsa.graph-activity",
             ConsumerSchemaVersion = "1",
             DescriptorPayload = payload,
@@ -197,6 +209,71 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
         return new(item.SourceDefinitionId, item.SourceVersionId, definition, version);
     }
 
+    /// <summary>
+    /// The direct-start wrapper: the reusable workflow's original identity, running the graph activity. When the
+    /// workflow declares outputs, the wrapper is a Sequence of the graph node and one <c>set-output</c> per output that
+    /// copies the graph node's output into the wrapper's own (spec FR-004e).
+    /// </summary>
+    private async ValueTask<WorkflowDefinitionState> BuildWrapperStateAsync(
+        ReusableActivityImportItem item,
+        WorkflowDefinitionState source,
+        CancellationToken cancellationToken)
+    {
+        var state = BuildWrapperState(item, source);
+        if (!state.Outputs.Any())
+            return state;
+
+        var graphNode = state.RootActivity;
+        var sequenceId = ReusableActivityImportIdentity.Create("wrapper-sequence", item.SourceVersionId);
+        var children = new List<ActivityNode> { graphNode };
+        foreach (var output in state.Outputs)
+        {
+            children.Add(new ActivityNode(
+                ReusableActivityImportIdentity.Create("wrapper-output", $"{item.SourceVersionId}:{output.ReferenceKey}"),
+                "elsa.intrinsic.set-output@1",
+                [
+                    new ArgumentState("name", new ArgumentValue(output.ReferenceKey, "Literal"), null, null, null, null),
+                    new ArgumentState(
+                        "value",
+                        new ArgumentValue(JsonSerializer.SerializeToElement(new
+                        {
+                            producerNodeId = graphNode.NodeId,
+                            projectionKey = output.ReferenceKey,
+                            producerScopeId = sequenceId
+                        }), "ActivityResult"),
+                        null, null, null, null)
+                ],
+                [])
+            {
+                Intrinsic = new AuthoredWorkflowIntrinsic(AuthoredWorkflowIntrinsicKind.SetOutput, output.Type)
+            });
+        }
+
+        var payload = JsonSerializer.SerializeToElement(new { activities = children, variables = Array.Empty<object>() }, Elsa3NativeStructureBuilder.PayloadJsonOptions);
+        var sequence = new ActivityNode(
+            sequenceId,
+            await SequenceVersionIdAsync(cancellationToken),
+            [],
+            [],
+            new ActivityNodeStructure(SequenceStructureKind, StructureSchemaVersion, payload));
+        return state with { RootActivity = sequence };
+    }
+
+    /// <summary>The catalog version of Elsa 4's Sequence with the highest valid SemVer.</summary>
+    private async ValueTask<string> SequenceVersionIdAsync(CancellationToken cancellationToken)
+    {
+        var definition = await activityLookup.GetDefinition(SequenceTypeKey, cancellationToken);
+        var versions = await activityLookup.ListVersions(definition.Id, cancellationToken);
+        return versions
+            .Select(summary => (summary, valid: Elsa.Primitives.Versioning.SemVer.TryParse(summary.Version, out var semVer), semVer))
+            .Where(item => item.valid)
+            .OrderByDescending(item => item.semVer)
+            .ThenBy(item => item.summary.Id, StringComparer.Ordinal)
+            .Select(item => item.summary.Id)
+            .FirstOrDefault()
+            ?? throw new InvalidOperationException($"The activity catalog holds no valid version of '{SequenceTypeKey}'.");
+    }
+
     private static WorkflowDefinitionState BuildWrapperState(
         ReusableActivityImportItem item,
         WorkflowDefinitionState source)
@@ -217,8 +294,13 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
         return new([], wrapperRoot, inputs, outputs, null);
     }
 
-    private static JsonElement BuildGraphManifest(WorkflowDefinitionState state)
+    /// <summary>
+    /// The schema-2 graph manifest: the converted body, its variables (the synthesized output variables included), each
+    /// declared output mapped to its variable (FR-004e) and Done mapped to the natural completion (D-5).
+    /// </summary>
+    private static JsonElement BuildGraphManifest(Elsa3ConvertedDefinition converted)
     {
+        var state = converted.State;
         var variables = state.Variables.Select(variable => new
         {
             referenceKey = variable.ReferenceKey,
@@ -239,7 +321,20 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
         {
             rootActivity = state.RootActivity,
             variables,
-            outputMappings = Array.Empty<object>()
+            outputMappings = converted.OutputMappings.Select(mapping => new
+            {
+                outputReferenceKey = mapping.OutputReferenceKey,
+                source = new
+                {
+                    syntax = "Variable",
+                    value = new { referenceKey = mapping.VariableReferenceKey, declaringScopeId = VariableReference.WorkflowScopeId }
+                }
+            }).ToArray(),
+            outcomeMappings = converted.OutcomeMappings.Select(mapping => new
+            {
+                sourceOutcomeReferenceKey = mapping.SourceOutcomeReferenceKey,
+                boundaryOutcomeReferenceKey = mapping.BoundaryOutcomeReferenceKey
+            }).ToArray()
         }, JsonOptions);
     }
 }

@@ -81,7 +81,8 @@ internal static class ReusableActivityImportFixtures
         var scope = Support.ConversionServices.Create(catalog ?? new BuiltInActivityLookup()).CreateScope();
         return new(
             scope.ServiceProvider.GetRequiredService<Conversion.IElsa3DefinitionConverter>(),
-            scope.ServiceProvider.GetRequiredService<Elsa3ArgumentDefinitionToInputOutput>());
+            scope.ServiceProvider.GetRequiredService<Elsa3ArgumentDefinitionToInputOutput>(),
+            scope.ServiceProvider.GetRequiredService<IActivityDefinitionLookup>());
     }
 
     /// <summary>

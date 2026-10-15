@@ -32,6 +32,9 @@ internal sealed class Elsa3ConversionPlan(Elsa3ConversionRequest request, Elsa3W
     /// </summary>
     public Dictionary<string, string> MemoryAliases { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>A reusable workflow's declared outputs and the synthesized graph variables that hold them.</summary>
+    public List<Elsa3GraphOutputMapping> OutputMappings { get; } = [];
+
     public bool HasErrors => Diagnostics.Any(diagnostic => diagnostic.IsError);
 
     public Elsa3NodePlan? Find(Elsa3Activity node) => Nodes.GetValueOrDefault(node);

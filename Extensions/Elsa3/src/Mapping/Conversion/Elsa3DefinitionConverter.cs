@@ -31,13 +31,18 @@ internal sealed class Elsa3DefinitionConverter(
         {
             var clone = Clone(request.Definition);
             var plan = await normalizer.NormalizeAsync(request, clone, cancellationToken);
+            var boundaryOutcomes = request.IsReusable ? Elsa3OutcomeKey.Assemble(plan) : [];
             await LowerAsync(plan, cancellationToken);
             if (plan.HasErrors)
                 return Elsa3MigrationResult<Elsa3ConvertedDefinition>.Failure(Ordered(plan.Diagnostics));
 
             var state = stateMapper.Map(plan);
+            // A reusable workflow is a schema-2 graph: Done stays its natural completion (D-5).
+            IReadOnlyList<Elsa3GraphOutcomeMapping> outcomeMappings = request.IsReusable
+                ? [new Elsa3GraphOutcomeMapping(Elsa3OutcomeKey.DoneKey, Elsa3OutcomeKey.DoneKey)]
+                : [];
             return Elsa3MigrationResult<Elsa3ConvertedDefinition>.Success(
-                new Elsa3ConvertedDefinition(state, [], [], []),
+                new Elsa3ConvertedDefinition(state, plan.OutputMappings.ToArray(), boundaryOutcomes, outcomeMappings),
                 Ordered(plan.Diagnostics));
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

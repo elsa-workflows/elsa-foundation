@@ -45,13 +45,28 @@ internal sealed class Elsa3TerminalPlacementRewrite : IElsa3NodeRewrite
         context.SetProperty(Elsa3IntrinsicContracts.OutcomeKey, Elsa3TypedValues.CreateLiteral("String", outcome));
     }
 
-    /// <summary>The reusable-workflow branch: a graph <c>Complete</c> node. Implemented by spec 236 task T048.</summary>
-    private static ValueTask ApplyReusableAsync(Elsa3RewriteContext context, string outcome, CancellationToken cancellationToken)
+    /// <summary>The graph Complete activity spec 237 adds: it ends the nearest reusable activity from any depth.</summary>
+    internal const string CompleteActivityTypeKey = "Elsa.Activities.Graph.Runtime.Activities.Complete";
+
+    /// <summary>
+    /// The reusable-workflow branch (plan D-1 to D-4): at any depth, one graph <c>Complete</c> node whose literal
+    /// <c>outcome</c> is the outcome's reference key (<c>Done</c> → <c>done</c>). The outcome is recorded so the
+    /// converter declares it on the activity contract (D-5 to D-7).
+    /// </summary>
+    private static async ValueTask ApplyReusableAsync(Elsa3RewriteContext context, string outcome, CancellationToken cancellationToken)
     {
-        context.Error(UnsupportedMode,
-            $"Elsa 3 '{context.Activity.Type}' in a reusable workflow must complete the reusable activity with outcome '{outcome}'; that conversion is not available yet.",
-            "Convert this workflow as a plain workflow, or wait for reusable-workflow Complete conversion.");
-        return ValueTask.CompletedTask;
+        var resolution = await context.Resolver.ResolveCatalogTypeKeyAsync(CompleteActivityTypeKey, cancellationToken);
+        if (resolution.Failure is { } failure)
+        {
+            context.Error(failure.Code, failure.Message, failure.Guidance);
+            return;
+        }
+
+        context.Activity.AdditionalProperties.Remove(Elsa3IntrinsicContracts.OutcomeKey);
+        context.Node.Resolved = resolution.Activity! with { Entry = context.Node.Resolved?.Entry };
+        context.Node.Intrinsic = null;
+        context.SetProperty("outcome", Elsa3TypedValues.CreateLiteral("String", Elsa3OutcomeKey.ReferenceKey(outcome)));
+        context.Plan.CompleteOutcomes.Add((outcome, Elsa3ConversionDiagnostics.NodeId(context.Activity), context.Node.JsonPath));
     }
 
     /// <summary>The single literal outcome a Complete names (Done when none; End always Done), or reports why there is none.</summary>

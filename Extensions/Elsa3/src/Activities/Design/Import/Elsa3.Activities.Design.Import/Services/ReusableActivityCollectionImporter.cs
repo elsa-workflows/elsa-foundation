@@ -145,7 +145,7 @@ public sealed class ReusableActivityCollectionImporter(
             };
         }
         var committed = await command.CommitAsync(mutation, cancellationToken);
-        return new(plan.PlanId, selection.Select(x => x.SourceVersionId).ToArray(), committed.NoOp, committed.Receipt);
+        return new(plan.PlanId, selection.Select(x => x.SourceVersionId).ToArray(), committed.NoOp, committed.Receipt, mutation.Warnings);
     }
 
     /// <summary>
