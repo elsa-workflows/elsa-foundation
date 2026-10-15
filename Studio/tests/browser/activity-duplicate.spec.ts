@@ -135,12 +135,12 @@ test("Ctrl+D does nothing while the designer code editor is focused", async ({ p
   const startingCount = await nodes.count();
   await page.keyboard.press("ControlOrMeta+d");
   const activeAfterPress = await page.evaluate(describeActiveElement);
-  console.log("activeElement after Ctrl+D", activeAfterPress);
+  expect(activeAfterPress.inEditor).toBe(true);
 
   await expect.poll(async () => {
     const duplicated = (await page.locator(".wf-editor-save-status").textContent())?.includes("Duplicated") === true;
-    return { duplicated, count: await nodes.count(), activeAfterPress };
-  }).toEqual({ duplicated: false, count: startingCount, activeAfterPress });
+    return { duplicated, count: await nodes.count() };
+  }).toEqual({ duplicated: false, count: startingCount });
   await expect(page.locator(".wf-canvas .wf-node").filter({ hasText: "Notify buyer (copy)" })).toHaveCount(0);
   await expect(page.locator(".wf-editor-save-status")).not.toContainText("Duplicated");
 });

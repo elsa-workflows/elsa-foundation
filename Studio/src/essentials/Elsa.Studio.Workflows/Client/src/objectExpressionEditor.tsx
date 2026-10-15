@@ -50,7 +50,7 @@ export function ObjectInlineEditor({
 
   if (dictionaryType) {
     return (
-      <Suspense fallback={null}>
+      <Suspense fallback={<DictionaryEditorFallback variant="inline" />}>
         <DictionaryValueEditor
           input={descriptor}
           valueTypeName={dictionaryType.valueTypeName}
@@ -113,7 +113,7 @@ export function ObjectExpandedEditor({
     : null;
   if (dictionaryType) {
     return (
-      <Suspense fallback={null}>
+      <Suspense fallback={<DictionaryEditorFallback variant="expanded" />}>
         <DictionaryValueEditor
           input={descriptor}
           valueTypeName={dictionaryType.valueTypeName}
@@ -283,6 +283,19 @@ function writeDraft(activity: unknown, propertyName: string, draft: string | nul
   const drafts = objectDrafts.get(activity) ?? new Map<string, string>();
   drafts.set(propertyName, draft);
   objectDrafts.set(activity, drafts);
+}
+
+function DictionaryEditorFallback({ variant }: { variant: "inline" | "expanded" }) {
+  return (
+    <div
+      className={`wf-dictionary-editor wf-dictionary-editor-loading ${variant}`}
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      Loading dictionary editor…
+    </div>
+  );
 }
 
 export function createObjectExpressionEditorContribution(

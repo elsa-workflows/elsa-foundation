@@ -73,7 +73,10 @@ function isCodeEditorEngineSwapping(designer: ParentNode | null) {
   if (!scope) return false;
   return Array.from(scope.querySelectorAll("[data-studio-code-editor]")).some(element => {
     if (!(element instanceof HTMLElement) || element.dataset.studioCodeEditorReady === "true") return false;
-    return !element.querySelector(":scope > .studio-code-editor-preview");
+    if (element.querySelector(":scope > .studio-code-editor-preview")) return false;
+    // Revoked authorization keeps the root and a status message, with no engine.
+    return !(element.querySelector(":scope > .studio-code-editor-status")
+      && !element.querySelector(".studio-code-editor-input, .studio-code-editor-rich, .cm-editor"));
   });
 }
 

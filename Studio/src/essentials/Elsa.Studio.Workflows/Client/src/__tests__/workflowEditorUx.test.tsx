@@ -153,7 +153,7 @@ describe("isWorkflowEditorKeyboardTarget", () => {
     host.remove();
   });
 
-  it("treats Monaco and text-node targets as editor-owned without reading document.activeElement", () => {
+  it("treats Monaco and text-node targets as editor-owned from the node even when the caret is elsewhere", () => {
     const monaco = document.createElement("div");
     monaco.className = "monaco-editor";
     const inputArea = document.createElement("textarea");
@@ -216,6 +216,25 @@ describe("isWorkflowEditorKeyboardTarget", () => {
     expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(false);
 
     swapping.remove();
+    designer.remove();
+  });
+
+  it("does not treat a revoked-authorization editor as swapping", () => {
+    const designer = document.createElement("section");
+    const canvas = document.createElement("div");
+    designer.appendChild(canvas);
+    document.body.appendChild(designer);
+
+    const revoked = document.createElement("section");
+    revoked.dataset.studioCodeEditor = "true";
+    const status = document.createElement("div");
+    status.className = "studio-code-editor-status";
+    status.textContent = "Expression source is hidden because the authorization session changed.";
+    revoked.appendChild(status);
+    designer.appendChild(revoked);
+    expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(false);
+
+    revoked.remove();
     designer.remove();
   });
 });
