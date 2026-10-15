@@ -95,7 +95,7 @@ export function registerCoreHomeWidgets(api: ElsaStudioModuleApi) {
     id: homeWidgetIds.tasks,
     moduleId: "Elsa.Studio.Dashboard",
     title: "Tasks",
-    description: "Open the Tasks inbox.",
+    description: "Open assigned work in the Tasks inbox.",
     core: true,
     requiresFeature: "user-tasks",
     defaultVisible: true,

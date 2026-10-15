@@ -42,6 +42,25 @@ public sealed class InMemoryPublicationRecordStore : IPublicationRecordStore
                 .ToArray());
     }
 
+    public ValueTask<IReadOnlyCollection<PublicationRecord>> ListByDefinitionIdsAsync(
+        IReadOnlyCollection<string> workflowDefinitionIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(workflowDefinitionIds);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (workflowDefinitionIds.Count == 0)
+            return ValueTask.FromResult<IReadOnlyCollection<PublicationRecord>>([]);
+        foreach (var workflowDefinitionId in workflowDefinitionIds)
+            ArgumentException.ThrowIfNullOrWhiteSpace(workflowDefinitionId);
+        var wanted = workflowDefinitionIds.ToHashSet(StringComparer.Ordinal);
+        lock (_gate)
+            return ValueTask.FromResult<IReadOnlyCollection<PublicationRecord>>(_records.Values
+                .Where(publication => wanted.Contains(publication.WorkflowDefinitionId))
+                .OrderBy(publication => publication.CreatedAt)
+                .ThenBy(publication => publication.PublicationId, StringComparer.Ordinal)
+                .ToArray());
+    }
+
     public ValueTask<bool> TryTransitionAsync(PublicationRecord publication, PublicationStatus expectedStatus, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(publication);

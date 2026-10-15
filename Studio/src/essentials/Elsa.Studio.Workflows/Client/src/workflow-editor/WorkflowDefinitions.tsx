@@ -5,6 +5,7 @@ import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDe
 import { listActivities } from "../api/activityDesign";
 import type { ActivityCatalogItem, DefinitionListState, WorkflowDefinitionDetails, WorkflowDefinitionSummary } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
+import { resolveDefinitionPublicationStatus } from "./definitionPublicationStatus";
 import { getDialogs } from "./dialogs";
 import { defaultDefinitionPageSize } from "./constants";
 import type { CreateWorkflowDraft } from "./editorTypes";
@@ -472,8 +473,8 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
                 <span>
                   {listState === "deleted" ? formatDate(definition.deletedAt) : (
                     <>
-                      <span className="wf-status-badge" data-status={isDeleted ? "cancelled" : publication === "draft" ? "suspended" : "completed"}>
-                        {isDeleted ? "Deleted" : publication === "draft" ? "Draft" : "Published"}
+                      <span className="wf-status-badge" data-status={isDeleted || publication === "retired" ? "cancelled" : publication === "draft" || publication === "retracted" ? "suspended" : "completed"}>
+                        {publication === "retracted" ? "Retracted" : publication === "retired" ? "Retired" : isDeleted ? "Deleted" : publication === "draft" ? "Draft" : "Published"}
                       </span>
                       {publication === "published-with-draft" ? <small>Newer draft</small> : isDeleted ? <small>{formatDate(definition.deletedAt)}</small> : null}
                     </>
@@ -569,8 +570,3 @@ function ResultFolderBreadcrumb({
   );
 }
 
-export function resolveDefinitionPublicationStatus(definition: Pick<WorkflowDefinitionSummary, "draftId" | "latestVersionId" | "latestVersion" | "versionCount" | "deletedAt">) {
-  if (definition.deletedAt) return "deleted";
-  if (definition.latestVersionId || definition.latestVersion || definition.versionCount) return definition.draftId ? "published-with-draft" : "published";
-  return "draft";
-}

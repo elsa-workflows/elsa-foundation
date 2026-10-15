@@ -118,6 +118,9 @@ public class WorkflowsPublishingFeature : IShellFeature
         // It is also the publication check permanent deletion requires, so a host that does not compose this
         // feature refuses the operation outright instead of deleting unverified (#1283).
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowDefinitionPermanentDeletionGuard, PublishedWorkflowDeletionGuard>());
+        // Optional Design-owned lookup so definition list/detail views can distinguish Retracted and
+        // Retired from Published. Design.Api injects it when present and omits publicationState otherwise.
+        services.TryAddScoped<IWorkflowDefinitionPublicationStateLookup, WorkflowDefinitionPublicationStateLookup>();
         // #418: WorkflowExecutableCompiler decomposition collaborators. Registered at the compiler's own
         // scoped lifetime so each is independently resolvable, replaceable, and unit-testable.
         services.TryAddSingleton<IValueConversionProfileRegistry>(BuiltInValueConversionProfileRegistry.Instance);

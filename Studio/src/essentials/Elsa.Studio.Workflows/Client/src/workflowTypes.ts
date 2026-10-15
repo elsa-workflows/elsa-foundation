@@ -30,6 +30,8 @@ export interface WorkflowDefinitionSummary {
   latestVersionId?: string | null;
   latestVersion?: string | null;
   versionCount: number;
+  /** Server publication lifecycle: draft, published, retracted, or retired. Omitted on design-only hosts. */
+  publicationState?: string | null;
   /** Organizational placement, intentionally separate from the authored workflow state. */
   folderId?: string | null;
   /** Root-to-containing-folder projection for result navigation; IDs are opaque. */

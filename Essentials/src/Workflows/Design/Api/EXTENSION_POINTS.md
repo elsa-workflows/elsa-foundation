@@ -23,6 +23,7 @@ The per-domain catalog (framework §2.22.1) of everything you can implement or o
 | `IWorkflowDefinitionLookup` | Core — `Elsa.Workflows.Design.Core` | `WorkflowDefinitionLookup` (`.Persistence.Core`) | You want a different read strategy (caching, projection store) while keeping the write path. |
 | Command interfaces (`IUpdateDraftCommand` + 5 lifecycle) | Core — `Elsa.Workflows.Design.Persistence.Core` | EF Core command implementations (`.Persistence.EntityFrameworkCore`) | You want different mutation/lifecycle behaviour while keeping the built-in `IWorkflowDefinitionLookup`. |
 | `IDraftStateDiffEngine` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `DraftStateDiffEngine` (`.Persistence.Core`) | You want to change which mutation events are emitted or the match-key semantics. |
+| `IWorkflowDefinitionPublicationStateLookup` | Contract — `Elsa.Workflows.Design.Persistence.Core` | `WorkflowDefinitionPublicationStateLookup` (`Elsa.Workflows.Publishing`) | Publishing is composed and definition list/detail views should distinguish Retracted and Retired from Published. Optional: a design-only host omits it and leaves `publicationState` unset. |
 
 ### `IWorkflowDefinitionLookup` *(Core — `Elsa.Workflows.Design.Core`)*
 - **Signature:** `GetDefinition(id)`, `ListDefinitions(searchTerm?)`, `GetVersion(versionId)`, `FindLatestVersion(definitionId)`, `ListVersions(definitionId)` — all `Task`-returning reads.
@@ -37,6 +38,11 @@ Summary: `IUpdateDraftCommand`, `ICreateDraftCommand`, `ICloneDraftFromVersionCo
 ### `IDraftStateDiffEngine` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
 - **Signature:** `IReadOnlyList<IEvent> Evaluate(string draftId, WorkflowDefinitionState stored, IReadOnlyCollection<DesignMetadataRecord> storedLayout, WorkflowDefinitionState desired, IReadOnlyCollection<DesignMetadataRecord> desiredLayout)`
 - **Default impl:** `DraftStateDiffEngine`. Override to change emission / matching.
+
+### `IWorkflowDefinitionPublicationStateLookup` *(Contract — `Elsa.Workflows.Design.Persistence.Core`)*
+- **Signature:** `ListByDefinitionIdsAsync(workflowDefinitionIds)` — one `WorkflowDefinitionPublicationState` per id (`Draft`, `Published`, `Retracted`, `Retired`).
+- **Default impl:** none in Design. Publishing registers `WorkflowDefinitionPublicationStateLookup`. Design list/detail endpoints take it as an optional constructor argument; absence leaves `publicationState` unset so a design-only host still works.
+- **Override:** `services.Replace(ServiceDescriptor.Scoped<IWorkflowDefinitionPublicationStateLookup, MyLookup>())`. Do not add a Design.Api → Publishing project reference; the lookup is the bridge.
 
 ### Domain-model abstractions
 `IWorkflowDefinition`, `IWorkflowDefinitionVersion`, `IWorkflowDefinitionDraft`, `IWorkflowDefinitionLayout`, `IWorkflowGraph` are read-model abstractions (framework §2.1). A custom persistence provider realises them; application code does not replace them piecemeal.

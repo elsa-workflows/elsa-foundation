@@ -294,6 +294,26 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("shows Retracted and Retired from the server publication state even when a version remains", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => response({
+      items: [
+        definition({ id: "retracted", name: "Retracted workflow", draftId: "draft-r", latestVersionId: "version-r", latestVersion: "1.0.0", versionCount: 1, publicationState: "retracted" }),
+        definition({ id: "retired", name: "Retired workflow", draftId: null, latestVersionId: "version-t", latestVersion: "2.0.0", versionCount: 1, publicationState: "retired" })
+      ]
+    })));
+    const { container, unmount } = await renderRegisteredRoute();
+
+    await waitForText(container, "Retracted workflow");
+    const retractedRow = rowByLabel(container, "Open workflow definition Retracted workflow");
+    const retiredRow = rowByLabel(container, "Open workflow definition Retired workflow");
+
+    expect(retractedRow?.querySelector(".wf-status-badge")?.textContent).toBe("Retracted");
+    expect(retractedRow?.textContent).not.toContain("Published");
+    expect(retiredRow?.querySelector(".wf-status-badge")?.textContent).toBe("Retired");
+    expect(retiredRow?.textContent).not.toContain("Published");
+    await unmount();
+  });
+
   it("shows published, published-with-draft, and unpublished draft status from version fields rather than draftId", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => response({
       items: [
