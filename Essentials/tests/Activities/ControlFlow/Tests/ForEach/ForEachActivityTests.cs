@@ -240,10 +240,10 @@ public sealed class ForEachActivityTests : IDisposable
     private static ValueTask<RuntimeStructuralContinuation> ExecuteAsync(SimpleActivityExecutionContext context) =>
         ((IRuntimeStructuralActivity)context.Activity).ExecuteStructureAsync(context);
 
-    private static ActivityChildCompletedContext NewCompletion(SimpleActivityExecutionContext context, int iterationIndex) =>
+    internal static ActivityChildCompletedContext NewCompletion(SimpleActivityExecutionContext context, int iterationIndex) =>
         new(context, "actexec-body", BodyNodeId, [ActivityOutcomes.Done], $"{ForEachExecutionId}:foreach-iteration:{iterationIndex}");
 
-    private SimpleActivityExecutionContext NewContext(object? collection, RuntimeInputBinding? collectionBinding = null)
+    internal static SimpleActivityExecutionContext NewContext(object? collection, RuntimeInputBinding? collectionBinding = null)
     {
         var activity = new ForEachActivity { Collection = collection };
         var context = new SimpleActivityExecutionContext(
