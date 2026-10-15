@@ -20,8 +20,9 @@ import {
 } from "./workflowDefinitionBrowseLocation";
 import "./workflowFolders.css";
 
-const loadDefinitionStatusBadge = import("./DefinitionStatusBadge");
-const DefinitionStatusBadge = lazy(() => loadDefinitionStatusBadge.then(module => ({ default: module.DefinitionStatusBadge })));
+const DefinitionStatusBadge = lazy(() =>
+  import("./DefinitionStatusBadge").then(module => ({ default: module.DefinitionStatusBadge }))
+);
 const MoveWorkflowDefinitionsDialog = lazy(() =>
   import("./MoveWorkflowDefinitionsDialog").then(module => ({ default: module.MoveWorkflowDefinitionsDialog }))
 );
@@ -419,8 +420,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
       ) : null}
       {state === "ready" && (definitions.length > 0 || page > 1) ? (
         <>
-          {definitions.length > 0 ? <Suspense fallback={<WfListSkeleton />}>
-            <div className="wf-grid" role="table" aria-label="Workflow definitions">
+          {definitions.length > 0 ? <div className="wf-grid" role="table" aria-label="Workflow definitions">
             <div className="wf-grid-head" role="row">
               <label className="wf-row-select">
                 <input
@@ -473,7 +473,9 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
                 <span>{definition.latestVersion ?? "No version"}</span>
                 <span>
                   {listState === "deleted" ? formatDate(definition.deletedAt) : (
-                    <DefinitionStatusBadge definition={definition} />
+                    <Suspense fallback={<span className="wf-status-badge" />}>
+                      <DefinitionStatusBadge definition={definition} />
+                    </Suspense>
                   )}
                 </span>
                 <span>{formatDate(definition.lastModifiedAt)}</span>
@@ -497,8 +499,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
               </div>
               );
             })}
-          </div>
-          </Suspense> : null}
+          </div> : null}
           <DefinitionPager
             page={page}
             pageSize={pageSize}

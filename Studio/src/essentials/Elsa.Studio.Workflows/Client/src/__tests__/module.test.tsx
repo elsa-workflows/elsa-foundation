@@ -307,9 +307,9 @@ describe("workflows module", () => {
     const retractedRow = rowByLabel(container, "Open workflow definition Retracted workflow");
     const retiredRow = rowByLabel(container, "Open workflow definition Retired workflow");
 
-    expect(retractedRow?.querySelector(".wf-status-badge")?.textContent).toBe("Retracted");
+    await waitForStatusBadge(retractedRow, "Retracted");
     expect(retractedRow?.textContent).not.toContain("Published");
-    expect(retiredRow?.querySelector(".wf-status-badge")?.textContent).toBe("Retired");
+    await waitForStatusBadge(retiredRow, "Retired");
     expect(retiredRow?.textContent).not.toContain("Published");
     await unmount();
   });
@@ -330,11 +330,11 @@ describe("workflows module", () => {
     const newerDraftRow = rowByLabel(container, "Open workflow definition Published with draft");
 
     expect(container.querySelector(".wf-grid-head")?.textContent).toContain("Status");
-    expect(draftRow?.textContent).toMatch(/Draft/);
+    await waitForStatusBadge(draftRow, "Draft");
     expect(draftRow?.textContent).not.toContain("Published");
-    expect(publishedRow?.querySelector(".wf-status-badge")?.textContent).toBe("Published");
+    await waitForStatusBadge(publishedRow, "Published");
     expect(publishedRow?.textContent).not.toContain("Newer draft");
-    expect(newerDraftRow?.querySelector(".wf-status-badge")?.textContent).toBe("Published");
+    await waitForStatusBadge(newerDraftRow, "Published");
     expect(newerDraftRow?.textContent).toContain("Newer draft");
     await unmount();
   });
@@ -5529,6 +5529,14 @@ async function waitForText(container: HTMLElement, text: string) {
   await vi.waitFor(() => {
     if (!container.textContent?.includes(text)) {
       throw new Error(`Timed out waiting for text: ${text}. Rendered: ${container.textContent}`);
+    }
+  }, { timeout: 5_000, interval: 20 });
+}
+
+async function waitForStatusBadge(row: Element | null, text: string) {
+  await vi.waitFor(() => {
+    if (row?.querySelector(".wf-status-badge")?.textContent !== text) {
+      throw new Error(`Timed out waiting for status badge '${text}'.`);
     }
   }, { timeout: 5_000, interval: 20 });
 }
