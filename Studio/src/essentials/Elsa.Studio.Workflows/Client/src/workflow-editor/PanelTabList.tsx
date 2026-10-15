@@ -3,8 +3,9 @@ import type { WorkflowEditorPanelTab } from "./editorTypes";
 
 // Renders the editor's icon + label panel tabs, delegating keyboard behaviour to the shared tablist
 // primitive (studio-ui, built in #191): arrow/Home/End roving-focus navigation via `useTablistKeyboard`,
-// found by its `data-tab-id`. The bespoke `wf-panel-tab-*` markup (icons, tooltips, ellipsis) is kept so
-// the workflow editor's tab styling is unchanged. `aria-controls`/`id` linkage is intentionally omitted:
+// found by its `data-tab-id`. The bespoke `wf-panel-tab-*` markup (icons, tooltips) is kept so
+// the workflow editor's tab styling is unchanged. Labels wrap and keep a `title`; they do not ellipsize.
+// `aria-controls`/`id` linkage is intentionally omitted:
 // these tabs' panel bodies are rendered by the parent without a `role="tabpanel"` element to point at, so
 // emitting `aria-controls` here would be a dangling reference. Wiring the panel side is a separate change.
 export function PanelTabList({

@@ -288,7 +288,34 @@ describe("workflows module", () => {
     expect(deletedRow?.textContent).toContain("Restore");
     expect(deletedRow?.textContent).toContain("Delete permanently");
     expect(deletedRow?.textContent).not.toContain("Artifacts");
-    expect(container.querySelector(".wf-grid-head")?.textContent).toContain("State");
+    expect(container.querySelector(".wf-grid-head")?.textContent).toContain("Status");
+    expect(activeRow?.textContent).toContain("Published");
+    expect(activeRow?.textContent).toContain("Newer draft");
+    await unmount();
+  });
+
+  it("shows published, published-with-draft, and unpublished draft status from version fields rather than draftId", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => response({
+      items: [
+        definition({ id: "draft-only", name: "Unpublished workflow", draftId: "draft-a", latestVersionId: null, latestVersion: null, versionCount: 0 }),
+        definition({ id: "published-clean", name: "Published workflow", draftId: null, latestVersionId: "version-1", latestVersion: "1.0.0", versionCount: 1 }),
+        definition({ id: "published-dirty", name: "Published with draft", draftId: "draft-b", latestVersionId: "version-2", latestVersion: "2.0.0", versionCount: 2 })
+      ]
+    })));
+    const { container, unmount } = await renderRegisteredRoute();
+
+    await waitForText(container, "Unpublished workflow");
+    const draftRow = rowByLabel(container, "Open workflow definition Unpublished workflow");
+    const publishedRow = rowByLabel(container, "Open workflow definition Published workflow");
+    const newerDraftRow = rowByLabel(container, "Open workflow definition Published with draft");
+
+    expect(container.querySelector(".wf-grid-head")?.textContent).toContain("Status");
+    expect(draftRow?.textContent).toMatch(/Draft/);
+    expect(draftRow?.textContent).not.toContain("Published");
+    expect(publishedRow?.querySelector(".wf-status-badge")?.textContent).toBe("Published");
+    expect(publishedRow?.textContent).not.toContain("Newer draft");
+    expect(newerDraftRow?.querySelector(".wf-status-badge")?.textContent).toBe("Published");
+    expect(newerDraftRow?.textContent).toContain("Newer draft");
     await unmount();
   });
 
@@ -2811,6 +2838,37 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("shows definition and version ids in the runs list before and after the name loads", async () => {
+    let resolveDefinitions!: (value: Response) => void;
+    const definitions = new Promise<Response>(done => { resolveDefinitions = done; });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("https://server.example/runtime/workflows/instances")) {
+        return response([workflowInstance({ definitionId: "definition-1" })]);
+      }
+      if (url.startsWith("https://server.example/design/workflows/definitions")) {
+        return definitions;
+      }
+      throw new Error(`Unexpected request ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/instances");
+
+    await waitForText(container, "wfexec-1");
+    const definitionCell = () => container.querySelector(".wf-identity-cell");
+    expect(definitionCell()?.querySelector("strong")?.textContent).toBe("definition-1");
+    expect(definitionCell()?.querySelector("small")?.textContent).toBe("version-1");
+    expect(definitionCell()?.getAttribute("title")).toBe("definition-1 (version-1)");
+
+    resolveDefinitions(response({ items: [definition({ id: "definition-1", name: "Order fulfillment" })] }));
+    await waitForText(container, "Order fulfillment");
+    expect(definitionCell()?.querySelector("strong")?.textContent).toBe("Order fulfillment");
+    expect(definitionCell()?.querySelector("small")?.textContent).toBe("definition-1 · version-1");
+    expect(definitionCell()?.getAttribute("title")).toBe("Order fulfillment (definition-1 · version-1)");
+
+    await unmount();
+  });
+
   it("renders direct workflow instance details from the pinned Runtime executable", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
@@ -2838,6 +2896,10 @@ describe("workflows module", () => {
           category: "Primitives",
           displayName: "Write Line"
         })] });
+      }
+
+      if (url.startsWith("https://server.example/design/workflows/definitions")) {
+        return response({ items: [definition({ id: "definition-1", name: "Order fulfillment" })] });
       }
 
       throw new Error(`Unexpected request ${url}`);
@@ -2880,6 +2942,10 @@ describe("workflows module", () => {
     // Run metadata moved to the Details tab.
     await click(buttonByText(container, "Details"));
     expect(container.textContent).toContain("Published Run");
+    const definitionCell = container.querySelector(".wf-instance-inspector .wf-identity-cell");
+    expect(definitionCell?.querySelector("strong")?.textContent).toBe("Order fulfillment");
+    expect(definitionCell?.querySelector("small")?.textContent).toBe("definition-1 · version-1");
+    expect(definitionCell?.getAttribute("title")).toBe("Order fulfillment (definition-1 · version-1)");
     // Incidents live under the Issues tab.
     await click(buttonByText(container, "Issues"));
     expect(container.textContent).toContain("No incidents recorded.");
@@ -2911,11 +2977,10 @@ describe("workflows module", () => {
 
     await waitForText(container, "Pinned Runtime executable");
     await click(buttonByText(container, "Designer"));
-    await waitForText(container, "Hello World");
+    await waitForEditor(container);
 
     expect(window.location.pathname).toBe("/workflows/definitions");
     expect(new URLSearchParams(window.location.search).get("definition")).toBe("definition-1");
-    expect(container.querySelector(".wf-editor")).toBeTruthy();
     expect(container.querySelector(".wf-instance-detail-workbench")).toBeNull();
 
     window.history.back();
@@ -2924,9 +2989,8 @@ describe("workflows module", () => {
     expect(container.querySelector(".wf-instance-detail-workbench")).toBeTruthy();
 
     window.history.forward();
-    await waitForText(container, "Hello World");
+    await waitForEditor(container);
     expect(window.location.pathname).toBe("/workflows/definitions");
-    expect(container.querySelector(".wf-editor")).toBeTruthy();
 
     window.history.back();
     await waitForText(container, "Pinned Runtime executable");
@@ -2943,9 +3007,8 @@ describe("workflows module", () => {
     for (const tab of ["Activity", "Issues", "Details"] as const) {
       await openTab(tab);
       await click(buttonByText(container, "Designer"));
-      await waitForText(container, "Hello World");
+      await waitForEditor(container);
       expect(window.location.pathname).toBe("/workflows/definitions");
-      expect(container.querySelector(".wf-editor")).toBeTruthy();
       expect(container.querySelector(".wf-instance-detail-workbench")).toBeNull();
 
       window.history.back();
@@ -5446,6 +5509,14 @@ async function waitForText(container: HTMLElement, text: string) {
   await vi.waitFor(() => {
     if (!container.textContent?.includes(text)) {
       throw new Error(`Timed out waiting for text: ${text}. Rendered: ${container.textContent}`);
+    }
+  }, { timeout: 5_000, interval: 20 });
+}
+
+async function waitForEditor(container: HTMLElement) {
+  await vi.waitFor(() => {
+    if (!container.querySelector(".wf-editor")) {
+      throw new Error("Timed out waiting for the workflow editor.");
     }
   }, { timeout: 5_000, interval: 20 });
 }

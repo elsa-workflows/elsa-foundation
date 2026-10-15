@@ -65,10 +65,10 @@ public sealed class FlowchartExecutionEngine(
 
         var graph = context.ExecutableNode.GetOrAddRoutingStructure(FlowchartGraph.From);
         var state = FlowchartStatePersister.LoadState(context.ActivityExecutionState) ?? FlowchartStatePersister.CreateInitialState(graph.SelectStartNode()?.ExecutableNodeId);
-        var pathId = ResolveExecutionPathId(context, state, completionContext.CompletedChildExecutableNodeId);
+        var (pathId, fromMetadata) = ResolveExecutionPathId(context, state, completionContext.CompletedChildExecutableNodeId);
         var path = state.ExecutionPaths.FirstOrDefault(item => StringComparer.Ordinal.Equals(item.ExecutionPathId, pathId))
                    ?? throw new FlowchartExecutionException($"Flowchart execution path '{pathId}' was not found for completed child '{completionContext.CompletedChildExecutableNodeId}'.");
-        var scopeId = ResolveExecutionScopeId(context, path);
+        var scopeId = ResolveExecutionScopeId(context, path, fromMetadata);
         var scope = state.Scopes.FirstOrDefault(item => StringComparer.Ordinal.Equals(item.ExecutionScopeId, scopeId))
                     ?? throw new FlowchartExecutionException($"Flowchart execution scope '{scopeId}' was not found for completed child '{completionContext.CompletedChildExecutableNodeId}'.");
 
@@ -272,24 +272,41 @@ public sealed class FlowchartExecutionEngine(
         return persister.StageState(RuntimeStructuralContinuation.Defer, state);
     }
 
-    private static string ResolveExecutionPathId(IRuntimeActivityExecutionContext context, FlowchartExecutionState state, string completedNodeId)
+    // Command metadata is inherited down the work-item chain, and a composite's completion carries its child's
+    // metadata, so a completed child that is itself a Flowchart (directly or under a graph boundary) arrives with
+    // ITS OWN path id (#2756). The metadata path is trusted only when this Flowchart's own state places the
+    // completed node on it; otherwise the path is resolved from this Flowchart's state.
+    private static (string PathId, bool FromMetadata) ResolveExecutionPathId(IRuntimeActivityExecutionContext context, FlowchartExecutionState state, string completedNodeId)
     {
-        if (context.SchedulerWorkItem.CommandMetadata.TryGetValue(ExecutionPathIdMetadataKey, out var metadataPathId) && !string.IsNullOrWhiteSpace(metadataPathId))
-            return metadataPathId;
+        if (context.SchedulerWorkItem.CommandMetadata.TryGetValue(ExecutionPathIdMetadataKey, out var metadataPathId) &&
+            !string.IsNullOrWhiteSpace(metadataPathId) &&
+            IsPathOf(state, metadataPathId, completedNodeId))
+            return (metadataPathId, true);
 
         var candidates = state.ExecutionPaths
             .Where(path => path.Status == ExecutionPathStatus.Active && StringComparer.Ordinal.Equals(path.CurrentNodeId, completedNodeId))
             .ToArray();
 
         if (candidates.Length == 1)
-            return candidates[0].ExecutionPathId;
+            return (candidates[0].ExecutionPathId, false);
 
         throw new FlowchartExecutionException($"Unable to resolve Flowchart execution path for completed child node '{completedNodeId}'.");
     }
 
-    private static string ResolveExecutionScopeId(IRuntimeActivityExecutionContext context, ExecutionPath path)
+    private static bool IsPathOf(FlowchartExecutionState state, string pathId, string completedNodeId) =>
+        state.ActiveChildren.Any(child =>
+            StringComparer.Ordinal.Equals(child.ExecutionPathId, pathId) &&
+            StringComparer.Ordinal.Equals(child.NodeId, completedNodeId)) ||
+        state.ExecutionPaths.Any(path =>
+            StringComparer.Ordinal.Equals(path.ExecutionPathId, pathId) &&
+            StringComparer.Ordinal.Equals(path.CurrentNodeId, completedNodeId));
+
+    private static string ResolveExecutionScopeId(IRuntimeActivityExecutionContext context, ExecutionPath path, bool pathFromMetadata)
     {
-        if (context.SchedulerWorkItem.CommandMetadata.TryGetValue(ExecutionScopeIdMetadataKey, out var metadataScopeId) && !string.IsNullOrWhiteSpace(metadataScopeId))
+        // The metadata scope id rides with the metadata path id; a leaked path id implies a leaked scope id too.
+        if (pathFromMetadata &&
+            context.SchedulerWorkItem.CommandMetadata.TryGetValue(ExecutionScopeIdMetadataKey, out var metadataScopeId) &&
+            !string.IsNullOrWhiteSpace(metadataScopeId))
             return metadataScopeId;
 
         return path.ExecutionScopeId;

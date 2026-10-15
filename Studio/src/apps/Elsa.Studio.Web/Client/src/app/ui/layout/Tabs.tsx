@@ -117,6 +117,7 @@ export function StudioTabs({
             // Roving tabindex: only the active tab is in the sequential tab order; arrows reach the rest.
             tabIndex={isActive ? 0 : -1}
             className={isActive ? "active" : ""}
+            title={tab.label}
             onClick={() => onSelect(tab.id)}
           >
             {tab.label}

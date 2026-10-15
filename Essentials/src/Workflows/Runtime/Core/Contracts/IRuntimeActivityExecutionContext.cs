@@ -74,8 +74,8 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
 
     /// <summary>
     /// Stages cancellation of one scheduled child's activity-execution subtree. Only valid
-    /// during a child-completion/child-fault evaluation with a <c>Defer</c> or <c>Complete</c>
-    /// continuation; applied atomically in the same checkpoint commit as the continuation.
+    /// during a child-completion, child-fault or child-notification evaluation with a <c>Defer</c> or
+    /// <c>Complete</c> continuation; applied atomically in the same checkpoint commit as the continuation.
     /// </summary>
     void RequestChildSubtreeCancellation(
         string childActivityExecutionId,
@@ -109,6 +109,18 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
     void RequestParentNotification(string code, System.Text.Json.JsonElement? payload = null);
 
     IReadOnlyCollection<RuntimeParentNotificationRequest> GetParentNotificationRequests();
+
+    /// <summary>
+    /// Stages a coded notification to the nearest committed ancestor whose executable node has
+    /// <paramref name="ancestorConsumerKey"/>, skipping every composite in between. The runtime resolves the target
+    /// from this activity's committed ancestry; the activity never names an execution. Only valid during an initial
+    /// structural execution that ends in a <c>Complete</c> continuation: the notification is enqueued ahead of this
+    /// activity's own completion, so the ancestor evaluates it first. When no such ancestor exists the activity
+    /// faults with <c>runtime.ancestor-notification.target-not-found</c>.
+    /// </summary>
+    void RequestAncestorNotification(string ancestorConsumerKey, string code, System.Text.Json.JsonElement? payload = null);
+
+    IReadOnlyCollection<RuntimeAncestorNotificationRequest> GetAncestorNotificationRequests();
 }
 
 /// <summary>
