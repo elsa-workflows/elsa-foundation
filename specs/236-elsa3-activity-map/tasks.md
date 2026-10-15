@@ -400,12 +400,12 @@ is unmapped.
   warnings, and all-or-nothing on errors.
 - A reusable workflow gets a schema-2 manifest with `outputMappings` (FR-004e) and `Complete` nodes for Elsa 3
   `Complete`/`End`, with its declared boundary outcomes (D-1 to D-7).
-- Reusable output is proven by `GraphActivityProvider` validate + compile (R-10, D-9).
+- Reusable output is proven by `GraphActivityProvider` validation (R-10, D-9); compilation follows #2796.
 - **Not in scope**: publishing imported reusables (#2796).
 
 **Independent test**: collection apply stores the same bindings as single-definition import (SC-004). A converted
-reusable workflow validates and compiles with the expected `outputMappings`, `outcomeMappings` and `completeOutcomes`
-(SC-006 at compile level).
+reusable workflow validates with the expected `outputMappings`, `outcomeMappings` and `completeOutcomes` (SC-006 by
+provider validation).
 
 ### Collection lowering, replacements, warnings
 
@@ -498,10 +498,10 @@ reusable workflow validates and compiles with the expected `outputMappings`, `ou
   - a real `Break` still maps to `Break` (D-8);
   - plain-workflow Complete/End still give `finish` or `UnsupportedMode`;
   - determinism of the outcome order.
-- [X] T053 [US4] Add to `MT/Elsa3CollectionLoweringTests.cs` (SC-006 at compile level, US4 scenario 5):
+- [X] T053 [US4] Add to `MT/Elsa3CollectionLoweringTests.cs` (SC-006 by provider validation, US4 scenario 5):
   - a reusable workflow setting `CustomOutput` via `SetOutput` → the manifest maps `CustomOutput` to the synthesized
     variable the converted node writes;
-  - `GraphProviderProof` validates and compiles with that output mapping;
+  - `GraphProviderProof` validates with that output mapping;
   - the wrapper exposes `CustomOutput`;
   - the stored catalog row has `ProviderSchemaVersion = "2"`.
 - [X] T054 [US4] Update the EF import tests under `Extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/`
@@ -523,7 +523,7 @@ reusable workflow validates and compiles with the expected `outputMappings`, `ou
 - T054: the EF import tests still use their single-row stub catalog, and they pass with schema 2 and the warnings
   channel.
 
-**Checkpoint**: every story is complete. Reusable output is proven at compile level, and the run-time proof is #2796's.
+**Checkpoint**: every story is complete. Reusable output is proven by provider validation; the compile and run-time proofs are #2796's.
 
 ---
 
@@ -579,7 +579,7 @@ Story order: US1 → US2 (the P1 MVP), then US3 and US4 (P2, independent of each
 1. **MVP = Phases 1–4 (US1 + US2).** Single-definition import converts every built-in against a real catalog and
    reports everything else by stable code. Stop and validate: coverage green, SC-002, SC-003, SC-005.
 2. **US3**: custom-activity aliases, with the one Essentials attribute and scanner facet.
-3. **US4**: the collection path, reusable outputs and Complete/End, proven at compile level.
+3. **US4**: the collection path, reusable outputs and Complete/End, proven by provider validation.
 4. **Polish**: docs, guards, maps, full run.
 5. **Remaining dependencies**:
    - #2705 activates Flowchart roots, so Complete/End reaches real Flowchart-based reusables;

@@ -393,7 +393,7 @@ produces for the same definition.
 - **Imported reusables are not yet published.** The collection import writes catalog rows without a publication, so
   imported reusable activities do not run as graphs until
   [#2796](https://github.com/elsa-workflows/elsa-foundation/issues/2796) (research R-10). This spec verifies its
-  reusable output by provider validation and compilation. SC-006's run-time check is met when #2796 lands.
+  reusable output by provider validation. Compilation and SC-006's run-time check are met when #2796 lands.
 
 ## Out of Scope
 

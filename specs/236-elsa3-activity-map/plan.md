@@ -37,7 +37,7 @@
 - A reusable workflow's `Complete`/`End` become spec 237 `Complete` nodes in a schema-2 graph whose contract
   declares the outcomes (D-1 to D-7).
 - The collection import never publishes, so imported reusables do not run (R-10, split out to #2796). This spec proves
-  its reusable output by provider validation and compilation in tests.
+  its reusable output by provider validation in tests; compilation needs the activity published and follows #2796.
 
 **One small Essentials change.** A generic `[ReplacesActivityType]` attribute, recorded by the CLR scanner as a design
 facet (research R-2).
@@ -62,8 +62,8 @@ facet (research R-2).
 - `Extensions/Elsa3/tests/Mapping/Tests` gets the coverage fixture, a real-catalog fixture built with the CLR scanner
   over the Elsa 4 activity assemblies, and theory tests per diagnostic code.
 - The real catalog includes the `Elsa.Activities.Graph.Runtime` assembly, so `Complete` resolves like any CLR activity.
-- Converted reusable output goes through `GraphActivityProvider.ValidateAsync` and `CompileAsync` with its derived
-  contract (R-10). This needs a test-only reference from `Elsa3.Mapping.Tests` to `Elsa.Activities.Graph.Design`.
+- Converted reusable output goes through `GraphActivityProvider.ValidateAsync` with its derived contract (R-10).
+  `CompileAsync` needs the activity published, so it follows #2796. This needs a test-only reference from `Elsa3.Mapping.Tests` to `Elsa.Activities.Graph.Design`.
   The production Mapping project gains no Graph reference: it emits the type key and resolves the version from the
   catalog.
 - `Essentials/tests/Activities/Design/Tests` covers the scanner facet.
@@ -186,8 +186,8 @@ Extensions/Elsa3/tests/Mapping/Tests/
 ├── Elsa3BuiltInConversionTests.cs                          # US1, SC-002
 ├── Elsa3ConversionDiagnosticsTests.cs                      # US2, SC-003 (theory per code)
 ├── Elsa3ReplacedActivityTypeTests.cs                       # US3
-├── Elsa3CollectionLoweringTests.cs                         # US4, SC-004, SC-006 (compile level)
-├── Elsa3ReusableTerminalTests.cs                           # D-1 to D-7, provider validate + compile
+├── Elsa3CollectionLoweringTests.cs                         # US4, SC-004, SC-006 (provider validation)
+├── Elsa3ReusableTerminalTests.cs                           # D-1 to D-7, provider validation
 └── (existing tests: stub lookups replaced by real keys)
 ```
 
@@ -221,7 +221,7 @@ Extensions/Elsa3/tests/Mapping/Tests/
    - Warnings channel.
    - `outputMappings`, output variables and wrapper outputs.
    - Schema 2: `ProviderSchemaVersion = "2"`, manifest `outcomeMappings`.
-   - Provider validate and compile proof for converted reusables (R-10). No publication; that is #2796.
+   - Provider validation proof for converted reusables (R-10). No publication, and so no compile proof; that is #2796.
    - Native-structure credential walk; retire the opaque structure.
 7. **Docs.** EXTENSION_POINTS / README / glossary. Run the quickstart.
 
@@ -237,7 +237,7 @@ Extensions/Elsa3/tests/Mapping/Tests/
 | D-6 | A `Complete` naming an outcome the definition does not declare: the outcome is declared emitted, plus `ELS3-BEHAVIOUR-OUTCOME-UNDECLARED`. | Elsa 3 emitted it at run time. |
 | D-7 | A declared outcome (other than `Done`) that no `Complete` reaches is **dropped** from the contract, plus `ELS3-BEHAVIOUR-OUTCOME-UNREACHED`. | Schema 2 rejects an emitted outcome with no source. A non-emitted outcome gets no caller port either (the publisher's `elsa.outcomes` facet keeps emitted only), so the warning makes the dead port visible. |
 | D-8 | Break-based ideas are dropped. Research R-1's "Break → mapped boundary outcome" alternative is marked superseded. Elsa 3 `Break` still maps to `Break` with `BREAK-STOPS-AT-PARALLEL`. | `Complete` replaces the reason for it; spec 237 keeps `Break` unrelated. |
-| D-9 | Import publication is split out to #2796. This spec proves reusable output with `GraphActivityProvider.ValidateAsync` + `CompileAsync` in tests. SC-006's run-time check follows #2796. | Keeps this spec in the Elsa 3 mapping context (R-10). |
+| D-9 | Import publication is split out to #2796. This spec proves reusable output with `GraphActivityProvider.ValidateAsync` in tests. `CompileAsync` and SC-006's run-time check follow #2796, since both need the activity published. | Keeps this spec in the Elsa 3 mapping context (R-10). |
 | D-10 | The reserved `ELS3-ACTIVITY-BOUNDARY-OUTCOME-UNSUPPORTED` is removed. | Never released, so the never-reuse rule is not affected. |
 
 ## HttpEndpoint request projections (maintainer decision, 2026-10-15)

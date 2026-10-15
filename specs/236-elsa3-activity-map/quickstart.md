@@ -31,17 +31,18 @@ dotnet test Extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFr
    javascript, liquid), applied as a collection item, stores the same bindings.
 5. **Determinism (SC-005).** Converting twice gives byte-identical serialized state.
 6. **Reusable outputs (SC-006).**
-   - The converted reusable workflow, given to `GraphActivityProvider.ValidateAsync` and `CompileAsync` with its
-     contract, validates clean, and the compiled descriptor maps `CustomOutput` to its synthesized variable.
+   - The converted reusable workflow, given to `GraphActivityProvider.ValidateAsync` with its contract, validates
+     clean, and its manifest maps `CustomOutput` to its synthesized variable.
    - The direct-start wrapper exposes `CustomOutput`.
-   - The run-time check (a caller receives the value) waits for #2796, which publishes imported reusables.
+   - Compilation and the run-time check (a caller receives the value) wait for #2796, which publishes imported
+     reusables.
 7. **Alias (US3).**
    - A test assembly activity with `[ReplacesActivityType("Acme.SendInvoice")]` resolves the Elsa 3 node.
    - A second claimant gives `ELS3-ACTIVITY-AMBIGUOUS-ALIAS`.
    - A new version without the attribute gives `ELS3-ACTIVITY-UNMAPPED-TYPE`.
 8. **Complete/End in a reusable workflow (D-1 to D-7).**
-   - `Complete("fail")` nested in a loop, `End`, and a natural end each convert. The provider validates and compiles
-     the result, and `completeOutcomes` holds `fail` and `done`.
+   - `Complete("fail")` nested in a loop, `End`, and a natural end each convert. The provider validates the
+     result, and `completeOutcomes` holds `fail` and `done`.
    - `Complete(["a","b"])` and an expression outcome give `ELS3-ACTIVITY-UNSUPPORTED-MODE`.
    - An undeclared outcome gives `ELS3-BEHAVIOUR-OUTCOME-UNDECLARED`.
    - A declared but unreached outcome gives `ELS3-BEHAVIOUR-OUTCOME-UNREACHED` and is absent from the contract.

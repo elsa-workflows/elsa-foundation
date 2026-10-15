@@ -240,7 +240,8 @@ lower to the Elsa 4 scoped variables (`currentItem`, `currentIndex`, `index`) wi
 
 **Decision**: split out to [#2796](https://github.com/elsa-workflows/elsa-foundation/issues/2796) (maintainer decision,
 2026-10-15). Spec 236 produces a correct schema-2 manifest and contract. It proves them by running
-`GraphActivityProvider.ValidateAsync` and `CompileAsync` over converted output in tests. It does not change how the
+`GraphActivityProvider.ValidateAsync` over converted output in tests. (Planned with `CompileAsync` too; during
+implementation compilation turned out to need the activity published, so it moved to #2796.) It does not change how the
 collection import persists or publishes.
 
 **Findings** (on `4764f246a`):
@@ -266,8 +267,8 @@ collection import persists or publishes.
   content. Persisting them is #2796's work.
 - The materializer moves to schema 2 (`ProviderSchemaVersion = "2"`, manifest `outcomeMappings`). It writes nothing
   else new.
-- SC-006 is a run-time criterion. Here it is proven at compile level (the compiled descriptor carries the output and
-  outcome mappings). It is proven at run time once #2796 lands.
+- SC-006 is a run-time criterion. Here it is proven by provider validation (the manifest carries the output and
+  outcome mappings). It is proven by compilation and at run time once #2796 lands.
 
 **Alternatives considered**: widening spec 236 to publish through `ActivityDefinitionPublisher` (rejected: a different
 bounded context, the Import package and publishing, much larger scope); holding spec 236 again (rejected: the

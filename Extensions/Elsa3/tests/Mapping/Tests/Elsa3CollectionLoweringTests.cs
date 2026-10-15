@@ -11,7 +11,7 @@ using static Elsa3.Mapping.Tests.Elsa3BuiltInConversionTests;
 namespace Elsa3.Mapping.Tests;
 
 /// <summary>
-/// Spec 236 US4 (FR-016 to FR-018, SC-004, SC-006 at compile level): the collection import converts every selected item
+/// Spec 236 US4 (FR-016 to FR-018, SC-004, SC-006 by provider validation): the collection import converts every selected item
 /// through the same converter as single-definition import, lowering value flow and reporting warnings, and a reusable
 /// workflow becomes a schema-2 graph activity whose outputs reach its direct-start wrapper.
 /// </summary>
