@@ -23,7 +23,7 @@ The package registers the Secrets application services plus `SecretsPermissionCo
 | POST | `/secrets/{name}/rotate` | `secrets:update-value` or `*` | Rotate sensitive value material. |
 | POST | `/secrets/{name}/test` | `secrets:test` or `*` | Test availability and return a safe result. |
 
-All routes use the Foundation Identity policy provider and evaluator. The module catalogs `secrets:read`, `secrets:write`, `secrets:update-value`, `secrets:delete`, `secrets:test`, `secrets:use`, `secrets:import`, and `secrets:export` under owner `Elsa.Secrets.Api`; only `secrets:write` implies `secrets:read`. The administrative wildcard remains a grant and is not cataloged as a module permission.
+All routes use the Foundation Identity policy provider and evaluator. The module catalogs `secrets:read`, `secrets:write`, `secrets:update-value`, `secrets:delete`, `secrets:test`, `secrets:use`, `secrets:import`, and `secrets:export` under owner `Elsa.Secrets.Api`. None of them implies another, so a writer who also reads needs both `secrets:write` and `secrets:read`. The administrative wildcard remains a grant and is not cataloged as a module permission.
 
 ## Tenant and disclosure boundaries
 

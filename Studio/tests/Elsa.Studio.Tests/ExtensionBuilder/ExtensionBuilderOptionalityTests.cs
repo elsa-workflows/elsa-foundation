@@ -133,7 +133,7 @@ public sealed class ExtensionBuilderOptionalityTests : IAsyncDisposable
     public async Task ComposedShellKeepsTheHostAuthorizationGateOnTheFirstAndEveryRequest(string? bearer, HttpStatusCode expected)
     {
         // The very first request to the shell-mapped bridge — the shell is still cold — must be gated exactly like every
-        // later one: 401 unauthenticated, 403 without extension-builder.read, relayed otherwise. A backend management
+        // later one: 401 unauthenticated, 403 without extension-builder:read, relayed otherwise. A backend management
         // call is issued only for the allowed caller.
         var backend = RespondingWith(WithSessionEndpoint(BearerPermissions, _ => JsonOk("""[ ]""")));
         var client = await StartComposedHostAsync(backend, featureEnabled: true, authEnabled: true);

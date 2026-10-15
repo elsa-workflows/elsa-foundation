@@ -72,7 +72,7 @@ internal static class StudioExtensionBuilderBridge
     // POST /projects/{projectId}/builds — Studio has no caller for it.
     internal static readonly IReadOnlyList<BridgeOperation> Operations =
     [
-        // Read relays (extension-builder.read; manage implies read via the policy).
+        // Read relays (extension-builder:read; manage implies read via the policy).
         new("list-templates", "GET", "/templates", BridgeAccess.Read),
         new("list-repositories", "GET", "/repositories", BridgeAccess.Read),
         new("list-workspaces", "GET", "/workspaces", BridgeAccess.Read),
@@ -90,7 +90,7 @@ internal static class StudioExtensionBuilderBridge
         new("get-build-log", "GET", "/builds/{buildId}/log", BridgeAccess.Read, BridgePayloadKind.Text, TimeoutSeconds: 30),
         new("get-build-artifact", "GET", "/builds/{buildId}/artifact", BridgeAccess.Read, BridgePayloadKind.Stream, TimeoutSeconds: 120),
 
-        // Mutation relays (extension-builder.manage).
+        // Mutation relays (extension-builder:manage).
         new("create-workspace", "POST", "/workspaces", BridgeAccess.Manage),
         new("delete-workspace", "DELETE", "/workspaces/{workspaceId}", BridgeAccess.Manage, TimeoutSeconds: 30),
         new("add-server-local-repository", "POST", "/repositories/server-local", BridgeAccess.Manage, TimeoutSeconds: 30),
@@ -119,8 +119,8 @@ internal static class StudioExtensionBuilderBridge
 
     public static IEndpointRouteBuilder MapStudioExtensionBuilderBridge(this IEndpointRouteBuilder endpoints)
     {
-        // Host-control permission gating (#249): reads require `extension-builder.read` (manage implies read,
-        // expanded locally in the policy); mutations require `extension-builder.manage`. When Studio auth is disabled
+        // Host-control permission gating (#249): reads require `extension-builder:read` (manage implies read,
+        // expanded locally in the policy); mutations require `extension-builder:manage`. When Studio auth is disabled
         // every policy allows anonymously (demo shell). The browser carries no Elsa host management key. The policies
         // travel inline (RequireStudioBridgePermission) because this is mapped from a shell feature, which cannot add
         // named policies to the host's authorization options.

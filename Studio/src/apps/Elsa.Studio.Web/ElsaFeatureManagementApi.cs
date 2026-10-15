@@ -16,8 +16,8 @@ internal static class ElsaFeatureManagementApi
     public static IEndpointRouteBuilder MapElsaFeatureManagementApi(this IEndpointRouteBuilder endpoints)
     {
         // Studio's OWN feature-management surface (ADR 0037). Host-control permission gating (#249): reading the feature
-        // catalog requires `module-management.read`; applying feature changes is a host-control MUTATION and requires
-        // `module-management.manage`. When Studio auth is disabled both allow anonymously (demo shell).
+        // catalog requires `module-management:read`; applying feature changes is a host-control MUTATION and requires
+        // `module-management:manage`. When Studio auth is disabled both allow anonymously (demo shell).
         var group = endpoints.MapGroup("/modularity/features");
 
         group.MapGet("", GetFeaturesAsync)

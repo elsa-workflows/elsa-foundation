@@ -39,7 +39,7 @@ public sealed class StudioBridgeAuthTests : IAsyncDisposable
     private const string ToolReadBearer = "user-tool-read";
     private const string ToolManageBearer = "user-tool-manage";
 
-    // A Studio module's own permission family (e.g. the optional Extension Builder module's extension-builder.read/
+    // A Studio module's own permission family (e.g. the optional Extension Builder module's extension-builder:read/
     // .manage), declared inline through RequireStudioBridgePermission rather than as a host-named policy.
     private const string ToolReadPermission = "tool.read";
     private const string ToolManagePermission = "tool.manage";

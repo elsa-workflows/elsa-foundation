@@ -283,10 +283,10 @@ public sealed class SecretsCanaryHost : IAsyncDisposable
         }
     }
 
-    private sealed class RecordingPermissionEvaluator(IPermissionCatalog catalog) : IPermissionEvaluator
+    private sealed class RecordingPermissionEvaluator : IPermissionEvaluator
     {
         private static readonly ConcurrentDictionary<string, int> Calls = new(StringComparer.Ordinal);
-        private readonly ClaimsPermissionEvaluator inner = new(catalog);
+        private readonly ClaimsPermissionEvaluator inner = new();
 
         public async ValueTask<PermissionEvaluationResult> EvaluateAsync(
             PermissionEvaluationContext context,

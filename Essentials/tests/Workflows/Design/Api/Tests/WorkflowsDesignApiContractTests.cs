@@ -692,12 +692,12 @@ public sealed class WorkflowsDesignApiContractTests
             {
                 claims.Add(new Claim(IdentityClaimTypes.Normalized, "v1"));
                 claims.Add(new Claim(IdentityClaimTypes.Provider, "external"));
-                claims.Add(new Claim(IdentityClaimTypes.Permission, "external.workflow-design.read"));
+                claims.Add(new Claim(IdentityClaimTypes.Permission, "external/workflows/design:read"));
             }
             else if (identity == "trusted-denied")
             {
                 claims.Add(new Claim(IdentityClaimTypes.Normalized, "v1"));
-                claims.Add(new Claim(IdentityClaimTypes.Permission, "workflow-design.other"));
+                claims.Add(new Claim(IdentityClaimTypes.Permission, "workflows/design:other"));
             }
             else if (identity is "trusted" or "trusted-read" or "trusted-manage" or "trusted-delete-409" or "tenant-allowed" or "tenant-denied" or "resource-denied" or "trusted-no-tenant" or "wildcard-tenant-denied" or "wildcard-no-tenant" or "manage-tenant-denied" or "manage-no-tenant" or "manage-resource-denied" or "wildcard-resource-denied")
             {
@@ -726,9 +726,9 @@ internal sealed class AuthorizationProbe
     public int ResourceCalls { get; set; }
 }
 
-internal sealed class RecordingPermissionEvaluator(IPermissionCatalog catalog, AuthorizationProbe probe) : IPermissionEvaluator
+internal sealed class RecordingPermissionEvaluator(AuthorizationProbe probe) : IPermissionEvaluator
 {
-    private readonly ClaimsPermissionEvaluator inner = new(catalog);
+    private readonly ClaimsPermissionEvaluator inner = new();
 
     public ValueTask<PermissionEvaluationResult> EvaluateAsync(
         PermissionEvaluationContext context,

@@ -37,7 +37,7 @@ Exposed manifest settings: **Minimum level** (default `Information`), **Buffer c
 ## Authorization
 
 All three endpoints use the shared Foundation policy model and require **any** of
-`Diagnostics:StructuredLogs` or the retained administrative wildcard. Authentication establishes a
+`diagnostics/structured-logs:read` or the retained administrative wildcard. Authentication establishes a
 normalized principal before endpoint selection; anonymous and rejected, non-normalized identities receive
 `401`, while authenticated callers without the permission receive `403`. `StructuredLogsPermissionContributor` catalogs
 the non-wildcard permission once under owner `Elsa.Diagnostics.StructuredLogs`, with no implication. The

@@ -332,7 +332,7 @@ public sealed class OidcBearerNormalizationTests
             new Claim(IdentityClaimTypes.TenantId, "tenant-forged"),
             new Claim(IdentityClaimTypes.Provider, "provider-forged"),
             new Claim(IdentityClaimTypes.Role, "admin"),
-            new Claim(IdentityClaimTypes.Permission, "worker.admin"));
+            new Claim(IdentityClaimTypes.Permission, "worker:admin"));
 
         using var response = await host.SendBearerAsync(token);
 
@@ -597,7 +597,7 @@ public sealed class OidcBearerNormalizationTests
             new Claim(IdentityClaimTypes.TenantId, "tenant-forged"),
             new Claim(IdentityClaimTypes.Provider, "provider-forged"),
             new Claim(IdentityClaimTypes.Role.ToUpperInvariant(), "admin"),
-            new Claim(IdentityClaimTypes.Permission, "worker.admin")
+            new Claim(IdentityClaimTypes.Permission, "worker:admin")
         ], "validated-token"));
         var context = CreateTokenValidatedContext(unit.Options, original);
 

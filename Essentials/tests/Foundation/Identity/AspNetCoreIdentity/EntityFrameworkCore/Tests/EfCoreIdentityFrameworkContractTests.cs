@@ -656,7 +656,8 @@ public sealed class EfCoreIdentityFrameworkContractTests
 
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(EfCoreIdentitySeeder));
         Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IOptions<IdentitySeedOptions>));
-        Assert.Equal(2, services.Count(descriptor => descriptor.ServiceType == typeof(IShellInitializer)));
+        // The persistence authority, the seeder and the unknown role grant reporter, each once.
+        Assert.Equal(3, services.Count(descriptor => descriptor.ServiceType == typeof(IShellInitializer)));
     }
 
     [Fact]

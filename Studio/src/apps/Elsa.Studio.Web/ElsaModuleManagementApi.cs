@@ -21,8 +21,8 @@ internal static class ElsaModuleManagementApi
     public static IEndpointRouteBuilder MapElsaModuleManagementApi(this IEndpointRouteBuilder endpoints)
     {
         // Studio's OWN host module-management surface (ADR 0037). Host-control permission gating (#249): the registry
-        // READ requires `module-management.read`; every MUTATION (upload, delete, reconcile, prune, feed CRUD,
-        // retention) requires `module-management.manage` — a mere authenticated session is not enough for a host-control
+        // READ requires `module-management:read`; every MUTATION (upload, delete, reconcile, prune, feed CRUD,
+        // retention) requires `module-management:manage` — a mere authenticated session is not enough for a host-control
         // write. `manage` implies `read`, expanded locally in the read policy. When Studio auth is disabled every policy
         // allows anonymously (demo shell). The browser carries no Elsa host management key.
         var group = endpoints.MapGroup("/_elsa/module-management");

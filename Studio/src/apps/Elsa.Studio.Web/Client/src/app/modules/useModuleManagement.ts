@@ -144,9 +144,9 @@ export function useHostOperations(
       setStatus(success);
     } catch (e) {
       // A 403 on a mutation is a Studio authorization failure: the signed-in user holds read but not
-      // module-management.manage. Name it as a permission problem rather than surfacing a raw HTTP error (#249).
+      // module-management:manage. Name it as a permission problem rather than surfacing a raw HTTP error (#249).
       setLocalError(isPermissionDenied(e)
-        ? "You do not have permission to make this change. This requires the module-management.manage permission."
+        ? "You do not have permission to make this change. This requires the module-management:manage permission."
         : getErrorMessage(e));
     }
   }

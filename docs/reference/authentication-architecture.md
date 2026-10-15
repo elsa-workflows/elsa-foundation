@@ -42,7 +42,7 @@ registers their default implementations:
 | `IAuthenticationProviderModule` / `IAuthenticationProviderResolver` | protocol | Each auth provider (local, OIDC, …) describes itself (id, kind, challenge metadata) so the API can enumerate providers. |
 | `IPrincipalFactory` | seam | Turn an external principal into a provisioned, normalized Elsa principal. |
 | `IClaimsNormalizer` / `IClaimMappingRule` | IAM | Map raw provider claims (roles, group memberships) into Elsa `elsa.identity.role` / `elsa.identity.permission` claims. |
-| `IPermissionCatalog` / `IPermissionEvaluator` / `IPermissionAuthorizationService` | IAM | The permission model: catalog, implication expansion, and canonical policy or request-internal evaluation. |
+| `IPermissionCatalog` / `IPermissionEvaluator` / `IPermissionAuthorizationService` | IAM | The permission model: catalog, `{resource}:{verb}` matching, and canonical policy or request-internal evaluation. |
 | `IUserStore` / `IRoleStore` / `IExternalIdentityStore` / `ITenantMembershipStore` | IAM | User/role/link/tenant persistence. |
 
 Because these contracts are provider-agnostic, first-party routes use `RequirePermission(...)`,
@@ -63,9 +63,15 @@ the OpenIddict validation scheme for validated bearer requests. OpenIddict's tok
 identity type (`openiddict`) is deliberately not trusted as an endpoint identity. Custom adapters
 call `AddNormalizedAuthenticationType(...)` only after implementing the same strip-map-mark rule.
 
-Permission keys are compared as Unicode NFC plus invariant uppercase using ordinal equality.
-Implications expand from grants toward requests and terminate safely on cycles. An explicit `*`
-grant satisfies an ordinary request, while requesting `*` itself requires that explicit grant.
+Permissions are named `{resource}:{verb}`, Elsa 3.9's shape: `:` separates the resource from the verb, `/`
+separates a parent resource from a child (`workflows/runtime`), and `-` joins words inside one segment
+(`execution-evidence`). Permissions are compared as Unicode NFC plus invariant uppercase using ordinal equality.
+A grant's trailing `*` resource segment covers the named resource and every resource beneath it
+(`identity/*:read`), a `*` verb covers every verb, and a bare `*` grant is the superuser, while requesting `*` itself
+requires that explicit grant. `manage` satisfies `read` on the same resource; the catalog carries no other
+implication. A grant that matches no registered permission authorizes nothing, and a host that stores roles warns
+about each such role grant at startup. The full rules, the Elsa 4 vocabulary and the Elsa 3.9 mapping are in
+[Elsa 3.9 to Elsa 4 permission mapping](elsa3-permission-mapping.md).
 For a member, resource denial vetoes resource grant and the general evaluator; the evaluator runs
 only after every resource source abstains. Exceptions, timeouts, and HTTP request cancellation
 propagate as operational failures rather than becoming `403`.
@@ -275,7 +281,7 @@ The `/_elsa/identity/*` surface (`FoundationIdentityApi`):
 | Route | Method | Purpose | Auth |
 |---|---|---|---|
 | `_elsa/identity/bootstrap` | GET | Ownership mode + enumerated providers (id, kind, display name, challenge metadata). | anonymous |
-| `_elsa/identity/capabilities` | GET | Provider/capability discovery. | requires `identity.providers.read` |
+| `_elsa/identity/capabilities` | GET | Provider/capability discovery. | requires `identity/providers:read` |
 | `_elsa/identity/challenge/{provider}` | GET | Redirect into the provider's challenge (backend login page for local; IdP redirect for OIDC). | anonymous |
 | `_elsa/identity/session` | GET | The current `AuthSession` (status/subject/roles/permissions/freshness) for the caller. | anonymous (reports "anonymous" when no session) |
 | `_elsa/identity/token` | GET | **Cookie→bearer exchange.** Mints a JWT for the cookie principal; bare `401` when anonymous. | interactive schemes only |
