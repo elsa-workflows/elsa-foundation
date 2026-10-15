@@ -76,7 +76,9 @@ internal sealed class Elsa3ActivityNormalizer(
         if (level > MaxNodeJsonLevel)
         {
             Error(plan, nodePlan, NestingTooDeep,
-                $"Elsa 3 activity '{Elsa3ConversionDiagnostics.NodeId(node)}' is nested deeper than the converted workflow can store.",
+                $"Elsa 3 activity '{Elsa3ConversionDiagnostics.NodeId(node)}' would sit at JSON level {level} of the converted workflow; the most is {MaxNodeJsonLevel}. " +
+                "Each Sequence or Flowchart adds 4 levels, each If or loop 3, each Parallel or Switch 5 " +
+                $"(at most {MaxSequenceNestingDepth} nested Sequences, 18 Ifs or loops, 11 Parallels or Switches).",
                 "Flatten the workflow: move part of the nested structure into a separate workflow.");
             return;
         }

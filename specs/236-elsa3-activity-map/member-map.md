@@ -250,3 +250,13 @@ The conversion, for a reusable workflow (plan D-1 to D-7; data-model §7a):
      so it gets no caller port.
 
 `Break` is unaffected: it still maps to `Break` (row above), and no `Complete`/`End` is lowered onto it.
+
+## Nesting budget
+
+Converted containers get native Elsa 4 structures, which nest children at different JSON depths, so the old flat
+limit of 14 containers no longer holds. An activity node may sit at JSON level 58 at most (System.Text.Json's limit
+is 64, and a node needs 6 levels for its bindings); the root node sits at level 2. Each Sequence or Flowchart adds 4
+levels, each If, While, For or ForEach adds 3, and each Parallel or Switch adds 5. That allows 14 nested Sequences, 18
+nested Ifs or loops, or 11 nested Parallels or Switches; mixed nesting adds up. A deeper node is
+`ELS3-ACTIVITY-NESTING-TOO-DEEP`, and its message names the level reached. User-facing explanation:
+`Extensions/Elsa3/src/Mapping/README.md`, "Nesting budget".

@@ -242,4 +242,5 @@ Reads current `specs/*` folders and task checkboxes. Status clues are textual, n
 | [232-container-readytorun-publish](../../specs/232-container-readytorun-publish/spec.md) | 232-container-readytorun-publish | unknown | - | 0 | 0 | out of scope |
 | [233-receive-correlation](../../specs/233-receive-correlation/spec.md) | Receive Event Correlation | Implemented — all tasks checked in ac027653e | - | 15 | 0 | retained, out of scope |
 | [234-hop-chain-collapse](../../specs/234-hop-chain-collapse/spec.md) | Collapse the per-activity hop chain under per-hop persistence | Draft | - | 0 | 68 | out of scope |
+| [236-elsa3-activity-map](../../specs/236-elsa3-activity-map/spec.md) | Elsa 3 activity map — convert Elsa 3 activity types, versions and members to Elsa 4 | Draft | - | 62 | 7 | deferred, out of scope |
 | [237-graph-boundary-completion](../../specs/237-graph-boundary-completion/spec.md) | Graph Boundary Completion From Any Depth | Implemented — PR for #2750 (also fixes #2756) | - | 32 | 1 | deferred, out of scope |

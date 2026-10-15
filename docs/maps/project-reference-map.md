@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 141
 - Test projects: 146
-- Direct project references: 1525
+- Direct project references: 1536
 
 ## Projects
 
@@ -298,7 +298,7 @@ Records direct project references only.
 | [Elsa3.Models](../../Extensions/Elsa3/src/Models/Elsa3.Models.csproj) | source | Elsa3 | - | true | - |
 | [Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests](../../Extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa3 | - | false | Elsa.Serialization.SystemText<br>Elsa.Serialization.Testing<br>Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore<br>Elsa3.Mapping |
 | [Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests](../../Extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/Tests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa3 | - | false | Elsa.Serialization.SystemText<br>Elsa.Serialization.Testing<br>Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore<br>Elsa3.Mapping |
-| [Elsa3.Mapping.Tests](../../Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj) | test | Elsa3 | - | false | Elsa.Serialization.SystemText<br>Elsa.Serialization.Testing<br>Elsa.Workflows.Design.Validations<br>Elsa3.Mapping |
+| [Elsa3.Mapping.Tests](../../Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj) | test | Elsa3 | - | false | Elsa.Activities.ControlFlow<br>Elsa.Activities.Design.Reconciliation.Clr<br>Elsa.Activities.DispatchWorkflow.Runtime<br>Elsa.Activities.Flowchart<br>Elsa.Activities.Graph.Design<br>Elsa.Activities.Graph.Runtime<br>Elsa.Activities.Http<br>Elsa.Activities.Primitives<br>Elsa.Activities.Scheduling<br>Elsa.Activities.Scripting<br>Elsa.Activities.Sequence<br>Elsa.Serialization.SystemText<br>Elsa.Serialization.Testing<br>Elsa.Workflows.Design.Validations<br>Elsa3.Mapping |
 | [Elsa.ExtensionBuilder.Api](../../Extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj) | source | Elsa.ExtensionBuilder | - | true | Elsa.Api.AspNetCore<br>Elsa.Cluster.Readability<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Git<br>Elsa.Modularity.Core |
 | [Elsa.ExtensionBuilder.Api.Tests](../../Extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj) | test | Elsa.ExtensionBuilder | - | false | Elsa.ExtensionBuilder.Api<br>Elsa.Git<br>Elsa.Modularity.Core |
 

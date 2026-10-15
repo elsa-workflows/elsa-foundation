@@ -529,22 +529,22 @@ reusable workflow validates and compiles with the expected `outputMappings`, `ou
 
 ## Phase 7: Polish and cross-cutting
 
-- [ ] T055 [P] Update `M/EXTENSION_POINTS.md` (§2.22.1): overridable contracts `IElsa3DefinitionConverter`,
+- [X] T055 [P] Update `M/EXTENSION_POINTS.md` (§2.22.1): overridable contracts `IElsa3DefinitionConverter`,
   `IElsa3NodeConverter`, `IElsa3ActivityMap` (layer badge, default implementation, signature, when to override, what
   depends on it).
-- [ ] T056 [P] Update `M/README.md` (and document the nesting budget per container kind in README, member-map.md and the `NestingTooDeep` message):
+- [X] T056 [P] Update `M/README.md` (and document the nesting budget per container kind in README, member-map.md and the `NestingTooDeep` message):
   - the conversion pipeline;
   - the resolution order;
   - the diagnostic families;
   - reusable outputs and Complete/End emission;
   - the #2705 and #2796 boundaries.
-- [ ] T057 [P] Add "replaced activity type" to `docs/glossary/elsa.md` (the attribute, the facet, and highest-version
+- [X] T057 [P] Add "replaced activity type" to `docs/glossary/elsa.md` (the attribute, the facet, and highest-version
   semantics).
-- [ ] T058 Run the boundary guards: `Elsa3MigrationBoundaryTests` and
+- [X] T058 Run the boundary guards: `Elsa3MigrationBoundaryTests` and
   `Runtime_projects_do_not_reference_elsa3_compatibility_projects` (§E2.7, §E2.2).
-- [ ] T059 Regenerate the extension-point and dependency maps with `-- all` and inspect `git diff --stat docs/`.
+- [X] T059 Regenerate the extension-point and dependency maps with `-- all` and inspect `git diff --stat docs/`.
   Don't trust `-- check` on Windows, because CRLF makes it report every map stale.
-- [ ] T060 Run the full Elsa 3 and affected Essentials test projects (`Extensions/Elsa3/tests/**`,
+- [X] T060 Run the full Elsa 3 and affected Essentials test projects (`Extensions/Elsa3/tests/**`,
   `Essentials/tests/Activities/Design/Tests`, `Essentials/tests/Activities/Graph/Tests`) and walk quickstart.md
   steps 1–8. Record the SC-006 run-time check as deferred to #2796.
 
