@@ -113,6 +113,37 @@ internal sealed class RealActivityCatalog : IActivityDefinitionLookup, IActivity
         return this;
     }
 
+    /// <summary>
+    /// Corrupts the structure facet of every version of <paramref name="activityTypeKey"/>: the facet keeps its shape,
+    /// but a slot is not an object, so reading it fails.
+    /// </summary>
+    public RealActivityCatalog WithUnreadableStructure(string activityTypeKey)
+    {
+        for (var index = 0; index < _versions.Count; index++)
+        {
+            var version = _versions[index];
+            if (!StringComparer.Ordinal.Equals(version.Definition.ActivityTypeKey, activityTypeKey))
+                continue;
+            _versions[index] = version with
+            {
+                DesignFacets = version.DesignFacets
+                    .Select(facet => facet.Payload.ValueKind == JsonValueKind.Object && facet.Payload.TryGetProperty("slots", out _)
+                        ? new ActivityDesignFacet(facet.Kind, facet.SchemaVersion, WithSlots(facet.Payload, "[5]"))
+                        : facet)
+                    .ToArray()
+            };
+        }
+
+        return this;
+    }
+
+    private static JsonElement WithSlots(JsonElement payload, string slots)
+    {
+        var node = System.Text.Json.Nodes.JsonNode.Parse(payload.GetRawText())!.AsObject();
+        node["slots"] = System.Text.Json.Nodes.JsonNode.Parse(slots);
+        return JsonSerializer.SerializeToElement(node);
+    }
+
     /// <summary>Adds a version whose version string is not valid SemVer, which resolution must ignore.</summary>
     public RealActivityCatalog WithInvalidVersion(string activityTypeKey, string version)
     {

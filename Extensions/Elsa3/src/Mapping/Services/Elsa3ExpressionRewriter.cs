@@ -499,7 +499,8 @@ public sealed class Elsa3ExpressionRewriter
                 return;
             }
 
-            if (node is CallExpression call && call.Callee is Identifier callee)
+            // A function the script declares itself is a local call, not an Elsa 3 host function.
+            if (node is CallExpression call && call.Callee is Identifier callee && !IsDeclared(callee.Name))
             {
                 if (SetterCalls.Contains(callee.Name))
                 {
@@ -571,7 +572,7 @@ public sealed class Elsa3ExpressionRewriter
                 return;
             }
 
-            if (node is Identifier { Name: "args" })
+            if (node is Identifier { Name: "args" } && !IsDeclared("args"))
             {
                 Issues.Add(new Elsa3ExpressionRewriteIssue(
                     Elsa3ImportDiagnosticCodes.ForbiddenCapability,
@@ -589,7 +590,8 @@ public sealed class Elsa3ExpressionRewriter
                 return;
             }
 
-            if (node is MemberExpression member && member.Object is Identifier root && TryGetAmbientKind(root.Name, out var memberKind))
+            if (node is MemberExpression member && member.Object is Identifier root && !IsDeclared(root.Name) &&
+                TryGetAmbientKind(root.Name, out var memberKind))
             {
                 if (member.Computed || member.Property is not Identifier property)
                 {
@@ -609,7 +611,7 @@ public sealed class Elsa3ExpressionRewriter
                 return;
             }
 
-            if (node is Identifier bareIdentifier && TryGetAmbientKind(bareIdentifier.Name, out _))
+            if (node is Identifier bareIdentifier && !IsDeclared(bareIdentifier.Name) && TryGetAmbientKind(bareIdentifier.Name, out _))
             {
                 Issues.Add(DynamicIssue($"JavaScript ambient root '{bareIdentifier.Name}' is not followed by a static member name."));
                 return;
@@ -660,12 +662,12 @@ public sealed class Elsa3ExpressionRewriter
         /// Whether a mutation target reaches an ambient value: the <c>variables</c> or <c>args</c> root, or a value read
         /// through <c>getVariable</c>/<c>getInput</c> (Elsa 4 hands expressions frozen values).
         /// </summary>
-        private static bool ContainsAmbientRoot(Node node)
+        private bool ContainsAmbientRoot(Node node)
         {
-            if (node is Identifier identifier &&
+            if (node is Identifier identifier && !IsDeclared(identifier.Name) &&
                 (TryGetAmbientKind(identifier.Name, out _) || identifier.Name.Equals("args", StringComparison.Ordinal)))
                 return true;
-            if (node is CallExpression { Callee: Identifier reader } && reader.Name is "getVariable" or "getInput")
+            if (node is CallExpression { Callee: Identifier reader } && reader.Name is "getVariable" or "getInput" && !IsDeclared(reader.Name))
                 return true;
             foreach (var child in node.ChildNodes)
             {

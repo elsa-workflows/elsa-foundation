@@ -159,6 +159,11 @@ Full list: [contracts/diagnostic-codes.md](contracts/diagnostic-codes.md).
   key → "unmapped activity type".
 - **Version pick:** the highest valid-SemVer version via `IActivityDefinitionLookup.ListVersions` + `SemVer.TryParse` /
   `CompareTo`; build metadata is ignored for ordering.
+- **Known limitation (PR #2805 review):** the pick ignores version lifecycle. For a CLR activity every version is
+  active, so this does not matter. For a verbatim or alias match that lands on a reusable (non-CLR) activity, the
+  highest version can be `Retired` or `Revoked`, or differ from the recommended version the picker offers. Excluding
+  revoked versions, or preferring the recommended active one, for non-CLR sources is left to the work that imports or
+  publishes reusable activities (#2796).
 - **Caching:** results are cached per conversion by Elsa 3 type name.
 - **Who uses it:**
   - `Elsa3MemoryReferenceGraph.GetVersionAsync` and `Elsa3ActivityToState.GetVersion` are replaced by calls to the

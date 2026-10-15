@@ -13,6 +13,8 @@ public sealed class Elsa3NodeRewriteTests
     [Theory]
     [InlineData("WaitAll", null)]
     [InlineData("WaitAny", 1)]
+    [InlineData("WAITALL", null)]
+    [InlineData("waitany", 1)]
     public async Task Fork_join_mode_becomes_the_parallel_threshold(string joinMode, int? threshold)
     {
         var fork = Activity("fork", "Elsa.Fork", ("joinMode", JsonSerializer.SerializeToElement(joinMode)));

@@ -18,6 +18,7 @@ skips and reports by code, so a code is never renamed or reused. Each diagnostic
 | `AmbiguousAlias` | `ELS3-ACTIVITY-AMBIGUOUS-ALIAS` | two definitions' highest versions claim the same Elsa 3 type | FR-009 |
 | `NoCounterpart` | `ELS3-ACTIVITY-NO-COUNTERPART` | R6 activity (ParallelForEach, BulkDispatchWorkflows, …) or R6 use (mid-flow Timer/Cron, a SendHttpRequest port holding an activity) | FR-003 |
 | `VersionUnavailable` | `ELS3-ACTIVITY-VERSION-UNAVAILABLE` | the target key has no valid-SemVer version in the catalog | FR-008 |
+| `StructureUnreadable` | `ELS3-ACTIVITY-STRUCTURE-UNREADABLE` | the target version is in the catalog, but its structure facet cannot be read (added in review) | FR-008 |
 | `UnknownMember` | `ELS3-ACTIVITY-UNKNOWN-MEMBER` | a property neither in the map nor a declared Elsa 4 member | FR-010 |
 | `MemberSemanticsChanged` | `ELS3-ACTIVITY-MEMBER-SEMANTICS-CHANGED` | captured `SendHttpRequest.ParsedContent` | FR-004 |
 | `ValueOutsideContract` | `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` | R5 value does not provably fit (non-literal where literal-only, non-string, non-JSON, literal credential) | FR-004 |

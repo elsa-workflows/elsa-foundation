@@ -40,12 +40,13 @@ internal sealed class Elsa3ParallelBranchNamesRewrite : IElsa3NodeRewrite
             _ => Elsa3TypedValues.TryGetLiteral(joinMode, out var literal) ? literal : null
         };
         mode = mode?.Trim() switch { "0" => "WaitAll", "1" => "WaitAny", var other => other };
-        switch (mode?.Trim())
+        // Enum names match ignoring case, as Elsa 3's enum deserialization does.
+        switch (mode?.Trim().ToLowerInvariant())
         {
-            case "WaitAll" or "waitAll":
+            case "waitall":
                 context.Node.StructureFields["threshold"] = null;
                 break;
-            case "WaitAny" or "waitAny":
+            case "waitany":
                 WaitAny(context, context.Node.Resolved!.Entry!.FindMember("JoinMode")!, property);
                 break;
             default:

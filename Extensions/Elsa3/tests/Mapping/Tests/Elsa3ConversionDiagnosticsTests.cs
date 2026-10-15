@@ -31,6 +31,7 @@ public sealed class Elsa3ConversionDiagnosticsTests
         { "graph:Flowchart", Elsa3ActivityDiagnosticCodes.GraphConversionPending },
         { "graph:Start", Elsa3ActivityDiagnosticCodes.GraphConversionPending },
         { "version-unavailable", Elsa3ActivityDiagnosticCodes.VersionUnavailable },
+        { "structure-unreadable", Elsa3ActivityDiagnosticCodes.StructureUnreadable },
         { "removed-input-bound", Elsa3ActivityDiagnosticCodes.RemovedInputBound },
         { "unsupported-mode", Elsa3ActivityDiagnosticCodes.UnsupportedMode },
         { "value-outside-contract", Elsa3ActivityDiagnosticCodes.ValueOutsideContract },
@@ -177,6 +178,10 @@ public sealed class Elsa3ConversionDiagnosticsTests
             case "version-unavailable":
                 catalog.WithoutVersions("Elsa.Activities.Primitives.Activities.WriteLine");
                 node = Activity("node", "Elsa.WriteLine", ("text", Literal("x")));
+                break;
+            case "structure-unreadable":
+                catalog.WithUnreadableStructure("Elsa.Activities.If.Activities.If");
+                node = Activity("node", "Elsa.If", ("condition", Literal("true", "Boolean")));
                 break;
             case "removed-input-bound":
                 node = Activity("node", "Elsa.HttpEndpoint", ("path", Literal("/x")), ("exposeFileTooLargeOutcome", Literal("true", "Boolean")));

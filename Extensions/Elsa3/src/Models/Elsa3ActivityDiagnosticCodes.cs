@@ -19,6 +19,9 @@ public static class Elsa3ActivityDiagnosticCodes
     /// <summary>The target type key has no valid-SemVer version in the catalog.</summary>
     public const string VersionUnavailable = "ELS3-ACTIVITY-VERSION-UNAVAILABLE";
 
+    /// <summary>The target activity version is in the catalog, but its structure facet cannot be read.</summary>
+    public const string StructureUnreadable = "ELS3-ACTIVITY-STRUCTURE-UNREADABLE";
+
     /// <summary>A property is neither a mapped Elsa 3 member nor a declared Elsa 4 member.</summary>
     public const string UnknownMember = "ELS3-ACTIVITY-UNKNOWN-MEMBER";
 

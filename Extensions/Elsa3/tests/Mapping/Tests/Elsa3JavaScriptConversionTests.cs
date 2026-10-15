@@ -30,6 +30,7 @@ public sealed class Elsa3JavaScriptConversionTests
     [InlineData("function f(Date) { return Date; } Date.now()")]
     [InlineData("(() => { let moment = 1; return moment; })() + moment")]
     [InlineData("[1].map(Guid => Guid).concat([Guid])[0]")]
+    [InlineData("(() => { function getOrderId() { return 1; } return getOrderId(); })() + getOrderId()")]
     [InlineData("(() => { try { return 1; } catch (Date) { return 2; } })() + Date.now()")]
     public async Task Constructs_elsa4_cannot_run_are_refused(string expression)
     {
@@ -50,6 +51,10 @@ public sealed class Elsa3JavaScriptConversionTests
     [InlineData("(() => { try { return 1; } catch (Guid) { return Guid.message; } })()")]
     [InlineData("(() => { if (true) { var Date = 1; } return Date; })()")]
     [InlineData("(function Date() { return Date.name; })()")]
+    [InlineData("(() => { const f = x => x; return f(1); })()")]
+    [InlineData("(() => { function getOrderId() { return 1; } return getOrderId(); })()")]
+    [InlineData("(() => { const variables = { a: 1 }; variables.a = 2; return variables.a; })()")]
+    [InlineData("((args) => args.length)([1])")]
     public async Task Names_that_only_look_like_elsa3_globals_convert(string expression)
     {
         var result = await ConvertTextAsync(expression);

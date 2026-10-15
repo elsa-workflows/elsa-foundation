@@ -144,6 +144,19 @@ internal sealed class Elsa3ActivityResolver(
                 return null;
 
             var version = await activityLookup.GetVersion(highest.Id, cancellationToken);
+            Elsa3StructureContract? structure;
+            try
+            {
+                structure = ReadStructure(version.DesignFacets);
+            }
+            catch (JsonException exception)
+            {
+                return Elsa3Resolution.Failed(
+                    Elsa3ActivityDiagnosticCodes.StructureUnreadable,
+                    $"Elsa 4 activity '{definition.ActivityTypeKey}' version '{version.Version}' has a structure facet that cannot be read: {exception.Message}",
+                    "Reconcile the activity catalog so the version's structure facet is rewritten, then convert again.");
+            }
+
             return Elsa3Resolution.Resolved(new Elsa3ResolvedActivity(
                 source,
                 entry,
@@ -151,13 +164,9 @@ internal sealed class Elsa3ActivityResolver(
                 definition.ActivityTypeKey,
                 version.Inputs.ToArray(),
                 version.Outputs.ToArray(),
-                ReadStructure(version.DesignFacets)));
+                structure));
         }
         catch (EntityNotFoundException)
-        {
-            return null;
-        }
-        catch (JsonException)
         {
             return null;
         }
