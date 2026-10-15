@@ -23,9 +23,9 @@ the unpinned `:latest` commands here are not that recorded run.
 > **Development posture.** The `docker run` examples below set `ASPNETCORE_ENVIRONMENT=Development`
 > so they can rely on the image's baked-in `shells.json` demo defaults. The canonical published-image
 > stack ([`docker-compose.images.yml`](../docker/compose/docker-compose.images.yml)) runs
-> `Production` instead, because `shells.Production.json` blanks those defaults and they must be
-> supplied as environment variables: `RecoveryContinuationSigningKey`, `HierarchyCursorSigningKey`,
-> Secrets `EncryptionKey`, OpenIddict `SigningKey`, and `SeedAdminPassword`. Development keeps the
+> `Production` instead, because `shells.Production.json` blanks `RecoveryContinuationSigningKey`,
+> `HierarchyCursorSigningKey`, Secrets `EncryptionKey`, and `SeedAdminPassword`. It turns OpenIddict
+> development mode off, so a `SigningKey` must be supplied as well. Development keeps the
 > code-default `AutoMigrate` policy. The published-image stack runs `Production` but overrides
 > `appsettings.Production.json`'s `Validate` setting with `AutoMigrate`. This page does not claim a
 > recorded runtime verification of the Development CLI path.
