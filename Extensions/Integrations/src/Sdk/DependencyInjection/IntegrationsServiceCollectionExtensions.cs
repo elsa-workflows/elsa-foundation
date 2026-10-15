@@ -1,6 +1,5 @@
 using Elsa.Activities.Http.Constants;
-using Elsa.Integrations.Sdk.Connections;
-using Elsa.Integrations.Sdk.Connections.Schemes;
+using Elsa.Integrations.Sdk.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -8,27 +7,27 @@ namespace Elsa.Integrations.Sdk.DependencyInjection;
 
 /// <summary>
 /// Runtime registration for connector activities. Activities only: no shell feature, hosted service,
-/// or EF context (#2726 rule 9). The host (or harness) still registers <c>IConnectionLookup</c> and
-/// <c>ISecretValueResolver</c>.
+/// or EF context (#2726 rule 9). Credential inputs resolve through the host's
+/// <c>ISecretValueResolver</c> / <c>IRuntimeSecretResolver</c>; this method does not register either.
 /// </summary>
 public static class IntegrationsServiceCollectionExtensions
 {
     /// <summary>
-    /// Adds the connection context factory, the open scheme authenticators this SDK ships, and a
-    /// delegating handler on the named <see cref="HttpActivityConstants.HttpClientName"/> client.
-    /// Outbound logging stays that client's header-free logger (spec 188 FR-019), owned by
+    /// Adds a delegating handler on the named <see cref="HttpActivityConstants.HttpClientName"/>
+    /// client so <see cref="Http.IntegrationsHttpAuthScope"/> can apply per-request auth. Outbound
+    /// logging stays that client's header-free logger (spec 188 FR-019), owned by
     /// <c>ActivitiesHttpFeature</c>; this method does not replace it.
     /// </summary>
+    /// <remarks>
+    /// #2729 will own the <c>http</c> connection authenticator on this same named client. Rebase by
+    /// folding this handler into that pipeline rather than registering two.
+    /// </remarks>
     public static IHttpClientBuilder AddElsaIntegrationsRuntime(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.TryAddSingleton<IConnectionContextFactory, ConnectionContextFactory>();
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IConnectionAuthenticator, BearerConnectionAuthenticator>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IConnectionAuthenticator, ApiKeyConnectionAuthenticator>());
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IConnectionAuthenticator, BasicConnectionAuthenticator>());
-        services.TryAddTransient<ConnectionAuthDelegatingHandler>();
+        services.TryAddTransient<IntegrationsHttpAuthHandler>();
         return services.AddHttpClient(HttpActivityConstants.HttpClientName)
-            .AddHttpMessageHandler<ConnectionAuthDelegatingHandler>();
+            .AddHttpMessageHandler<IntegrationsHttpAuthHandler>();
     }
 }

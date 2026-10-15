@@ -8,20 +8,26 @@ namespace Company.Connector.Activities;
 [Version("1.0.0")]
 public sealed class Ping : ConnectorActivity<string>
 {
-    public Ping(IConnectionContext connectionContext) : base(connectionContext)
+    public Ping(IHttpClientFactory httpClientFactory) : base(httpClientFactory)
     {
     }
 
-    [ActivityInput(Tier = InputTier.Essential)]
-    public ConnectionReference Connection { get; set; } = new("demo");
+    [ActivityInput(IsCredential = true)]
+    public string? Authorization { get; set; }
 
-    [ActivityInput(Tier = InputTier.Optional)]
-    public string Path { get; set; } = "/health";
+    [ActivityInput(Tier = InputTier.Essential)]
+    public string Url { get; set; } = "https://example.com/health";
 
     protected override async ValueTask<ActivityTransition<string>> ExecuteAsync(ActivityExecutionContext context)
     {
-        await using var handle = await ConnectionContext.ResolveAsync(Connection, context.CancellationToken);
-        var body = await handle.HttpClient.GetStringAsync(Path, context.CancellationToken);
-        return ActivityTransition.Complete(body);
+        using (PushHttpAuth(request =>
+        {
+            if (!string.IsNullOrWhiteSpace(Authorization))
+                request.Headers.TryAddWithoutValidation("Authorization", Authorization);
+        }))
+        {
+            var body = await CreateHttpClient().GetStringAsync(Url, context.CancellationToken);
+            return ActivityTransition.Complete(body);
+        }
     }
 }

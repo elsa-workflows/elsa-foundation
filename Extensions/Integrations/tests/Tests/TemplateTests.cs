@@ -1,9 +1,8 @@
 using System.Text.Json;
-using Elsa.Integrations.Sdk.Design;
 
 namespace Elsa.Integrations.Tests;
 
-public sealed class TemplateAndDesignTests
+public sealed class TemplateTests
 {
     [Fact]
     public void Dotnet_new_template_is_elsa_connector()
@@ -12,29 +11,6 @@ public sealed class TemplateAndDesignTests
         using var document = JsonDocument.Parse(File.ReadAllText(path));
         Assert.Equal("elsa-connector", document.RootElement.GetProperty("shortName").GetString());
         Assert.Equal("Elsa.Integrations.Connector", document.RootElement.GetProperty("identity").GetString());
-    }
-
-    [Fact]
-    public void Connection_type_descriptor_is_design_only()
-    {
-        var descriptor = new ConnectionTypeDescriptor
-        {
-            Name = "http",
-            DisplayName = "HTTP",
-            EgressAllowlist = ["*.example.com"],
-            Schemes =
-            [
-                new AuthSchemeDescriptor
-                {
-                    Name = "bearer",
-                    DisplayName = "Bearer",
-                    Fields = [new ConnectionFieldDescriptor { Name = "accessToken", DisplayName = "Access token", IsSensitive = true }]
-                }
-            ]
-        };
-
-        Assert.Equal("http", descriptor.Name);
-        Assert.Contains("Design", typeof(ConnectionTypeDescriptor).Namespace);
     }
 
     private static string RepoRoot()

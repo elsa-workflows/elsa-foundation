@@ -11,6 +11,9 @@ public sealed class ActivitiesOnlyLoadingTests
         Assert.DoesNotContain(types, type => Implements(type, "IShellFeature"));
         Assert.DoesNotContain(types, type => Implements(type, "IHostedService"));
         Assert.DoesNotContain(types, type => type.Name.EndsWith("DbContext", StringComparison.Ordinal) || type.BaseType?.Name == "DbContext");
+        Assert.DoesNotContain(types, type => type.Name is
+            "ConnectionReference" or "SensitiveValue" or "ConnectionUnavailableException"
+            or "IConnectionLookup" or "IConnectionAuthenticator" or "ConnectionTypeDescriptor");
     }
 
     [Fact]

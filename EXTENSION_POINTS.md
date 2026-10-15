@@ -100,7 +100,7 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| Integrations SDK (connector activities, open auth-scheme contributors, connection lookup) | [`Extensions/Integrations/src/Sdk/EXTENSION_POINTS.md`](Extensions/Integrations/src/Sdk/EXTENSION_POINTS.md) |
+| Integrations SDK (connector activities, named HTTP client auth scope) | [`Extensions/Integrations/src/Sdk/EXTENSION_POINTS.md`](Extensions/Integrations/src/Sdk/EXTENSION_POINTS.md) |
 
 ### Secrets
 
