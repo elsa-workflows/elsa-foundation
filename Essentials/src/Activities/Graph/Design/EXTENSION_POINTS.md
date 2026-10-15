@@ -8,7 +8,8 @@ This project owns the Design-time provider for reusable activity graphs. The can
 |---|---|---|---|
 | Activity graph Design provider | `elsa.activity-graph` | `GraphActivitiesDesignFeature` registers one `GraphActivityProvider` and exposes the same instance through `IActivityProvider`, `IActivityTemplateProviderCompiler`, and `IActivityTemplateDependencyDiscoverer` | Implemented |
 | Provider reference rewriting | `elsa.activity-graph` | `GraphActivitiesDesignFeature` registers `GraphActivityProviderReferenceRewriter : IActivityProviderReferenceRewriter` | Implemented |
-| Provider manifest schema | `1` | `ActivityGraphManifest` parsing and canonical serialization | Implemented |
+| Provider manifest schemas | `1`, `2` | `ActivityGraphManifest` parsing and canonical serialization; schema 2 adds `outcomeMappings` (spec 138) and accepts `Complete` nodes (spec 237) | Implemented |
+| Complete-outside-graph draft rule | `Graph/CompleteOutsideGraph` | `GraphActivitiesDesignFeature` registers `CompleteOutsideGraphDraftValidator : IDraftValidator` (scoped) | Implemented |
 | Runtime boundary contract | `elsa.graph-activity` / `1` | Pinned `RuntimeActivityDescriptor` and value-flow `ActivityContract` | Implemented |
 
 The provider may reference provider-neutral Design and Runtime Core contracts to compile executable material. It must not reference the graph Runtime implementation, Runtime API, or a concrete persistence provider.
@@ -26,6 +27,11 @@ single-owner defaults.
 | `IActivityProviderReferenceRewriter` | Activity Design Core | Provider features register schema-aware rewriters as enumerable contributors. Publishing persistence consumes them when applying upgrade plans to opaque provider manifests. | `GraphActivityProviderReferenceRewriter` |
 | `IActivityTemplateProviderCompiler` | Workflows Publishing Core | Provider features register one compiler per stable provider/schema pair. `IActivityTemplateProviderCompilerRegistry` and `ActivityTemplateCompiler` consume it. | `GraphActivityProvider` |
 | `IActivityTemplateDependencyDiscoverer` | Workflows Publishing Core | Provider features register one discoverer per stable provider/schema pair. `IActivityTemplateDependencyDiscovererRegistry` and `ActivityTemplateCompiler` consume it. | `GraphActivityProvider` |
+| `IDraftValidator` | Workflows Design Validations Core | Features register enumerable scoped validators; the draft validation gate runs them all and promotion refuses a Draft with errors. | `CompleteOutsideGraphDraftValidator` *(cross-domain)* |
+
+At draft time the provider recognises `Complete` nodes through `IActivityDefinitionLookup`, resolved in a scope
+created from `IServiceScopeFactory` because the provider is a singleton; without a registered lookup, draft
+validation cannot credit `Complete` nodes and compilation remains the exact check.
 
 The owning replacement and composition rules remain in the
 [Activity Design API catalog](../../Design/Api/EXTENSION_POINTS.md) and

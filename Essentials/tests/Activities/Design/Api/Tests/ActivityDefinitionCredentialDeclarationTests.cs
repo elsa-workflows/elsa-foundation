@@ -9,7 +9,7 @@ using Elsa.Activities.Design.Persistence.Core.Filters;
 using Elsa.Activities.Design.Persistence.Core.Services;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Primitives.Diagnostics;
-using Elsa.Primitives.Identity;
+using Elsa.Testing;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Xunit;
 
@@ -24,7 +24,7 @@ namespace Elsa.Activities.Design.Api.Tests;
 /// </summary>
 public sealed class ActivityDefinitionCredentialDeclarationTests
 {
-    private static readonly GuidIdentityGenerator Identities = new();
+    private static readonly TestIdentityGenerator Identities = new();
 
     private static readonly ActivityDefinitionVersionFactory VersionFactory = new(Identities, new DefaultActivityDefinitionHasher());
 

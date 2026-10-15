@@ -1731,6 +1731,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Design.Validations.Core",
+          "path": "Essentials/src/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Publishing.Core",
           "path": "Essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj"
         },
@@ -9407,6 +9412,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+          "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Resumption",
           "path": "Essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj"
         },
@@ -9419,6 +9429,16 @@
           "type": "internal",
           "id": "Elsa.Activities.Testing",
           "path": "Essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.Sqlite",
+          "version": "10.0.10"
         },
         {
           "type": "external",
@@ -9564,6 +9584,11 @@
           "path": "Essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
+        },
+        {
           "type": "external",
           "id": "Microsoft.Extensions.DependencyInjection",
           "version": "10.0.10"
@@ -9686,6 +9711,11 @@
           "type": "internal",
           "id": "Elsa.Activities.Testing",
           "path": "Essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
         },
         {
           "type": "external",
@@ -10083,6 +10113,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Testing",
           "path": "Essentials/tests/Testing/Elsa.Testing.csproj"
         },
@@ -10219,6 +10254,11 @@
           "type": "internal",
           "id": "Elsa.Activities.Testing",
           "path": "Essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
         },
         {
           "type": "internal",
@@ -10975,6 +11015,11 @@
           "path": "Essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
+        },
+        {
           "type": "external",
           "id": "Microsoft.AspNetCore.Authorization",
           "version": "10.0.10"
@@ -11140,6 +11185,16 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Expressions.Testing",
+          "path": "Essentials/tests/Expressions/Testing/Elsa.Expressions.Testing.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Testing",
           "path": "Essentials/tests/Testing/Elsa.Testing.csproj"
         },
@@ -11236,6 +11291,11 @@
           "type": "internal",
           "id": "Elsa.Activities.Testing",
           "path": "Essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
         },
         {
           "type": "external",
@@ -11503,6 +11563,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.Core",
           "path": "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
         },
         {
           "type": "external",
@@ -13522,6 +13587,11 @@
           "path": "Essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/Elsa.Workflows.Runtime.Distributed.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
+        },
+        {
           "type": "external",
           "id": "Xunit.SkippableFact",
           "version": "1.5.23"
@@ -14367,6 +14437,40 @@
       ]
     },
     {
+      "path": "Essentials/tests/Expressions/Testing/Elsa.Expressions.Testing.csproj",
+      "name": "Elsa.Expressions.Testing",
+      "kind": "test",
+      "domain": "Elsa.Expressions",
+      "sub_domain": "Testing",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Expressions",
+          "path": "Essentials/src/Expressions/Elsa.Expressions/Elsa.Expressions.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Expressions.JavaScript",
+          "path": "Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/Elsa.Expressions.JavaScript.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        }
+      ]
+    },
+    {
       "path": "Essentials/tests/Expressions/Tests/Elsa.Expressions.Tests.csproj",
       "name": "Elsa.Expressions.Tests",
       "kind": "test",
@@ -14382,6 +14486,11 @@
           "type": "internal",
           "id": "Elsa.Activities.Design.Core",
           "path": "Essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Events",
+          "path": "Essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
         },
         {
           "type": "internal",
@@ -14417,6 +14526,11 @@
           "type": "internal",
           "id": "Elsa.Serialization.SystemText",
           "path": "Essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
         },
         {
           "type": "external",
@@ -17186,6 +17300,35 @@
       ]
     },
     {
+      "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj",
+      "name": "Elsa.Serialization.Testing",
+      "kind": "test",
+      "domain": "Elsa.Serialization",
+      "sub_domain": "Testing",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Serialization.SystemText",
+          "path": "Essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        }
+      ]
+    },
+    {
       "path": "Essentials/tests/Serialization/Tests/Elsa.Serialization.Tests.csproj",
       "name": "Elsa.Serialization.Tests",
       "kind": "test",
@@ -17197,6 +17340,11 @@
       "package_id": null,
       "line": null,
       "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Events",
+          "path": "Essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
+        },
         {
           "type": "internal",
           "id": "Elsa.Primitives",
@@ -17211,6 +17359,11 @@
           "type": "internal",
           "id": "Elsa.Serialization.SystemText",
           "path": "Essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
         },
         {
           "type": "external",
@@ -17546,6 +17699,11 @@
           "type": "internal",
           "id": "Elsa.Tasks.Testing",
           "path": "Essentials/tests/Tasks/Testing/Elsa.Tasks.Testing.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Testing",
+          "path": "Essentials/tests/Testing/Elsa.Testing.csproj"
         },
         {
           "type": "external",
@@ -18317,6 +18475,16 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Expressions.Testing",
+          "path": "Essentials/tests/Expressions/Testing/Elsa.Expressions.Testing.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Tasks.Testing",
           "path": "Essentials/tests/Tasks/Testing/Elsa.Tasks.Testing.csproj"
         },
@@ -18535,6 +18703,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Testing",
           "path": "Essentials/tests/Testing/Elsa.Testing.csproj"
         },
@@ -18691,6 +18864,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.Core",
           "path": "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
         },
         {
           "type": "internal",
@@ -19126,6 +19304,11 @@
           "type": "internal",
           "id": "Elsa.Cluster.Testing",
           "path": "Essentials/tests/Cluster/Testing/Elsa.Cluster.Testing.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
         },
         {
           "type": "external",
@@ -20823,6 +21006,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore",
           "path": "Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj"
         },
@@ -20907,6 +21095,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore",
           "path": "Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj"
         },
@@ -20968,6 +21161,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Design.Validations",
           "path": "Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/Elsa.Workflows.Design.Validations.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Serialization.Testing",
+          "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
         },
         {
           "type": "internal",

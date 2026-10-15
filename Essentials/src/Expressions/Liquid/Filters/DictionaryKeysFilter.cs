@@ -7,7 +7,7 @@ namespace Elsa.Expressions.Liquid.Filters;
 /// <summary>
 /// A liquid filter that extracts the key values from a <see cref="DictionaryValue"/> value.
 /// </summary>
-public sealed class DictionaryKeysFilter : ILiquidFilter
+internal sealed class DictionaryKeysFilter : ILiquidFilter
 {
     public const string Key = "keys";
 

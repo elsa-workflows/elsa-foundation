@@ -2,12 +2,12 @@ using Elsa.Foundation.Identity.Core.Authorization;
 
 namespace Elsa.Expressions.JavaScript.Rendering;
 
-public static class JavaScriptRenderingPermissions
+internal static class JavaScriptRenderingPermissions
 {
     public const string Render = "expressions.javascript.render";
 }
 
-public sealed class JavaScriptRenderingPermissionContributor : IPermissionContributor
+internal sealed class JavaScriptRenderingPermissionContributor : IPermissionContributor
 {
     public string OwnerId => "Elsa.Expressions.JavaScript.Rendering";
 

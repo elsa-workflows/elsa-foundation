@@ -6,7 +6,7 @@ namespace Elsa.Expressions.Liquid.Contracts;
 /// <summary>
 /// Represents a Liquid filter.
 /// </summary>
-public interface ILiquidFilter
+internal interface ILiquidFilter
 {
     /// <summary>
     /// Processes the specified input.

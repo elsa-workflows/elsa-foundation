@@ -125,7 +125,7 @@ public sealed class WorkbenchOpenIddictVendorTests
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
+            ClearStorePool(Path.Join(directory.FullName, "tokens.db"));
             directory.Delete(recursive: true);
         }
     }
@@ -190,7 +190,7 @@ public sealed class WorkbenchOpenIddictVendorTests
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
+            ClearStorePool(Path.Join(directory.FullName, "tokens.db"));
             directory.Delete(recursive: true);
         }
     }

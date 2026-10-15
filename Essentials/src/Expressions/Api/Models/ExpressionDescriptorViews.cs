@@ -5,7 +5,7 @@ using Elsa.Primitives.Models;
 namespace Elsa.Expressions.Api.Models;
 
 [JsonConverter(typeof(ExpressionEditingModeViewJsonConverter))]
-public enum ExpressionEditingModeView
+internal enum ExpressionEditingModeView
 {
     Literal,
     Text,
@@ -36,15 +36,15 @@ internal sealed class ExpressionEditingModeViewJsonConverter : JsonConverter<Exp
         });
 }
 
-public sealed record ExpressionDescriptorView(
+internal sealed record ExpressionDescriptorView(
     string Type,
     string DisplayName,
     string? Description,
     ExpressionEditingModeView EditingMode);
 
-public sealed record ExpressionDescriptorsResponse(IReadOnlyCollection<ExpressionDescriptorView> Items);
+internal sealed record ExpressionDescriptorsResponse(IReadOnlyCollection<ExpressionDescriptorView> Items);
 
-public sealed record VariableTypeDescriptorView(
+internal sealed record VariableTypeDescriptorView(
     string Alias,
     string DisplayName,
     string? Category,
@@ -54,4 +54,4 @@ public sealed record VariableTypeDescriptorView(
     bool SupportsDurability,
     IReadOnlyCollection<string> CompatibleStorageDriverKeys);
 
-public sealed record VariableTypeDescriptorsResponse(IReadOnlyCollection<VariableTypeDescriptorView> Items);
+internal sealed record VariableTypeDescriptorsResponse(IReadOnlyCollection<VariableTypeDescriptorView> Items);

@@ -52,6 +52,7 @@
     <ProjectReference Include="..\..\..\..\src\Workflows\Publishing\Core\Elsa.Workflows.Publishing.Core.csproj" />
     <ProjectReference Include="..\..\..\Api\Compatibility\Testing\Elsa.Api.Compatibility.Testing.csproj" />
     <ProjectReference Include="..\..\..\Testing\Elsa.Testing.csproj" />
+    <ProjectReference Include="..\..\..\Serialization\Testing\Elsa.Serialization.Testing.csproj" />
   </ItemGroup>
 
 </Project>

@@ -7,7 +7,7 @@ namespace Elsa.Expressions.JsonConverters;
 /// <summary>
 /// Produces <see cref="VariableConverter"/> instances for <see cref="IVariable"/> and <see cref="IVariable{T}"/>.
 /// </summary>    
-public sealed class VariableConverterFactory(IVariableMapper variableMapper) : JsonConverterFactory
+internal sealed class VariableConverterFactory(IVariableMapper variableMapper) : JsonConverterFactory
 {
     /// <inheritdoc />
     public override bool CanConvert(Type typeToConvert) => typeof(IVariable).IsAssignableFrom(typeToConvert);

@@ -7,7 +7,7 @@ using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Core.Models;
 using Xunit;
 
@@ -20,7 +20,7 @@ namespace Elsa.Activities.Bpmn.Tests;
 /// </summary>
 public sealed class BpmnDecisionTests
 {
-    private static readonly IPayloadSerializer Serializer = new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+    private static readonly IPayloadSerializer Serializer = SerializationServices.PayloadSerializer();
 
     [Fact]
     public void BpmnDecision_declares_its_outcome_as_echoed_to_output() =>

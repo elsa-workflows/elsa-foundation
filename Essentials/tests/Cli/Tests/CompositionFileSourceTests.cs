@@ -665,7 +665,7 @@ public sealed class CompositionFileSourceTests
         var refusal = Assert.Throws<CliRefusal>(() => input.ReadText(invalidEncoding ? path : directory.File("private-canary.json")));
 
         Assert.Equal(invalidEncoding ? "composition-input-invalid" : "composition-input-unreadable", refusal.Code);
-        AssertRefusalWithholds(refusal, "private-canary");
+        AssertRefusalWithholds(refusal, invalidEncoding ? path : "private-canary");
     }
 
     [Fact]

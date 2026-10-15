@@ -49,7 +49,7 @@ public sealed class ModuleFinalizationGateTests : IAsyncLifetime
     public async Task DisposeAsync()
     {
         await _host.DisposeAsync();
-        SqliteConnection.ClearAllPools();
+        SqliteConnection.ClearPool(new SqliteConnection(ConnectionString));
         foreach (var file in new[] { _file, _file + "-journal", _file + "-wal", _file + "-shm" })
             File.Delete(file);
     }

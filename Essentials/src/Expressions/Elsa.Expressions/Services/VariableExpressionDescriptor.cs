@@ -4,7 +4,7 @@ using Elsa.Expressions.Core.Models;
 
 namespace Elsa.Expressions.Services;
 
-public sealed class VariableExpressionDescriptor : IExpressionDescriptor
+internal sealed class VariableExpressionDescriptor : IExpressionDescriptor
 {
     public string TypeName => WellKnownExpressionDescriptorTypes.Variable;
 

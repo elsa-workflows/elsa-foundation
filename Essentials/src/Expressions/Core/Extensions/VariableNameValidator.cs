@@ -1,6 +1,6 @@
 ﻿namespace Elsa.Expressions.Core.Extensions;
 
-public static class VariableNameValidator
+internal static class VariableNameValidator
 {
     public static bool IsValidVariableName(this string? name)
     {

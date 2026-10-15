@@ -11,7 +11,7 @@ using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -192,7 +192,7 @@ public sealed class WriteHttpResponseExecutionTests
             RuntimeInputBindingSource.Expression,
             expression: new RuntimeExpressionBinding("JavaScript", "Date.now()", capabilityProfile: "unrestricted"));
         var node = NewWriteNode(200, body: null, contentType: "text/plain", bodyBinding: bodyBinding);
-        var registry = new WellKnownTypeRegistry();
+        var registry = SerializationServices.TypeRegistry();
         registry.RegisterType(typeof(string), "String");
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -337,7 +337,7 @@ public sealed class WriteHttpResponseExecutionTests
             ? new ValueTypeDescriptor(reference.Alias, reference.CollectionKind)
             : throw new InvalidOperationException($"Could not describe '{type}'.");
 
-    private static IPayloadSerializer Serializer => TestPayloadSerializers.NewPayloadSerializer();
+    private static readonly IPayloadSerializer Serializer = SerializationServices.PayloadSerializer();
 
     private static async Task<JsonElement> ActivateAndProjectAsync(
         ExecutableNode node,
@@ -347,7 +347,7 @@ public sealed class WriteHttpResponseExecutionTests
         await using var services = new ServiceCollection().BuildServiceProvider();
         var activityType = typeof(WriteHttpResponse);
         var activityTypeKey = TypeAliasConvention.CanonicalAlias(activityType);
-        var registry = new WellKnownTypeRegistry();
+        var registry = SerializationServices.TypeRegistry();
         registry.RegisterType(activityType, activityTypeKey);
         var attempt = new ActivityAttempt("attempt-1", snapshot.InvocationId, 1, ActivityAttemptReason.Initial, WorkflowExecutionHarness.Timestamp);
         var activator = new ActivityActivator(

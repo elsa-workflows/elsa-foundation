@@ -104,7 +104,7 @@ Not extension points: nothing here can be registered, replaced or contributed.
 
 ## Cross-references
 
-- Granular FR-018 mutation events (declared as tested contract; publication currently retired pending an event-sourcing consumer): [`Elsa.Workflows.Design.Api/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Api/EXTENSION_POINTS.md).
-- Design persistence provider (EF Core stores + commands): [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md).
-- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- Granular FR-018 mutation events (declared as tested contract; publication currently retired pending an event-sourcing consumer): [`Elsa.Workflows.Design.Api/EXTENSION_POINTS.md`](../../Api/EXTENSION_POINTS.md).
+- Design persistence provider (EF Core stores + commands): [`Elsa.Workflows.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../../Persistence/EntityFrameworkCore/EXTENSION_POINTS.md).
+- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.6 + §2.22.1 + §2.24.2.

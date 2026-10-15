@@ -1,0 +1,11 @@
+#nullable enable
+Elsa.Expressions.ExpressionsFeature
+Elsa.Expressions.ExpressionsFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Expressions.ExpressionsFeature.EvaluatorOptions.get -> Elsa.Expressions.Options.ExpressionEvaluatorOptions!
+Elsa.Expressions.ExpressionsFeature.EvaluatorOptions.set -> void
+Elsa.Expressions.ExpressionsFeature.ExpressionsFeature() -> void
+Elsa.Expressions.Options.ExpressionEvaluatorOptions
+Elsa.Expressions.Options.ExpressionEvaluatorOptions.Arguments.get -> System.Collections.Generic.IDictionary<string!, object!>!
+Elsa.Expressions.Options.ExpressionEvaluatorOptions.Arguments.set -> void
+Elsa.Expressions.Options.ExpressionEvaluatorOptions.ExpressionEvaluatorOptions() -> void
+static readonly Elsa.Expressions.Options.ExpressionEvaluatorOptions.Empty -> Elsa.Expressions.Options.ExpressionEvaluatorOptions!

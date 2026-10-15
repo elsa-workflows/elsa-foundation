@@ -281,6 +281,10 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 if (absorptionPlan is not null)
                     subtreeCancellationPlans = [.. subtreeCancellationPlans, absorptionPlan];
 
+                // An ancestor notification is an initial-execution-only power.
+                if (context.GetAncestorNotificationRequests().Count > 0)
+                    throw new InvalidOperationException("An ancestor notification is only valid in an initial structural execution.");
+
                 // Seam C: a structural child evaluating its own children may itself notify ITS parent
                 // (bubbling is the consumer's recursion). Harvest those staged notifications and commit them
                 // atomically with this evaluation's continuation. Root staging or a Fault/Cancel continuation with

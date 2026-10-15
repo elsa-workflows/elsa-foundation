@@ -16,7 +16,7 @@ namespace Elsa.Architecture.Tests;
 public sealed class FeatureClassShapeGuardTests
 {
     /// <summary>The domains whose feature classes are held to the rule. A domain's change adds its key here.</summary>
-    private static readonly HashSet<string> ActivatedDomains = new(StringComparer.Ordinal) { "Caching", "Events", "Locking", "Mediator", "Primitives", "Tasks" };
+    private static readonly HashSet<string> ActivatedDomains = new(StringComparer.Ordinal) { "Caching", "Events", "Expressions", "Locking", "Mediator", "Primitives", "Serialization", "Tasks" };
 
     private static IReadOnlyList<(Type Feature, string? Domain)> Features { get; } = LoadFeatures();
 

@@ -10,7 +10,7 @@ namespace Elsa.Primitives.Identity;
 /// for indexed primary keys (random inserts fragment the index B-tree). Provided for parity with callers that do not
 /// require sortable identifiers; prefer a time-ordered generator otherwise.
 /// </remarks>
-public sealed class GuidIdentityGenerator : IIdentityGenerator
+internal sealed class GuidIdentityGenerator : IIdentityGenerator
 {
     public string Generate() => Guid.NewGuid().ToString("N");
 }

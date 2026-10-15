@@ -144,7 +144,7 @@ public sealed class EfSqliteSerialOpenInterceptorTests : IAsyncDisposable
             await context.DisposeAsync();
         await _database.DisposeAsync();
         await _other.DisposeAsync();
-        TemporarySqliteDatabase.ClearPoolAndDeleteFiles(Path.Join(_uncreatedDirectory, "elsa.db"));
+        TemporarySqliteDatabase.ClearPoolAndDeleteFiles($"Data Source={Path.Join(_uncreatedDirectory, "elsa.db")}");
         if (Directory.Exists(_uncreatedDirectory))
             Directory.Delete(_uncreatedDirectory, recursive: true);
         _release.Dispose();

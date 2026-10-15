@@ -376,6 +376,7 @@
           "Elsa.Http": "[4.0.0-dev, )",
           "Elsa.Http.Core": "[4.0.0-dev, )",
           "Elsa.Serialization.SystemText": "[4.0.0-dev, )",
+          "Elsa.Serialization.Testing": "[1.0.0, )",
           "Elsa.Workflows.Runtime.Api": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
           "xunit": "[2.9.3, )"
@@ -538,6 +539,12 @@
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Serialization.Core": "[4.0.0-dev, )",
           "Elsa.Tasks.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.serialization.testing": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Serialization.SystemText": "[4.0.0-dev, )"
         }
       },
       "elsa.tasks.core": {

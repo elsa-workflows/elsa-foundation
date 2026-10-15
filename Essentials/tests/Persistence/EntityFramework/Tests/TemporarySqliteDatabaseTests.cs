@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace Elsa.Persistence.EntityFramework.Tests;
@@ -43,7 +44,7 @@ public sealed class TemporarySqliteDatabaseTests
         // standing in for the residual pool lock this helper exists to tolerate.
         var path = Path.Join(Path.GetTempPath(), new string('a', 5000) + ".db");
 
-        TemporarySqliteDatabase.ClearPoolAndDeleteFiles(path);
+        TemporarySqliteDatabase.ClearPoolAndDeleteFiles($"Data Source={path}");
     }
 
     [Fact]
@@ -56,11 +57,56 @@ public sealed class TemporarySqliteDatabaseTests
         Directory.CreateDirectory(path);
         try
         {
-            TemporarySqliteDatabase.ClearPoolAndDeleteFiles(path);
+            TemporarySqliteDatabase.ClearPoolAndDeleteFiles($"Data Source={path}");
         }
         finally
         {
             Directory.Delete(path);
         }
+    }
+
+    /// <summary>
+    /// One test's teardown must not reach another test's pool (#2185). A clear reclaims and disposes any connection of the
+    /// pools it clears that looks leaked, and a connection another test is opening looks leaked for a moment, so a
+    /// teardown that cleared every pool could dispose the native handle of that open. The pooled handle of another
+    /// database surviving the teardown shows the clear never reached that database's pool.
+    /// </summary>
+    [Fact]
+    public async Task DisposeAsync_leaves_the_pool_of_another_database_alone()
+    {
+        await using var other = new TemporarySqliteDatabase("helper-test-other");
+        var database = new TemporarySqliteDatabase("helper-test-disposed");
+        await using (var connection = new SqliteConnection(database.ConnectionString))
+            await connection.OpenAsync();
+        SQLitePCL.sqlite3 pooled;
+        await using (var connection = new SqliteConnection(other.ConnectionString))
+        {
+            await connection.OpenAsync();
+            pooled = connection.Handle!;
+        }
+
+        await database.DisposeAsync();
+
+        Assert.False(pooled.IsClosed);
+        await using var reopened = new SqliteConnection(other.ConnectionString);
+        await reopened.OpenAsync();
+        Assert.Same(pooled, reopened.Handle);
+    }
+
+    /// <summary>The other half: the disposed database's own pool is cleared, so no pooled handle keeps its deleted file open.</summary>
+    [Fact]
+    public async Task DisposeAsync_clears_the_pool_of_its_own_database()
+    {
+        var database = new TemporarySqliteDatabase("helper-test-own-pool");
+        SQLitePCL.sqlite3 pooled;
+        await using (var connection = new SqliteConnection(database.ConnectionString))
+        {
+            await connection.OpenAsync();
+            pooled = connection.Handle!;
+        }
+
+        await database.DisposeAsync();
+
+        Assert.True(pooled.IsClosed);
     }
 }

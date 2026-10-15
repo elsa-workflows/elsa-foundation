@@ -50,18 +50,20 @@ public sealed class EfIdentityStoreSupportSchemaWriteRefusalTests
         }
         finally
         {
-            TemporarySqliteDatabase.ClearPoolAndDeleteFiles(databasePath);
+            TemporarySqliteDatabase.ClearPoolAndDeleteFiles(ConnectionTo(databasePath));
         }
     }
 
     private static IdentityIamSqliteDbContext CreateContext(string databasePath, params Microsoft.EntityFrameworkCore.Diagnostics.IInterceptor[] interceptors)
     {
         var builder = new DbContextOptionsBuilder<IdentityIamSqliteDbContext>()
-            .UseSqlite($"Data Source={databasePath};Default Timeout=5");
+            .UseSqlite(ConnectionTo(databasePath));
         if (interceptors.Length > 0)
             builder.AddInterceptors(interceptors);
         return new IdentityIamSqliteDbContext(builder.Options);
     }
+
+    private static string ConnectionTo(string databasePath) => $"Data Source={databasePath};Default Timeout=5";
 
     private sealed class FixedAccess(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
     {

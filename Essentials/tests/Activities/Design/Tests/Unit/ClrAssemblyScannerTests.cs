@@ -13,7 +13,6 @@ using Elsa.Activities.Runtime.Core;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
-using Elsa.Primitives.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -197,7 +196,7 @@ public sealed class ClrAssemblyScannerTests
         ActivityVersionReconciliationModel content,
         Assembly assembly)
     {
-        var identityGenerator = new GuidIdentityGenerator();
+        var identityGenerator = new TestIdentityGenerator();
         var definition = new ActivityDefinitionFactory(identityGenerator).Create(
             identity.ActivityTypeKey,
             identity.Category ?? string.Empty,

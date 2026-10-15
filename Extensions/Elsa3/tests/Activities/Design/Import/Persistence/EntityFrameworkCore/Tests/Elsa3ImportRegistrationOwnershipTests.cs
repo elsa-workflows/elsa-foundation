@@ -131,7 +131,7 @@ public sealed class Elsa3ImportRegistrationOwnershipTests
         }
         finally
         {
-            TemporarySqliteDatabase.ClearPoolAndDeleteFiles(path);
+            TemporarySqliteDatabase.ClearPoolAndDeleteFiles(connectionString);
         }
     }
 

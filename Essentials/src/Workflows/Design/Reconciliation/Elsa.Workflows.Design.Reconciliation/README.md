@@ -16,4 +16,4 @@ is reconciled; publication refuses it.
 
 ## Cross-domain contributions
 
-- **`IStartupTask`** *(Core — `Elsa.Tasks.Core`)* — `WorkflowsVersionReconcilerStartupTask` runs the reconciliation pass at startup on every node, without a lock: its sources are node-local, and concurrent passes converge (#2187, #2189, #2192). Catalog: [`Elsa.Tasks/EXTENSION_POINTS.md`](../Elsa.Tasks/EXTENSION_POINTS.md)
+- **`IStartupTask`** *(Core — `Elsa.Tasks.Core`)* — `WorkflowsVersionReconcilerStartupTask` runs the reconciliation pass at startup on every node, without a lock: its sources are node-local, and concurrent passes converge (#2187, #2189, #2192). Catalog: [`Elsa.Tasks/EXTENSION_POINTS.md`](../../../../Tasks/Elsa.Tasks/EXTENSION_POINTS.md)

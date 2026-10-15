@@ -21,6 +21,8 @@
     <ProjectReference Include="..\..\..\src\Cluster\Core\Elsa.Cluster.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Tasks\Schedules\Elsa.Tasks.Schedules.csproj" />
     <ProjectReference Include="..\Testing\Elsa.Tasks.Testing.csproj" />
+    <!-- FakeSystemClock and RecordingLogger. -->
+    <ProjectReference Include="..\..\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
 
   <ItemGroup>

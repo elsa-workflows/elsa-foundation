@@ -27,3 +27,14 @@ A runtime-only host can catalog and enable `ActivitiesGraphRuntime` without refe
 the Design project. Conversely, an authoring host that intentionally does not support Activity Graph
 authoring omits `ActivitiesGraphDesign`; the authoring-capabilities response then does not advertise
 that provider.
+
+## Ending a reusable activity from any depth
+
+A graph body ends its reusable activity early with the `Complete` catalog activity
+(`Elsa.Activities.Graph.Runtime.Activities.Complete`, input `outcome`), which ships in `Elsa.Activities.Graph.Runtime`
+and needs no extra feature. Its `outcome` is one literal boundary outcome reference key of a schema-2 graph. The
+nearest enclosing reusable activity then completes with that outcome, whatever composites sit in between, and
+durably cancels the rest of its body. `ActivitiesGraphDesign` validates these nodes when a graph is published and
+rejects them in plain workflow definitions. Emitters such as importers and Studio write the node shape, rules and
+diagnostic codes in the [Complete activity contract](../../specs/237-graph-boundary-completion/contracts/complete-activity.md)
+(spec 237).

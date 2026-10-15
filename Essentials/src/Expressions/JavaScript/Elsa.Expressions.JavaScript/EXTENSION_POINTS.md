@@ -17,7 +17,7 @@ expression handler, cannot evaluate canonical input bindings, and shares only th
 
 ## Cross-references
 
-- JS type declarations for the design surface: [`Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md`](../Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md).
-- Base expression descriptor registration: [`Elsa.Expressions/EXTENSION_POINTS.md`](../Elsa.Expressions/EXTENSION_POINTS.md).
-- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- JS type declarations for the design surface: [`Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md`](../Rendering/Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md).
+- Base expression descriptor registration: [`Elsa.Expressions/EXTENSION_POINTS.md`](../../Elsa.Expressions/EXTENSION_POINTS.md).
+- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../../../../EXTENSION_POINTS.md).
 - Value-flow contract: [`../../../../specs/095-value-flow-redesign/contracts/expression-and-import-contract.md`](../../../../../specs/095-value-flow-redesign/contracts/expression-and-import-contract.md).

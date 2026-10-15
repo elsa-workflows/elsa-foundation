@@ -46,6 +46,6 @@ Every `IEvent` type in the `Elsa.Activities.Design.Core.Reconciliation` namespac
 
 ## Cross-references
 
-- Activity catalog persistence: [`Elsa.Activities.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../Elsa.Activities.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md).
-- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- Activity catalog persistence: [`Elsa.Activities.Design.Persistence.EntityFrameworkCore/EXTENSION_POINTS.md`](../../Persistence/EntityFrameworkCore/EXTENSION_POINTS.md).
+- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.22.1.

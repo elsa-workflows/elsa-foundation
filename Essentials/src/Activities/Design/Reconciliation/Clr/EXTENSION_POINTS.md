@@ -81,5 +81,5 @@ reconciliation feature's handler.
 
 - Reconciliation lifecycle + the source contract: [`Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](../Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md).
 - Activity abstractions + `[Version]`: `Elsa.Activities.Runtime.Core`.
-- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 (DI-source), §E2.2 (Design→Runtime edge), §E2.8 (author semver).

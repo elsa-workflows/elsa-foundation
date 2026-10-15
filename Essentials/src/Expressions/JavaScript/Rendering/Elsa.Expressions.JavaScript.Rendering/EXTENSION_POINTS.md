@@ -12,6 +12,7 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Expressions.JavaS
 - **Register:** `services.AddScoped<IJavaScriptDeclarationContributor, MyContributor>()`.
 - **Aggregated by:** the single `BuildDeclarationsDocument : IEventHandler<DeclarationsDocumentGenerating>` (this feature), which injects `IEnumerable<IJavaScriptDeclarationContributor>` and invokes each to build the TypeScript declaration document surfaced in the design editor.
 - **Purpose:** contribute TypeScript type declarations, function signatures, variable names, etc. to the editor's IntelliSense document.
+- **Check the output:** the document factory and renderer are internal, so a contributor's rendered declarations are read through the rendering endpoint, `GET javascript/documents/render`, which `JavaScriptRenderingEndpointsFeature` maps.
 
 **Known implementations (shipped):**
 - `Elsa.Expressions.JavaScript.Rendering` — `CommonDeclarationContributor` *(intra-domain — default, registers common built-in declarations)*
@@ -22,25 +23,12 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Expressions.JavaS
 
 ## Events
 
-Every `IEvent` type in `Elsa.Expressions.JavaScript.Rendering.Core` has a `### <EventClassName>` heading here, and every such heading names one; review keeps the two in step.
-
-### DeclarationsDocumentGenerating
-`(IJavaScriptDeclarationsContributionContext Context)`
-
-**Semantic.** The TypeScript declaration document for the JavaScript editor is being built. Contributors add their type declarations to `Context`. Sequential: the document must be complete before it is returned to the editor.
-
-**Contributor interface.** `IJavaScriptDeclarationContributor` (above).
-
-**Delivery strategy.** Sequential.
-
-**Publication site.** The declarations endpoint handler (`Elsa.Expressions.JavaScript.Rendering`), on each request for the declaration document.
-
-**Expected handler.** Exactly one: `BuildDeclarationsDocument` (this feature).
+None public. `DeclarationsDocumentGenerating` is internal to this feature: the document factory publishes it inline on each request for the declaration document, and its single handler, `BuildDeclarationsDocument`, has every `IJavaScriptDeclarationContributor` add to the event's context before the document is returned. Contribute through `IJavaScriptDeclarationContributor`, not by handling the event.
 
 ---
 
 ## Cross-references
 
-- JS script pre/post processors (runtime execution): [`Elsa.Expressions.JavaScript/EXTENSION_POINTS.md`](../Elsa.Expressions.JavaScript/EXTENSION_POINTS.md).
+- JS script pre/post processors (runtime execution): [`Elsa.Expressions.JavaScript/EXTENSION_POINTS.md`](../../Elsa.Expressions.JavaScript/EXTENSION_POINTS.md).
 - Repo-wide index: [`../../EXTENSION_POINTS.md`](../../../Elsa.Expressions/EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.6 + §2.22.1.

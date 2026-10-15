@@ -90,7 +90,11 @@ order is not an override seam, and neither is `TaskStateManager`, which `TaskMan
 ### `IRecurringTask : ITask` *(Core — `Elsa.Tasks.Core`)*
 - **Kind:** Contributor, run on the schedule its `GetSchedule()` returns, an `ITaskSchedule` (`Elsa.Tasks.Core`).
 - **Signature:** `ValueTask ExecuteAsync(CancellationToken cancellationToken);`
-- **Register:** `services.AddScoped<IRecurringTask, MyTask>()`. For the schedule, derive from `BackoffSweepWorkerTask`, whose interval widens on failure, or implement `ITaskSchedule`; the schedule classes in `Elsa.Tasks.Schedules` are internal.
+- **Register:** `services.AddScoped<IRecurringTask, MyTask>()`.
+- **Schedule:** return one from `TaskSchedule` (`Elsa.Tasks.Schedules`), derive from `BackoffSweepWorkerTask`, whose interval widens on failure, or implement `ITaskSchedule`. The schedule classes behind `TaskSchedule` are internal.
+  - `TaskSchedule.Every(interval, logger)`: the first run one interval after the schedule starts, each next run one interval after the previous run ends. An interval shorter than one millisecond throws `ArgumentOutOfRangeException`.
+  - `TaskSchedule.Cron(expression, systemClock, logger)`: a standard five-field cron expression, read in UTC against `ISystemClock`. Each run is at the next occurrence after the schedule starts or the previous run ends, so an occurrence a long run overlaps is skipped. An expression that does not parse throws a `FormatException`, and one that never occurs (February 30) an `ArgumentException`, both when the schedule is created.
+  - The logger records what escapes a run past the task manager's own failure log, a failure to schedule the next run, and, for `Cron`, an expression that has no further occurrence, after which the task does not run again.
 
 ### `IBackgroundTask : ITask` *(Core — `Elsa.Tasks.Core`)*
 - **Kind:** Contributor — long-running background work (hosted service lifecycle).
@@ -124,6 +128,6 @@ The eight shipped workers live in other domains: `RuntimeResumptionPumpTask`, `D
 
 ## Cross-references
 
-- `ITaskSchedule` lives in `Elsa.Tasks.Core`; the schedule classes in `Elsa.Tasks.Schedules` are internal.
+- `ITaskSchedule` lives in `Elsa.Tasks.Core`; the schedule classes in `Elsa.Tasks.Schedules` are internal and reached through `TaskSchedule`.
 - Repo-wide index: [`EXTENSION_POINTS.md`](../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.2 + §2.22.1.

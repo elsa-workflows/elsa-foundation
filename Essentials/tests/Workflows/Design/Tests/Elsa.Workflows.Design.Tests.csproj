@@ -45,6 +45,8 @@
     <ProjectReference Include="..\..\..\..\src\Workflows\Design\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
     <ProjectReference Include="..\..\..\..\src\Workflows\Design\JavaScript\Elsa.Workflows.Design.JavaScript.csproj" />
     <ProjectReference Include="..\..\..\Testing\Elsa.Testing.csproj" />
+    <ProjectReference Include="..\..\..\Serialization\Testing\Elsa.Serialization.Testing.csproj" />
+    <ProjectReference Include="..\..\..\Expressions\Testing\Elsa.Expressions.Testing.csproj" />
   </ItemGroup>
 
 </Project>

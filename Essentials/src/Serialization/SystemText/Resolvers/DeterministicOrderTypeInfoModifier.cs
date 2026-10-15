@@ -15,7 +15,7 @@ namespace Elsa.Serialization.SystemText.Resolvers;
 /// separate concern handled by <see cref="JsonConverters.DeterministicDictionaryConverterFactory"/> and the
 /// polymorphic converters — the contract resolver cannot reorder dictionary entries.
 /// </remarks>
-public static class DeterministicOrderTypeInfoModifier
+internal static class DeterministicOrderTypeInfoModifier
 {
     /// <summary>
     /// Sorts the serialized members of every object contract by ordinal name.

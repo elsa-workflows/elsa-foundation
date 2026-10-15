@@ -5,7 +5,7 @@ using Elsa.Mediator.Core.Contracts;
 
 namespace Elsa.Expressions.Api.Handlers;
 
-public sealed class ListVariableTypeDescriptorsRequestHandler(IVariableTypeDescriptorCatalog catalog)
+internal sealed class ListVariableTypeDescriptorsRequestHandler(IVariableTypeDescriptorCatalog catalog)
     : IRequestHandler<ListVariableTypeDescriptors, VariableTypeDescriptorsResponse>
 {
     public Task<VariableTypeDescriptorsResponse> Handle(ListVariableTypeDescriptors request, CancellationToken cancellationToken)

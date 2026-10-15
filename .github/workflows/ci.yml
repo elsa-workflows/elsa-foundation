@@ -3,7 +3,7 @@ name: CI
 # Build-and-test gate for pull requests targeting main, and for main itself.
 #
 # Neither of the other build workflows guards PRs:
-#   - docker.yml   builds images on PRs only when a Dockerfile or the image inputs change.
+#   - docker.yml   builds images only after a merge into main or on manual dispatch (#2751).
 #   - packages.yml runs on push to main only (#2622) and deliberately packs/compiles only
 #     the src/ libraries -- it does NOT build test projects or run tests.
 # Net result: PRs could merge to main with compile errors or failing tests undetected.

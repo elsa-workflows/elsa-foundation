@@ -13,7 +13,7 @@ using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Api;
 using Elsa.Workflows.Runtime.Api.Coalescing;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -71,7 +71,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
         services.AddSingleton<TimeProvider>(timeProvider);
         services.AddSingleton<CheckpointRecorder>();
         services.AddSingleton<ChildExecutionProbe>();
-        var typeRegistry = new WellKnownTypeRegistry();
+        var typeRegistry = SerializationServices.TypeRegistry();
         typeRegistry.RegisterType(typeof(string), "String");
         typeRegistry.RegisterType(typeof(int), "Int32");
         services.AddSingleton<IWellKnownTypeRegistry>(typeRegistry);
@@ -658,7 +658,7 @@ internal sealed class DispatchWorkflowRuntimeTestFixture : IAsyncDisposable
             ? values.Single()
             : throw new InvalidOperationException($"Expected one value but found {values.Count}.");
 
-    private static void RegisterActivityTypes(WellKnownTypeRegistry registry)
+    private static void RegisterActivityTypes(IWellKnownTypeRegistry registry)
     {
         var types = new[]
         {

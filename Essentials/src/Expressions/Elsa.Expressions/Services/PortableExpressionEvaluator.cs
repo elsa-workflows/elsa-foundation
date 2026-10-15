@@ -5,7 +5,7 @@ using Elsa.Expressions.Core.Models;
 namespace Elsa.Expressions.Services;
 
 /// <summary>Routes a portable expression to its constructor-injected language handler.</summary>
-public sealed class PortableExpressionEvaluator : IPortableExpressionEvaluator
+internal sealed class PortableExpressionEvaluator : IPortableExpressionEvaluator
 {
     private readonly IReadOnlyDictionary<string, IPortableExpressionHandler> _handlers;
 

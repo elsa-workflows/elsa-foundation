@@ -678,14 +678,6 @@ export function isRejectedTestRun(testRun: WorkflowTestRunView) {
   return testRun.status.toLowerCase() === "rejected";
 }
 
-export function isWorkflowEditorKeyboardTarget(target: HTMLElement | null) {
-  if (!target) return false;
-  return target.isContentEditable
-    || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)
-    || Boolean(target.closest("[contenteditable='true']"))
-    || Boolean(target.closest("[data-studio-code-editor]"));
-}
-
 export function formatWorkflowVersionLoadError(error: string) {
   try {
     const payload = JSON.parse(error) as { error?: unknown };

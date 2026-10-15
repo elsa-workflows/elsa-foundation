@@ -29,6 +29,7 @@ All scripts share `_ReusableCommon.ps1` and run against a from-source `Elsa.Work
 | `Test-PublishingLifecycle.ps1` | migrated Publishing API journey: snapshot review/publish, route authority, Runtime preflight, policy CAS, slot unpublish/restore, activity receipt replay, and Test Run lookup/cancel |
 | `Test-SetOutcome.ps1` | **Set Outcome** (`Control` intrinsic) + Flowchart routes only the matching branch (both outcomes) |
 | `Test-ReusableActivityOutcomeLimit.ps1` | publishes schema-2 mapped outcomes and proves only the matching parent branch runs |
+| `Test-ReusableActivityComplete.ps1` | a `Complete` node in a Flowchart body ends the reusable activity with its outcome (no mappings); `Complete(unknown)` and `Complete` in a plain workflow are refused at publication (spec 237) |
 | `Test-ReusableSequenceNesting.ps1` | regression coverage for reusable placement inside a workflow Sequence |
 
 ## Composition: what works, what doesn't
@@ -46,4 +47,4 @@ All scripts share `_ReusableCommon.ps1` and run against a from-source `Elsa.Work
 - **Publishing successive reusable-activity versions** → supported through exact-version-bound publication preflight. `Test-ReusableActivityPinning` publishes C v1 and C v2 over REST, then verifies that consumer B remains pinned to C v1.
 - **"whole hierarchy in sync while in draft"** → **no draft-consumes-draft**; a parent draft binds only *published* child versions. Draft test-run compiles the draft under edit; nested children come from their published versions.
 - **"execute a draft"** → yes (`Test-DraftTestRun`, `Test-ActivityDraftTestRun`).
-- **"outcomes of workflows used as activities"** → schema-2 reusable boundaries map entry outcomes to public outcomes, and the parent routes them through generic Flowchart ports (`Test-ReusableActivityOutcomeLimit`).
+- **"outcomes of workflows used as activities"** → schema-2 reusable boundaries map entry outcomes to public outcomes, and the parent routes them through generic Flowchart ports (`Test-ReusableActivityOutcomeLimit`); a `Complete` node anywhere in the body ends the reusable activity with an authored outcome, as Elsa 3 `Complete(Outcomes)` did (`Test-ReusableActivityComplete`).
