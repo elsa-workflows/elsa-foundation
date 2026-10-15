@@ -1,6 +1,8 @@
-﻿namespace Elsa.Expressions.JavaScript.Rendering.Core.Models;
+﻿using Elsa.Expressions.JavaScript.Rendering.Core.Models;
 
-public sealed class JavaScriptDeclarationsDocument
+namespace Elsa.Expressions.JavaScript.Rendering.Models;
+
+internal sealed class JavaScriptDeclarationsDocument
 {
     /// <summary>
     /// A collection of function definitions.

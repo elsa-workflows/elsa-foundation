@@ -12,6 +12,7 @@ using Elsa.Activities.Design.Reconciliation.Options;
 using Elsa.Activities.Design.Reconciliation.Services;
 using Elsa.Events.Core.Contracts;
 using Elsa.Serialization.Testing;
+using Elsa.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Models;
@@ -40,7 +41,7 @@ internal static class InMemoryReconcilerHarness
         IActivityReconciliationSource source,
         DuplicateHandling duplicateHandling = DuplicateHandling.Skip)
     {
-        var identityGenerator = new GuidIdentityGenerator();
+        var identityGenerator = new TestIdentityGenerator();
         var hasher = new DefaultActivityDefinitionHasher();
         var serializer = SerializationServices.PayloadSerializer();
         var definitionFactory = new ActivityDefinitionFactory(identityGenerator);
@@ -90,11 +91,6 @@ internal static class InMemoryReconcilerHarness
             if (@event is ActivityVersionsReconciling reconciling)
                 await handler.Handle(reconciling, cancellationToken);
         }
-    }
-
-    private sealed class GuidIdentityGenerator : IIdentityGenerator
-    {
-        public string Generate() => Guid.NewGuid().ToString("N");
     }
 
     private sealed class InMemoryAddActivityDefinitionCommand(CatalogStore store) : IAddActivityDefinitionCommand

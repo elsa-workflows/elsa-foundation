@@ -4,14 +4,13 @@ namespace Elsa.Events.Core.Contracts;
 /// Marker for an in-process event: "something happened." The single event concept in the
 /// framework — it covers plain pub/sub, lifecycle/state-transition notifications, and the
 /// contribution pattern (a handler mutates a shared payload the publisher reads back). The
-/// axis that varies is the <see cref="IEventPublishingStrategy"/> the publisher selects, not
-/// the type.
+/// axis that varies is how it is delivered, not the type: inline through
+/// <see cref="IInlineEventPublisher"/> or deferred through <see cref="IDeferredEventPublisher"/>.
 /// </summary>
 /// <remarks>
-/// Default publish (Sequential strategy) is synchronous, in-order, and awaited — a throwing
-/// handler propagates to and CAN break the caller. Resilience is opt-in via a strategy that
-/// owns it (e.g. Background fire-and-forget, which catches and logs). There is no
-/// exception-shielding middleware on the default path.
+/// Inline delivery is synchronous, in-order, and awaited: a throwing handler propagates to and
+/// CAN break the caller. Deferred delivery returns before handlers run and catches and logs
+/// their failures. There is no exception-shielding middleware on the inline path.
 /// </remarks>
 public interface IEvent
 {

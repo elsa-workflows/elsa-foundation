@@ -2,7 +2,7 @@ using Acornima;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.Core.Services;
-using Elsa.Expressions.JavaScript.Core.Models;
+using Elsa.Expressions.JavaScript.Models;
 using System.Text.RegularExpressions;
 
 namespace Elsa.Expressions.JavaScript.Services;

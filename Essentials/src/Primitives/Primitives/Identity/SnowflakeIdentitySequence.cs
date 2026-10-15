@@ -11,7 +11,7 @@ namespace Elsa.Primitives.Identity;
 /// <see cref="SnowflakeIdentityGenerator"/> that consumes it remains scoped and supplies the (scoped) clock per call.
 /// All mutation is guarded by a lock; identifier generation is therefore serialized but allocation-free and fast.
 /// </remarks>
-public sealed class SnowflakeIdentitySequence
+internal sealed class SnowflakeIdentitySequence
 {
     private const int WorkerIdBits = 10;
     private const int SequenceBits = 12;

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace Elsa.Expressions.Core.Helpers;
+namespace Elsa.Expressions.Liquid.Helpers;
 
 /// <summary>
 /// Materializes a dynamic (<c>Any</c>) value into its canonical runtime representation — a mutable
@@ -16,7 +16,7 @@ namespace Elsa.Expressions.Core.Helpers;
 /// unchanged. The lift is a structural copy, never a re-serialization of the author's bytes, so it does not
 /// disturb the stored opaque JSON.
 /// </remarks>
-public static class DynamicValueMaterializer
+internal static class DynamicValueMaterializer
 {
     /// <summary>
     /// Returns <paramref name="value"/> as its canonical dynamic representation: a stored

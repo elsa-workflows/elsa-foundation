@@ -17691,6 +17691,11 @@
           "path": "Essentials/tests/Tasks/Testing/Elsa.Tasks.Testing.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Testing",
+          "path": "Essentials/tests/Testing/Elsa.Testing.csproj"
+        },
+        {
           "type": "external",
           "id": "Microsoft.Extensions.DependencyInjection",
           "version": "10.0.10"

@@ -3,6 +3,7 @@ using System.Text.Json;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
+using Elsa.Testing;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -49,7 +50,7 @@ public sealed class WorkflowsDesignReconciliationFeatureRegistrationTests
         var services = new ServiceCollection();
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.AddLogging();
-        services.AddSingleton<IIdentityGenerator, StubIdentityGenerator>();
+        services.AddSingleton<IIdentityGenerator, TestIdentityGenerator>();
         services.AddSingleton<IInlineEventPublisher, StubEventPublisher>();
         services.AddSingleton<IWorkflowDefinitionStore, ThrowingDefinitionStore>();
         services.AddSingleton<IWorkflowDefinitionVersionStore, ThrowingVersionStore>();
@@ -74,11 +75,6 @@ public sealed class WorkflowsDesignReconciliationFeatureRegistrationTests
         public string SourceId { get; } = id;
         public ValueTask<IEnumerable<Workflows.Design.Reconciliation.Models.WorkflowVersionReconciliationModel>> Read(CancellationToken cancellationToken)
             => ValueTask.FromResult<IEnumerable<Workflows.Design.Reconciliation.Models.WorkflowVersionReconciliationModel>>([]);
-    }
-
-    private sealed class StubIdentityGenerator : IIdentityGenerator
-    {
-        public string Generate() => Guid.NewGuid().ToString("N");
     }
 
     private sealed class StubPayloadSerializer : IPayloadSerializer
