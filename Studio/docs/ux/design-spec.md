@@ -166,7 +166,7 @@ registry, and only renders when `user-tasks` is enabled (`Elsa.Studio.UserTasks`
 `requiresFeature: "workflows"` matches `Elsa.Studio.Workflows` only (not `Contoso.Workflows` or `Elsa.Studio.WorkflowsX`). A missing `enabledFeatures` list hides gated widgets.
 
 **Edit home** is a tinted mode with add, remove, reorder, Add widget, Reset to default, and
-(for `studio-preferences.manage-defaults`) Save as server default. Normal view collapses
+(for `studio/preferences/defaults:manage`) Save as server default. Normal view collapses
 per-widget chrome into `OverflowMenu`. Add widget moves focus into the dialog, closes on
 Escape, and returns focus to the trigger. Reorder keeps focus on the moved widget and
 announces the new position.

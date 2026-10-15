@@ -14,19 +14,16 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
 {
     [Theory]
     [InlineData("exact")]
-    [InlineData("implied")]
+    [InlineData("subtree")]
     [InlineData("wildcard")]
     [InlineData("normalized-external")]
     public async Task Foundation_evaluator_paths_flow_through_the_design_context(string grantKind)
     {
-        var services = CreateServices();
-        if (grantKind == "implied")
-            services.ReplacePermissionCatalog<DesignPermissionCatalog>();
-        using var provider = services.BuildServiceProvider();
+        using var provider = CreateServices().BuildServiceProvider();
         var accessor = provider.GetRequiredService<IHttpContextAccessor>();
         var grant = grantKind switch
         {
-            "implied" => "activities.design.author.bundle",
+            "subtree" => "activities/*:author",
             "wildcard" => "*",
             _ => HttpContextActivityDesignAuthorizationContext.AuthorPermission
         };
@@ -416,18 +413,5 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
             Interlocked.Increment(ref Calls);
             return ValueTask.FromResult(PermissionEvaluationResult.Success);
         }
-    }
-
-    private sealed class DesignPermissionCatalog : IPermissionCatalog
-    {
-        private static readonly Permission Bundle = new(
-            "activities.design.author.bundle",
-            "Design author bundle",
-            "test",
-            "Test implication",
-            new HashSet<string>([HttpContextActivityDesignAuthorizationContext.AuthorPermission], StringComparer.Ordinal));
-
-        public IReadOnlyCollection<Permission> List() => [Bundle];
-        public Permission? Find(string key) => string.Equals(key, Bundle.Key, StringComparison.Ordinal) ? Bundle : null;
     }
 }

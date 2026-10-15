@@ -41,8 +41,8 @@ The Foundation Identity Abstractions feature owns the provider-agnostic authenti
 
 - **Kind:** Contributor (feature-owned permission contribution to the shared catalog).
 - **Register:** `services.AddPermissionContributor<MyContributor>()` (or `services.TryAddEnumerable(ServiceDescriptor.Singleton<IPermissionContributor, MyContributor>())`).
-- **Consumed by:** `CompositePermissionCatalog`, which canonicalizes keys for lookup while retaining declared spelling and provenance. The default identity permissions are contributed by `DefaultIdentityPermissionCatalog`; canonical duplicates, padded keys, wildcard definitions, and wildcard implication targets fail during catalog construction with both ownership sources in the diagnostic.
-- **Known implementations:** `DefaultIdentityPermissionCatalog` (identity permissions), `ModuleManagementPermissionContributor` (`Elsa.Modularity.Api`), `ExtensionBuilderPermissionContributor` (`Elsa.ExtensionBuilder.Api`, optional) — the two host-control features that own `module-management.*` / `extension-builder.*` permissions per ADR 0037 *(cross-domain)*.
+- **Consumed by:** `CompositePermissionCatalog`, which canonicalizes keys for lookup while retaining declared spelling and provenance. The default identity permissions are contributed by `DefaultIdentityPermissionCatalog`; keys that are not one concrete `{resource}:{verb}` permission, canonical duplicates, padded keys, and wildcard definitions fail during catalog construction with both ownership sources in the diagnostic. The catalog carries no implications; see [Elsa 3.9 to Elsa 4 permission mapping](../../../../../docs/reference/elsa3-permission-mapping.md) for the matching rules.
+- **Known implementations:** `DefaultIdentityPermissionCatalog` (identity permissions), `ModuleManagementPermissionContributor` (`Elsa.Modularity.Api`), `ExtensionBuilderPermissionContributor` (`Elsa.ExtensionBuilder.Api`, optional) — the two host-control features that own the `module-management` / `extension-builder` permissions per ADR 0037 *(cross-domain)*.
 
 ### `IPermissionResourceHandler`
 

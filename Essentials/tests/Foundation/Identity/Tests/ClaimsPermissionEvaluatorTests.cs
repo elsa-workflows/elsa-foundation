@@ -6,132 +6,109 @@ namespace Elsa.Foundation.Identity.Tests;
 
 public sealed class ClaimsPermissionEvaluatorTests
 {
+    private readonly ClaimsPermissionEvaluator _evaluator = new();
+
     [Fact]
     public async Task GrantsAnExactPermissionUsingCanonicalOrdinalKeys()
     {
-        var evaluator = new ClaimsPermissionEvaluator(new TestPermissionCatalog(
-        [new("re\u0301ad", "Read", "Test", "Read permission.")]));
-
-        var result = await evaluator.EvaluateAsync(Context("r\u0065\u0301ad", "RÉAD"));
-
-        Assert.True(result.Succeeded);
+        Assert.True(await GrantsAsync("résumes:read", "RÉSUMES:READ"));
     }
 
-    [Fact]
-    public async Task ExpandsImplicationsFromGrantedPermissionOnlyAndTerminatesCycles()
+    [Theory]
+    [InlineData("identity/*:read", "identity/users:read", true)]
+    [InlineData("identity/*:read", "identity/roles/members:read", true)]
+    [InlineData("identity/*:read", "identity:read", true)]
+    [InlineData("identity/*:*", "identity/providers:manage", true)]
+    [InlineData("workflows/runtime/*:execute", "workflows/runtime/javascript:execute", true)]
+    [InlineData("identity/*:read", "identity-audit/users:read", false)]
+    [InlineData("identity/*:read", "identityx:read", false)]
+    [InlineData("identity/*:read", "workflows/design:read", false)]
+    [InlineData("identity/*:read", "identity/users:delete", false)]
+    [InlineData("identity/users/*:read", "identity/roles:read", false)]
+    public async Task ATrailingWildcardResourceCoversTheResourceAndEveryChild(string grant, string required, bool expected)
     {
-        var evaluator = new ClaimsPermissionEvaluator(new TestPermissionCatalog(
-        [
-            new("admin", "Admin", "Test", "Admin.", new HashSet<string> { "MANAGE" }),
-            new("manage", "Manage", "Test", "Manage.", new HashSet<string> { "READ" }),
-            new("read", "Read", "Test", "Read.", new HashSet<string> { "MANAGE" }),
-            new("write", "Write", "Test", "Write.")
-        ]));
-
-        var implied = await evaluator.EvaluateAsync(Context("ADMIN", "read"));
-        var reverse = await evaluator.EvaluateAsync(Context("READ", "admin"));
-        var requestedExpansion = await evaluator.EvaluateAsync(Context("MANAGE", "admin"));
-
-        Assert.True(implied.Succeeded);
-        Assert.False(reverse.Succeeded);
-        Assert.False(requestedExpansion.Succeeded);
+        Assert.Equal(expected, await GrantsAsync(grant, required));
     }
 
-    [Fact]
-    public async Task WildcardGrantSatisfiesOrdinaryPermissionButNotWildcardRequest()
+    [Theory]
+    [InlineData("identity/users:*", "identity/users:read", true)]
+    [InlineData("identity/users:*", "identity/users:delete", true)]
+    [InlineData("identity/users:*", "identity/roles:read", false)]
+    [InlineData("*:read", "workflows/design:read", true)]
+    [InlineData("*:read", "workflows/design:manage", false)]
+    public async Task AWildcardVerbOrResourceCoversOnlyItsOwnAxis(string grant, string required, bool expected)
     {
-        var evaluator = new ClaimsPermissionEvaluator(new TestPermissionCatalog(
-        [new("read", "Read", "Test", "Read permission.")]));
-
-        var ordinary = await evaluator.EvaluateAsync(Context("*", "READ"));
-        var wildcard = await evaluator.EvaluateAsync(Context("read", "*"));
-        var explicitWildcard = await evaluator.EvaluateAsync(Context("*", "*"));
-
-        Assert.True(ordinary.Succeeded);
-        Assert.False(wildcard.Succeeded);
-        Assert.True(explicitWildcard.Succeeded);
+        Assert.Equal(expected, await GrantsAsync(grant, required));
     }
 
-    [Fact]
-    public async Task RejectsPaddedDeclarationsAndDoesNotAuthorizeFromPaddedClaims()
+    [Theory]
+    [InlineData("*", "identity/users:manage", true)]
+    [InlineData("*", "workflows/runtime/javascript:execute", true)]
+    [InlineData("*:*", "secrets:delete", true)]
+    [InlineData("*", "*", true)]
+    [InlineData("*:*", "*", true)]
+    [InlineData("identity/*:*", "*", false)]
+    [InlineData("identity/users:manage", "*", false)]
+    public async Task TheBareWildcardIsTheSuperuserAndOnlyItSatisfiesAWildcardRequest(string grant, string required, bool expected)
     {
-        var paddedCatalog = new ClaimsPermissionEvaluator(new TestPermissionCatalog(
-        [new(" read ", "Read", "Test", "Invalid definition.")]));
-        var evaluator = new ClaimsPermissionEvaluator(new TestPermissionCatalog(
-        [new("read", "Read", "Test", "Read permission.")]));
-
-        await Assert.ThrowsAsync<InvalidOperationException>(() => paddedCatalog.EvaluateAsync(Context("read", "read")).AsTask());
-        await Assert.ThrowsAsync<ArgumentException>(() => evaluator.EvaluateAsync(Context("read", " read ")).AsTask());
-        var paddedClaim = await evaluator.EvaluateAsync(Context(" read ", "read"));
-        Assert.False(paddedClaim.Succeeded);
+        Assert.Equal(expected, await GrantsAsync(grant, required));
     }
 
-    [Fact]
-    public async Task RejectsWildcardCatalogDefinitionsAndImplicationTargets()
+    [Theory]
+    [InlineData("identity/users:manage", "identity/users:read", true)]
+    [InlineData("identity/*:manage", "identity/users:read", true)]
+    [InlineData("*:manage", "secrets:read", true)]
+    [InlineData("identity/users:manage", "identity/roles:read", false)]
+    [InlineData("identity/users:read", "identity/users:manage", false)]
+    [InlineData("identity/users:manage", "identity/users:delete", false)]
+    [InlineData("identity/users:write", "identity/users:read", false)]
+    [InlineData("studio/preferences/defaults:manage", "studio/preferences:read", false)]
+    public async Task ManageImpliesReadOnTheSameResourceAndNothingElseImpliesAnything(string grant, string required, bool expected)
     {
-        var definitionEvaluator = new ClaimsPermissionEvaluator(new TestPermissionCatalog(
-        [new("*", "Wildcard", "Test", "Invalid definition.")]));
-        var targetEvaluator = new ClaimsPermissionEvaluator(new TestPermissionCatalog(
-        [new("admin", "Admin", "Test", "Invalid target.", new HashSet<string> { "*" })]));
-
-        await Assert.ThrowsAsync<InvalidOperationException>(() => definitionEvaluator.EvaluateAsync(Context("admin", "read")).AsTask());
-        await Assert.ThrowsAsync<InvalidOperationException>(() => targetEvaluator.EvaluateAsync(Context("admin", "read")).AsTask());
+        Assert.Equal(expected, await GrantsAsync(grant, required));
     }
 
-    [Fact]
-    public async Task BuildsTheCatalogIndexOnceAcrossEvaluations()
+    [Theory]
+    [InlineData("identity.users.read")]
+    [InlineData("identity/users")]
+    [InlineData("identity/*")]
+    [InlineData("identity*:read")]
+    [InlineData("*/users:read")]
+    [InlineData("identity/*/users:read")]
+    [InlineData("identity//users:read")]
+    [InlineData("identity/users:re*d")]
+    [InlineData("identity/users:read:extra")]
+    [InlineData("identity/users:read/all")]
+    [InlineData("identity users:read")]
+    [InlineData(" identity/users:read")]
+    [InlineData("")]
+    public async Task AGrantThatIsNotAPermissionMatchesNothing(string grant)
     {
-        // An endpoint that authorizes each row of a page evaluates twice per row against one scoped evaluator, so a
-        // per-evaluation rebuild put a full catalog walk on the per-row path.
-        var catalog = new CountingPermissionCatalog(
-        [
-            new("admin", "Admin", "Test", "Admin.", new HashSet<string> { "READ" }),
-            new("read", "Read", "Test", "Read.")
-        ]);
-        var evaluator = new ClaimsPermissionEvaluator(catalog);
-
-        var first = await evaluator.EvaluateAsync(Context("ADMIN", "read"));
-        var second = await evaluator.EvaluateAsync(Context("ADMIN", "read"));
-        var third = await evaluator.EvaluateAsync(Context("read", "admin"));
-
-        Assert.True(first.Succeeded);
-        Assert.True(second.Succeeded);
-        Assert.False(third.Succeeded);
-        Assert.Equal(1, catalog.ListCalls);
+        Assert.False(await GrantsAsync(grant, "identity/users:read"));
     }
 
-    [Fact]
-    public async Task KeepsThrowingForAMalformedCatalogOnEveryEvaluation()
+    [Theory]
+    [InlineData("identity.users.read")]
+    [InlineData("identity/*:read")]
+    [InlineData("identity/users:*")]
+    [InlineData(" identity/users:read")]
+    public async Task ARequestThatIsNotOneConcretePermissionIsAProgrammingError(string required)
     {
-        // A failed build must not be cached as a success, and must not be swallowed on the second call.
-        var evaluator = new ClaimsPermissionEvaluator(new TestPermissionCatalog(
-        [new("*", "Wildcard", "Test", "Invalid definition.")]));
-
-        await Assert.ThrowsAsync<InvalidOperationException>(() => evaluator.EvaluateAsync(Context("admin", "read")).AsTask());
-        await Assert.ThrowsAsync<InvalidOperationException>(() => evaluator.EvaluateAsync(Context("admin", "read")).AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => GrantsAsync("*", required));
     }
 
-    private static PermissionEvaluationContext Context(string granted, string requested) =>
-        new(new ClaimsPrincipal(new ClaimsIdentity(
-        [new Claim(IdentityClaimTypes.Permission, granted)], "test")), requested);
-
-    private sealed class CountingPermissionCatalog(IReadOnlyCollection<Permission> permissions) : IPermissionCatalog
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task AnEmptyRequestIsDenied(string? required)
     {
-        public int ListCalls { get; private set; }
-
-        public IReadOnlyCollection<Permission> List()
-        {
-            ListCalls++;
-            return permissions;
-        }
-
-        public Permission? Find(string key) => permissions.FirstOrDefault(permission => permission.Key == key);
+        Assert.False(await GrantsAsync("*", required!));
     }
 
-    private sealed class TestPermissionCatalog(IReadOnlyCollection<Permission> permissions) : IPermissionCatalog
+    private async Task<bool> GrantsAsync(string grant, string required)
     {
-        public IReadOnlyCollection<Permission> List() => permissions;
-
-        public Permission? Find(string key) => permissions.FirstOrDefault(permission => permission.Key == key);
+        var principal = new ClaimsPrincipal(new ClaimsIdentity([new Claim(IdentityClaimTypes.Permission, grant)], "test"));
+        return (await _evaluator.EvaluateAsync(new PermissionEvaluationContext(principal, required))).Succeeded;
     }
 }

@@ -77,27 +77,27 @@ public sealed class EndpointSecurityTests
         // real sources rather than a copy of them.
         var expected = new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["Elsa.Workflows.Design.Api.Authorization.WorkflowDesignPermissions.Read"] = "workflow-design.read",
-            ["Elsa.Workflows.Design.Api.Authorization.WorkflowDesignPermissions.Manage"] = "workflow-design.manage",
-            ["Elsa.Activities.Design.Api.Authorization.ActivityDesignPermissions.Read"] = "activity-design.read",
-            ["Elsa.Activities.Design.Api.Authorization.ActivityDesignPermissions.Manage"] = "activity-design.manage",
-            ["Elsa.Expressions.Api.Authorization.ExpressionsPermissions.Read"] = "expressions.read",
-            ["Elsa.Workflows.Publishing.Api.Authorization.WorkflowPublishingPermissions.Read"] = "workflow-publishing.read",
-            ["Elsa.Workflows.Publishing.Api.Authorization.WorkflowPublishingPermissions.Manage"] = "workflow-publishing.manage",
-            ["Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions.WorkflowRuntimeRead"] = "workflow-runtime.read",
-            ["Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions.WorkflowRuntimeExecute"] = "workflow-runtime.execute",
-            ["Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions.WorkflowRuntimeManage"] = "workflow-runtime.manage",
-            ["Elsa.Api.Capabilities.Authorization.ApiCapabilitiesPermissions.Read"] = "api-capabilities.read",
-            ["Elsa3.Activities.Design.Import.Endpoints.Elsa3ImportPermissions.Read"] = "elsa3-import.read",
-            ["Elsa3.Activities.Design.Import.Endpoints.Elsa3ImportPermissions.Manage"] = "elsa3-import.manage",
-            ["Elsa.Activities.Bpmn.Interchange.Endpoints.BpmnInterchangePermissions.Read"] = "bpmn-interchange.read",
-            ["Elsa.Activities.Bpmn.Interchange.Endpoints.BpmnInterchangePermissions.Manage"] = "bpmn-interchange.manage"
+            ["Elsa.Workflows.Design.Api.Authorization.WorkflowDesignPermissions.Read"] = "workflows/design:read",
+            ["Elsa.Workflows.Design.Api.Authorization.WorkflowDesignPermissions.Manage"] = "workflows/design:manage",
+            ["Elsa.Activities.Design.Api.Authorization.ActivityDesignPermissions.Read"] = "activities/design:read",
+            ["Elsa.Activities.Design.Api.Authorization.ActivityDesignPermissions.Manage"] = "activities/design:manage",
+            ["Elsa.Expressions.Api.Authorization.ExpressionsPermissions.Read"] = "expressions:read",
+            ["Elsa.Workflows.Publishing.Api.Authorization.WorkflowPublishingPermissions.Read"] = "workflows/publishing:read",
+            ["Elsa.Workflows.Publishing.Api.Authorization.WorkflowPublishingPermissions.Manage"] = "workflows/publishing:manage",
+            ["Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions.WorkflowRuntimeRead"] = "workflows/runtime:read",
+            ["Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions.WorkflowRuntimeExecute"] = "workflows/runtime:execute",
+            ["Elsa.Workflows.Runtime.Api.Authorization.WorkflowRuntimePermissions.WorkflowRuntimeManage"] = "workflows/runtime:manage",
+            ["Elsa.Api.Capabilities.Authorization.ApiCapabilitiesPermissions.Read"] = "api-capabilities:read",
+            ["Elsa3.Activities.Design.Import.Endpoints.Elsa3ImportPermissions.Read"] = "elsa3-import:read",
+            ["Elsa3.Activities.Design.Import.Endpoints.Elsa3ImportPermissions.Manage"] = "elsa3-import:manage",
+            ["Elsa.Activities.Bpmn.Interchange.Endpoints.BpmnInterchangePermissions.Read"] = "bpmn-interchange:read",
+            ["Elsa.Activities.Bpmn.Interchange.Endpoints.BpmnInterchangePermissions.Manage"] = "bpmn-interchange:manage"
         };
         var actual = expected.Keys.ToDictionary(key => key, ReadDeclaredPermission, StringComparer.Ordinal);
 
         Assert.Equal(expected.OrderBy(x => x.Key), actual.OrderBy(x => x.Key));
         Assert.Equal(actual.Count, actual.Values.Distinct(StringComparer.Ordinal).Count());
-        Assert.All(actual.Values, value => Assert.Matches("^[a-z][a-z0-9-]*\\.(read|manage|execute)$", value));
+        Assert.All(actual.Values, value => Assert.Matches("^[a-z][a-z0-9-]*(/[a-z][a-z0-9-]*)*:(read|manage|execute)$", value));
         Assert.NotEqual(
             actual["Elsa.Api.Capabilities.Authorization.ApiCapabilitiesPermissions.Read"],
             actual["Elsa.Workflows.Design.Api.Authorization.WorkflowDesignPermissions.Read"]);

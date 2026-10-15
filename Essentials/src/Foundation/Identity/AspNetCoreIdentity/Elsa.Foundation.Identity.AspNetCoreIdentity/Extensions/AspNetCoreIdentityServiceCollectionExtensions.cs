@@ -1,3 +1,4 @@
+using CShells.Lifecycle;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Foundation.Identity.Core.Iam;
@@ -55,6 +56,13 @@ public static class AspNetCoreIdentityServiceCollectionExtensions
         services.TryAddScoped<IdentitySeedCoordinator>();
 
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IAuthenticationProviderModule, AspNetCoreIdentityAuthenticationProviderModule>());
+
+        if (services.All(descriptor => descriptor.ServiceType != typeof(UnknownRoleGrantReporter)))
+        {
+            services.AddSingleton<UnknownRoleGrantReporter>();
+            services.AddHostedService(sp => sp.GetRequiredService<UnknownRoleGrantReporter>());
+            services.AddSingleton<IShellInitializer>(sp => sp.GetRequiredService<UnknownRoleGrantReporter>());
+        }
 
         return services;
     }

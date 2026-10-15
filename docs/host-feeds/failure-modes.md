@@ -111,7 +111,7 @@ a readiness-gated load balancer never sends one: the node would stay live, not r
   because it is public and unauthenticated: it never names the exception, the EF module or its migrations.
 - **Attention carries the detail.** While a shell is not active, the `shell-activation` Attention contributor lists it: a
   warning for a fault (with the exception *type*), critical for a refusal (with the EF module, its code and the pending
-  migrations). It needs the `module-management.read` permission, the one the Modularity contributor asks for. It goes when
+  migrations). It needs the `module-management:read` permission, the one the Modularity contributor asks for. It goes when
   the shell is active by any path: the retry, a request or a reload. Messages are in the host log only, because a driver's
   message can echo a connection string, and the persistence command is in the log and in the reload endpoint's 409.
 - **When the only shell is down, nothing serves the Attention item.** It is served by whichever shell is active, so it helps

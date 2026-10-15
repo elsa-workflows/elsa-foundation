@@ -27,11 +27,11 @@ public sealed class ReusableActivityImportHttpContractTests
             .ToArray();
 
         Assert.Equal(5, endpoints.Length);
-        AssertEndpoint(endpoints, "POST", "migration/elsa3/reusable-activities/collections", "elsa3-import.manage");
-        AssertEndpoint(endpoints, "GET", "migration/elsa3/reusable-activities/collections/{collectionHandle}/analysis", "elsa3-import.read");
-        AssertEndpoint(endpoints, "POST", "migration/elsa3/reusable-activities/collections/{collectionHandle}/selection", "elsa3-import.read");
-        AssertEndpoint(endpoints, "POST", "migration/elsa3/reusable-activities/collections/{collectionHandle}/apply", "elsa3-import.manage");
-        AssertEndpoint(endpoints, "GET", "migration/elsa3/reusable-activities/imports/{idempotencyKey}", "elsa3-import.read");
+        AssertEndpoint(endpoints, "POST", "migration/elsa3/reusable-activities/collections", "elsa3-import:manage");
+        AssertEndpoint(endpoints, "GET", "migration/elsa3/reusable-activities/collections/{collectionHandle}/analysis", "elsa3-import:read");
+        AssertEndpoint(endpoints, "POST", "migration/elsa3/reusable-activities/collections/{collectionHandle}/selection", "elsa3-import:read");
+        AssertEndpoint(endpoints, "POST", "migration/elsa3/reusable-activities/collections/{collectionHandle}/apply", "elsa3-import:manage");
+        AssertEndpoint(endpoints, "GET", "migration/elsa3/reusable-activities/imports/{idempotencyKey}", "elsa3-import:read");
     }
 
     private static void AssertEndpoint(

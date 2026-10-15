@@ -114,7 +114,7 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
     public async Task AllowsAuthenticatedBrowserRequestWithModuleManagementReadWhenStudioAuthEnabled()
     {
         // The backend session endpoint validates the browser bearer AND reports its permissions; a session holding
-        // module-management.read passes the status/registry read gate (#249).
+        // module-management:read passes the status/registry read gate (#249).
         var backend = SessionBackend(StudioBridgeAuth.ModuleManagementReadPermission);
         var client = await StartConfiguredHostAsync(backend, authEnabled: true, bearer: ValidBearer);
 
@@ -126,7 +126,7 @@ public sealed class StudioBackendManagementBridgeTests : IAsyncDisposable
     [Fact]
     public async Task ForbidsAuthenticatedBrowserStatusRequestMissingModuleManagementReadWhenStudioAuthEnabled()
     {
-        // A live session that lacks module-management.read is FORBIDDEN (403) — a distinct authorization failure, not a
+        // A live session that lacks module-management:read is FORBIDDEN (403) — a distinct authorization failure, not a
         // 401 and not a backend-status state. No backend management call is issued for a forbidden caller.
         var backend = SessionBackend();
         var client = await StartConfiguredHostAsync(backend, authEnabled: true, bearer: ValidBearer);

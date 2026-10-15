@@ -617,8 +617,8 @@ public sealed class RuntimeMinimalApiBehaviorTests
                 new ClaimsPrincipal(new ClaimsIdentity(
                     [
                         new Claim(ClaimTypes.NameIdentifier, "operator-1"),
-                        new Claim(IdentityClaimTypes.Permission, "workflow-runtime.read"),
-                        new Claim(IdentityClaimTypes.Permission, "workflow-runtime.execute"),
+                        new Claim(IdentityClaimTypes.Permission, "workflows/runtime:read"),
+                        new Claim(IdentityClaimTypes.Permission, "workflows/runtime:execute"),
                         new Claim(IdentityClaimTypes.Normalized, "v1")
                     ],
                     Scheme.Name)),

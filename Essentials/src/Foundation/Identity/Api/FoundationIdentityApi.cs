@@ -114,8 +114,7 @@ public static class FoundationIdentityApi
                 x.Key,
                 x.DisplayName,
                 x.Category,
-                x.Description,
-                x.Implies?.ToArray() ?? [])).ToList());
+                x.Description)).ToList());
 
         await Results.Json(response, FoundationIdentityApiJsonContext.Default.IdentityCapabilitiesResponse).ExecuteAsync(context);
     }

@@ -22,15 +22,15 @@ namespace Elsa.Diagnostics.OpenTelemetry.Tests;
 
 public sealed class OpenTelemetryAuthorizationTests
 {
-    private const string Permission = "DIAGNOSTICS:OPENTELEMETRY.READ";
+    private const string Permission = "DIAGNOSTICS/OPENTELEMETRY:READ";
 
     [Theory]
     [InlineData(null, HttpStatusCode.Unauthorized)]
     [InlineData("lacking", HttpStatusCode.Forbidden)]
     [InlineData("exact", HttpStatusCode.OK)]
     [InlineData("wildcard", HttpStatusCode.OK)]
-    [InlineData("legacy", HttpStatusCode.OK)]
-    [InlineData("implied", HttpStatusCode.Forbidden)]
+    [InlineData("subtree", HttpStatusCode.OK)]
+    [InlineData("parent", HttpStatusCode.Forbidden)]
     [InlineData("tenant", HttpStatusCode.OK)]
     [InlineData("resource", HttpStatusCode.OK)]
     public async Task Query_endpoint_uses_the_same_permission_evaluator_for_mixed_host(string? identity, HttpStatusCode expected)
@@ -44,7 +44,7 @@ public sealed class OpenTelemetryAuthorizationTests
 
         Assert.Equal(expected, response.StatusCode);
 
-        if (identity is "exact" or "wildcard" or "legacy")
+        if (identity is "exact" or "wildcard" or "subtree")
         {
             using var canaryRequest = new HttpRequestMessage(HttpMethod.Get, "/_wave5/fe-canary");
             canaryRequest.Headers.Add("X-Test-Identity", identity);
@@ -126,9 +126,9 @@ public sealed class OpenTelemetryAuthorizationTests
             {
                 "exact" or "tenant" or "resource" => Permission,
                 "wildcard" => PermissionKey.Wildcard,
-                "legacy" => "DIAGNOSTICS:OPENTELEMETRY",
-                "implied" => "DIAGNOSTICS",
-                _ => "DIAGNOSTICS:OTHER"
+                "subtree" => "DIAGNOSTICS/*:READ",
+                "parent" => "DIAGNOSTICS:READ",
+                _ => "DIAGNOSTICS/OTHER:READ"
             };
             var claims = new List<Claim>
             {

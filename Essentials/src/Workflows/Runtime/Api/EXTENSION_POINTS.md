@@ -28,8 +28,8 @@ Optional stimulus/trigger providers are additive contributors to Runtime routing
 
 Activity-execution detail exposes capture truth and stable evidence identities but never embeds raw captured payloads. Clients resolve a payload through the dedicated `value-evidence/{evidenceId}/payload` capability only after the separate payload-resolution authorization and audit path succeeds.
 
-Alteration endpoints are a durable command/query surface: submit and cancel require `workflow-runtime.manage`; plan
-and job reads require `workflow-runtime.read`. Hosts add custom alteration implementations through the Runtime
+Alteration endpoints are a durable command/query surface: submit and cancel require `workflows/runtime:manage`; plan
+and job reads require `workflows/runtime:read`. Hosts add custom alteration implementations through the Runtime
 `AddWorkflowAlterationHandler<T>` contribution, not by adding API request handlers or wire-level CLR type names. The
 API exposes no handler payload schema endpoint: descriptor-only discovery remains the trusted host's
 `IWorkflowAlterationRegistry` concern, avoiding handler construction and executable payload-type leakage.
