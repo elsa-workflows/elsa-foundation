@@ -114,16 +114,16 @@ public sealed class FixturePayload
 /// </summary>
 public sealed class ComplexInputFixtureActivity : FixtureActivity
 {
-    [ActivityInput(Order = 20)]
+    [ActivityInput(Order = 20, Tier = InputTier.Optional)]
     public FixturePayload Payload { get; set; } = null!;
 
-    [ActivityInput(Order = 10, Category = "Simple", DefaultValue = "Auto", DefaultSyntax = "Literal")]
+    [ActivityInput(Order = 10, Category = "Simple", DefaultValue = "Auto", DefaultSyntax = "Literal", Tier = InputTier.Essential)]
     public FixtureMode Mode { get; set; }
 
     [ActivityInput(Order = 30)]
     public string Label { get; set; } = null!;
 
-    [ActivityInput(Order = 40, DefaultValue = "1", DefaultSyntax = "Literal")]
+    [ActivityInput(Order = 40, DefaultValue = "1", DefaultSyntax = "Literal", Tier = InputTier.Setting)]
     public int Count { get; set; }
 }
 

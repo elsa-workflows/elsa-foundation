@@ -123,6 +123,120 @@ describe("isWorkflowEditorKeyboardTarget", () => {
     expect(isWorkflowEditorKeyboardTarget(window)).toBe(false);
     expect(isWorkflowEditorKeyboardTarget(document)).toBe(false);
   });
+
+  it("walks the keydown composedPath through a shadow tree into the code editor", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const editor = document.createElement("section");
+    editor.dataset.studioCodeEditor = "true";
+    const inner = document.createElement("span");
+    editor.appendChild(inner);
+    host.attachShadow({ mode: "open" }).appendChild(editor);
+
+    let blocked: boolean | undefined;
+    let targetOnly: boolean | undefined;
+    const listener = (event: KeyboardEvent) => {
+      targetOnly = isWorkflowEditorKeyboardTarget(event.target);
+      blocked = isActivityClipboardShortcutBlocked(event);
+    };
+    window.addEventListener("keydown", listener, true);
+    inner.dispatchEvent(new KeyboardEvent("keydown", {
+      key: "d",
+      ctrlKey: true,
+      bubbles: true,
+      composed: true
+    }));
+    window.removeEventListener("keydown", listener, true);
+
+    expect(targetOnly).toBe(false);
+    expect(blocked).toBe(true);
+    host.remove();
+  });
+
+  it("treats Monaco and text-node targets as editor-owned from the node even when the caret is elsewhere", () => {
+    const monaco = document.createElement("div");
+    monaco.className = "monaco-editor";
+    const inputArea = document.createElement("textarea");
+    inputArea.className = "inputarea";
+    monaco.appendChild(inputArea);
+    document.body.appendChild(monaco);
+
+    const editor = document.createElement("section");
+    editor.dataset.studioCodeEditor = "true";
+    const token = document.createElement("span");
+    token.appendChild(document.createTextNode("buyer.email"));
+    editor.appendChild(token);
+    document.body.appendChild(editor);
+
+    const previouslyFocused = document.createElement("button");
+    document.body.appendChild(previouslyFocused);
+    previouslyFocused.focus();
+
+    expect(isWorkflowEditorKeyboardTarget(inputArea)).toBe(true);
+    expect(isWorkflowEditorKeyboardTarget(token.firstChild)).toBe(true);
+    expect(document.activeElement).toBe(previouslyFocused);
+
+    monaco.remove();
+    editor.remove();
+    previouslyFocused.remove();
+  });
+
+  it("blocks a keydown outside the editor when the caret is still inside it", () => {
+    const editor = document.createElement("section");
+    editor.dataset.studioCodeEditor = "true";
+    const surface = document.createElement("textarea");
+    editor.appendChild(surface);
+    document.body.appendChild(editor);
+    surface.focus();
+
+    const event = new KeyboardEvent("keydown", { key: "d", ctrlKey: true, bubbles: true, composed: true });
+    document.body.dispatchEvent(event);
+
+    expect(document.activeElement).toBe(surface);
+    expect(isWorkflowEditorKeyboardTarget(event.target)).toBe(false);
+    expect(isActivityClipboardShortcutBlocked(event)).toBe(true);
+
+    editor.remove();
+  });
+
+  it("blocks shortcuts while a code editor is swapping engines, but not for an idle compact preview", () => {
+    const designer = document.createElement("section");
+    const canvas = document.createElement("div");
+    designer.appendChild(canvas);
+    document.body.appendChild(designer);
+
+    const swapping = document.createElement("section");
+    swapping.dataset.studioCodeEditor = "true";
+    designer.appendChild(swapping);
+    expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(true);
+
+    const preview = document.createElement("button");
+    preview.className = "studio-code-editor-preview";
+    swapping.appendChild(preview);
+    expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(false);
+
+    swapping.remove();
+    designer.remove();
+  });
+
+  it("does not treat a revoked-authorization editor as swapping", () => {
+    const designer = document.createElement("section");
+    const canvas = document.createElement("div");
+    designer.appendChild(canvas);
+    document.body.appendChild(designer);
+
+    const revoked = document.createElement("section");
+    revoked.dataset.studioCodeEditor = "true";
+    const status = document.createElement("div");
+    status.className = "studio-code-editor-status";
+    status.textContent = "Expression source is hidden because the authorization session changed.";
+    revoked.appendChild(status);
+    designer.appendChild(revoked);
+    expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(false);
+
+    revoked.remove();
+    designer.remove();
+  });
 });
 
 describe("activity clipboard shortcut gating", () => {

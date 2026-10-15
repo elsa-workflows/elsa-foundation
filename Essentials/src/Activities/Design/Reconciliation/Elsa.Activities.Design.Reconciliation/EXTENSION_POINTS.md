@@ -34,7 +34,7 @@ Every `IEvent` type in the `Elsa.Activities.Design.Core.Reconciliation` namespac
 ### ActivityVersionsReconciling
 `(ICollection<IActivityDefinitionVersion> Versions)`
 
-**Semantic.** The activity catalog reconciliation pass is running. Sources contribute their activity versions to the `Versions` collection; the reconciler diffs against the stored catalog.
+**Semantic.** The activity catalog reconciliation pass is running. Sources contribute their activity versions to the `Versions` collection; the reconciler diffs against the stored catalog. A hash difference that is only input `Tier` refreshes `Hash` and `InputsSource` in place (the single write-once exception); any other hash difference throws.
 
 **Delivery strategy.** Sequential — all versions must be contributed before reconciliation proceeds.
 

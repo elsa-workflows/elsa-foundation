@@ -5506,6 +5506,18 @@ button.wf-reference-select {
   gap: 9px;
 }
 
+.wf-dictionary-editor-loading {
+  min-height: 7.5rem;
+  align-content: center;
+  color: var(--wf-muted-text);
+  padding: 9px;
+}
+
+.wf-dictionary-editor-loading.expanded {
+  height: 100%;
+  min-height: 12rem;
+}
+
 .wf-dictionary-editor.expanded {
   height: 100%;
   grid-template-rows: auto minmax(0, 1fr);

@@ -425,6 +425,10 @@ public abstract class ActivitiesDesignDbContext(DbContextOptions options) : DbCo
 
     private static void ConfigureImmutableProperties(ModelBuilder modelBuilder)
     {
+        // Hash and InputsSource are write-once after insert (PropertySaveBehavior.Throw on SaveChanges).
+        // The single sanctioned exception is IRefreshActivityDefinitionVersionCommand: a tier-only
+        // catalog refresh, which uses ExecuteUpdateAsync with a hash compare-and-swap so it never
+        // goes through this guard. No other caller may rewrite those columns.
         var immutable = new[]
         {
             (typeof(ActivityDefinition), "ActivityTypeKey"),
