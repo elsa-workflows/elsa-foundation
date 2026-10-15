@@ -23,8 +23,8 @@ namespace Elsa.Activities.Design.Core.Models;
 /// </para>
 /// <para>
 /// <see cref="Tier"/> is the presentation-only disclosure group (<c>essential</c>, <c>optional</c>,
-/// <c>setting</c>). It is left out of every serialized form while null, and the catalog hasher
-/// strips it even when set, so adding or changing a tier does not throw
+/// <c>setting</c>). It is left out of every serialized form while null. The catalog hasher includes
+/// it when set, so adding or changing a tier re-reconciles the stored version instead of throwing
 /// <c>ActivityVersionHashMismatchException</c>. JSON catalogs and the descriptor/version API set the
 /// same strings; CLR authors set <c>[ActivityInput(Tier = InputTier.Optional)]</c>.
 /// </para>

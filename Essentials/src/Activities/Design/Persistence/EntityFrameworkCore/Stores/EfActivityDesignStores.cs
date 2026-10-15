@@ -52,6 +52,7 @@ public sealed class EfActivityDesignStores(
     ICreateActivityDefinitionCommand,
     IAddActivityDefinitionCommand,
     IAddActivityDefinitionVersionCommand,
+    IRefreshActivityDefinitionVersionCommand,
     ICreateActivityDraftCommand,
     IUpdateActivityDefinitionPresentationCommand,
     IUpdateActivityDraftPresentationCommand,
@@ -659,6 +660,24 @@ public sealed class EfActivityDesignStores(
             context.Db.ActivityDefinitionVersions.Add(version);
             return new ActivityDefinitionVersionAdded(version.DefinitionId, version.Id, version.Version, version.Hash);
         }, tenantId: version.TenantId, cancellationToken: cancellationToken)).Value;
+    }
+
+    public async Task RefreshAsync(DesignOperationKey operationKey, ActivityDefinitionVersion version, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(operationKey);
+        ArgumentNullException.ThrowIfNull(version);
+        EnsureTenant(version.TenantId);
+        PrepareVersion(version);
+        var hash = version.Hash;
+        var inputsSource = version.InputsSource;
+        var updated = await ById(Access(db.ActivityDefinitionVersions), version.Id)
+            .ExecuteUpdateAsync(
+                updates => updates
+                    .SetProperty(row => row.Hash, hash)
+                    .SetProperty(row => row.InputsSource, inputsSource),
+                cancellationToken);
+        if (updated != 1)
+            throw new InvalidOperationException("The activity version to refresh was not found in the current tenant.");
     }
 
     private static void ValidateCreate(CreateActivityDefinitionRequest request)

@@ -18,9 +18,9 @@ namespace Elsa.Activities.Design.Persistence.Core.Services;
 /// canonical sorted-key serialisation that the payload serializer does not produce, and the JSON is
 /// consumed only here (it is never persisted or read by another component — only the SHA-256 is).
 /// Excluded from the hash: <c>LastModifiedAt</c>/<c>CreatedAt</c>/<c>RowNumber</c>, provenance,
-/// identity fields such as <c>Id</c> and <c>Version</c>, nested versions on the parent, the
-/// presentation-only <c>elsa.activity-icon</c> design facet, and the presentation-only input
-/// <c>Tier</c>.
+/// identity fields such as <c>Id</c> and <c>Version</c>, nested versions on the parent, and the
+/// presentation-only <c>elsa.activity-icon</c> design facet. Input <c>Tier</c> is hashed so a
+/// changed disclosure group re-reconciles the stored version.
 /// </remarks>
 public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
 {
@@ -72,13 +72,10 @@ public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
         v.ConsumerSchemaVersion,
         v.DescriptorPayload,
         v.ExecutionType,
-        Inputs = ExcludePresentationInputFields(v.Inputs),
+        v.Inputs,
         v.Outputs,
         DesignFacets = ExcludePresentationFacets(v.DesignFacets),
     };
-
-    private static IEnumerable<InputDefinition> ExcludePresentationInputFields(IEnumerable<InputDefinition> inputs) =>
-        inputs.Select(input => input.Tier is null ? input : input with { Tier = null });
 
     private static IEnumerable<ActivityDesignFacet> ExcludePresentationFacets(IEnumerable<ActivityDesignFacet> facets) =>
         facets.Where(facet => !string.Equals(facet.Kind, ActivityIconName.FacetKind, StringComparison.Ordinal));

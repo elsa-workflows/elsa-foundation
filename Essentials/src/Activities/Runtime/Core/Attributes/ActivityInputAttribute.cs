@@ -60,10 +60,11 @@ public sealed class ActivityInputAttribute : Attribute
     public bool IsCredential { get; init; }
 
     /// <summary>
-    /// Optional designer disclosure tier. Presentation only: it is copied onto
-    /// <c>InputDefinition.Tier</c> and the authoring catalog <c>tier</c> field, and is excluded from
-    /// the descriptor hash, so adding or changing it does not throw
-    /// <c>ActivityVersionHashMismatchException</c>. Leave unset for the client default.
+    /// Optional designer disclosure tier. Presentation only at runtime: it is copied onto
+    /// <c>InputDefinition.Tier</c> and the authoring catalog <c>tier</c> field. It is part of the
+    /// descriptor hash, so adding or changing it re-reconciles the stored version in place (same
+    /// <c>(DefinitionId, Version)</c>) instead of throwing <c>ActivityVersionHashMismatchException</c>.
+    /// Other content changes on that identity still throw. Leave unset for the client default.
     /// </summary>
     /// <remarks>
     /// Attribute parameters cannot be nullable enums, so the CLR default is <c>0</c> (not a defined

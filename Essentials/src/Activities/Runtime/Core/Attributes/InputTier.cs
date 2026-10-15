@@ -2,7 +2,7 @@ namespace Elsa.Activities.Runtime.Core.Attributes;
 
 /// <summary>
 /// Presentation-only grouping for an activity input in the designer. It does not change
-/// requiredness, browsability, bindings, or the catalog content hash.
+/// requiredness, browsability, or bindings. It is part of the catalog content hash.
 /// </summary>
 /// <remarks>
 /// The authoring catalog exposes the value as the camel-case string <c>essential</c>,

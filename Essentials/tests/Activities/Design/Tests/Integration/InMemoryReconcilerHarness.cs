@@ -66,7 +66,8 @@ internal static class InMemoryReconcilerHarness
             definitionStore,
             versionStore,
             new InMemoryAddActivityDefinitionCommand(store),
-            new InMemoryAddVersionCommand(store));
+            new InMemoryAddVersionCommand(store),
+            new InMemoryRefreshVersionCommand(store));
     }
 
     public sealed class CatalogStore
@@ -120,6 +121,20 @@ internal static class InMemoryReconcilerHarness
         {
             store.Versions.Add(entity);
             return Task.FromResult(new ActivityDefinitionVersionAdded(entity.DefinitionId, entity.Id, entity.Version, entity.Hash));
+        }
+    }
+
+    private sealed class InMemoryRefreshVersionCommand(CatalogStore store) : IRefreshActivityDefinitionVersionCommand
+    {
+        public Task RefreshAsync(
+            DesignOperationKey operationKey,
+            ActivityDefinitionVersion version,
+            CancellationToken cancellationToken = default)
+        {
+            var persisted = store.Versions.Single(item => item.Id == version.Id);
+            persisted.Inputs = version.Inputs;
+            persisted.Hash = version.Hash;
+            return Task.CompletedTask;
         }
     }
 

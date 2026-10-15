@@ -99,7 +99,7 @@ public sealed class ClrAssemblyScannerTests
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
         { typeof(TriggerFixtureActivity), "10C41B96E22D85F9A598D30A6AE51D2FAA0F4EF5AA9909D23932EBC3CD00D80E" },
-        { typeof(HttpEndpoint), "E7E0CBCEC193A6377AD9102415555997268AC479B89FDDE58578244A5EBF7C88" }
+        { typeof(HttpEndpoint), "D081CBE360E49EDF9CA622EAFC6DA5B0029B400DA02538B2C6FC178285B665DD" }
     };
 
     [Theory]
@@ -154,11 +154,11 @@ public sealed class ClrAssemblyScannerTests
 
     public static TheoryData<Type, string> UndeclaredCatalogHashes => new()
     {
-        // Captured before the sensitivity flags existed: an activity that declares nothing must keep
-        // its catalog hash, or reconciling an existing catalog throws ActivityVersionHashMismatchException. Both values
-        // were re-derived independently on unmodified main at df02ece3c and matched.
+        // PlainFixtureActivity still declares nothing, so it keeps the pre-sensitivity catalog hash.
+        // ComplexInputFixtureActivity declares input tiers, which are hashed, so its snapshot moves
+        // with this PR rather than throwing on re-reconcile.
         { typeof(PlainFixtureActivity), "41ADAB509FABBD50A14009DB8FD9D1BCA14B7C4ED67E86725937D1C6B2ABC87E" },
-        { typeof(ComplexInputFixtureActivity), "2F39C96B99BCE02E81CDA3DF8FBB0CA9E8CA41A1809CD59C38E9B36DDF59A167" }
+        { typeof(ComplexInputFixtureActivity), "950B126E699A6CEB156EA274E9DB0B9563BD628566AEE99C6BC5AE1E9623B7AE" }
     };
 
     [Theory]
@@ -171,7 +171,8 @@ public sealed class ClrAssemblyScannerTests
         var json = JsonSerializer.Serialize(model.Inputs);
         Assert.DoesNotContain(nameof(InputDefinition.IsSensitive), json, StringComparison.Ordinal);
         Assert.DoesNotContain(nameof(InputDefinition.IsCredential), json, StringComparison.Ordinal);
-        Assert.Equal(expectedHash, CatalogVersion(model, model, activityType.Assembly).Hash);
+        var actualHash = CatalogVersion(model, model, activityType.Assembly).Hash;
+        Assert.True(expectedHash == actualHash, $"Expected hash '{expectedHash}', actual hash '{actualHash}'.");
     }
 
     [Theory]
@@ -751,13 +752,13 @@ public sealed class ClrAssemblyScannerTests
 
     public static TheoryData<Type, string> BuiltInCatalogHashesUnchangedFromMain => new()
     {
-        // Snapshot of origin/main at 14dd6f6e7 (#2716). Icon facets and input tiers are presentation
-        // only and are excluded from the hash, so these stay the values main already persisted even
-        // after SendHttpRequest and HttpEndpoint declare tiers.
-        { typeof(HttpEndpoint), "E7E0CBCEC193A6377AD9102415555997268AC479B89FDDE58578244A5EBF7C88" },
+        // WriteLine and Parallel still declare no tier, so they keep the origin/main snapshot at
+        // 14dd6f6e7 (#2716). HttpEndpoint and SendHttpRequest declare tiers, which are hashed, so
+        // their snapshots move with this PR. Icon facets stay excluded from the hash.
+        { typeof(HttpEndpoint), "D081CBE360E49EDF9CA622EAFC6DA5B0029B400DA02538B2C6FC178285B665DD" },
         { typeof(WriteLine), "618BB61870A3FADC2551123EA520F7F5852CB0D00CD4AE5E6DB8A80D7677EF2C" },
         { typeof(ParallelActivity), "A466AC1D4873108D85B6BA08D2058ACD9FD51A60571E8BA043043A17B20CCC82" },
-        { typeof(SendHttpRequest), "7AD368DDFFE9850E7581CDCA314FBCD451CBD3EF43DB8FDCBC59DB10D47C27E1" }
+        { typeof(SendHttpRequest), "3198C060D839A973424ED9347FB5468B13B2849B9D8FCCDE597C1D34FCE87DF9" }
     };
 
     [Theory]
@@ -768,7 +769,8 @@ public sealed class ClrAssemblyScannerTests
         var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == activityType.FullName);
 
         Assert.DoesNotContain(model.DesignFacets, facet => facet.Kind == ActivityIconName.FacetKind);
-        Assert.Equal(expectedHash, CatalogVersion(model, model, activityType.Assembly).Hash);
+        var actualHash = CatalogVersion(model, model, activityType.Assembly).Hash;
+        Assert.True(expectedHash == actualHash, $"Expected hash '{expectedHash}', actual hash '{actualHash}'.");
     }
 
     [Fact]

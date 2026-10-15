@@ -112,7 +112,7 @@ public sealed class HasherTests
     }
 
     [Fact]
-    public void Hash_IsStable_WhenOnlyTheInputTierChanges()
+    public void Hash_Changes_WhenTheInputTierChanges()
     {
         var hasher = new DefaultActivityDefinitionHasher();
         var (def, _) = MakeFixture();
@@ -124,8 +124,8 @@ public sealed class HasherTests
         var withTier = NewVersion(def, inputs: [essential]);
         var changedTier = NewVersion(def, inputs: [optional]);
 
-        Assert.Equal(hasher.Hash(def, withoutTier), hasher.Hash(def, withTier));
-        Assert.Equal(hasher.Hash(def, withTier), hasher.Hash(def, changedTier));
+        Assert.NotEqual(hasher.Hash(def, withoutTier), hasher.Hash(def, withTier));
+        Assert.NotEqual(hasher.Hash(def, withTier), hasher.Hash(def, changedTier));
     }
 
     [Fact]

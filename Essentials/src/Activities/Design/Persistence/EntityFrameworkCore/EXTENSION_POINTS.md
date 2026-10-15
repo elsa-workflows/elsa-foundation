@@ -11,7 +11,7 @@ The registration replaces the following contracts with the indicated implementat
 | Contract family | Implementation |
 |---|---|
 | Activity definition, version, authoring, draft, publication, layout, validation, dependency, availability, upgrade, and picker stores | `EfActivityDesignStores` |
-| Activity authoring, draft, lifecycle, recommendation, fork, and upgrade commands | `EfActivityDesignStores` |
+| Activity authoring, draft, lifecycle, recommendation, fork, upgrade, and in-place version refresh (`IRefreshActivityDefinitionVersionCommand`) commands | `EfActivityDesignStores` |
 | `IDesignAtomicWriter` | `EfDesignAtomicWrite` |
 | Management projection checkpoint writer | `EfActivityManagementProjectionWriter` |
 
