@@ -1,4 +1,4 @@
 #nullable enable
 Elsa.Serialization.SystemText.SerializationFeature
-Elsa.Serialization.SystemText.SerializationFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 Elsa.Serialization.SystemText.SerializationFeature.SerializationFeature() -> void
+virtual Elsa.Serialization.SystemText.SerializationFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

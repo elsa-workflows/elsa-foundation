@@ -1,8 +1,9 @@
 ﻿using CShells.Features;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Elsa.Expressions.JavaScript.Rendering.Contracts;
 using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
-using Elsa.Expressions.JavaScript.Rendering.Core.Events;
 using Elsa.Expressions.JavaScript.Rendering.Core.Models;
+using Elsa.Expressions.JavaScript.Rendering.Events;
 using Elsa.Expressions.JavaScript.Rendering.Handlers;
 using Elsa.Expressions.JavaScript.Rendering.Services;
 using Elsa.Expressions.JavaScript.Rendering.Contributors;
@@ -32,7 +33,7 @@ public class JavaScriptRenderingFeature : IShellFeature
 
     public IEnumerable<JavaScriptVariableDeclaration> VariableDeclarations { get; set; } = [];
 
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         services
             .AddEventHandler<DeclarationsDocumentGenerating, BuildDeclarationsDocument>()

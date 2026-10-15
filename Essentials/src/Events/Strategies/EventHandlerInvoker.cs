@@ -8,7 +8,7 @@ namespace Elsa.Events.Strategies;
 /// Invokes an event handler for the event an <see cref="IEventContext"/> carries, through a compiled delegate cached
 /// per event type. Publishing strategies dispatch each handler through <see cref="Invoke"/>.
 /// </summary>
-public static class EventHandlerInvoker
+internal static class EventHandlerInvoker
 {
     // Per-event-type compiled invoker. Rebuilding typeof(IEventHandler<>).MakeGenericType + GetMethod and
     // then dispatching through MethodBase.Invoke on every Publish was avoidable per-call reflection on a
