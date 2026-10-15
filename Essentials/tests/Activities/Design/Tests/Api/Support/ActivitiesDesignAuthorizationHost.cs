@@ -118,7 +118,7 @@ public sealed class ActivitiesDesignAuthorizationHost : IAsyncDisposable
     private static void MapAuthorizationProbeEndpoints(IEndpointRouteBuilder endpoints)
     {
         endpoints.MapGet("/test/activity-resource/{tenantId}", () => Results.Ok("resource-ok"))
-            .RequirePermission("activity-design.read");
+            .RequirePermission("activities/design:read");
 
         endpoints.MapGet("/test/activity-provider-authoring", async (
                 HttpContext context,
@@ -128,7 +128,7 @@ public sealed class ActivitiesDesignAuthorizationHost : IAsyncDisposable
                 var allowed = await authorization.CanAuthorProviderAsync(provider, context.RequestAborted);
                 return allowed ? Results.Ok(new { allowed = true }) : Results.Forbid();
             })
-            .RequirePermission("activity-design.manage");
+            .RequirePermission("activities/design:manage");
 
         endpoints.MapGet("/test/activity-provider-payload", async (
                 HttpContext context,
@@ -138,7 +138,7 @@ public sealed class ActivitiesDesignAuthorizationHost : IAsyncDisposable
                 var allowed = await authorization.CanReadProviderPayloadAsync(provider, context.RequestAborted);
                 return Results.Ok(new { payload = allowed ? "provider-payload" : null });
             })
-            .RequirePermission("activity-design.read");
+            .RequirePermission("activities/design:read");
 
         endpoints.MapGet("/test/activity-denial-boundary", (
                 AuthorizationProviderProbe provider,
@@ -150,7 +150,7 @@ public sealed class ActivitiesDesignAuthorizationHost : IAsyncDisposable
                 sender.Touch();
                 return Results.Ok();
             })
-            .RequirePermission("activity-design.manage");
+            .RequirePermission("activities/design:manage");
     }
 }
 
@@ -167,8 +167,8 @@ public sealed class ActivitiesDesignAuthorizationContributor : IPermissionContri
             "Test-only implied permission.",
             new HashSet<string>(StringComparer.Ordinal)
             {
-                "activity-design.read",
-                "activity-design.manage"
+                "activities/design:read",
+                "activities/design:manage"
             })
     ];
 }
@@ -352,8 +352,8 @@ public sealed class AuthorizationAuthenticationHandler(
 
         if (fixture == "ambiguous")
         {
-            var first = CreateIdentity(SchemeName, "activity-design.read", "tenant-a");
-            var second = CreateIdentity(SchemeName, "activity-design.read", "tenant-a");
+            var first = CreateIdentity(SchemeName, "activities/design:read", "tenant-a");
+            var second = CreateIdentity(SchemeName, "activities/design:read", "tenant-a");
             return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal([first, second]), SchemeName));
         }
 
@@ -388,18 +388,18 @@ public sealed class AuthorizationAuthenticationHandler(
         var marker = fixture == "invalid-normalization" ? "invalid" : "v1";
         var permissions = fixture switch
         {
-            "exact" or "normalized" or "tenant-b" or "route-mismatch" or "no-tenant" => new[] { "activity-design.read" },
+            "exact" or "normalized" or "tenant-b" or "route-mismatch" or "no-tenant" => new[] { "activities/design:read" },
             "implied-no-tenant" => new[] { "activity-design.admin" },
             "wildcard-no-tenant" => new[] { PermissionKey.Wildcard },
-            "manage" => new[] { "activity-design.read", "activity-design.manage" },
+            "manage" => new[] { "activities/design:read", "activities/design:manage" },
             "implied" => new[] { "activity-design.admin" },
             "wildcard" => new[] { PermissionKey.Wildcard },
-            "provider-author" => new[] { "activity-design.manage", HttpContextActivityDesignAuthorizationContext.AuthorPermission },
-            "provider-payload" => new[] { "activity-design.read", HttpContextActivityDesignAuthorizationContext.ProviderPayloadReadPermission },
+            "provider-author" => new[] { "activities/design:manage", HttpContextActivityDesignAuthorizationContext.AuthorPermission },
+            "provider-payload" => new[] { "activities/design:read", HttpContextActivityDesignAuthorizationContext.ProviderPayloadReadPermission },
             "provider-all" => new[]
             {
-                "activity-design.read",
-                "activity-design.manage",
+                "activities/design:read",
+                "activities/design:manage",
                 HttpContextActivityDesignAuthorizationContext.AuthorPermission,
                 HttpContextActivityDesignAuthorizationContext.ProviderPayloadReadPermission
             },
@@ -426,7 +426,7 @@ public sealed class AuthorizationAuthenticationHandler(
         if (tenant is not null)
             claims.Add(new Claim(IdentityClaimTypes.TenantId, tenant));
         claims.Add(new Claim(IdentityClaimTypes.Provider, "authorization-test-provider"));
-        claims.AddRange((permissions ?? ["activity-design.read"]).Select(permission => new Claim(IdentityClaimTypes.Permission, permission)));
+        claims.AddRange((permissions ?? ["activities/design:read"]).Select(permission => new Claim(IdentityClaimTypes.Permission, permission)));
         claims.Add(new Claim(ClaimTypes.NameIdentifier, "activities-design-authorization-actor"));
         return new ClaimsIdentity(claims, authenticationType);
     }
@@ -437,7 +437,7 @@ public sealed class ActivitiesDesignFastEndpoint : ElsaEndpointWithoutRequest<st
     public override void Configure()
     {
         Get("test/activity-fast");
-        ConfigurePermissions("activity-design.read");
+        ConfigurePermissions("activities/design:read");
     }
 
     public override Task HandleAsync(CancellationToken cancellationToken) =>

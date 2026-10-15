@@ -221,7 +221,7 @@ internal static class PermissionBypassScanner
         return keys;
     }
 
-    /// <summary>Letters and a <c>.</c>, <c>:</c> or <c>-</c>, the shape of a permission key such as <c>workflow-design.read</c>.</summary>
+    /// <summary>Letters and a <c>.</c>, <c>:</c> or <c>-</c>, the shape of a permission key such as <c>workflows/design:read</c>.</summary>
     private static bool IsNamespacedKey(string value) =>
         value.Any(char.IsLetter) && value.IndexOfAny(['.', ':', '-']) >= 0;
 

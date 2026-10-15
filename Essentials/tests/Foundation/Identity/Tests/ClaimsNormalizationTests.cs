@@ -21,7 +21,7 @@ public sealed class ClaimsNormalizationTests
             "tenant-a",
             "entra",
             [
-                new("later", "tenant-a", "entra", "groups", "admins", new HashSet<string> { "operators" }, new HashSet<string> { "identity.providers.read" }, 20, false),
+                new("later", "tenant-a", "entra", "groups", "admins", new HashSet<string> { "operators" }, new HashSet<string> { "identity/providers:read" }, 20, false),
                 new("first", "tenant-a", "entra", "groups", "admins", new HashSet<string> { "admins" }, new HashSet<string> { DefaultIdentityPermissionKeys.IdentityUsersManage }, 10, true)
             ]));
 
@@ -48,8 +48,8 @@ public sealed class ClaimsNormalizationTests
             "tenant-a",
             "entra",
             [
-                new("wrong-tenant", "tenant-b", "entra", "groups", "admins", new HashSet<string> { "tenant-b-admins" }, new HashSet<string> { "identity.roles.manage" }, 1, false),
-                new("wrong-provider", "tenant-a", "github", "groups", "admins", new HashSet<string> { "github-admins" }, new HashSet<string> { "identity.providers.manage" }, 2, false),
+                new("wrong-tenant", "tenant-b", "entra", "groups", "admins", new HashSet<string> { "tenant-b-admins" }, new HashSet<string> { "identity/roles:manage" }, 1, false),
+                new("wrong-provider", "tenant-a", "github", "groups", "admins", new HashSet<string> { "github-admins" }, new HashSet<string> { "identity/providers:manage" }, 2, false),
                 new("right", "tenant-a", "entra", "groups", "admins", new HashSet<string> { "admins" }, new HashSet<string> { DefaultIdentityPermissionKeys.IdentityUsersManage }, 3, false)
             ]));
 

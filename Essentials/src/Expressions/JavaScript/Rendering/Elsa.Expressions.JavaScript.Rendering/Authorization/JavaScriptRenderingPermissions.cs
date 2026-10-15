@@ -4,7 +4,7 @@ namespace Elsa.Expressions.JavaScript.Rendering;
 
 internal static class JavaScriptRenderingPermissions
 {
-    public const string Render = "expressions.javascript.render";
+    public const string Render = "expressions/javascript:render";
 }
 
 internal sealed class JavaScriptRenderingPermissionContributor : IPermissionContributor

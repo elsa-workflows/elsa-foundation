@@ -17,7 +17,7 @@ internal static class StudioBackendManagementBridge
     public static IEndpointRouteBuilder MapStudioBackendManagementBridge(this IEndpointRouteBuilder endpoints)
     {
         // Host-control permission gating (#249, ADR 0037). Status + registry read the backend module/feature registry,
-        // so they require `module-management.read`. When Studio auth is disabled every policy allows anonymously (demo
+        // so they require `module-management:read`. When Studio auth is disabled every policy allows anonymously (demo
         // shell). A signed-in user lacking the permission is forbidden (403) — distinct from an unauthenticated 401 and
         // from the backend-status states this bridge also reports. A Studio module that relays its own backend surface
         // nests its routes under the same route group from its shell feature.

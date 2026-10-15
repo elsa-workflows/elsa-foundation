@@ -64,7 +64,7 @@ public sealed class ActivitiesDesignAuthorizationBoundaryTests
         using var response = await host.Client.SendAsync(request);
 
         Assert.Equal(expected, response.StatusCode);
-        Assert.Contains("activities.design.author", host.Observations.EvaluatedPermissions);
+        Assert.Contains("activities/design:author", host.Observations.EvaluatedPermissions);
     }
 
     [Fact]
@@ -121,8 +121,8 @@ public sealed class ActivitiesDesignAuthorizationBoundaryTests
         Assert.Equal(0, host.Observations.CommandSenderCalls);
         Assert.Equal(0, host.Observations.ProviderCalls);
         Assert.Equal(0, host.Observations.StoreCalls);
-        Assert.DoesNotContain("activities.design.author", host.Observations.EvaluatedPermissions);
-        Assert.DoesNotContain("activities.design.provider-payload.read", host.Observations.EvaluatedPermissions);
+        Assert.DoesNotContain("activities/design:author", host.Observations.EvaluatedPermissions);
+        Assert.DoesNotContain("activities/design/provider-payload:read", host.Observations.EvaluatedPermissions);
     }
 
     [Fact]

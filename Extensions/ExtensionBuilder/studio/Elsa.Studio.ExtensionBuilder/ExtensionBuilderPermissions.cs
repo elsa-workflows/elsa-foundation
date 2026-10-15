@@ -8,8 +8,8 @@ namespace Elsa.Studio.ExtensionBuilder;
 /// </summary>
 internal static class ExtensionBuilderPermissions
 {
-    public const string Read = "extension-builder.read";
-    public const string Manage = "extension-builder.manage";
+    public const string Read = "extension-builder:read";
+    public const string Manage = "extension-builder:manage";
 
     /// <summary>Satisfies a READ surface: the read permission, or manage (which implies read).</summary>
     public static readonly string[] ReadKeys = [Read, Manage];

@@ -8,7 +8,7 @@ Modules contribute widgets with `registerHomeWidget` (or the `homeWidgets` / `da
 
 ## Layout persistence
 
-Signed-in users read and write `/_elsa/studio/home-layout`. Admins with `studio-preferences.manage-defaults` (or `*`) read and write `/_elsa/studio/home-layout/default`. **Reset to default** deletes the user document so the admin default, then the built-in layout, applies. When GET falls back to the admin default it still returns that document's ETag; the first user PUT uses `If-None-Match: *`. The reserved subject `__admin_default__` cannot call the per-user route.
+Signed-in users read and write `/_elsa/studio/home-layout`. Admins with `studio/preferences/defaults:manage` (or `*`) read and write `/_elsa/studio/home-layout/default`. **Reset to default** deletes the user document so the admin default, then the built-in layout, applies. When GET falls back to the admin default it still returns that document's ETag; the first user PUT uses `If-None-Match: *`. The reserved subject `__admin_default__` cannot call the per-user route.
 
 ## Anonymous and demo sessions
 

@@ -141,25 +141,25 @@ public static class IdentityClaimTypes
 
 public static class DefaultIdentityPermissionKeys
 {
-    public const string IdentityUsersRead = "identity.users.read";
+    public const string IdentityUsersRead = "identity/users:read";
 
-    public const string IdentityUsersManage = "identity.users.manage";
+    public const string IdentityUsersManage = "identity/users:manage";
 
-    public const string IdentityRolesRead = "identity.roles.read";
+    public const string IdentityRolesRead = "identity/roles:read";
 
-    public const string IdentityRolesManage = "identity.roles.manage";
+    public const string IdentityRolesManage = "identity/roles:manage";
 
-    public const string IdentityPermissionsRead = "identity.permissions.read";
+    public const string IdentityPermissionsRead = "identity/permissions:read";
 
-    public const string IdentityApplicationsRead = "identity.applications.read";
+    public const string IdentityApplicationsRead = "identity/applications:read";
 
-    public const string IdentityApplicationsManage = "identity.applications.manage";
+    public const string IdentityApplicationsManage = "identity/applications:manage";
 
-    public const string IdentityProvidersRead = "identity.providers.read";
+    public const string IdentityProvidersRead = "identity/providers:read";
 
-    public const string IdentityProvidersManage = "identity.providers.manage";
+    public const string IdentityProvidersManage = "identity/providers:manage";
 
-    public const string IdentityCredentialsManage = "identity.credentials.manage";
+    public const string IdentityCredentialsManage = "identity/credentials:manage";
 }
 
 public sealed record PermissionAuthorizationRequirement(string Permission) : IAuthorizationRequirement;

@@ -9,7 +9,7 @@ namespace Elsa.Diagnostics.StructuredLogs.Tests;
 
 public sealed class StructuredLogsPermissionsTests
 {
-    private const string ExpectedPermission = "Diagnostics:StructuredLogs";
+    private const string ExpectedPermission = "diagnostics/structured-logs:read";
     private const string ExpectedOwner = "Elsa.Diagnostics.StructuredLogs";
 
     [Fact]

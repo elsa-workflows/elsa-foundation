@@ -25,7 +25,7 @@ public sealed class OpenTelemetryPermissionContributor : IPermissionContributor
             OpenTelemetryPermissions.LegacyPolicy,
             "Legacy OpenTelemetry diagnostics access",
             "Diagnostics",
-            "Compatibility alias for existing grants; use Diagnostics:OpenTelemetry.Read for new assignments.",
+            "Compatibility alias for existing grants; use diagnostics/opentelemetry:read for new assignments.",
             new HashSet<string>(StringComparer.Ordinal) { OpenTelemetryPermissions.Read })
         {
             OwnerId = OwnerId,

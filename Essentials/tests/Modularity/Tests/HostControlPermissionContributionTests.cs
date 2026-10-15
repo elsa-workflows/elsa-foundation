@@ -39,10 +39,10 @@ public sealed class HostControlPermissionContributionTests
     {
         var keys = _catalog.List().Select(x => x.Key).ToHashSet();
 
-        Assert.Contains("module-management.read", keys);
-        Assert.Contains("module-management.manage", keys);
-        Assert.Contains("extension-builder.read", keys);
-        Assert.Contains("extension-builder.manage", keys);
+        Assert.Contains("module-management:read", keys);
+        Assert.Contains("module-management:manage", keys);
+        Assert.Contains("extension-builder:read", keys);
+        Assert.Contains("extension-builder:manage", keys);
     }
 
     [Fact]

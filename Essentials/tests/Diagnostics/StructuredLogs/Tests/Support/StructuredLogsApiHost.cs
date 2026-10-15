@@ -36,7 +36,7 @@ public sealed class StructuredLogsApiHost : IAsyncDisposable
     public const string AdjacentIdentity = "adjacent";
     public const string UntrustedIdentity = "untrusted";
     public const string ResourceDeniedIdentity = "resource-denied";
-    public const string Permission = "Diagnostics:StructuredLogs";
+    public const string Permission = "diagnostics/structured-logs:read";
 
     private const string SchemeName = "structured-logs-canary";
     private readonly IHost host;

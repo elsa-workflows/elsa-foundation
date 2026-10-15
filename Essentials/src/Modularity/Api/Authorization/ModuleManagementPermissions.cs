@@ -11,9 +11,9 @@ public static class ModuleManagementPermissionKeys
 {
     public const string OwnerId = "elsa.modularity.module-management";
 
-    public const string Read = "module-management.read";
+    public const string Read = "module-management:read";
 
-    public const string Manage = "module-management.manage";
+    public const string Manage = "module-management:manage";
 }
 
 /// <summary>

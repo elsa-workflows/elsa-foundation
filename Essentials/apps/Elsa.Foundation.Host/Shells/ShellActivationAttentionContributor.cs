@@ -28,7 +28,7 @@ namespace Elsa.Foundation.Host.Shells;
 public sealed class ShellActivationAttentionContributor(ShellActivationTracker tracker) : IAttentionContributor
 {
     /// <summary>The permission of <c>ModuleManagementPermissionKeys.Read</c> in <c>Elsa.Modularity.Api</c>.</summary>
-    public const string RequiredPermission = "module-management.read";
+    public const string RequiredPermission = "module-management:read";
 
     public AttentionContributorDescriptor Descriptor { get; } = new("shell-activation", "Shell activation", RequiredPermission);
 

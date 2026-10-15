@@ -26,7 +26,7 @@ API-visible request and response types live in `Elsa.Activities.Design.Api.Core`
 
 The exact method/template/operation inventory is the executable [38-route manifest](../../../../../specs/166-activities-design-api-migration/contracts/activities-design-route-manifest.md).
 
-Catalog and read operations declare exactly `activity-design.read`; management operations declare exactly `activity-design.manage`. Foundation Identity owns normalized-principal trust, implication, wildcard compatibility, replaceable evaluation, tenant/resource handlers, and the standard `401`/`403` boundary. Wildcard is evaluator-level grant compatibility and is not endpoint-owned policy metadata. Transport errors preserve the reviewed RFC 7807 contract through the owner-local Minimal API mapping.
+Catalog and read operations declare exactly `activities/design:read`; management operations declare exactly `activities/design:manage`. Foundation Identity owns normalized-principal trust, implication, wildcard compatibility, replaceable evaluation, tenant/resource handlers, and the standard `401`/`403` boundary. Wildcard is evaluator-level grant compatibility and is not endpoint-owned policy metadata. Transport errors preserve the reviewed RFC 7807 contract through the owner-local Minimal API mapping.
 
 The default catalog returns addable activities. `availability=all` is the diagnostic/administrative view and includes unavailable entries with their reason; it does not change availability.
 

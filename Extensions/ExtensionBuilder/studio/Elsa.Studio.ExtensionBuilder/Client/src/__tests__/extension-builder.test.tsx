@@ -111,7 +111,7 @@ describe("extension builder page", () => {
 
   it("renders a distinct permission-denied state (not backend-unavailable) when the capabilities read is forbidden", async () => {
     // A 403 on the bridge capabilities read is a Studio authorization failure — the signed-in user lacks
-    // extension-builder.read (#249). It must render "do not have permission" / name the permission, NOT the
+    // extension-builder:read (#249). It must render "do not have permission" / name the permission, NOT the
     // backend-unavailable/retry surface, and NOT a login prompt.
     const workspaceGetJson = vi.fn(defaultGetJson);
     const { container, unmount } = await renderExtensionBuilderPage(stubApi({
@@ -124,7 +124,7 @@ describe("extension builder page", () => {
 
     await waitForText(container, "do not have permission");
 
-    expect(container.textContent).toContain("extension-builder.read");
+    expect(container.textContent).toContain("extension-builder:read");
     // Not conflated with the backend-management-unavailable surface or its retry affordance.
     expect(container.textContent).not.toContain("optional privileged host-management integration");
     expect(container.textContent).not.toContain("Retry");

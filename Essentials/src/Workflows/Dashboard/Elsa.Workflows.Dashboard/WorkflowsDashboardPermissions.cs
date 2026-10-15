@@ -4,7 +4,7 @@ namespace Elsa.Workflows.Dashboard;
 
 public static class WorkflowsDashboardPermissions
 {
-    public const string Read = "workflows.dashboard.read";
+    public const string Read = "workflows/dashboard:read";
 }
 
 public sealed class WorkflowsDashboardPermissionContributor : IPermissionContributor

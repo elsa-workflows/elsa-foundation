@@ -26,7 +26,7 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
         var accessor = provider.GetRequiredService<IHttpContextAccessor>();
         var grant = grantKind switch
         {
-            "implied" => "activities.design.author.bundle",
+            "implied" => "activities/design:author-bundle",
             "wildcard" => "*",
             _ => HttpContextActivityDesignAuthorizationContext.AuthorPermission
         };
@@ -421,7 +421,7 @@ public sealed class HttpContextActivityDesignAuthorizationContextTests
     private sealed class DesignPermissionCatalog : IPermissionCatalog
     {
         private static readonly Permission Bundle = new(
-            "activities.design.author.bundle",
+            "activities/design:author-bundle",
             "Design author bundle",
             "test",
             "Test implication",

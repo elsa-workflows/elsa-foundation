@@ -147,7 +147,7 @@ describe("settings shell and appearance", () => {
     expect(visited).toEqual(["/settings/theme-builder"]);
   });
 
-  it("gates legacy admin URLs for an authenticated user without module-management.read", async () => {
+  it("gates legacy admin URLs for an authenticated user without module-management:read", async () => {
     const rendered: string[] = [];
     await act(() => root.render(
       <AuthContext.Provider value={authenticatedWithoutHostControl()}>

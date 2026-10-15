@@ -275,7 +275,7 @@ The `/_elsa/identity/*` surface (`FoundationIdentityApi`):
 | Route | Method | Purpose | Auth |
 |---|---|---|---|
 | `_elsa/identity/bootstrap` | GET | Ownership mode + enumerated providers (id, kind, display name, challenge metadata). | anonymous |
-| `_elsa/identity/capabilities` | GET | Provider/capability discovery. | requires `identity.providers.read` |
+| `_elsa/identity/capabilities` | GET | Provider/capability discovery. | requires `identity/providers:read` |
 | `_elsa/identity/challenge/{provider}` | GET | Redirect into the provider's challenge (backend login page for local; IdP redirect for OIDC). | anonymous |
 | `_elsa/identity/session` | GET | The current `AuthSession` (status/subject/roles/permissions/freshness) for the caller. | anonymous (reports "anonymous" when no session) |
 | `_elsa/identity/token` | GET | **Cookie→bearer exchange.** Mints a JWT for the cookie principal; bare `401` when anonymous. | interactive schemes only |

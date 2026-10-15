@@ -5,9 +5,9 @@ namespace Elsa.Workflows.ExecutionEvidence.Authorization;
 public static class ExecutionEvidencePermissionKeys
 {
     public const string OwnerId = "Elsa.Workflows.ExecutionEvidence";
-    public const string Read = "execution-evidence.read";
-    public const string Delete = "execution-evidence.delete";
-    public const string Manage = "execution-evidence.manage";
+    public const string Read = "workflows/execution-evidence:read";
+    public const string Delete = "workflows/execution-evidence:delete";
+    public const string Manage = "workflows/execution-evidence:manage";
 }
 
 public sealed class ExecutionEvidencePermissionContributor : IPermissionContributor

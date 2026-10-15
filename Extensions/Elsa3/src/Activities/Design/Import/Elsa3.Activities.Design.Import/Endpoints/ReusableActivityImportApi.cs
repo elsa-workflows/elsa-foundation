@@ -40,8 +40,8 @@ public sealed record ReusableActivityImportApplyHttpRequest(string PlanId, IRead
 
 internal static class Elsa3ImportPermissions
 {
-    public const string Read = "elsa3-import.read";
-    public const string Manage = "elsa3-import.manage";
+    public const string Read = "elsa3-import:read";
+    public const string Manage = "elsa3-import:manage";
 }
 
 public static class ReusableActivityImportHttp
