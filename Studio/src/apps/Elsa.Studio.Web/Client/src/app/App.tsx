@@ -74,10 +74,10 @@ import {
 import {
   getSettingsSectionGroups,
   hasSettingsSections,
-  isSettingsSectionActive,
   isSettingsSurfacePath,
   resolveSettingsSection
 } from "./settings/settingsSections";
+import { isDashboardPath, isNavigationItemActive } from "./navigation/active";
 import elsaLogo from "../assets/images/icon.png";
 import { AgentLauncher, createAgentClient, createWorkflowAgentContextProvider, type AgentSessionIndicatorSession, workflowAgentCapabilities, workflowPromptStarters } from "./agent";
 import { WeaverSurface } from "./weaver";
@@ -392,7 +392,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
   const owningFeatureArea = findFeatureAreaForPath(featureAreas, path);
   const settingsSection = settingsSurface ? resolveSettingsSection(path, settingsGroups) : undefined;
   const pageTitle = settingsSection?.label
-    ?? navigation.find(item => isNavigationItemActive(item, path))?.label
+    ?? navigation.find(item => isNavigationItemActive(item, path, navigation))?.label
     ?? activeRoute?.label
     ?? owningFeatureArea?.title
     ?? (settingsSurface ? "Settings" : "Studio");
@@ -599,6 +599,7 @@ export function ShellFrame({
                 key={item.id}
                 item={item}
                 childItems={childItemsFor(item, visibleNavigation, query, matchesQuery)}
+                items={visibleNavigation}
                 path={path}
                 collapsed={navCollapsed}
                 onNavigate={onNavigate}
@@ -630,6 +631,7 @@ export function ShellFrame({
                     key={item.id}
                     item={item}
                     childItems={childItemsFor(item, visibleNavigation, query, matchesQuery)}
+                    items={visibleNavigation}
                     path={path}
                     collapsed={navCollapsed}
                     onNavigate={onNavigate}
@@ -648,6 +650,7 @@ export function ShellFrame({
                 key={item.id}
                 item={item}
                 childItems={childItemsFor(item, visibleNavigation, query, matchesQuery)}
+                items={visibleNavigation}
                 path={path}
                 collapsed={navCollapsed}
                 onNavigate={onNavigate}
@@ -1103,18 +1106,20 @@ function childItemsFor(
 function NavItemGroup({
   item,
   childItems,
+  items,
   path,
   collapsed,
   onNavigate
 }: {
   item: StudioNavigationContribution;
   childItems: StudioNavigationContribution[];
+  items: readonly StudioNavigationContribution[];
   path: string;
   collapsed: boolean;
   onNavigate: (path: string) => void;
 }) {
-  const hasActiveChild = childItems.some(child => isNavigationItemActive(child, path));
-  const itemActive = isNavigationItemActive(item, path);
+  const hasActiveChild = childItems.some(child => isNavigationItemActive(child, path, items));
+  const itemActive = isNavigationItemActive(item, path, items);
   return (
     <div className="nav-item-group">
       <a
@@ -1134,7 +1139,7 @@ function NavItemGroup({
       {childItems.length > 0 ? (
         <div className="nav-children">
           {childItems.map(child => {
-            const childActive = isNavigationItemActive(child, path);
+            const childActive = isNavigationItemActive(child, path, items);
             return (
               <a
                 key={child.id}
@@ -1223,17 +1228,7 @@ function getDefaultNavIconColor(id: string) {
   return "var(--primary)";
 }
 
-function isNavigationItemActive(item: StudioNavigationContribution, path: string) {
-  if ((item.id === "dashboard" || item.id === "home") && isDashboardPath(path)) return true;
-  if (isSettingsSectionActive(item, path)) return true;
-  if (path === item.path) return true;
-  if (!item.activePathPrefix) return false;
-  return path === item.activePathPrefix || path.startsWith(`${item.activePathPrefix}/`);
-}
-
-export function isDashboardPath(path: string) {
-  return path === "/" || path === "/dashboard" || path === "/overview";
-}
+export { isDashboardPath, isExactSegmentPrefix, isNavigationItemActive } from "./navigation/active";
 
 export function getStudioNavigation(moduleNavigation: StudioNavigationContribution[], options: { includeThemeBuilder?: boolean } = {}) {
   const hostNavigation = [
