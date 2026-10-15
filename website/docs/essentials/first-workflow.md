@@ -35,7 +35,7 @@ Open **Workflows → Executables** and run the artifact you just published. The 
 
 *The published artifact in Executables.*
 
-After it starts, choose **Open Run** in the status line, or open **Workflows → Runs**. Check that it belongs to the published artifact and has status **Completed**. Its timeline should contain exactly one completed Write Line activity. Open the activity's **Activity** and **Issues** tabs (they appear as ACTIVITY / ISSUES). At 1024 px on this pinned Studio the labels can clip; hover a tab or widen the window. The run should have zero incidents and an empty Issues view.
+After it starts, choose **Open Run** in the status line, or open **Workflows → Runs**. Check that it belongs to the published artifact and has status **Completed**. Its timeline should contain exactly one completed Write Line activity. Open the run-details **Activity** and **Issues** tabs (they appear as ACTIVITY / ISSUES). At 1024 px on this pinned Studio the labels can clip; hover a tab or widen the window. The run should have zero incidents and an empty Issues view.
 
 <img src="../assets/elsa4/elsa4-07-run-timeline_studio-7cb2f2c2_act-4.0.5-preview.png" alt="Completed run with the Write Line activity marked Completed and a timeline listing Flowchart and Write Line as OK" width="800">
 
