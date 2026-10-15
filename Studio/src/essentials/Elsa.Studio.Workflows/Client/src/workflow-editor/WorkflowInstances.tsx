@@ -563,13 +563,10 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
             sourceResult.access,
             executableResult.executable.chosenReference?.activityPresentation ?? [])
         : null;
-      const definitionNames = await loadDefinitionDisplayNames(context, [details.instance.definitionId]);
-      if (generation !== loadGeneration.current) return;
-      const definitionName = definitionNames.get(details.instance.definitionId);
       setData({
         details,
         definitionVersion: executableResult.executable
-          ? projectPinnedExecutable(executableResult.executable, details, catalog, executableGraph ?? undefined, definitionName)
+          ? projectPinnedExecutable(executableResult.executable, details, catalog, executableGraph ?? undefined)
           : null,
         definitionVersionError: executableResult.error,
         activityCatalog: catalog,
@@ -589,6 +586,15 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
       if (initialEvidence) {
         requestAnimationFrame(() => requestAnimationFrame(() => focusSelectedCanvasActivity(initialEvidence)));
       }
+      void loadDefinitionDisplayNames(context, [details.instance.definitionId]).then(
+        definitionNames => {
+          if (generation !== loadGeneration.current) return;
+          const definitionName = definitionNames.get(details.instance.definitionId);
+          if (!definitionName) return;
+          setData(current => current ? applyDefinitionDisplayName(current, definitionName) : current);
+        },
+        () => undefined
+      );
     } catch (e) {
       if (generation !== loadGeneration.current) return;
       setData(null);
@@ -952,6 +958,25 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
       ) : null}
     </>
   );
+}
+
+export function applyDefinitionDisplayName<T extends {
+  details: Pick<WorkflowInstanceDetails, "instance">;
+  definitionVersion: WorkflowDefinitionVersionDetails | null;
+}>(data: T, definitionName: string | null | undefined): T {
+  if (!data.definitionVersion) return data;
+  const name = resolveNamedIdentity(definitionName, data.details.instance.definitionId).label;
+  if (data.definitionVersion.definition.name === name) return data;
+  return {
+    ...data,
+    definitionVersion: {
+      ...data.definitionVersion,
+      definition: {
+        ...data.definitionVersion.definition,
+        name
+      }
+    }
+  };
 }
 
 export function projectPinnedExecutable(
@@ -1645,7 +1670,7 @@ function WorkflowInstanceInspector({
                     onViewInput={onViewInput}
                     onLoadMoreIncidentAssociations={onLoadMoreIncidentAssociations}
                   />
-                  <WorkflowUnmatchedEvidence details={details} graphNodeIds={graphNodeIds} rootNodeId={rootNodeId} activityCatalog={activityCatalog} />
+                  <WorkflowUnmatchedEvidence details={details} graphNodeIds={graphNodeIds} rootNodeId={rootNodeId} activityCatalog={activityCatalog} executableGraph={executableGraph} />
                 </>
               ) : (
                 <dl className="wf-instance-meta">
@@ -2585,7 +2610,7 @@ export function WorkflowIncidentList({
   );
 }
 
-function getIncidentActivityLabel(
+export function getIncidentActivityLabel(
   activity: Pick<ActivityExecutionStateSummary, "activityType" | "activityTypeVersion"> | null | undefined,
   catalog: ActivityCatalogItem[],
   presentation?: ExecutableGraphNodeFacts["presentation"]
@@ -2679,11 +2704,12 @@ function NamedIdentity({
   );
 }
 
-function WorkflowUnmatchedEvidence({ details, graphNodeIds, rootNodeId, activityCatalog }: {
+function WorkflowUnmatchedEvidence({ details, graphNodeIds, rootNodeId, activityCatalog, executableGraph }: {
   details: WorkflowInstanceDetails;
   graphNodeIds?: Set<string>;
   rootNodeId?: string | null;
   activityCatalog?: ActivityCatalogItem[];
+  executableGraph?: ExecutableActivityGraph | null;
 }) {
   if (!graphNodeIds) return null;
 
@@ -2700,7 +2726,7 @@ function WorkflowUnmatchedEvidence({ details, graphNodeIds, rootNodeId, activity
       <div className="wf-instance-unmatched-list">
         {unmatchedActivities.map(activity => (
           <div className="wf-instance-unmatched" key={`activity-${activity.activityExecutionId}`}>
-            <strong>{resolveActivityLabel(undefined, activityCatalog?.find(item => item.activityTypeKey === activity.activityType), activity.activityType)}</strong>
+            <strong>{getIncidentActivityLabel(activity, activityCatalog ?? [], findExecutableNodeFacts(executableGraph, activity)?.presentation)}</strong>
             <small title={activity.activityExecutionId}>{activity.activityExecutionId}</small>
           </div>
         ))}

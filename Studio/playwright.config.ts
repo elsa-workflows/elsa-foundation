@@ -5,7 +5,7 @@ export default defineConfig({
   // The performance benchmark owns a production server, serial worker, CPU throttle, and extended
   // timeout in playwright.performance.config.ts. Running it in the parallel development-server suite
   // makes its cold-page samples contend with unrelated browser cases and invalidates the measurement.
-  testIgnore: ["expression-code-intelligence-performance.spec.ts", "classic-rough-edges-screenshots.spec.ts"],
+  testIgnore: ["expression-code-intelligence-performance.spec.ts"],
   fullyParallel: true,
   reporter: "line",
   use: {

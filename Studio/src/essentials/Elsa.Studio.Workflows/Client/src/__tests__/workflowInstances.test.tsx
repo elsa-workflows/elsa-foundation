@@ -4,6 +4,8 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { buildExecutableActivityGraph } from "../executableGraph";
 import {
+  applyDefinitionDisplayName,
+  getIncidentActivityLabel,
   getIncidentRootCause,
   getIncidentHealthActionState,
   combineActivityExecutions,
@@ -135,6 +137,82 @@ describe("Runtime-pinned workflow instance rendering", () => {
     const projected = projectPinnedExecutable(executable, details, [], undefined, "Order fulfillment");
     expect(projected.definition.name).toBe("Order fulfillment");
     expect(projected.definition.id).toBe("definition-1");
+  });
+
+  it("fills a workflow display name onto already-projected run data without rebuilding the graph", () => {
+    const executable = {
+      artifactId: "artifact-pinned",
+      artifactHash: "sha256:pinned",
+      createdAt: "2026-07-01T00:00:00Z",
+      rootActivityType: "Example.Root",
+      rootActivityVersion: "1.0.0",
+      nodeCount: 1,
+      resumeTargetCount: 0,
+      rootActivity: {
+        executableNodeId: "exec-root",
+        authoredActivityId: "authored-root",
+        activityType: "Example.Root",
+        activityTypeVersion: "1.0.0",
+        inputBindings: [],
+        childSlots: []
+      },
+      chosenReference: {
+        sourceReferenceId: "reference-1",
+        selection: "requested",
+        layout: [],
+        activityPresentation: []
+      },
+      references: []
+    } satisfies WorkflowExecutableDetails;
+    const details = {
+      instance: {
+        workflowExecutionId: "execution-1",
+        artifactId: "artifact-pinned",
+        artifactVersion: "3.0.0",
+        artifactHash: "sha256:pinned",
+        definitionId: "definition-1",
+        definitionVersionId: "draft:synthetic",
+        status: "Running",
+        createdAt: "2026-07-01T00:00:00Z",
+        activityCount: 0,
+        incidentCount: 0
+      },
+      activities: [],
+      incidents: []
+    } satisfies WorkflowInstanceDetails;
+    const projected = projectPinnedExecutable(executable, details, []);
+    const named = applyDefinitionDisplayName({ details, definitionVersion: projected }, "Order fulfillment");
+
+    expect(projected.definition.name).toBe("definition-1");
+    expect(named.definitionVersion?.definition.name).toBe("Order fulfillment");
+    expect(named.definitionVersion?.state).toBe(projected.state);
+    expect(applyDefinitionDisplayName({ details, definitionVersion: projected }, "  ").definitionVersion?.definition.name)
+      .toBe("definition-1");
+  });
+
+  it("resolves unmatched activity labels against the instance activity type version", () => {
+    const activity = activityExecution({ activityType: "Example.Activity", activityTypeVersion: "1.0.0" });
+    const catalogV1 = {
+      activityVersionId: "example-activity@1",
+      activityTypeKey: "Example.Activity",
+      version: "1.0.0",
+      category: "Tests",
+      displayName: "Write Line v1",
+      executionType: "Activity",
+      inputs: [],
+      outputs: []
+    } satisfies ActivityCatalogItem;
+    const catalogV2 = {
+      ...catalogV1,
+      activityVersionId: "example-activity@2",
+      version: "2.0.0",
+      displayName: "Write Line v2"
+    } satisfies ActivityCatalogItem;
+
+    expect(getIncidentActivityLabel(activity, [catalogV2, catalogV1])).toBe("Write Line v1");
+    expect(getIncidentActivityLabel({ ...activity, activityTypeVersion: "2.0.0" }, [catalogV2, catalogV1])).toBe("Write Line v2");
+    expect(getIncidentActivityLabel(activity, [catalogV2], { nodeId: "authored-node", displayName: "Pinned occurrence" }))
+      .toBe("Pinned occurrence");
   });
 
   it("focuses only an outer activity execution that exists in the loaded Runtime Evidence", () => {

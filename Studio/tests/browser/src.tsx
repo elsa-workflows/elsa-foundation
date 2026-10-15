@@ -97,7 +97,6 @@ const activityDuplicateEditorFixture = searchParams.get("mode") === "activity-du
 const navPlacementFixture = searchParams.get("mode") === "nav-placement";
 const navBeforeFixture = searchParams.get("mode") === "nav-before";
 const homeFixture = searchParams.get("mode") === "home" || searchParams.get("mode") === "home-before";
-const classicRoughEdgesFixture = searchParams.get("mode") === "classic-rough-edges";
 const settingsBeforeFixture = searchParams.get("mode") === "settings-before";
 const settingsFixture = searchParams.get("mode") === "settings";
 const expressionCodeIntelligenceFixture = searchParams.get("mode") === "expression-code-intelligence";
@@ -1604,8 +1603,8 @@ function browserVersion(
 // writes the chosen theme palette onto <html> itself, the way the provider does at runtime.
 // Activity-icon shots default to Classic light — Studio 4's default theme.
 const darkVariant = searchParams.get("theme") === "dark";
-const fixtureTheme = activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || classicRoughEdgesFixture ? "classic" : "meridian";
-if (!navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture && !homeFixture && !classicRoughEdgesFixture) {
+const fixtureTheme = activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture ? "classic" : "meridian";
+if (!navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture && !homeFixture) {
   document.documentElement.dataset.theme = fixtureTheme;
   document.documentElement.dataset.themeLayout = "classic";
   document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
@@ -1649,11 +1648,6 @@ async function renderRequestedFixture() {
   if (homeFixture) {
     const { HomeFixture } = await import("./homeFixture");
     root.render(<HomeFixture />);
-    return;
-  }
-  if (classicRoughEdgesFixture) {
-    const { ClassicRoughEdgesFixture } = await import("./classicRoughEdgesFixture");
-    root.render(<ClassicRoughEdgesFixture />);
     return;
   }
   if (activityDuplicateFixture) {

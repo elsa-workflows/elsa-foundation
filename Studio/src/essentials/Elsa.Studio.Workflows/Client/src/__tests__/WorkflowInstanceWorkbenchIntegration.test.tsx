@@ -27,6 +27,10 @@ const api = vi.hoisted(() => ({
   supportsWorkflowInstanceHealthFilter: vi.fn(),
   listActivities: vi.fn()
 }));
+const designApi = vi.hoisted(() => ({
+  listDefinitions: vi.fn(),
+  getDefinition: vi.fn()
+}));
 const mockFlowInstance = vi.hoisted(() => ({ fitView: vi.fn() }));
 const useActualReactFlow = vi.hoisted(() => ({ enabled: false }));
 
@@ -35,6 +39,7 @@ vi.mock("../api/runtime", () => ({
   WorkflowInstanceHealthFilterUnavailableError: class extends Error {}
 }));
 vi.mock("../api/activityDesign", () => ({ listActivities: api.listActivities }));
+vi.mock("../api/workflowDesign", () => designApi);
 vi.mock("@xyflow/react", async importOriginal => {
   const actual = await importOriginal<typeof import("@xyflow/react")>();
   return {
@@ -124,6 +129,8 @@ beforeEach(() => {
   api.getExecutableInputSources.mockResolvedValue({ authoredInputs: [], compiledInputs: [], access: "allowed" });
   api.supportsActivityExecutionInspection.mockResolvedValue(false);
   api.getActivityExecutionInspection.mockResolvedValue(activityInspection());
+  designApi.listDefinitions.mockResolvedValue({ definitions: [], page: 1, pageSize: 100, totalCount: 0 });
+  designApi.getDefinition.mockRejectedValue(new Error("not found"));
 });
 
 afterEach(() => {
@@ -800,6 +807,42 @@ describe("workflow run workbench incident navigation", () => {
     expect(container.querySelector(".wf-activity-overview-status")?.textContent).toContain("Completed");
     expect(metadataValue("Incidents")).toBe("1");
     expect(metadataValue("Bookmarks")).toBe("2");
+  });
+});
+
+describe("workflow run workbench definition names", () => {
+  it("renders the inspector immediately with the definition id and fills the name when it arrives", async () => {
+    const lookup = deferred<{ definitions: Array<{ id: string; name: string }>; page: number; pageSize: number; totalCount: number }>();
+    designApi.listDefinitions.mockReturnValue(lookup.promise);
+
+    renderWorkbench();
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).toContain("definition-1"));
+    expect(container.textContent).not.toContain("Loading workflow run...");
+    expect(container.textContent).not.toContain("Loading run details...");
+    expect(container.textContent).not.toContain("Order fulfillment");
+
+    lookup.resolve({
+      definitions: [{ id: "definition-1", name: "Order fulfillment" }],
+      page: 1,
+      pageSize: 100,
+      totalCount: 1
+    });
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).toContain("Order fulfillment"));
+    expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).toContain("1.0.0");
+  });
+
+  it("keeps the inspector ready when the optional workflow-name lookup fails", async () => {
+    designApi.listDefinitions.mockRejectedValue(new Error("Design is unavailable"));
+    designApi.getDefinition.mockRejectedValue(new Error("Design is unavailable"));
+
+    renderWorkbench();
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).toContain("definition-1"));
+    expect(container.textContent).not.toContain("Loading workflow run...");
+    expect(container.textContent).not.toContain("Design is unavailable");
+    expect(container.querySelector(".wf-error-card")).toBeNull();
   });
 });
 
