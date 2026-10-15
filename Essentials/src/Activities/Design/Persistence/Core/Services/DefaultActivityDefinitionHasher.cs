@@ -19,7 +19,8 @@ namespace Elsa.Activities.Design.Persistence.Core.Services;
 /// consumed only here (it is never persisted or read by another component — only the SHA-256 is).
 /// Excluded from the hash: <c>LastModifiedAt</c>/<c>CreatedAt</c>/<c>RowNumber</c>, provenance,
 /// identity fields such as <c>Id</c> and <c>Version</c>, nested versions on the parent, and the
-/// presentation-only <c>elsa.activity-icon</c> design facet.
+/// presentation-only <c>elsa.activity-icon</c> design facet. Input <c>Tier</c> is hashed so a
+/// changed disclosure group re-reconciles the stored version.
 /// </remarks>
 public sealed class DefaultActivityDefinitionHasher : IActivityDefinitionHasher
 {

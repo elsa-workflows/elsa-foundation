@@ -19,8 +19,6 @@ using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Enums;
 using Elsa.Primitives.Persistence;
-using Elsa.Primitives.Hosting.Services;
-using Elsa.Serialization.Core;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -67,7 +65,8 @@ internal static class InMemoryReconcilerHarness
             definitionStore,
             versionStore,
             new InMemoryAddActivityDefinitionCommand(store),
-            new InMemoryAddVersionCommand(store));
+            new InMemoryAddVersionCommand(store),
+            new InMemoryRefreshVersionCommand(store));
     }
 
     public sealed class CatalogStore
@@ -116,6 +115,41 @@ internal static class InMemoryReconcilerHarness
         {
             store.Versions.Add(entity);
             return Task.FromResult(new ActivityDefinitionVersionAdded(entity.DefinitionId, entity.Id, entity.Version, entity.Hash));
+        }
+    }
+
+    internal static IRefreshActivityDefinitionVersionCommand RefreshCommand(CatalogStore store) =>
+        new InMemoryRefreshVersionCommand(store);
+
+    private sealed class InMemoryRefreshVersionCommand(CatalogStore store) : IRefreshActivityDefinitionVersionCommand
+    {
+        public Task RefreshAsync(
+            DesignOperationKey operationKey,
+            ActivityDefinitionVersion version,
+            string? expectedOldHash,
+            CancellationToken cancellationToken = default)
+        {
+            var persisted = store.Versions.Single(item => item.Id == version.Id);
+            switch (ActivityDefinitionVersionRefresh.Classify(persisted.Hash, expectedOldHash, version.Hash))
+            {
+                case ActivityDefinitionVersionRefresh.Outcome.Write:
+                    persisted.Inputs = version.Inputs;
+                    persisted.Hash = version.Hash;
+                    persisted.LastModifiedAt = DateTimeOffset.UtcNow;
+                    version.LastModifiedAt = persisted.LastModifiedAt;
+                    return Task.CompletedTask;
+                case ActivityDefinitionVersionRefresh.Outcome.AlreadyWritten:
+                    version.LastModifiedAt = persisted.LastModifiedAt;
+                    return Task.CompletedTask;
+                default:
+                    throw new ActivityVersionHashMismatchException(
+                        definitionId: version.DefinitionId,
+                        activityTypeKey: version.Definition?.ActivityTypeKey ?? version.DefinitionId,
+                        persistedVersion: persisted.Version,
+                        incomingVersion: version.Version,
+                        persistedHash: persisted.Hash,
+                        incomingHash: version.Hash ?? string.Empty);
+            }
         }
     }
 

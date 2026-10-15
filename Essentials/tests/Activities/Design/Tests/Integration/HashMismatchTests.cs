@@ -14,6 +14,7 @@ namespace Elsa.Activities.Design.Tests.Integration;
 /// incoming content hash to the persisted one.
 /// - Different content (here, a changed <c>Description</c>) → <see cref="ActivityVersionHashMismatchException"/>,
 ///   surfacing the broken source loudly and persisting nothing new.
+/// - A hash difference that is only input <c>Tier</c> → refresh the stored inputs and hash in place.
 /// - Identical content → a genuine duplicate, handled per the <see cref="DuplicateHandling"/> option:
 ///   skipped silently by default, or thrown when configured to throw.
 /// </summary>
@@ -146,6 +147,61 @@ public sealed class HashMismatchTests
             Source(Model(designFacets: [ActivityIconName.ToFacet("Mail")!]))).Reconcile(CancellationToken.None);
 
         Assert.Single(store.Versions);
+    }
+
+    [Fact]
+    public async Task SameVersionChangingTheInputTier_UpdatesTheStoredTier()
+    {
+        var store = new InMemoryReconcilerHarness.CatalogStore();
+        var unset = Input(isNullable: false);
+
+        await InMemoryReconcilerHarness.BuildReconciler(store, Source(Model(inputs: [unset]))).Reconcile(CancellationToken.None);
+        var first = Assert.Single(store.Versions);
+        var originalHash = first.Hash;
+        Assert.Null(Assert.Single(first.Inputs).Tier);
+
+        await InMemoryReconcilerHarness.BuildReconciler(
+            store,
+            Source(Model(inputs: [unset with { Tier = ActivityInputTiers.Optional }]))).Reconcile(CancellationToken.None);
+
+        var persisted = Assert.Single(store.Versions);
+        Assert.Equal(ActivityInputTiers.Optional, Assert.Single(persisted.Inputs).Tier);
+        Assert.NotEqual(originalHash, persisted.Hash);
+    }
+
+    [Fact]
+    public async Task SameVersionChangingTheInputTierAndDescription_ThrowsHashMismatch()
+    {
+        var store = new InMemoryReconcilerHarness.CatalogStore();
+        var unset = Input(isNullable: false);
+
+        await InMemoryReconcilerHarness.BuildReconciler(store, Source(Model(inputs: [unset]))).Reconcile(CancellationToken.None);
+
+        await Assert.ThrowsAsync<ActivityVersionHashMismatchException>(
+            () => InMemoryReconcilerHarness.BuildReconciler(
+                store,
+                Source(Model("changed", inputs: [unset with { Tier = ActivityInputTiers.Optional }]))).Reconcile(CancellationToken.None));
+
+        var persisted = Assert.Single(store.Versions);
+        Assert.Null(Assert.Single(persisted.Inputs).Tier);
+    }
+
+    [Fact]
+    public async Task SameVersionUnchangedInputTier_IsANoOp()
+    {
+        var store = new InMemoryReconcilerHarness.CatalogStore();
+        var optional = Input(isNullable: false) with { Tier = ActivityInputTiers.Optional };
+
+        await InMemoryReconcilerHarness.BuildReconciler(store, Source(Model(inputs: [optional]))).Reconcile(CancellationToken.None);
+        var first = Assert.Single(store.Versions);
+        var hash = first.Hash;
+        Assert.Equal(ActivityInputTiers.Optional, Assert.Single(first.Inputs).Tier);
+
+        await InMemoryReconcilerHarness.BuildReconciler(store, Source(Model(inputs: [optional]))).Reconcile(CancellationToken.None);
+
+        var persisted = Assert.Single(store.Versions);
+        Assert.Equal(hash, persisted.Hash);
+        Assert.Equal(ActivityInputTiers.Optional, Assert.Single(persisted.Inputs).Tier);
     }
 
     [Fact]
