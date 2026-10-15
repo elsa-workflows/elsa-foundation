@@ -769,8 +769,8 @@
 .wf-grid-head,
 .wf-grid-row {
   display: grid;
-  grid-template-columns: 32px minmax(220px, 1fr) 120px 150px 190px minmax(190px, auto);
-  align-items: center;
+  grid-template-columns: 32px minmax(0, 1fr) 120px 150px 190px minmax(0, auto);
+  align-items: start;
   gap: 12px;
   border-bottom: 1px solid var(--wf-border);
   padding: 10px 12px;
@@ -2497,6 +2497,7 @@
 
 .wf-row-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
 }
@@ -2975,13 +2976,15 @@
 
 .wf-panel-tab-list {
   flex: 1;
+  flex-wrap: wrap;
   overflow-x: auto;
 }
 
 .wf-panel-tab-list button {
   display: inline-flex;
-  min-width: 0;
-  height: 28px;
+  min-width: min-content;
+  height: auto;
+  min-height: 28px;
   align-items: center;
   gap: 6px;
   border: 1px solid transparent;
@@ -3017,9 +3020,9 @@
 
 .wf-panel-tab-list button span:last-child {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  white-space: normal;
+  line-height: 1.2;
 }
 
 .wf-panel-actions {
@@ -5501,6 +5504,18 @@ button.wf-reference-select {
   min-width: 0;
   min-height: 0;
   gap: 9px;
+}
+
+.wf-dictionary-editor-loading {
+  min-height: 7.5rem;
+  align-content: center;
+  color: var(--wf-muted-text);
+  padding: 9px;
+}
+
+.wf-dictionary-editor-loading.expanded {
+  height: 100%;
+  min-height: 12rem;
 }
 
 .wf-dictionary-editor.expanded {

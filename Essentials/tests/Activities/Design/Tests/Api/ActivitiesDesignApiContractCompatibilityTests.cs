@@ -201,7 +201,9 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // JSON wire shape did not. It moved again when ActivityInputDescriptorView gained IsSensitive and IsCredential.
         // It moved again when ActivityAuthoringDescriptorView gained IconName, the catalog field projected
         // from the presentation-only elsa.activity-icon facet (ActivityIconName).
-        Assert.Equal("ae401e58d0296e8e392f7140f8504f0f8c532106a5f5b3f43dec73632b600041", PublicShapeHash(ContractTypes));
+        // It moved again when ActivityInputDescriptorView gained Tier, the presentation-only disclosure
+        // group (essential / optional / setting) projected from InputDefinition.Tier.
+        Assert.Equal("5ef979cf4c3a0ec39c773bde4cb7b11e1ec1cecdf1031a222b04af4c749a1164", PublicShapeHash(ContractTypes));
     }
 
     [Fact]

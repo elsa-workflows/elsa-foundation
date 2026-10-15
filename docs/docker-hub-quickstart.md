@@ -4,14 +4,35 @@ Run the prebuilt Elsa Workbench + Elsa Studio images from Docker Hub with plain 
 no checkout, no build. For building the images yourself or the full PostgreSQL compose stack, see
 [Docker & compose](docker.md).
 
+For a digest-pinned Compose walkthrough with a recorded hosted result, use the
+[public Elsa 4 quickstart](https://v4.elsaworkflows.io/essentials/quickstart)
+([source](../website/docs/essentials/quickstart.md)). That page pins a verified image pair;
+the unpinned `:latest` commands here are not that recorded run.
+
 | Service        | Image                          | URL                    | Login                    |
 |----------------|--------------------------------|------------------------|--------------------------|
 | Elsa Workbench | `elsaworkflows/elsa-workbench` | http://localhost:13000 | —                        |
 | Elsa Studio    | `elsaworkflows/elsa-studio`    | http://localhost:14000 | `admin` / `Password123!` |
 
-> **Image tags.** Both images publish `latest`, `4.0.0-preview.<n>` and `sha-<short-commit>` on every push to `main`. There are no `4` / `4.0` / `4.0.0` release tags yet; to pin a version, use a preview or commit tag.
+> **Image tags.** Both images use `latest`, `4.0.0-preview.<n>` and `sha-<short-commit>`. Workbench
+> is published by `.github/workflows/docker.yml` after a successful Packages run on `main`, not on
+> every push, so Hub tags can lag `main`. Studio is published separately
+> (`.github/workflows/studio-docker.yml`, manual). There are no `4` / `4.0` / `4.0.0` release tags
+> yet; to pin a version, use a preview or commit tag.
 
-> **Demo only.** The login is the demo admin seeded by the image's built-in `shells.json` (Development posture). The credentials and API key on this page are demo values: do not expose this setup beyond your machine.
+> **Development posture.** The `docker run` examples below set `ASPNETCORE_ENVIRONMENT=Development`
+> so they can rely on the image's baked-in `shells.json` demo defaults. The canonical published-image
+> stack ([`docker-compose.images.yml`](../docker/compose/docker-compose.images.yml)) runs
+> `Production` instead, because `shells.Production.json` blanks those defaults and they must be
+> supplied as environment variables: `RecoveryContinuationSigningKey`, `HierarchyCursorSigningKey`,
+> Secrets `EncryptionKey`, OpenIddict `SigningKey`, and `SeedAdminPassword`. Development keeps the
+> code-default `AutoMigrate` policy. The published-image stack runs `Production` but overrides
+> `appsettings.Production.json`'s `Validate` setting with `AutoMigrate`. This page does not claim a
+> recorded runtime verification of the Development CLI path.
+
+> **Demo only.** The login is the demo admin seeded by the image's built-in `shells.json`
+> (`admin` / `Password123!`). The credentials and API key on this page are demo values: do not
+> expose this setup beyond your machine.
 
 ## Quickstart
 
@@ -53,7 +74,7 @@ docker run -d --name elsa-workbench \
   -e ASPNETCORE_ENVIRONMENT=Development \
   -e Elsa__ModuleManagement__ApiKey=elsa-docker-demo-key \
   -e Cors__AllowedOrigins__0=http://localhost:14000 \
-  -e CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentity__AllowedReturnUrlOrigins__0=http://localhost:14000 \
+  -e CShells__Shells__default__Features__FoundationIdentityAspNetCoreIdentity__AllowedReturnUrlOrigins__2=http://localhost:14000 \
   -e Elsa__DataProtection__EntityFrameworkCore__Enabled=true \
   -e "Elsa__DataProtection__EntityFrameworkCore__ConnectionString=Data Source=/app/data/data-protection.db" \
   -v elsa-workbench-packages:/app/packages \
@@ -82,8 +103,10 @@ The non-obvious settings:
 - `Studio__BackendModuleManagementApiKey` must equal the server's
   `Elsa__ModuleManagement__ApiKey`. It stays server-side (never sent to the browser) and gates the
   module *package* management API.
-- `Cors__AllowedOrigins__0` and `...AllowedReturnUrlOrigins__0` both point at the Studio origin so
-  the browser can call the API and the login flow can redirect back to Studio.
+- `Cors__AllowedOrigins__0` and `...AllowedReturnUrlOrigins__2` both point at the Studio origin so
+  the browser can call the API and the login flow can redirect back to Studio. Index `2` adds the
+  origin without replacing the image's baked-in `https://localhost:7030` and `http://localhost:5089`
+  entries, matching `docker-compose.images.yml`.
 - `elsa-workbench-packages:/app/packages` is the Nuplane directory feed: drop `.nupkg`
   activity/extension packages into that volume to load them.
 - `Elsa__DataProtection__EntityFrameworkCore__*` and `elsa-data:/app/data` keep the Data Protection key ring, which

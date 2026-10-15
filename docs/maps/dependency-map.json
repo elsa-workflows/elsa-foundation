@@ -9923,6 +9923,16 @@
           "path": "Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Activities.Design.Reconciliation",
+          "path": "Essentials/src/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation/Elsa.Activities.Design.Reconciliation.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Events.Core",
+          "path": "Essentials/src/Events/Core/Elsa.Events.Core.csproj"
+        },
+        {
           "type": "external",
           "id": "Microsoft.EntityFrameworkCore.SqlServer",
           "version": "10.0.10"

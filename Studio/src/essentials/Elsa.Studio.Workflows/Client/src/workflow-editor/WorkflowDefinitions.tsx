@@ -430,12 +430,13 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
               </label>
               <span>Name</span>
               <span>Latest version</span>
-              <span>{listState === "all" ? "State" : listState === "deleted" ? "Deleted" : "Draft"}</span>
+              <span>{listState === "deleted" ? "Deleted" : "Status"}</span>
               <span>Modified</span>
               <span>Actions</span>
             </div>
             {definitions.map(definition => {
               const isDeleted = Boolean(definition.deletedAt);
+              const publication = resolveDefinitionPublicationStatus(definition);
               return (
               <div
                 className="wf-grid-row"
@@ -468,13 +469,16 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
                   ) : null}
                 </span>
                 <span>{definition.latestVersion ?? "No version"}</span>
-                <span>{listState === "all"
-                  ? isDeleted
-                    ? `Deleted ${formatDate(definition.deletedAt)}`
-                    : definition.draftId ? "Draft" : "Active"
-                  : listState === "deleted"
-                    ? formatDate(definition.deletedAt)
-                    : definition.draftId ? "Draft" : "None"}</span>
+                <span>
+                  {listState === "deleted" ? formatDate(definition.deletedAt) : (
+                    <>
+                      <span className="wf-status-badge" data-status={isDeleted ? "cancelled" : publication === "draft" ? "suspended" : "completed"}>
+                        {isDeleted ? "Deleted" : publication === "draft" ? "Draft" : "Published"}
+                      </span>
+                      {publication === "published-with-draft" ? <small>Newer draft</small> : isDeleted ? <small>{formatDate(definition.deletedAt)}</small> : null}
+                    </>
+                  )}
+                </span>
                 <span>{formatDate(definition.lastModifiedAt)}</span>
                 <span className="wf-row-actions" onClick={event => event.stopPropagation()}>
                   {!isDeleted ? (
@@ -563,4 +567,10 @@ function ResultFolderBreadcrumb({
       ))}
     </nav>
   );
+}
+
+export function resolveDefinitionPublicationStatus(definition: Pick<WorkflowDefinitionSummary, "draftId" | "latestVersionId" | "latestVersion" | "versionCount" | "deletedAt">) {
+  if (definition.deletedAt) return "deleted";
+  if (definition.latestVersionId || definition.latestVersion || definition.versionCount) return definition.draftId ? "published-with-draft" : "published";
+  return "draft";
 }
