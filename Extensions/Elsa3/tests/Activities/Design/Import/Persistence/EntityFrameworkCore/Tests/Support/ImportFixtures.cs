@@ -8,9 +8,12 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Activities.Design.Import.Services;
+using Elsa3.Mapping;
+using Elsa3.Mapping.Conversion;
 using Elsa3.Mapping.Mappings;
 using Elsa3.Mapping.Services;
 using Elsa3.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.Tests.Support;
@@ -81,9 +84,16 @@ internal static class ImportFixtures
         var registry = SerializationServices.TypeRegistry();
         registry.RegisterType(typeof(string), "String");
         registry.RegisterType(typeof(object), "Object");
-        var argumentMapper = new Elsa3ArgumentDefinitionToInputOutput(registry);
-        var stateMapper = new Elsa3WorkflowDefinitionToState(registry, new Elsa3ActivityToState(new BuiltInActivityLookup()), argumentMapper);
-        return new(stateMapper, argumentMapper);
+        // The conversion as the Elsa3Mapping feature registers it, over a catalog whose one activity every type maps to.
+        var services = new ServiceCollection();
+        services.AddSingleton<IActivityDefinitionLookup>(new BuiltInActivityLookup());
+        services.AddSingleton(registry);
+        new Elsa3MappingFeature().ConfigureServices(services);
+        var scope = services.BuildServiceProvider().CreateScope();
+        return new(
+            scope.ServiceProvider.GetRequiredService<IElsa3DefinitionConverter>(),
+            scope.ServiceProvider.GetRequiredService<Elsa3ArgumentDefinitionToInputOutput>(),
+            scope.ServiceProvider.GetRequiredService<IActivityDefinitionLookup>());
     }
 
     /// <summary>Materializes a scoped, keyed mutation the way the importer hands it to the command.</summary>

@@ -1,17 +1,108 @@
 # Elsa3.Mapping
 
-Object mappings for converting Elsa3 model types to Elsa4 counterparts. Consumed by the Elsa3 import pipeline.
+Converts Elsa 3 workflow definitions to Elsa 4 Design state. The single-definition import and the Elsa 3 collection
+import both use one converter, `IElsa3DefinitionConverter`. Graph conversion (#2705) and start-time reconciliation
+(spec 235) build on it. The decision record for every Elsa 3 member is
+[`specs/236-elsa3-activity-map/member-map.md`](../../../../specs/236-elsa3-activity-map/member-map.md).
 
-`Elsa3ActivityToState` keeps an Elsa 3 property as an input when its name matches a declared input's name (exactly,
-else the only match ignoring case) and stores the binding under that input's `ReferenceKey`, the key design validation
-and publication match ordinally; an output keeps the Elsa 3 property name; a property that names neither is dropped.
-Two properties that bind one input, or a property that matches several declared inputs only ignoring case, refuse the
-mapping with an `ArgumentException` naming the node, the properties and the input, never a value.
+## Pipeline
 
-## Mappings
+A conversion clones the definition, so the caller's object is never changed, then runs four stages:
 
-`Elsa3ActivityToState`, `Elsa3ArgumentDefinitionToInputOutput`, `Elsa3WorkflowDefinitionToState` and
-`Elsa3WorkflowDefinitionToWorkflowDefinitionVersion` are concrete scoped services. They inject one another, and the
-importer and the reusable-activity materializer inject them directly. They implement no shared mapping contract, so
-there is nothing to replace per type pair. The feature's replaceable contracts are in its
-[extension-point catalog](EXTENSION_POINTS.md).
+1. **Normalize** (`Elsa3ActivityNormalizer`), node by node:
+   - resolves the node's Elsa 4 activity;
+   - applies the member rules of its map entry: renames, defaults, removed and lost members, narrowed contracts and
+     runtime-difference warnings;
+   - runs the entry's rewrite strategy;
+   - routes port children (`then`, `body`, `cases[].activity`, …) to the Elsa 4 child slots.
+2. **Collect and lower** value flow: memory references, `getVariable`, `getInput` and loop values become Elsa 4
+   bindings. This stage runs only when normalization reported no error.
+3. **Map** to `WorkflowDefinitionState`, giving each container the native structure of its Elsa 4 activity (Sequence,
+   If, loops, Parallel, Switch).
+4. **Report** diagnostics, ordered by (JSON path, code).
+
+Nothing throws for input or catalog content. Every cause is a diagnostic:
+- `ELS3-ACTIVITY-*` errors make the item unconvertible;
+- `ELS3-BEHAVIOUR-*` warnings mean it converts, but Elsa 4 behaves differently at run time;
+- `VF-IMP-*` are value-flow errors.
+
+The codes are constants in `Elsa3.Models.Elsa3ActivityDiagnosticCodes` and `Elsa3ImportDiagnosticCodes`.
+
+## Which Elsa 4 activity a node becomes
+
+The resolver tries these in order, and the first match wins:
+
+1. A plan replacement (a reusable reference in a collection).
+2. The built-in map (`Elsa3BuiltInActivityMap`).
+3. An Elsa 4 CLR activity marked `[ReplacesActivityType("Acme.SendInvoice")]`, read from the catalog. Two claimants →
+   `ELS3-ACTIVITY-AMBIGUOUS-ALIAS`.
+4. The Elsa 3 type used verbatim as a catalog key.
+5. Otherwise `ELS3-ACTIVITY-UNMAPPED-TYPE`.
+
+A catalog target takes its highest valid-SemVer version; the Elsa 3 integer version never selects it.
+
+## Behaviour worth knowing
+
+- **Output capture.**
+  - An Elsa 3 output captured into a **workflow** variable becomes an Elsa 4 `Variable` output binding, so readers of
+    the variable see the value.
+  - A capture into a container variable is `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`; Elsa 4 captures into workflow
+    scope only.
+  - A loop's current value captured into a variable is read as the loop's scoped variable (`index`, `currentItem`)
+    inside the loop body. Outside the loop that read is not representable.
+- **HttpEndpoint headers and query string.** A captured `Headers` or `QueryStringData` gets a synthesized `set` node
+  right after the endpoint. It rebuilds the Elsa 3 shape from Elsa 4's `Request` output (one value → string, several →
+  array) into the captured variable, or into `elsa3.http.{node}.headers` / `.query` for a bare memory slot. The
+  endpoint must sit in a list of activities (a Sequence) so that a node can follow it.
+- **JavaScript.**
+  - `getVariable("x")`, `getInput("x")` and `variables.x` become bindings, read as `args.x`.
+  - A statement-form expression is wrapped in a function that returns its last expression.
+  - A RunJavaScript body is rewritten so its reads go through the `arguments` input, and its completion value becomes
+    a `return`.
+  - What Elsa 4 cannot run is refused (`VF-IMP-005`/`006`): Elsa 3 host functions such as generated `get{Name}()`
+    accessors, `getCorrelationId`, `newGuid` or `setOutcome`, as well as `new Date()`, CLR globals, lodash/moment and
+    Elsa 3 `args`.
+  - Widening what converts is #2717.
+- **Reusable workflows** (collection import, `IsReusable`):
+  - The body becomes a schema-2 graph.
+  - `SetOutput` of a declared output writes a synthesized variable (`elsa3.output.{hash}`) that `outputMappings`
+    expose.
+  - `Complete`/`End` become the graph `Complete` activity, at any depth, with the outcome's reference key (`Done` →
+    `done`, other names verbatim).
+  - `Done` is always declared and mapped from the natural completion.
+  - Several outcomes or an expression outcome → `ELS3-ACTIVITY-UNSUPPORTED-MODE`. An undeclared outcome is declared
+    with a warning; a declared outcome nothing reaches is dropped with a warning.
+- **Flowcharts** report `ELS3-ACTIVITY-GRAPH-CONVERSION-PENDING` until graph conversion (#2705). Their children are
+  still converted node by node, and their value flow is lowered with the rest of the definition, so a child's
+  JavaScript is lowered or refused as anywhere else. `IElsa3NodeConverter` converts them one at a time from that same
+  lowered definition (`PrepareAsync`, then `ConvertNodeAsync` per child).
+- **Imported reusable activities** are not yet published, so they do not run as graphs until #2796.
+
+## Nesting budget
+
+A converted workflow is stored as JSON, and System.Text.Json reads at most 64 levels by default. A node needs up to 6
+levels for its own bindings, so an activity node may sit at most at **JSON level 58**; the root node sits at level 2.
+
+Each container adds the levels its native structure puts between it and its children:
+
+| Container | Levels per container | Deepest uniform nesting |
+|---|---|---|
+| Sequence, Flowchart (`structure > payload > activities > [i]`) | 4 | 14 containers |
+| If, While, For, ForEach (`structure > payload > then`/`body`) | 3 | 18 containers |
+| Parallel, Switch (`structure > payload > branches`/`cases > [i] > activity`) | 5 | 11 containers |
+
+Mixed nesting adds up: an activity is convertible when 2 plus the levels of all its ancestor containers is at most 58.
+For example, 4 Parallels (20) inside 8 Sequences (32) put a node at level 54, which converts. A deeper node is
+`ELS3-ACTIVITY-NESTING-TOO-DEEP`, and the message names the level reached. A binding value that is itself deeply
+nested JSON can still exceed the limit at a convertible depth; the import then fails before anything is committed.
+
+## Registration
+
+`Elsa3MappingFeature` registers the following:
+- the built-in map as a singleton;
+- the resolver, the replaced-type index, the normalizer and the converter, all scoped;
+- one `IElsa3NodeRewrite` per rewrite strategy;
+- the mappers and value-flow services;
+- the importer and the reusable-activity materializer.
+
+The replaceable contracts are listed in its [extension-point catalog](EXTENSION_POINTS.md).

@@ -734,6 +734,38 @@ public sealed class ClrAssemblyScannerTests
     }
 
     [Fact]
+    public void ReplacesActivityType_IsRecordedTrimmedDistinctAndSorted()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(ReplacingFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == typeof(ReplacingFixtureActivity).FullName);
+        var facet = Assert.Single(model.DesignFacets, candidate => candidate.Kind == ClrAssemblyScanner.ReplacedActivityTypesFacetKind);
+
+        Assert.Equal("1", facet.SchemaVersion);
+        Assert.Equal(
+            ["Acme.Legacy.SendInvoice", "Acme.SendInvoice"],
+            facet.Payload.GetProperty("typeNames").EnumerateArray().Select(name => name.GetString()));
+        Assert.False(facet.Payload.TryGetProperty("ports", out _));
+    }
+
+    [Theory]
+    [InlineData(typeof(DerivedFromReplacingFixtureActivity))]
+    [InlineData(typeof(LucideIconFixtureActivity))]
+    public void ReplacesActivityType_IsNotInheritedAndAbsentWithoutADeclaration(Type activityType)
+    {
+        // No facet means the activity's catalog content, and so its hash, is what it was before the attribute existed.
+        using var folder = TempAssemblyFolder.WithCopyOf(activityType.Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == activityType.FullName);
+
+        Assert.DoesNotContain(model.DesignFacets, facet => facet.Kind == ClrAssemblyScanner.ReplacedActivityTypesFacetKind);
+    }
+
+    [Fact]
+    public void ReplacesActivityType_RefusesABlankName() =>
+        Assert.Throws<ArgumentException>(() => new ReplacesActivityTypeAttribute(" "));
+
+    [Fact]
     public void ActivityIconFacet_IsExcludedFromTheCatalogHash()
     {
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(LucideIconFixtureActivity).Assembly);

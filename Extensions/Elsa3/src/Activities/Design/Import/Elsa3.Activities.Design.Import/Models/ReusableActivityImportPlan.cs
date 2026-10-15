@@ -75,11 +75,13 @@ public sealed record ReusableActivityImportApplyRequest(
     ReusableActivityImportAccessScope? AccessScope = null,
     string? IdempotencyKey = null);
 
+/// <param name="Warnings">Conversion warnings of the applied items (runtime differences); never persisted.</param>
 public sealed record ReusableActivityImportApplyResult(
     string PlanId,
     IReadOnlyList<string> AppliedSourceVersionIds,
     bool NoOp,
-    ReusableActivityImportReceipt? Receipt = null);
+    ReusableActivityImportReceipt? Receipt = null,
+    IReadOnlyList<Elsa3MigrationDiagnostic>? Warnings = null);
 
 /// <summary>Complete Design mutation handed to the atomic adapter.</summary>
 public sealed record ReusableActivityImportMutation(
@@ -89,7 +91,8 @@ public sealed record ReusableActivityImportMutation(
     IReadOnlyList<ImportedReusableActivity> Activities,
     IReadOnlyList<ImportedWorkflow> Workflows,
     ReusableActivityImportAccessScope? AccessScope = null,
-    string? IdempotencyKey = null);
+    string? IdempotencyKey = null,
+    IReadOnlyList<Elsa3MigrationDiagnostic>? Warnings = null);
 
 /// <summary>
 /// One reusable Elsa 3 workflow mapped to a graph activity. <paramref name="Body"/> is the mapped workflow state the
@@ -169,7 +172,15 @@ public sealed record ReusableActivityImportReceipt(
     ReusableActivityImportAccessScope AccessScope,
     ReusableActivityImportReceiptStatus Status,
     DateTimeOffset CompletedAt,
-    IReadOnlyList<ReusableActivityImportSourceReceipt> Sources);
+    IReadOnlyList<ReusableActivityImportSourceReceipt> Sources)
+{
+    /// <summary>
+    /// The conversion warnings of the apply that produced this receipt (runtime differences, spec 236 R-7). Returned by
+    /// the apply that commits, never persisted: a replayed or status read returns the receipt without them.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<Elsa3MigrationDiagnostic>? Warnings { get; init; }
+}
 
 public sealed record ReusableActivityImportSourceReceipt(
     string SourceDefinitionId,

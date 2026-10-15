@@ -1,0 +1,954 @@
+{
+  "source": "docs/reports/evidence/activity-contract-parity/elsa3-surface.json (elsa-core 5b0c2d73), corrected per spec 236 research R-4",
+  "activities": [
+    {
+      "type": "Elsa.Break",
+      "module": "Elsa.Workflows.Core",
+      "members": []
+    },
+    {
+      "type": "Elsa.BulkDispatchWorkflows",
+      "module": "Elsa.Workflows.Runtime",
+      "members": [
+        {
+          "name": "WorkflowDefinitionId",
+          "kind": "input"
+        },
+        {
+          "name": "Items",
+          "kind": "input"
+        },
+        {
+          "name": "DefaultItemInputKey",
+          "kind": "input"
+        },
+        {
+          "name": "CorrelationIdFunction",
+          "kind": "input"
+        },
+        {
+          "name": "Input",
+          "kind": "input"
+        },
+        {
+          "name": "WaitForCompletion",
+          "kind": "input"
+        },
+        {
+          "name": "StartNewTrace",
+          "kind": "input"
+        },
+        {
+          "name": "ChannelName",
+          "kind": "input"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.Complete",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "Outcomes",
+          "kind": "input"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.CompositeWithResult",
+      "module": "Elsa.Workflows.Core",
+      "members": []
+    },
+    {
+      "type": "Elsa.Correlate",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "CorrelationId",
+          "kind": "input"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.Cron",
+      "module": "Elsa.Scheduling",
+      "members": [
+        {
+          "name": "CronExpression",
+          "kind": "input"
+        },
+        {
+          "name": "CanStartWorkflow",
+          "kind": "customProperty"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.Delay",
+      "module": "Elsa.Scheduling",
+      "members": [
+        {
+          "name": "TimeSpan",
+          "kind": "input"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.DispatchWorkflow",
+      "module": "Elsa.Workflows.Runtime",
+      "members": [
+        {
+          "name": "WorkflowDefinitionId",
+          "kind": "input"
+        },
+        {
+          "name": "CorrelationId",
+          "kind": "input"
+        },
+        {
+          "name": "Input",
+          "kind": "input"
+        },
+        {
+          "name": "WaitForCompletion",
+          "kind": "input"
+        },
+        {
+          "name": "StartNewTrace",
+          "kind": "input"
+        },
+        {
+          "name": "ChannelName",
+          "kind": "input"
+        },
+        {
+          "name": "Result",
+          "kind": "output"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.DownloadHttpFile",
+      "module": "Elsa.Http",
+      "members": [
+        {
+          "name": "Url",
+          "kind": "input"
+        },
+        {
+          "name": "Method",
+          "kind": "input"
+        },
+        {
+          "name": "ExpectedStatusCodes",
+          "kind": "input"
+        },
+        {
+          "name": "RequestContent",
+          "kind": "input"
+        },
+        {
+          "name": "RequestContentType",
+          "kind": "input"
+        },
+        {
+          "name": "Authorization",
+          "kind": "input"
+        },
+        {
+          "name": "DisableAuthorizationHeaderValidation",
+          "kind": "input"
+        },
+        {
+          "name": "RequestHeaders",
+          "kind": "input"
+        },
+        {
+          "name": "Response",
+          "kind": "output"
+        },
+        {
+          "name": "StatusCode",
+          "kind": "output"
+        },
+        {
+          "name": "ResponseContentStream",
+          "kind": "output"
+        },
+        {
+          "name": "ResponseContentBytes",
+          "kind": "output"
+        },
+        {
+          "name": "ResponseHeaders",
+          "kind": "output"
+        },
+        {
+          "name": "ResponseContentHeaders",
+          "kind": "output"
+        },
+        {
+          "name": "Result",
+          "kind": "output"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.DynamicActivity",
+      "module": "Elsa.Workflows.Core",
+      "members": []
+    },
+    {
+      "type": "Elsa.End",
+      "module": "Elsa.Workflows.Core",
+      "members": []
+    },
+    {
+      "type": "Elsa.Event",
+      "module": "Elsa.Workflows.Runtime",
+      "members": [
+        {
+          "name": "EventName",
+          "kind": "input"
+        },
+        {
+          "name": "Result",
+          "kind": "output"
+        },
+        {
+          "name": "CanStartWorkflow",
+          "kind": "customProperty"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.ExecuteWorkflow",
+      "module": "Elsa.Workflows.Runtime",
+      "members": [
+        {
+          "name": "WorkflowDefinitionId",
+          "kind": "input"
+        },
+        {
+          "name": "CorrelationId",
+          "kind": "input"
+        },
+        {
+          "name": "Input",
+          "kind": "input"
+        },
+        {
+          "name": "WaitForCompletion",
+          "kind": "input"
+        },
+        {
+          "name": "Result",
+          "kind": "output"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.Fault",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "Code",
+          "kind": "input"
+        },
+        {
+          "name": "Category",
+          "kind": "input"
+        },
+        {
+          "name": "FaultType",
+          "kind": "input"
+        },
+        {
+          "name": "Message",
+          "kind": "input"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.Finish",
+      "module": "Elsa.Workflows.Core",
+      "members": []
+    },
+    {
+      "type": "Elsa.FlowDecision",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "Condition",
+          "kind": "input"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.FlowFork",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "Branches",
+          "kind": "input"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.FlowJoin",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "Mode",
+          "kind": "input"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.FlowSendHttpRequest",
+      "module": "Elsa.Http",
+      "members": [
+        {
+          "name": "ExpectedStatusCodes",
+          "kind": "input"
+        },
+        {
+          "name": "Url",
+          "kind": "input"
+        },
+        {
+          "name": "Method",
+          "kind": "input"
+        },
+        {
+          "name": "Content",
+          "kind": "input"
+        },
+        {
+          "name": "ContentType",
+          "kind": "input"
+        },
+        {
+          "name": "Authorization",
+          "kind": "input"
+        },
+        {
+          "name": "DisableAuthorizationHeaderValidation",
+          "kind": "input"
+        },
+        {
+          "name": "RequestHeaders",
+          "kind": "input"
+        },
+        {
+          "name": "EnableResiliency",
+          "kind": "input"
+        },
+        {
+          "name": "StatusCode",
+          "kind": "output"
+        },
+        {
+          "name": "ParsedContent",
+          "kind": "output"
+        },
+        {
+          "name": "ResponseHeaders",
+          "kind": "output"
+        },
+        {
+          "name": "Result",
+          "kind": "output"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.FlowSwitch",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "Mode",
+          "kind": "input"
+        },
+        {
+          "name": "Cases",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.Flowchart",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "Activities",
+          "kind": "port"
+        },
+        {
+          "name": "Variables",
+          "kind": "property"
+        },
+        {
+          "name": "Connections",
+          "kind": "property"
+        },
+        {
+          "name": "Start",
+          "kind": "port"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.For",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "Start",
+          "kind": "input"
+        },
+        {
+          "name": "End",
+          "kind": "input"
+        },
+        {
+          "name": "Step",
+          "kind": "input"
+        },
+        {
+          "name": "OuterBoundInclusive",
+          "kind": "input"
+        },
+        {
+          "name": "CurrentValue",
+          "kind": "output"
+        },
+        {
+          "name": "Body",
+          "kind": "port"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.ForEach",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "Items",
+          "kind": "input"
+        },
+        {
+          "name": "CurrentValue",
+          "kind": "output"
+        },
+        {
+          "name": "Body",
+          "kind": "port"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.Fork",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "Branches",
+          "kind": "port"
+        },
+        {
+          "name": "JoinMode",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.HttpEndpoint",
+      "module": "Elsa.Http",
+      "members": [
+        {
+          "name": "Path",
+          "kind": "input"
+        },
+        {
+          "name": "SupportedMethods",
+          "kind": "input"
+        },
+        {
+          "name": "Authorize",
+          "kind": "input"
+        },
+        {
+          "name": "Policy",
+          "kind": "input"
+        },
+        {
+          "name": "RequestTimeout",
+          "kind": "input"
+        },
+        {
+          "name": "RequestSizeLimit",
+          "kind": "input"
+        },
+        {
+          "name": "FileSizeLimit",
+          "kind": "input"
+        },
+        {
+          "name": "AllowedFileExtensions",
+          "kind": "input"
+        },
+        {
+          "name": "BlockedFileExtensions",
+          "kind": "input"
+        },
+        {
+          "name": "AllowedMimeTypes",
+          "kind": "input"
+        },
+        {
+          "name": "ParsedContent",
+          "kind": "output"
+        },
+        {
+          "name": "Files",
+          "kind": "output"
+        },
+        {
+          "name": "File",
+          "kind": "output"
+        },
+        {
+          "name": "RouteData",
+          "kind": "output"
+        },
+        {
+          "name": "QueryStringData",
+          "kind": "output"
+        },
+        {
+          "name": "Headers",
+          "kind": "output"
+        },
+        {
+          "name": "Result",
+          "kind": "output"
+        },
+        {
+          "name": "ExposeRequestTooLargeOutcome",
+          "kind": "property"
+        },
+        {
+          "name": "ExposeFileTooLargeOutcome",
+          "kind": "property"
+        },
+        {
+          "name": "ExposeInvalidFileExtensionOutcome",
+          "kind": "property"
+        },
+        {
+          "name": "ExposeInvalidFileMimeTypeOutcome",
+          "kind": "property"
+        },
+        {
+          "name": "CanStartWorkflow",
+          "kind": "customProperty"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.If",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "Condition",
+          "kind": "input"
+        },
+        {
+          "name": "Result",
+          "kind": "output"
+        },
+        {
+          "name": "Then",
+          "kind": "port"
+        },
+        {
+          "name": "Else",
+          "kind": "port"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.Inline",
+      "module": "Elsa.Workflows.Core",
+      "members": []
+    },
+    {
+      "type": "Elsa.NotFoundActivity",
+      "module": "Elsa.Workflows.Core",
+      "members": []
+    },
+    {
+      "type": "Elsa.Parallel",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "Activities",
+          "kind": "port"
+        },
+        {
+          "name": "Variables",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.ParallelForEach",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "Items",
+          "kind": "input"
+        },
+        {
+          "name": "Body",
+          "kind": "port"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.PublishEvent",
+      "module": "Elsa.Workflows.Runtime",
+      "members": [
+        {
+          "name": "EventName",
+          "kind": "input"
+        },
+        {
+          "name": "CorrelationId",
+          "kind": "input"
+        },
+        {
+          "name": "IsLocalEvent",
+          "kind": "input"
+        },
+        {
+          "name": "Payload",
+          "kind": "input"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.ReadLine",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "Result",
+          "kind": "output"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.RunJavaScript",
+      "module": "Elsa.Expressions.JavaScript",
+      "members": [
+        {
+          "name": "Script",
+          "kind": "input"
+        },
+        {
+          "name": "PossibleOutcomes",
+          "kind": "input"
+        },
+        {
+          "name": "Result",
+          "kind": "output"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.RunTask",
+      "module": "Elsa.Workflows.Runtime",
+      "members": [
+        {
+          "name": "TaskName",
+          "kind": "input"
+        },
+        {
+          "name": "Payload",
+          "kind": "input"
+        },
+        {
+          "name": "TaskId",
+          "kind": "output"
+        },
+        {
+          "name": "Result",
+          "kind": "output"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.SendHttpRequest",
+      "module": "Elsa.Http",
+      "members": [
+        {
+          "name": "Url",
+          "kind": "input"
+        },
+        {
+          "name": "Method",
+          "kind": "input"
+        },
+        {
+          "name": "Content",
+          "kind": "input"
+        },
+        {
+          "name": "ContentType",
+          "kind": "input"
+        },
+        {
+          "name": "Authorization",
+          "kind": "input"
+        },
+        {
+          "name": "DisableAuthorizationHeaderValidation",
+          "kind": "input"
+        },
+        {
+          "name": "RequestHeaders",
+          "kind": "input"
+        },
+        {
+          "name": "EnableResiliency",
+          "kind": "input"
+        },
+        {
+          "name": "StatusCode",
+          "kind": "output"
+        },
+        {
+          "name": "ParsedContent",
+          "kind": "output"
+        },
+        {
+          "name": "ResponseHeaders",
+          "kind": "output"
+        },
+        {
+          "name": "Result",
+          "kind": "output"
+        },
+        {
+          "name": "ExpectedStatusCodes",
+          "kind": "port"
+        },
+        {
+          "name": "UnmatchedStatusCode",
+          "kind": "port"
+        },
+        {
+          "name": "FailedToConnect",
+          "kind": "port"
+        },
+        {
+          "name": "Timeout",
+          "kind": "port"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.Sequence",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "Activities",
+          "kind": "port"
+        },
+        {
+          "name": "Variables",
+          "kind": "property"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.SetName",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "Value",
+          "kind": "input"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.SetOutput",
+      "module": "Elsa.Workflows.Management",
+      "members": [
+        {
+          "name": "OutputName",
+          "kind": "input"
+        },
+        {
+          "name": "OutputValue",
+          "kind": "input"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.SetVariable",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "Value",
+          "kind": "input"
+        },
+        {
+          "name": "Variable",
+          "kind": "input"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.Start",
+      "module": "Elsa.Workflows.Core",
+      "members": []
+    },
+    {
+      "type": "Elsa.StartAt",
+      "module": "Elsa.Scheduling",
+      "members": [
+        {
+          "name": "DateTime",
+          "kind": "input"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.StateMachine",
+      "module": "Elsa.Workflows.Core",
+      "members": []
+    },
+    {
+      "type": "Elsa.Switch",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "Mode",
+          "kind": "input"
+        },
+        {
+          "name": "Output",
+          "kind": "output"
+        },
+        {
+          "name": "Cases",
+          "kind": "property"
+        },
+        {
+          "name": "Default",
+          "kind": "port"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.Timer",
+      "module": "Elsa.Scheduling",
+      "members": [
+        {
+          "name": "Interval",
+          "kind": "input"
+        },
+        {
+          "name": "CanStartWorkflow",
+          "kind": "customProperty"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.While",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "Condition",
+          "kind": "input"
+        },
+        {
+          "name": "Body",
+          "kind": "port"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.Workflow",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "Result",
+          "kind": "output"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.WriteFileHttpResponse",
+      "module": "Elsa.Http",
+      "members": [
+        {
+          "name": "ContentType",
+          "kind": "input"
+        },
+        {
+          "name": "Filename",
+          "kind": "input"
+        },
+        {
+          "name": "EntityTag",
+          "kind": "input"
+        },
+        {
+          "name": "Content",
+          "kind": "input"
+        },
+        {
+          "name": "EnableResumableDownloads",
+          "kind": "input"
+        },
+        {
+          "name": "DownloadCorrelationId",
+          "kind": "input"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.WriteHttpResponse",
+      "module": "Elsa.Http",
+      "members": [
+        {
+          "name": "StatusCode",
+          "kind": "input"
+        },
+        {
+          "name": "Content",
+          "kind": "input"
+        },
+        {
+          "name": "ContentType",
+          "kind": "input"
+        },
+        {
+          "name": "ResponseHeaders",
+          "kind": "input"
+        }
+      ]
+    },
+    {
+      "type": "Elsa.WriteLine",
+      "module": "Elsa.Workflows.Core",
+      "members": [
+        {
+          "name": "Text",
+          "kind": "input"
+        }
+      ]
+    }
+  ]
+}

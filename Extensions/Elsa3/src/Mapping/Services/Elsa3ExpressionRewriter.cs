@@ -20,7 +20,21 @@ public sealed class Elsa3ExpressionRewriter
         string language,
         string source,
         TypeReference resultType,
-        Func<Elsa3AmbientReference, Elsa3ExpressionParameterResolution> resolve)
+        Func<Elsa3AmbientReference, Elsa3ExpressionParameterResolution> resolve) =>
+        Rewrite(language, source, resultType, resolve, Elsa3JavaScriptMode.Expression);
+
+    /// <param name="mode">
+    /// <see cref="Elsa3JavaScriptMode.Expression"/>: the result is one expression, as Elsa 4 evaluates it; a statement
+    /// form is wrapped in a function returning its completion value (plan D-15).
+    /// <see cref="Elsa3JavaScriptMode.Script"/>: a RunJavaScript body, whose completion value becomes a <c>return</c>
+    /// (plan D-16).
+    /// </param>
+    public Elsa3ExpressionRewriteResult Rewrite(
+        string language,
+        string source,
+        TypeReference resultType,
+        Func<Elsa3AmbientReference, Elsa3ExpressionParameterResolution> resolve,
+        Elsa3JavaScriptMode mode)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(language);
         ArgumentException.ThrowIfNullOrWhiteSpace(source);
@@ -30,7 +44,7 @@ public sealed class Elsa3ExpressionRewriter
         return language switch
         {
             var value when value.Equals("JavaScript", StringComparison.OrdinalIgnoreCase) =>
-                RewriteJavaScript(source, resultType, resolve),
+                RewriteJavaScript(source, resultType, resolve, mode),
             var value when value.Equals("Liquid", StringComparison.OrdinalIgnoreCase) =>
                 RewriteLiquid(source, resultType, resolve),
             _ => Elsa3ExpressionRewriteResult.Failure(new Elsa3ExpressionRewriteIssue(
@@ -43,7 +57,8 @@ public sealed class Elsa3ExpressionRewriter
     private static Elsa3ExpressionRewriteResult RewriteJavaScript(
         string source,
         TypeReference resultType,
-        Func<Elsa3AmbientReference, Elsa3ExpressionParameterResolution> resolve)
+        Func<Elsa3AmbientReference, Elsa3ExpressionParameterResolution> resolve,
+        Elsa3JavaScriptMode mode)
     {
         Script script;
         try
@@ -63,8 +78,50 @@ public sealed class Elsa3ExpressionRewriter
         if (analyzer.Issues.Count > 0)
             return Elsa3ExpressionRewriteResult.Failure(analyzer.Issues);
 
-        var rewritten = ApplyEdits(source, analyzer.Edits);
-        return Elsa3ExpressionRewriteResult.Success(CreateDefinition("JavaScript", rewritten, resultType, analyzer.Parameters));
+        // Elsa 3 evaluated source as a statement script whose completion value is the result. Elsa 4 evaluates an
+        // expression as one parenthesized expression and a script as a function body that must return.
+        var edits = analyzer.Edits.ToList();
+        var body = script.Body;
+        if (mode == Elsa3JavaScriptMode.Script)
+        {
+            var hasCompletion = body.Count > 0 && body[^1] is ExpressionStatement;
+            if (hasCompletion)
+                edits.Add(new SourceEdit(body[^1].Start, body[^1].Start, "return "));
+            return Elsa3ExpressionRewriteResult.Success(
+                CreateDefinition("JavaScript", ApplyEdits(source, edits), resultType, analyzer.Parameters),
+                completionValueLost: body.Count > 0 && !hasCompletion);
+        }
+
+        if (body.Count == 0)
+        {
+            return Elsa3ExpressionRewriteResult.Failure(new Elsa3ExpressionRewriteIssue(
+                Elsa3ImportDiagnosticCodes.UnsupportedShape,
+                "JavaScript has no expression.",
+                "Give the expression a value before import."));
+        }
+
+        if (body[^1] is not ExpressionStatement last)
+        {
+            return Elsa3ExpressionRewriteResult.Failure(DynamicIssue(
+                "JavaScript ends with a statement rather than an expression, so its Elsa 3 completion value cannot be preserved as one Elsa 4 expression."));
+        }
+
+        if (body.Count == 1)
+        {
+            // One expression, evaluated by Elsa 4 inside parentheses: drop its statement semicolon, and end with a
+            // newline when a line comment trails, so the comment cannot swallow the closing parenthesis. Block
+            // comments are harmless and kept.
+            if (last.End > last.Expression.End)
+                edits.Add(new SourceEdit(last.Expression.End, last.End, string.Empty));
+            if (source.AsSpan(last.End).Contains("//", StringComparison.Ordinal))
+                edits.Add(new SourceEdit(source.Length, source.Length, "\n"));
+            return Elsa3ExpressionRewriteResult.Success(CreateDefinition("JavaScript", ApplyEdits(source, edits), resultType, analyzer.Parameters));
+        }
+
+        // Statements: an immediately invoked function that returns the last expression, Elsa 3's completion value.
+        edits.Add(new SourceEdit(last.Start, last.Start, "return "));
+        var wrapped = $"(function () {{\n{ApplyEdits(source, edits)}\n}})()";
+        return Elsa3ExpressionRewriteResult.Success(CreateDefinition("JavaScript", wrapped, resultType, analyzer.Parameters));
     }
 
     private static Elsa3ExpressionRewriteResult RewriteLiquid(
@@ -269,11 +326,168 @@ public sealed class Elsa3ExpressionRewriter
             "Boolean", "Number", "String", "parseFloat", "parseInt",
         };
 
+        /// <summary>
+        /// Globals Elsa 3 put into the engine that Elsa 4 does not have (or removes): CLR types, <c>Date</c> and the
+        /// optional lodash and moment libraries. Reading or constructing them would fail at run time (plan D-14).
+        /// </summary>
+        private static readonly HashSet<string> ElsaThreeGlobals = new(StringComparer.Ordinal)
+        {
+            "Date", "DateTime", "DateTimeOffset", "TimeSpan", "Guid", "Random", "_", "moment",
+        };
+
+        private static Elsa3ExpressionRewriteIssue UnavailableGlobal(string name) => new(
+            Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+            $"JavaScript uses '{name}', which the Elsa 4 JavaScript engine does not provide.",
+            "Supply the value as a pinned input or compute it in an activity before import.");
+
+        /// <summary>
+        /// The names declared in the scopes enclosing the node being visited, innermost last. A reference to one of them
+        /// is a local value, not an Elsa 3 global. Scopes follow JavaScript: <c>var</c> and parameters belong to their
+        /// function (or the script), <c>let</c>, <c>const</c>, classes and function declarations to their block, and a
+        /// catch variable to its clause.
+        /// </summary>
+        private readonly List<HashSet<string>> _scopes = [];
+
+        private bool IsDeclared(string name) => _scopes.Any(scope => scope.Contains(name));
+
+        private bool IsNondeterministicMember(Node node) =>
+            node is MemberExpression member && IsNondeterministicCall(member);
+
+        private bool IsUnavailableGlobal(string name) => ElsaThreeGlobals.Contains(name) && !IsDeclared(name);
+
+        public void Visit(Node node)
+        {
+            var scope = ScopeOf(node);
+            if (scope is not null)
+                _scopes.Add(scope);
+            try
+            {
+                VisitNode(node);
+            }
+            finally
+            {
+                if (scope is not null)
+                    _scopes.RemoveAt(_scopes.Count - 1);
+            }
+        }
+
+        private static HashSet<string>? ScopeOf(Node node)
+        {
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            switch (node)
+            {
+                case Script script:
+                    CollectVarDeclarations(script, names);
+                    CollectLexicalDeclarations(script.Body, names);
+                    break;
+                case IFunction function:
+                    if (function.Id is { } functionId)
+                        CollectBindings(functionId, names);
+                    foreach (var parameter in function.Params)
+                        CollectBindings(parameter, names);
+                    CollectVarDeclarations(function.Body, names);
+                    break;
+                case BlockStatement block:
+                    CollectLexicalDeclarations(block.Body, names);
+                    break;
+                case SwitchStatement switchStatement:
+                    CollectLexicalDeclarations(switchStatement.Cases.SelectMany(@case => @case.Consequent), names);
+                    break;
+                case CatchClause { Param: { } caught }:
+                    CollectBindings(caught, names);
+                    break;
+                case ForStatement { Init: VariableDeclaration declaration }:
+                    CollectLexicalDeclaration(declaration, names);
+                    break;
+                case ForInStatement { Left: VariableDeclaration declaration }:
+                    CollectLexicalDeclaration(declaration, names);
+                    break;
+                case ForOfStatement { Left: VariableDeclaration declaration }:
+                    CollectLexicalDeclaration(declaration, names);
+                    break;
+                case ClassExpression { Id: { } classId }:
+                    CollectBindings(classId, names);
+                    break;
+                default:
+                    return null;
+            }
+
+            return names;
+        }
+
+        /// <summary>The <c>var</c> declarations of a function or script body, which do not reach into nested functions.</summary>
+        private static void CollectVarDeclarations(Node node, HashSet<string> names)
+        {
+            foreach (var child in node.ChildNodes)
+            {
+                if (child is IFunction)
+                    continue;
+                if (child is VariableDeclaration { Kind: VariableDeclarationKind.Var } declaration)
+                {
+                    foreach (var declarator in declaration.Declarations)
+                        CollectBindings(declarator.Id, names);
+                }
+
+                CollectVarDeclarations(child, names);
+            }
+        }
+
+        private static void CollectLexicalDeclarations(IEnumerable<Node> statements, HashSet<string> names)
+        {
+            foreach (var statement in statements)
+            {
+                switch (statement)
+                {
+                    case VariableDeclaration declaration:
+                        CollectLexicalDeclaration(declaration, names);
+                        break;
+                    case FunctionDeclaration { Id: { } functionId }:
+                        CollectBindings(functionId, names);
+                        break;
+                    case ClassDeclaration { Id: { } classId }:
+                        CollectBindings(classId, names);
+                        break;
+                }
+            }
+        }
+
+        private static void CollectLexicalDeclaration(VariableDeclaration declaration, HashSet<string> names)
+        {
+            if (declaration.Kind == VariableDeclarationKind.Var)
+                return;
+            foreach (var declarator in declaration.Declarations)
+                CollectBindings(declarator.Id, names);
+        }
+
+        private static void CollectBindings(Node? pattern, HashSet<string> names)
+        {
+            switch (pattern)
+            {
+                case Identifier identifier:
+                    names.Add(identifier.Name);
+                    break;
+                case ArrayPattern array:
+                    foreach (var element in array.Elements)
+                        CollectBindings(element, names);
+                    break;
+                case ObjectPattern objectPattern:
+                    foreach (var property in objectPattern.Properties)
+                        CollectBindings(property is Property { } bound ? bound.Value : property, names);
+                    break;
+                case AssignmentPattern assigned:
+                    CollectBindings(assigned.Left, names);
+                    break;
+                case RestElement rest:
+                    CollectBindings(rest.Argument, names);
+                    break;
+            }
+        }
+
         public Dictionary<string, ExpressionParameterBinding> Parameters { get; } = new(StringComparer.Ordinal);
         public List<SourceEdit> Edits { get; } = [];
         public List<Elsa3ExpressionRewriteIssue> Issues { get; } = [];
 
-        public void Visit(Node node)
+        private void VisitNode(Node node)
         {
             if (node is AssignmentExpression assignment && ContainsAmbientRoot(assignment.Left) ||
                 node is UpdateExpression update && ContainsAmbientRoot(update.Argument))
@@ -285,7 +499,8 @@ public sealed class Elsa3ExpressionRewriter
                 return;
             }
 
-            if (node is CallExpression call && call.Callee is Identifier callee)
+            // A function the script declares itself is a local call, not an Elsa 3 host function.
+            if (node is CallExpression call && call.Callee is Identifier callee && !IsDeclared(callee.Name))
             {
                 if (SetterCalls.Contains(callee.Name))
                 {
@@ -300,7 +515,6 @@ public sealed class Elsa3ExpressionRewriter
                 {
                     "getVariable" => Elsa3AmbientReferenceKind.Variable,
                     "getInput" => Elsa3AmbientReferenceKind.WorkflowRequest,
-                    "getOutput" => Elsa3AmbientReferenceKind.ActivityResult,
                     _ => (Elsa3AmbientReferenceKind?)null,
                 };
                 if (kind is not null)
@@ -331,6 +545,42 @@ public sealed class Elsa3ExpressionRewriter
                 }
             }
 
+            if (node is NewExpression { Callee: Identifier constructed } && IsUnavailableGlobal(constructed.Name))
+            {
+                Issues.Add(UnavailableGlobal(constructed.Name));
+                return;
+            }
+
+            if (node is MemberExpression { Object: Identifier global } && IsUnavailableGlobal(global.Name) &&
+                !IsNondeterministicMember(node))
+            {
+                Issues.Add(UnavailableGlobal(global.Name));
+                return;
+            }
+
+            // A bare reference too, such as Date.now without a call or moment passed as a value.
+            if (node is Identifier bareGlobal && IsUnavailableGlobal(bareGlobal.Name))
+            {
+                Issues.Add(UnavailableGlobal(bareGlobal.Name));
+                return;
+            }
+
+            // A non-computed object key is a name, not a reference.
+            if (node is Property { Computed: false, Shorthand: false } objectProperty)
+            {
+                Visit(objectProperty.Value);
+                return;
+            }
+
+            if (node is Identifier { Name: "args" } && !IsDeclared("args"))
+            {
+                Issues.Add(new Elsa3ExpressionRewriteIssue(
+                    Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                    "JavaScript reads Elsa 3 evaluator arguments ('args'), which Elsa 4 replaces with the expression's own parameters.",
+                    "Read the value through getVariable or getInput instead before import."));
+                return;
+            }
+
             if (node is CallExpression { Callee: MemberExpression calledMember } && IsNondeterministicCall(calledMember))
             {
                 Issues.Add(new Elsa3ExpressionRewriteIssue(
@@ -340,7 +590,8 @@ public sealed class Elsa3ExpressionRewriter
                 return;
             }
 
-            if (node is MemberExpression member && member.Object is Identifier root && TryGetAmbientKind(root.Name, out var memberKind))
+            if (node is MemberExpression member && member.Object is Identifier root && !IsDeclared(root.Name) &&
+                TryGetAmbientKind(root.Name, out var memberKind))
             {
                 if (member.Computed || member.Property is not Identifier property)
                 {
@@ -360,7 +611,7 @@ public sealed class Elsa3ExpressionRewriter
                 return;
             }
 
-            if (node is Identifier bareIdentifier && TryGetAmbientKind(bareIdentifier.Name, out _))
+            if (node is Identifier bareIdentifier && !IsDeclared(bareIdentifier.Name) && TryGetAmbientKind(bareIdentifier.Name, out _))
             {
                 Issues.Add(DynamicIssue($"JavaScript ambient root '{bareIdentifier.Name}' is not followed by a static member name."));
                 return;
@@ -397,31 +648,26 @@ public sealed class Elsa3ExpressionRewriter
             value.Length > 0 && (char.IsLetter(value[0]) || value[0] is '_' or '$') &&
             value.Skip(1).All(character => char.IsLetterOrDigit(character) || character is '_' or '$');
 
+        /// <summary>
+        /// The ambient object roots Elsa 3 JavaScript has: only <c>variables</c>. Elsa 3 has no <c>input</c> or
+        /// <c>output</c> object, so those names are ordinary script locals.
+        /// </summary>
         private static bool TryGetAmbientKind(string root, out Elsa3AmbientReferenceKind kind)
         {
-            switch (root)
-            {
-                case "variables":
-                    kind = Elsa3AmbientReferenceKind.Variable;
-                    return true;
-                case "input":
-                case "inputs":
-                    kind = Elsa3AmbientReferenceKind.WorkflowRequest;
-                    return true;
-                case "output":
-                case "outputs":
-                    kind = Elsa3AmbientReferenceKind.ActivityResult;
-                    return true;
-                default:
-                    kind = default;
-                    return false;
-            }
+            kind = Elsa3AmbientReferenceKind.Variable;
+            return root.Equals("variables", StringComparison.Ordinal);
         }
 
-        private static bool ContainsAmbientRoot(Node node)
+        /// <summary>
+        /// Whether a mutation target reaches an ambient value: the <c>variables</c> or <c>args</c> root, or a value read
+        /// through <c>getVariable</c>/<c>getInput</c> (Elsa 4 hands expressions frozen values).
+        /// </summary>
+        private bool ContainsAmbientRoot(Node node)
         {
-            if (node is Identifier identifier &&
+            if (node is Identifier identifier && !IsDeclared(identifier.Name) &&
                 (TryGetAmbientKind(identifier.Name, out _) || identifier.Name.Equals("args", StringComparison.Ordinal)))
+                return true;
+            if (node is CallExpression { Callee: Identifier reader } && reader.Name is "getVariable" or "getInput" && !IsDeclared(reader.Name))
                 return true;
             foreach (var child in node.ChildNodes)
             {
@@ -431,8 +677,8 @@ public sealed class Elsa3ExpressionRewriter
             return false;
         }
 
-        private static bool IsNondeterministicCall(MemberExpression member) =>
-            member.Object is Identifier root &&
+        private bool IsNondeterministicCall(MemberExpression member) =>
+            member.Object is Identifier root && !IsDeclared(root.Name) &&
             member.Property is Identifier property &&
             ((root.Name.Equals("Math", StringComparison.Ordinal) && property.Name.Equals("random", StringComparison.Ordinal)) ||
              (root.Name.Equals("Date", StringComparison.Ordinal) && property.Name.Equals("now", StringComparison.Ordinal)) ||
@@ -575,6 +821,16 @@ public sealed class Elsa3ExpressionRewriter
     private sealed record LiquidRootToken(int Start, int MemberStart, string Root, string Member);
 }
 
+/// <summary>How an Elsa 3 JavaScript source is evaluated in Elsa 4.</summary>
+public enum Elsa3JavaScriptMode
+{
+    /// <summary>An expression bound to an input: Elsa 4 evaluates one parenthesized expression.</summary>
+    Expression,
+
+    /// <summary>A RunJavaScript body: Elsa 4 runs it as a function body that must return its value.</summary>
+    Script,
+}
+
 public enum Elsa3AmbientReferenceKind
 {
     WorkflowRequest,
@@ -614,7 +870,14 @@ public sealed class Elsa3ExpressionRewriteResult
     public ExpressionDefinition? Definition { get; }
     public IReadOnlyList<Elsa3ExpressionRewriteIssue> Issues { get; }
 
-    public static Elsa3ExpressionRewriteResult Success(ExpressionDefinition definition) => new(definition, []);
+    /// <summary>
+    /// Script mode: the body ends with a statement, so Elsa 3's completion value (for example of a trailing
+    /// <c>if</c>) has no <c>return</c> in Elsa 4 and the converted script returns nothing.
+    /// </summary>
+    public bool CompletionValueLost { get; private init; }
+
+    public static Elsa3ExpressionRewriteResult Success(ExpressionDefinition definition, bool completionValueLost = false) =>
+        new(definition, []) { CompletionValueLost = completionValueLost };
     public static Elsa3ExpressionRewriteResult Failure(params Elsa3ExpressionRewriteIssue[] issues) => new(null, issues);
     public static Elsa3ExpressionRewriteResult Failure(IEnumerable<Elsa3ExpressionRewriteIssue> issues) => new(null, issues.ToArray());
 }
