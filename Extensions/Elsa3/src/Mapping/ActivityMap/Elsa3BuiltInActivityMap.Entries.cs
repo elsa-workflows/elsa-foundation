@@ -59,7 +59,7 @@ internal sealed partial class Elsa3BuiltInActivityMap
             [Slot("Activities", "Parallel.Branch"), Removed("Variables", kind: Elsa3MemberKind.Property)],
             rewrite: Elsa3NodeRewriteKind.ParallelBranchNames),
         Catalog("Fork", Parallel,
-            [Slot("Branches", "Parallel.Branch"), Structure("JoinMode", warning: ForkWaitAnyCancellation)],
+            [Slot("Branches", "Parallel.Branch"), Structure("JoinMode", Elsa3MemberKind.Input, ForkWaitAnyCancellation)],
             rewrite: Elsa3NodeRewriteKind.ParallelBranchNames),
         Catalog("Switch", Switch,
             [Structure("Cases"), Slot("Default", "Switch.Default"), Structure("Mode", Elsa3MemberKind.Input), Lost("Output")],

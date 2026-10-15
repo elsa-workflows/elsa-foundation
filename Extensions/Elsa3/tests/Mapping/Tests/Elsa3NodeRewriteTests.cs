@@ -31,6 +31,21 @@ public sealed class Elsa3NodeRewriteTests
     }
 
     [Fact]
+    public async Task Fork_without_a_join_mode_waits_for_all_branches_like_elsa3()
+    {
+        var fork = Activity("fork", "Elsa.Fork");
+        fork.AdditionalProperties["branches"] = JsonSerializer.SerializeToElement(new[] { Port(Activity("a", "Elsa.WriteLine", ("text", Literal("a")))) });
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", fork)));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Empty(result.Diagnostics);
+        // No threshold (absent or null) means the Parallel waits for every branch.
+        var payload = Node(result.Value!.State, "fork").Structure!.Payload;
+        Assert.True(!payload.TryGetProperty("threshold", out var threshold) || threshold.ValueKind == JsonValueKind.Null);
+    }
+
+    [Fact]
     public async Task A_container_variable_is_scoped_to_its_container()
     {
         var set = Activity("set", "Elsa.SetVariable", ("value", Literal("x")));

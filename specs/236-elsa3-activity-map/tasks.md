@@ -261,10 +261,16 @@ ordered. No exception escapes either path.
   reported as a value-flow error.
 - *Behaviour changes asserted by migrated tests.* A duplicate binding, too-deep nesting and an unknown member are
   diagnostics (422 on the collection apply instead of a 400 ArgumentException). A ForEach body comes from its `body` port.
-- *Open questions.* Fork's default join mode is taken as WaitAny (Elsa 3's default), giving threshold 1 plus a warning.
-  `HttpEndpoint.Headers`/`QueryStringData` captures (projections `Request.Headers`/`Request.Query`) are reported
-  unconvertible until a binding can project a sub-path. `customProperties.commitStrategy` is dropped by the Elsa 3
-  model before conversion sees it.
+- *Review decisions (2026-10-15, maintainer).*
+  - VF-IMP-008 loosening: kept.
+  - JSON-depth nesting budget: kept, on condition that the per-kind budgets are documented where users meet them
+    (Mapping README, member-map.md and the `NestingTooDeep` message): what each container kind allows and why.
+    Added to T056.
+  - 422 instead of 400 on the collection apply: accepted.
+  - Fork default join mode: verified in elsa-core `5b0c2d73`: `JoinMode = ForkJoinMode.WaitAll`, enum
+    WaitAll = 0, WaitAny = 1. Absent now converts to a Parallel with no threshold and no warning. Fixed.
+  - `customProperties.commitStrategy`: left as is (silently dropped by the Elsa 3 model).
+  - `HttpEndpoint.Headers`/`QueryStringData` captures: open, under discussion.
 
 ---
 
@@ -436,7 +442,7 @@ reusable workflow validates and compiles with the expected `outputMappings`, `ou
 - [ ] T055 [P] Update `M/EXTENSION_POINTS.md` (§2.22.1): overridable contracts `IElsa3DefinitionConverter`,
   `IElsa3NodeConverter`, `IElsa3ActivityMap` (layer badge, default implementation, signature, when to override, what
   depends on it).
-- [ ] T056 [P] Update `M/README.md`:
+- [ ] T056 [P] Update `M/README.md` (and document the nesting budget per container kind in README, member-map.md and the `NestingTooDeep` message):
   - the conversion pipeline;
   - the resolution order;
   - the diagnostic families;

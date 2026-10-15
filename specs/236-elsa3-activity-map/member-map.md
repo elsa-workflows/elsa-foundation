@@ -65,7 +65,7 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 | Parallel.Variables | prop | — | R3 (default empty) | — |
 | Parallel (Break inside a branch) | — | Break does not cross Parallel | **W** | — |
 | Fork.Branches | port | Parallel `branches` | R1 + R7 | 0 |
-| Fork.JoinMode | prop | Parallel `threshold` (WaitAll → null, WaitAny → 1) | R1 + **W** (losing-branch cancellation unverified) | 0 |
+| Fork.JoinMode | input (default WaitAll, verified in elsa-core `5b0c2d73`; enum WaitAll = 0, WaitAny = 1) | Parallel `threshold` (absent or WaitAll → null, WaitAny → 1) | R1 + **W** for WaitAny (losing-branch cancellation unverified) | 0 |
 | Switch.Cases[].Label | prop | `cases[].match` | R1 | 1 |
 | Switch.Cases[].Condition | prop | — (one `Value`, compared to `match`) | R7: synthesize `Value` returning the label of the first true case (MatchFirst) | 1 |
 | Switch.Cases[].Activity | port | slot `Switch.Case[{match}]` | R1 | 1 (2 cases) |

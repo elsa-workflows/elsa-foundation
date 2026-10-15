@@ -27,20 +27,19 @@ internal sealed class Elsa3ParallelBranchNamesRewrite : IElsa3NodeRewrite
             slots[index] = slots[index] with { Label = $"Branch {branch}" };
         }
 
-        if (!context.TryGetProperty("JoinMode", out var property, out var joinMode))
-        {
-            // Elsa 3 Fork waits for any branch by default; Parallel always waits for all.
-            if (context.Node.Resolved?.Entry?.FindMember("JoinMode") is { } rule)
-                WaitAny(context, rule, property);
+        // Elsa 3 Fork waits for all branches by default (elsa-core 5b0c2d73: JoinMode = ForkJoinMode.WaitAll), which is
+        // what a Parallel without a threshold does.
+        if (!context.TryGetProperty("JoinMode", out var property, out var joinMode) || !Elsa3TypedValues.IsBound(joinMode))
             return ValueTask.CompletedTask;
-        }
 
         var mode = joinMode.ValueKind switch
         {
             JsonValueKind.String => joinMode.GetString(),
-            JsonValueKind.Number => joinMode.GetInt32() == 0 ? "WaitAny" : "WaitAll",
+            // ForkJoinMode: WaitAll = 0, WaitAny = 1.
+            JsonValueKind.Number => joinMode.GetInt32() == 0 ? "WaitAll" : "WaitAny",
             _ => Elsa3TypedValues.TryGetLiteral(joinMode, out var literal) ? literal : null
         };
+        mode = mode?.Trim() switch { "0" => "WaitAll", "1" => "WaitAny", var other => other };
         switch (mode?.Trim())
         {
             case "WaitAll" or "waitAll":
