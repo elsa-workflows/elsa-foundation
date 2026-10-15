@@ -1,4 +1,6 @@
-namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
+
+namespace Elsa.Workflows.Design.Api.Services;
 
 /// <summary>
 /// Design-only default: returns no states so definition views leave <c>publicationState</c> unset.

@@ -137,13 +137,22 @@ public sealed class WorkflowDefinitionPublicationStateLookupTests
     public void Publishing_replaces_the_design_null_lookup()
     {
         var services = new ServiceCollection();
-        services.TryAddScoped<IWorkflowDefinitionPublicationStateLookup, NullWorkflowDefinitionPublicationStateLookup>();
+        services.TryAddScoped<IWorkflowDefinitionPublicationStateLookup, PriorLookup>();
         new WorkflowsPublishingFeature().ConfigureServices(services);
 
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
         Assert.IsType<WorkflowDefinitionPublicationStateLookup>(
             scope.ServiceProvider.GetRequiredService<IWorkflowDefinitionPublicationStateLookup>());
+    }
+
+    private sealed class PriorLookup : IWorkflowDefinitionPublicationStateLookup
+    {
+        public Task<IReadOnlyDictionary<string, WorkflowDefinitionPublicationState>> ListByDefinitionIdsAsync(
+            IReadOnlyCollection<string> workflowDefinitionIds,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyDictionary<string, WorkflowDefinitionPublicationState>>(
+                new Dictionary<string, WorkflowDefinitionPublicationState>(StringComparer.Ordinal));
     }
 
     private sealed class Fixture
