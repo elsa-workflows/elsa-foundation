@@ -70,7 +70,7 @@ public sealed class ForEach : StructuralActivity, IRuntimeStructuralActivity, IR
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
-        var navigator = LoopNavigator.From(runtimeContext.ExecutableNode, LoopKind.ForEach);
+        var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(static node => LoopNavigator.From(node, LoopKind.ForEach));
         var items = ForEachCollection.Resolve(Collection);
 
         // Empty/null collection or empty body short-circuits without scheduling a pass.
@@ -88,7 +88,7 @@ public sealed class ForEach : StructuralActivity, IRuntimeStructuralActivity, IR
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        var navigator = LoopNavigator.From(runtimeContext.ExecutableNode, LoopKind.ForEach);
+        var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(static node => LoopNavigator.From(node, LoopKind.ForEach));
 
         if (navigator.Body is null || !navigator.IsBody(context.CompletedChildExecutableNodeId))
             throw new ControlFlowExecutionException($"Completed child executable node '{context.CompletedChildExecutableNodeId}' is not the ForEach body.");
