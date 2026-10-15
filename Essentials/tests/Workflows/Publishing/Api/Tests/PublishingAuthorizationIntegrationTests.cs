@@ -46,8 +46,8 @@ public sealed class PublishingAuthorizationIntegrationTests
         ["ambiguous", "ambiguous", HttpStatusCode.Unauthorized],
         ["trusted-denied", "denied", HttpStatusCode.Forbidden],
         ["exact-read", "exact", HttpStatusCode.OK],
-        ["exact-manage-on-read", "manage", HttpStatusCode.Forbidden],
-        ["configured-implication", "implied", HttpStatusCode.OK],
+        ["manage-satisfies-read", "manage", HttpStatusCode.OK],
+        ["verb-wildcard", "implied", HttpStatusCode.OK],
         ["evaluator-wildcard", "wildcard", HttpStatusCode.OK],
         ["normalized", "normalized", HttpStatusCode.OK],
         ["normalized-external", "external", HttpStatusCode.OK],
@@ -74,7 +74,7 @@ public sealed class PublishingAuthorizationIntegrationTests
 
     [Theory]
     [InlineData("exact", HttpStatusCode.OK, HttpStatusCode.Forbidden)]
-    [InlineData("manage", HttpStatusCode.Forbidden, HttpStatusCode.OK)]
+    [InlineData("manage", HttpStatusCode.OK, HttpStatusCode.OK)]
     [InlineData("implied", HttpStatusCode.OK, HttpStatusCode.OK)]
     [InlineData("wildcard", HttpStatusCode.OK, HttpStatusCode.OK)]
     public async Task Read_and_manage_routes_preserve_exact_and_configured_permission_relationships(
@@ -266,7 +266,6 @@ internal sealed class PublishingAuthorizationHost(IHost host) : IAsyncDisposable
                     new WorkflowsPublishingFeature().ConfigureServices(services);
                     new WorkflowsPublishingApiFeature().ConfigureServices(services);
                     Support.PublishingDomainSeams.Register(services);
-                    services.AddPermissionContributor<PublishingAuthorizationContributor>();
                     services.ReplacePermissionEvaluator<PublishingRecordingPermissionEvaluator>();
                     services.AddScoped<IPermissionResourceHandler, PublishingAuthorizationResourceHandler>();
                     services.AddSingleton<PublishingAuthorizationObservationState>();
@@ -395,11 +394,9 @@ internal sealed class PublishingAuthorizationObservationState
     }
 }
 
-internal sealed class PublishingRecordingPermissionEvaluator(
-    PublishingAuthorizationObservationState observations,
-    IPermissionCatalog catalog) : IPermissionEvaluator
+internal sealed class PublishingRecordingPermissionEvaluator(PublishingAuthorizationObservationState observations) : IPermissionEvaluator
 {
-    private readonly ClaimsPermissionEvaluator _inner = new(catalog);
+    private readonly ClaimsPermissionEvaluator _inner = new();
 
     public ValueTask<PermissionEvaluationResult> EvaluateAsync(
         PermissionEvaluationContext context,
@@ -449,25 +446,6 @@ internal sealed class PublishingAuthorizationResourceHandler(
 
         return ValueTask.FromResult<PermissionEvaluationResult?>(null);
     }
-}
-
-internal sealed class PublishingAuthorizationContributor : IPermissionContributor
-{
-    public string OwnerId => "Elsa.Workflows.Publishing.Api.Tests.Authorization";
-
-    public IEnumerable<Permission> Contribute() =>
-    [
-        new(
-            "publishing.authorization.admin",
-            "Publishing authorization test administrator",
-            "Publishing authorization tests",
-            "Test-only configured implication for both catalog actions.",
-            new HashSet<string>(StringComparer.Ordinal)
-            {
-                WorkflowPublishingPermissions.Read,
-                WorkflowPublishingPermissions.Manage
-            })
-    ];
 }
 
 internal sealed class PublishingAuthorizationAuthenticationHandler(
@@ -525,13 +503,13 @@ internal sealed class PublishingAuthorizationAuthenticationHandler(
             "exact" or "normalized" or "tenant-b" or "route-mismatch" or "no-tenant" =>
                 new[] { WorkflowPublishingPermissions.Read },
             "manage" => new[] { WorkflowPublishingPermissions.Manage },
-            "implied" or "implied-no-tenant" => new[] { "publishing.authorization.admin" },
+            "implied" or "implied-no-tenant" => new[] { "workflows/publishing:*" },
             "wildcard" or "wildcard-no-tenant" => new[] { PermissionKey.Wildcard },
             "cancel-evaluator" => new[] { WorkflowPublishingPermissions.Read },
-            _ => new[] { "workflow-publishing.other" }
+            _ => new[] { "workflows/publishing:other" }
         };
         if (fixture == "normalized")
-            permissions[0] = "WORKFLOW-PUBLISHING.READ";
+            permissions[0] = "WORKFLOWS/PUBLISHING:READ";
 
         var tenant = fixture == "no-tenant" || fixture.EndsWith("-no-tenant", StringComparison.Ordinal)
             ? null

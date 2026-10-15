@@ -88,7 +88,7 @@ public sealed class WorkflowDispatchAuthorizationIntegrationTests
     }
 
     [Fact]
-    public async Task Manage_permission_cannot_read_and_cross_tenant_redrive_fails_without_mutation()
+    public async Task Manage_permission_reads_its_own_tenant_and_cross_tenant_redrive_fails_without_mutation()
     {
         await using var host = await DispatchApiHost.StartAsync();
         host.Authorize(PermissionNames.WorkflowRuntimeManage, "tenant-a");
@@ -100,8 +100,9 @@ public sealed class WorkflowDispatchAuthorizationIntegrationTests
             new { requestId = "cross-tenant-request" });
         var body = await redrive.Content.ReadAsStringAsync();
 
-        Assert.Equal(HttpStatusCode.Forbidden, list.StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, get.StatusCode);
+        // Manage satisfies read on the same resource (ADR 0085 D2).
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, get.StatusCode);
         Assert.Equal(HttpStatusCode.InternalServerError, redrive.StatusCode);
         Assert.DoesNotContain("tenant-b", body, StringComparison.Ordinal);
         Assert.DoesNotContain(host.TenantBDispatch.DispatchId, body, StringComparison.Ordinal);

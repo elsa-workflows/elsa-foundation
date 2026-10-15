@@ -102,7 +102,7 @@ public sealed class AspNetCoreIdentitySignInTests : IAsyncDisposable
 
         Assert.True(outcome.Succeeded);
         // The admin role is granted every catalog permission; a representative one should be projected.
-        Assert.Contains("identity.users.manage", outcome.Session!.Permissions);
+        Assert.Contains("identity/users:manage", outcome.Session!.Permissions);
     }
 
     private async Task CreateUserAsync(string username, string password, string tenantId)

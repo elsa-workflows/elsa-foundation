@@ -170,7 +170,7 @@ export const moduleManagementKeys = {
 
 const backendRegistryPath = "/_elsa/module-management/registry";
 
-// `canManageStudioHost` reflects whether the signed-in user holds module-management.manage (from usePermissions).
+// `canManageStudioHost` reflects whether the signed-in user holds module-management:manage (from usePermissions).
 // It PROACTIVELY hides/disables the Studio host's mutation affordances a user can't use; the server-side manage gate
 // remains the authority (a stale session never grants a write). Defaults to true so demo/auth-disabled mode — where
 // permission checks do not apply and usePermissions reports no permissions — keeps full mutation access.
@@ -235,7 +235,7 @@ async function readServerRegistryViaBridge(host: StudioEndpointContext): Promise
 }
 
 // Maps a thrown registry read to an explicit unavailable result. A 403 is a Studio authorization failure (the user
-// lacks module-management.read), surfaced as the distinct "forbidden" state so the UI renders "you lack permission"
+// lacks module-management:read), surfaced as the distinct "forbidden" state so the UI renders "you lack permission"
 // rather than "backend unavailable". Any other throw is a Studio-origin failure reaching the bridge, surfaced as
 // "unknown".
 function registryFailureResult(error: unknown): Extract<HostRegistryResult, { kind: "unavailable" }> {
@@ -265,9 +265,9 @@ function defaultBackendRegistryDetail(status: BackendRegistryUnavailableKind): s
     case "unauthorized": return "The backend rejected the Studio management credential.";
     case "unreachable": return "The privileged host-management surface could not be reached.";
     case "degraded": return "The privileged host-management surface is degraded.";
-    // A Studio authorization failure (403): the signed-in user lacks the module-management.read permission. This is
+    // A Studio authorization failure (403): the signed-in user lacks the module-management:read permission. This is
     // "Studio denied you", not a backend problem.
-    case "forbidden": return "You do not have permission to read module management. This requires the module-management.read permission.";
+    case "forbidden": return "You do not have permission to read module management. This requires the module-management:read permission.";
     default: return "Privileged host-management status is unknown.";
   }
 }

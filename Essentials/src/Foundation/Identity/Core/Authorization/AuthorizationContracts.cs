@@ -80,7 +80,12 @@ public sealed class ReplacementContractAttribute : Attribute
 {
 }
 
-public sealed record Permission(string Key, string DisplayName, string Category, string Description, IReadOnlySet<string>? Implies = null)
+/// <summary>
+/// One catalog entry. <see cref="Key"/> is a concrete <c>{resource}:{verb}</c> permission (see <see cref="PermissionKey"/>).
+/// The catalog carries no implications: the evaluator's one rule is that <c>manage</c> on a resource satisfies
+/// <c>read</c> on the same resource.
+/// </summary>
+public sealed record Permission(string Key, string DisplayName, string Category, string Description)
 {
     /// <summary>
     /// Stable module or feature owner. These are intentionally non-positional so adding
@@ -141,25 +146,25 @@ public static class IdentityClaimTypes
 
 public static class DefaultIdentityPermissionKeys
 {
-    public const string IdentityUsersRead = "identity.users.read";
+    public const string IdentityUsersRead = "identity/users:read";
 
-    public const string IdentityUsersManage = "identity.users.manage";
+    public const string IdentityUsersManage = "identity/users:manage";
 
-    public const string IdentityRolesRead = "identity.roles.read";
+    public const string IdentityRolesRead = "identity/roles:read";
 
-    public const string IdentityRolesManage = "identity.roles.manage";
+    public const string IdentityRolesManage = "identity/roles:manage";
 
-    public const string IdentityPermissionsRead = "identity.permissions.read";
+    public const string IdentityPermissionsRead = "identity/permissions:read";
 
-    public const string IdentityApplicationsRead = "identity.applications.read";
+    public const string IdentityApplicationsRead = "identity/applications:read";
 
-    public const string IdentityApplicationsManage = "identity.applications.manage";
+    public const string IdentityApplicationsManage = "identity/applications:manage";
 
-    public const string IdentityProvidersRead = "identity.providers.read";
+    public const string IdentityProvidersRead = "identity/providers:read";
 
-    public const string IdentityProvidersManage = "identity.providers.manage";
+    public const string IdentityProvidersManage = "identity/providers:manage";
 
-    public const string IdentityCredentialsManage = "identity.credentials.manage";
+    public const string IdentityCredentialsManage = "identity/credentials:manage";
 }
 
 public sealed record PermissionAuthorizationRequirement(string Permission) : IAuthorizationRequirement;
@@ -174,7 +179,7 @@ public sealed record PermissionSetAuthorizationRequirement : IAuthorizationRequi
             throw new ArgumentOutOfRangeException(nameof(mode));
 
         var canonicalPermissions = permissions
-            .Select(PermissionKey.Normalize)
+            .Select(PermissionKey.NormalizeRequirement)
             .Distinct(StringComparer.Ordinal)
             .OrderBy(permission => permission, StringComparer.Ordinal)
             .ToArray();

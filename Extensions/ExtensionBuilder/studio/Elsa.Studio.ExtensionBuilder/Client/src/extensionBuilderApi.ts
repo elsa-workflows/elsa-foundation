@@ -59,7 +59,7 @@ const shortRelayTimeout = { timeoutMs: 40_000 };
 // the UI: when `status` is not "available" the capabilities are absent and the UI renders an explicit
 // backend-management-unavailable state instead of issuing doomed backend requests.
 export interface BackendManagementCapabilities {
-  // "forbidden" is a Studio authorization failure (403 — the user lacks extension-builder.read), surfaced alongside the
+  // "forbidden" is a Studio authorization failure (403 — the user lacks extension-builder:read), surfaced alongside the
   // bridge's backend-management states so the UI can render "you lack permission" distinctly (#249, ADR 0037).
   status: StudioBackendManagementStatusKind | "forbidden";
   detail: string;
@@ -380,13 +380,13 @@ export async function getBackendManagementCapabilities(hostContext: StudioEndpoi
       capabilities: result.status === "available" && result.capabilities ? normalizeCapabilities(result.capabilities) : null
     };
   } catch (error) {
-    // A 403 is a Studio authorization failure (the user lacks extension-builder.read). Map it to the explicit
+    // A 403 is a Studio authorization failure (the user lacks extension-builder:read). Map it to the explicit
     // "forbidden" state so the Extension Builder page renders a permission surface rather than a raw failure. Any other
     // throw is a Studio-origin failure; rethrow so the caller's failed-state handling applies.
     if (isPermissionDenied(error)) {
       return {
         status: "forbidden",
-        detail: "You do not have permission to use Extension Builder. This requires the extension-builder.read permission.",
+        detail: "You do not have permission to use Extension Builder. This requires the extension-builder:read permission.",
         capabilities: null
       };
     }

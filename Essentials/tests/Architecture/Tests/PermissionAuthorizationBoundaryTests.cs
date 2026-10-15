@@ -393,7 +393,7 @@ public sealed class PermissionAuthorizationBoundaryTests
                 public static class StudioPreferencesPermissions
                 {
                     public const string OwnerId = "elsa.studio.preferences";
-                    public const string Read = "studio.preferences.read";
+                    public const string Read = "studio/preferences:read";
                 }
 
                 public sealed class StudioPreferencesPermissionContributor : IPermissionContributor

@@ -38,15 +38,15 @@ describe("useHostControlAccess", () => {
     });
   });
 
-  it("grants module read (not manage) to a module-management.read holder", () => {
-    const access = readAccess(session("authenticated", ["module-management.read"]));
+  it("grants module read (not manage) to a module-management:read holder", () => {
+    const access = readAccess(session("authenticated", ["module-management:read"]));
 
     expect(access.canReadModuleManagement).toBe(true);
     expect(access.canManageModuleManagement).toBe(false);
   });
 
-  it("treats module-management.manage as satisfying read too", () => {
-    const access = readAccess(session("authenticated", ["module-management.manage"]));
+  it("treats module-management:manage as satisfying read too", () => {
+    const access = readAccess(session("authenticated", ["module-management:manage"]));
 
     expect(access.canReadModuleManagement).toBe(true);
     expect(access.canManageModuleManagement).toBe(true);

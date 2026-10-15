@@ -33,7 +33,9 @@ A branch lives as long as its pull request.
 
 - **Never swept:** `main`, `publish-state`, `release/*`, `rc/*` and any protected branch. A branch that
   must live longer than its PR (a demo, an integration line) needs an open PR or one of those patterns.
-- Naming is unchanged and not enforced; the sweep reads PR state, not names.
+- Agents name branches `agent/<worker>/<issue>-<slug>`, per
+  [Issue Bus Lite][org-agents-work]. The sweep does not
+  enforce names; it reads PR state.
   [Packages](../../.github/workflows/packages.yml) runs on pushes to `main` only; a branch gets CI
   through its PR.
 
@@ -97,20 +99,23 @@ GITHUB_REPOSITORY=elsa-workflows/elsa-foundation bash tools/repo-hygiene/hygiene
 
 ## Claims
 
-Moved from `AGENTS.md` (#2578); `AGENTS.md` keeps the short form.
+Moved from `AGENTS.md` (#2578); `AGENTS.md` keeps the short form. Claims follow the org-wide
+[Issue Bus Lite][org-agents-claim] protocol, which wins over
+this section on conflict.
 
 Several agent sessions run against this repository at once, in separate worktrees. Two sessions that pick the same unit will not see each other in git: a branch does not exist anywhere shared until it is pushed, so a clean check at session start proves nothing about what another session began a minute later.
 
-Claim the unit on its issue before writing code when one of these is true:
+1. Before claiming, read the issue's comments and the open PRs that reference it. If someone already has an open PR for the issue, stop.
+2. Comment exactly `claim: <worker> starting`, where the worker is `codex`, `claude`, `cursor` or your app slug, for example `claim: claude starting` when posting as `elsa-workflows-claude[bot]`. Only when you post through the owner's account does your role tag come first, for example `[Claude] claim: claude starting`.
+3. Re-read the comments. The earliest claim that hasn't been abandoned wins. If it isn't yours, comment `claim-abandoned` and leave the issue alone.
+4. If you won, assign yourself and remove `ready-for-agent`. Assignment plus the missing label is the claim.
+5. Branch `agent/<worker>/<issue>-<slug>` off the issue's target branch.
 
-- The task names an issue or PR number.
-- The task is one slice of a unit that was split into slices, whether or not the other slices are assigned.
-- The user says another session is working on a related slice. Ask what else that session owns before starting.
+See [Issue tracker](../agents/issue-tracker.md) for the commands.
 
-The claim is one comment naming the worktree and the exact scope being taken. Before posting it, read the issue's comments and the open PRs that reference it. If another session already claimed that scope, stop and tell the user rather than building a second copy. See [Issue tracker](../agents/issue-tracker.md) for the commands.
+Re-check for competing work before committing, not only at session start. That check is the backstop that catches a session which started after you did. When a unit is split into slices, prefer giving one session the whole stack, or naming an owner per slice in the issue, over relying on claims alone.
 
-Release the claim when the session ends: comment when the work ships, and comment when it is abandoned, so the next session does not read a stale claim as live work.
+To give up, comment `blocked: <reason>`, add `blocked` (or `needs:decision` when a decision is missing), and unassign yourself. Leave the branch and any draft PR for the next worker.
 
-Re-check for competing work before committing, not only at session start. That check is the backstop that catches a session which started after you did.
-
-A claim is advisory. It narrows the window rather than closing it, and two sessions starting within the same minute still race. When a unit is split into slices, prefer giving one session the whole stack, or naming an owner per slice in the issue, over relying on claims alone.
+[org-agents-work]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#work
+[org-agents-claim]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#claim

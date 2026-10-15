@@ -527,14 +527,14 @@ internal static class IdentityIamProviderSmoke
         UserStatus.Active,
         ResourceOwnership.Foundation,
         new HashSet<string>(["role-primary"], StringComparer.Ordinal),
-        new HashSet<string>(["identity.users.read"], StringComparer.Ordinal));
+        new HashSet<string>(["identity/users:read"], StringComparer.Ordinal));
 
     private static RoleRecord Role(string tenant, string id) => new(
         id,
         tenant,
         "role-name",
         "role-primary",
-        new HashSet<string>(["identity.users.read"], StringComparer.Ordinal),
+        new HashSet<string>(["identity/users:read"], StringComparer.Ordinal),
         false);
 
     private static void AssertUser(UserRecord expected, UserRecord actual)

@@ -14,7 +14,7 @@ Enable the `ApiCapabilities` shell feature. Supported domain API features depend
 static declarations while their shell services are composed. An omitted domain feature therefore contributes
 neither endpoints nor a capability.
 
-The endpoint is secured with `api-capabilities.read`. Its response intentionally contains no caller identity,
+The endpoint is secured with `api-capabilities:read`. Its response intentionally contains no caller identity,
 effective permissions, arbitrary module state, or rich editor bootstrap data. Clients must still satisfy each
 domain endpoint's action-scoped authorization policy.
 

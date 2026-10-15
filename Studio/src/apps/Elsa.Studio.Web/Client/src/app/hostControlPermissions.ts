@@ -5,8 +5,8 @@ import { StudioHttpError } from "../sdk";
 // management surfaces. The frontend uses them with `usePermissions` to PROACTIVELY hide/disable affordances a user
 // cannot use; the server-side bridge check remains the authority (an out-of-date session never grants access).
 export const hostControlPermissions = {
-  moduleManagementRead: "module-management.read",
-  moduleManagementManage: "module-management.manage"
+  moduleManagementRead: "module-management:read",
+  moduleManagementManage: "module-management:manage"
 } as const;
 
 // A management-surface read a user may hold the read permission for satisfies it directly; a `manage` holder satisfies
