@@ -6,7 +6,7 @@ using Elsa.Secrets.Core.Models;
 
 namespace Elsa.Connections.Services;
 
-public sealed class SecretConnectionCredentialSource(ISecretValueResolver secretValueResolver) : IConnectionCredentialSource
+internal sealed class SecretConnectionCredentialSource(ISecretValueResolver secretValueResolver) : IConnectionCredentialSource
 {
     public string Kind => ConnectionCredentialSourceKinds.Secret;
 

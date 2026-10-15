@@ -60,8 +60,10 @@ public sealed record AllowedHostsPolicy(string Kind, IReadOnlyList<string> Hosts
         var trimmed = pattern.Trim();
         if (trimmed.StartsWith("*.", StringComparison.Ordinal))
         {
+            // Keep the leading dot so "*.example.com" matches "api.example.com" and not
+            // "example.com", "evilexample.com", or "api.example.com.evil".
             var suffix = trimmed[1..];
-            return host.EndsWith(suffix, StringComparison.OrdinalIgnoreCase);
+            return host.Length > suffix.Length && host.EndsWith(suffix, StringComparison.OrdinalIgnoreCase);
         }
 
         return string.Equals(host, trimmed, StringComparison.OrdinalIgnoreCase);

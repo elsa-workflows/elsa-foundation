@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Elsa.Api.AspNetCore;
 using Elsa.Connections.Core.Contracts;
+using Elsa.Connections.Core.Exceptions;
 using Elsa.Connections.Core.Models;
 using Elsa.Connections.Core.Permissions;
 using Elsa.Connections.Options;
@@ -48,7 +49,7 @@ public static class ConnectionsApi
 
         api.MapUnboundOperation("POST", $"{ConnectionsRoute}/picker", "ConnectionsPicker",
                 typeof(ConnectionPickerResponse), StatusCodes.Status200OK, null, HandlePickerAsync, containFailures: false)
-            .RequireAnyPermission(PermissionKey.Wildcard, ConnectionsPermissions.Read, ConnectionsPermissions.Use);
+            .RequireAnyPermission(PermissionKey.Wildcard, ConnectionsPermissions.Use);
 
         api.MapUnboundOperation("GET", ConnectionRoute, "ConnectionsGet",
                 typeof(ConnectionMetadata), StatusCodes.Status200OK, null, HandleGetAsync, containFailures: false)
@@ -106,8 +107,16 @@ public static class ConnectionsApi
         if (request is null)
             return;
 
-        var result = await Manager(context).CreateAsync(tenantId, request, context.RequestAborted);
-        await Json(result, StatusCodes.Status201Created).ExecuteAsync(context);
+        try
+        {
+            var result = await Manager(context).CreateAsync(tenantId, request, context.RequestAborted);
+            await Json(result, StatusCodes.Status201Created).ExecuteAsync(context);
+        }
+        catch (Exception exception)
+        {
+            if (!await WriteMappedErrorAsync(context, exception))
+                throw;
+        }
     }
 
     private static async Task HandleDescriptorsAsync(HttpContext context)
@@ -158,8 +167,16 @@ public static class ConnectionsApi
         if (request is null)
             return;
 
-        var result = await Manager(context).UpdateAsync(tenantId, RouteName(context), request, context.RequestAborted);
-        await (result is null ? Results.NotFound() : Json(result)).ExecuteAsync(context);
+        try
+        {
+            var result = await Manager(context).UpdateAsync(tenantId, RouteName(context), request, context.RequestAborted);
+            await (result is null ? Results.NotFound() : Json(result)).ExecuteAsync(context);
+        }
+        catch (Exception exception)
+        {
+            if (!await WriteMappedErrorAsync(context, exception))
+                throw;
+        }
     }
 
     private static async Task HandleDeleteAsync(HttpContext context)
@@ -192,12 +209,50 @@ public static class ConnectionsApi
         await Json(result).ExecuteAsync(context);
     }
 
+    private static async Task<bool> WriteMappedErrorAsync(HttpContext context, Exception exception)
+    {
+        switch (exception)
+        {
+            case ArgumentException argument:
+                await Results.Json(
+                    new { error = argument.Message },
+                    JsonOptions,
+                    contentType: "application/json",
+                    statusCode: StatusCodes.Status400BadRequest).ExecuteAsync(context);
+                return true;
+            case ConnectionConflictException conflict:
+                await Results.Json(
+                    new { error = conflict.Message },
+                    JsonOptions,
+                    contentType: "application/json",
+                    statusCode: StatusCodes.Status409Conflict).ExecuteAsync(context);
+                return true;
+            case ConnectionUnavailableException unavailable when string.Equals(unavailable.Code, ConnectionFaultCodes.Forbidden, StringComparison.Ordinal):
+                await Results.Json(
+                    new { error = unavailable.Message },
+                    JsonOptions,
+                    contentType: "application/json",
+                    statusCode: StatusCodes.Status403Forbidden).ExecuteAsync(context);
+                return true;
+            default:
+                return false;
+        }
+    }
+
     private static async Task HandleOAuthRedirectUriAsync(HttpContext context)
     {
         var options = context.RequestServices.GetRequiredService<IOptions<ConnectionsOptions>>().Value;
-        var origin = string.IsNullOrWhiteSpace(options.PublicBaseUrl)
-            ? $"{context.Request.Scheme}://{context.Request.Host.Value}"
-            : options.PublicBaseUrl.TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(options.PublicBaseUrl))
+        {
+            await Results.Json(
+                new { error = "Elsa:Connections:PublicBaseUrl must be configured before an OAuth redirect URI can be issued." },
+                JsonOptions,
+                contentType: "application/json",
+                statusCode: StatusCodes.Status400BadRequest).ExecuteAsync(context);
+            return;
+        }
+
+        var origin = options.PublicBaseUrl.TrimEnd('/');
         await Json(new OAuthRedirectUriResponse { RedirectUri = origin + OAuthCallbackPath }).ExecuteAsync(context);
     }
 

@@ -46,6 +46,7 @@ public static class ConnectionsServiceCollectionExtensions
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IExpressionDescriptorProvider, ConnectionExpressionDescriptorProvider>());
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IVariableTypeDescriptorProvider, ConnectionTypeDescriptorProvider>());
         services.TryAddScoped<IConnectionPublishTenantAccessor, NullConnectionPublishTenantAccessor>();
+        services.TryAddScoped<IConnectionPermissionGate, NullConnectionPermissionGate>();
 
         return services;
     }

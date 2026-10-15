@@ -71,6 +71,7 @@ authorizes requests whether the grant reaches any registered permission.
 | Expressions | `expressions:read`, `expressions/javascript:render` | `Elsa.Expressions.Api`, `Elsa.Expressions.JavaScript.Rendering` |
 | Diagnostics | `diagnostics/opentelemetry:read`, `diagnostics/structured-logs:read` | `Elsa.Diagnostics.OpenTelemetry`, `Elsa.Diagnostics.StructuredLogs` |
 | Secrets | `secrets:read`, `secrets:write`, `secrets:update-value`, `secrets:delete`, `secrets:test`, `secrets:use`, `secrets:import`, `secrets:export` | `Elsa.Secrets.Api` |
+| Connections | `connections:read`, `connections:use`, `connections:manage`, `connections:bind-secret`, `connections:test` | `Elsa.Connections.Api` |
 | Studio preferences | `studio/preferences:read`, `studio/preferences:write`, `studio/preferences/defaults:manage` | `Elsa.Studio.Preferences.Api` |
 | Platform | `attention:read`, `api-capabilities:read`, `module-management:read`, `module-management:manage` | `Elsa.Attention.Api`, `Elsa.Api.Capabilities`, `Elsa.Modularity.Api` |
 | Extensions | `elsa3-import:read`, `elsa3-import:manage`, `extension-builder:read`, `extension-builder:manage`, `agent:use`, `agent/proposals:manage`, `agent/audit:read` | `Elsa3.Activities.Design.Import`, `Elsa.ExtensionBuilder.Api`, `Elsa.Agent.Api` |

@@ -17,18 +17,20 @@ public sealed class ConnectionsPermissionContributor : IPermissionContributor
         Permission(
             ConnectionsPermissions.Use,
             "Use connections",
-            "Bind connections in workflows and publish definitions that reference them.",
-            new HashSet<string>(StringComparer.Ordinal) { ConnectionsPermissions.Read }),
+            "Resolve and bind connections in workflows, and publish definitions that reference them. Not granted by connections:manage."),
         Permission(
             ConnectionsPermissions.Manage,
             "Manage connections",
-            "Create, update, revoke and delete connections.",
-            new HashSet<string>(StringComparer.Ordinal) { ConnectionsPermissions.Read, ConnectionsPermissions.Use }),
+            "Create, update, revoke and delete connections. Does not grant use or secret binding."),
+        Permission(
+            ConnectionsPermissions.BindSecret,
+            "Bind connection secrets",
+            "Bind an existing tenant secret or a named credential to a connection field."),
         Permission(ConnectionsPermissions.Test, "Test connections", "Test a connection without disclosing credentials.")
     ];
 
-    private Permission Permission(string key, string displayName, string description, IReadOnlySet<string>? implies = null) =>
-        new(key, displayName, "Connections", description, implies)
+    private Permission Permission(string key, string displayName, string description) =>
+        new(key, displayName, "Connections", description)
         {
             OwnerId = OwnerId,
             ContributorType = ContributorType

@@ -64,6 +64,9 @@ public static class Elsa3ActivityDiagnosticCodes
     /// <summary>SendHttpRequest: Elsa 4 does not validate the Authorization header.</summary>
     public const string AuthHeaderUnvalidated = "ELS3-BEHAVIOUR-AUTH-HEADER-UNVALIDATED";
 
+    /// <summary>SendHttpRequest.Authorization was removed; bind an http connection instead.</summary>
+    public const string HttpAuthorizationUseConnection = "ELS3-BEHAVIOUR-HTTP-AUTHORIZATION-CONNECTION";
+
     /// <summary>While.Condition is re-read only from persisted state.</summary>
     public const string WhilePersistedCondition = "ELS3-BEHAVIOUR-WHILE-PERSISTED-CONDITION";
 

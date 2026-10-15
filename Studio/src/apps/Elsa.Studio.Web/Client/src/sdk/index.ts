@@ -623,6 +623,8 @@ export interface StudioActivityInputDescriptor extends StudioActivityPropertyDes
   isSensitive?: boolean | null;
   /** Activity-declared: accepts only a Secret Reference. Implies isSensitive. Absent on older backends. */
   isCredential?: boolean | null;
+  /** Activity-declared: the required connection type. Absent on older backends. */
+  connectionType?: string | null;
 }
 
 export function readActivityInputOptionsProvider(input: StudioActivityInputDescriptor): StudioActivityInputOptionsProviderDescriptor | null {

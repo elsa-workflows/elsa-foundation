@@ -1,16 +1,18 @@
 using Elsa.Connections.Core.Contracts;
+using Elsa.Connections.Core.Exceptions;
 using Elsa.Connections.Core.Models;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 
 namespace Elsa.Connections.Services;
 
-public sealed class DefaultConnectionManager(
+internal sealed class DefaultConnectionManager(
     IConnectionRepository repository,
     IConnectionTypeRegistry types,
     IAuthenticationSchemeRegistry schemes,
     IConnectionResolver resolver,
     ISecretManager secretManager,
+    IConnectionPermissionGate permissionGate,
     TimeProvider timeProvider) : IConnectionManager
 {
     public async ValueTask<ConnectionMetadata> CreateAsync(string tenantId, CreateConnectionRequest request, CancellationToken cancellationToken = default)
@@ -27,6 +29,8 @@ public sealed class DefaultConnectionManager(
             throw new ArgumentException($"Connection type '{type.Descriptor.Name}' does not support scheme '{request.AuthScheme}'.", nameof(request));
         if (schemes.Find(request.AuthScheme) is null)
             throw new ArgumentException($"Unknown authentication scheme '{request.AuthScheme}'.", nameof(request));
+        ValidateSettings(type, request.Settings);
+        await EnsureBindSecretAsync(tenantId, request.SecretFields, cancellationToken);
 
         var now = timeProvider.GetUtcNow();
         var document = new ConnectionDocument
@@ -50,10 +54,20 @@ public sealed class DefaultConnectionManager(
             }
         };
 
-        document.Definition.SecretFields = await WriteSecretFieldsAsync(tenantId, name, request.SecretFields, cancellationToken);
-
         if (!await repository.TryAddAsync(document, cancellationToken))
-            throw new InvalidOperationException($"A connection named '{name}' already exists in this tenant.");
+            throw new ConnectionConflictException(name);
+
+        try
+        {
+            document.Definition.SecretFields = await WriteSecretFieldsAsync(tenantId, name, request.SecretFields, cancellationToken);
+            await repository.SaveAsync(document, cancellationToken);
+        }
+        catch
+        {
+            await DeleteOwnedSecretsAsync(tenantId, name, document.Definition.SecretFields, cancellationToken);
+            await repository.DeleteAsync(tenantId, name, cancellationToken);
+            throw;
+        }
 
         return ToMetadata(document);
     }
@@ -77,14 +91,27 @@ public sealed class DefaultConnectionManager(
         if (document is null)
             return null;
 
+        var type = types.Find(document.Definition.TypeName)
+            ?? throw new ArgumentException($"Unknown connection type '{document.Definition.TypeName}'.", nameof(request));
+        if (schemes.Find(document.Definition.AuthScheme) is null)
+            throw new ArgumentException($"Unknown authentication scheme '{document.Definition.AuthScheme}'.", nameof(request));
+
         if (request.DisplayName is not null)
             document.Definition.DisplayName = request.DisplayName.Trim();
         if (request.Settings is not null)
+        {
+            ValidateSettings(type, request.Settings);
             document.Definition.Settings = new Dictionary<string, string>(request.Settings, StringComparer.OrdinalIgnoreCase);
+        }
         if (request.Tags is not null)
             document.Definition.Tags = [..request.Tags];
         if (request.SecretFields is not null)
+        {
+            await EnsureBindSecretAsync(tenantId, request.SecretFields, cancellationToken);
+            var previous = document.Definition.SecretFields;
             document.Definition.SecretFields = await WriteSecretFieldsAsync(tenantId, document.Definition.Name, request.SecretFields, cancellationToken);
+            await DeleteRemovedOwnedSecretsAsync(tenantId, document.Definition.Name, previous, document.Definition.SecretFields, cancellationToken);
+        }
 
         document.State.UpdatedAt = timeProvider.GetUtcNow();
         await repository.SaveAsync(document, cancellationToken);
@@ -101,17 +128,24 @@ public sealed class DefaultConnectionManager(
         if (type is null)
             return new ConnectionTestResult { Succeeded = false, Message = $"Unknown connection type '{document.Definition.TypeName}'." };
 
-        await using var resolved = await resolver.ResolveAsync(new ConnectionResolveRequest
+        try
         {
-            TenantId = tenantId,
-            Name = document.Definition.Name,
-            RequiredType = document.Definition.TypeName
-        }, cancellationToken);
+            await using var resolved = await resolver.ResolveAsync(new ConnectionResolveRequest
+            {
+                TenantId = tenantId,
+                Name = document.Definition.Name,
+                RequiredType = document.Definition.TypeName
+            }, cancellationToken);
 
-        var result = await type.TestAsync(resolved, cancellationToken);
-        document.State.LastTestedAt = timeProvider.GetUtcNow();
-        await repository.SaveAsync(document, cancellationToken);
-        return result;
+            var result = await type.TestAsync(resolved, cancellationToken);
+            document.State.LastTestedAt = timeProvider.GetUtcNow();
+            await repository.SaveAsync(document, cancellationToken);
+            return result;
+        }
+        catch (ConnectionUnavailableException exception)
+        {
+            return new ConnectionTestResult { Succeeded = false, Message = exception.Message };
+        }
     }
 
     public async ValueTask<ConnectionMetadata?> RevokeAsync(string tenantId, string name, CancellationToken cancellationToken = default)
@@ -132,16 +166,26 @@ public sealed class DefaultConnectionManager(
         if (document is null)
             return false;
 
-        foreach (var field in document.Definition.SecretFields.Values)
+        await DeleteOwnedSecretsAsync(tenantId, document.Definition.Name, document.Definition.SecretFields, cancellationToken);
+        return await repository.DeleteAsync(tenantId, document.Definition.Name, cancellationToken);
+    }
+
+    private async ValueTask EnsureBindSecretAsync(
+        string tenantId,
+        IDictionary<string, ConnectionSecretFieldInput> inputs,
+        CancellationToken cancellationToken)
+    {
+        foreach (var input in inputs.Values)
         {
-            if (field.SecretName is { Length: > 0 } &&
-                field.SecretName.StartsWith($"connection:{document.Definition.Name}:", StringComparison.Ordinal))
+            var bindsExisting = !string.IsNullOrWhiteSpace(input.ExistingSecretName) ||
+                (!string.IsNullOrWhiteSpace(input.NamedCredentialName) &&
+                 string.Equals(input.SourceKind, ConnectionCredentialSourceKinds.NamedCredential, StringComparison.OrdinalIgnoreCase));
+            if (bindsExisting)
             {
-                await secretManager.DeleteAsync(tenantId, field.SecretName, cancellationToken);
+                await permissionGate.EnsureBindSecretAsync(tenantId, cancellationToken);
+                return;
             }
         }
-
-        return await repository.DeleteAsync(tenantId, document.Definition.Name, cancellationToken);
     }
 
     private async ValueTask<IDictionary<string, ConnectionSecretField>> WriteSecretFieldsAsync(
@@ -197,6 +241,59 @@ public sealed class DefaultConnectionManager(
         }
 
         return fields;
+    }
+
+    private async ValueTask DeleteRemovedOwnedSecretsAsync(
+        string tenantId,
+        string connectionName,
+        IDictionary<string, ConnectionSecretField> previous,
+        IDictionary<string, ConnectionSecretField> next,
+        CancellationToken cancellationToken)
+    {
+        foreach (var (fieldName, field) in previous)
+        {
+            if (next.ContainsKey(fieldName))
+                continue;
+            await DeleteOwnedSecretAsync(tenantId, connectionName, field, cancellationToken);
+        }
+    }
+
+    private async ValueTask DeleteOwnedSecretsAsync(
+        string tenantId,
+        string connectionName,
+        IDictionary<string, ConnectionSecretField> fields,
+        CancellationToken cancellationToken)
+    {
+        foreach (var field in fields.Values)
+            await DeleteOwnedSecretAsync(tenantId, connectionName, field, cancellationToken);
+    }
+
+    private async ValueTask DeleteOwnedSecretAsync(
+        string tenantId,
+        string connectionName,
+        ConnectionSecretField field,
+        CancellationToken cancellationToken)
+    {
+        if (field.SecretName is { Length: > 0 } &&
+            field.SecretName.StartsWith($"connection:{connectionName}:", StringComparison.Ordinal))
+        {
+            await secretManager.DeleteAsync(tenantId, field.SecretName, cancellationToken);
+        }
+    }
+
+    private static void ValidateSettings(IConnectionTypeProvider type, IDictionary<string, string> settings)
+    {
+        if (!string.Equals(type.Descriptor.Name, ConnectionTypeNames.Http, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var hasBaseUrl = settings.TryGetValue(HttpConnectionSettingKeys.BaseUrl, out var baseUrl) && !string.IsNullOrWhiteSpace(baseUrl);
+        var hasHosts = settings.TryGetValue(HttpConnectionSettingKeys.AllowedHosts, out var hosts) && !string.IsNullOrWhiteSpace(hosts);
+        if (!hasBaseUrl && !hasHosts)
+        {
+            throw new ArgumentException(
+                "An http connection requires at least one of baseUrl or allowedHosts.",
+                nameof(settings));
+        }
     }
 
     private static void ValidateOwner(string owner)

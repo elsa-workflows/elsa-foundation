@@ -32,17 +32,42 @@ public sealed class HttpAuthenticatorTests
     [Fact]
     public async Task Basic_SetsAuthorizationHeader()
     {
+        var username = $"u{Guid.NewGuid():N}";
+        var password = $"p{Guid.NewGuid():N}";
         var authenticator = new BasicHttpRequestAuthenticator();
         var connection = new FakeResolvedConnection(
             HttpAuthSchemes.Basic,
             AllowedHostsPolicy.Any,
-            ("password", "p@ss"),
-            settings: new Dictionary<string, string> { [HttpConnectionSettingKeys.Username] = "alice" });
+            ("password", password),
+            settings: new Dictionary<string, string> { [HttpConnectionSettingKeys.Username] = username });
 
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://example.test/");
         await authenticator.ApplyAsync(request, connection);
-        var expected = "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes("alice:p@ss"));
+        var expected = "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes($"{username}:{password}"));
         Assert.Equal(expected, request.Headers.GetValues("Authorization").Single());
+    }
+
+    [Fact]
+    public async Task Apply_RequiresHttpsUnlessAllowInsecureHttpIsSet()
+    {
+        var authenticator = new BearerHttpRequestAuthenticator();
+        var connection = new FakeResolvedConnection(
+            HttpAuthSchemes.Bearer,
+            AllowedHostsPolicy.Any,
+            ("token", "abc123"));
+
+        using var insecure = new HttpRequestMessage(HttpMethod.Get, "http://api.example/v1");
+        var refused = await Assert.ThrowsAsync<ConnectionUnavailableException>(() => authenticator.ApplyAsync(insecure, connection).AsTask());
+        Assert.Equal(ConnectionFaultCodes.InsecureHttp, refused.Code);
+
+        var optedIn = new FakeResolvedConnection(
+            HttpAuthSchemes.Bearer,
+            AllowedHostsPolicy.Any,
+            ("token", "abc123"),
+            settings: new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowInsecureHttp] = "true" });
+        using var allowed = new HttpRequestMessage(HttpMethod.Get, "http://api.example/v1");
+        await authenticator.ApplyAsync(allowed, optedIn);
+        Assert.Equal("Bearer abc123", allowed.Headers.GetValues("Authorization").Single());
     }
 
     [Fact]

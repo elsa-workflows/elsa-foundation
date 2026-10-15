@@ -61,6 +61,8 @@ public static class ConnectionFaultCodes
     public const string Unavailable = "ConnectionUnavailable";
     public const string HostNotAllowed = "ConnectionHostNotAllowed";
     public const string OwnerNotSupported = "ConnectionOwnerNotSupported";
+    public const string InsecureHttp = "ConnectionInsecureHttp";
+    public const string Forbidden = "ConnectionForbidden";
 }
 
 public static class HttpConnectionSettingKeys
@@ -71,6 +73,7 @@ public static class HttpConnectionSettingKeys
     public const string ApiKeyPlacement = "placement";
     public const string ApiKeyQueryName = "queryName";
     public const string Username = "username";
+    public const string AllowInsecureHttp = "allowInsecureHttp";
 }
 
 public static class HttpConnectionSecretFields

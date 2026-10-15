@@ -4,7 +4,7 @@ using Elsa.Connections.Core.Models;
 
 namespace Elsa.Connections.Services;
 
-public sealed class InMemoryConnectionRepository : IConnectionRepository
+internal sealed class InMemoryConnectionRepository : IConnectionRepository
 {
     private readonly ConcurrentDictionary<string, ConnectionDocument> _documents = new(StringComparer.OrdinalIgnoreCase);
 

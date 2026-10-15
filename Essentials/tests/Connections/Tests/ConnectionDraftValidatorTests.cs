@@ -1,6 +1,7 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Connections.Core.Contracts;
+using Elsa.Connections.Core.Exceptions;
 using Elsa.Expressions.Core.Models;
 using Elsa.Connections.Core.Models;
 using Elsa.Connections.Design.Validators;
@@ -29,7 +30,8 @@ public sealed class ConnectionDraftValidatorTests
             new EmptyStructureService(),
             new Catalog(httpConnectionType: ConnectionTypeNames.Http),
             manager,
-            new FixedConnectionPublishTenantAccessor(tenant));
+            new FixedConnectionPublishTenantAccessor(tenant),
+            new NullConnectionPermissionGate());
 
         var missing = (await validator.Validate(new FakeDraft(Node("missing-one")), CancellationToken.None)).ToArray();
         Assert.Contains(missing, error => error.Type == ConnectionDraftValidator.MissingType);
@@ -38,8 +40,8 @@ public sealed class ConnectionDraftValidatorTests
         Assert.Contains(wrong, error => error.Type == ConnectionDraftValidator.TypeMismatchType);
 
         var needsAuth = (await validator.Validate(new FakeDraft(Node("needs-auth")), CancellationToken.None)).ToArray();
-        Assert.DoesNotContain(needsAuth, error => error.Type == ConnectionDraftValidator.NeedsAuthorizationType);
-        Assert.Empty(needsAuth);
+        var warning = Assert.Single(needsAuth, error => error.Type == ConnectionDraftValidator.NeedsAuthorizationType);
+        Assert.Equal(ValidationSeverities.Warning, warning.Severity);
     }
 
     [Fact]
@@ -54,7 +56,8 @@ public sealed class ConnectionDraftValidatorTests
             new EmptyStructureService(),
             catalog,
             manager,
-            new FixedConnectionPublishTenantAccessor(tenant));
+            new FixedConnectionPublishTenantAccessor(tenant),
+            new NullConnectionPermissionGate());
         var literalNode = new ActivityNode(
             "n1",
             "ver-1",
@@ -76,10 +79,28 @@ public sealed class ConnectionDraftValidatorTests
             new EmptyStructureService(),
             catalog,
             manager,
-            new NullConnectionPublishTenantAccessor());
+            new NullConnectionPublishTenantAccessor(),
+            new NullConnectionPermissionGate());
         var blank = (await blankTenant.Validate(new FakeDraft(Node("ready-http")), CancellationToken.None)).ToArray();
         Assert.Contains(blank, error => error.Type == ConnectionDraftValidator.MissingType);
         Assert.Contains(blank, error => error.Message.Contains("tenant", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task UsePermission_BlocksWhenTheGateRefuses()
+    {
+        var tenant = "t1";
+        var repository = new InMemoryConnectionRepository();
+        await repository.TryAddAsync(Document(tenant, "ready-http", ConnectionTypeNames.Http, ConnectionStatuses.Ready));
+        var validator = new ConnectionDraftValidator(
+            new EmptyStructureService(),
+            new Catalog(httpConnectionType: ConnectionTypeNames.Http),
+            new RecordingManager(repository),
+            new FixedConnectionPublishTenantAccessor(tenant),
+            new DenyingUseGate());
+
+        var errors = (await validator.Validate(new FakeDraft(Node("ready-http")), CancellationToken.None)).ToArray();
+        Assert.Contains(errors, error => error.Type == ConnectionDraftValidator.ForbiddenType);
     }
 
     private static ActivityNode Node(string connectionName) =>
@@ -216,5 +237,14 @@ public sealed class ConnectionDraftValidatorTests
 
         public ValueTask<bool> DeleteAsync(string tenantId, string name, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class DenyingUseGate : IConnectionPermissionGate
+    {
+        public ValueTask EnsureUseAsync(string tenantId, CancellationToken cancellationToken = default) =>
+            throw new ConnectionUnavailableException("connection", ConnectionFaultCodes.Forbidden, "Permission connections:use is required.");
+
+        public ValueTask EnsureBindSecretAsync(string tenantId, CancellationToken cancellationToken = default) =>
+            ValueTask.CompletedTask;
     }
 }

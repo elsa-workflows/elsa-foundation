@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Connections.Core.Contracts;
 using Elsa.Connections.Core.Models;
 using Elsa.Secrets.Core.Contracts;
+using Elsa.Secrets.Core.Exceptions;
 using Elsa.Secrets.Core.Models;
 
 namespace Elsa.Connections.Services;
@@ -10,7 +11,7 @@ namespace Elsa.Connections.Services;
 /// Writes grant material as a new secret version only when the current version still matches
 /// <see cref="GrantWriteRequest.ExpectedSecretVersion"/>. A mismatch is <see cref="GrantWriteStatus.Conflict"/>.
 /// </summary>
-public sealed class DefaultConnectionGrantWriter(ISecretManager secretManager, ISecretNameValidator names) : IConnectionGrantWriter
+internal sealed class DefaultConnectionGrantWriter(ISecretManager secretManager, ISecretNameValidator names) : IConnectionGrantWriter
 {
     public async ValueTask<GrantWriteResult> TryCompareAndSwapAsync(GrantWriteRequest request, CancellationToken cancellationToken = default)
     {
@@ -30,14 +31,19 @@ public sealed class DefaultConnectionGrantWriter(ISecretManager secretManager, I
             ["expires_at"] = request.ExpiresAt.ToString("O")
         });
 
-        var rotated = await secretManager.RotateAsync(request.TenantId, normalized, new RotateSecretRequest
+        try
         {
-            Value = payload
-        }, cancellationToken);
+            var rotated = await secretManager.RotateAsync(request.TenantId, normalized, new RotateSecretRequest
+            {
+                Value = payload,
+                ExpectedVersion = request.ExpectedSecretVersion
+            }, cancellationToken);
 
-        if (rotated.CurrentVersion != request.ExpectedSecretVersion + 1)
-            return new GrantWriteResult(GrantWriteStatus.Conflict, rotated.CurrentVersion);
-
-        return new GrantWriteResult(GrantWriteStatus.Written, rotated.CurrentVersion);
+            return new GrantWriteResult(GrantWriteStatus.Written, rotated.CurrentVersion);
+        }
+        catch (SecretVersionConflictException conflict)
+        {
+            return new GrantWriteResult(GrantWriteStatus.Conflict, conflict.CurrentVersion);
+        }
     }
 }

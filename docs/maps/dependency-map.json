@@ -3082,6 +3082,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Foundation.Identity.Core",
+          "path": "Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Design.Core",
           "path": "Essentials/src/Workflows/Design/Core/Elsa.Workflows.Design.Core.csproj"
         },
@@ -3108,36 +3113,6 @@
         {
           "type": "external",
           "id": "Microsoft.Extensions.DependencyInjection",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Logging.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Options",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Primitives",
           "version": "10.0.10"
         }
       ]
@@ -3264,6 +3239,11 @@
           "version": "10.0.10"
         },
         {
+          "type": "external",
+          "id": "Microsoft.Extensions.Http",
+          "version": "10.0.10"
+        },
+        {
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
           "version": "0.0.30"
@@ -3281,6 +3261,11 @@
         {
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging",
           "version": "10.0.10"
         },
         {
@@ -14091,6 +14076,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Api.AspNetCore",
+          "path": "Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Connections.Api",
           "path": "Essentials/src/Connections/Api/Elsa.Connections.Api.csproj"
         },
@@ -14121,6 +14111,16 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Foundation.Identity.Core",
+          "path": "Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity",
+          "path": "Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Secrets.Core",
           "path": "Essentials/src/Secrets/Core/Elsa.Secrets.Core.csproj"
         },
@@ -14133,6 +14133,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime",
           "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.AspNetCore.TestHost",
+          "version": "10.0.10"
         },
         {
           "type": "external",

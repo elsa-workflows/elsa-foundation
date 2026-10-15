@@ -1,5 +1,6 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Connections.Core.Contracts;
+using Elsa.Connections.Core.Exceptions;
 using Elsa.Connections.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
@@ -9,22 +10,25 @@ using Elsa.Workflows.Design.Validations.Core.Models;
 namespace Elsa.Connections.Design.Validators;
 
 /// <summary>
-/// Publish gate (D7): a missing or wrong-type connection blocks; <c>NeedsAuthorization</c> does not.
+/// Publish gate (D7): a missing or wrong-type connection blocks; <c>NeedsAuthorization</c> warns only.
 /// </summary>
 public sealed class ConnectionDraftValidator(
     IActivityStructureService activityStructureService,
     IActivityDefinitionLookup activityDefinitionLookup,
     IConnectionManager connectionManager,
-    IConnectionPublishTenantAccessor tenantAccessor) : IDraftValidator
+    IConnectionPublishTenantAccessor tenantAccessor,
+    IConnectionPermissionGate permissionGate) : IDraftValidator
 {
     public const string MissingType = "Connections/Missing";
     public const string TypeMismatchType = "Connections/TypeMismatch";
     public const string NeedsAuthorizationType = "Connections/NeedsAuthorization";
+    public const string ForbiddenType = "Connections/Forbidden";
 
     public async ValueTask<IEnumerable<ValidationError>> Validate(IWorkflowDefinitionDraft draft, CancellationToken cancellationToken)
     {
         var tenantId = tenantAccessor.TenantId;
         var errors = new List<ValidationError>();
+        var useChecked = false;
         foreach (var node in WalkTree(draft.State.RootActivity))
         {
             if (string.IsNullOrWhiteSpace(node.ActivityVersionId))
@@ -48,6 +52,24 @@ public sealed class ConnectionDraftValidator(
                         Type: MissingType,
                         Message: "A tenant is required to publish a workflow that uses a connection."));
                     continue;
+                }
+
+                if (!useChecked)
+                {
+                    try
+                    {
+                        await permissionGate.EnsureUseAsync(tenantId, cancellationToken);
+                    }
+                    catch (ConnectionUnavailableException)
+                    {
+                        errors.Add(new ValidationError(
+                            Path: $"{node.NodeId}/inputs/{input.ReferenceKey}",
+                            Type: ForbiddenType,
+                            Message: "Permission connections:use is required to publish a workflow that uses a connection."));
+                        return errors;
+                    }
+
+                    useChecked = true;
                 }
 
                 var reading = ConnectionReferencePayload.Read(state.Value?.Value);
@@ -80,9 +102,16 @@ public sealed class ConnectionDraftValidator(
                     continue;
                 }
 
-                // NeedsAuthorization warns only: it does not block publish (D7). The connection's
-                // status is visible on the picker; a run still faults with ConnectionUnavailable.
-                _ = string.Equals(metadata.Status, ConnectionStatuses.NeedsAuthorization, StringComparison.Ordinal);
+                if (string.Equals(metadata.Status, ConnectionStatuses.NeedsAuthorization, StringComparison.Ordinal))
+                {
+                    errors.Add(new ValidationError(
+                        Path: $"{node.NodeId}/inputs/{input.ReferenceKey}",
+                        Type: NeedsAuthorizationType,
+                        Message: $"Connection '{reference.Name}' needs authorization. Publishing still succeeds; a run faults until it is authorized.")
+                    {
+                        Severity = ValidationSeverities.Warning
+                    });
+                }
             }
         }
 

@@ -9,7 +9,7 @@ describe("connections module", () => {
     register(api);
 
     expect(api.featureAreas.list()).toEqual([
-      expect.objectContaining({ id: "connections", title: "Connections", navGroup: "Security", ownedPaths: ["/security/connections", "/connections"] })
+      expect.objectContaining({ id: "connections", title: "Connections", navGroup: "Security", ownedPaths: ["/security/connections"] })
     ]);
     expect(api.propertyEditors.list()).toEqual([]);
     expect(api.expressionEditors.list()).toEqual([

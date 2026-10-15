@@ -9,7 +9,7 @@ namespace Elsa.Connections.Services;
 /// kind is <c>configuration</c>; a host registers additional <see cref="IAccessTokenSource"/> kinds
 /// (including cloud-vendor packages) without changing this type.
 /// </summary>
-public sealed class ConfigurationAccessTokenSource(IConfiguration configuration, TimeProvider timeProvider) : IAccessTokenSource
+internal sealed class ConfigurationAccessTokenSource(IConfiguration configuration, TimeProvider timeProvider) : IAccessTokenSource
 {
     public const string KindName = "configuration";
 

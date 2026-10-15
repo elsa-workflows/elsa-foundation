@@ -5,6 +5,8 @@ namespace Elsa.Activities.Http.Connections;
 /// <summary>
 /// Default applicator when Connections is not composed: an unbound request is sent as authored; a
 /// bound connection is refused rather than sending credentials the host cannot resolve.
+/// Throws <see cref="InvalidOperationException"/> rather than the typed connection fault because
+/// this package cannot reference Elsa.Connections.
 /// </summary>
 public sealed class UnboundHttpConnectionApplicator : IHttpConnectionApplicator
 {

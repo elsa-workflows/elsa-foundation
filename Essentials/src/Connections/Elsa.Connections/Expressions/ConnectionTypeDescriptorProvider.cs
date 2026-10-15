@@ -6,7 +6,7 @@ using Elsa.Primitives.Models;
 namespace Elsa.Connections.Expressions;
 
 /// <summary>Registers <see cref="ConnectionReference"/> as a well-known dotted alias.</summary>
-public sealed class ConnectionTypeDescriptorProvider : IVariableTypeDescriptorProvider
+internal sealed class ConnectionTypeDescriptorProvider : IVariableTypeDescriptorProvider
 {
     private static readonly IReadOnlySet<CollectionKind> CollectionKinds = new HashSet<CollectionKind> { CollectionKind.Single };
     private static readonly IReadOnlySet<string> JsonStorage = new HashSet<string>(StringComparer.Ordinal) { "elsa.json" };

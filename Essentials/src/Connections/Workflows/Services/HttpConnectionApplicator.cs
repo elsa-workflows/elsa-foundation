@@ -11,11 +11,12 @@ namespace Elsa.Connections.Workflows.Services;
 /// Resolves the bound http connection for the execution partition and applies its authenticator.
 /// Revealed credentials are registered with <see cref="IRuntimeSecretMask"/>.
 /// </summary>
-public sealed class HttpConnectionApplicator(
+internal sealed class HttpConnectionApplicator(
     IConnectionResolver resolver,
     IEnumerable<IHttpRequestAuthenticator> authenticators,
     IWorkflowExecutionPartitionAccessor partitionAccessor,
-    IRuntimeSecretMask secretMask) : IHttpConnectionApplicator
+    IRuntimeSecretMask secretMask,
+    IConnectionPermissionGate permissionGate) : IHttpConnectionApplicator
 {
     private readonly IReadOnlyList<IHttpRequestAuthenticator> _authenticators = authenticators.ToArray();
 
@@ -30,6 +31,7 @@ public sealed class HttpConnectionApplicator(
             return;
 
         var tenantId = partitionAccessor.Current.Value;
+        await permissionGate.EnsureUseAsync(tenantId, cancellationToken);
         await using var resolved = await resolver.ResolveAsync(new ConnectionResolveRequest
         {
             TenantId = tenantId,
@@ -50,6 +52,29 @@ public sealed class HttpConnectionApplicator(
 
         var masked = new MaskingResolvedConnection(resolved, secretMask, context.InvocationId);
         await authenticator.ApplyAsync(request, masked, cancellationToken);
+        RegisterAppliedValues(request, secretMask, context.InvocationId, resolved.Name);
+    }
+
+    private static void RegisterAppliedValues(HttpRequestMessage request, IRuntimeSecretMask mask, string activityExecutionId, string connectionName)
+    {
+        if (request.Headers.TryGetValues("Authorization", out var authorization))
+        {
+            foreach (var value in authorization)
+                mask.Register(activityExecutionId, $"{connectionName}:authorization", value);
+        }
+
+        if (request.RequestUri?.Query is { Length: > 1 } query)
+        {
+            foreach (var part in query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var separator = part.IndexOf('=');
+                if (separator < 0)
+                    continue;
+                var value = Uri.UnescapeDataString(part[(separator + 1)..]);
+                if (value.Length > 0)
+                    mask.Register(activityExecutionId, $"{connectionName}:query", value);
+            }
+        }
     }
 
     private sealed class MaskingResolvedConnection(

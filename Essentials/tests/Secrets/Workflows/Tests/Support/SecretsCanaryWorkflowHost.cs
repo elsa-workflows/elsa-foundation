@@ -370,7 +370,8 @@ public sealed class SecretsCanaryWorkflowHost : IAsyncDisposable
                 AuthScheme = HttpAuthSchemes.Bearer,
                 Settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    [HttpConnectionSettingKeys.AllowedHosts] = "canary-endpoint.test"
+                    [HttpConnectionSettingKeys.AllowedHosts] = "canary-endpoint.test",
+                    [HttpConnectionSettingKeys.AllowInsecureHttp] = "true"
                 },
                 SecretFields = new Dictionary<string, ConnectionSecretFieldInput>(StringComparer.Ordinal)
                 {

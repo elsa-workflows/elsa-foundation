@@ -12,7 +12,4 @@ public sealed class ActivityConnectionAttribute : Attribute
 {
     /// <summary>The connection type the bound connection must have, for example <c>http</c>.</summary>
     public required string ConnectionType { get; init; }
-
-    /// <summary>Optional capabilities the connection must advertise, for example <c>files.write</c>.</summary>
-    public string[]? RequiredCapabilities { get; init; }
 }

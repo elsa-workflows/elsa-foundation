@@ -4,7 +4,7 @@ using Elsa.Expressions.Core.Models;
 
 namespace Elsa.Connections.Expressions;
 
-public sealed class ConnectionExpressionDescriptor : IExpressionDescriptor
+internal sealed class ConnectionExpressionDescriptor : IExpressionDescriptor
 {
     public string TypeName => ConnectionExpressionTypes.Connection;
     public string DisplayName => "Connection";
@@ -15,7 +15,7 @@ public sealed class ConnectionExpressionDescriptor : IExpressionDescriptor
     };
 }
 
-public sealed class ConnectionExpressionDescriptorProvider : IExpressionDescriptorProvider
+internal sealed class ConnectionExpressionDescriptorProvider : IExpressionDescriptorProvider
 {
     public IEnumerable<IExpressionDescriptor> GetDescriptors()
     {

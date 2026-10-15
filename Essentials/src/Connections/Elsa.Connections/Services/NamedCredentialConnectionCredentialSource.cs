@@ -10,7 +10,7 @@ namespace Elsa.Connections.Services;
 /// <see cref="IAccessTokenSourceRegistry"/>. The credential's <c>Kind</c> selects the source; hosts
 /// add kinds without changing this type.
 /// </summary>
-public sealed class NamedCredentialConnectionCredentialSource(
+internal sealed class NamedCredentialConnectionCredentialSource(
     IAccessTokenSourceRegistry registry,
     IConfiguration configuration) : IConnectionCredentialSource
 {

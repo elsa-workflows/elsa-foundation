@@ -16,7 +16,7 @@ export function ConnectionPickerEditor({
   descriptor,
   endpointContext
 }: StudioExpressionEditorProps & { endpointContext: StudioEndpointContext }) {
-  const requiredType = descriptor.uiHint === "connection-picker" ? (descriptor as { connectionType?: string | null }).connectionType ?? undefined : undefined;
+  const requiredType = descriptor.connectionType ?? undefined;
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [state, setState] = useState<LoadState>({ endpointContext, status: "loading", items: [] });
   const visibleState: LoadState = state.endpointContext === endpointContext

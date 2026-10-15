@@ -21,15 +21,32 @@ export interface ListConnectionsResponse {
   items: ConnectionMetadata[];
 }
 
+export interface ConnectionSettingField {
+  name: string;
+  displayName: string;
+  editorHint: string;
+  required?: boolean;
+}
+
 export interface ConnectionTypeDescriptor {
   name: string;
   displayName: string;
   supportedSchemes: string[];
+  settings: ConnectionSettingField[];
+}
+
+export interface AuthSchemeField {
+  name: string;
+  displayName: string;
+  sensitive: boolean;
+  editorHint: string;
+  required?: boolean;
 }
 
 export interface AuthSchemeDescriptor {
   name: string;
   displayName: string;
+  fields: AuthSchemeField[];
   hasInteractiveAuthorization: boolean;
 }
 

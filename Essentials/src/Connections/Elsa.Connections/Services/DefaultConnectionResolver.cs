@@ -4,17 +4,19 @@ using Elsa.Connections.Core.Models;
 
 namespace Elsa.Connections.Services;
 
-public sealed class DefaultConnectionResolver(
+internal sealed class DefaultConnectionResolver(
     IConnectionRepository repository,
     IConnectionTypeRegistry types,
     IConnectionCredentialSourceRegistry credentials,
-    TimeProvider timeProvider) : IConnectionResolver
+    IConnectionPermissionGate permissionGate) : IConnectionResolver
 {
     public async ValueTask<IResolvedConnection> ResolveAsync(ConnectionResolveRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.TenantId);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Name);
+
+        await permissionGate.EnsureUseAsync(request.TenantId, cancellationToken);
 
         if (!string.Equals(request.Owner, ConnectionOwners.Tenant, StringComparison.OrdinalIgnoreCase))
         {
@@ -59,31 +61,8 @@ public sealed class DefaultConnectionResolver(
                 ConnectionFaultCodes.Unavailable,
                 $"Connection '{name}' type '{document.Definition.TypeName}' is not registered.");
 
-        document.State.LastUsedAt = timeProvider.GetUtcNow();
-        await repository.SaveAsync(document, cancellationToken);
-
-        var hosts = ResolveHosts(type.Descriptor.Hosts, document.Definition.Settings);
+        var hosts = type.ResolveHosts(new Dictionary<string, string>(document.Definition.Settings, StringComparer.OrdinalIgnoreCase));
         return new ResolvedConnection(document, hosts, credentials);
-    }
-
-    internal static AllowedHostsPolicy ResolveHosts(AllowedHostsPolicy typePolicy, IDictionary<string, string> settings)
-    {
-        if (string.Equals(typePolicy.Kind, AllowedHostsPolicy.FixedKind, StringComparison.Ordinal))
-            return typePolicy;
-
-        var hosts = new List<string>();
-        if (settings.TryGetValue(HttpConnectionSettingKeys.AllowedHosts, out var allowed) && !string.IsNullOrWhiteSpace(allowed))
-        {
-            hosts.AddRange(allowed.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
-        }
-
-        if (settings.TryGetValue(HttpConnectionSettingKeys.BaseUrl, out var baseUrl) &&
-            Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
-        {
-            hosts.Add(uri.IdnHost);
-        }
-
-        return new AllowedHostsPolicy(AllowedHostsPolicy.UserDeclaredKind, hosts);
     }
 }
 

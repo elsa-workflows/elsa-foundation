@@ -25,4 +25,14 @@ public sealed class AllowedHostsPolicyTests
         Assert.True(policy.Allows(new Uri("https://www.googleapis.com/drive")));
         Assert.False(policy.Allows(new Uri("https://evil.example/x")));
     }
+
+    [Fact]
+    public void Wildcard_DoesNotMatchApexOrAdjacentSuffixes()
+    {
+        var policy = AllowedHostsPolicy.Fixed("*.example.com");
+        Assert.True(policy.Allows(new Uri("https://api.example.com/v1")));
+        Assert.False(policy.Allows(new Uri("https://example.com/v1")));
+        Assert.False(policy.Allows(new Uri("https://evilexample.com/v1")));
+        Assert.False(policy.Allows(new Uri("https://api.example.com.evil/v1")));
+    }
 }

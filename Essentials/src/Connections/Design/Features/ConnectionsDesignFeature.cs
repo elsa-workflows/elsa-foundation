@@ -24,6 +24,7 @@ public class ConnectionsDesignFeature : IShellFeature
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddConnections();
+        services.AddHttpContextAccessor();
         services.Replace(ServiceDescriptor.Scoped<IConnectionPublishTenantAccessor, PersistenceScopeConnectionPublishTenantAccessor>());
         services.AddScoped<IDraftValidator, ConnectionDraftValidator>();
     }

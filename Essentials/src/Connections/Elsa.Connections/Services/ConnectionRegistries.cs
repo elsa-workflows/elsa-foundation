@@ -3,9 +3,22 @@ using Elsa.Connections.Core.Models;
 
 namespace Elsa.Connections.Services;
 
-public sealed class ConnectionTypeRegistry(IEnumerable<IConnectionTypeProvider> providers) : IConnectionTypeRegistry
+internal sealed class ConnectionTypeRegistry : IConnectionTypeRegistry
 {
-    private readonly IReadOnlyList<IConnectionTypeProvider> _providers = providers.ToArray();
+    private readonly IReadOnlyList<IConnectionTypeProvider> _providers;
+
+    public ConnectionTypeRegistry(IEnumerable<IConnectionTypeProvider> providers)
+    {
+        var list = providers.ToArray();
+        var duplicates = list
+            .GroupBy(provider => provider.Descriptor.Name, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToArray();
+        if (duplicates.Length > 0)
+            throw new InvalidOperationException($"Duplicate connection type names: {string.Join(", ", duplicates)}.");
+        _providers = list;
+    }
 
     public IConnectionTypeProvider? Find(string name) =>
         _providers.FirstOrDefault(provider => string.Equals(provider.Descriptor.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -13,9 +26,22 @@ public sealed class ConnectionTypeRegistry(IEnumerable<IConnectionTypeProvider> 
     public IReadOnlyList<IConnectionTypeProvider> List() => _providers;
 }
 
-public sealed class AuthenticationSchemeRegistry(IEnumerable<IAuthenticationSchemeProvider> providers) : IAuthenticationSchemeRegistry
+internal sealed class AuthenticationSchemeRegistry : IAuthenticationSchemeRegistry
 {
-    private readonly IReadOnlyList<IAuthenticationSchemeProvider> _providers = providers.ToArray();
+    private readonly IReadOnlyList<IAuthenticationSchemeProvider> _providers;
+
+    public AuthenticationSchemeRegistry(IEnumerable<IAuthenticationSchemeProvider> providers)
+    {
+        var list = providers.ToArray();
+        var duplicates = list
+            .GroupBy(provider => provider.Descriptor.Name, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToArray();
+        if (duplicates.Length > 0)
+            throw new InvalidOperationException($"Duplicate authentication scheme names: {string.Join(", ", duplicates)}.");
+        _providers = list;
+    }
 
     public IAuthenticationSchemeProvider? Find(string name) =>
         _providers.FirstOrDefault(provider => string.Equals(provider.Descriptor.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -23,10 +49,22 @@ public sealed class AuthenticationSchemeRegistry(IEnumerable<IAuthenticationSche
     public IReadOnlyList<IAuthenticationSchemeProvider> List() => _providers;
 }
 
-public sealed class ConnectionCredentialSourceRegistry(IEnumerable<IConnectionCredentialSource> sources) : IConnectionCredentialSourceRegistry
+internal sealed class ConnectionCredentialSourceRegistry : IConnectionCredentialSourceRegistry
 {
-    private readonly IReadOnlyDictionary<string, IConnectionCredentialSource> _sources = sources
-        .ToDictionary(source => source.Kind, StringComparer.OrdinalIgnoreCase);
+    private readonly IReadOnlyDictionary<string, IConnectionCredentialSource> _sources;
+
+    public ConnectionCredentialSourceRegistry(IEnumerable<IConnectionCredentialSource> sources)
+    {
+        var list = sources.ToArray();
+        var duplicates = list
+            .GroupBy(source => source.Kind, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToArray();
+        if (duplicates.Length > 0)
+            throw new InvalidOperationException($"Duplicate connection credential source kinds: {string.Join(", ", duplicates)}.");
+        _sources = list.ToDictionary(source => source.Kind, StringComparer.OrdinalIgnoreCase);
+    }
 
     public IConnectionCredentialSource Get(string kind)
     {
@@ -38,9 +76,22 @@ public sealed class ConnectionCredentialSourceRegistry(IEnumerable<IConnectionCr
     }
 }
 
-public sealed class AccessTokenSourceRegistry(IEnumerable<IAccessTokenSource> sources) : IAccessTokenSourceRegistry
+internal sealed class AccessTokenSourceRegistry : IAccessTokenSourceRegistry
 {
-    private readonly IReadOnlyList<IAccessTokenSource> _sources = sources.ToArray();
+    private readonly IReadOnlyList<IAccessTokenSource> _sources;
+
+    public AccessTokenSourceRegistry(IEnumerable<IAccessTokenSource> sources)
+    {
+        var list = sources.ToArray();
+        var duplicates = list
+            .GroupBy(source => source.Kind, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToArray();
+        if (duplicates.Length > 0)
+            throw new InvalidOperationException($"Duplicate access token source kinds: {string.Join(", ", duplicates)}.");
+        _sources = list;
+    }
 
     public IAccessTokenSource? Find(string kind) =>
         _sources.FirstOrDefault(source => string.Equals(source.Kind, kind, StringComparison.OrdinalIgnoreCase));

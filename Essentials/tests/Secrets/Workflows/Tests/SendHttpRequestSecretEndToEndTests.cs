@@ -80,7 +80,8 @@ public sealed class SendHttpRequestSecretEndToEndTests(DiscreteHttpCanaryHostFix
                 ["state"] = literalState
             });
         var body = await submitted.Content.ReadAsStringAsync();
-        Assert.True(submitted.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.UnprocessableEntity or HttpStatusCode.Conflict);
+        Assert.Equal(HttpStatusCode.BadRequest, submitted.StatusCode);
+        Assert.Contains("Inputs/ConnectionReference", body, StringComparison.Ordinal);
         Assert.DoesNotContain(literal, body, StringComparison.Ordinal);
         var cells = await ReadDatabaseCellsAsync(Host.DesignDirectory);
         Assert.Empty(cells.SelectMany(cell => CanaryScanner.Find(cell.Bytes, literal, cell.Location)));

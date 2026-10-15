@@ -172,8 +172,7 @@ public sealed class RuntimeInputBindingCompiler(
         IsConnectionTyped(type.Alias);
 
     private static bool IsConnectionTyped(string? alias) =>
-        string.Equals(alias, typeof(Elsa.Activities.Runtime.Core.Models.ConnectionReference).FullName, StringComparison.Ordinal) ||
-        alias is { Length: > 0 } && alias.EndsWith(".ConnectionReference", StringComparison.Ordinal);
+        string.Equals(alias, typeof(Elsa.Activities.Runtime.Core.Models.ConnectionReference).FullName, StringComparison.Ordinal);
 
     public RuntimeInputBinding Compile(string nodeId, InputDefinition inputDefinition, ArgumentState state)
     {

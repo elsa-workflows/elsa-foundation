@@ -34,7 +34,7 @@ public class ConnectionsApiFeature : IWebShellFeature
         services.AddHttpContextAccessor();
         services.AddDynamicEndpointApiExplorerRefresh();
         services.AddPermissionContributor<ConnectionsPermissionContributor>();
-        services.Replace(ServiceDescriptor.Scoped<IConnectionPublishTenantAccessor, HttpContextConnectionPublishTenantAccessor>());
+        services.Replace(ServiceDescriptor.Scoped<IConnectionPermissionGate, HttpContextConnectionPermissionGate>());
     }
 
     public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) =>

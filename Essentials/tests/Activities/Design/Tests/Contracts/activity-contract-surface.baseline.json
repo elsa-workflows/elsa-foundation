@@ -614,15 +614,15 @@
       "executionType": "Action",
       "inputs": [
         {
-          "key": "Authorization",
-          "name": "Authorization",
-          "type": "String",
+          "key": "Connection",
+          "name": "Connection",
+          "type": "Elsa.Activities.Runtime.Core.Models.ConnectionReference",
           "collectionKind": "Single",
           "isRequired": false,
           "isNullable": true,
-          "uiHint": null,
+          "uiHint": "connection-picker",
           "defaultValue": null,
-          "defaultSyntax": null,
+          "defaultSyntax": "Connection",
           "uiSpecifications": null
         },
         {

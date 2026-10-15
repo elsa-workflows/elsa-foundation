@@ -98,7 +98,8 @@ public sealed class ConnectionManagerAndResolverTests
         await manager.CreateAsync(Tenant, new CreateConnectionRequest
         {
             Name = "soon-gone",
-            AuthScheme = HttpAuthSchemes.Bearer
+            AuthScheme = HttpAuthSchemes.Bearer,
+            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" }
         });
         await manager.RevokeAsync(Tenant, "soon-gone");
         var revoked = await Assert.ThrowsAsync<ConnectionUnavailableException>(() => resolver.ResolveAsync(new ConnectionResolveRequest
@@ -107,6 +108,87 @@ public sealed class ConnectionManagerAndResolverTests
             Name = "soon-gone"
         }).AsTask());
         Assert.Contains("Revoked", revoked.Message, StringComparison.Ordinal);
+
+        var test = await manager.TestAsync(Tenant, "soon-gone");
+        Assert.False(test.Succeeded);
+        Assert.Contains("Revoked", test.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DuplicateCreate_DoesNotOverwriteTheExistingCredential()
+    {
+        await using var provider = CreateProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
+        var resolver = scope.ServiceProvider.GetRequiredService<IConnectionResolver>();
+
+        await manager.CreateAsync(Tenant, new CreateConnectionRequest
+        {
+            Name = "dup",
+            AuthScheme = HttpAuthSchemes.Bearer,
+            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new() { Value = "value-a" }
+            }
+        });
+
+        await Assert.ThrowsAsync<ConnectionConflictException>(() => manager.CreateAsync(Tenant, new CreateConnectionRequest
+        {
+            Name = "dup",
+            AuthScheme = HttpAuthSchemes.Bearer,
+            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "other.example" },
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new() { Value = "value-b" }
+            }
+        }).AsTask());
+
+        await using var resolved = await resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "dup" });
+        Assert.Equal("value-a", (await resolved.GetSensitiveAsync(HttpConnectionSecretFields.Token)).Reveal());
+        Assert.Equal("api.example", resolved.Settings[HttpConnectionSettingKeys.AllowedHosts]);
+    }
+
+    [Fact]
+    public async Task HttpCreate_RequiresBaseUrlOrAllowedHosts()
+    {
+        await using var provider = CreateProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => manager.CreateAsync(Tenant, new CreateConnectionRequest
+        {
+            Name = "no-hosts",
+            AuthScheme = HttpAuthSchemes.Bearer,
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new() { Value = "tok" }
+            }
+        }).AsTask());
+    }
+
+    [Fact]
+    public async Task Resolve_UsesBaseUrlHostWhenAllowedHostsIsOmitted()
+    {
+        await using var provider = CreateProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
+        var resolver = scope.ServiceProvider.GetRequiredService<IConnectionResolver>();
+
+        await manager.CreateAsync(Tenant, new CreateConnectionRequest
+        {
+            Name = "from-base",
+            AuthScheme = HttpAuthSchemes.Bearer,
+            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.BaseUrl] = "https://api.example/v1" },
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new() { Value = "tok" }
+            }
+        });
+
+        await using var resolved = await resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "from-base" });
+        Assert.True(resolved.Hosts.Allows(new Uri("https://api.example/resource")));
+        Assert.False(resolved.Hosts.Allows(new Uri("https://evil.example/resource")));
     }
 
     [Fact]
@@ -192,6 +274,38 @@ public sealed class ConnectionManagerAndResolverTests
             ExpiresAt = DateTimeOffset.UtcNow.AddHours(1)
         });
         Assert.Equal(GrantWriteStatus.Missing, missing.Status);
+    }
+
+    [Fact]
+    public async Task GrantWriter_CompareAndSwap_OnlyOneWriterSucceedsForTheSameVersion()
+    {
+        await using var provider = CreateProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var secrets = scope.ServiceProvider.GetRequiredService<ISecretManager>();
+        var writer = scope.ServiceProvider.GetRequiredService<IConnectionGrantWriter>();
+
+        var created = await secrets.CreateAsync(Tenant, new CreateSecretRequest
+        {
+            Name = "oauth-grant-parallel",
+            Value = "{}",
+            TypeName = SecretTypeNames.Text
+        });
+        var expectedVersion = created.CurrentVersion!.Value;
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 32).Select(index => writer.TryCompareAndSwapAsync(new GrantWriteRequest
+        {
+            TenantId = Tenant,
+            ConnectionName = "oauth",
+            GrantSecretName = "oauth-grant-parallel",
+            ExpectedSecretVersion = expectedVersion,
+            AccessToken = $"token-{index}",
+            ExpiresAt = DateTimeOffset.UtcNow.AddHours(1)
+        }).AsTask()));
+
+        Assert.Equal(1, results.Count(result => result.Status == GrantWriteStatus.Written));
+        Assert.Equal(31, results.Count(result => result.Status == GrantWriteStatus.Conflict));
+        var current = await secrets.FindAsync(Tenant, "oauth-grant-parallel");
+        Assert.Equal(expectedVersion + 1, current!.CurrentVersion);
     }
 
     [Fact]

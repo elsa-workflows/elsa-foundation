@@ -11,7 +11,7 @@ export function register(api: ElsaStudioModuleApi) {
     title: "Connections",
     description: "Manage service connections and bind workflow inputs to connection references.",
     navGroup: "Security",
-    ownedPaths: ["/security/connections", "/connections"],
+    ownedPaths: ["/security/connections"],
     required: false,
     defaultEnabled: true,
     order: 46,
@@ -26,12 +26,6 @@ export function register(api: ElsaStudioModuleApi) {
       {
         id: "connections",
         path: "/security/connections",
-        label: "Connections",
-        component: () => <ConnectionsPage context={api.backend} dialogs={api.dialogs} />
-      },
-      {
-        id: "connections-legacy",
-        path: "/connections",
         label: "Connections",
         component: () => <ConnectionsPage context={api.backend} dialogs={api.dialogs} />
       }

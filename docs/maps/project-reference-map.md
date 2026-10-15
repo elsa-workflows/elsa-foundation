@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 146
 - Test projects: 147
-- Direct project references: 1582
+- Direct project references: 1586
 
 ## Projects
 
@@ -52,7 +52,7 @@ Records direct project references only.
 | [Elsa.Cluster.Readability](../../Essentials/src/Cluster/Readability/Elsa.Cluster.Readability.csproj) | source | Elsa.Cluster | - | true | Elsa.Cluster.Core<br>Elsa.Cluster.InProcess<br>Elsa.Persistence.Schema |
 | [Elsa.Connections.Api](../../Essentials/src/Connections/Api/Elsa.Connections.Api.csproj) | source | Elsa.Connections | - | true | Elsa.Api.AspNetCore<br>Elsa.Connections<br>Elsa.Connections.Core<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core |
 | [Elsa.Connections.Core](../../Essentials/src/Connections/Core/Elsa.Connections.Core.csproj) | source | Elsa.Connections | - | true | Elsa.Primitives |
-| [Elsa.Connections.Design](../../Essentials/src/Connections/Design/Elsa.Connections.Design.csproj) | source | Elsa.Connections | - | true | Elsa.Activities.Design.Core<br>Elsa.Connections<br>Elsa.Connections.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Validations.Core<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Connections.Design](../../Essentials/src/Connections/Design/Elsa.Connections.Design.csproj) | source | Elsa.Connections | - | true | Elsa.Activities.Design.Core<br>Elsa.Connections<br>Elsa.Connections.Core<br>Elsa.Foundation.Identity.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Validations.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Connections](../../Essentials/src/Connections/Elsa.Connections/Elsa.Connections.csproj) | source | Elsa.Connections | - | true | Elsa.Activities.Runtime.Core<br>Elsa.Connections.Core<br>Elsa.Expressions.Core<br>Elsa.Secrets.Core |
 | [Elsa.Connections.Workflows](../../Essentials/src/Connections/Workflows/Elsa.Connections.Workflows.csproj) | source | Elsa.Connections | - | true | Elsa.Activities.Http<br>Elsa.Connections<br>Elsa.Connections.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Diagnostics.ConsoleLogStreaming](../../Essentials/src/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj) | source | Elsa.Diagnostics | - | true | - |
@@ -207,7 +207,7 @@ Records direct project references only.
 | [Elsa.Cluster.Readability.Tests](../../Essentials/tests/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj) | test | Elsa.Cluster | - | false | Elsa.Cluster.Readability<br>Elsa.Testing<br>Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
 | [Elsa.Cluster.Testing](../../Essentials/tests/Cluster/Testing/Elsa.Cluster.Testing.csproj) | test | Elsa.Cluster | - | false | Elsa.Cluster.Core<br>Elsa.Serialization.SystemText<br>Elsa.Serialization.Testing<br>Elsa.Workflows.Runtime.Distributed |
 | [Elsa.Cluster.Tests](../../Essentials/tests/Cluster/Tests/Elsa.Cluster.Tests.csproj) | test | Elsa.Cluster | - | false | Elsa.Cluster.Core<br>Elsa.Cluster.InProcess<br>Elsa.Cluster.Testing |
-| [Elsa.Connections.Tests](../../Essentials/tests/Connections/Tests/Elsa.Connections.Tests.csproj) | test | Elsa.Connections | - | false | Elsa.Activities.Http<br>Elsa.Connections<br>Elsa.Connections.Api<br>Elsa.Connections.Core<br>Elsa.Connections.Design<br>Elsa.Connections.Workflows<br>Elsa.Expressions<br>Elsa.Secrets<br>Elsa.Secrets.Core<br>Elsa.Workflows.Runtime |
+| [Elsa.Connections.Tests](../../Essentials/tests/Connections/Tests/Elsa.Connections.Tests.csproj) | test | Elsa.Connections | - | false | Elsa.Activities.Http<br>Elsa.Api.AspNetCore<br>Elsa.Connections<br>Elsa.Connections.Api<br>Elsa.Connections.Core<br>Elsa.Connections.Design<br>Elsa.Connections.Workflows<br>Elsa.Expressions<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Secrets<br>Elsa.Secrets.Core<br>Elsa.Workflows.Runtime |
 | [Elsa.Diagnostics.ConsoleLogStreaming.Tests](../../Essentials/tests/Diagnostics/ConsoleLogStreaming/Tests/Elsa.Diagnostics.ConsoleLogStreaming.Tests.csproj) | test | Elsa.Diagnostics | - | false | Elsa.Diagnostics.ConsoleLogStreaming |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests](../../Essentials/tests/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.OpenTelemetry<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore |
 | [Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests](../../Essentials/tests/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Diagnostics | net10.0 | false | Elsa.Diagnostics.OpenTelemetry.Core<br>Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore |

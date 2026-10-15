@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Ban, Cable, Plus, Search, ShieldCheck, Trash2 } from "lucide-react";
 import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { createConnection, deleteConnection, getConnectionDescriptors, listConnections, revokeConnection, testConnection } from "./connectionsApi";
-import type { ConnectionDescriptorsResponse, ConnectionMetadata, CreateConnectionRequest } from "./connectionTypes";
+import type { AuthSchemeDescriptor, ConnectionDescriptorsResponse, ConnectionMetadata, ConnectionTypeDescriptor, CreateConnectionRequest } from "./connectionTypes";
 
 export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointContext; dialogs: StudioDialogApi }) {
   const [search, setSearch] = useState("");
@@ -13,8 +13,8 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
   const [name, setName] = useState("");
   const [typeName, setTypeName] = useState("http");
   const [authScheme, setAuthScheme] = useState("bearer");
-  const [allowedHosts, setAllowedHosts] = useState("");
-  const [secretValue, setSecretValue] = useState("");
+  const [settings, setSettings] = useState<Record<string, string>>({});
+  const [secretValues, setSecretValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -23,6 +23,10 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
     () => items.find(item => item.name === selectedName) ?? items[0] ?? null,
     [items, selectedName]
   );
+
+  const selectedType: ConnectionTypeDescriptor | undefined = (descriptors?.types ?? []).find(type => type.name === typeName);
+  const selectedScheme: AuthSchemeDescriptor | undefined = (descriptors?.schemes ?? []).find(scheme => scheme.name === authScheme);
+  const supportedSchemes = selectedType?.supportedSchemes ?? descriptors?.schemes.map(scheme => scheme.name) ?? ["bearer"];
 
   async function load(preferredName?: string) {
     setLoading(true);
@@ -49,24 +53,34 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
     void load();
   }, []);
 
+  useEffect(() => {
+    if (!supportedSchemes.includes(authScheme) && supportedSchemes[0])
+      setAuthScheme(supportedSchemes[0]);
+  }, [authScheme, supportedSchemes]);
+
   async function onCreate(event: React.FormEvent) {
     event.preventDefault();
+    const secretFields: CreateConnectionRequest["secretFields"] = {};
+    for (const field of selectedScheme?.fields ?? []) {
+      if (!field.sensitive)
+        continue;
+      const value = secretValues[field.name]?.trim();
+      if (value)
+        secretFields[field.name] = { value };
+    }
     const request: CreateConnectionRequest = {
       name,
       typeName,
       authScheme,
-      settings: allowedHosts.trim() ? { allowedHosts: allowedHosts.trim() } : {},
-      secretFields: secretValue
-        ? {
-            [authScheme === "basic" ? "password" : authScheme === "api-key" ? "apiKey" : "token"]: { value: secretValue }
-          }
-        : {}
+      settings: Object.fromEntries(Object.entries(settings).filter(([, value]) => value.trim().length > 0)),
+      secretFields
     };
     try {
       const created = await createConnection(context, request);
       setCreating(false);
       setName("");
-      setSecretValue("");
+      setSettings({});
+      setSecretValues({});
       setStatus(`Connection '${created.name}' created.`);
       await load(created.name);
     } catch (e) {
@@ -122,18 +136,30 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
               {selected.status === "NeedsAuthorization" ? <p role="status">Needs authorization. Publishing still succeeds; a run faults until this connection is authorized.</p> : null}
               <div className="connections-actions">
                 <button type="button" onClick={async () => {
-                  const result = await testConnection(context, selected.name);
-                  setStatus(result.message ?? (result.succeeded ? "Test succeeded." : "Test failed."));
+                  try {
+                    const result = await testConnection(context, selected.name);
+                    setStatus(result.message ?? (result.succeeded ? "Test succeeded." : "Test failed."));
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : "The connection could not be tested.");
+                  }
                 }}><ShieldCheck aria-hidden="true" size={14} /> Test</button>
                 <button type="button" onClick={async () => {
                   if (!await dialogs.confirm({ message: `Revoke ${selected.name}?`, tone: "danger" })) return;
-                  await revokeConnection(context, selected.name);
-                  await load(selected.name);
+                  try {
+                    await revokeConnection(context, selected.name);
+                    await load(selected.name);
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : "The connection could not be revoked.");
+                  }
                 }}><Ban aria-hidden="true" size={14} /> Revoke</button>
                 <button type="button" onClick={async () => {
                   if (!await dialogs.confirm({ message: `Delete ${selected.name}?`, tone: "danger" })) return;
-                  await deleteConnection(context, selected.name);
-                  await load();
+                  try {
+                    await deleteConnection(context, selected.name);
+                    await load();
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : "The connection could not be deleted.");
+                  }
                 }}><Trash2 aria-hidden="true" size={14} /> Delete</button>
               </div>
             </article>
@@ -146,20 +172,51 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
           <label>Name <input required value={name} onChange={event => setName(event.target.value)} autoComplete="off" /></label>
           <label>Type
             <select value={typeName} onChange={event => setTypeName(event.target.value)}>
-              {(descriptors?.types ?? [{ name: "http", displayName: "HTTP" }]).map(type => (
+              {(descriptors?.types ?? [{ name: "http", displayName: "HTTP", settings: [], supportedSchemes: ["bearer"] }]).map(type => (
                 <option key={type.name} value={type.name}>{type.displayName}</option>
               ))}
             </select>
           </label>
           <label>Auth scheme
             <select value={authScheme} onChange={event => setAuthScheme(event.target.value)}>
-              {(descriptors?.schemes ?? [{ name: "bearer", displayName: "Bearer" }, { name: "basic", displayName: "Basic" }, { name: "api-key", displayName: "API key" }]).map(scheme => (
+              {(descriptors?.schemes ?? []).filter(scheme => supportedSchemes.includes(scheme.name)).map(scheme => (
                 <option key={scheme.name} value={scheme.name}>{scheme.displayName}</option>
               ))}
             </select>
           </label>
-          <label>Allowed hosts <input value={allowedHosts} onChange={event => setAllowedHosts(event.target.value)} placeholder="api.example, *.googleapis.com" /></label>
-          <label>Credential <input type="password" autoComplete="new-password" value={secretValue} onChange={event => setSecretValue(event.target.value)} /></label>
+          {(selectedType?.settings ?? []).map(field => (
+            <label key={field.name}>{field.displayName}
+              <input
+                type={field.editorHint === "checkbox" ? "checkbox" : "text"}
+                checked={field.editorHint === "checkbox" ? settings[field.name] === "true" : undefined}
+                value={field.editorHint === "checkbox" ? undefined : settings[field.name] ?? ""}
+                placeholder={field.name === "allowedHosts" ? "api.example, *.googleapis.com" : undefined}
+                onChange={event => setSettings(current => ({
+                  ...current,
+                  [field.name]: field.editorHint === "checkbox" ? String(event.target.checked) : event.target.value
+                }))}
+              />
+            </label>
+          ))}
+          {(selectedScheme?.fields ?? []).filter(field => !field.sensitive).map(field => (
+            <label key={field.name}>{field.displayName}
+              <input
+                value={settings[field.name] ?? ""}
+                onChange={event => setSettings(current => ({ ...current, [field.name]: event.target.value }))}
+                autoComplete="off"
+              />
+            </label>
+          ))}
+          {(selectedScheme?.fields ?? []).filter(field => field.sensitive).map(field => (
+            <label key={field.name}>{field.displayName}
+              <input
+                type="password"
+                autoComplete="new-password"
+                value={secretValues[field.name] ?? ""}
+                onChange={event => setSecretValues(current => ({ ...current, [field.name]: event.target.value }))}
+              />
+            </label>
+          ))}
           <div>
             <button type="submit">Create</button>
             <button type="button" onClick={() => setCreating(false)}>Cancel</button>
