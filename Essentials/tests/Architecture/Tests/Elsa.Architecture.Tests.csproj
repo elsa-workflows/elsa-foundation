@@ -154,6 +154,8 @@
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Resumption\Elsa.Workflows.Runtime.Resumption.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Scheduling\Elsa.Workflows.Runtime.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Activities\Design\Import\Persistence\EntityFrameworkCore\Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Integrations\src\Sdk\Elsa.Integrations.Sdk.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Integrations\src\Connectors\OAuth2\Elsa.Integrations.Connectors.OAuth2.csproj" />
   </ItemGroup>
 
   <!-- SharedAssemblyMajorVersionGuardTests binds, validates and matches each host's shares with Nuplane's own code (#2150). -->
