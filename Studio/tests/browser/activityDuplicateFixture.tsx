@@ -111,7 +111,7 @@ export function ActivityDuplicateFixture() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (isWorkflowEditorKeyboardTarget(event.target as HTMLElement | null)) return;
+      if (isWorkflowEditorKeyboardTarget(event)) return;
       const shortcut = matchActivityClipboardShortcut(event);
       if (shortcut === "copy") {
         event.preventDefault();

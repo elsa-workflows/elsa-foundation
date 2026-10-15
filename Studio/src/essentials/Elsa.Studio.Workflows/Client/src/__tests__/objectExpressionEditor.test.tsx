@@ -121,7 +121,7 @@ describe("Object Expression Editor Contribution", () => {
     expect(contribution.createDefaultValue?.(context(input))).toEqual([]);
   });
 
-  it("uses the dictionary editor for string-keyed Object expressions", () => {
+  it("uses the dictionary editor for string-keyed Object expressions", async () => {
     const contribution = createObjectExpressionEditorContribution(() => []);
     const Inline = contribution.surfaces.inline!;
     const input = descriptor(
@@ -138,8 +138,35 @@ describe("Object Expression Editor Contribution", () => {
       />
     );
 
-    expect(container.querySelector(".wf-dictionary-editor.inline")).not.toBeNull();
+    await vi.waitFor(() => expect(container.querySelector(".wf-dictionary-editor.inline:not(.wf-dictionary-editor-loading)")).not.toBeNull());
     expect(container.querySelector<HTMLInputElement>("input[aria-label='Key 1']")?.value).toBe("Accept");
+  });
+
+  it("shows a status fallback while the dictionary editor chunk loads", async () => {
+    vi.resetModules();
+    vi.doMock("../DictionaryValueEditor", () => new Promise(() => undefined));
+    const { createObjectExpressionEditorContribution: createContribution } = await import("../objectExpressionEditor");
+    const Inline = createContribution(() => []).surfaces.inline!;
+    const input = descriptor(
+      "Headers",
+      "System.Collections.Generic.IDictionary`2[System.String,System.String]"
+    );
+    const container = render(
+      <Inline
+        descriptor={input}
+        syntax="Object"
+        value={{ Accept: "application/json" }}
+        context={context(input)}
+        onChange={() => {}}
+      />
+    );
+
+    const loading = container.querySelector("[role='status']");
+    expect(loading?.className).toContain("wf-dictionary-editor-loading");
+    expect(loading?.getAttribute("aria-busy")).toBe("true");
+    expect(loading?.textContent).toBe("Loading dictionary editor…");
+    expect(container.querySelector(".wf-dictionary-editor.inline:not(.wf-dictionary-editor-loading)")).toBeNull();
+    vi.doUnmock("../DictionaryValueEditor");
   });
 
   it("preserves collection repeater editing, add, reorder, and remove behavior", () => {
