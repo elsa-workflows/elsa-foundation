@@ -96,7 +96,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-activity-upgrades",
         path: "/workflows/activity-definitions/upgrades",
         label: "Activity Definition upgrades",
-        component: () => deferred("Activity Definition upgrades", <ActivityUpgradeWorkbenchPage context={api.backend} />)
+        component: ({ navigate }) => deferred("Activity Definition upgrades", <ActivityUpgradeWorkbenchPage context={api.backend} navigateToStudioPath={navigate} />)
       },
       {
         id: "workflows-activity-definitions",

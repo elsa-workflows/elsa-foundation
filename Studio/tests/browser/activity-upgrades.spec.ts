@@ -114,8 +114,13 @@ test("a lost child-stage response reconciles once, survives reload, hands off ex
   await page.reload();
   await expect(page.getByRole("heading", { name: "Awaiting separately reviewed publication" })).toBeVisible();
   expect(state.childApplyBodies).toHaveLength(1);
+  const draftGet = page.waitForResponse(response =>
+    response.url().includes("/design/activities/drafts/activity-child-draft") &&
+    response.request().method() === "GET"
+  );
   await page.getByRole("link", { name: "Open next required draft" }).click();
   await expect(page).toHaveURL(/section=editor.*draft=activity-child-draft.*returnPlan=plan-1/);
+  expect((await draftGet).status()).toBe(404);
   await expect(page.getByRole("heading", { name: "Activity draft unavailable" })).toBeVisible();
   await page.getByRole("button", { name: "Activity Definition" }).click();
   await expect(page).toHaveURL(/activity-definitions\/upgrades\?plan=plan-1/);
@@ -202,7 +207,8 @@ async function mockUpgradeApi(page: Page, api: UpgradeApi) {
         { rel: "activity-upgrade-plan", href: "design/activities/upgrade-plans/{planId}", templated: true },
         { rel: "activity-upgrade-plan-apply", href: "design/activities/upgrade-plans/{planId}/apply", templated: true },
         { rel: "activity-upgrade-apply-receipt", href: "design/activities/upgrade-plans/{planId}/receipts/{receiptId}", templated: true },
-        { rel: "activity-upgrade-plan-refresh", href: "design/activities/upgrade-plans/{planId}/refresh", templated: true }
+        { rel: "activity-upgrade-plan-refresh", href: "design/activities/upgrade-plans/{planId}/refresh", templated: true },
+        { rel: "activity-definition-draft", href: "design/activities/drafts/{draftId}", templated: true }
       ]
     }]
   }));
@@ -228,6 +234,10 @@ async function mockUpgradeApi(page: Page, api: UpgradeApi) {
       return json(route, api.refresh(planId, request.postDataJSON()));
     }
     return route.abort();
+  });
+  await page.route("**/design/activities/drafts/*", async route => {
+    if (route.request().method() !== "GET") return route.abort();
+    return json(route, { title: "Activity draft not found" }, 404);
   });
 }
 
