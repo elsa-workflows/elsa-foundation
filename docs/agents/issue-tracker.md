@@ -15,7 +15,7 @@ Infer the repo from `git remote -v` - `gh` does this automatically when run insi
 
 ## Claiming a unit before working on it
 
-Claims follow [Issue Bus Lite](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#claim). See "Concurrent work claims" in [AGENTS.md](../../AGENTS.md#concurrent-work-claims) and [Claims](../contributing/repository-hygiene.md#claims) for the steps.
+Claims follow [Issue Bus Lite][org-agents-claim]. See "Concurrent work claims" in [AGENTS.md](../../AGENTS.md#concurrent-work-claims) and [Claims](../contributing/repository-hygiene.md#claims) for the steps.
 
 - **Check for an existing claim**: `gh issue view <number> --comments`, then list the PRs whose branch names the issue:
 
@@ -39,8 +39,6 @@ An issue in a program is the record of progress, so comment at each transition r
 - Each review round: what was raised and how it resolved.
 - Merged or closed: the outcome, and the gate evidence if it is not already on the PR.
 
-Keep the program's project board Status and any labels in sync in the same pass. Each program has its own board, so resolve it with `gh project list --owner <owner>` rather than assuming a fixed number.
-
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** This flag tells `/triage` whether to treat an external PR itself as a feature request and apply issue-triage conventions to it; set it to `yes` to do that. It does not mean fixes are unwelcome as PRs: small fixes may come directly by PR, while substantial feature requests should start in Issues for scope alignment. See [CONTRIBUTING.md](../../CONTRIBUTING.md).
@@ -60,3 +58,5 @@ Create a GitHub issue.
 ## When a skill says "fetch the relevant ticket"
 
 Run `gh issue view <number> --comments`.
+
+[org-agents-claim]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#claim

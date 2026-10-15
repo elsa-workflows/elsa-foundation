@@ -241,15 +241,19 @@ analyzer-only, which NuGet leaves out of the consumers' restore graphs, so no ex
   If fewer than half of the filed issues are promoted after four weeks, or the metrics do not move, the routines are
   paused and their prompts revised.
 
-**Owner amendment, 15 October 2026:** the fixer routine follows the org-wide
-[Issue Bus Lite](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#issue-bus-lite) protocol
-([#2765](https://github.com/elsa-workflows/elsa-foundation/issues/2765)). Its PRs are not auto-merged by the routine
-and it no longer merges through `elsa-auto-review-merge`. The routine requests review, and the Code Review app
-(`elsa-workflows-review-bot[bot]`) approves and merges once a review round leaves no actionable findings and CI is
-green on the exact head commit. D7's human-merge cases (runtime and persistence code, public renames, and the PRs
-for UX QA defects) are dropped: those PRs follow the same Code Review loop, including the 14 October note's
-reference to them. Routine PRs carry the `auto-fix` label, which replaces the `claude/auto-fix-*` branch prefix as
-the way the routine finds its own PRs and their reverts. The remaining D7 decisions are unchanged.
+**Owner amendment, 15 October 2026:** merging under D7 follows the review loop of the org-wide
+[Issue Bus Lite][org-agents-review] protocol, by
+[owner decision quoted on #2766](https://github.com/elsa-workflows/elsa-foundation/pull/2766#issuecomment-6183395119)
+and recorded for the org in [elsa-workflows/.github#6](https://github.com/elsa-workflows/.github/pull/6). The Code
+Review app (`elsa-workflows-review-bot[bot]`) merges every PR, including the runtime, persistence and public-rename
+PRs and the UX QA fix PRs that D7 sent to a human merge, once a review round leaves nothing actionable and CI is
+green on the exact head commit. Actionable findings are fixed in new commits and reviewed again, for at most 6
+rounds; if blocking findings remain after the sixth, the PR is escalated to the maintainer with
+`blocked: review loop exhausted` and `needs:decision`. D7's human-merge cases and its pause of auto-merge after a
+revert are dropped, and so is the 14 October note's reference to D7's human merge. The fixer routine never merges
+its own PRs and no longer merges through `elsa-auto-review-merge`; it requests review and stops. Routine PRs carry
+the `auto-fix` label, which replaces the `claude/auto-fix-*` branch prefix as the way the routine finds its own PRs.
+D7's routines, caps and labels are otherwise unchanged.
 
 ## Consequences
 
@@ -259,3 +263,5 @@ the way the routine finds its own PRs and their reverts. The remaining D7 decisi
 - Breaking changes (renames, internalization, migration squash, mode names) are accepted because nothing has
   shipped. They become far more expensive after GA, so they come first.
 - Existing tests that assert on documentation or source text are deleted, not migrated.
+
+[org-agents-review]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#review-and-merge-rules

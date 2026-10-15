@@ -34,7 +34,7 @@ A branch lives as long as its pull request.
 - **Never swept:** `main`, `publish-state`, `release/*`, `rc/*` and any protected branch. A branch that
   must live longer than its PR (a demo, an integration line) needs an open PR or one of those patterns.
 - Agents name branches `agent/<worker>/<issue>-<slug>`, per
-  [Issue Bus Lite](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#work). The sweep does not
+  [Issue Bus Lite][org-agents-work]. The sweep does not
   enforce names; it reads PR state.
   [Packages](../../.github/workflows/packages.yml) runs on pushes to `main` only; a branch gets CI
   through its PR.
@@ -46,9 +46,8 @@ An open issue is a commitment someone can act on, not a log entry.
 - **Every open issue has a state:** one triage label (`needs-triage`, `needs-info`, `ready-for-agent`,
   `ready-for-human`) or, for program-tracked work, a `status:*` label. Programs and epics are exempt.
   `wontfix` issues are closed. See [triage labels](../agents/triage-labels.md).
-- **Owner exception: agents file new issues as `needs-triage`.** Only a maintainer promotes an issue to a
-  `ready-*` state. The one exception to that rule is the [UX QA routine](../skills/catalog.md#ux-qa-routine), also
-  an owner exception. It may file a defect as
+- **Agents file new issues as `needs-triage`.** Only a maintainer promotes an issue to a `ready-*` state.
+  The exception is the [UX QA routine](../skills/catalog.md#ux-qa-routine). It may file a defect as
   `ready-for-agent` when a second agent reproduced it, its fix needs no design choice, and the repository is
   under the cap.
 - **Progress goes on the existing record.** Checkpoints, receipts and gate evidence belong in PR
@@ -58,7 +57,7 @@ An open issue is a commitment someone can act on, not a log entry.
   issues. A program labelled `status:parked` stays open but does not count toward the cap, and gets no
   new child issues until it is reactivated. At the cap, add scope to the existing parent instead of
   filing more.
-  Owner exception: the [11 October owner amendment](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) makes named
+  The [11 October owner amendment](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) makes named
   exceptions for existing consolidation #2501 and website/docs #2495. Keep those programs active under
   their existing queues; do not re-park them solely to meet the cap. This does not raise the general cap
   or authorize more programs, cleanup or changes to enforcement settings.
@@ -101,7 +100,7 @@ GITHUB_REPOSITORY=elsa-workflows/elsa-foundation bash tools/repo-hygiene/hygiene
 ## Claims
 
 Moved from `AGENTS.md` (#2578); `AGENTS.md` keeps the short form. Claims follow the org-wide
-[Issue Bus Lite](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#claim) protocol, which wins over
+[Issue Bus Lite][org-agents-claim] protocol, which wins over
 this section on conflict.
 
 Several agent sessions run against this repository at once, in separate worktrees. Two sessions that pick the same unit will not see each other in git: a branch does not exist anywhere shared until it is pushed, so a clean check at session start proves nothing about what another session began a minute later.
@@ -117,3 +116,6 @@ See [Issue tracker](../agents/issue-tracker.md) for the commands.
 Re-check for competing work before committing, not only at session start. That check is the backstop that catches a session which started after you did. When a unit is split into slices, prefer giving one session the whole stack, or naming an owner per slice in the issue, over relying on claims alone.
 
 To give up, comment `blocked: <reason>`, add `blocked` (or `needs:decision` when a decision is missing), and unassign yourself. Leave the branch and any draft PR for the next worker.
+
+[org-agents-work]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#work
+[org-agents-claim]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#claim

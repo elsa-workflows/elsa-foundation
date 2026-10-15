@@ -4,7 +4,7 @@ This file is the AI-provider-neutral front door for AI agents and engineers work
 
 ## Agent protocol
 
-The org-wide [AGENTS.md](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md) is the protocol for finding, claiming, branching, opening PRs, review and merge ([Issue Bus Lite](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#issue-bus-lite)). If this file or a doc it links conflicts with the org file, the org file wins, unless the repo note names an explicit owner exception. Everything below is a repo-specific note, such as structure, builds and the build-slot wrapper, generated maps, the constitution and the evidence a PR must carry here.
+The org-wide [AGENTS.md][org-agents] is the protocol for finding, claiming, branching, opening PRs, review and merge ([Issue Bus Lite][org-agents-ibl]). If this file or a doc it links conflicts with the org file, the org file wins, unless the repo note names an explicit owner exception. Everything below is a repo-specific note, such as structure, builds and the build-slot wrapper, generated maps, the constitution and the evidence a PR must carry here.
 
 ## Repository intent
 
@@ -25,7 +25,7 @@ Use the narrowest source that answers the task.
 | Quality gates, invariants, allowed exceptions, ratification | `.specify/memory/constitution-framework.md` and `.specify/memory/constitution.md` |
 | Domain and architecture terms | `docs/glossary/` |
 | Task workflows and skill descriptions | `docs/skills/catalog.md` |
-| Agent protocol: finding, claiming, branches, PRs, review and merge | [org AGENTS.md](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md) |
+| Agent protocol: finding, claiming, branches, PRs, review and merge | [org AGENTS.md][org-agents] |
 | Repo contributor notes: claim detail, PR gate evidence, generated maps, task paths, review checklist | `docs/contributing/` |
 | Personal workflow/model preferences | `.agent-prefs/` for local selections; `docs/reference/` for committed catalogs/templates |
 | Shared backlog, program-goal bucket registry, stewardship, active objectives, roadmap notes | `docs/program-goals/` |
@@ -42,7 +42,7 @@ Do not duplicate concept explanations in new docs. Link to the canonical glossar
 
 ## Concurrent work claims
 
-Claim, branch and hand off as [Issue Bus Lite](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#issue-bus-lite) says: comment `claim: <worker> starting`, re-read, and if the earliest unabandoned claim is yours, assign yourself and remove `ready-for-agent`. Claude sessions post as `elsa-workflows-claude[bot]` and Codex sessions as `elsa-workflows-codex[bot]`, with no role prefix, so a Claude claim is `claim: claude starting`. Only when you post through the owner's account does your role tag come first, for example `[Claude] claim: claude starting`. Branch `agent/<worker>/<issue>-<slug>`. Several sessions run here at once in separate worktrees, so re-check the issue and its open PRs before committing. Repo detail: [Claims](docs/contributing/repository-hygiene.md#claims); commands: [Issue tracker](docs/agents/issue-tracker.md).
+Claim, branch and hand off as [Issue Bus Lite][org-agents-ibl] says: comment `claim: <worker> starting`, re-read, and if the earliest unabandoned claim is yours, assign yourself and remove `ready-for-agent`. Claude sessions post as `elsa-workflows-claude[bot]` and Codex sessions as `elsa-workflows-codex[bot]`, with no role prefix, so a Claude claim is `claim: claude starting`. Only when you post through the owner's account does your role tag come first, for example `[Claude] claim: claude starting`. Branch `agent/<worker>/<issue>-<slug>`. Several sessions run here at once in separate worktrees, so re-check the issue and its open PRs before committing. Repo detail: [Claims](docs/contributing/repository-hygiene.md#claims); commands: [Issue tracker](docs/agents/issue-tracker.md).
 
 ## Branch and issue hygiene
 
@@ -50,8 +50,8 @@ Follow [Repository hygiene](docs/contributing/repository-hygiene.md). In short:
 
 - Push a branch only when opening its PR (draft is fine) in the same session; otherwise keep the work local.
 - Never restore a branch deleted on merge; its work is in `main`. Restore a swept branch from its `archive/` tag only when a maintainer asks to resume that work, and open its PR in the same session.
-- Owner exception: file new issues as `needs-triage` only. The one exception to that rule is the [UX QA routine](docs/skills/catalog.md#ux-qa-routine), which files reproduced defects as `ready-for-agent`. Put checkpoints, receipts and evidence on the PR or the issue being worked, never in a new issue.
-- Respect the caps and named owner exceptions in [Repository hygiene](docs/contributing/repository-hygiene.md#issues): normally at most 2 active programs and 20 `ready-for-agent` issues. The 11 October owner exception reactivates existing #2501 and #2495; it does not authorize more programs. At the cap, extend the existing parent instead of filing more.
+- File new issues as `needs-triage` only. The one exception is the [UX QA routine](docs/skills/catalog.md#ux-qa-routine), which files reproduced defects as `ready-for-agent`. Put checkpoints, receipts and evidence on the PR or the issue being worked, never in a new issue.
+- Respect the caps and named owner exceptions in [Repository hygiene](docs/contributing/repository-hygiene.md#issues): normally at most 2 active programs and 20 `ready-for-agent` issues. The 11 October exception reactivates existing #2501 and #2495; it does not authorize more programs. At the cap, extend the existing parent instead of filing more.
 - Before closing an issue as not planned, run `git log origin/main -E --grep '(^|[^[:alnum:]_./-])#<number>([^0-9]|$)'`. If its work landed, close it as completed and name the commit or PR.
 
 ## Builds on a shared machine
@@ -65,7 +65,7 @@ Parallel sessions on one machine compete for the same CPU. Four concurrent solut
 
 ## Program bookkeeping
 
-Comment on the program issue at every state transition. Every PR carries this repo's gate evidence as a PR comment; that evidence is required for review, not permission to merge. Merging follows [Issue Bus Lite](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#review-and-merge-rules): request review with `@elsa-workflows-bot review`, Code Review (`elsa-workflows-review-bot[bot]`) approves and merges, and an author never merges its own PR. See [Program bookkeeping](docs/contributing/merging.md#program-bookkeeping) and [PR evidence](docs/contributing/merging.md#pr-evidence).
+Comment on the program issue at every state transition. Every PR carries this repo's gate evidence as a PR comment; that evidence is required for review, not permission to merge. Merging follows [Issue Bus Lite][org-agents-review]: request review with `@elsa-workflows-bot review`, Code Review (`elsa-workflows-review-bot[bot]`) approves and merges, and an author never merges its own PR. See [Program bookkeeping](docs/contributing/merging.md#program-bookkeeping) and [PR evidence](docs/contributing/merging.md#pr-evidence).
 
 ## Post-merge gates
 
@@ -97,3 +97,7 @@ Maintainers publish organization-repository branches and contributors use fork P
 Both constitutions are ratified at the document level (2026-08-08; now framework v6.1.0 and Elsa v6.0.2, after #2578 and #2591); sections marked draft or provisional, framework §2.24 and Elsa §E2.8 activity versioning, Model X and §E2.9, are excluded from that ratification. Warn users when a section's draft or provisional status matters to their task, and route unratified material through [Constitution Readiness](docs/program-goals/constitution-readiness.md). Draft history: [docs/reports/archive/constitution-draft-history.md](docs/reports/archive/constitution-draft-history.md); current gaps: [docs/reports/knowledge-inventory.md](docs/reports/knowledge-inventory.md) and [docs/reports/unfinished-work.md](docs/reports/unfinished-work.md).
 
 New work moves toward this rule: constitution for gates and governance, glossary for meanings, skills for executable workflows, maps and catalogs for navigation and generated facts, reports for current findings and unfinished work.
+
+[org-agents]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md
+[org-agents-ibl]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#issue-bus-lite
+[org-agents-review]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#review-and-merge-rules
