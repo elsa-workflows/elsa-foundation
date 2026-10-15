@@ -2,8 +2,8 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 
 /// <summary>
 /// The publication-lifecycle facts Design cannot see: whether a definition currently serves, was
-/// unpublished, or only has retired publication records. Publishing implements this; a design-only
-/// host omits it and definition views leave <c>publicationState</c> unset.
+/// unpublished, or only has retired publication records. Design registers a null-object default so
+/// NativeEndpoints can resolve it; Publishing replaces that with the slot/journal lookup.
 /// </summary>
 public interface IWorkflowDefinitionPublicationStateLookup
 {

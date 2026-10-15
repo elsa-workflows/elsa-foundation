@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions;
 using Elsa.Workflows.Design.Api.Endpoints.Definitions.List;
 using Elsa.Workflows.Design.Api.Models;
@@ -24,6 +25,21 @@ public sealed class WorkflowDefinitionPublicationStateProjectionTests
         var view = Assert.Single(result.Items);
         Assert.Null(view.PublicationState);
         Assert.Equal(1, view.VersionCount);
+    }
+
+    [Fact]
+    public async Task List_omits_publication_state_when_the_null_lookup_is_injected()
+    {
+        var endpoint = new Endpoint(
+            new OneDefinitionStore(),
+            new EmptyProjectionStore(),
+            new NullWorkflowDefinitionPublicationStateLookup());
+
+        var result = await endpoint.HandleAsync(
+            new ListDefinitions(null, null, null, null, null, "all"),
+            CancellationToken.None);
+
+        Assert.Null(Assert.Single(result.Items).PublicationState);
     }
 
     [Fact]
@@ -63,6 +79,20 @@ public sealed class WorkflowDefinitionPublicationStateProjectionTests
         var details = await reader.ReadAsync("orders", CancellationToken.None);
 
         Assert.Equal(WorkflowDefinitionPublicationStateFormatting.Retired, details.Definition.PublicationState);
+    }
+
+    [Fact]
+    public void Wire_omits_publication_state_when_null_and_writes_it_when_set()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var now = new DateTimeOffset(2026, 10, 15, 12, 0, 0, TimeSpan.Zero);
+        var unset = new WorkflowDefinitionView("orders", "Orders", null, now, now, VersionCount: 1);
+        var omitted = JsonSerializer.SerializeToElement(unset, options);
+        Assert.False(omitted.TryGetProperty("publicationState", out _));
+
+        var set = unset with { PublicationState = WorkflowDefinitionPublicationStateFormatting.Retracted };
+        var written = JsonSerializer.SerializeToElement(set, options);
+        Assert.Equal("retracted", written.GetProperty("publicationState").GetString());
     }
 
     private sealed class StubPublicationStateLookup(

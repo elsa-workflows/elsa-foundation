@@ -69,4 +69,24 @@ describe("definition publication status", () => {
       publicationState: "published"
     })).toBe("deleted");
   });
+
+  it("does not treat an unknown publication state as Published", () => {
+    expect(resolveDefinitionPublicationStatus({
+      draftId: null,
+      latestVersionId: "version-1",
+      latestVersion: "1.0.0",
+      versionCount: 1,
+      publicationState: "archived"
+    })).toBe("draft");
+  });
+
+  it("treats a null publication state as the version heuristic", () => {
+    expect(resolveDefinitionPublicationStatus({
+      draftId: null,
+      latestVersionId: "version-1",
+      latestVersion: "1.0.0",
+      versionCount: 1,
+      publicationState: null
+    })).toBe("published");
+  });
 });

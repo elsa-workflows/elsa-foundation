@@ -12,6 +12,7 @@ using Elsa.Workflows.Design.Api.Capabilities;
 using Elsa.Workflows.Design.Api.Services;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Extensions;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.Routing;
@@ -55,6 +56,9 @@ public class WorkflowsDesignApiFeature : IWebShellFeature
         services.AddRequestHandlersFrom(assembly);
         // These services back the authoring API, which registers them itself rather than relying on the validation feature.
         services.AddScopedVariableAuthoring();
+        // Null-object so NativeEndpoints GetRequiredService does not fail on a design-only host.
+        // Publishing replaces this with the slot/journal lookup.
+        services.TryAddScoped<IWorkflowDefinitionPublicationStateLookup, NullWorkflowDefinitionPublicationStateLookup>();
         services.TryAddScoped<Endpoints.Definitions.IWorkflowDefinitionDetailsReader, Endpoints.Definitions.WorkflowDefinitionDetailsReader>();
         services.TryAddScoped<Endpoints.Versions.IWorkflowVersionDetailsReader, Endpoints.Versions.WorkflowVersionDetailsReader>();
         services.TryAddScoped<IExpressionAuthoringAuthorizationPolicy, DefaultExpressionAuthoringAuthorizationPolicy>();

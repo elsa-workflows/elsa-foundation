@@ -473,7 +473,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
                 <span>{definition.latestVersion ?? "No version"}</span>
                 <span>
                   {listState === "deleted" ? formatDate(definition.deletedAt) : (
-                    <Suspense fallback={<span className="wf-status-badge" />}>
+                    <Suspense fallback={<span className="wf-status-badge" role="status"><span className="wf-visually-hidden">Loading status</span></span>}>
                       <DefinitionStatusBadge definition={definition} />
                     </Suspense>
                   )}

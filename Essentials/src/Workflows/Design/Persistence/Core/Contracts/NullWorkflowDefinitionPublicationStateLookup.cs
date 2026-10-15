@@ -1,0 +1,16 @@
+namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
+
+/// <summary>
+/// Design-only default: returns no states so definition views leave <c>publicationState</c> unset.
+/// NativeEndpoints' generated <c>Map()</c> resolves every constructor argument with
+/// <c>GetRequiredService</c>; registering this keeps those hosts from failing when Publishing is absent.
+/// Publishing replaces this registration.
+/// </summary>
+public sealed class NullWorkflowDefinitionPublicationStateLookup : IWorkflowDefinitionPublicationStateLookup
+{
+    public Task<IReadOnlyDictionary<string, WorkflowDefinitionPublicationState>> ListByDefinitionIdsAsync(
+        IReadOnlyCollection<string> workflowDefinitionIds,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyDictionary<string, WorkflowDefinitionPublicationState>>(
+            new Dictionary<string, WorkflowDefinitionPublicationState>(StringComparer.Ordinal));
+}

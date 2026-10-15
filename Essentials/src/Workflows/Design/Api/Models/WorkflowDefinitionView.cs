@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Elsa.Workflows.Design.Api.Models;
 
 public sealed record WorkflowDefinitionView(
@@ -11,6 +13,7 @@ public sealed record WorkflowDefinitionView(
     string? LatestVersionId = null,
     string? LatestVersion = null,
     int VersionCount = 0,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     string? PublicationState = null
 );
 

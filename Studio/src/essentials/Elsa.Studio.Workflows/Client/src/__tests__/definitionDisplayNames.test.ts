@@ -47,7 +47,8 @@ describe("definition display names", () => {
     const names = await loadDefinitionDisplayNames({} as StudioEndpointContext, ["def-1", "def-2"]);
     expect(names.get("def-1")).toBe("Order fulfillment");
     expect(names.get("def-2")).toBe("Invoice approval");
-    expect(listDefinitions).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ pageSize: 100 }));
+    expect(listDefinitions).toHaveBeenCalledTimes(1);
+    expect(listDefinitions).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ pageSize: 100, state: "all" }));
     expect(getDefinition).toHaveBeenCalledWith(expect.anything(), "def-2");
   });
 });

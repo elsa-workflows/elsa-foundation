@@ -31,16 +31,23 @@ public sealed class WorkflowDefinitionPublicationStateLookup(
         if (ids.Length == 0)
             return result;
 
+        var slotsByDefinition = (await activationAuthority.ListByDefinitionIdsAsync(ids, cancellationToken))
+            .GroupBy(slot => slot.WorkflowDefinitionId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, StringComparer.Ordinal);
+
         var unresolved = new List<string>();
         foreach (var id in ids)
         {
-            var slots = await activationAuthority.ListByDefinitionAsync(id, cancellationToken);
-            if (slots.Any(slot => slot.ActiveActivationId is not null))
-                result[id] = WorkflowDefinitionPublicationState.Published;
-            else if (slots.Count > 0)
-                result[id] = WorkflowDefinitionPublicationState.Retracted;
-            else
+            if (!slotsByDefinition.TryGetValue(id, out var definitionSlots))
+            {
                 unresolved.Add(id);
+                continue;
+            }
+
+            if (definitionSlots.Any(slot => slot.ActiveActivationId is not null))
+                result[id] = WorkflowDefinitionPublicationState.Published;
+            else
+                result[id] = WorkflowDefinitionPublicationState.Retracted;
         }
 
         if (unresolved.Count == 0)
