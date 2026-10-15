@@ -26,6 +26,12 @@ internal sealed class Elsa3ConversionPlan(Elsa3ConversionRequest request, Elsa3W
     /// <summary>Literal outcomes named by converted Complete/End nodes of a reusable workflow, with their node ids.</summary>
     public List<(string Outcome, string NodeId, string JsonPath)> CompleteOutcomes { get; } = [];
 
+    /// <summary>
+    /// Elsa 3 memory slots that a synthesized workflow variable stands in for (plan D-13): a consumer of the slot reads
+    /// the variable.
+    /// </summary>
+    public Dictionary<string, string> MemoryAliases { get; } = new(StringComparer.Ordinal);
+
     public bool HasErrors => Diagnostics.Any(diagnostic => diagnostic.IsError);
 
     public Elsa3NodePlan? Find(Elsa3Activity node) => Nodes.GetValueOrDefault(node);

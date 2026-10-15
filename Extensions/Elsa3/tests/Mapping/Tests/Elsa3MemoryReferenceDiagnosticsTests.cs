@@ -152,9 +152,12 @@ public sealed class Elsa3MemoryReferenceDiagnosticsTests
         var definition = Workflow(
             "ambiguous",
             Activity("root", "Elsa.Sequence", children: [producer, consumer]),
+            // A producer capturing into a declared variable that a consumer reads is the ordinary Elsa 3 pattern
+            // (plan D-17); the read is ambiguous only when two variables share the memory id.
             variables:
             [
                 new Elsa3Variable { Id = "shared", Name = "shared-variable", TypeName = "String" },
+                new Elsa3Variable { Id = "shared", Name = "shared-duplicate", TypeName = "String" },
             ]);
         return Case(definition, Container(), Producer(), Consumer());
     }

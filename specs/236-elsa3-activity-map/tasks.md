@@ -272,6 +272,9 @@ ordered. No exception escapes either path.
   - `customProperties.commitStrategy`: left as is (silently dropped by the Elsa 3 model).
   - `HttpEndpoint.Headers`/`QueryStringData` captures: synthesized workflow variable with the Elsa 3 shape (plan D-11 to
     D-13, Phase 4b).
+  - Output capture (plan D-17): an output captured into a workflow variable becomes an Elsa 4 Variable output
+    binding; container-scope capture and loop values read outside their loop are OUTPUT-NOT-REPRESENTABLE. Implemented
+    with Phase 4b; D-11 now writes the captured workflow variable when there is one (D-11a).
   - Elsa 3 JavaScript: verified (research R-11). 236 closes the silent gaps (D-14), wraps statement-form expressions
     (D-15) and rewrites RunJavaScript scripts (D-16), in Phase 4c. Widening what converts is the follow-up (#2717).
 
@@ -286,7 +289,7 @@ that keeps the Elsa 3 shape, so every consumer kind keeps working.
 JavaScript expression converts with 0 errors. The synthesized `set` node follows the endpoint, and both consumers read
 `elsa3.http.{node}.headers`.
 
-- [ ] T061 [US1] Implement `M/ActivityMap/Rewrites/Elsa3HttpTriggerResponseModeRewrite.cs` (kind `HttpTriggerResponseMode`,
+- [X] T061 [US1] Implement `M/ActivityMap/Rewrites/Elsa3HttpTriggerResponseModeRewrite.cs` (kind `HttpTriggerResponseMode`,
   set on the HttpEndpoint entry):
   - for each captured `Headers`/`QueryStringData` property, plan a synthesized workflow variable and a `set` node
     (ids per D-13);
@@ -296,15 +299,15 @@ JavaScript expression converts with 0 errors. The synthesized `set` node follows
 
   Change the two rules in `Elsa3BuiltInActivityMap.Entries.cs` from `Lost(..., "Request.*")` to `Structure(...)` outputs
   consumed by the rewrite, and keep the coverage test green.
-- [ ] T062 [US1] Insert the synthesized node in `M/Conversion/Elsa3ActivityNormalizer.cs`: an `Elsa3Activity` placed right
+- [X] T062 [US1] Insert the synthesized node in `M/Conversion/Elsa3ActivityNormalizer.cs`: an `Elsa3Activity` placed right
   after the endpoint in its parent's `Activities` (and slot list), with a plan that resolves to `elsa.intrinsic.set@1`, a
   workflow-scoped Object variable target, and a `value` input. The value is a portable JavaScript expression with one
   `ActivityResult` parameter bound to the endpoint's `Request` output, whose source rebuilds the Elsa 3 shape.
   Declare the variable on the clone's workflow variables.
-- [ ] T063 [US1] In `M/Services/Elsa3ValueFlowLowerer.cs` (or via the memory-reference graph), resolve a consumer of the
+- [X] T063 [US1] In `M/Services/Elsa3ValueFlowLowerer.cs` (or via the memory-reference graph), resolve a consumer of the
   captured memory id to a `Variable` binding on the synthesized variable (workflow scope); JavaScript reads resolve
   through the same variable.
-- [ ] T064 [US1] Tests in `MT/Elsa3HttpRequestProjectionTests.cs`:
+- [X] T064 [US1] Tests in `MT/Elsa3HttpRequestProjectionTests.cs`:
   - headers read by a direct binding and by JavaScript;
   - query string;
   - both captured on one endpoint;

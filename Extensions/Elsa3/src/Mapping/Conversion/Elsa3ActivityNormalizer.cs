@@ -65,6 +65,10 @@ internal sealed class Elsa3ActivityNormalizer(
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        // A node a rewrite synthesized (for example an HttpEndpoint projection) arrives with its plan already made.
+        if (plan.Nodes.ContainsKey(node))
+            return;
+
         var nodePlan = new Elsa3NodePlan(node, jsonPath, parent);
         plan.Nodes[node] = nodePlan;
         node.AdditionalProperties ??= new Dictionary<string, JsonElement>();

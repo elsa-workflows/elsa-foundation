@@ -19,7 +19,9 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         IReadOnlyDictionary<string, string> diagnosticMetadata,
         IReadOnlyDictionary<Elsa3Activity, string>? jsonPaths = null,
         Func<Elsa3Activity, string, string>? sourceNameOf = null,
-        Func<Elsa3Activity, string, bool>? isScriptBody = null)
+        Func<Elsa3Activity, string, bool>? isScriptBody = null,
+        IReadOnlySet<string>? containerVariableIds = null,
+        IReadOnlyDictionary<string, string>? memoryAliases = null)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(inventory);
@@ -42,6 +44,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             .GroupBy(variable => variable.Id, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
 
+        var containerVariables = containerVariableIds ?? new HashSet<string>(StringComparer.Ordinal);
         var cyclicMemoryIds = FindCycleMemoryIds(inventory, variablesById, outputsByMemory, diagnostics, input);
 
         foreach (var property in properties)
@@ -104,10 +107,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             var isOutput = directions.Contains(Elsa3PropertyDirection.Output);
             if (isOutput && !isInput)
             {
-                // Output projection identity belongs to the activity contract in Elsa 4. Removing the property
-                // drops only the Elsa 3 memory id; the producer relationship remains available to consumers
-                // through the validated inventory while this pass lowers them.
-                property.Activity.AdditionalProperties.Remove(property.PropertyName);
+                LowerOutputCapture(input, property, variablesById, containerVariables, diagnostics);
                 continue;
             }
 
@@ -127,9 +127,13 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             if (cyclicMemoryIds.Contains(property.MemoryReferenceId))
                 continue;
 
-            var variableMatches = variablesById.GetValueOrDefault(property.MemoryReferenceId) ?? [];
+            // A memory slot a synthesized workflow variable stands in for is read through that variable (plan D-13).
+            var variableMatches = variablesById.GetValueOrDefault(
+                memoryAliases?.GetValueOrDefault(property.MemoryReferenceId) ?? property.MemoryReferenceId) ?? [];
             var producerMatches = outputsByMemory.GetValueOrDefault(property.MemoryReferenceId) ?? [];
-            if (variableMatches.Length + producerMatches.Length > 1)
+            // A captured output writes its variable (plan D-17), so a variable read is unambiguous however many
+            // activities write it; without a variable, the memory slot must have one producer.
+            if (variableMatches.Length > 1 || variableMatches.Length == 0 && producerMatches.Length > 1)
             {
                 diagnostics.Add(CreateDiagnostic(
                     input,
@@ -144,6 +148,12 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
 
             if (variableMatches.Length == 1)
             {
+                if (producerMatches.FirstOrDefault(IsLoopVariable) is { } loop)
+                {
+                    LowerLoopVariableRead(input, property, loop, diagnostics);
+                    continue;
+                }
+
                 property.Activity.AdditionalProperties[property.PropertyName] = CreateArgument(
                     property.Value,
                     "Variable",
@@ -286,6 +296,87 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             JsonSerializer.SerializeToElement(rewrite.Definition));
     }
 
+    /// <summary>
+    /// An output captured into a variable (plan D-17). Elsa 3 output targets are variables; Elsa 4 captures a leaf
+    /// result into a workflow-scope variable through a <c>Variable</c> output binding. A capture into a container-scope
+    /// variable cannot be expressed; a loop's current value has no Elsa 4 output (its readers bind to the loop
+    /// variable); a memory slot that is no declared variable is read through the producer's result.
+    /// </summary>
+    private static void LowerOutputCapture(
+        DiagnosticScope input,
+        ActivityProperty property,
+        IReadOnlyDictionary<string, Elsa3Variable[]> variablesById,
+        IReadOnlySet<string> containerVariableIds,
+        List<Elsa3MigrationDiagnostic> diagnostics)
+    {
+        var memoryId = property.MemoryReferenceId!;
+        var isLoopVariable = property.Occurrences.Any(IsLoopVariable);
+        if (!isLoopVariable && variablesById.ContainsKey(memoryId))
+        {
+            property.Activity.AdditionalProperties[property.PropertyName] = CreateArgument(
+                property.Value,
+                "Variable",
+                JsonSerializer.SerializeToElement(new
+                {
+                    referenceKey = memoryId,
+                    declaringScopeId = VariableReference.WorkflowScopeId,
+                }));
+            return;
+        }
+
+        if (!isLoopVariable && containerVariableIds.Contains(memoryId))
+        {
+            diagnostics.Add(CreateDiagnostic(
+                input,
+                property,
+                Elsa3ActivityDiagnosticCodes.OutputNotRepresentable,
+                $"Output '{property.PropertyName}' is captured into container variable '{memoryId}'; Elsa 4 captures outputs into workflow variables only.",
+                "Declare the variable on the workflow instead of the container before converting.",
+                $"{property.JsonPath}.memoryReference",
+                memoryId));
+            return;
+        }
+
+        property.Activity.AdditionalProperties.Remove(property.PropertyName);
+    }
+
+    /// <summary>
+    /// A read of a workflow variable a loop captures its current value into (plan D-17): inside the loop body it is
+    /// the loop's scoped variable; outside, nothing writes it in Elsa 4.
+    /// </summary>
+    private static void LowerLoopVariableRead(
+        DiagnosticScope input,
+        ActivityProperty property,
+        Elsa3MemoryOccurrence loop,
+        List<Elsa3MigrationDiagnostic> diagnostics)
+    {
+        if (IsCarriedValue(loop, property))
+        {
+            property.Activity.AdditionalProperties[property.PropertyName] = CreateArgument(
+                property.Value,
+                "Variable",
+                JsonSerializer.SerializeToElement(new
+                {
+                    declaringScopeId = loop.ActivityNodeId,
+                    referenceKey = loop.StablePropertyKey,
+                }));
+            return;
+        }
+
+        diagnostics.Add(CreateDiagnostic(
+            input,
+            property,
+            Elsa3ActivityDiagnosticCodes.OutputNotRepresentable,
+            $"Variable '{property.MemoryReferenceId}' holds loop '{loop.ActivityNodeId}''s current value, which Elsa 4 keeps only inside the loop body.",
+            "Read the value inside the loop, or copy it into another variable there.",
+            $"{property.JsonPath}.memoryReference",
+            property.MemoryReferenceId));
+    }
+
+    private static bool IsLoopVariable(Elsa3MemoryOccurrence occurrence) =>
+        occurrence.Direction == Elsa3PropertyDirection.Output &&
+        Elsa3LoopVariableReferencesRewrite.LoopVariableKeys.Contains(occurrence.StablePropertyKey);
+
     /// <summary>The Elsa 4 RunJavaScript input that carries the values a converted script reads.</summary>
     internal const string ScriptArgumentsKey = "arguments";
 
@@ -403,6 +494,18 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                     .Where(value => value.Name.Equals(ambient.Name, StringComparison.OrdinalIgnoreCase) ||
                                     value.Id.Equals(ambient.Name, StringComparison.Ordinal))
                     .ToArray();
+                if (matches.Length == 1 &&
+                    outputs.FirstOrDefault(output => IsLoopVariable(output) &&
+                                                     output.MemoryReferenceId.Equals(matches[0].Id, StringComparison.Ordinal)) is { } loop)
+                {
+                    return IsCarriedValue(loop, consumer)
+                        ? Elsa3ExpressionParameterResolution.Success(new VariableExpressionParameterBinding(loop.ActivityNodeId, loop.StablePropertyKey))
+                        : Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
+                            Elsa3ActivityDiagnosticCodes.OutputNotRepresentable,
+                            $"Variable '{ambient.Name}' holds loop '{loop.ActivityNodeId}''s current value, which Elsa 4 keeps only inside the loop body.",
+                            "Read the value inside the loop, or copy it into another variable there."));
+                }
+
                 return matches.Length switch
                 {
                     1 => Elsa3ExpressionParameterResolution.Success(

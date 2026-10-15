@@ -87,7 +87,9 @@ internal sealed class Elsa3DefinitionConverter(
             plan.Request.DiagnosticMetadata,
             jsonPaths,
             plan.SourceName,
-            (node, property) => plan.Find(node)?.ScriptProperty is { } script && StringComparer.Ordinal.Equals(script, property)));
+            (node, property) => plan.Find(node)?.ScriptProperty is { } script && StringComparer.Ordinal.Equals(script, property),
+            plan.Nodes.Values.SelectMany(node => node.Variables).Select(variable => variable.ReferenceKey).ToHashSet(StringComparer.Ordinal),
+            plan.MemoryAliases));
     }
 
     /// <summary>The node's declared contract, plus its Elsa 4 loop variables as outputs so lowering can resolve them.</summary>
