@@ -1,8 +1,8 @@
-using System.Text.Json;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Mapping.Contracts;
+using Elsa3.Mapping.Conversion;
 using Elsa3.Mapping.Mappings;
 using Elsa3.Models;
 
@@ -10,20 +10,17 @@ namespace Elsa3.Mapping.Services;
 
 public sealed class Elsa3WorkflowDefinitionImporter : IElsa3WorkflowDefinitionImporter
 {
+    private readonly IElsa3DefinitionConverter _converter;
     private readonly Elsa3WorkflowDefinitionToWorkflowDefinitionVersion _mapper;
-    private readonly Elsa3MemoryReferenceGraph _memoryReferenceGraph;
-    private readonly Elsa3ValueFlowLowerer _valueFlowLowerer;
     private readonly IReusableActivityCollectionImporter? _reusableActivities;
 
     public Elsa3WorkflowDefinitionImporter(
+        IElsa3DefinitionConverter converter,
         Elsa3WorkflowDefinitionToWorkflowDefinitionVersion mapper,
-        Elsa3MemoryReferenceGraph memoryReferenceGraph,
-        Elsa3ValueFlowLowerer valueFlowLowerer,
         IReusableActivityCollectionImporter? reusableActivities = null)
     {
+        _converter = converter;
         _mapper = mapper;
-        _memoryReferenceGraph = memoryReferenceGraph;
-        _valueFlowLowerer = valueFlowLowerer;
         _reusableActivities = reusableActivities;
     }
 
@@ -43,38 +40,14 @@ public sealed class Elsa3WorkflowDefinitionImporter : IElsa3WorkflowDefinitionIm
                 metadata: BuildDiagnosticMetadata(input)));
         }
 
-        try
-        {
-            // Never mutate the caller's Elsa 3 DTO. The clone is an importer-only transition object;
-            // successful mapping publishes only ordinary Elsa 4 authored state.
-            var definition = JsonSerializer.SerializeToElement(input.Definition)
-                                 .Deserialize<Elsa3WorkflowDefinition>()
-                             ?? throw new JsonException("Elsa 3 workflow definition clone produced no value.");
-            var inventory = await _memoryReferenceGraph.CollectAsync(definition.Root, cancellationToken);
-            var diagnostics = _valueFlowLowerer.Lower(definition, inventory, BuildDiagnosticMetadata(input));
-            if (diagnostics.Any(diagnostic => diagnostic.IsError))
-                return Elsa3MigrationResult<IWorkflowDefinitionVersion>.Failure(diagnostics);
+        var conversion = await _converter.ConvertAsync(
+            new Elsa3ConversionRequest(input.Definition, diagnosticMetadata: BuildDiagnosticMetadata(input)),
+            cancellationToken);
+        if (!conversion.Succeeded)
+            return Elsa3MigrationResult<IWorkflowDefinitionVersion>.Failure(conversion.Diagnostics);
 
-            var version = await _mapper.Map(definition, cancellationToken);
-            return Elsa3MigrationResult<IWorkflowDefinitionVersion>.Success(version);
-        }
-        catch (Exception exception) when (exception is not OperationCanceledException)
-        {
-            var definitionId = string.IsNullOrWhiteSpace(input.Definition.DefinitionId)
-                ? "<unspecified>"
-                : input.Definition.DefinitionId;
-            var metadata = BuildDiagnosticMetadata(input);
-
-            if (!string.IsNullOrWhiteSpace(input.Definition.DefinitionId))
-                metadata["DefinitionId"] = input.Definition.DefinitionId;
-
-            return Elsa3MigrationResult<IWorkflowDefinitionVersion>.Failure(new Elsa3MigrationDiagnostic(
-                Elsa3MigrationDiagnosticSeverity.Error,
-                Elsa3MigrationDiagnosticCodes.DefinitionMappingFailed,
-                $"Elsa 3 workflow definition '{definitionId}' could not be mapped: {exception.Message}",
-                guidance: "Review the Elsa 3 definition and installed Elsa 4 activity catalog before retrying import.",
-                metadata: metadata));
-        }
+        var version = _mapper.Map(input.Definition, conversion.Value!.State);
+        return Elsa3MigrationResult<IWorkflowDefinitionVersion>.Success(version, conversion.Diagnostics);
     }
 
     public ValueTask<ReusableActivityImportPlan> AnalyzeReusableCollectionAsync(

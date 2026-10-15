@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa3.Mapping.ActivityMap.Rewrites;
 using Elsa3.Models;
 
 namespace Elsa3.Mapping.Services;
@@ -15,7 +16,9 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     public IReadOnlyList<Elsa3MigrationDiagnostic> Lower(
         Elsa3WorkflowDefinition definition,
         Elsa3MemoryReferenceInventory inventory,
-        IReadOnlyDictionary<string, string> diagnosticMetadata)
+        IReadOnlyDictionary<string, string> diagnosticMetadata,
+        IReadOnlyDictionary<Elsa3Activity, string>? jsonPaths = null,
+        Func<Elsa3Activity, string, string>? sourceNameOf = null)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(inventory);
@@ -23,7 +26,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         var input = new DiagnosticScope(diagnosticMetadata, definition.DefinitionId);
 
         var diagnostics = new List<Elsa3MigrationDiagnostic>();
-        var properties = CollectProperties(definition.Root, inventory).ToArray();
+        var properties = CollectProperties(definition.Root, inventory, jsonPaths, sourceNameOf ?? ((_, name) => name)).ToArray();
         var nodeOrder = inventory.Nodes
             .Select((node, index) => (node.ActivityNodeId, index))
             .ToDictionary(item => item.ActivityNodeId, item => item.index, StringComparer.Ordinal);
@@ -241,8 +244,11 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         List<Elsa3MigrationDiagnostic> diagnostics)
     {
         var expression = property.Expression!;
+        // Literal, Object and Secret values are data, not code: they carry no Elsa 3 reads to rewrite. A Secret value is
+        // judged by the credential-literal rule as it stands.
         if (expression.Type.Equals("Literal", StringComparison.OrdinalIgnoreCase) ||
-            expression.Type.Equals("Object", StringComparison.OrdinalIgnoreCase))
+            expression.Type.Equals("Object", StringComparison.OrdinalIgnoreCase) ||
+            expression.Type.Equals("Secret", StringComparison.OrdinalIgnoreCase))
         {
             property.Activity.AdditionalProperties[property.PropertyName] = StripMemoryReference(property.Value);
             return;
@@ -429,13 +435,20 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         return false;
     }
 
+    /// <summary>
+    /// A loop's current value read inside its body: Elsa 4 exposes it as the loop's scoped variable (<c>index</c>,
+    /// <c>currentItem</c>, <c>currentIndex</c>) declared by the loop node.
+    /// </summary>
     private static bool IsCarriedValue(Elsa3MemoryOccurrence producer, ActivityProperty consumer) =>
-        producer.StablePropertyKey.Equals("key:current-value", StringComparison.Ordinal) &&
+        (producer.StablePropertyKey.Equals("key:current-value", StringComparison.Ordinal) ||
+         Elsa3LoopVariableReferencesRewrite.LoopVariableKeys.Contains(producer.StablePropertyKey)) &&
         consumer.ActivityPath.StartsWith($"{producer.ActivityPath}/", StringComparison.Ordinal);
 
     private static IEnumerable<ActivityProperty> CollectProperties(
         Elsa3Activity root,
-        Elsa3MemoryReferenceInventory inventory)
+        Elsa3MemoryReferenceInventory inventory,
+        IReadOnlyDictionary<Elsa3Activity, string>? jsonPaths,
+        Func<Elsa3Activity, string, string> sourceNameOf)
     {
         var nodes = inventory.Nodes.ToDictionary(node => node.ActivityNodeId, StringComparer.Ordinal);
         return Visit(root, "$.root");
@@ -446,7 +459,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             var node = nodes[nodeId];
             foreach (var (propertyName, value) in activity.AdditionalProperties.ToArray())
             {
-                var propertyPath = $"{jsonPath}{FormatJsonProperty(propertyName)}";
+                var propertyPath = $"{jsonPath}{FormatJsonProperty(sourceNameOf(activity, propertyName))}";
                 var occurrences = inventory.Occurrences
                     .Where(occurrence => occurrence.ActivityNodeId.Equals(nodeId, StringComparison.Ordinal) &&
                                          occurrence.JsonPath.Equals($"{propertyPath}.memoryReference", StringComparison.Ordinal))
@@ -459,7 +472,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 var stablePropertyKey = occurrences
                     .FirstOrDefault(occurrence => occurrence.Direction == Elsa3PropertyDirection.Input)?.StablePropertyKey
                     ?? occurrences.FirstOrDefault()?.StablePropertyKey
-                    ?? ToStableKey(propertyName);
+                    ?? inputContract?.StablePropertyKey
+                    ?? ToStableKey(sourceNameOf(activity, propertyName));
                 yield return new ActivityProperty(
                     activity,
                     nodeId,
@@ -478,7 +492,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             var children = activity.Activities ?? [];
             for (var index = 0; index < children.Count; index++)
             {
-                foreach (var property in Visit(children[index], $"{jsonPath}.activities[{index}]"))
+                foreach (var property in Visit(children[index], jsonPaths?.GetValueOrDefault(children[index]) ?? $"{jsonPath}.activities[{index}]"))
                     yield return property;
             }
         }
@@ -523,9 +537,18 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         return new TypeReference(alias);
     }
 
+    /// <summary>
+    /// Whether a value of one type may bind a member of the other. <c>Object</c> on either side accepts any type: Elsa 3
+    /// declares untyped values as Object, and an Elsa 4 Object member takes any value.
+    /// </summary>
     private static bool TypesMatch(TypeReference left, TypeReference right) =>
+        IsObject(left) || IsObject(right) ||
         left.Alias.Equals(right.Alias, StringComparison.OrdinalIgnoreCase) &&
         left.CollectionKind == right.CollectionKind;
+
+    private static bool IsObject(TypeReference type) =>
+        type.CollectionKind == CollectionKind.Single &&
+        (type.Alias.Equals("Object", StringComparison.OrdinalIgnoreCase) || type.Alias.Equals("Elsa.Any", StringComparison.Ordinal));
 
     private static JsonElement StripMemoryReference(JsonElement value)
     {

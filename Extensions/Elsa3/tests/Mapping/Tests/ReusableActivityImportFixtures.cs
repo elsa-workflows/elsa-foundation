@@ -41,12 +41,16 @@ internal static class ReusableActivityImportFixtures
             Root = root
         };
 
-    public static Elsa3Activity Leaf(string nodeId, string type = "Elsa.WriteLine", bool directStart = false) => new()
+    /// <summary>
+    /// A leaf with no members. A direct-start leaf is an HTTP trigger by default, because only a trigger can start a
+    /// workflow in Elsa 4 (a start-marked WriteLine is unconvertible).
+    /// </summary>
+    public static Elsa3Activity Leaf(string nodeId, string? type = null, bool directStart = false) => new()
     {
         Id = $"activity-{nodeId}",
         NodeId = nodeId,
         Name = nodeId,
-        Type = type,
+        Type = type ?? (directStart ? "Elsa.HttpEndpoint" : "Elsa.WriteLine"),
         Version = 1,
         CustomProperties = new() { CanStartWorkflow = directStart }
     };
@@ -72,13 +76,12 @@ internal static class ReusableActivityImportFixtures
     public static ReusableActivityImportCollection Collection(params Elsa3WorkflowDefinition[] definitions) =>
         new("fixture-collection", definitions);
 
-    public static Elsa3ReusableActivityImportMaterializer Materializer(BuiltInActivityLookup? catalog = null)
+    public static Elsa3ReusableActivityImportMaterializer Materializer(IActivityDefinitionLookup? catalog = null)
     {
-        var registry = TypeRegistry();
-        var argumentMapper = new Elsa3ArgumentDefinitionToInputOutput(registry);
-        var activityMapper = new Elsa3ActivityToState(catalog ?? new BuiltInActivityLookup());
-        var stateMapper = new Elsa3WorkflowDefinitionToState(registry, activityMapper, argumentMapper);
-        return new(stateMapper, argumentMapper);
+        var scope = Support.ConversionServices.Create(catalog ?? new BuiltInActivityLookup()).CreateScope();
+        return new(
+            scope.ServiceProvider.GetRequiredService<Conversion.IElsa3DefinitionConverter>(),
+            scope.ServiceProvider.GetRequiredService<Elsa3ArgumentDefinitionToInputOutput>());
     }
 
     /// <summary>
@@ -86,7 +89,7 @@ internal static class ReusableActivityImportFixtures
     /// <paramref name="catalog"/>; for tests whose catalog declares no credential input, so the rule refuses nothing.
     /// The tests of the rule at the import compose it as a host does, through <see cref="ImportServices"/>.
     /// </summary>
-    public static ICredentialLiteralValidator Validator(BuiltInActivityLookup? catalog = null) => new CredentialLiteralValidator(
+    public static ICredentialLiteralValidator Validator(IActivityDefinitionLookup? catalog = null) => new CredentialLiteralValidator(
         new CatalogVersionResolver(catalog ?? new BuiltInActivityLookup()),
         Options.Create(new WorkflowDesignValidatorOptions()),
         new ActivityTreeWalker(new DefaultActivityStructureService([])));
@@ -94,11 +97,10 @@ internal static class ReusableActivityImportFixtures
     /// <summary>
     /// The collection import as a host composes it: the registrations of <c>WorkflowDesignValidations</c> (the rule, its
     /// tree walker and the host's structure service), <c>Elsa3Mapping</c> and <c>Elsa3ImportJsonActivities</c>, over
-    /// <paramref name="catalog"/> as the activity catalog and <paramref name="command"/> as the commit port. Like every
-    /// feature in <c>src</c>, none of them registers a structure handler for
-    /// <see cref="Elsa3ImportedActivityStructure.Kind"/>.
+    /// <paramref name="catalog"/> as the activity catalog and <paramref name="command"/> as the commit port. None of them
+    /// registers a native structure handler; the import walks native payloads itself.
     /// </summary>
-    public static ServiceProvider ImportServices(BuiltInActivityLookup catalog, IReusableActivityImportCommand command)
+    public static ServiceProvider ImportServices(IActivityDefinitionLookup catalog, IReusableActivityImportCommand command)
     {
         var services = new ServiceCollection();
         services.AddLogging();

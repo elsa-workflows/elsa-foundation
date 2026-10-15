@@ -1,6 +1,10 @@
 ﻿using CShells.Features;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Elsa3.Mapping.ActivityMap;
+using Elsa3.Mapping.ActivityMap.Rewrites;
 using Elsa3.Mapping.Contracts;
+using Elsa3.Mapping.Conversion;
+using Elsa3.Mapping.Resolution;
 using Elsa3.Mapping.Mappings;
 using Elsa3.Mapping.Services;
 using Elsa3.Activities.Design.Import.Contracts;
@@ -18,8 +22,20 @@ namespace Elsa3.Mapping;
 )]
 public class Elsa3MappingFeature : IShellFeature
 {
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
+        // The built-in map is a static table: one per application (§2.5.1). Resolution caches per conversion scope.
+        services.AddSingleton<IElsa3ActivityMap, Elsa3BuiltInActivityMap>();
+        services.AddScoped<Elsa3ActivityResolver>();
+        services.AddSingleton<IElsa3NodeRewrite, Elsa3SwitchValueSynthesisRewrite>();
+        services.AddSingleton<IElsa3NodeRewrite, Elsa3VariableReferenceRewrite>();
+        services.AddSingleton<IElsa3NodeRewrite, Elsa3TerminalPlacementRewrite>();
+        services.AddSingleton<IElsa3NodeRewrite, Elsa3ParallelBranchNamesRewrite>();
+        services.AddSingleton<IElsa3NodeRewrite, Elsa3LoopVariableReferencesRewrite>();
+        services.AddScoped<Elsa3ActivityNormalizer>();
+        services.AddScoped<Elsa3DefinitionConverter>();
+        services.AddScoped<IElsa3DefinitionConverter>(provider => provider.GetRequiredService<Elsa3DefinitionConverter>());
+        services.AddScoped<IElsa3NodeConverter>(provider => provider.GetRequiredService<Elsa3DefinitionConverter>());
         services.AddScoped<Elsa3ArgumentDefinitionToInputOutput>();
         services.AddScoped<Elsa3MemoryReferenceGraph>();
         services.AddScoped<Elsa3ExpressionRewriter>();

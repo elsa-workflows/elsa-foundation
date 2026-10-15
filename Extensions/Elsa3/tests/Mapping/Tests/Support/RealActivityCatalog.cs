@@ -82,6 +82,19 @@ internal sealed class RealActivityCatalog : IActivityDefinitionLookup
         return this;
     }
 
+    /// <summary>
+    /// Adds a test activity at version 1.0.0 under <paramref name="activityTypeKey"/> (a key no shipped activity uses),
+    /// declaring <paramref name="inputs"/>; an Elsa 3 node of that type resolves to it verbatim.
+    /// </summary>
+    public RealActivityCatalog WithActivity(string activityTypeKey, params InputDefinition[] inputs)
+    {
+        Add(new ActivityVersionReconciliationModel(
+            null, "1.0.0", activityTypeKey, activityTypeKey, "Test", null,
+            "elsa.clr-activity", "1", "elsa.clr-activity", "1", new object(),
+            inputs, [], [], ActivityExecutionType.Action));
+        return this;
+    }
+
     /// <summary>Adds a version whose version string is not valid SemVer, which resolution must ignore.</summary>
     public RealActivityCatalog WithInvalidVersion(string activityTypeKey, string version)
     {

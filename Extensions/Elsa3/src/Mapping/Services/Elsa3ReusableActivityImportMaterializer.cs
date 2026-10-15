@@ -6,6 +6,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
+using Elsa3.Mapping.Conversion;
 using Elsa3.Mapping.Mappings;
 using Elsa3.Models;
 
@@ -17,7 +18,7 @@ namespace Elsa3.Mapping.Services;
 /// Exact reusable references are rewritten to the deterministic activity-version identities from the plan.
 /// </summary>
 public sealed class Elsa3ReusableActivityImportMaterializer(
-    Elsa3WorkflowDefinitionToState stateMapper,
+    IElsa3DefinitionConverter converter,
     Elsa3ArgumentDefinitionToInputOutput argumentMapper) : IReusableActivityImportMaterializer
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -50,13 +51,23 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
                 StringComparer.Ordinal);
         var activities = new List<ImportedReusableActivity>();
         var workflows = new List<ImportedWorkflow>();
+        var failures = new List<Elsa3MigrationDiagnostic>();
 
         foreach (var item in selection.OrderBy(x => x.SourceVersionId, StringComparer.Ordinal))
         {
             cancellationToken.ThrowIfCancellationRequested();
             var source = sourceById[item.SourceVersionId];
             var replacements = BuildReplacements(item, sourceById, selectedById);
-            var mappedState = await stateMapper.Map(source, replacements, cancellationToken);
+            var conversion = await converter.ConvertAsync(
+                new Elsa3ConversionRequest(source, item.IsReusable, replacements, DiagnosticMetadata(item)),
+                cancellationToken);
+            if (!conversion.Succeeded)
+            {
+                failures.AddRange(conversion.Diagnostics);
+                continue;
+            }
+
+            var mappedState = conversion.Value!.State;
             if (item.IsReusable)
             {
                 var head = headByDefinition[source.DefinitionId];
@@ -70,6 +81,12 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             }
         }
 
+        // FR-018: one unconvertible item refuses the whole apply, reporting every item's diagnostics.
+        if (failures.Count > 0)
+            throw new ReusableActivityImportValidationException(
+                "One or more selected Elsa 3 definitions could not be converted.",
+                failures);
+
         return new(
             plan.PlanId,
             plan.CollectionId,
@@ -77,6 +94,13 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             activities.OrderBy(x => x.Definition.Id, StringComparer.Ordinal).ToArray(),
             workflows.OrderBy(x => x.Version.Id, StringComparer.Ordinal).ToArray());
     }
+
+    private static IReadOnlyDictionary<string, string> DiagnosticMetadata(ReusableActivityImportItem item) =>
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["SourceDefinitionId"] = item.SourceDefinitionId,
+            ["SourceVersionId"] = item.SourceVersionId
+        };
 
     private IReadOnlyDictionary<string, Elsa3ActivityExactReplacement> BuildReplacements(
         ReusableActivityImportItem owner,

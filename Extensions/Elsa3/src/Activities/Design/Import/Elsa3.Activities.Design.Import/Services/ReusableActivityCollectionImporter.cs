@@ -16,9 +16,10 @@ namespace Elsa3.Activities.Design.Import.Services;
 /// <para>
 /// The nodes judged are those of each imported workflow version's state and of each reusable activity's mapped body,
 /// from which <see cref="IReusableActivityImportMaterializer"/> must build that activity version's descriptor payload: the root and every node nested under
-/// it, which the mapping limits to <see cref="Elsa3ImportedActivityStructure.MaxNestingDepth"/> containers. The mapping nests child activities under <see cref="Elsa3ImportedActivityStructure.Kind"/>, which no
-/// structure handler projects, so the rule's own tree walk does not reach them; the import enumerates them through
-/// <see cref="Elsa3ImportedActivityStructure.Nodes"/> and judges each through <see cref="ICredentialLiteralValidator"/>.
+/// it. The mapping nests children in the native structure of each container's Elsa 4 activity; the import enumerates them
+/// through <see cref="Elsa3ImportedActivityNodes.Walk"/>, which needs no structure handler, and judges each node on its
+/// own (its structure detached) through <see cref="ICredentialLiteralValidator"/>, so a host that registers the native
+/// handlers does not judge a nested node twice.
 /// </para>
 /// <para>
 /// The apply is all or nothing, so a refused binding refuses the whole apply before any workflow or activity is committed,
@@ -166,11 +167,12 @@ public sealed class ReusableActivityCollectionImporter(
             Location: $"the reusable activity imported from Elsa 3 workflow version '{activity.Version.SourceId}'"));
         var nodes = workflowRoots.Concat(activityRoots)
             .Where(root => root.Root is not null)
-            .SelectMany(root => Elsa3ImportedActivityStructure.Nodes(root.Root!).Select(node => (Node: node, root.Location)));
+            .SelectMany(root => Elsa3ImportedActivityNodes.Walk(root.Root!).Select(node => (Node: node, root.Location)));
         var findings = new List<ValidationError>();
         foreach (var (node, location) in nodes)
         {
-            var nodeFindings = await credentialLiterals.Validate(new WorkflowDefinitionState([], node, [], [], null), cancellationToken);
+            var alone = node with { Structure = null };
+            var nodeFindings = await credentialLiterals.Validate(new WorkflowDefinitionState([], alone, [], [], null), cancellationToken);
             findings.AddRange(nodeFindings.Select(finding => CredentialLiteralFinding.Located(finding, location)));
         }
 

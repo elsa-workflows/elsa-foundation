@@ -117,13 +117,14 @@ The rule bounds that time; it does not encrypt the column, and it does not reach
 through the credential-literal rule, `ICredentialLiteralValidator`, registered by `WorkflowDesignValidations`, on which
 `Elsa3ImportJsonActivities` depends: the nodes of each imported workflow version's state and of each reusable
 activity's `Body` (from which the materializer builds that activity version's descriptor payload), the root and every
-node nested under it, up to `Elsa3ImportedActivityStructure.MaxNestingDepth` (14) containers below the root. The mapping
-refuses deeper nesting with 400 naming the limit: the structure payload, the stored workflow state and a reusable
-activity's descriptor payload keep the default JSON nesting limit of 64. A binding value that is itself deeply nested
-can still exceed that limit within 14 containers, and the apply then fails with a 500 before anything is committed. The mapping nests child activities under `elsa3.imported-activity.structure`, which
-no structure handler projects, so the rule's own tree walk sees only each root. `Elsa3ImportedActivityStructure`
-(`Models`) is the one definition of that shape: the mapping writes it through `Create`, and the importer reads every
-nested node back through `Nodes` and judges each as the root of its own state. The apply is all or nothing, so a
+node nested under it. The conversion refuses nesting deeper than the stored state can hold (`ELS3-ACTIVITY-NESTING-TOO-DEEP`,
+400): the stored workflow state and a reusable activity's descriptor payload keep the default JSON nesting limit of 64,
+and each container adds the levels its native payload needs (14 Sequence containers, fewer Parallel or Switch ones). A
+binding value that is itself deeply nested can still exceed that limit, and the apply then fails with a 500 before
+anything is committed. The mapping nests children in the native structure of each container's Elsa 4 activity;
+`Elsa3ImportedActivityNodes.Walk` (`Models`) reads every nested node back from any native payload without a structure
+handler, and the importer judges each node on its own, its structure detached, so a host that registers the native
+handlers does not judge a nested node twice. The apply is all or nothing, so a
 literal, object, value read, expression or malformed secret reference on an input the installed activity declares a
 credential refuses the whole apply and no workflow or activity is committed: one `CredentialLiteralRefusedException`,
 answered 400 (`elsa3.import.request-invalid`) with the messages of every refused binding in `detail`. Each message names

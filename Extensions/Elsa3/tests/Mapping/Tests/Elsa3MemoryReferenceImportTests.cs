@@ -147,18 +147,21 @@ public sealed class Elsa3MemoryReferenceImportTests
         {
             ["Value"] = MemoryReference(memoryId),
         });
+        // Elsa 3 serializes a ForEach body in its `body` port; Elsa 4 reads the current item from the loop's scoped
+        // `currentItem` variable, declared by the loop node.
         var loop = Activity("loop", "Elsa.ForEach", new Dictionary<string, JsonElement>
         {
             ["CurrentValue"] = MemoryReference(memoryId),
-        }, [loopBody]);
+            ["Body"] = JsonSerializer.SerializeToElement(loopBody, new JsonSerializerOptions(JsonSerializerDefaults.Web)),
+        });
         var definition = Workflow("loop", loop);
 
-        return Case(definition, [ForEach(), Consumer()], [memoryId], version =>
+        return Case(definition, [Consumer()], [memoryId], version =>
         {
             var value = ReadValue(FindInput(version, "loop-body", ValueInputKey));
             Assert.Equal("Variable", value.ExpressionType);
             Assert.Equal("loop", GetProperty(value.Value, "declaringScopeId").GetString());
-            Assert.Equal("key:current-value", GetProperty(value.Value, "referenceKey").GetString());
+            Assert.Equal("currentItem", GetProperty(value.Value, "referenceKey").GetString());
         });
     }
 

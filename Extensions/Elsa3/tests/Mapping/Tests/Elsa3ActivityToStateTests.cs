@@ -2,52 +2,36 @@ using System.Text.Json;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Models;
-using Elsa3.Mapping.Mappings;
+using Elsa.Workflows.Design.Core.Models;
 using Elsa3.Mapping.Services;
+using Elsa3.Mapping.Tests.Support;
 using Elsa3.Models;
 using Xunit;
 
 namespace Elsa3.Mapping.Tests;
 
 /// <summary>
-/// Regression coverage for the Elsa-3 → Elsa-4 activity mapper. The mapper resolves each
-/// <see cref="Elsa3Activity.AdditionalProperties"/> entry against the target activity version's
-/// declared inputs/outputs and projects it onto <see cref="ActivityNode.Inputs"/> /
-/// <see cref="ActivityNode.Outputs"/>. Prior to the #378 fix an inverted De Morgan guard
-/// (<c>||</c> where <c>&amp;&amp;</c> was intended) made the population loop body unreachable, so
-/// every imported activity silently dropped all argument bindings.
+/// Regression coverage for binding Elsa 3 properties to an Elsa 4 activity's declared inputs and outputs. A type that
+/// the built-in map does not cover (<c>Acme.Leaf</c>) resolves verbatim to its catalog key and binds by name
+/// (spec FR-010). Prior to the #378 fix an inverted De Morgan guard made the population loop unreachable, so every
+/// imported activity silently dropped all argument bindings.
 /// </summary>
 public sealed class Elsa3ActivityToStateTests
 {
-    private const string ActivityType = "Elsa.WriteLine";
-    private const string DefinitionId = "def-writeline";
-    private const string VersionId = "ver-writeline-1";
+    private const string ActivityType = "Acme.Leaf";
+    private const string DefinitionId = "def-acme-leaf";
+    private const string VersionId = "ver-acme-leaf-1";
 
-    /// <summary>A mapper over an activity declaring the input <c>Message</c>, under the key <c>key:message</c>.</summary>
-    private readonly Elsa3ActivityToState _messageMapper = new(new FakeActivityDefinitionLookup(inputNames: ["Message"], outputNames: []));
+    /// <summary>A catalog activity declaring the input <c>Message</c>, under the key <c>key:message</c>.</summary>
+    private readonly IActivityDefinitionLookup _messageCatalog = new FakeActivityDefinitionLookup(inputNames: ["Message"], outputNames: []);
 
-    /// <summary>A mapper over an activity declaring two inputs whose names differ only in case, under distinct keys.</summary>
-    private readonly Elsa3ActivityToState _urlMapper = new(new ReusableActivityImportFixtures.BuiltInActivityLookup(Input("Url", "url-key"), Input("URL", "upper-url-key")));
+    /// <summary>A catalog activity declaring two inputs whose names differ only in case, under distinct keys.</summary>
+    private readonly IActivityDefinitionLookup _urlCatalog = new ReusableActivityImportFixtures.BuiltInActivityLookup(Input("Url", "url-key"), Input("URL", "upper-url-key"));
 
     [Fact]
     public async Task Map_InputArgument_PopulatesInputsOnActivityNode()
     {
-        // A leaf Elsa-3 activity whose "Message" property carries a literal-expression argument, stored under the declared
-        // input's reference key (the fake catalog declares "key:message").
-        var source = new Elsa3Activity
-        {
-            Id = "a1",
-            NodeId = "node-1",
-            Name = "WriteLine1",
-            Type = ActivityType,
-            Version = 1,
-            AdditionalProperties = new Dictionary<string, JsonElement>
-            {
-                ["Message"] = Argument("Literal", "Hello world"),
-            },
-        };
-
-        var node = await _messageMapper.Map(source, CancellationToken.None);
+        var node = await MapAsync(_messageCatalog, Leaf(("Message", Argument("Literal", "Hello world"))));
 
         var input = Assert.Single(node.Inputs);
         Assert.Equal("key:message", input.ReferenceKey);
@@ -59,7 +43,7 @@ public sealed class Elsa3ActivityToStateTests
     [Fact]
     public async Task Map_InputArgument_whose_name_differs_in_case_from_the_declared_input_is_stored_under_the_declared_key()
     {
-        var node = await _messageMapper.Map(Leaf(("message", Argument("Literal", "Hello world"))), CancellationToken.None);
+        var node = await MapAsync(_messageCatalog, Leaf(("message", Argument("Literal", "Hello world"))));
 
         var input = Assert.Single(node.Inputs);
         Assert.Equal("key:message", input.ReferenceKey);
@@ -69,10 +53,13 @@ public sealed class Elsa3ActivityToStateTests
     [Fact]
     public async Task Map_two_properties_that_bind_the_same_declared_input_is_refused()
     {
-        var refusal = await Assert.ThrowsAsync<ArgumentException>(() =>
-            _messageMapper.Map(Leaf(("message", Argument("Literal", "first")), ("Message", Argument("Literal", "second"))), CancellationToken.None).AsTask());
+        var result = await ConversionServices.ConvertAsync(_messageCatalog, ConversionServices.Definition(
+            Leaf(("message", Argument("Literal", "first")), ("Message", Argument("Literal", "second")))));
 
-        Assert.Contains("'node-1'", refusal.Message, StringComparison.Ordinal);
+        Assert.False(result.Succeeded);
+        var refusal = Assert.Single(result.Diagnostics);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.DuplicateInputBinding, refusal.Code);
+        Assert.Equal("node-1", refusal.Metadata["ActivityNodeId"]);
         Assert.Contains("'message' and 'Message'", refusal.Message, StringComparison.Ordinal);
         Assert.Contains("'key:message'", refusal.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("first", refusal.Message, StringComparison.Ordinal);
@@ -81,7 +68,7 @@ public sealed class Elsa3ActivityToStateTests
     [Fact]
     public async Task Map_property_that_matches_several_declared_inputs_ignoring_case_binds_the_exact_name()
     {
-        var node = await _urlMapper.Map(Leaf(("URL", Argument("Literal", "value"))), CancellationToken.None);
+        var node = await MapAsync(_urlCatalog, Leaf(("URL", Argument("Literal", "value"))));
 
         Assert.Equal("upper-url-key", Assert.Single(node.Inputs).ReferenceKey);
     }
@@ -89,64 +76,34 @@ public sealed class Elsa3ActivityToStateTests
     [Fact]
     public async Task Map_property_that_matches_several_declared_inputs_only_ignoring_case_is_refused()
     {
-        var refusal = await Assert.ThrowsAsync<ArgumentException>(() =>
-            _urlMapper.Map(Leaf(("url", Argument("Literal", "value"))), CancellationToken.None).AsTask());
+        var result = await ConversionServices.ConvertAsync(_urlCatalog, ConversionServices.Definition(Leaf(("url", Argument("Literal", "value")))));
 
+        var refusal = Assert.Single(result.Diagnostics);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.DuplicateInputBinding, refusal.Code);
         Assert.Contains("'url' matches more than one declared input: 'Url', 'URL'", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task Map_OutputArgument_PopulatesOutputsOnActivityNode()
     {
-        var source = new Elsa3Activity
-        {
-            Id = "a1",
-            NodeId = "node-1",
-            Name = "WriteLine1",
-            Type = ActivityType,
-            Version = 1,
-            AdditionalProperties = new Dictionary<string, JsonElement>
-            {
-                ["Result"] = Argument("JavaScript", "getResult()"),
-            },
-        };
+        var catalog = new FakeActivityDefinitionLookup(inputNames: [], outputNames: ["Result"]);
 
-        var lookup = new FakeActivityDefinitionLookup(
-            inputNames: [],
-            outputNames: ["Result"]);
-
-        var mapper = new Elsa3ActivityToState(lookup);
-
-        var node = await mapper.Map(source, CancellationToken.None);
+        var node = await MapAsync(catalog, Leaf(("Result", Argument("Literal", "result"))));
 
         var output = Assert.Single(node.Outputs);
-        Assert.Equal("Result", output.ReferenceKey);
-        Assert.Equal("getResult()", output.Value.Value);
-        Assert.Equal("JavaScript", output.Value.ExpressionType);
+        Assert.Equal("key:result", output.ReferenceKey);
+        Assert.Equal("result", output.Value.Value);
+        Assert.Equal("Literal", output.Value.ExpressionType);
         Assert.Empty(node.Inputs);
     }
 
     [Fact]
     public async Task Collect_OutputOnlyMemoryReference_PreservesProducerOccurrence()
     {
-        var source = new Elsa3Activity
-        {
-            Id = "a1",
-            NodeId = "node-1",
-            Name = "Producer",
-            Type = ActivityType,
-            Version = 1,
-            AdditionalProperties = new Dictionary<string, JsonElement>
-            {
-                ["Result"] = MemoryReference("result-1"),
-            },
-        };
+        var source = Leaf(("Result", MemoryReference("result-1")));
+        var contract = new Elsa3NodeContract([], [Output("Result")]);
 
-        var lookup = new FakeActivityDefinitionLookup(
-            inputNames: [],
-            outputNames: ["Result"]);
-
-        var inventory = await new Elsa3MemoryReferenceGraph(lookup).CollectAsync(source, CancellationToken.None);
+        var inventory = await new Elsa3MemoryReferenceGraph().CollectAsync(source, _ => contract);
 
         var occurrence = Assert.Single(inventory.Occurrences);
         Assert.Equal("result-1", occurrence.MemoryReferenceId);
@@ -192,12 +149,9 @@ public sealed class Elsa3ActivityToStateTests
             Version = 1,
             Activities = [nestedContainer],
         };
+        var contract = new Elsa3NodeContract([Input("Value", "key:value")], [Output("Value")]);
 
-        var lookup = new FakeActivityDefinitionLookup(
-            inputNames: ["Value"],
-            outputNames: ["Value"]);
-
-        var inventory = await new Elsa3MemoryReferenceGraph(lookup).CollectAsync(root, CancellationToken.None);
+        var inventory = await new Elsa3MemoryReferenceGraph().CollectAsync(root, _ => contract);
 
         Assert.Collection(
             inventory.Occurrences,
@@ -220,6 +174,13 @@ public sealed class Elsa3ActivityToStateTests
         Assert.Equal("node-nested", Assert.Single(inventory.Nodes, x => x.ActivityNodeId == "node-leaf").StructuralFrameId);
     }
 
+    private static async Task<ActivityNode> MapAsync(IActivityDefinitionLookup catalog, Elsa3Activity leaf)
+    {
+        var result = await ConversionServices.ConvertAsync(catalog, ConversionServices.Definition(leaf));
+        Assert.True(result.Succeeded, string.Join(Environment.NewLine, result.Diagnostics.Select(diagnostic => $"{diagnostic.Code}: {diagnostic.Message}")));
+        return result.Value!.State.RootActivity;
+    }
+
     /// <summary>A leaf Elsa 3 activity, node <c>node-1</c>, carrying <paramref name="properties"/>.</summary>
     private static Elsa3Activity Leaf(params (string Name, JsonElement Value)[] properties) => new()
     {
@@ -233,6 +194,9 @@ public sealed class Elsa3ActivityToStateTests
 
     private static InputDefinition Input(string name, string referenceKey) =>
         new(referenceKey, name, new TypeReference("String"), null, name, null, IsNullable: true);
+
+    private static OutputDefinition Output(string name) =>
+        new($"key:{name.ToLowerInvariant()}", name, new TypeReference("String"), null, name, null, true);
 
     private static JsonElement Argument(string expressionType, string expressionValue) =>
         JsonSerializer.SerializeToElement(new
@@ -254,9 +218,8 @@ public sealed class Elsa3ActivityToStateTests
         });
 
     /// <summary>
-    /// Hand-rolled lookup (the test project pulls in no mocking library) returning a single
-    /// activity definition + version whose declared input/output names drive the mapper's
-    /// property-to-argument matching.
+    /// Hand-rolled lookup (the test project pulls in no mocking library) returning a single activity definition and
+    /// version, whatever the key, whose declared input/output names drive property-to-argument matching.
     /// </summary>
     private sealed class FakeActivityDefinitionLookup(string[] inputNames, string[] outputNames) : IActivityDefinitionLookup
     {
@@ -289,8 +252,8 @@ public sealed class Elsa3ActivityToStateTests
     {
         public string Id => DefinitionId;
         public string ActivityTypeKey => ActivityType;
-        public string Category => "Console";
-        public string? DisplayName => "Write Line";
+        public string Category => "Test";
+        public string? DisplayName => "Acme leaf";
         public string? Description => null;
     }
 
