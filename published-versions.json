@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c",
+  "last_publish_commit": "12332fec967d4f44d669bc6976e599ab2ec71038",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
-      "version": "4.0.9-preview",
-      "commit": "d2acadc1c7eda9f2de3f35d481493ae4896cdb04"
+      "version": "4.0.10-preview",
+      "commit": "12332fec967d4f44d669bc6976e599ab2ec71038"
     },
     {
       "package_id": "Elsa.Activities.Bpmn.Interchange",
@@ -14,8 +14,8 @@
     },
     {
       "package_id": "Elsa.Activities.ControlFlow",
-      "version": "4.0.8-preview",
-      "commit": "d2acadc1c7eda9f2de3f35d481493ae4896cdb04"
+      "version": "4.0.9-preview",
+      "commit": "12332fec967d4f44d669bc6976e599ab2ec71038"
     },
     {
       "package_id": "Elsa.Activities.Design.Api",
