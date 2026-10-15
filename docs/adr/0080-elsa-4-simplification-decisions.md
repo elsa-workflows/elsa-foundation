@@ -249,10 +249,12 @@ Review app (`elsa-workflows-review-bot[bot]`) merges every PR, including the run
 PRs and the UX QA fix PRs that D7 sent to a human merge, once a review round leaves nothing actionable and CI is
 green on the exact head commit. Actionable findings are fixed in new commits and reviewed again, for at most 6
 rounds; if blocking findings remain after the sixth, the PR is escalated to the maintainer with
-`blocked: review loop exhausted` and `needs:decision`. D7's human-merge cases and its pause of auto-merge after a
-revert are dropped, and so is the 14 October note's reference to D7's human merge. The fixer routine never merges
+`blocked: review loop exhausted` and `needs:decision`. D7's human-merge cases are dropped, and so is the 14 October
+note's reference to D7's human merge. D7's pause after a reverted auto-merge is kept, as the owner confirmed on
+15 October: while #2559 carries `auto-merge-paused`, routine PRs request no Code Review. The fixer routine never merges
 its own PRs and no longer merges through `elsa-auto-review-merge`; it requests review and stops. Routine PRs carry
-the `auto-fix` label, which replaces the `claude/auto-fix-*` branch prefix as the way the routine finds its own PRs.
+the `auto-fix` label, which replaces the `claude/auto-fix-*` branch prefix as the way the routine finds its own PRs
+and their reverts.
 D7's routines, caps and labels are otherwise unchanged.
 
 ## Consequences
