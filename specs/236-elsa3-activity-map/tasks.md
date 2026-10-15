@@ -409,17 +409,17 @@ reusable workflow validates and compiles with the expected `outputMappings`, `ou
 
 ### Collection lowering, replacements, warnings
 
-- [ ] T039 [US4] Move `M/Services/Elsa3ReusableActivityImportMaterializer.cs` onto `IElsa3DefinitionConverter` (FR-016):
+- [X] T039 [US4] Move `M/Services/Elsa3ReusableActivityImportMaterializer.cs` onto `IElsa3DefinitionConverter` (FR-016):
   - convert a private clone of each selected definition with `IsReusable = item.IsReusable` and the plan's
     replacements (`BuildReplacements` unchanged);
   - pass diagnostic metadata built from the plan item (R-8);
   - any Error across items → `ReusableActivityImportValidationException` with all items' diagnostics, persisting
     nothing (FR-018);
   - `BuildActivity` / `BuildWorkflow` / `BuildWrapperState` / `BuildGraphManifest` keep their shape (FR-019).
-- [ ] T040 [US4] In `M/Services/Elsa3MemoryReferenceGraph.cs` / `M/Resolution/Elsa3ActivityResolver.cs`, ensure a node
+- [X] T040 [US4] In `M/Services/Elsa3MemoryReferenceGraph.cs` / `M/Resolution/Elsa3ActivityResolver.cs`, ensure a node
   the plan rewrites to a reusable activity takes inputs and outputs from its `Elsa3ActivityExactReplacement` and is
   never looked up in the catalog (FR-017, US4 scenario 2).
-- [ ] T041 [P] [US4] Add the warnings channel (R-7):
+- [X] T041 [P] [US4] Add the warnings channel (R-7):
   - optional `IReadOnlyList<Elsa3MigrationDiagnostic> Warnings` (default empty) on `ReusableActivityImportMutation`
     and `ReusableActivityImportApplyResult` in `IMP/Models/ReusableActivityImportPlan.cs`;
   - copy them in `IMP/Services/ReusableActivityCollectionImporter.cs`;
@@ -430,10 +430,10 @@ reusable workflow validates and compiles with the expected `outputMappings`, `ou
   - update the class remarks that describe the opaque structure;
   - then delete `IMP/Models/Elsa3ImportedActivityStructure.cs` once nothing references it, keeping `MaxNestingDepth`
     = 14 wherever the normalizer now owns it.
-- [ ] T043 [US4] Update `MT/ReusableActivityCollectionCredentialLiteralTests.cs` and `MT/ReusableActivityImportFixtures.cs`
+- [X] T043 [US4] Update `MT/ReusableActivityCollectionCredentialLiteralTests.cs` and `MT/ReusableActivityImportFixtures.cs`
   for native structures and real keys. A refused binding nested in a native child slot is still found and refuses the
   whole apply.
-- [ ] T044 [US4] Create `MT/Elsa3CollectionLoweringTests.cs` (SC-004, US4 scenarios 1–4):
+- [X] T044 [US4] Create `MT/Elsa3CollectionLoweringTests.cs` (SC-004, US4 scenarios 1–4):
   - every value-flow case of the single-definition tests (literal, request, variable, result, loop, JavaScript,
     Liquid), applied as a collection item, stores identical bindings;
   - the replacement-consuming node is lowered from the replacement's contract;
@@ -443,14 +443,14 @@ reusable workflow validates and compiles with the expected `outputMappings`, `ou
 
 ### Reusable outputs (FR-004e)
 
-- [ ] T045 [US4] Create `M/ActivityMap/Rewrites/Elsa3ReusableOutputWriteRewrite.cs` (data-model §6, §8; member-map
+- [X] T045 [US4] Create `M/ActivityMap/Rewrites/Elsa3ReusableOutputWriteRewrite.cs` (data-model §6, §8; member-map
   "SetOutput in reusable workflows"):
   - in a reusable workflow, `SetOutput` naming a declared output `O` → `elsa.intrinsic.set@1` on the synthesized
     variable `elsa3.output.{sha256(O)[..16]}`, with `O`'s type and storage driver;
   - otherwise → `elsa.intrinsic.set-output@1`;
   - `OutputName` literal-only (R5);
   - emit `Elsa3GraphOutputMapping`s and the synthesized variables on `Elsa3ConvertedDefinition`.
-- [ ] T046 [US4] In `M/Services/Elsa3ReusableActivityImportMaterializer.cs` (content only, FR-019):
+- [X] T046 [US4] In `M/Services/Elsa3ReusableActivityImportMaterializer.cs` (content only, FR-019):
   - `BuildGraphManifest` appends the synthesized variables and writes `outputMappings` (`{ outputReferenceKey, source:
     { syntax: "Variable", value: { referenceKey, declaringScopeId } } }`);
   - `BuildWrapperState` gives the wrapper a root `Sequence[graph node, set-output(O ← graph node output O) …]` instead
@@ -458,17 +458,17 @@ reusable workflow validates and compiles with the expected `outputMappings`, `ou
 
 ### Complete and End in reusable workflows (D-1 to D-7)
 
-- [ ] T047 [P] [US4] Create `M/Conversion/Elsa3OutcomeKey.cs` (internal static; D-4, data-model §7a):
+- [X] T047 [P] [US4] Create `M/Conversion/Elsa3OutcomeKey.cs` (internal static; D-4, data-model §7a):
   - `"Done"` → (`done`, `Done`); else (`s`, `s`) verbatim, ordinal;
   - detects a key collision (`"done"` with `"Done"`).
-- [ ] T048 [US4] Complete the **reusable branch** of `M/ActivityMap/Rewrites/Elsa3TerminalPlacementRewrite.cs`:
+- [X] T048 [US4] Complete the **reusable branch** of `M/ActivityMap/Rewrites/Elsa3TerminalPlacementRewrite.cs`:
   - at any depth, `Complete` with absent/empty or one literal outcome, and `End`, → one node whose target is the
     catalog type `Elsa.Activities.Graph.Runtime.Activities.Complete`, resolved by `Elsa3ActivityResolver` like any CLR
     activity, with input `outcome` = literal reference key (`End` → `done`) (D-1, D-3);
   - several outcomes, an expression outcome or a key collision → `UnsupportedMode` (D-2, D-4);
   - never `finish`;
   - record each literal outcome and node for T049.
-- [ ] T049 [US4] In `M/Conversion/Elsa3DefinitionConverter.cs`, assemble for `IsReusable = true` (data-model §7a):
+- [X] T049 [US4] In `M/Conversion/Elsa3DefinitionConverter.cs`, assemble for `IsReusable = true` (data-model §7a):
   - `BoundaryOutcomes`, in ordinal reference-key order:
     - `done`/`Done`, emitted, always (D-5);
     - each outcome a `Complete` names, emitted, with one `ELS3-BEHAVIOUR-OUTCOME-UNDECLARED` per node whose outcome
@@ -476,15 +476,15 @@ reusable workflow validates and compiles with the expected `outputMappings`, `ou
     - each declared outcome other than `Done` that no `Complete` reaches is left out, with one
       `ELS3-BEHAVIOUR-OUTCOME-UNREACHED` per outcome (D-7);
   - `OutcomeMappings = [done → done]`.
-- [ ] T050 [US4] In `M/Services/Elsa3ReusableActivityImportMaterializer.cs` (content only): `ProviderSchemaVersion =
+- [X] T050 [US4] In `M/Services/Elsa3ReusableActivityImportMaterializer.cs` (content only): `ProviderSchemaVersion =
   "2"` and the manifest's `outcomeMappings` from `Elsa3ConvertedDefinition.OutcomeMappings`. `BoundaryOutcomes` is
   returned but not persisted, since the contract's home is #2796 (D-9). Leave a short code comment naming #2796 where
   the outcomes stop.
-- [ ] T051 [US4] Create `MT/Support/GraphProviderProof.cs`: given an `Elsa3ConvertedDefinition` and the reusable's
+- [X] T051 [US4] Create `MT/Support/GraphProviderProof.cs`: given an `Elsa3ConvertedDefinition` and the reusable's
   inputs and outputs, it builds the `DesignActivityContract` (inputs, outputs, `BoundaryOutcomes`) and the schema-2
   `ActivityProviderManifest`. It runs `GraphActivityProvider.ValidateAsync` and `CompileAsync` against
   `RealActivityCatalog` and returns diagnostics plus the compiled boundary payload (R-10).
-- [ ] T052 [US4] Create `MT/Elsa3ReusableTerminalTests.cs` (D-1 to D-8; quickstart step 8; reusable definitions with
+- [X] T052 [US4] Create `MT/Elsa3ReusableTerminalTests.cs` (D-1 to D-8; quickstart step 8; reusable definitions with
   non-Flowchart containers such as Sequence, loops and Parallel, since Flowchart is pending until #2705):
   - `Complete("fail")` nested in a loop inside Parallel converts to a `Complete` node with `outcome = "fail"`;
   - `End` → `outcome = "done"`;
@@ -498,16 +498,30 @@ reusable workflow validates and compiles with the expected `outputMappings`, `ou
   - a real `Break` still maps to `Break` (D-8);
   - plain-workflow Complete/End still give `finish` or `UnsupportedMode`;
   - determinism of the outcome order.
-- [ ] T053 [US4] Add to `MT/Elsa3CollectionLoweringTests.cs` (SC-006 at compile level, US4 scenario 5):
+- [X] T053 [US4] Add to `MT/Elsa3CollectionLoweringTests.cs` (SC-006 at compile level, US4 scenario 5):
   - a reusable workflow setting `CustomOutput` via `SetOutput` → the manifest maps `CustomOutput` to the synthesized
     variable the converted node writes;
   - `GraphProviderProof` validates and compiles with that output mapping;
   - the wrapper exposes `CustomOutput`;
   - the stored catalog row has `ProviderSchemaVersion = "2"`.
-- [ ] T054 [US4] Update the EF import tests under `Extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/`
+- [X] T054 [US4] Update the EF import tests under `Extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/`
   (`Tests/Support/ImportFixtures.cs` and the apply/retention tests) and `MT/ReusableActivityCollectionApplyTests.cs` /
   `MT/ReusableActivityCollectionImportTests.cs` for real keys, schema 2 and warnings on the apply result. Run them
   green.
+
+**US4 implementation notes (2026-10-15):**
+- *Provider proof is validation only.* `GraphProviderProof` runs the real `GraphActivityProvider.ValidateAsync` with
+  the native structure handlers and Complete detection through the real catalog, on the exact manifest the import
+  writes. `CompileAsync` needs every dependency published (publication and template), which is #2796's work, so the
+  compile half of R-10's proof moves to #2796.
+- *Bug found by the proof.* The materializer wrote a manifest variable's `collectionKind` as `None`, which the graph
+  manifest rejects. It now writes the exact `CollectionKind` name.
+- *Wrapper.* A reusable workflow with outputs gets a Sequence wrapper (graph node, then one `set-output` per output,
+  read through an `ActivityResult` binding). The materializer resolves Sequence's catalog version through
+  `IActivityDefinitionLookup`.
+- *Warnings.* The apply response's receipt carries them; the EF codec stores the receipt without them.
+- T054: the EF import tests still use their single-row stub catalog, and they pass with schema 2 and the warnings
+  channel.
 
 **Checkpoint**: every story is complete. Reusable output is proven at compile level, and the run-time proof is #2796's.
 

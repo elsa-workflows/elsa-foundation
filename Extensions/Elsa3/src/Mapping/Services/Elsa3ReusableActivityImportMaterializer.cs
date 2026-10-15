@@ -298,7 +298,7 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
     /// The schema-2 graph manifest: the converted body, its variables (the synthesized output variables included), each
     /// declared output mapped to its variable (FR-004e) and Done mapped to the natural completion (D-5).
     /// </summary>
-    private static JsonElement BuildGraphManifest(Elsa3ConvertedDefinition converted)
+    internal static JsonElement BuildGraphManifest(Elsa3ConvertedDefinition converted)
     {
         var state = converted.State;
         var variables = state.Variables.Select(variable => new
@@ -308,7 +308,8 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             type = new
             {
                 alias = variable.Type.Alias,
-                collectionKind = variable.Type.CollectionKind.ToString() == "Single" ? "None" : variable.Type.CollectionKind.ToString()
+                // The graph manifest reads the exact CollectionKind name (Single, Array, ...).
+                collectionKind = variable.Type.CollectionKind.ToString()
             },
             storageDriverKey = variable.StorageDriverType ?? "elsa.json",
             initialValue = variable.Default is null ? null : new
