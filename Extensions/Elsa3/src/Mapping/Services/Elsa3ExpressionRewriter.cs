@@ -74,7 +74,6 @@ public sealed class Elsa3ExpressionRewriter
         }
 
         var analyzer = new JavaScriptAnalyzer(resolve);
-        analyzer.CollectDeclarations(script);
         analyzer.Visit(script);
         if (analyzer.Issues.Count > 0)
             return Elsa3ExpressionRewriteResult.Failure(analyzer.Issues);
@@ -342,61 +341,144 @@ public sealed class Elsa3ExpressionRewriter
             "Supply the value as a pinned input or compute it in an activity before import.");
 
         /// <summary>
-        /// Names the script declares itself (variables, functions, parameters, catch variables, classes). A reference to
-        /// one of them is a local value, not an Elsa 3 global, wherever it is declared.
+        /// The names declared in the scopes enclosing the node being visited, innermost last. A reference to one of them
+        /// is a local value, not an Elsa 3 global. Scopes follow JavaScript: <c>var</c> and parameters belong to their
+        /// function (or the script), <c>let</c>, <c>const</c>, classes and function declarations to their block, and a
+        /// catch variable to its clause.
         /// </summary>
-        private readonly HashSet<string> _declared = new(StringComparer.Ordinal);
+        private readonly List<HashSet<string>> _scopes = [];
+
+        private bool IsDeclared(string name) => _scopes.Any(scope => scope.Contains(name));
 
         private bool IsNondeterministicMember(Node node) =>
             node is MemberExpression member && IsNondeterministicCall(member);
 
-        private bool IsUnavailableGlobal(string name) => ElsaThreeGlobals.Contains(name) && !_declared.Contains(name);
+        private bool IsUnavailableGlobal(string name) => ElsaThreeGlobals.Contains(name) && !IsDeclared(name);
 
-        public void CollectDeclarations(Node node)
+        public void Visit(Node node)
         {
+            var scope = ScopeOf(node);
+            if (scope is not null)
+                _scopes.Add(scope);
+            try
+            {
+                VisitNode(node);
+            }
+            finally
+            {
+                if (scope is not null)
+                    _scopes.RemoveAt(_scopes.Count - 1);
+            }
+        }
+
+        private static HashSet<string>? ScopeOf(Node node)
+        {
+            var names = new HashSet<string>(StringComparer.Ordinal);
             switch (node)
             {
-                case VariableDeclarator declarator:
-                    CollectBindings(declarator.Id);
+                case Script script:
+                    CollectVarDeclarations(script, names);
+                    CollectLexicalDeclarations(script.Body, names);
                     break;
                 case IFunction function:
                     if (function.Id is { } functionId)
-                        CollectBindings(functionId);
+                        CollectBindings(functionId, names);
                     foreach (var parameter in function.Params)
-                        CollectBindings(parameter);
+                        CollectBindings(parameter, names);
+                    CollectVarDeclarations(function.Body, names);
+                    break;
+                case BlockStatement block:
+                    CollectLexicalDeclarations(block.Body, names);
+                    break;
+                case SwitchStatement switchStatement:
+                    CollectLexicalDeclarations(switchStatement.Cases.SelectMany(@case => @case.Consequent), names);
                     break;
                 case CatchClause { Param: { } caught }:
-                    CollectBindings(caught);
+                    CollectBindings(caught, names);
                     break;
-                case IClass { Id: { } classId }:
-                    CollectBindings(classId);
+                case ForStatement { Init: VariableDeclaration declaration }:
+                    CollectLexicalDeclaration(declaration, names);
                     break;
+                case ForInStatement { Left: VariableDeclaration declaration }:
+                    CollectLexicalDeclaration(declaration, names);
+                    break;
+                case ForOfStatement { Left: VariableDeclaration declaration }:
+                    CollectLexicalDeclaration(declaration, names);
+                    break;
+                case ClassExpression { Id: { } classId }:
+                    CollectBindings(classId, names);
+                    break;
+                default:
+                    return null;
             }
 
-            foreach (var child in node.ChildNodes)
-                CollectDeclarations(child);
+            return names;
         }
 
-        private void CollectBindings(Node? pattern)
+        /// <summary>The <c>var</c> declarations of a function or script body, which do not reach into nested functions.</summary>
+        private static void CollectVarDeclarations(Node node, HashSet<string> names)
+        {
+            foreach (var child in node.ChildNodes)
+            {
+                if (child is IFunction)
+                    continue;
+                if (child is VariableDeclaration { Kind: VariableDeclarationKind.Var } declaration)
+                {
+                    foreach (var declarator in declaration.Declarations)
+                        CollectBindings(declarator.Id, names);
+                }
+
+                CollectVarDeclarations(child, names);
+            }
+        }
+
+        private static void CollectLexicalDeclarations(IEnumerable<Node> statements, HashSet<string> names)
+        {
+            foreach (var statement in statements)
+            {
+                switch (statement)
+                {
+                    case VariableDeclaration declaration:
+                        CollectLexicalDeclaration(declaration, names);
+                        break;
+                    case FunctionDeclaration { Id: { } functionId }:
+                        CollectBindings(functionId, names);
+                        break;
+                    case ClassDeclaration { Id: { } classId }:
+                        CollectBindings(classId, names);
+                        break;
+                }
+            }
+        }
+
+        private static void CollectLexicalDeclaration(VariableDeclaration declaration, HashSet<string> names)
+        {
+            if (declaration.Kind == VariableDeclarationKind.Var)
+                return;
+            foreach (var declarator in declaration.Declarations)
+                CollectBindings(declarator.Id, names);
+        }
+
+        private static void CollectBindings(Node? pattern, HashSet<string> names)
         {
             switch (pattern)
             {
                 case Identifier identifier:
-                    _declared.Add(identifier.Name);
+                    names.Add(identifier.Name);
                     break;
                 case ArrayPattern array:
                     foreach (var element in array.Elements)
-                        CollectBindings(element);
+                        CollectBindings(element, names);
                     break;
                 case ObjectPattern objectPattern:
                     foreach (var property in objectPattern.Properties)
-                        CollectBindings(property is Property { } bound ? bound.Value : property);
+                        CollectBindings(property is Property { } bound ? bound.Value : property, names);
                     break;
                 case AssignmentPattern assigned:
-                    CollectBindings(assigned.Left);
+                    CollectBindings(assigned.Left, names);
                     break;
                 case RestElement rest:
-                    CollectBindings(rest.Argument);
+                    CollectBindings(rest.Argument, names);
                     break;
             }
         }
@@ -405,7 +487,7 @@ public sealed class Elsa3ExpressionRewriter
         public List<SourceEdit> Edits { get; } = [];
         public List<Elsa3ExpressionRewriteIssue> Issues { get; } = [];
 
-        public void Visit(Node node)
+        private void VisitNode(Node node)
         {
             if (node is AssignmentExpression assignment && ContainsAmbientRoot(assignment.Left) ||
                 node is UpdateExpression update && ContainsAmbientRoot(update.Argument))
@@ -594,7 +676,7 @@ public sealed class Elsa3ExpressionRewriter
         }
 
         private bool IsNondeterministicCall(MemberExpression member) =>
-            member.Object is Identifier root && !_declared.Contains(root.Name) &&
+            member.Object is Identifier root && !IsDeclared(root.Name) &&
             member.Property is Identifier property &&
             ((root.Name.Equals("Math", StringComparison.Ordinal) && property.Name.Equals("random", StringComparison.Ordinal)) ||
              (root.Name.Equals("Date", StringComparison.Ordinal) && property.Name.Equals("now", StringComparison.Ordinal)) ||
