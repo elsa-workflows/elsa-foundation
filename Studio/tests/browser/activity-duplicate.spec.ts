@@ -53,13 +53,16 @@ async function selectNotifyBuyer(page: import("@playwright/test").Page) {
 }
 
 function focusReadyCodeEditor(root: HTMLElement) {
-  const surface = root.querySelector(
-    ".cm-content, .monaco-editor textarea.inputarea, textarea.studio-code-editor-input, [data-studio-code-editor-surface]"
-  );
+  const surface =
+    root.querySelector(".cm-content") ??
+    root.querySelector(".monaco-editor textarea.inputarea, textarea.studio-code-editor-input");
   if (!(surface instanceof HTMLElement)) return false;
-  if (!root.contains(document.activeElement)) surface.focus();
+  const activeBefore = document.activeElement;
+  if (!(activeBefore === surface || (activeBefore instanceof Element && surface.contains(activeBefore)))) {
+    surface.focus();
+  }
   const active = document.activeElement;
-  return active instanceof Element && root.contains(active);
+  return active === surface || (active instanceof Element && surface.contains(active));
 }
 
 async function dispatchCanvasShortcut(page: import("@playwright/test").Page, key: "c" | "v" | "d" | "z") {
