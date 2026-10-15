@@ -96,6 +96,12 @@ not automatic constitution violations.
 | Foundation Data Protection (the host's key ring: fixed application name, opt-in EF key store, certificate at rest, startup warnings) | [`Essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Foundation/DataProtection/EntityFrameworkCore/EXTENSION_POINTS.md) |
 | Workflow Agent (workflow explain/troubleshoot/change-proposal contribution) | [`Extensions/Agent/src/Workflows/EXTENSION_POINTS.md`](Extensions/Agent/src/Workflows/EXTENSION_POINTS.md) |
 
+### Integrations
+
+| Domain | Catalog |
+|---|---|
+| Integrations SDK (connector activities, open auth-scheme contributors, connection lookup) | [`Extensions/Integrations/src/Sdk/EXTENSION_POINTS.md`](Extensions/Integrations/src/Sdk/EXTENSION_POINTS.md) |
+
 ### Secrets
 
 | Domain | Catalog |

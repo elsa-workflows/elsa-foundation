@@ -1,6 +1,6 @@
 # Connections and Secrets: conceptual model
 
-**Status:** Proposed. Decisions D1-D10 below were made in review on 2026-09-30; the rest of the document is still a proposal. Nothing is built.
+**Status:** Proposed. Decisions D1-D10 below were made in review on 2026-09-30; the rest of the document is still a proposal. `Elsa.Integrations.Sdk` v1 (#2726) now ships the activity-side connection context, open scheme contract, and named `Elsa.Activities.Http` auth handler. Persistence (`Elsa.Connections`, D6) is not in that package.
 **Date:** 2026-09-30
 **Scope:** `elsa-foundation` (backend, SDK) and `elsa-foundation-studio` (designer UI)
 **Follow-ups if accepted:** one ADR (next free number is 0072, but 0001/0002/0003/0050/0062 have been reused, so check for collisions), glossary entries in `docs/glossary/elsa.md` and Studio `CONTEXT.md`, then Speckit specs per phase.
@@ -38,7 +38,7 @@ These override anything below that reads differently.
 | Pluggable stores | **Seam exists** (`ISecretStore`, `ISecretStoreRegistry`), **no external store ships.** No KeyVault, AWS, or HashiCorp implementation. | `src/Elsa/Secrets/Core/Contracts/` |
 | `SecretReference(Name, TypeName?, Scope?)` + `ISecretValueResolver` | Implemented. Resolves at point of use, tenant-scoped, safe failure codes. | `Core/Models/SecretModels.cs`, `Services/DefaultSecretValueResolver.cs` |
 | `Secret` expression syntax | **Descriptor only.** `SecretExpressionDescriptor` (`EditingMode.Reference`, UI hint `SecretPicker`). I grepped `src/` outside `Secrets/`: **nothing references `ISecretValueResolver` or `SecretExpressionTypes`.** A workflow cannot actually consume a secret at runtime today. | `src/Elsa/Secrets/Expressions/` |
-| Connections / connectors | **Absent.** No concept, no term in the glossary. | n/a |
+| Connections / connectors | **SDK v1 (#2726).** `Elsa.Integrations.Sdk` ships `ConnectionReference`, `IConnectionContext` on `ISecretValueResolver`, open `IConnectionAuthenticator` schemes, and auth on the named `Elsa.Activities.Http` client. Persistence (`Elsa.Connections`) is still absent. | `Extensions/Integrations/src/Sdk/` |
 | Outbound OAuth (token acquire, refresh, revoke) | **Absent.** The only OAuth code is Identity, where Elsa is the IdP. | `src/Elsa/Foundation/Identity/` |
 | HTTP activity auth | `SendHttpRequest` has only a free-form `RequestHeaders` dictionary. No auth model. The only way to use an API key is to paste it into a header literal. | `src/Elsa/Activities/Http/Activities/SendHttpRequest.cs:74-134` |
 | AI provider keys (Anthropic, Copilot) | Read from options or environment variables. Not the Secrets module. | `src/Elsa/Agent/*/Options/` |

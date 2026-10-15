@@ -40,6 +40,7 @@
   -->
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Cli\Elsa.Cli\Elsa.Cli.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\..\Extensions\Integrations\src\Templates\Elsa.Integrations.Templates.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\apps\Elsa.Workbench\Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\apps\Elsa.Foundation.Host\Elsa.Foundation.Host.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\src\Cli\Worker\Elsa.Cli.Worker.csproj" ReferenceOutputAssembly="false" />
@@ -127,6 +128,7 @@
     <ProjectReference Include="..\..\..\src\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
     <ProjectReference Include="..\..\..\src\Expressions\Liquid\Elsa.Expressions.Liquid.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\ExtensionBuilder\src\Api\Elsa.ExtensionBuilder.Api.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Integrations\src\Sdk\Elsa.Integrations.Sdk.csproj" />
     <ProjectReference Include="..\..\..\src\Foundation\DataProtection\EntityFrameworkCore\Elsa.Foundation.DataProtection.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Foundation\Identity\AspNetCoreIdentity\EntityFrameworkCore\Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Foundation\Identity\Oidc\Elsa.Foundation.Identity.Oidc.csproj" />

@@ -6,9 +6,9 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 
 ## Summary
 
-- Catalog files discovered: 66
-- Source catalogs discovered: 65
-- Source catalogs indexed from root: 65
+- Catalog files discovered: 67
+- Source catalogs discovered: 66
+- Source catalogs indexed from root: 66
 - Discovered source catalogs not linked from root index: 0
 - Root-indexed catalogs missing on disk: 0
 
@@ -16,7 +16,7 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 
 | Catalog | Owner project | Domain | Sections | Extension-point headings | Kind lines | Known implementation blocks | Root indexed |
 |---|---|---|---|---|---|---:|---|
-| [EXTENSION_POINTS.md](../../EXTENSION_POINTS.md) | - | repo root | Two axes: override vs. extend<br>Intra-domain vs. cross-domain contributions<br>How to read the kinds<br>The doc layering<br>Per-domain catalogs | Infrastructure<br>Expressions<br>HTTP<br>API<br>Agent and Identity<br>Secrets<br>Persistence<br>Activities<br>Workflows<br>Legacy<br>Diagnostics | - | 0 | root |
+| [EXTENSION_POINTS.md](../../EXTENSION_POINTS.md) | - | repo root | Two axes: override vs. extend<br>Intra-domain vs. cross-domain contributions<br>How to read the kinds<br>The doc layering<br>Per-domain catalogs | Infrastructure<br>Expressions<br>HTTP<br>API<br>Agent and Identity<br>Integrations<br>Secrets<br>Persistence<br>Activities<br>Workflows<br>Legacy<br>Diagnostics | - | 0 | root |
 | [Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md](../../Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md) | Elsa.Activities.Bpmn | Elsa.Activities | Scoped execution seam<br>Implementable contributor interfaces<br>Activity-owned structure contracts<br>Consumed runtime contracts<br>Publish-time start-trigger surface (spec 117)<br>Cross-domain contributions<br>Structure-dependent `Cancelled` outcome (spec 125) | `IBpmnElementBehavior` | Contributor (element behavior provider) | 0 | yes |
 | [Essentials/src/Activities/Bpmn/Interchange/EXTENSION_POINTS.md](../../Essentials/src/Activities/Bpmn/Interchange/EXTENSION_POINTS.md) | Elsa.Activities.Bpmn.Interchange | Elsa.Activities | Replaceable service contracts<br>Owned interchange contracts<br>Owned HTTP endpoints<br>Consumed contracts | `IBpmnDocumentImporter`<br>`IBpmnDocumentExporter` | Replacement contract<br>Replacement contract | 0 | yes |
 | [Essentials/src/Activities/ControlFlow/Do/EXTENSION_POINTS.md](../../Essentials/src/Activities/ControlFlow/Do/EXTENSION_POINTS.md) | Elsa.Activities.ControlFlow | Elsa.Activities | Cross-domain contributions | - | - | 0 | yes |
@@ -82,6 +82,7 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 | [Extensions/Agent/src/Workflows/EXTENSION_POINTS.md](../../Extensions/Agent/src/Workflows/EXTENSION_POINTS.md) | Elsa.Agent.Workflows | Elsa.Agent | Contributions to other domains<br>Overridable contracts | `IAgentCapabilityProvider` *(Agent core contract — `Elsa.Agent.Core`)*<br>`IAgentContextProvider` *(Agent core contract — `Elsa.Agent.Core`)*<br>`IWorkflowAgentContextProvider`<br>`IWorkflowRevisionProvider`<br>`IWorkflowChangePermissionEvaluator`<br>`IWorkflowChangeProposalService` | - | 0 | yes |
 | [Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/EXTENSION_POINTS.md](../../Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/EXTENSION_POINTS.md) | Elsa3.Activities.Design.Import | Elsa3 | Implementable contributor interfaces<br>Authorized HTTP contract | `IReusableActivityImportMaterializer`<br>`IReusableActivityImportCommand`<br>`IReusableActivityImportOperationStore`<br>`IReusableActivityCollectionAnalyzer`<br>`IActivityCollectionJsonSource` *(Feature contract — `Elsa3.Activities.Design.Import`)* | Design mapping strategy.<br>atomic persistence command.<br>scoped durable operation store.<br>replaceable pure analysis strategy.<br>Source (opens a stream of activity JSON — pull pattern). | 1 | yes |
 | [Extensions/Elsa3/src/Mapping/EXTENSION_POINTS.md](../../Extensions/Elsa3/src/Mapping/EXTENSION_POINTS.md) | Elsa3.Mapping | Elsa3 | Replacement/import boundary contracts | `IElsa3WorkflowDefinitionImporter` *(Feature contract — `Elsa3.Mapping`)*<br>`IReusableActivityImportMaterializer` contribution | Replacement/import boundary contract. | 0 | yes |
+| [Extensions/Integrations/src/Sdk/EXTENSION_POINTS.md](../../Extensions/Integrations/src/Sdk/EXTENSION_POINTS.md) | Elsa.Integrations.Sdk | Elsa.Integrations | Replaceable services<br>Implementable contributor interfaces<br>Named HTTP client<br>Design-time descriptors<br>Packaging copy | `IConnectionLookup` *(runtime contract — `Elsa.Integrations.Sdk.Connections`)*<br>`ISecretValueResolver` *(core contract — `Elsa.Secrets.Core`)*<br>`IConnectionAuthenticator` *(open scheme contract — plan D3)* | Replacement. One implementation wins.<br>Replacement owned by Secrets. The SDK consumes it; it does not replace or wrap it with a cache.<br>Contributor. `IEnumerable<IConnectionAuthenticator>` is aggregated by `ConnectionAuthDelegatingHandler`. | 0 | yes |
 
 ## Root Index Coverage
 
