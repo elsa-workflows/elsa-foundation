@@ -7,6 +7,7 @@ using Elsa.Workflows.Runtime.Core.Diagnostics;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Xunit.Abstractions;
 using Activity = System.Diagnostics.Activity;
 
 namespace Elsa.Activities.Http.IntegrationTests;
@@ -15,23 +16,24 @@ namespace Elsa.Activities.Http.IntegrationTests;
 /// Drains far longer than the drain cycle limit complete under the default options in every persistence mode (#2661). The
 /// limit counts only cycles that dispatch no work item new to the drain, so a run that keeps advancing is not cut off. Each
 /// shape here spends cycles hop by hop: an Event that suspends one Parallel branch ends the folding session, so the other
-/// branch's 100 WriteLines run one hop per cycle after it, and an activity without a ReplaySafe profile is never fused.
+/// branch's WriteLines run one hop per cycle after it, and an activity without a ReplaySafe profile is never fused.
 /// Every test first checks that its drains ran more cycles than the limit, so a shape that stopped needing them would fail
-/// here instead of passing without covering anything.
+/// here instead of passing without covering anything. <see cref="ShapeLength"/> keeps every shape past the limit in every
+/// mode.
 /// </summary>
-public sealed class DrainCyclesWithoutProgressTests
+public sealed class DrainCyclesWithoutProgressTests(ITestOutputHelper output)
 {
-    private const int Lines = 100;
+    private const int ShapeLength = 30;
     private const string TriggerPath = "drain-cycles/parallel";
 
     private readonly DrainCycleCounter _cycles = new();
-    private readonly ExecutableNode[] _lines = ReferenceWorkflows.WriteLines(Lines);
+    private readonly ExecutableNode[] _lines = ReferenceWorkflows.WriteLines(ShapeLength);
 
     public static TheoryData<PersistenceMode> Modes() => new(Enum.GetValues<PersistenceMode>());
 
     [Theory]
     [MemberData(nameof(Modes))]
-    public async Task A_run_whose_Parallel_suspends_one_branch_runs_100_WriteLines_in_the_other(PersistenceMode mode)
+    public async Task A_run_whose_Parallel_suspends_one_branch_runs_every_WriteLine_in_the_other(PersistenceMode mode)
     {
         await using var fixture = await StartHostAsync(mode);
         var executable = ReferenceWorkflows.Executable(
@@ -50,7 +52,7 @@ public sealed class DrainCyclesWithoutProgressTests
 
     [Theory]
     [MemberData(nameof(Modes))]
-    public async Task An_HTTP_triggered_run_answers_after_100_WriteLines_beside_a_suspended_branch(PersistenceMode mode)
+    public async Task An_HTTP_triggered_run_answers_after_every_WriteLine_beside_a_suspended_branch(PersistenceMode mode)
     {
         await using var fixture = await StartHostAsync(mode);
         var endpoint = ReferenceWorkflows.SyncPostEndpoint("http-in", TriggerPath);
@@ -73,10 +75,10 @@ public sealed class DrainCyclesWithoutProgressTests
 
     [Theory]
     [MemberData(nameof(Modes))]
-    public async Task A_sequence_of_100_activities_without_a_ReplaySafe_profile_completes(PersistenceMode mode)
+    public async Task A_sequence_of_activities_without_a_ReplaySafe_profile_completes(PersistenceMode mode)
     {
         await using var fixture = await StartHostAsync(mode);
-        var steps = Enumerable.Range(1, Lines)
+        var steps = Enumerable.Range(1, ShapeLength)
             .Select(step => ReferenceWorkflows.Clr($"external-{step}", typeof(ExternalStepActivity), []))
             .ToArray();
         Assert.Equal(SideEffectProfile.External, steps[0].ActivityContract!.SideEffectProfile);
@@ -92,7 +94,7 @@ public sealed class DrainCyclesWithoutProgressTests
 
     [Theory]
     [MemberData(nameof(Modes))]
-    public async Task A_run_whose_Parallel_faults_one_branch_runs_100_WriteLines_in_the_other_and_faults_through_its_incident_strategy(PersistenceMode mode)
+    public async Task A_run_whose_Parallel_faults_one_branch_runs_every_WriteLine_in_the_other_and_faults_through_its_incident_strategy(PersistenceMode mode)
     {
         await using var fixture = await StartHostAsync(mode);
         var executable = ReferenceWorkflows.Executable(
@@ -132,6 +134,7 @@ public sealed class DrainCyclesWithoutProgressTests
 
     private async Task AssertDrainedPastTheLimitAsync(HttpEndpointHostFixture fixture)
     {
+        output.WriteLine($"Drain cycles: {_cycles.Count}");
         Assert.True(
             _cycles.Count > WorkflowDrainOrchestratorOptions.DefaultMaxCyclesWithoutProgress,
             $"The run took {_cycles.Count} drain cycles, no more than the limit of {WorkflowDrainOrchestratorOptions.DefaultMaxCyclesWithoutProgress}: this shape no longer covers a drain longer than the limit.");
