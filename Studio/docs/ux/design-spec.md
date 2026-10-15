@@ -156,8 +156,14 @@ widgets with `registerHomeWidget` (id, title, size, lazy component, optional
 Reset deletes the user layout. Anonymous/demo sessions use `localStorage` or the built-in
 default.
 
-**Get started** ticks Create a workflow / Run it / See what happened from real state, hides
-when every step is done or dismissed, and can be restored from Add widget.
+The built-in default landing is Get started, Quick actions, Recent workflows, Recent
+runs, and Needs attention. **Get started** ticks Create a workflow / Run it / See what
+happened from real state, links to the Elsa 4 docs for an empty install, hides when every
+step is done or dismissed, and can be restored from Add widget. **Quick actions** link to
+create a workflow and open the designer. Recent runs show status. List widgets have
+title / description / CTA empty states. **Tasks** is in the default layout and the widget
+registry, and only renders when `user-tasks` is enabled (`Elsa.Studio.UserTasks` matches).
+`requiresFeature: "workflows"` matches `Elsa.Studio.Workflows` only (not `Contoso.Workflows` or `Elsa.Studio.WorkflowsX`). A missing `enabledFeatures` list hides gated widgets.
 
 **Edit home** is a tinted mode with add, remove, reorder, Add widget, Reset to default, and
 (for `studio-preferences.manage-defaults`) Save as server default. Normal view collapses

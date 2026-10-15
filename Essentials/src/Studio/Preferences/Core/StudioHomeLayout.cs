@@ -26,9 +26,11 @@ public static partial class StudioHomeLayout
     public static readonly IReadOnlySet<string> CoreWidgetIds = new HashSet<string>(StringComparer.Ordinal)
     {
         "home.get-started",
+        "home.quick-actions",
         "home.recent-workflows",
         "home.needs-attention",
         "home.recent-runs",
+        "home.tasks",
         "attention.queue",
         "workflows.portfolio",
         "workflows.run-health"
@@ -38,9 +40,11 @@ public static partial class StudioHomeLayout
         {
           "widgets": [
             { "id": "home.get-started", "size": "full", "visible": true },
+            { "id": "home.quick-actions", "size": "medium", "visible": true },
             { "id": "home.recent-workflows", "size": "medium", "visible": true },
+            { "id": "home.recent-runs", "size": "medium", "visible": true },
             { "id": "home.needs-attention", "size": "medium", "visible": true },
-            { "id": "home.recent-runs", "size": "full", "visible": true }
+            { "id": "home.tasks", "size": "medium", "visible": true }
           ]
         }
         """);
