@@ -22,7 +22,8 @@ import { ActivityDefinitionTestRunDialog } from "../../src/essentials/Elsa.Studi
 import { WorkflowLazyBoundary } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/WorkflowLazyBoundary";
 import { WorkflowEditorToolbar } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditorToolbar";
 import { builtInPropertyEditors } from "../../src/apps/Elsa.Studio.Web/Client/src/app/propertyEditors";
-import { Download, PackageOpen, Sparkles, Upload } from "lucide-react";
+import { Download, ListTree, Package, PackageOpen, Play, Sparkles, Upload } from "lucide-react";
+import { PanelTabList } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/PanelTabList";
 import { WorkflowDefinitions } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowDefinitions";
 import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
 import { useRunDetailLayout } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useRunDetailLayout";
@@ -170,7 +171,7 @@ function ActivityDefinitionRoutesFixture() {
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
   return path.startsWith("/workflows/activity-definitions/upgrades")
-    ? <ActivityUpgradeWorkbenchPage context={endpointContext} />
+    ? <ActivityUpgradeWorkbenchPage context={endpointContext} navigateToStudioPath={navigate} />
     : <QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={endpointContext} activityEditors={() => [activityGraphImplementationEditorContribution]} runtime={{ identity: { tenantId: "browser-tenant", subject: "browser-author" }, activityDefinitions: { localRecovery: { enabled: true, ttlMinutes: 30 } } }} navigateToStudioPath={navigate} /></QueryClientProvider>;
 }
 
@@ -769,16 +770,23 @@ function ActivityInspectorTabsFixture() {
   return (
     <main className="wf-editor browser-fixture">
       <h1>Activity inspector tabs</h1>
-      <div aria-label="Workflow inspector panel controls">
-        <button type="button" aria-pressed={activeOuterPanel === "inspector"} onClick={() => setActiveOuterPanel("inspector")}>Inspector</button>
-        <button type="button" aria-pressed={activeOuterPanel === "runtime"} onClick={() => setActiveOuterPanel("runtime")}>Runtime</button>
-        <button type="button" aria-pressed={activeOuterPanel === "artifacts"} onClick={() => setActiveOuterPanel("artifacts")}>Artifacts</button>
-      </div>
       <aside
         className="wf-inspector browser-inspector"
         aria-label="Activity inspector"
         style={{ width: "264px", height: "510px", padding: 0 }}
       >
+        <div className="wf-panel-title">
+          <PanelTabList
+            label="Inspector panel tabs"
+            tabs={[
+              { id: "inspector", title: "Inspector", order: 0, icon: <ListTree size={15} />, render: () => null },
+              { id: "runtime", title: "Runtime", order: 5, icon: <Play size={15} />, render: () => null },
+              { id: "artifacts", title: "Artifacts", order: 10, icon: <Package size={15} />, render: () => null }
+            ]}
+            activeTabId={activeOuterPanel}
+            onSelect={tabId => setActiveOuterPanel(tabId as "inspector" | "runtime" | "artifacts")}
+          />
+        </div>
         {activeOuterPanel === "inspector" ? (
           <InspectorPanel
             context={endpointContext}
@@ -1595,12 +1603,12 @@ function browserVersion(
 // writes the chosen theme palette onto <html> itself, the way the provider does at runtime.
 // Activity-icon shots default to Classic light — Studio 4's default theme.
 const darkVariant = searchParams.get("theme") === "dark";
-const fixtureTheme = activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture ? "classic" : "meridian";
+const fixtureTheme = activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture ? "classic" : "meridian";
 if (!navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture && !homeFixture) {
   document.documentElement.dataset.theme = fixtureTheme;
   document.documentElement.dataset.themeLayout = "classic";
   document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
-  if (darkVariant || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture) {
+  if (darkVariant || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture) {
     const palette = getTheme(fixtureTheme)![darkVariant ? "dark" : "light"];
     for (const token of themeTokenNames) {
       document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);

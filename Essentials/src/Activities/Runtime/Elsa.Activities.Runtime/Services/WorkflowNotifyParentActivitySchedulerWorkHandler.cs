@@ -173,6 +173,10 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
                 if (context.GetChildFaultAbsorptionRequests().Count > 0)
                     throw new InvalidOperationException("A child-fault absorption is only valid in a child-fault evaluation.");
 
+                // An ancestor notification is an initial-execution-only power.
+                if (context.GetAncestorNotificationRequests().Count > 0)
+                    throw new InvalidOperationException("An ancestor notification is only valid in an initial structural execution.");
+
                 subtreeCancellationPlans = await StructuralParentEvaluationSupport.PlanChildSubtreeCancellationsAsync(
                     serviceProvider,
                     activityExecutionStateStore,

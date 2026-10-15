@@ -178,6 +178,50 @@ describe("HomePage", () => {
     expect(container.textContent).not.toContain("Recent body");
     flushSync(() => root.unmount());
   });
+
+  it("treats Elsa.Studio.Workflows as the workflows feature gate", async () => {
+    const api = stubApi();
+    api.runtime.enabledFeatures = ["Elsa.Studio.Workflows"];
+    api.dashboardWidgets.add(widget({
+      id: "home.recent-workflows",
+      title: "Recent workflows",
+      requiresFeature: "workflows",
+      component: () => <span>Recent body</span>
+    }));
+    seedHomeLayout(api, ["home.recent-workflows"]);
+    const { container, root } = render(api);
+    await waitUntil(() => container.textContent?.includes("Recent body") === true);
+    expect(container.textContent).toContain("Recent body");
+    flushSync(() => root.unmount());
+  });
+
+  it("shows Tasks only when user-tasks is enabled", async () => {
+    const api = stubApi();
+    api.runtime.enabledFeatures = ["Elsa.Studio.Workflows"];
+    api.dashboardWidgets.add(widget({
+      id: "home.quick-actions",
+      title: "Quick actions",
+      requiresFeature: "workflows",
+      component: () => <a href="/workflows/definitions">Create a workflow</a>
+    }));
+    api.dashboardWidgets.add(widget({
+      id: "home.tasks",
+      title: "Tasks",
+      requiresFeature: "user-tasks",
+      component: () => <span>Task inbox</span>
+    }));
+    seedHomeLayout(api, ["home.quick-actions", "home.tasks"]);
+    const hidden = render(api);
+    await waitUntil(() => hidden.container.textContent?.includes("Create a workflow") === true);
+    expect(hidden.container.textContent).not.toContain("Task inbox");
+    flushSync(() => hidden.root.unmount());
+
+    api.runtime.enabledFeatures = ["Elsa.Studio.Workflows", "Elsa.Studio.UserTasks"];
+    const shown = render(api);
+    await waitUntil(() => shown.container.textContent?.includes("Task inbox") === true);
+    expect(shown.container.textContent).toContain("Create a workflow");
+    flushSync(() => shown.root.unmount());
+  });
 });
 
 function render(api: ReturnType<typeof stubApi>) {

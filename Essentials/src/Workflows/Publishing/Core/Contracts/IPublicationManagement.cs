@@ -10,6 +10,17 @@ public interface IPublicationRecordStore
     ValueTask SaveAsync(PublicationRecord publication, CancellationToken cancellationToken = default);
     ValueTask<PublicationRecord?> FindAsync(string publicationId, CancellationToken cancellationToken = default);
     ValueTask<IReadOnlyCollection<PublicationRecord>> ListBySlotAsync(string slotId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Bounded batch of publication records for the supplied definition ids. The default is empty:
+    /// providers without a definition-keyed index must not scan the journal. The in-memory store
+    /// overrides this; the EF ledger does not, because it has no definition-id hash.
+    /// </summary>
+    ValueTask<IReadOnlyCollection<PublicationRecord>> ListByDefinitionIdsAsync(
+        IReadOnlyCollection<string> workflowDefinitionIds,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult<IReadOnlyCollection<PublicationRecord>>([]);
+
     ValueTask<bool> TryTransitionAsync(
         PublicationRecord publication,
         PublicationStatus expectedStatus,

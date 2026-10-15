@@ -394,7 +394,7 @@ public sealed class BpmnExecutionEngine(
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(faultContext);
 
-        var graph = BpmnGraph.From(context.ExecutableNode);
+        var graph = context.ExecutableNode.GetOrAddRoutingStructure(BpmnGraph.From);
         var state = BpmnStatePersister.LoadState(context.ActivityExecutionState) ?? BpmnStatePersister.CreateInitialState();
 
         var faultedNodeId = faultContext.FaultedChildExecutableNodeId;

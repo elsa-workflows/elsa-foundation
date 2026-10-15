@@ -81,7 +81,7 @@ public sealed class Parallel(IActivityExecutionStateStore activityExecutionState
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
-        var navigator = ParallelNavigator.From(runtimeContext.ExecutableNode);
+        var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(ParallelNavigator.From);
         var branches = navigator.RunnableBranches;
 
         // No runnable branch short-circuits straight to Done without forking. (When there are no runnable
@@ -107,7 +107,7 @@ public sealed class Parallel(IActivityExecutionStateStore activityExecutionState
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        var navigator = ParallelNavigator.From(runtimeContext.ExecutableNode);
+        var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(ParallelNavigator.From);
 
         if (!navigator.IsBranch(context.CompletedChildExecutableNodeId))
             throw new ControlFlowExecutionException($"Completed child executable node '{context.CompletedChildExecutableNodeId}' is not a Parallel branch.");
@@ -120,7 +120,7 @@ public sealed class Parallel(IActivityExecutionStateStore activityExecutionState
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        var navigator = ParallelNavigator.From(runtimeContext.ExecutableNode);
+        var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(ParallelNavigator.From);
 
         if (!navigator.IsBranch(context.FaultedChildExecutableNodeId))
             throw new ControlFlowExecutionException($"Faulted child executable node '{context.FaultedChildExecutableNodeId}' is not a Parallel branch.");

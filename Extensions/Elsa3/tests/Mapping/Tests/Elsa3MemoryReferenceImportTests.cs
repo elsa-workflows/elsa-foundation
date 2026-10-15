@@ -75,7 +75,7 @@ public sealed class Elsa3MemoryReferenceImportTests
             "request",
             Activity("request-node", "Elsa.Consumer", new Dictionary<string, JsonElement>
             {
-                ["Value"] = Argument("JavaScript", "input.customerId", memoryId),
+                ["Value"] = Argument("JavaScript", "getInput(\"customerId\")", memoryId),
             }),
             inputs:
             [
@@ -119,24 +119,23 @@ public sealed class Elsa3MemoryReferenceImportTests
     private static ValidImportCase ActivityResultCase()
     {
         const string producerMemoryId = "legacy:receipt-result";
-        const string consumerMemoryId = "legacy:receipt-consumer";
         var producer = Activity("producer", "Elsa.Producer", new Dictionary<string, JsonElement>
         {
             ["ReceiptId"] = MemoryReference(producerMemoryId),
         });
+        // Elsa 3 JavaScript has no getOutput; a consumer reads a prior result through its own memory reference.
         var consumer = Activity("consumer", "Elsa.Consumer", new Dictionary<string, JsonElement>
         {
-            ["Value"] = Argument("JavaScript", "getOutput(\"receiptId\")", consumerMemoryId),
+            ["Value"] = MemoryReference(producerMemoryId),
         });
         var definition = Workflow("result", Activity("root", "Elsa.Sequence", children: [producer, consumer]));
 
-        return Case(definition, [Container(), Producer(), Consumer()], [producerMemoryId, consumerMemoryId], version =>
+        return Case(definition, [Container(), Producer(), Consumer()], [producerMemoryId], version =>
         {
-            var expression = ReadPortableExpression(ReadValue(FindInput(version, "consumer", ValueInputKey)));
-            Assert.Equal("args.receiptId", expression.Source);
-            var parameter = Assert.IsType<ActivityResultExpressionParameterBinding>(expression.Parameters["receiptId"]);
-            Assert.Equal("producer", parameter.ProducerNodeId);
-            Assert.Equal("key:receipt-id", parameter.ProjectionKey);
+            var value = ReadValue(FindInput(version, "consumer", ValueInputKey));
+            Assert.Equal("ActivityResult", value.ExpressionType);
+            Assert.Equal("producer", GetProperty(value.Value, "producerNodeId").GetString());
+            Assert.Equal("key:receipt-id", GetProperty(value.Value, "projectionKey").GetString());
         });
     }
 
@@ -147,18 +146,21 @@ public sealed class Elsa3MemoryReferenceImportTests
         {
             ["Value"] = MemoryReference(memoryId),
         });
+        // Elsa 3 serializes a ForEach body in its `body` port; Elsa 4 reads the current item from the loop's scoped
+        // `currentItem` variable, declared by the loop node.
         var loop = Activity("loop", "Elsa.ForEach", new Dictionary<string, JsonElement>
         {
             ["CurrentValue"] = MemoryReference(memoryId),
-        }, [loopBody]);
+            ["Body"] = JsonSerializer.SerializeToElement(loopBody, new JsonSerializerOptions(JsonSerializerDefaults.Web)),
+        });
         var definition = Workflow("loop", loop);
 
-        return Case(definition, [ForEach(), Consumer()], [memoryId], version =>
+        return Case(definition, [Consumer()], [memoryId], version =>
         {
             var value = ReadValue(FindInput(version, "loop-body", ValueInputKey));
             Assert.Equal("Variable", value.ExpressionType);
             Assert.Equal("loop", GetProperty(value.Value, "declaringScopeId").GetString());
-            Assert.Equal("key:current-value", GetProperty(value.Value, "referenceKey").GetString());
+            Assert.Equal("currentItem", GetProperty(value.Value, "referenceKey").GetString());
         });
     }
 

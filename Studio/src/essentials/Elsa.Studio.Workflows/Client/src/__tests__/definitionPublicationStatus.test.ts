@@ -1,0 +1,92 @@
+import { describe, expect, it } from "vitest";
+import { resolveDefinitionPublicationStatus } from "../workflow-editor/definitionPublicationStatus";
+
+describe("definition publication status", () => {
+  it("treats a never-published working copy as Draft, not Published", () => {
+    expect(resolveDefinitionPublicationStatus({
+      draftId: "draft-1",
+      latestVersionId: null,
+      latestVersion: null,
+      versionCount: 0
+    })).toBe("draft");
+  });
+
+  it("does not treat draftId alone as the list status — a published workflow still has a draft", () => {
+    expect(resolveDefinitionPublicationStatus({
+      draftId: "draft-1",
+      latestVersionId: "version-1",
+      latestVersion: "1.0.0",
+      versionCount: 1
+    })).toBe("published-with-draft");
+  });
+
+  it("shows Published when a version exists and the draft has been discarded", () => {
+    expect(resolveDefinitionPublicationStatus({
+      draftId: null,
+      latestVersionId: "version-1",
+      latestVersion: "1.0.0",
+      versionCount: 1
+    })).toBe("published");
+  });
+
+  it("shows Retracted when the server says so, even if a design version remains", () => {
+    expect(resolveDefinitionPublicationStatus({
+      draftId: "draft-1",
+      latestVersionId: "version-1",
+      latestVersion: "1.0.0",
+      versionCount: 1,
+      publicationState: "retracted"
+    })).toBe("retracted");
+  });
+
+  it("shows Retired when the server says so, even if a design version remains", () => {
+    expect(resolveDefinitionPublicationStatus({
+      draftId: null,
+      latestVersionId: "version-1",
+      latestVersion: "1.0.0",
+      versionCount: 1,
+      publicationState: "retired"
+    })).toBe("retired");
+  });
+
+  it("trusts an explicit Draft publication state over leftover version fields", () => {
+    expect(resolveDefinitionPublicationStatus({
+      draftId: "draft-1",
+      latestVersionId: "version-1",
+      latestVersion: "1.0.0",
+      versionCount: 1,
+      publicationState: "draft"
+    })).toBe("draft");
+  });
+
+  it("prefers Deleted over publication when the definition is soft-deleted", () => {
+    expect(resolveDefinitionPublicationStatus({
+      draftId: "draft-1",
+      latestVersionId: "version-1",
+      latestVersion: "1.0.0",
+      versionCount: 1,
+      deletedAt: "2026-10-14T10:00:00Z",
+      publicationState: "published"
+    })).toBe("deleted");
+  });
+
+  it("does not treat an unknown publication state as Published", () => {
+    expect(resolveDefinitionPublicationStatus({
+      draftId: null,
+      latestVersionId: "version-1",
+      latestVersion: "1.0.0",
+      versionCount: 1,
+      publicationState: "archived"
+    })).toBe("draft");
+  });
+
+  it("treats a null publication state as the version heuristic", () => {
+    expect(resolveDefinitionPublicationStatus({
+      draftId: null,
+      latestVersionId: "version-1",
+      latestVersion: "1.0.0",
+      versionCount: 1,
+      publicationState: null
+    })).toBe("published");
+  });
+});

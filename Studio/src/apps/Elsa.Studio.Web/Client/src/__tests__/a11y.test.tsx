@@ -52,6 +52,7 @@ describe("StudioTabs keyboard navigation", () => {
     render(<ControlledTabs />);
     expect(tabs().map(tab => tab.tabIndex)).toEqual([0, -1, -1]);
     expect(tabs()[0].getAttribute("aria-selected")).toBe("true");
+    expect(tabs().map(tab => tab.title)).toEqual(["One", "Two", "Three"]);
   });
 
   it("links each tab to its panel via aria-controls / id", () => {
@@ -276,6 +277,30 @@ describe("sidebar search filtering", () => {
     expect(active?.textContent).toContain("Home");
     // Exactly one current link.
     expect(container.querySelectorAll('.nav-section a[aria-current="page"]')).toHaveLength(1);
+  });
+
+  it("marks only the most specific sibling when Workflows and Runs share a /workflows prefix", () => {
+    render(
+      <ThemeProvider>
+        <ShellFrame
+          navigation={[
+            { id: "home", label: "Home", path: "/dashboard", placement: "main" },
+            { id: "workflows", label: "Workflows", path: "/workflows/definitions", activePathPrefix: "/workflows", placement: "main" },
+            { id: "workflows-runs", label: "Runs", path: "/workflows/instances", activePathPrefix: "/workflows/instances", placement: "main" }
+          ]}
+          panels={[]}
+          path="/workflows/instances"
+          title="Runs"
+          backendBaseUrl="https://backend.example/"
+          onNavigate={() => {}}
+        >
+          <div>content</div>
+        </ShellFrame>
+      </ThemeProvider>
+    );
+    const current = Array.from(container.querySelectorAll('.nav-section a[aria-current="page"]')).map(link => link.textContent?.trim());
+    expect(current).toEqual(["Runs"]);
+    expect(container.querySelector('a[aria-label="Workflows"]')?.className).not.toContain("active");
   });
 
   it("filters nav items by case-insensitive label substring", () => {

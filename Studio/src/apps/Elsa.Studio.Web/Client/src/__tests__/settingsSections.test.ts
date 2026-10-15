@@ -56,6 +56,8 @@ describe("settings sections", () => {
     expect(isSettingsSurfacePath("/modules", navigation)).toBe(true);
     expect(isSettingsSurfacePath("/theme-builder/preview", [appearance, { ...modules, id: "theme-builder", path: "/theme-builder", activePathPrefix: "/theme-builder" }])).toBe(true);
     expect(isSettingsSurfacePath("/dashboard", navigation)).toBe(false);
+    expect(isSettingsSurfacePath("/modulesX", navigation)).toBe(false);
+    expect(resolveSettingsSection("/modulesX", groups)).toBeUndefined();
   });
 
   it("treats legacy admin URLs as the settings surface even when the user cannot see those sections", () => {

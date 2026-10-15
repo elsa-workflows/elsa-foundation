@@ -34,9 +34,11 @@ describe("dashboard widget contract", () => {
     expect(api.routes.list().map(item => item.path)).toEqual(["/", "/dashboard", "/overview"]);
     expect(api.homeWidgets.list().map(item => item.id)).toEqual([
       homeWidgetIds.getStarted,
+      homeWidgetIds.quickActions,
       homeWidgetIds.recentWorkflows,
+      homeWidgetIds.recentRuns,
       homeWidgetIds.needsAttention,
-      homeWidgetIds.recentRuns
+      homeWidgetIds.tasks
     ]);
   });
 
@@ -278,9 +280,11 @@ describe("dashboard widget contract", () => {
     expect((await first.load()).value.widgets.map(entry => entry.id)).toEqual(["home.recent-runs"]);
     expect((await second.load()).value.widgets.map(entry => entry.id)).toEqual([
       "home.get-started",
+      "home.quick-actions",
       "home.recent-workflows",
+      "home.recent-runs",
       "home.needs-attention",
-      "home.recent-runs"
+      "home.tasks"
     ]);
     await first.reset();
     expect((await first.load()).source).toBe("builtin");

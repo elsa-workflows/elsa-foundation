@@ -35,7 +35,7 @@ Open the downloaded file and make these four replacements. Keep the other config
 
 The digests are image index digests from the verification record. The loopback (`127.0.0.1`) bindings keep the demo ports on your machine; do not expose this configuration to a network.
 
-Pick a Compose project name. The commands below use `elsa-first-workflow`; if that name is already in use, choose another and use it everywhere. Before starting, check that no containers, network or volumes of that project exist and that ports `13000` and `14000` are free. Leave other projects' resources and listeners alone.
+Pick a Compose project name. The commands below use `elsa-first-workflow`; if that name is already in use, choose another and use it everywhere. The downloaded file sets a top-level `name: elsa-stack`; the `-p` flag overrides that name, so Compose uses `elsa-first-workflow` (or the name you chose) for containers, the network and volumes. Use the `-p` name in every command; do not mix it with `elsa-stack`. Before starting, check that no containers, network or volumes of that project exist and that ports `13000` and `14000` are free. Leave other projects' resources and listeners alone.
 
 ## Start and sign in
 

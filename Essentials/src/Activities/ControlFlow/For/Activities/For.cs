@@ -90,7 +90,7 @@ public sealed class For : StructuralActivity, IRuntimeStructuralActivity, IRunti
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
         var range = ResolveRange();
-        var navigator = LoopNavigator.From(runtimeContext.ExecutableNode, LoopKind.For);
+        var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(static node => LoopNavigator.From(node, LoopKind.For));
 
         if (!range.HasFirst || navigator.Body is null)
         {
@@ -106,7 +106,7 @@ public sealed class For : StructuralActivity, IRuntimeStructuralActivity, IRunti
         ArgumentNullException.ThrowIfNull(context);
 
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
-        var navigator = LoopNavigator.From(runtimeContext.ExecutableNode, LoopKind.For);
+        var navigator = runtimeContext.ExecutableNode.GetOrAddRoutingStructure(static node => LoopNavigator.From(node, LoopKind.For));
 
         if (!navigator.IsBody(context.CompletedChildExecutableNodeId))
             throw new ControlFlowExecutionException($"Completed child executable node '{context.CompletedChildExecutableNodeId}' is not the For body.");
