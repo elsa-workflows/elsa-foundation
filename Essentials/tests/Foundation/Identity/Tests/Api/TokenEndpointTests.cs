@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 
@@ -230,6 +231,29 @@ public sealed class TokenEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Logout_Revokes_The_Sessions_Tokens_So_An_Old_Refresh_Token_Gets_401()
+    {
+        var client = _fixture.Client;
+        await LoginTestHelper.LoginAsync(client);
+        var accessToken = await FetchAccessTokenAsync(client);
+
+        // The cookie exchange stores a refresh token but does not hand it out, so issue the pair a
+        // refresh-capable client would hold for the same subject. The control proves refresh works pre-logout.
+        var control = await IssueRefreshTokenForAsync(accessToken);
+        var refreshToken = await IssueRefreshTokenForAsync(accessToken);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = control })).StatusCode);
+
+        var logout = await client.PostAsJsonAsync("/_elsa/identity/logout/aspnetcore-identity", new { });
+        Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
+
+        // A stale tab can neither refresh nor keep using the bearer it already had.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken })).StatusCode);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/protected");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.SendAsync(request)).StatusCode);
+    }
+
+    [Fact]
     public async Task Refresh_With_A_Garbage_Token_Returns_401_Not_500()
     {
         // Regression for the refresh error contract: an invalid/expired/replayed refresh token makes
@@ -272,6 +296,16 @@ public sealed class TokenEndpointTests : IAsyncLifetime
         Assert.NotNull(response);
         Assert.False(string.IsNullOrWhiteSpace(response!.AccessToken));
         return response.AccessToken;
+    }
+
+    private async Task<string> IssueRefreshTokenForAsync(string accessToken)
+    {
+        await using var scope = _fixture.Services.CreateAsyncScope();
+        var tokens = scope.ServiceProvider.GetRequiredService<ITokenService>();
+        var principal = (await tokens.ValidateAsync(new TokenValidationRequest(accessToken))).Principal!;
+        var issued = await tokens.IssueAsync(new TokenIssueRequest(
+            principal.FindFirst(ClaimTypes.NameIdentifier)!.Value, principal.FindFirst(IdentityClaimTypes.TenantId)!.Value, []));
+        return issued.RefreshToken!;
     }
 
     private sealed record AccessTokenPayload(string AccessToken, DateTimeOffset ExpiresAt);

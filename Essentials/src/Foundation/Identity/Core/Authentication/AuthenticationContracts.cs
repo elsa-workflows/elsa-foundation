@@ -38,6 +38,9 @@ public interface ITokenService
     ValueTask<TokenValidationResult> ValidateAsync(TokenValidationRequest request, CancellationToken cancellationToken = default);
 
     ValueTask RevokeAsync(TokenRevocationRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Revokes every access and refresh token issued to <paramref name="subjectId"/>, as sign-out requires.</summary>
+    ValueTask RevokeSubjectAsync(string subjectId, CancellationToken cancellationToken = default);
 }
 
 public interface IAuthSessionService

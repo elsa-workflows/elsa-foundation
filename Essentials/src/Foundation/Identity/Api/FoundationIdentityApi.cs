@@ -153,8 +153,7 @@ public static class FoundationIdentityApi
             return;
         }
 
-        var subject = normalizedPrincipal.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? normalizedPrincipal.FindFirstValue("sub");
+        var subject = Subject(normalizedPrincipal);
         if (string.IsNullOrWhiteSpace(subject))
         {
             await Results.Unauthorized().ExecuteAsync(context);
@@ -220,6 +219,8 @@ public static class FoundationIdentityApi
                 string.Equals(candidate.ProviderId, descriptor.Id, StringComparison.OrdinalIgnoreCase));
         if (invalidator is not null)
             await invalidator.InvalidateAsync(new AuthenticationSessionInvalidationContext(context.User), context.RequestAborted);
+        if (descriptor is not null)
+            await RevokeSubjectTokensAsync(context);
 
         if (!string.IsNullOrEmpty(schemeName) &&
             await services.GetRequiredService<IAuthenticationSchemeProvider>().GetSchemeAsync(schemeName) is not null)
@@ -231,6 +232,20 @@ public static class FoundationIdentityApi
         }
 
         await Results.NoContent().ExecuteAsync(context);
+    }
+
+    // Revokes under the normalized subject, the one the token exchange issues under, so a stale tab can neither
+    // refresh nor keep its bearer. An un-normalized principal revokes nothing.
+    private static async Task RevokeSubjectTokensAsync(HttpContext context)
+    {
+        var tokens = context.RequestServices.GetService<ITokenService>();
+        if (tokens is null ||
+            !context.RequestServices.GetRequiredService<NormalizedPrincipalValidator>().TryGetNormalizedPrincipal(context.User, out var principal))
+            return;
+
+        var subject = Subject(principal);
+        if (!string.IsNullOrWhiteSpace(subject))
+            await tokens.RevokeSubjectAsync(subject, context.RequestAborted);
     }
 
     private static async Task HandleRefreshAsync(HttpContext context)
@@ -306,6 +321,9 @@ public static class FoundationIdentityApi
 
         return null;
     }
+
+    private static string? Subject(ClaimsPrincipal principal) =>
+        principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.FindFirstValue("sub");
 
     private static string RouteValue(HttpContext context, string name) =>
         context.Request.RouteValues.TryGetValue(name, out var value) ? Convert.ToString(value) ?? string.Empty : string.Empty;

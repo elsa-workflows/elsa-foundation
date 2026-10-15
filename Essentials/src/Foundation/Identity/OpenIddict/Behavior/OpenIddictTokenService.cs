@@ -24,7 +24,7 @@ namespace Elsa.Foundation.Identity.OpenIddict;
 /// <item><b>Refresh</b> redeems the stored refresh entry (single use; reuse after redemption or revocation
 /// fails) and issues a fresh access/refresh pair.</item>
 /// <item><b>Revoke</b> revokes the matching token entry, for access JWTs (via their embedded entry id) and
-/// opaque refresh tokens alike.</item>
+/// opaque refresh tokens alike. <b>RevokeSubject</b> revokes every entry issued to a subject, which sign-out uses.</item>
 /// </list>
 /// Tokens are minted directly with the server's <see cref="OpenIddictServerOptions.JsonWebTokenHandler"/> and
 /// credentials rather than through the HTTP <c>/connect/token</c> pipeline, because issuance here is a
@@ -105,6 +105,21 @@ public sealed class OpenIddictTokenService(
 
         if (entry is not null)
             await tokenManager.TryRevokeAsync(entry, cancellationToken);
+    }
+
+    public async ValueTask RevokeSubjectAsync(string subjectId, CancellationToken cancellationToken = default)
+    {
+        // Entry by entry, not RevokeBySubjectAsync: that bulk path needs ExecuteUpdate, which the in-memory store
+        // (Workbench development/demo mode) refuses. Materialized first so no reader stays open across the updates.
+        var entries = new List<object>();
+        await foreach (var entry in tokenManager.FindBySubjectAsync(subjectId, cancellationToken))
+            entries.Add(entry);
+
+        foreach (var entry in entries)
+        {
+            if (await tokenManager.HasStatusAsync(entry, OpenIddictConstants.Statuses.Valid, cancellationToken))
+                await tokenManager.TryRevokeAsync(entry, cancellationToken);
+        }
     }
 
     private string CreateAccessTokenJwt(TokenIssueRequest request, string entryId, DateTimeOffset now, DateTimeOffset expiresAt)
