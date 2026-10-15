@@ -9,6 +9,16 @@
 - **Default implementation:** `Elsa3WorkflowDefinitionImporter`.
 - **Runtime boundary:** This is a Design-side migration/import surface. `Elsa.Workflows.Runtime.*` projects must not consume it.
 
+### Replacing a mapping contract
+
+`IElsa3DefinitionConverter`, `IElsa3NodeConverter` and `IElsa3ActivityMap` are replacement contracts: at most one
+implementation each per container (framework §2.6.2). `Elsa3MappingFeature` registers its defaults with `TryAdd`, so a
+host replaces one by registering its own **before** the feature, or with `services.Replace(...)`. Composing a second
+registration of any of them fails shell activation with `MultipleElsa3MappingRegistrationsException`, which names every
+registration. The default `IElsa3NodeConverter` is whichever `IElsa3DefinitionConverter` is composed, so the two follow
+one policy; a host whose definition converter does not also implement `IElsa3NodeConverter` registers a node converter
+as well, or resolving one fails with a message saying so.
+
 ### `IElsa3DefinitionConverter` *(Replacement contract — `Elsa3.Mapping`)*
 
 - **Signature:** `ValueTask<Elsa3MigrationResult<Elsa3ConvertedDefinition>> ConvertAsync(Elsa3ConversionRequest, CancellationToken)`.
