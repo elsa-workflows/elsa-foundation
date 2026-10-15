@@ -417,6 +417,21 @@ public sealed class Elsa3ExpressionRewriter
                 return;
             }
 
+            // A bare reference too, such as Date.now without a call or moment passed as a value. Not '_', which is also
+            // a common parameter name; its library use (_.map) is caught as a member above.
+            if (node is Identifier bareGlobal && ElsaThreeGlobals.Contains(bareGlobal.Name) && bareGlobal.Name != "_")
+            {
+                Issues.Add(UnavailableGlobal(bareGlobal.Name));
+                return;
+            }
+
+            // A non-computed object key is a name, not a reference.
+            if (node is Property { Computed: false, Shorthand: false } objectProperty)
+            {
+                Visit(objectProperty.Value);
+                return;
+            }
+
             if (node is Identifier { Name: "args" })
             {
                 Issues.Add(new Elsa3ExpressionRewriteIssue(

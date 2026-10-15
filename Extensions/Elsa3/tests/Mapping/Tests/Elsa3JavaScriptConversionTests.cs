@@ -24,12 +24,26 @@ public sealed class Elsa3JavaScriptConversionTests
     [InlineData("getVariable('o').name = 'x'")]
     [InlineData("getCorrelationId()")]
     [InlineData("getOrderId()")]
+    [InlineData("Date.now")]
+    [InlineData("typeof moment")]
+    [InlineData("[DateTime][0]")]
     public async Task Constructs_elsa4_cannot_run_are_refused(string expression)
     {
         var result = await ConvertTextAsync(expression);
 
         Assert.False(result.Succeeded);
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+    }
+
+    [Theory]
+    [InlineData("({ Date: 1 }).Date")]
+    [InlineData("[1].map(_ => 2)[0]")]
+    [InlineData("'a'.length")]
+    public async Task Names_that_only_look_like_elsa3_globals_convert(string expression)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
     }
 
     [Theory]
