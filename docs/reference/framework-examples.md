@@ -70,11 +70,11 @@ When a registry-style or index-style consumer needs access to contributions from
 
 1. The domain defines a **Registry** with a `Register<T>(item)` method (and accessor methods).
 2. The domain publishes an `<RegistryName>Initializing` event whose payload exposes a directly-accessible `ICollection<T>`.
-3. The feature implementing the domain registers a **StartUp task** that publishes the event Sequentially and flushes the contributions into the registry:
+3. The feature implementing the domain registers a **StartUp task** that takes an `IInlineEventPublisher`, publishes the event through it and flushes the contributions into the registry. The inline publisher runs every handler in order before `Publish` returns, so the contributions can be read back:
 
    ```
    var event = new <RegistryName>Initializing();
-   await eventPublisher.Publish(event);   // default Sequential — contributions read back
+   await inlineEventPublisher.Publish(event);
    registry.RegisterAll(event.Items);
    ```
 
