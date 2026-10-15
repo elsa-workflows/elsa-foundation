@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "ed70720d9ac5dfc440dae3b400059033f7fa3658",
+  "last_publish_commit": "4764f246a2a811e6e4562981df29af01bb37f3fa",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -64,18 +64,18 @@
     },
     {
       "package_id": "Elsa.Activities.Flowchart",
-      "version": "4.0.8-preview",
-      "commit": "d2acadc1c7eda9f2de3f35d481493ae4896cdb04"
+      "version": "4.0.9-preview",
+      "commit": "4764f246a2a811e6e4562981df29af01bb37f3fa"
     },
     {
       "package_id": "Elsa.Activities.Graph.Design",
-      "version": "4.0.7-preview",
-      "commit": "d2acadc1c7eda9f2de3f35d481493ae4896cdb04"
+      "version": "4.0.8-preview",
+      "commit": "4764f246a2a811e6e4562981df29af01bb37f3fa"
     },
     {
       "package_id": "Elsa.Activities.Graph.Runtime",
-      "version": "4.0.7-preview",
-      "commit": "d2acadc1c7eda9f2de3f35d481493ae4896cdb04"
+      "version": "4.0.8-preview",
+      "commit": "4764f246a2a811e6e4562981df29af01bb37f3fa"
     },
     {
       "package_id": "Elsa.Activities.Http",
@@ -89,8 +89,8 @@
     },
     {
       "package_id": "Elsa.Activities.Runtime",
-      "version": "4.0.17-preview",
-      "commit": "d2acadc1c7eda9f2de3f35d481493ae4896cdb04"
+      "version": "4.0.18-preview",
+      "commit": "4764f246a2a811e6e4562981df29af01bb37f3fa"
     },
     {
       "package_id": "Elsa.Activities.Runtime.Core",
@@ -604,8 +604,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime",
-      "version": "4.0.38-preview",
-      "commit": "d2acadc1c7eda9f2de3f35d481493ae4896cdb04"
+      "version": "4.0.39-preview",
+      "commit": "4764f246a2a811e6e4562981df29af01bb37f3fa"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Api",
@@ -614,8 +614,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Core",
-      "version": "4.0.28-preview",
-      "commit": "d2acadc1c7eda9f2de3f35d481493ae4896cdb04"
+      "version": "4.0.29-preview",
+      "commit": "4764f246a2a811e6e4562981df29af01bb37f3fa"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Distributed",
