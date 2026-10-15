@@ -1,9 +1,11 @@
 # Elsa 3.8/3.9 parity: identity administration and scope
 
-Status: accepted (owner decisions 2026-10-15). Sipke Schoorstra approved D1–D11 below exactly as recommended.
+Status: accepted (owner decisions 2026-10-15). Sipke Schoorstra approved D1–D11 below exactly as recommended:
+[owner decision on valence-works/strategy#8](https://github.com/valence-works/strategy/issues/8#issuecomment-6183509892)
+(maintainers only). Some details in D2, D8 and D9 come from rows 1.8, 3.3 and 1.4 of the same approved plan.
 
-Program: [Elsa 3.8/3.9 parity #2771](https://github.com/elsa-workflows/elsa-foundation/issues/2771), goal bucket
-[`elsa3-parity`](../program-goals/elsa3-parity.md). Planning record and full assessment:
+Program: Elsa 3.8/3.9 parity #2771, goal bucket [`elsa3-parity`](../program-goals/elsa3-parity.md). Planning record
+and full assessment:
 [valence-works/strategy#8](https://github.com/valence-works/strategy/issues/8) (maintainers only). Constrained by
 [ADR 0080](0080-elsa-4-simplification-decisions.md) (simplification decisions). In this ADR, D1–D11 are this ADR's
 decisions; cite them as "ADR 0085 D7" to keep them apart from ADR 0080's numbering.
@@ -40,8 +42,10 @@ provider's capabilities and are hidden when users live in the IdP.
 ### D2: Elsa 3.9's permission vocabulary on Elsa 4's evaluator
 
 Permissions are renamed to 3.9's `resource:verb` shape with trailing-`*` matching of child resources; `*` stays
-superuser. Elsa 4 keeps its single evaluator. The implication catalog shrinks to one rule: `manage` implies `read`.
-Unknown grants log a startup warning. A 3.9 → 4 mapping table is published.
+superuser. This ADR does not fix the character that separates a parent resource from a child resource; #2773 picks
+that one rule, and the API, the mapping table and Studio (#2781, #2782) all use it. The `identity/*` and `resource/*`
+forms in those issues are illustrative, not the decision. Elsa 4 keeps its single evaluator. The implication catalog
+shrinks to one rule: `manage` implies `read`. Unknown grants log a startup warning. A 3.9 → 4 mapping table is published.
 
 *Why:* renames are cheap before GA and expensive after; 3.9 roles then migrate almost one to one, and the docs read
 the same in both products. Porting 3.9's evaluator would add a second authority for no gain.
@@ -77,8 +81,8 @@ Providers and users are host-wide in v1; every record carries its tenant id, as 
 per-tenant providers and users follow. Tenant resolution is decided separately, token claim first, then host or
 header.
 
-*Why:* it matches Elsa 3.8 and the records already carry tenant ids. The labs plan runs one shell per tenant group,
-which works with this.
+*Why:* it matches Elsa 3.8 and the records already carry tenant ids, so per-tenant identity can follow without a
+data migration.
 
 ### D7: The backend keeps owning the login page
 
@@ -110,12 +114,21 @@ revocable, authenticated into the normal principal pipeline. OAuth client creden
 - **MQTT:** belongs to Elsa Integrations, not this program.
 - **LDAP: no.** Use an external IdP.
 
+*Why:* identity comes first because the other modules depend on it: User Tasks assigns work to participants, which
+needs users and roles, and Webhooks needs API keys and permissions to secure its endpoints. StateMachine is deferred
+because BPMN already models most state-driven flows. MQTT is a transport integration, which Elsa Integrations owns.
+LDAP is dropped because an external IdP (for example Active Directory through OIDC) covers it without Elsa owning a
+directory protocol.
+
 ### D11: Tracked as the `elsa3-parity` program goal
 
 Parity work is tracked as a new `elsa3-parity` program goal in this repository
 ([goal bucket](../program-goals/elsa3-parity.md), program issue #2771, label `elsa3-parity`). #1152 stays the record
 of activity-surface gaps. This is a named owner exception to [ADR 0080 D0](0080-elsa-4-simplification-decisions.md#d0--focus)'s
 parking and two-program cap, recorded there as the 15 October amendment.
+
+*Why:* #1152 has no program bucket and records activity-surface gaps only, while parity spans identity, tenancy,
+import and modules and needs its own queue, label and owner to be planned and capped like any other program.
 
 ## Consequences
 
