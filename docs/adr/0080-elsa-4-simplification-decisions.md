@@ -250,10 +250,9 @@ PRs and the UX QA fix PRs that D7 sent to a human merge, once a review round lea
 green on the exact head commit. Actionable findings are fixed in new commits and reviewed again, for at most 6
 rounds; if blocking findings remain after the sixth, the PR is escalated to the maintainer with
 `blocked: review loop exhausted` and `needs:decision`. D7's human-merge cases are dropped, and so is the 14 October
-note's reference to D7's human merge. D7's pause after a reverted auto-merge is kept, as the owner confirmed on
-15 October ([record](https://github.com/elsa-workflows/elsa-foundation/pull/2766#issuecomment-6199163408)), which
-overrides the Lead summary's listing of the pause among the dropped items: while #2559 carries `auto-merge-paused`,
-routine PRs request no Code Review. The fixer routine never merges
+note's reference to D7's human merge. D7's pause after a reverted auto-merge is kept for now, pending owner confirmation (see
+[this comment](https://github.com/elsa-workflows/elsa-foundation/pull/2766#issuecomment-6199163408)): while #2559
+carries `auto-merge-paused`, routine PRs request no Code Review. The fixer routine never merges
 its own PRs and no longer merges through `elsa-auto-review-merge`; it requests review and stops. Routine PRs carry
 the `auto-fix` label, which replaces the `claude/auto-fix-*` branch prefix as the way the routine finds its own PRs
 and their reverts.
