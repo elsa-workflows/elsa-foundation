@@ -95,7 +95,7 @@ public static class SecretBindingDiagnostics
         {
             SecretBindingRefusalReason.PersistedByActivity => "the activity copies its value into its own persisted state",
             SecretBindingRefusalReason.FixedAtPublish => "its value is read when the workflow is published",
-            SecretBindingRefusalReason.EchoedToOutput => "the activity returns its value in its result or copies it into a fault",
+            SecretBindingRefusalReason.EchoedToOutput => "the activity returns its value in its result, writes it out of the workflow or copies it into a fault",
             _ => throw new ArgumentOutOfRangeException(nameof(reason), reason, "Unknown secret binding refusal reason.")
         });
 
