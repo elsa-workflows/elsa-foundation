@@ -30,7 +30,10 @@ Activities Design contracts.
 
 The model retains exact identity material through deterministic hashes where provider collation could
 collapse distinct values, uses optimistic concurrency tokens, and commits operation markers with
-their mutations. Reads and list operations use bounded pages with deterministic ordering. JSON
+their mutations. Activity definition version `Hash` and `InputsSource` are write-once after insert;
+the single sanctioned exception is `IRefreshActivityDefinitionVersionCommand`, which compare-and-swaps
+those columns on the expected previous hash, stamps a new `ConcurrencyToken` and `LastModifiedAt`,
+and treats a row already at the incoming hash as success. Reads and list operations use bounded pages with deterministic ordering. JSON
 conversion failures cross the adapter boundary as `DesignPersistenceException` serialization failures;
 provider failures retain cancellation, concurrency, and domain-conflict contracts. `EfDesignAtomicWrite`
 accepts a transaction factory and `EfActivityManagementProjectionWriter.WriteInCurrentTransactionAsync`

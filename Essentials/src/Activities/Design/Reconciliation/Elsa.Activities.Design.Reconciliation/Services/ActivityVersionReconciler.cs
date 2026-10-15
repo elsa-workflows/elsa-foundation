@@ -181,12 +181,19 @@ public sealed class ActivityVersionReconciler(
 
             if (IsInputTierOnlyChange(definition, existingVersion, incomingVersion))
             {
-                existingVersion.Inputs = incomingVersion.Inputs.ToArray();
-                existingVersion.Hash = incomingHash;
+                var expectedOldHash = existingVersion.Hash;
+                var refresh = ActivityDefinitionVersion.From(incomingVersion, definition.Id);
+                refresh.Id = existingVersion.Id;
+                refresh.TenantId = existingVersion.TenantId;
+                refresh.Definition = definition;
                 await refreshVersionCommand.RefreshAsync(
                     CreateOperationKey("refresh", incomingVersion),
-                    existingVersion,
+                    refresh,
+                    expectedOldHash,
                     cancellationToken);
+                existingVersion.Inputs = incomingVersion.Inputs.ToArray();
+                existingVersion.Hash = incomingHash;
+                existingVersion.LastModifiedAt = refresh.LastModifiedAt;
                 if (sourceVersionPublisher is not null)
                 {
                     existingVersion.Definition ??= definition;

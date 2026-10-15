@@ -124,17 +124,38 @@ internal static class InMemoryReconcilerHarness
         }
     }
 
+    internal static IRefreshActivityDefinitionVersionCommand RefreshCommand(CatalogStore store) =>
+        new InMemoryRefreshVersionCommand(store);
+
     private sealed class InMemoryRefreshVersionCommand(CatalogStore store) : IRefreshActivityDefinitionVersionCommand
     {
         public Task RefreshAsync(
             DesignOperationKey operationKey,
             ActivityDefinitionVersion version,
+            string? expectedOldHash,
             CancellationToken cancellationToken = default)
         {
             var persisted = store.Versions.Single(item => item.Id == version.Id);
-            persisted.Inputs = version.Inputs;
-            persisted.Hash = version.Hash;
-            return Task.CompletedTask;
+            switch (ActivityDefinitionVersionRefresh.Classify(persisted.Hash, expectedOldHash, version.Hash))
+            {
+                case ActivityDefinitionVersionRefresh.Outcome.Write:
+                    persisted.Inputs = version.Inputs;
+                    persisted.Hash = version.Hash;
+                    persisted.LastModifiedAt = DateTimeOffset.UtcNow;
+                    version.LastModifiedAt = persisted.LastModifiedAt;
+                    return Task.CompletedTask;
+                case ActivityDefinitionVersionRefresh.Outcome.AlreadyWritten:
+                    version.LastModifiedAt = persisted.LastModifiedAt;
+                    return Task.CompletedTask;
+                default:
+                    throw new ActivityVersionHashMismatchException(
+                        definitionId: version.DefinitionId,
+                        activityTypeKey: version.Definition?.ActivityTypeKey ?? version.DefinitionId,
+                        persistedVersion: persisted.Version,
+                        incomingVersion: version.Version,
+                        persistedHash: persisted.Hash,
+                        incomingHash: version.Hash ?? string.Empty);
+            }
         }
     }
 
