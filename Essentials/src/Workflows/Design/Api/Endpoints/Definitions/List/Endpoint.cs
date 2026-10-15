@@ -3,6 +3,7 @@ using Elsa.Foundation.Identity.Authorization;
 using Elsa.Mediator.Core.Contracts;
 using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Design.Api.Models;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
 using Elsa.Workflows.Design.Persistence.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
@@ -14,7 +15,8 @@ namespace Elsa.Workflows.Design.Api.Endpoints.Definitions.List;
 [RequirePermission(WorkflowDesignPermissions.Read)]
 public sealed class Endpoint(
     IWorkflowDefinitionStore store,
-    IWorkflowDefinitionListProjectionStore projectionStore) : ApiEndpoint<ListDefinitions, WorkflowDefinitionListView>
+    IWorkflowDefinitionListProjectionStore projectionStore,
+    IWorkflowDefinitionPublicationStateLookup? publicationStateLookup = null) : ApiEndpoint<ListDefinitions, WorkflowDefinitionListView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -49,12 +51,14 @@ public sealed class Endpoint(
                 "The workflow-definition list contains the same folded identity in multiple physical persistence scopes.");
         }
 
-        var projections = await projectionStore.ListByDefinitionIdsAsync(
-            definitions.Select(definition => definition.Id).ToArray(),
-            cancellationToken);
+        var definitionIds = definitions.Select(definition => definition.Id).ToArray();
+        var projections = await projectionStore.ListByDefinitionIdsAsync(definitionIds, cancellationToken);
         var projectionsByDefinitionId = projections.ToDictionary(
             projection => projection.WorkflowDefinitionId,
             StringComparer.Ordinal);
+        var publicationStates = publicationStateLookup is null
+            ? null
+            : await publicationStateLookup.ListByDefinitionIdsAsync(definitionIds, cancellationToken);
 
         var items = definitions.Select(definition =>
         {
@@ -69,7 +73,7 @@ public sealed class Endpoint(
                 projection?.DraftId,
                 projection?.LatestVersionId,
                 projection?.LatestVersion,
-                projection?.VersionCount ?? 0);
+                projection?.VersionCount ?? 0).WithPublicationState(publicationStates);
         }).ToArray();
         return new WorkflowDefinitionListView(items);
     }

@@ -63,7 +63,7 @@ code.
 | Page header | `target, phase 1` | Eyebrow, title, one-line description, actions. One `primary` button (see Principles). |
 | Lists | `target, phase 2` | A single filter row (search + segmented status + "More filters"), then the grid, then the pager. Filters apply live. |
 | Designer | `exists` | Palette / canvas / inspector. |
-| Designer tabs | `target, phase 1` | Tab labels never truncate: they collapse to icon + tooltip below the width they need. |
+| Designer tabs | `exists` for inspector / Runtime / Artifacts panel tabs (wrap + `title`, no ellipsis); remaining collapse-to-icon is `target, phase 1` | Tab labels never truncate. The inspector panel tabs wrap and keep a `title` plus keyboard access. Below the width they need they should collapse to icon + tooltip. |
 | Designer header | `exists` | Save, Review & publish and Run are all visible. None uses `StudioButton`. Run is the filled action (`.wf-run-button` uses `--studio-accent`). Review & publish is outlined (`.wf-review-button`). |
 | Designer header primary | `target, phase 1` | Review & publish becomes the one `primary` action; Save and Run become `default` (or `ghost`). |
 
@@ -156,8 +156,14 @@ widgets with `registerHomeWidget` (id, title, size, lazy component, optional
 Reset deletes the user layout. Anonymous/demo sessions use `localStorage` or the built-in
 default.
 
-**Get started** ticks Create a workflow / Run it / See what happened from real state, hides
-when every step is done or dismissed, and can be restored from Add widget.
+The built-in default landing is Get started, Quick actions, Recent workflows, Recent
+runs, and Needs attention. **Get started** ticks Create a workflow / Run it / See what
+happened from real state, links to the Elsa 4 docs for an empty install, hides when every
+step is done or dismissed, and can be restored from Add widget. **Quick actions** link to
+create a workflow and open the designer. Recent runs show status. List widgets have
+title / description / CTA empty states. **Tasks** is in the default layout and the widget
+registry, and only renders when `user-tasks` is enabled (`Elsa.Studio.UserTasks` matches).
+`requiresFeature: "workflows"` matches `Elsa.Studio.Workflows` only (not `Contoso.Workflows` or `Elsa.Studio.WorkflowsX`). A missing `enabledFeatures` list hides gated widgets.
 
 **Edit home** is a tinted mode with add, remove, reorder, Add widget, Reset to default, and
 (for `studio/preferences/defaults:manage`) Save as server default. Normal view collapses

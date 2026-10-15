@@ -9,6 +9,8 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Persistence\EntityFrameworkCore\Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Reconciliation\Elsa.Activities.Design.Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Events\Core\Elsa.Events.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- Fails any unordered Skip or Take (EF warning 10102) in this suite. -->

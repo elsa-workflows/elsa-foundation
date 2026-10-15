@@ -273,7 +273,7 @@ public sealed class ReusableActivityImportOperationService(
                           idempotencyKey,
                           new InvalidOperationException("The atomic import adapter did not return a durable receipt."));
         await DiscardCollectionAsync(collectionHandle, accessScope);
-        return receipt;
+        return result.Warnings is { Count: > 0 } warnings ? receipt with { Warnings = warnings } : receipt;
     }
 
     /// <inheritdoc />

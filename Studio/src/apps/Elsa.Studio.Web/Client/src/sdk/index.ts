@@ -240,9 +240,11 @@ export type StudioHomeWidgetSize = StudioDashboardWidgetSize | StudioHomeWidgetS
 
 export const homeWidgetIds = {
   getStarted: "home.get-started",
+  quickActions: "home.quick-actions",
   recentWorkflows: "home.recent-workflows",
   needsAttention: "home.needs-attention",
-  recentRuns: "home.recent-runs"
+  recentRuns: "home.recent-runs",
+  tasks: "home.tasks"
 } as const;
 
 export const homeRunDetailOpenedStorageKey = "elsa-studio.ui.home.run-detail-opened";

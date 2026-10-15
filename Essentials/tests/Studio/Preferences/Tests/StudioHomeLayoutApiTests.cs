@@ -24,7 +24,7 @@ public sealed class StudioHomeLayoutApiTests
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal("builtin", document.RootElement.GetProperty("source").GetString());
         Assert.Equal("home-layout", document.RootElement.GetProperty("namespace").GetString());
-        Assert.Equal(4, document.RootElement.GetProperty("value").GetProperty("widgets").GetArrayLength());
+        Assert.Equal(6, document.RootElement.GetProperty("value").GetProperty("widgets").GetArrayLength());
         Assert.Equal("home.get-started", document.RootElement.GetProperty("value").GetProperty("widgets")[0].GetProperty("id").GetString());
     }
 

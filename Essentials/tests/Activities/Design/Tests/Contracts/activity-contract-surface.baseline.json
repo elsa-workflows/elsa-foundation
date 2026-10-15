@@ -401,6 +401,34 @@
       }
     },
     {
+      "alias": "Elsa.Activities.Graph.Runtime.Activities.Complete",
+      "activityTypeKey": "Elsa.Activities.Graph.Runtime.Activities.Complete",
+      "version": "1.0.0",
+      "category": "Runtime",
+      "executionType": "Action",
+      "inputs": [
+        {
+          "key": "outcome",
+          "name": "Outcome",
+          "type": "String",
+          "collectionKind": "Single",
+          "isRequired": true,
+          "isNullable": false,
+          "uiHint": null,
+          "defaultValue": null,
+          "defaultSyntax": null,
+          "uiSpecifications": null
+        }
+      ],
+      "outputs": [],
+      "outcomes": {
+        "declared": false,
+        "ports": [],
+        "dynamic": null
+      },
+      "structure": null
+    },
+    {
       "alias": "Elsa.Activities.Graph.Runtime.Activities.GraphActivity",
       "activityTypeKey": "Elsa.Activities.Graph.Runtime.Activities.GraphActivity",
       "version": "1.0.0",

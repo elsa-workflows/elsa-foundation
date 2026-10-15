@@ -20,6 +20,9 @@ import {
 } from "./workflowDefinitionBrowseLocation";
 import "./workflowFolders.css";
 
+const DefinitionStatusBadge = lazy(() =>
+  import("./DefinitionStatusBadge").then(module => ({ default: module.DefinitionStatusBadge }))
+);
 const MoveWorkflowDefinitionsDialog = lazy(() =>
   import("./MoveWorkflowDefinitionsDialog").then(module => ({ default: module.MoveWorkflowDefinitionsDialog }))
 );
@@ -430,7 +433,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
               </label>
               <span>Name</span>
               <span>Latest version</span>
-              <span>{listState === "all" ? "State" : listState === "deleted" ? "Deleted" : "Draft"}</span>
+              <span>{listState === "deleted" ? "Deleted" : "Status"}</span>
               <span>Modified</span>
               <span>Actions</span>
             </div>
@@ -468,13 +471,13 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
                   ) : null}
                 </span>
                 <span>{definition.latestVersion ?? "No version"}</span>
-                <span>{listState === "all"
-                  ? isDeleted
-                    ? `Deleted ${formatDate(definition.deletedAt)}`
-                    : definition.draftId ? "Draft" : "Active"
-                  : listState === "deleted"
-                    ? formatDate(definition.deletedAt)
-                    : definition.draftId ? "Draft" : "None"}</span>
+                <span>
+                  {listState === "deleted" ? formatDate(definition.deletedAt) : (
+                    <Suspense fallback={<span className="wf-status-badge" role="status"><span className="wf-visually-hidden">Loading status</span></span>}>
+                      <DefinitionStatusBadge definition={definition} />
+                    </Suspense>
+                  )}
+                </span>
                 <span>{formatDate(definition.lastModifiedAt)}</span>
                 <span className="wf-row-actions" onClick={event => event.stopPropagation()}>
                   {!isDeleted ? (
@@ -564,3 +567,4 @@ function ResultFolderBreadcrumb({
     </nav>
   );
 }
+

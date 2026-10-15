@@ -32,6 +32,8 @@ public sealed class ReusableActivityArchitectureTests
             // The provider uses the provider-neutral Design structure projector to preserve
             // authored parent/slot/order. This remains Design -> Design; Graph Runtime stays clean.
             "Elsa.Workflows.Design.Core",
+            // CompleteOutsideGraphDraftValidator (spec 237) contributes an IDraftValidator; Design -> Design .Core.
+            "Elsa.Workflows.Design.Validations.Core",
             "Elsa.Workflows.Publishing.Core",
             "Elsa.Workflows.Runtime.Core");
 

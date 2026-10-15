@@ -1731,6 +1731,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Design.Validations.Core",
+          "path": "Essentials/src/Workflows/Design/Validations/Core/Elsa.Workflows.Design.Validations.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Publishing.Core",
           "path": "Essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj"
         },
@@ -9407,6 +9412,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+          "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Workflows.Runtime.Resumption",
           "path": "Essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj"
         },
@@ -9424,6 +9434,11 @@
           "type": "internal",
           "id": "Elsa.Serialization.Testing",
           "path": "Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.EntityFrameworkCore.Sqlite",
+          "version": "10.0.10"
         },
         {
           "type": "external",
@@ -9906,6 +9921,16 @@
           "type": "internal",
           "id": "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
           "path": "Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Design.Reconciliation",
+          "path": "Essentials/src/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation/Elsa.Activities.Design.Reconciliation.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Events.Core",
+          "path": "Essentials/src/Events/Core/Elsa.Events.Core.csproj"
         },
         {
           "type": "external",
@@ -21127,6 +21152,61 @@
       "package_id": null,
       "line": null,
       "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.ControlFlow",
+          "path": "Essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Design.Reconciliation.Clr",
+          "path": "Essentials/src/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.DispatchWorkflow.Runtime",
+          "path": "Essentials/src/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Flowchart",
+          "path": "Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Graph.Design",
+          "path": "Essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Graph.Runtime",
+          "path": "Essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Http",
+          "path": "Essentials/src/Activities/Http/Elsa.Activities.Http.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Primitives",
+          "path": "Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Scheduling",
+          "path": "Essentials/src/Activities/Scheduling/Elsa.Activities.Scheduling.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Scripting",
+          "path": "Essentials/src/Activities/Scripting/Elsa.Activities.Scripting.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Sequence",
+          "path": "Essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj"
+        },
         {
           "type": "internal",
           "id": "Elsa.Serialization.SystemText",

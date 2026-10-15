@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Contracts;
+using Elsa.Activities.Design.Core.Reconciliation;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Design.Core.Stores;
 using Elsa.Activities.Design.Persistence.Core.Contracts;
@@ -52,6 +53,7 @@ public sealed class EfActivityDesignStores(
     ICreateActivityDefinitionCommand,
     IAddActivityDefinitionCommand,
     IAddActivityDefinitionVersionCommand,
+    IRefreshActivityDefinitionVersionCommand,
     ICreateActivityDraftCommand,
     IUpdateActivityDefinitionPresentationCommand,
     IUpdateActivityDraftPresentationCommand,
@@ -659,6 +661,58 @@ public sealed class EfActivityDesignStores(
             context.Db.ActivityDefinitionVersions.Add(version);
             return new ActivityDefinitionVersionAdded(version.DefinitionId, version.Id, version.Version, version.Hash);
         }, tenantId: version.TenantId, cancellationToken: cancellationToken)).Value;
+    }
+
+    public async Task RefreshAsync(
+        DesignOperationKey operationKey,
+        ActivityDefinitionVersion version,
+        string? expectedOldHash,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(operationKey);
+        ArgumentNullException.ThrowIfNull(version);
+        EnsureTenant(version.TenantId);
+        PrepareVersion(version);
+        var incomingHash = version.Hash;
+        var inputsSource = version.InputsSource;
+        var now = DateTimeOffset.UtcNow;
+        var token = Guid.NewGuid().ToByteArray();
+        // ExecuteUpdateAsync bypasses PropertySaveBehavior.Throw on Hash/InputsSource. That is the
+        // sanctioned tier-only refresh: compare-and-swap on the old hash, and stamp concurrency
+        // bookkeeping the same way SaveChanges would. operationKey is unused; the hash CAS is the
+        // retry token.
+        var updated = await ById(Access(db.ActivityDefinitionVersions), version.Id)
+            .Where(row => row.Hash == expectedOldHash)
+            .ExecuteUpdateAsync(
+                updates => updates
+                    .SetProperty(row => row.Hash, incomingHash)
+                    .SetProperty(row => row.InputsSource, inputsSource)
+                    .SetProperty(row => row.LastModifiedAt, now)
+                    .SetProperty(row => EF.Property<byte[]>(row, "ConcurrencyToken"), token),
+                cancellationToken);
+        if (updated == 1)
+        {
+            version.LastModifiedAt = now;
+            return;
+        }
+
+        var stored = await ById(Access(db.ActivityDefinitionVersions.AsNoTracking()), version.Id)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (stored is not null &&
+            ActivityDefinitionVersionRefresh.Classify(stored.Hash, expectedOldHash, incomingHash) ==
+            ActivityDefinitionVersionRefresh.Outcome.AlreadyWritten)
+        {
+            version.LastModifiedAt = stored.LastModifiedAt;
+            return;
+        }
+
+        throw new ActivityVersionHashMismatchException(
+            definitionId: version.DefinitionId,
+            activityTypeKey: version.Definition?.ActivityTypeKey ?? version.DefinitionId,
+            persistedVersion: stored?.Version ?? version.Version,
+            incomingVersion: version.Version,
+            persistedHash: stored?.Hash,
+            incomingHash: incomingHash ?? string.Empty);
     }
 
     private static void ValidateCreate(CreateActivityDefinitionRequest request)
