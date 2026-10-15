@@ -345,7 +345,7 @@ refused with a stable code, statement-form expressions are wrapped faithfully, a
   - the D-15 wrap (completion value preserved, non-expression tail refused);
   - D-16 script lowering, `arguments` and `return`, `setOutcome` refused;
   - existing VF tests stay green.
-- [ ] T069 Comment on #2717 with R-11: the list of refusals 236 now reports, that `getHttpRequestBody` is a host
+- [X] T069 Comment on #2717 with R-11: the list of refusals 236 now reports, that `getHttpRequestBody` is a host
   extension, the accessor-precedence and value-shape risks. Only with the maintainer's go-ahead.
 
 ---
