@@ -12,7 +12,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Sdk\Elsa.Integrations.Sdk.csproj" />
     <ProjectReference Include="..\..\..\..\..\Essentials\src\Secrets\Core\Elsa.Secrets.Core.csproj" />
   </ItemGroup>
 

@@ -6,7 +6,7 @@ namespace Elsa.Integrations.Sdk.Secrets;
 /// Writes OAuth grants as versioned secrets. Compare-and-swap is the correctness guarantee
 /// (#2727 AC 5); a lock is only an optimization. Not a second <c>ISecretStore</c>.
 /// </summary>
-public interface IGrantSecretWriter
+internal interface IGrantSecretWriter
 {
     /// <summary>Current secret version, or 0 when the name has no grant.</summary>
     ValueTask<int> GetVersionAsync(string tenantId, string name, CancellationToken cancellationToken = default);
@@ -25,7 +25,7 @@ public interface IGrantSecretWriter
     ValueTask DeleteAsync(string tenantId, string name, CancellationToken cancellationToken = default);
 }
 
-public static class GrantStorePolicy
+internal static class GrantStorePolicy
 {
     /// <summary>
     /// Grants need a writable store (plan §2.5). Configuration and other read-only stores are refused.

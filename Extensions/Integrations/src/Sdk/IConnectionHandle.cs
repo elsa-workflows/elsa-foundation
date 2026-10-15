@@ -3,7 +3,7 @@ namespace Elsa.Integrations.Sdk;
 /// <summary>
 /// A short-lived, scoped handle the engine may hold. It never exposes long-lived secrets or tokens.
 /// </summary>
-public interface IConnectionHandle : IAsyncDisposable
+internal interface IConnectionHandle : IAsyncDisposable
 {
     string TenantId { get; }
     string ConnectionName { get; }

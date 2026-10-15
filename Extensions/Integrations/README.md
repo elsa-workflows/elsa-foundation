@@ -11,12 +11,18 @@ parallel secret store, no Elsa 3 shims. HTTP uses the foundation `http` connecti
 
 ```
 Extensions/Integrations/
-  src/Sdk/                         STUB of Elsa.Integrations.Sdk (#2726)
+  src/Sdk/                         Non-packable STUB of Elsa.Integrations.Sdk (#2726)
   src/Connectors/OAuth2/           Generic OAuth2 scheme (#2727)
   tests/Connectors/OAuth2/Tests/   Harness tests against a mock OAuth server
 ```
 
 ## SDK stub (#2726)
+
+`Elsa.Integrations.Sdk` is **not packable** (`IsPackable=false`) and **internal / test-only**
+until [#2726](https://github.com/elsa-workflows/elsa-foundation/issues/2726) lands. No
+`Elsa.Integrations.Sdk` NuGet package is produced. Types are `internal`; only
+`Elsa.Integrations.Connectors.OAuth2.Tests` sees them. The packable OAuth2 connector does not
+reference the stub, so packing it cannot emit a dependency on a package that does not exist.
 
 Checked 2026-10-13: #2726 has no branch or PR. The stub follows that issue's revised contract:
 
@@ -35,6 +41,9 @@ Checked 2026-10-13: #2726 has no branch or PR. The stub follows that issue's rev
 1. Delete `Extensions/Integrations/src/Sdk`.
 2. Point the connector at the real `Elsa.Integrations.Sdk` package.
 3. Keep `ConnectorActivity`, `IConnectionContext`, and `IConnectionHandle` unless the real SDK chose different names.
+
+`IActiveConnectionAccessor` is removed in the same PR that lands D1 and `[ActivityConnection]` on
+`SendHttpRequest`. No shim is left behind (ADR 0045).
 
 ## Connections phase 1 blocker
 

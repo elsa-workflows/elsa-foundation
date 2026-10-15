@@ -3,7 +3,7 @@ using Elsa.Integrations.Sdk.OAuth;
 
 namespace Elsa.Integrations.Sdk.Harness;
 
-public sealed class InMemoryValenceOAuthAppRegistry : IValenceOAuthAppRegistry
+internal sealed class InMemoryValenceOAuthAppRegistry : IValenceOAuthAppRegistry
 {
     private readonly ConcurrentDictionary<string, ValenceOAuthApp> _apps = new(StringComparer.OrdinalIgnoreCase);
 

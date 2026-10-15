@@ -3,7 +3,7 @@ namespace Elsa.Integrations.Sdk.Connections;
 /// <summary>
 /// Tenant-owned connection metadata. Secret material is never stored here; only secret keys are.
 /// </summary>
-public sealed class ConnectionRecord
+internal sealed class ConnectionRecord
 {
     public required string TenantId { get; init; }
     public required string Name { get; init; }

@@ -4,7 +4,7 @@ namespace Elsa.Integrations.Sdk.OAuth;
 /// Plan D2: the OAuth callback is a backend route built from <see cref="PublicBaseUrl"/>.
 /// Production Control (#801) owns the hosted endpoint; this stub holds the path contract.
 /// </summary>
-public sealed class OAuthCallbackOptions
+internal sealed class OAuthCallbackOptions
 {
     public const string Path = "/_elsa/connections/oauth/callback";
 

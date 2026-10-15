@@ -7,7 +7,7 @@ catalog ([#2726](https://github.com/elsa-workflows/elsa-foundation/issues/2726) 
 
 ## Acceptance criteria (13 Oct rewrite)
 
-1. Built on the SDK stub; OAuth2 is one scheme.
+1. Built against a non-packable, internal SDK stub; OAuth2 is one scheme. No `Elsa.Integrations.Sdk` package is produced until #2726.
 2. Authorization-code + PKCE and client-credentials, with configurable auth/token/scopes URLs.
 3. Valence-registered app and BYO client.
 4. Callback at `/_elsa/connections/oauth/callback`, built from `PublicBaseUrl`.
@@ -20,6 +20,7 @@ catalog ([#2726](https://github.com/elsa-workflows/elsa-foundation/issues/2726) 
 
 ## Blockers
 
-Foundation connections phase 1 (D1) has no tracking issue yet. The SDK (#2726) and hosted
-connections platform (valence-works/elsa-control#801) have not landed. This tree uses marked stubs
-that reuse foundation contracts instead of shims.
+Foundation connections phase 1 (D1) has no tracking issue yet (Elsa 4 Lead files it). The SDK (#2726)
+and hosted connections platform (valence-works/elsa-control#801) have not landed. This tree uses a
+non-packable, internal SDK stub that reuses foundation contracts instead of shims.
+`IActiveConnectionAccessor` is removed in the same PR that lands D1 and `[ActivityConnection]`.

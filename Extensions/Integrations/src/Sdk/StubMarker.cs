@@ -10,7 +10,7 @@ namespace Elsa.Integrations.Sdk;
 /// <c>ISecretValueResolver</c>, HTTP via the named <c>Elsa.Activities.Http</c> client,
 /// design-time schema never loaded to execute. Checked 2026-10-13: #2726 has no branch or PR.
 /// </remarks>
-public static class IntegrationsSdkStub
+internal static class IntegrationsSdkStub
 {
     public const string Issue = "elsa-workflows/elsa-foundation#2726";
     public const bool IsStub = true;

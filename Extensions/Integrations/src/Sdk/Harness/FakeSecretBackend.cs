@@ -9,7 +9,7 @@ namespace Elsa.Integrations.Sdk.Harness;
 /// Test double of the foundation secret path: <see cref="ISecretValueResolver"/> for reads,
 /// <see cref="IGrantSecretWriter"/> for CAS writes. Not a parallel store contract.
 /// </summary>
-public sealed class FakeSecretBackend : ISecretValueResolver, IGrantSecretWriter
+internal sealed class FakeSecretBackend : ISecretValueResolver, IGrantSecretWriter
 {
     private readonly ConcurrentDictionary<string, Entry> _entries = new(StringComparer.Ordinal);
     private SecretStoreDescriptor _store = WritableEncryptedStore;

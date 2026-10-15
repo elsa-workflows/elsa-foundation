@@ -9,7 +9,7 @@ namespace Elsa.Integrations.Sdk.OAuth;
 /// Added to the named <c>Elsa.Activities.Http</c> client. Injects a short-lived token resolved
 /// through <c>ISecretValueResolver</c> and refreshes on 401 or expiry with compare-and-swap.
 /// </summary>
-public sealed class OAuth2DelegatingHandler(
+internal sealed class OAuth2DelegatingHandler(
     IActiveConnectionAccessor connections,
     OAuth2TokenService tokens,
     IRuntimeSecretMask? mask,

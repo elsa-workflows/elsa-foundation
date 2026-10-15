@@ -8,7 +8,7 @@ namespace Elsa.Integrations.Sdk.Connections;
 /// STUB tenant-scoped context. Sits on <c>ISecretValueResolver</c>; it does not resolve or cache
 /// secrets itself (#2726 rule 5). The authenticated client is the named Elsa HTTP client.
 /// </summary>
-public sealed class ConnectionContext(
+internal sealed class ConnectionContext(
     string tenantId,
     IConnectionStore connections,
     IHttpClientFactory httpClientFactory) : IConnectionContext

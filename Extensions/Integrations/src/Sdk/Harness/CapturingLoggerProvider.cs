@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Integrations.Sdk.Harness;
 
 /// <summary>Collects log lines so tests can prove secrets never appear in logs.</summary>
-public sealed class CapturingLoggerProvider : ILoggerProvider
+internal sealed class CapturingLoggerProvider : ILoggerProvider
 {
     private readonly List<string> _lines = [];
     private readonly object _gate = new();

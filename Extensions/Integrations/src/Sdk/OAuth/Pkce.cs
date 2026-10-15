@@ -4,7 +4,7 @@ using System.Text;
 namespace Elsa.Integrations.Sdk.OAuth;
 
 /// <summary>RFC 7636 S256 PKCE helpers for authorization-code.</summary>
-public static class Pkce
+internal static class Pkce
 {
     public static string CreateVerifier()
     {

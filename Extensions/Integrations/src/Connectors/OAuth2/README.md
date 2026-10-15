@@ -41,7 +41,9 @@ The named `Elsa.Activities.Http` client stays header-free in logs (spec 188 FR-0
 Foundation connections phase 1 (the `http` connection that replaces `SendHttpRequest.Authorization`)
 has no tracking issue yet. This package binds the scheme to that connection through a harness stub.
 [#2726](https://github.com/elsa-workflows/elsa-foundation/issues/2726) has no branch or PR; the
-SDK here is a marked stub that reuses foundation contracts instead of shims.
+SDK stub is non-packable and internal (test-only). This package does not reference it, so no
+`Elsa.Integrations.Sdk` package can be produced from this tree. `IActiveConnectionAccessor` is
+removed in the same PR that lands D1 and `[ActivityConnection]` (ADR 0045, no shims).
 
 ## Tests
 

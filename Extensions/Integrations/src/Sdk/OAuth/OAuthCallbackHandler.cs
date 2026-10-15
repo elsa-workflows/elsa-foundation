@@ -4,7 +4,7 @@ namespace Elsa.Integrations.Sdk.OAuth;
 /// Completes authorization-code + PKCE after the provider redirects to
 /// <c>/_elsa/connections/oauth/callback</c>.
 /// </summary>
-public sealed class OAuthCallbackHandler(OAuth2TokenService tokens, OAuthCallbackOptions options)
+internal sealed class OAuthCallbackHandler(OAuth2TokenService tokens, OAuthCallbackOptions options)
 {
     public async ValueTask<OAuthCallbackResult> HandleAsync(
         Connections.ConnectionRecord connection,
@@ -32,7 +32,7 @@ public sealed class OAuthCallbackHandler(OAuth2TokenService tokens, OAuthCallbac
     }
 }
 
-public sealed record OAuthCallbackResult(bool Ok, string? Error)
+internal sealed record OAuthCallbackResult(bool Ok, string? Error)
 {
     public static OAuthCallbackResult Succeeded() => new(true, null);
     public static OAuthCallbackResult Failed(string error) => new(false, error);

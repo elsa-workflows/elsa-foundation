@@ -1,17 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    STUB for elsa-workflows/elsa-foundation#2726.
+    STUB for elsa-workflows/elsa-foundation#2726. Not packable and not a public surface:
+    types are internal; only Elsa.Integrations.Connectors.OAuth2.Tests sees them.
+    No Elsa.Integrations.Sdk package is produced until #2726 lands.
     Reuses foundation activity, secret and HTTP contracts. No parallel manifest catalog,
     no parallel ISecretStore, no Elsa 3 shims (ADR 0045).
     Delete this project and PackageReference the real SDK when #2726 lands.
   -->
 
   <PropertyGroup>
-    <Description>STUB of Elsa.Integrations.Sdk (#2726). Reuses ISecretValueResolver, IRuntimeSecretMask, and the named Elsa.Activities.Http client. Not the shipping SDK.</Description>
-    <PackageTags>elsa;integrations;sdk;stub</PackageTags>
-    <IsPackable>true</IsPackable>
+    <Description>Non-packable STUB of Elsa.Integrations.Sdk (#2726). Test-only until the real SDK lands. Not a NuGet package.</Description>
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Integrations.Connectors.OAuth2.Tests" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />

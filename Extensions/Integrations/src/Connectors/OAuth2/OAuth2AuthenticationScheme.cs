@@ -1,4 +1,3 @@
-using Elsa.Integrations.Sdk.OAuth;
 using Elsa.Secrets.Core.Models;
 
 namespace Elsa.Integrations.Connectors.OAuth2;
@@ -12,13 +11,17 @@ public sealed record OAuth2AuthenticationScheme
 {
     public const string Name = "oauth2";
     public const bool RequiresWritableStore = true;
+    public const string ClientSourceValence = "valence";
+    public const string ClientSourceBringYourOwn = "byo";
+    public const string GrantTypeAuthorizationCode = "authorization_code";
+    public const string GrantTypeClientCredentials = "client_credentials";
 
     public required string GrantType { get; init; }
     public string? AuthorizationUrl { get; init; }
     public required string TokenUrl { get; init; }
     public string? ScopesUrl { get; init; }
     public string? Scopes { get; init; }
-    public string ClientSource { get; init; } = OAuth2ClientSources.Valence;
+    public string ClientSource { get; init; } = ClientSourceValence;
     public string? ValenceAppId { get; init; }
     public string? ClientId { get; init; }
 
@@ -43,6 +46,12 @@ public sealed record OAuth2AuthenticationScheme
         return settings;
     }
 
-    public void EnsureStoreCanHoldGrants(SecretStoreDescriptor store) =>
-        Elsa.Integrations.Sdk.Secrets.GrantStorePolicy.EnsureWritable(store);
+    public void EnsureStoreCanHoldGrants(SecretStoreDescriptor store)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        var writable = !store.IsReadOnly && store.Capabilities.HasFlag(SecretStoreCapabilities.Write);
+        if (!writable)
+            throw new InvalidOperationException(
+                $"OAuth2 grants require a writable secret store. '{store.Name}' is read-only (RequiresWritableStore).");
+    }
 }

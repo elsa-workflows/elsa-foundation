@@ -3,7 +3,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 namespace Elsa.Integrations.Sdk.Harness;
 
 /// <summary>Harness <see cref="IRuntimeSecretMask"/> so tests can prove tokens are registered and masked.</summary>
-public sealed class CapturingSecretMask : IRuntimeSecretMask
+internal sealed class CapturingSecretMask : IRuntimeSecretMask
 {
     private readonly Dictionary<string, List<(string Name, string Value)>> _values = new(StringComparer.Ordinal);
 

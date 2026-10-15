@@ -4,7 +4,7 @@ namespace Elsa.Integrations.Sdk;
 /// Tenant-scoped resolver that yields a short-lived handle plus an authenticated <see cref="HttpClient"/>.
 /// The SDK never returns raw long-lived secrets.
 /// </summary>
-public interface IConnectionContext
+internal interface IConnectionContext
 {
     string TenantId { get; }
 

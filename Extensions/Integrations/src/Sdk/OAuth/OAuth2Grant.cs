@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace Elsa.Integrations.Sdk.OAuth;
 
 /// <summary>Mutable token state stored as a secret. Never part of workflow JSON or activity results.</summary>
-public sealed class OAuth2Grant
+internal sealed class OAuth2Grant
 {
     public required string AccessToken { get; init; }
     public string? RefreshToken { get; init; }

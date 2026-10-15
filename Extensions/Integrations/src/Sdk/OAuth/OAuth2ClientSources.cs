@@ -1,12 +1,12 @@
 namespace Elsa.Integrations.Sdk.OAuth;
 
-public static class OAuth2ClientSources
+internal static class OAuth2ClientSources
 {
     public const string Valence = "valence";
     public const string BringYourOwn = "byo";
 }
 
-public static class OAuth2GrantTypes
+internal static class OAuth2GrantTypes
 {
     public const string AuthorizationCode = "authorization_code";
     public const string ClientCredentials = "client_credentials";
@@ -16,7 +16,7 @@ public static class OAuth2GrantTypes
 /// <summary>
 /// Secret names use the foundation name alphabet (letters, numbers, dot, dash, underscore, colon).
 /// </summary>
-public static class OAuth2SecretKeys
+internal static class OAuth2SecretKeys
 {
     public static string Grant(string connectionName) => $"connection:{connectionName}:oauth2-grant";
 

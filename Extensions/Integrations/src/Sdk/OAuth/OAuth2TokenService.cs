@@ -15,7 +15,7 @@ namespace Elsa.Integrations.Sdk.OAuth;
 /// on expiry or 401. Reads go through <see cref="ISecretValueResolver"/>; writes use compare-and-swap
 /// on the secret version. This type does not cache tokens.
 /// </summary>
-public sealed class OAuth2TokenService(
+internal sealed class OAuth2TokenService(
     ISecretValueResolver secrets,
     IGrantSecretWriter grants,
     IValenceOAuthAppRegistry valenceApps,

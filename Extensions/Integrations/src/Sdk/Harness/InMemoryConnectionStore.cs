@@ -3,7 +3,7 @@ using Elsa.Integrations.Sdk.Connections;
 
 namespace Elsa.Integrations.Sdk.Harness;
 
-public sealed class InMemoryConnectionStore : IConnectionStore
+internal sealed class InMemoryConnectionStore : IConnectionStore
 {
     private readonly ConcurrentDictionary<string, ConnectionRecord> _connections = new(StringComparer.Ordinal);
 

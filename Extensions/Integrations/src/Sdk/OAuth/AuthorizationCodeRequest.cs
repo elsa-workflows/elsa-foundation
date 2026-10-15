@@ -1,9 +1,9 @@
 namespace Elsa.Integrations.Sdk.OAuth;
 
-public sealed record AuthorizationCodeRequest(
+internal sealed record AuthorizationCodeRequest(
     string AuthorizationUrl,
     string State,
     string CodeChallenge,
     string CodeChallengeMethod = "S256");
 
-public sealed record AuthorizationCodeCallback(string Code, string State);
+internal sealed record AuthorizationCodeCallback(string Code, string State);

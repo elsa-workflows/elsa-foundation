@@ -6,7 +6,7 @@ namespace Elsa.Integrations.Sdk;
 /// Base for connector activities. v1 is activities only: no host endpoints, hosted services, or other
 /// host-integrated features, so the package stays collectible.
 /// </summary>
-public abstract class ConnectorActivity<TResult> : Activity<TResult>
+internal abstract class ConnectorActivity<TResult> : Activity<TResult>
 {
     protected ConnectorActivity(IConnectionContext connectionContext)
     {
@@ -18,7 +18,7 @@ public abstract class ConnectorActivity<TResult> : Activity<TResult>
 }
 
 /// <inheritdoc cref="ConnectorActivity{TResult}"/>
-public abstract class ConnectorActivity : ConnectorActivity<ActivityUnit>
+internal abstract class ConnectorActivity : ConnectorActivity<ActivityUnit>
 {
     protected ConnectorActivity(IConnectionContext connectionContext) : base(connectionContext)
     {

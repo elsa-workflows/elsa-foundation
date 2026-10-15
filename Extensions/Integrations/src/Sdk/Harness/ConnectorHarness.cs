@@ -15,7 +15,7 @@ namespace Elsa.Integrations.Sdk.Harness;
 /// STUB of the #2726 testing harness: in-memory connections, a fake <see cref="ISecretValueResolver"/>,
 /// the named Elsa HTTP client, and a capturing secret mask.
 /// </summary>
-public sealed class ConnectorHarness : IAsyncDisposable
+internal sealed class ConnectorHarness : IAsyncDisposable
 {
     private readonly ServiceProvider _services;
     private readonly HttpMessageHandler? _ownedPrimaryHandler;
@@ -146,7 +146,7 @@ public sealed class ConnectorHarness : IAsyncDisposable
     }
 }
 
-public sealed class ConnectorHarnessOptions
+internal sealed class ConnectorHarnessOptions
 {
     public string TenantId { get; set; } = "default";
     public TimeProvider TimeProvider { get; set; } = TimeProvider.System;

@@ -1480,7 +1480,6 @@
       "elsa.integrations.connectors.oauth2": {
         "type": "Project",
         "dependencies": {
-          "Elsa.Integrations.Sdk": "[4.0.0-dev, )",
           "Elsa.Secrets.Core": "[4.0.0-dev, )"
         }
       },

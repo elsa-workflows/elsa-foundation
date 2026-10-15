@@ -21353,66 +21353,6 @@
           "type": "internal",
           "id": "Elsa.Secrets.Core",
           "path": "Essentials/src/Secrets/Core/Elsa.Secrets.Core.csproj"
-        },
-        {
-          "type": "internal",
-          "id": "Elsa.Integrations.Sdk",
-          "path": "Extensions/Integrations/src/Sdk/Elsa.Integrations.Sdk.csproj"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "CShells.Abstractions",
-          "version": "0.0.30"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.DependencyInjection",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Http",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Logging",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Logging.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Options",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Primitives",
-          "version": "10.0.10"
         }
       ]
     },
@@ -21424,9 +21364,9 @@
       "sub_domain": "Sdk",
       "role": "feature/implementation",
       "declared_target_framework": null,
-      "packable": true,
-      "package_id": "Elsa.Integrations.Sdk",
-      "line": "B",
+      "packable": false,
+      "package_id": null,
+      "line": null,
       "edges": [
         {
           "type": "internal",
@@ -21471,41 +21411,6 @@
         {
           "type": "external",
           "id": "Microsoft.Extensions.Options",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "CShells.Abstractions",
-          "version": "0.0.30"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "CShells.AspNetCore.Abstractions",
-          "version": "0.0.30"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Configuration.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.DependencyInjection",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Logging",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Primitives",
           "version": "10.0.10"
         }
       ]

@@ -7,7 +7,7 @@ namespace Elsa.Integrations.Sdk.Harness;
 /// Stub of D1: the named HTTP client is bound to the tenant's http connection until
 /// <c>SendHttpRequest</c> grows an <c>[ActivityConnection]</c> input.
 /// </summary>
-public sealed class HarnessAuthState : IActiveConnectionAccessor
+internal sealed class HarnessAuthState : IActiveConnectionAccessor
 {
     public ConnectionRecord? ActiveConnection { get; set; }
     public OAuth2TokenService? Tokens { get; set; }
