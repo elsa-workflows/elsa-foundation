@@ -73,6 +73,31 @@ public sealed class HttpAuthenticatorTests
     }
 
     [Fact]
+    public async Task ApiKey_HeaderPlacement_RefusesDisallowedHost()
+    {
+        var apiKey = NewCredential("key");
+        var authenticator = new ApiKeyHttpRequestAuthenticator();
+        var allowed = new FakeResolvedConnection(
+            HttpAuthSchemes.ApiKey,
+            AllowedHostsPolicy.Fixed("api.example"),
+            ("apiKey", apiKey),
+            settings: new Dictionary<string, string>
+            {
+                [HttpConnectionSettingKeys.ApiKeyPlacement] = ApiKeyPlacements.Header,
+                [HttpConnectionSettingKeys.ApiKeyHeaderName] = "X-Api-Key"
+            });
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.example/v1");
+        await authenticator.ApplyAsync(request, allowed);
+        Assert.Equal(apiKey, request.Headers.GetValues("X-Api-Key").Single());
+
+        using var refused = new HttpRequestMessage(HttpMethod.Get, "https://evil.example/v1");
+        var ex = await Assert.ThrowsAsync<ConnectionUnavailableException>(() => authenticator.ApplyAsync(refused, allowed).AsTask());
+        Assert.Equal(ConnectionFaultCodes.HostNotAllowed, ex.Code);
+        Assert.False(refused.Headers.Contains("X-Api-Key"));
+    }
+
+    [Fact]
     public async Task ApiKey_QueryPlacement_PutsKeyOnUri()
     {
         var apiKey = NewCredential("key");
@@ -91,6 +116,20 @@ public sealed class HttpAuthenticatorTests
         await authenticator.ApplyAsync(request, connection);
         Assert.Contains($"api_key={apiKey}", request.RequestUri!.Query, StringComparison.Ordinal);
         Assert.False(request.Headers.Contains("Authorization"));
+
+        var hostBound = new FakeResolvedConnection(
+            HttpAuthSchemes.ApiKey,
+            AllowedHostsPolicy.Fixed("example.test"),
+            ("apiKey", apiKey),
+            settings: new Dictionary<string, string>
+            {
+                [HttpConnectionSettingKeys.ApiKeyPlacement] = ApiKeyPlacements.Query,
+                [HttpConnectionSettingKeys.ApiKeyQueryName] = "api_key"
+            });
+        using var refused = new HttpRequestMessage(HttpMethod.Get, "https://evil.example/resource");
+        var ex = await Assert.ThrowsAsync<ConnectionUnavailableException>(() => authenticator.ApplyAsync(refused, hostBound).AsTask());
+        Assert.Equal(ConnectionFaultCodes.HostNotAllowed, ex.Code);
+        Assert.DoesNotContain("api_key=", refused.RequestUri!.Query, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

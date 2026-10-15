@@ -17,8 +17,13 @@ public sealed class UnboundHttpConnectionApplicator : IHttpConnectionApplicator
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        if (connection is null || string.IsNullOrWhiteSpace(connection.Name))
+        if (connection is null)
             return ValueTask.CompletedTask;
+        if (string.IsNullOrWhiteSpace(connection.Name))
+        {
+            throw new InvalidOperationException(
+                "SendHttpRequest is bound to a connection reference that has no name.");
+        }
 
         throw new InvalidOperationException(
             $"SendHttpRequest is bound to connection '{connection.Name}' but no connection applicator is composed. Enable the ConnectionsWorkflows feature.");

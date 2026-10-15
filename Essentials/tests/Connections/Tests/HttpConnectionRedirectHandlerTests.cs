@@ -74,15 +74,157 @@ public sealed class HttpConnectionRedirectHandlerTests
     }
 
     [Fact]
-    public async Task SameOriginRedirectToHttp_RequiresAllowInsecureHttpWhenCredentialsRemain()
+    public async Task HttpsToHttpRedirect_StripsConnectionCredentials()
+    {
+        var token = NewValue();
+        var inner = new RecordingHandler(new Uri("http://origin.example" + LandingPath));
+        using var handler = new HttpConnectionRedirectHandler(inner);
+        using var client = new HttpClient(handler);
+        using var request = await ApplyAsync("bearer", token, new Uri(Origin + StartPath), allowedHosts: "origin.example");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(2, inner.Requests.Count);
+        Assert.Equal($"Bearer {token}", inner.Requests[0].Authorization);
+        Assert.Null(inner.Requests[1].Authorization);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.TemporaryRedirect)]
+    [InlineData(HttpStatusCode.PermanentRedirect)]
+    public async Task Redirect307And308_KeepMethodAndBody(HttpStatusCode status)
+    {
+        var inner = new RecordingHandler(new Uri(Origin + LandingPath), status);
+        using var handler = new HttpConnectionRedirectHandler(inner);
+        using var client = new HttpClient(handler);
+        using var request = new HttpRequestMessage(HttpMethod.Post, Origin + StartPath)
+        {
+            Content = new StringContent("payload", Encoding.UTF8, "text/plain")
+        };
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(2, inner.Requests.Count);
+        Assert.Equal("POST", inner.Requests[1].Method);
+        Assert.Equal("payload", inner.Requests[1].Body);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.MovedPermanently)]
+    [InlineData(HttpStatusCode.Found)]
+    [InlineData(HttpStatusCode.SeeOther)]
+    public async Task Redirect301302PostAnd303_RewriteToGetWithoutBody(HttpStatusCode status)
+    {
+        var inner = new RecordingHandler(new Uri(Origin + LandingPath), status);
+        using var handler = new HttpConnectionRedirectHandler(inner);
+        using var client = new HttpClient(handler);
+        using var request = new HttpRequestMessage(HttpMethod.Post, Origin + StartPath)
+        {
+            Content = new StringContent("payload", Encoding.UTF8, "text/plain")
+        };
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(2, inner.Requests.Count);
+        Assert.Equal("GET", inner.Requests[1].Method);
+        Assert.True(string.IsNullOrEmpty(inner.Requests[1].Body));
+    }
+
+    [Fact]
+    public async Task AllowAutoRedirectDisabled_ReturnsTheRedirectResponse()
+    {
+        var inner = new RecordingHandler(new Uri(Origin + LandingPath));
+        using var handler = new HttpConnectionRedirectHandler(inner, allowAutoRedirect: false);
+        using var client = new HttpClient(handler);
+        using var request = new HttpRequestMessage(HttpMethod.Get, Origin + StartPath);
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Single(inner.Requests);
+    }
+
+    [Fact]
+    public async Task RedirectLoop_StopsAfterConfiguredHops()
+    {
+        var inner = new LoopingHandler();
+        using var handler = new HttpConnectionRedirectHandler(inner, allowAutoRedirect: true, maxAutomaticRedirections: HttpConnectionRedirectHandler.DefaultMaxRedirects);
+        using var client = new HttpClient(handler);
+        using var request = new HttpRequestMessage(HttpMethod.Get, Origin + StartPath);
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.Found, response.StatusCode);
+        Assert.Equal(HttpConnectionRedirectHandler.DefaultMaxRedirects + 1, inner.Sends);
+    }
+
+    [Fact]
+    public async Task DifferentPortOnTheSameHost_StripsConnectionCredentials()
+    {
+        var token = NewValue();
+        var inner = new RecordingHandler(new Uri("https://origin.example:8443" + LandingPath));
+        using var handler = new HttpConnectionRedirectHandler(inner);
+        using var client = new HttpClient(handler);
+        using var request = await ApplyAsync("bearer", token, new Uri(Origin + StartPath), allowedHosts: "origin.example");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(2, inner.Requests.Count);
+        Assert.Equal($"Bearer {token}", inner.Requests[0].Authorization);
+        Assert.Null(inner.Requests[1].Authorization);
+        Assert.Equal(8443, inner.Requests[1].Port);
+    }
+
+    [Fact]
+    public async Task NoConnection_StripsAuthorizationOnCrossOriginRedirect()
+    {
+        var inner = new RecordingHandler(new Uri(Other + LandingPath));
+        using var handler = new HttpConnectionRedirectHandler(inner);
+        using var client = new HttpClient(handler);
+        using var request = new HttpRequestMessage(HttpMethod.Get, Origin + StartPath);
+        request.Headers.TryAddWithoutValidation("Authorization", "Bearer supplied");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("Bearer supplied", inner.Requests[0].Authorization);
+        Assert.Null(inner.Requests[1].Authorization);
+    }
+
+    [Fact]
+    public async Task NoConnection_RefusesHttpsToHttpRedirect()
     {
         var inner = new RecordingHandler(new Uri("http://origin.example" + LandingPath));
         using var handler = new HttpConnectionRedirectHandler(inner);
         using var client = new HttpClient(handler);
-        using var request = await ApplyAsync("bearer", NewValue(), new Uri(Origin + StartPath), allowedHosts: "origin.example");
+        using var request = new HttpRequestMessage(HttpMethod.Get, Origin + StartPath);
 
-        var refused = await Assert.ThrowsAsync<ConnectionUnavailableException>(() => client.SendAsync(request));
-        Assert.Equal(ConnectionFaultCodes.InsecureHttp, refused.Code);
+        await Assert.ThrowsAsync<HttpRequestException>(() => client.SendAsync(request));
+        Assert.Single(inner.Requests);
+    }
+
+    [Fact]
+    public async Task QueryNameIsMatchedAsAParameterName()
+    {
+        var inner = new RecordingHandler(new Uri(Origin + LandingPath));
+        using var handler = new HttpConnectionRedirectHandler(inner);
+        using var client = new HttpClient(handler);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "http://origin.example" + StartPath + "?monkey=1");
+        request.Options.Set(HttpConnectionRequestOptionKeys.Applied, new HttpConnectionApplication
+        {
+            ConnectionName = "acme",
+            Hosts = AllowedHostsPolicy.Fixed("origin.example"),
+            AllowInsecureHttp = false,
+            QueryName = "key"
+        });
+
+        using var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(2, inner.Requests.Count);
     }
 
     private static async Task<HttpRequestMessage> ApplyAsync(string scheme, string token, Uri url, string allowedHosts)
@@ -170,7 +312,7 @@ public sealed class HttpConnectionRedirectHandlerTests
 
     private static string NewValue() => $"tok{Guid.NewGuid():N}";
 
-    private sealed class RecordingHandler(Uri landing) : HttpMessageHandler
+    private sealed class RecordingHandler(Uri landing, HttpStatusCode redirectStatus = HttpStatusCode.Found) : HttpMessageHandler
     {
         public List<CapturedRequest> Requests { get; } = [];
 
@@ -179,7 +321,7 @@ public sealed class HttpConnectionRedirectHandlerTests
             Requests.Add(CapturedRequest.From(request));
             if (request.RequestUri?.AbsolutePath == StartPath)
             {
-                var redirect = new HttpResponseMessage(HttpStatusCode.Found);
+                var redirect = new HttpResponseMessage(redirectStatus);
                 redirect.Headers.Location = landing;
                 return Task.FromResult(redirect);
             }
@@ -188,19 +330,44 @@ public sealed class HttpConnectionRedirectHandlerTests
         }
     }
 
-    private sealed record CapturedRequest(string Host, string Path, string Query, string? Authorization, string? ApiKeyHeader)
+    private sealed class LoopingHandler : HttpMessageHandler
+    {
+        public int Sends { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Sends++;
+            var redirect = new HttpResponseMessage(HttpStatusCode.Found);
+            redirect.Headers.Location = new Uri(Origin + $"/hop-{Sends}");
+            return Task.FromResult(redirect);
+        }
+    }
+
+    private sealed record CapturedRequest(
+        string Host,
+        string Path,
+        string Query,
+        string? Authorization,
+        string? ApiKeyHeader,
+        string Method,
+        string? Body,
+        int Port)
     {
         public static CapturedRequest From(HttpRequestMessage request)
         {
             var uri = request.RequestUri ?? throw new InvalidOperationException("Missing URI.");
             request.Headers.TryGetValues("Authorization", out var authorization);
             request.Headers.TryGetValues("X-Api-Key", out var apiKey);
+            var body = request.Content?.ReadAsStringAsync().GetAwaiter().GetResult();
             return new CapturedRequest(
                 uri.IdnHost,
                 uri.AbsolutePath,
                 uri.Query,
                 authorization?.FirstOrDefault(),
-                apiKey?.FirstOrDefault());
+                apiKey?.FirstOrDefault(),
+                request.Method.Method,
+                body,
+                uri.Port);
         }
     }
 

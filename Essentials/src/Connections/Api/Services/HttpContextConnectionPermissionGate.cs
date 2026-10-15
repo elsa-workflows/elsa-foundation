@@ -11,24 +11,24 @@ internal sealed class HttpContextConnectionPermissionGate(
     IPermissionAuthorizationService authorization,
     IHttpContextAccessor httpContextAccessor) : IConnectionPermissionGate
 {
+    public ValueTask EnsureManageAsync(string tenantId, CancellationToken cancellationToken = default) =>
+        EnsureAsync(ConnectionsPermissions.Manage, tenantId, cancellationToken);
+
     public ValueTask EnsureUseAsync(string tenantId, CancellationToken cancellationToken = default) =>
-        EnsureAsync(ConnectionsPermissions.Use, tenantId, requirePrincipal: false, cancellationToken);
+        EnsureAsync(ConnectionsPermissions.Use, tenantId, cancellationToken);
 
     public ValueTask EnsureBindSecretAsync(string tenantId, CancellationToken cancellationToken = default) =>
-        EnsureAsync(ConnectionsPermissions.BindSecret, tenantId, requirePrincipal: false, cancellationToken);
+        EnsureAsync(ConnectionsPermissions.BindSecret, tenantId, cancellationToken);
 
-    private async ValueTask EnsureAsync(string permission, string tenantId, bool requirePrincipal, CancellationToken cancellationToken)
+    private async ValueTask EnsureAsync(string permission, string tenantId, CancellationToken cancellationToken)
     {
         var principal = httpContextAccessor.HttpContext?.User;
         if (principal?.Identity?.IsAuthenticated != true)
         {
-            if (!requirePrincipal)
-                return;
-
             throw new ConnectionUnavailableException(
                 "connection",
                 ConnectionFaultCodes.Forbidden,
-                "A principal is required to bind an existing secret or named credential to a connection.");
+                $"An authenticated principal is required for permission '{permission}'.");
         }
 
         var result = await authorization.AuthorizeAsync(

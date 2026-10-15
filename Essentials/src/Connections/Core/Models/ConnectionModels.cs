@@ -183,7 +183,16 @@ public sealed class ConnectionResolveRequest
     public required string Name { get; init; }
     public string? RequiredType { get; init; }
     public string Owner { get; init; } = ConnectionOwners.Tenant;
+    /// <summary>
+    /// Publisher or binder identity recorded at publish or bind time. Runtime of a published
+    /// workflow passes this rather than the identity that triggered the run.
+    /// </summary>
     public string? RunAs { get; init; }
+    /// <summary>
+    /// When false, skip the live principal use check. Set for already-published workflow runtime;
+    /// use was recorded against the publisher at publish time.
+    /// </summary>
+    public bool CheckUsePermission { get; init; } = true;
 }
 
 public sealed class ConnectionCredentialRequest

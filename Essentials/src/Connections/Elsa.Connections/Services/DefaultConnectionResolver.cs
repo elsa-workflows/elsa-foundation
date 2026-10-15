@@ -16,7 +16,8 @@ internal sealed class DefaultConnectionResolver(
         ArgumentException.ThrowIfNullOrWhiteSpace(request.TenantId);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Name);
 
-        await permissionGate.EnsureUseAsync(request.TenantId, cancellationToken);
+        if (request.CheckUsePermission)
+            await permissionGate.EnsureUseAsync(request.TenantId, cancellationToken);
 
         if (!string.Equals(request.Owner, ConnectionOwners.Tenant, StringComparison.OrdinalIgnoreCase))
         {

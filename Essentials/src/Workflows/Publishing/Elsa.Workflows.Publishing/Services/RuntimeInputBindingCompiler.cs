@@ -111,7 +111,7 @@ public sealed class RuntimeInputBindingCompiler(
         EnsureNoCredentialLiterals(nodeId, states, key =>
             contractsByKey.TryGetValue(key, out var contract) && contract.IsCredential ? contract.Name : null);
         EnsureConnectionBindings(nodeId, states, key =>
-            contractsByKey.TryGetValue(key, out var contract) && IsConnectionTyped(contract.Type));
+            contractsByKey.TryGetValue(key, out var contract) && IsConnectionInput(contract));
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
         foreach (var state in states)
         {
@@ -167,6 +167,9 @@ public sealed class RuntimeInputBindingCompiler(
 
     private static bool IsConnectionInput(InputDefinition definition) =>
         !string.IsNullOrWhiteSpace(definition.ConnectionType) || IsConnectionTyped(definition.Type.Alias);
+
+    private static bool IsConnectionInput(RuntimeActivityInputContract contract) =>
+        !string.IsNullOrWhiteSpace(contract.ConnectionType) || IsConnectionTyped(contract.Type);
 
     private static bool IsConnectionTyped(Elsa.Primitives.Models.ValueTypeDescriptor type) =>
         IsConnectionTyped(type.Alias);
@@ -331,7 +334,9 @@ public sealed class RuntimeInputBindingCompiler(
         IsNullable: contract.IsNullable,
         IsRequired: contract.IsRequired,
         DefaultValue: contract.DefaultValue,
-        DefaultSyntax: contract.HasDefault ? LiteralExpressionType : null);
+        DefaultSyntax: contract.HasDefault ? LiteralExpressionType : null,
+        IsCredential: contract.IsCredential ? true : null,
+        ConnectionType: contract.ConnectionType);
 
     private static void AddBinding(
         IDictionary<string, RuntimeInputBinding> bindings,

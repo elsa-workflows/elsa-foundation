@@ -15,8 +15,7 @@ internal sealed class HttpConnectionApplicator(
     IConnectionResolver resolver,
     IEnumerable<IHttpRequestAuthenticator> authenticators,
     IWorkflowExecutionPartitionAccessor partitionAccessor,
-    IRuntimeSecretMask secretMask,
-    IConnectionPermissionGate permissionGate) : IHttpConnectionApplicator
+    IRuntimeSecretMask secretMask) : IHttpConnectionApplicator
 {
     private readonly IReadOnlyList<IHttpRequestAuthenticator> _authenticators = authenticators.ToArray();
 
@@ -27,17 +26,24 @@ internal sealed class HttpConnectionApplicator(
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
-        if (connection is null || string.IsNullOrWhiteSpace(connection.Name))
+        if (connection is null)
             return;
+        if (string.IsNullOrWhiteSpace(connection.Name))
+        {
+            throw new ConnectionUnavailableException(
+                "connection",
+                ConnectionFaultCodes.Unavailable,
+                "A bound connection reference has no name.");
+        }
 
         var tenantId = partitionAccessor.Current.Value;
-        await permissionGate.EnsureUseAsync(tenantId, cancellationToken);
         await using var resolved = await resolver.ResolveAsync(new ConnectionResolveRequest
         {
             TenantId = tenantId,
             Name = connection.Name,
             RequiredType = connection.Type ?? ConnectionTypeNames.Http,
-            Owner = ConnectionOwners.Tenant
+            Owner = ConnectionOwners.Tenant,
+            CheckUsePermission = false
         }, cancellationToken);
 
         var authenticator = _authenticators.FirstOrDefault(candidate =>

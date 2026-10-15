@@ -326,7 +326,7 @@ The original eleven questions are resolved as D1-D10 above, with one exception (
 | Phase | Unit | Notes |
 |---|---|---|
 | 0 | Wire `Secret` expression evaluation; add `Sensitive` flag to `[ActivityInput]` and definition guard; add `isSensitive` to Studio SDK descriptor; canary test v1; interim credential input `Authorization` on `SendHttpRequest` (D1, amended 2026-10-01) | No new concepts. Closes today's real leak risk. |
-| 1 | Connections core: types, in-memory repository, manager, resolver, `SensitiveValue`, `[ActivityConnection]`, publish gate, permissions; `http` type (api-key, basic, bearer); migrate `SendHttpRequest`, replacing and removing its phase 0 `Authorization` input | Studio: Connections page and picker shipped. Durable Groundwork repository and workflow Connections panel deferred (follow #2729). |
+| 1 | Connections core: types, in-memory repository, manager, resolver, `SensitiveValue`, `[ActivityConnection]`, publish gate, permissions; `http` type (api-key, basic, bearer); migrate `SendHttpRequest`, replacing and removing its phase 0 `Authorization` input | Studio: Connections page and picker shipped. durable `ConnectionRepository` and workflow Connections panel deferred (follow #2729). |
 | 2 | OAuth: authorization-code with PKCE, client credentials, Grant secret type, single-flight refresh, revocation, Attention integration, `FakeOAuthProvider` | Needs answers to questions 2 and 3. |
 | 3 | External stores: KeyVault first, then AWS SM, Vault; store contract suite | Independent of phase 2. |
 | 4 | First real connectors (Google Drive, OneDrive), migrate Anthropic and Copilot options to connection types | Proves the SDK ergonomics on real providers. |

@@ -150,6 +150,40 @@ public sealed class ConnectionManagerAndResolverTests
     }
 
     [Fact]
+    public async Task Update_KeepsPreviousSecretFieldsWhenTheInputCarriesNoNewValue()
+    {
+        await using var provider = CreateProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
+        var resolver = scope.ServiceProvider.GetRequiredService<IConnectionResolver>();
+
+        await manager.CreateAsync(Tenant, new CreateConnectionRequest
+        {
+            Name = "keep-fields",
+            AuthScheme = HttpAuthSchemes.Bearer,
+            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new() { Value = "value-keep" }
+            }
+        });
+
+        await manager.UpdateAsync(Tenant, "keep-fields", new UpdateConnectionRequest
+        {
+            DisplayName = "Kept",
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new()
+            }
+        });
+
+        await using var resolved = await resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "keep-fields" });
+        Assert.Equal("value-keep", (await resolved.GetSensitiveAsync(HttpConnectionSecretFields.Token)).Reveal());
+        var metadata = await manager.FindAsync(Tenant, "keep-fields");
+        Assert.Equal("Kept", metadata!.DisplayName);
+    }
+
+    [Fact]
     public async Task HttpCreate_RequiresBaseUrlOrAllowedHosts()
     {
         await using var provider = CreateProvider();

@@ -41,13 +41,13 @@ function stubApi(): ElsaStudioModuleApi {
         getJson: vi.fn(),
         postJson: vi.fn(),
         putJson: vi.fn(),
-        deleteJson: vi.fn(),
-        postForm: vi.fn()
+        deleteJson: vi.fn()
       }
     },
     featureAreas: registry(),
     propertyEditors: registry(),
-    expressionEditors: registry()
+    expressionEditors: registry(),
+    dialogs: { confirm: vi.fn(), prompt: vi.fn(), alert: vi.fn() }
   };
 }
 

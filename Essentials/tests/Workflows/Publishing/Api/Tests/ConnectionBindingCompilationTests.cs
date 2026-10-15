@@ -61,9 +61,12 @@ public sealed class ConnectionBindingCompilationTests
     public void A_wrong_connection_type_is_refused()
     {
         var state = Bound(new { connection = "smtp-one", type = "smtp" }, "Connection");
-        var exception = Assert.Throws<ArgumentException>(() => _compiler.CompileAll(NodeId, [CatalogInput()], [state]));
-        Assert.Contains("http", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("smtp", exception.Message, StringComparison.Ordinal);
+        var catalog = Assert.Throws<ArgumentException>(() => _compiler.CompileAll(NodeId, [CatalogInput()], [state]));
+        var pinned = Assert.Throws<ArgumentException>(() => _compiler.CompileAll(NodeId, [PinnedContract()], [state]));
+        Assert.Contains("http", catalog.Message, StringComparison.Ordinal);
+        Assert.Contains("smtp", catalog.Message, StringComparison.Ordinal);
+        Assert.Contains("http", pinned.Message, StringComparison.Ordinal);
+        Assert.Contains("smtp", pinned.Message, StringComparison.Ordinal);
     }
 
     private static InputDefinition CatalogInput() => new(
@@ -84,7 +87,8 @@ public sealed class ConnectionBindingCompilationTests
         isNullable: true,
         hasDefault: false,
         defaultValue: null,
-        ActivityValuePolicy.Default);
+        ActivityValuePolicy.Default,
+        connectionType: "http");
 
     private static WorkflowArgumentState Bound(object value, string expressionType) =>
         new(InputKey, new ArgumentValue(JsonSerializer.SerializeToElement(value), expressionType), null, null, null, null);

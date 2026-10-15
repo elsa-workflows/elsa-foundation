@@ -30,6 +30,7 @@ internal sealed class DefaultConnectionManager(
         if (schemes.Find(request.AuthScheme) is null)
             throw new ArgumentException($"Unknown authentication scheme '{request.AuthScheme}'.", nameof(request));
         ValidateSettings(type, request.Settings);
+        await permissionGate.EnsureManageAsync(tenantId, cancellationToken);
         await EnsureBindSecretAsync(tenantId, request.SecretFields, cancellationToken);
 
         var now = timeProvider.GetUtcNow();
@@ -96,11 +97,15 @@ internal sealed class DefaultConnectionManager(
         if (schemes.Find(document.Definition.AuthScheme) is null)
             throw new ArgumentException($"Unknown authentication scheme '{document.Definition.AuthScheme}'.", nameof(request));
 
+        await permissionGate.EnsureManageAsync(tenantId, cancellationToken);
+
         if (request.DisplayName is not null)
             document.Definition.DisplayName = request.DisplayName.Trim();
         if (request.Settings is not null)
         {
             ValidateSettings(type, request.Settings);
+            if (RetargetsBoundCredential(document, request.Settings))
+                await permissionGate.EnsureBindSecretAsync(tenantId, cancellationToken);
             document.Definition.Settings = new Dictionary<string, string>(request.Settings, StringComparer.OrdinalIgnoreCase);
         }
         if (request.Tags is not null)
@@ -109,7 +114,8 @@ internal sealed class DefaultConnectionManager(
         {
             await EnsureBindSecretAsync(tenantId, request.SecretFields, cancellationToken);
             var previous = document.Definition.SecretFields;
-            document.Definition.SecretFields = await WriteSecretFieldsAsync(tenantId, document.Definition.Name, request.SecretFields, cancellationToken);
+            document.Definition.SecretFields = await MergeSecretFieldsAsync(
+                tenantId, document.Definition.Name, previous, request.SecretFields, cancellationToken);
             await DeleteRemovedOwnedSecretsAsync(tenantId, document.Definition.Name, previous, document.Definition.SecretFields, cancellationToken);
         }
 
@@ -197,50 +203,160 @@ internal sealed class DefaultConnectionManager(
         var fields = new Dictionary<string, ConnectionSecretField>(StringComparer.Ordinal);
         foreach (var (fieldName, input) in inputs)
         {
-            var field = new ConnectionSecretField
-            {
-                FieldName = fieldName,
-                SourceKind = string.IsNullOrWhiteSpace(input.SourceKind)
-                    ? ConnectionCredentialSourceKinds.Secret
-                    : input.SourceKind
-            };
-
-            if (string.Equals(field.SourceKind, ConnectionCredentialSourceKinds.NamedCredential, StringComparison.OrdinalIgnoreCase))
-            {
-                field.NamedCredentialName = input.NamedCredentialName;
-            }
-            else if (!string.IsNullOrWhiteSpace(input.ExistingSecretName))
-            {
-                field.SecretName = input.ExistingSecretName.Trim();
-            }
-            else if (!string.IsNullOrWhiteSpace(input.Value))
-            {
-                var secretName = ConnectionName.OwnedSecretName(connectionName, fieldName);
-                var existing = await secretManager.FindAsync(tenantId, secretName, cancellationToken);
-                if (existing is null)
-                {
-                    await secretManager.CreateAsync(tenantId, new CreateSecretRequest
-                    {
-                        Name = secretName,
-                        DisplayName = $"{connectionName} {fieldName}",
-                        TypeName = SecretTypeNames.Text,
-                        StoreName = SecretStoreNames.Encrypted,
-                        Value = input.Value,
-                        Tags = ["owned-by-connection", connectionName]
-                    }, cancellationToken);
-                }
-                else
-                {
-                    await secretManager.RotateAsync(tenantId, secretName, new RotateSecretRequest { Value = input.Value }, cancellationToken);
-                }
-
-                field.SecretName = secretName;
-            }
-
-            fields[fieldName] = field;
+            var field = await WriteSecretFieldAsync(tenantId, connectionName, fieldName, input, cancellationToken);
+            if (field is not null)
+                fields[fieldName] = field;
         }
 
         return fields;
+    }
+
+    private async ValueTask<IDictionary<string, ConnectionSecretField>> MergeSecretFieldsAsync(
+        string tenantId,
+        string connectionName,
+        IDictionary<string, ConnectionSecretField> previous,
+        IDictionary<string, ConnectionSecretFieldInput> inputs,
+        CancellationToken cancellationToken)
+    {
+        var fields = new Dictionary<string, ConnectionSecretField>(previous, StringComparer.Ordinal);
+        foreach (var (fieldName, input) in inputs)
+        {
+            if (!CarriesNewSecretValue(input))
+                continue;
+
+            var field = await WriteSecretFieldAsync(tenantId, connectionName, fieldName, input, cancellationToken);
+            if (field is not null)
+                fields[fieldName] = field;
+        }
+
+        return fields;
+    }
+
+    private async ValueTask<ConnectionSecretField?> WriteSecretFieldAsync(
+        string tenantId,
+        string connectionName,
+        string fieldName,
+        ConnectionSecretFieldInput input,
+        CancellationToken cancellationToken)
+    {
+        var field = new ConnectionSecretField
+        {
+            FieldName = fieldName,
+            SourceKind = string.IsNullOrWhiteSpace(input.SourceKind)
+                ? ConnectionCredentialSourceKinds.Secret
+                : input.SourceKind
+        };
+
+        if (string.Equals(field.SourceKind, ConnectionCredentialSourceKinds.NamedCredential, StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(input.NamedCredentialName))
+                return null;
+            field.NamedCredentialName = input.NamedCredentialName;
+            return field;
+        }
+
+        if (!string.IsNullOrWhiteSpace(input.ExistingSecretName))
+        {
+            field.SecretName = input.ExistingSecretName.Trim();
+            return field;
+        }
+
+        if (string.IsNullOrWhiteSpace(input.Value))
+            return null;
+
+        var secretName = ConnectionName.OwnedSecretName(connectionName, fieldName);
+        var existing = await secretManager.FindAsync(tenantId, secretName, cancellationToken);
+        if (existing is null)
+        {
+            await secretManager.CreateAsync(tenantId, new CreateSecretRequest
+            {
+                Name = secretName,
+                DisplayName = $"{connectionName} {fieldName}",
+                TypeName = SecretTypeNames.Text,
+                StoreName = SecretStoreNames.Encrypted,
+                Value = input.Value,
+                Tags = ["owned-by-connection", connectionName]
+            }, cancellationToken);
+        }
+        else
+        {
+            await secretManager.RotateAsync(tenantId, secretName, new RotateSecretRequest { Value = input.Value }, cancellationToken);
+        }
+
+        field.SecretName = secretName;
+        return field;
+    }
+
+    private static bool CarriesNewSecretValue(ConnectionSecretFieldInput input)
+    {
+        if (!string.IsNullOrWhiteSpace(input.Value) || !string.IsNullOrWhiteSpace(input.ExistingSecretName))
+            return true;
+
+        return !string.IsNullOrWhiteSpace(input.NamedCredentialName) &&
+            string.Equals(input.SourceKind, ConnectionCredentialSourceKinds.NamedCredential, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool RetargetsBoundCredential(ConnectionDocument document, IDictionary<string, string> nextSettings)
+    {
+        if (!HasBoundExistingCredential(document))
+            return false;
+
+        return !HostsEqual(document.Definition.Settings, nextSettings)
+            || !SchemesEqual(document.Definition.Settings, nextSettings)
+            || !InsecureFlagsEqual(document.Definition.Settings, nextSettings);
+    }
+
+    private static bool HasBoundExistingCredential(ConnectionDocument document)
+    {
+        var ownedPrefix = $"connection:{document.Definition.Name}:";
+        foreach (var field in document.Definition.SecretFields.Values)
+        {
+            if (!string.IsNullOrWhiteSpace(field.NamedCredentialName) ||
+                string.Equals(field.SourceKind, ConnectionCredentialSourceKinds.NamedCredential, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (!string.IsNullOrWhiteSpace(field.SecretName) &&
+                !field.SecretName.StartsWith(ownedPrefix, StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool HostsEqual(IDictionary<string, string> previous, IDictionary<string, string> next) =>
+        SettingEquals(previous, next, HttpConnectionSettingKeys.AllowedHosts) &&
+        string.Equals(HostOf(previous), HostOf(next), StringComparison.OrdinalIgnoreCase);
+
+    private static bool SchemesEqual(IDictionary<string, string> previous, IDictionary<string, string> next) =>
+        string.Equals(SchemeOf(previous), SchemeOf(next), StringComparison.OrdinalIgnoreCase);
+
+    private static bool InsecureFlagsEqual(IDictionary<string, string> previous, IDictionary<string, string> next) =>
+        AllowInsecure(previous) == AllowInsecure(next);
+
+    private static bool SettingEquals(IDictionary<string, string> previous, IDictionary<string, string> next, string key)
+    {
+        previous.TryGetValue(key, out var left);
+        next.TryGetValue(key, out var right);
+        return string.Equals(left?.Trim(), right?.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? HostOf(IDictionary<string, string> settings) =>
+        TryBaseUri(settings, out var uri) ? uri.IdnHost : null;
+
+    private static string? SchemeOf(IDictionary<string, string> settings) =>
+        TryBaseUri(settings, out var uri) ? uri.Scheme : null;
+
+    private static bool AllowInsecure(IDictionary<string, string> settings) =>
+        settings.TryGetValue(HttpConnectionSettingKeys.AllowInsecureHttp, out var flag) &&
+        bool.TryParse(flag, out var allowed) &&
+        allowed;
+
+    private static bool TryBaseUri(IDictionary<string, string> settings, out Uri uri)
+    {
+        uri = null!;
+        return settings.TryGetValue(HttpConnectionSettingKeys.BaseUrl, out var baseUrl) &&
+            !string.IsNullOrWhiteSpace(baseUrl) &&
+            Uri.TryCreate(baseUrl, UriKind.Absolute, out uri!);
     }
 
     private async ValueTask DeleteRemovedOwnedSecretsAsync(

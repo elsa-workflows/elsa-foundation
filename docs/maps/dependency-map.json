@@ -3244,6 +3244,11 @@
           "version": "10.0.10"
         },
         {
+          "type": "external",
+          "id": "Microsoft.Extensions.Options",
+          "version": "10.0.10"
+        },
+        {
           "type": "pinned-transitive",
           "id": "CShells.AspNetCore.Abstractions",
           "version": "0.0.30"
@@ -3271,11 +3276,6 @@
         {
           "type": "pinned-transitive",
           "id": "Microsoft.Extensions.Logging.Abstractions",
-          "version": "10.0.10"
-        },
-        {
-          "type": "pinned-transitive",
-          "id": "Microsoft.Extensions.Options",
           "version": "10.0.10"
         },
         {

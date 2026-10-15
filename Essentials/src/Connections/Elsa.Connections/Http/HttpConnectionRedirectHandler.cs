@@ -6,19 +6,33 @@ namespace Elsa.Connections.Http;
 /// <summary>
 /// Follows redirects after the primary handler has auto-redirect disabled. Connection-applied
 /// credentials are kept only for hops the connection's host policy allows, and are stripped when
-/// the next hop is a different host.
+/// the next hop is a different origin (scheme, host, or port).
 /// </summary>
 internal sealed class HttpConnectionRedirectHandler : DelegatingHandler
 {
     public const int DefaultMaxRedirects = 8;
 
+    private readonly bool _allowAutoRedirect;
+    private readonly int _maxAutomaticRedirections;
+
     public HttpConnectionRedirectHandler()
+        : this(allowAutoRedirect: true, maxAutomaticRedirections: DefaultMaxRedirects)
     {
     }
 
-    public HttpConnectionRedirectHandler(HttpMessageHandler innerHandler)
-        : base(innerHandler)
+    public HttpConnectionRedirectHandler(bool allowAutoRedirect, int maxAutomaticRedirections)
     {
+        _allowAutoRedirect = allowAutoRedirect;
+        _maxAutomaticRedirections = Math.Max(0, maxAutomaticRedirections);
+    }
+
+    public HttpConnectionRedirectHandler(
+        HttpMessageHandler innerHandler,
+        bool allowAutoRedirect = true,
+        int maxAutomaticRedirections = DefaultMaxRedirects)
+        : this(allowAutoRedirect, maxAutomaticRedirections)
+    {
+        InnerHandler = innerHandler;
     }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -26,30 +40,32 @@ internal sealed class HttpConnectionRedirectHandler : DelegatingHandler
         ArgumentNullException.ThrowIfNull(request);
         request.Options.TryGetValue(HttpConnectionRequestOptionKeys.Applied, out var applied);
 
-        var remaining = DefaultMaxRedirects;
+        if (request.Content is not null)
+            await request.Content.LoadIntoBufferAsync(cancellationToken).ConfigureAwait(false);
+
+        var remaining = _maxAutomaticRedirections;
         while (true)
         {
             EnsureHopAllowed(request, applied);
             var response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
-            if (!IsRedirect(response) || remaining-- <= 0)
+            if (!_allowAutoRedirect || !IsRedirect(response) || remaining-- <= 0)
                 return response;
 
-            var location = response.Headers.Location;
+            var status = response.StatusCode;
+            var location = response.Headers.Location!;
             response.Dispose();
-            if (location is null)
-                return response;
 
             var next = ToAbsolute(request.RequestUri, location);
-            PrepareRedirect(request, next, applied);
+            PrepareRedirect(request, next, applied, status);
         }
     }
 
     private static void EnsureHopAllowed(HttpRequestMessage request, HttpConnectionApplication? applied)
     {
+        var uri = request.RequestUri ?? throw new InvalidOperationException("The HTTP request has no URI.");
         if (applied is null)
             return;
 
-        var uri = request.RequestUri ?? throw new InvalidOperationException("The HTTP request has no URI.");
         if (!applied.Hosts.Allows(uri))
         {
             throw new ConnectionUnavailableException(
@@ -69,25 +85,60 @@ internal sealed class HttpConnectionRedirectHandler : DelegatingHandler
         }
     }
 
-    private static void PrepareRedirect(HttpRequestMessage request, Uri next, HttpConnectionApplication? applied)
+    private static void PrepareRedirect(
+        HttpRequestMessage request,
+        Uri next,
+        HttpConnectionApplication? applied,
+        System.Net.HttpStatusCode status)
     {
         var previous = request.RequestUri;
-        var crossHost = previous is not null &&
-            !string.Equals(previous.IdnHost, next.IdnHost, StringComparison.OrdinalIgnoreCase);
+        var crossOrigin = IsCrossOrigin(previous, next);
 
-        if (applied is not null && !crossHost && applied.QueryName is { Length: > 0 } && previous is not null)
+        if (applied is null &&
+            previous is not null &&
+            string.Equals(previous.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(next.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new HttpRequestException("HTTPS to HTTP redirects are not followed.");
+        }
+
+        if (applied is not null && !crossOrigin && applied.QueryName is { Length: > 0 } && previous is not null)
             next = CopyQueryCredential(previous, next, applied.QueryName);
 
         request.RequestUri = next;
 
-        if (applied is not null && crossHost)
-            StripAppliedCredentials(request, applied);
+        if (crossOrigin)
+        {
+            if (applied is not null)
+                StripAppliedCredentials(request, applied);
+            else
+                request.Headers.Remove("Authorization");
+        }
 
-        if (request.Method == HttpMethod.Post || request.Method == HttpMethod.Put)
+        RewriteMethodIfRequired(request, status);
+    }
+
+    private static void RewriteMethodIfRequired(HttpRequestMessage request, System.Net.HttpStatusCode status)
+    {
+        var code = (int)status;
+        if (code is 307 or 308)
+            return;
+
+        if (code == 303 || (code is 301 or 302 && request.Method == HttpMethod.Post))
         {
             request.Method = HttpMethod.Get;
             request.Content = null;
         }
+    }
+
+    internal static bool IsCrossOrigin(Uri? previous, Uri next)
+    {
+        if (previous is null)
+            return false;
+
+        return !string.Equals(previous.Scheme, next.Scheme, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(previous.IdnHost, next.IdnHost, StringComparison.OrdinalIgnoreCase)
+            || previous.Port != next.Port;
     }
 
     private static Uri CopyQueryCredential(Uri previous, Uri next, string queryName)
@@ -157,8 +208,21 @@ internal sealed class HttpConnectionRedirectHandler : DelegatingHandler
                 return true;
         }
 
-        if (applied.QueryName is { Length: > 0 } && request.RequestUri?.Query is { Length: > 1 } query)
-            return query.Contains(Uri.EscapeDataString(applied.QueryName), StringComparison.OrdinalIgnoreCase);
+        return applied.QueryName is { Length: > 0 } && QueryHasName(request.RequestUri, applied.QueryName);
+    }
+
+    private static bool QueryHasName(Uri? uri, string queryName)
+    {
+        if (uri?.Query is not { Length: > 1 } query)
+            return false;
+
+        foreach (var part in query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var separator = part.IndexOf('=');
+            var name = separator < 0 ? part : part[..separator];
+            if (string.Equals(Uri.UnescapeDataString(name), queryName, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
 
         return false;
     }
