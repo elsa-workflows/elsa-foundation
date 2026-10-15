@@ -235,6 +235,14 @@ analyzer-only, which NuGet leaves out of the consumers' restore graphs, so no ex
   If fewer than half of the filed issues are promoted after four weeks, or the metrics do not move, the routines are
   paused and their prompts revised.
 
+**Owner amendment, 15 October 2026:** the fixer routine follows the org-wide
+[Issue Bus Lite](https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#issue-bus-lite) protocol
+([#2765](https://github.com/elsa-workflows/elsa-foundation/issues/2765)). Its PRs are not auto-merged by the routine
+and it no longer merges through `elsa-auto-review-merge`. They are merged by the Code Review app
+(`elsa-4-code-review[bot]`), after a non-author approval on the exact head commit and green CI. Routine PRs carry the
+`auto-fix` label, which replaces the `claude/auto-fix-*` branch prefix as the way the routine finds its own PRs and
+their reverts. The remaining D7 decisions are unchanged.
+
 ## Consequences
 
 - Framework constitution 4.0.1 → 5.0.0 (MAJOR: §2.5, §2.21.1 and §2.23 rules removed or redefined). Elsa
