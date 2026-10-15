@@ -51,6 +51,10 @@ public sealed class ClrAssemblyScanner(
     private static readonly string ActivityValueOutcomesAttributeFullName = typeof(ActivityValueOutcomesAttribute).FullName!;
     private static readonly string ActivityAttributeFullName = typeof(ActivityAttribute).FullName!;
     private static readonly string RefusesSecretBindingAttributeFullName = typeof(RefusesSecretBindingAttribute).FullName!;
+    private static readonly string ReplacesActivityTypeAttributeFullName = typeof(ReplacesActivityTypeAttribute).FullName!;
+
+    /// <summary>The design facet that records the activity type names an activity declares it replaces.</summary>
+    public const string ReplacedActivityTypesFacetKind = "elsa.replaced-activity-types";
     private static readonly string StringTypeFullName = typeof(string).FullName!;
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -254,7 +258,34 @@ public sealed class ClrAssemblyScanner(
         if (iconFacet is not null)
             facets.Add(iconFacet);
 
+        var replacedTypesFacet = BuildReplacedActivityTypesFacet(attributes);
+        if (replacedTypesFacet is not null)
+            facets.Add(replacedTypesFacet);
+
         return facets;
+    }
+
+    /// <summary>
+    /// Records <see cref="ReplacesActivityTypeAttribute"/> declarations from the class itself (the attribute is not
+    /// inherited) as facet <see cref="ReplacedActivityTypesFacetKind"/> v1 with payload
+    /// <c>{ "typeNames": [...] }</c>: trimmed, distinct and ordinally sorted. No declaration, no facet, so every
+    /// activity that declares none keeps its catalog content and hash. The payload has no <c>ports</c> member, which
+    /// the authoring catalog would read as ports.
+    /// </summary>
+    private static ActivityDesignFacet? BuildReplacedActivityTypesFacet(IReadOnlyCollection<CustomAttributeData> attributes)
+    {
+        var typeNames = attributes
+            .Where(attribute => attribute.AttributeType.FullName == ReplacesActivityTypeAttributeFullName)
+            .Select(attribute => ReadRequiredStringConstructorArgument(attribute, 0).Trim())
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        return typeNames.Length == 0
+            ? null
+            : new ActivityDesignFacet(
+                ReplacedActivityTypesFacetKind,
+                "1",
+                JsonSerializer.SerializeToElement(new { typeNames }, SerializerOptions));
     }
 
     /// <summary>

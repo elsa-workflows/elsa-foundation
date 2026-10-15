@@ -357,32 +357,32 @@ refused with a stable code, statement-form expressions are wrapped faithfully, a
 **Independent test**: a test assembly activity resolves; a second claimant is ambiguous; a new version without the mark
 is unmapped.
 
-- [ ] T032 [P] [US3] Create `Essentials/src/Activities/Runtime/Core/Attributes/ReplacesActivityTypeAttribute.cs`
+- [X] T032 [P] [US3] Create `Essentials/src/Activities/Runtime/Core/Attributes/ReplacesActivityTypeAttribute.cs`
   (data-model §10): public sealed,
   `[AttributeUsage(AttributeTargets.Class, AllowMultiple = true, Inherited = false)]`, `TypeName`; a blank value throws
   `ArgumentException`. No Elsa 3 name or reference (§E2.7).
-- [ ] T033 [US3] Record the facet in `Essentials/src/Activities/Design/Reconciliation/Clr/Services/ClrAssemblyScanner.cs`
+- [X] T033 [US3] Record the facet in `Essentials/src/Activities/Design/Reconciliation/Clr/Services/ClrAssemblyScanner.cs`
   (and `ReflectionOnlyAttributes.cs` if attributes are read reflection-only there):
   - `ActivityDesignFacet("elsa.replaced-activity-types", "1", { "typeNames": [...] })`;
   - names trimmed, distinct and ordinally sorted, read from the class only;
   - no facet when absent;
   - the payload never carries `ports`.
-- [ ] T034 [US3] Add to `Essentials/tests/Activities/Design/Tests/Unit/ClrAssemblyScannerTests.cs`:
+- [X] T034 [US3] Add to `Essentials/tests/Activities/Design/Tests/Unit/ClrAssemblyScannerTests.cs`:
   - facet present, sorted and de-duplicated for one or several attributes;
   - not inherited from a base class;
   - no facet without the attribute;
   - the content hash of an un-attributed activity unchanged (hash stability).
-- [ ] T035 [P] [US3] Document the facet in `Essentials/src/Activities/Design/Reconciliation/Clr/README.md` and
+- [X] T035 [P] [US3] Document the facet in `Essentials/src/Activities/Design/Reconciliation/Clr/README.md` and
   `Essentials/src/Activities/Design/Reconciliation/Clr/EXTENSION_POINTS.md`: kind, schema and payload, and the
   version-bump consequence of the hash (R-2).
-- [ ] T036 [US3] Create `M/Resolution/Elsa3ReplacedActivityTypeIndex.cs` (internal sealed; data-model §9):
+- [X] T036 [US3] Create `M/Resolution/Elsa3ReplacedActivityTypeIndex.cs` (internal sealed; data-model §9):
   - built once per scope from `IActivityDefinitionVersionStore.ListAsync()`;
   - highest valid-SemVer version per definition;
   - `typeNames` → definition id;
   - more than one id → `AmbiguousAlias` naming both.
-- [ ] T037 [US3] Plug the alias step into `M/Resolution/Elsa3ActivityResolver.cs` between the built-in map and the
+- [X] T037 [US3] Plug the alias step into `M/Resolution/Elsa3ActivityResolver.cs` between the built-in map and the
   verbatim key. The built-in map wins over an alias. Aliased nodes bind members by name case-insensitively (FR-010).
-- [ ] T038 [US3] Create `MT/Elsa3ReplacedActivityTypeTests.cs` with a test-assembly activity (US3 scenarios 1–3):
+- [X] T038 [US3] Create `MT/Elsa3ReplacedActivityTypeTests.cs` with a test-assembly activity (US3 scenarios 1–3):
   - it resolves to the highest version and binds properties case-insensitively;
   - two claimants → `ELS3-ACTIVITY-AMBIGUOUS-ALIAS`;
   - a new version without the attribute → `ELS3-ACTIVITY-UNMAPPED-TYPE`;

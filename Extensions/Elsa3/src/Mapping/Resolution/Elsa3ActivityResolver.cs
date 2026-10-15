@@ -20,7 +20,8 @@ namespace Elsa3.Mapping.Resolution;
 /// <remarks>Never throws for input or catalog content: a miss is an <see cref="Elsa3ResolutionFailure"/>.</remarks>
 internal sealed class Elsa3ActivityResolver(
     IElsa3ActivityMap map,
-    IActivityDefinitionLookup activityLookup)
+    IActivityDefinitionLookup activityLookup,
+    Elsa3ReplacedActivityTypeIndex? aliasIndex = null)
 {
     private static readonly JsonSerializerOptions FacetJsonOptions = new(JsonSerializerDefaults.Web);
     private readonly Dictionary<string, Elsa3Resolution> _byType = new(StringComparer.Ordinal);
@@ -66,6 +67,17 @@ internal sealed class Elsa3ActivityResolver(
         var entry = map.Find(type);
         if (entry is not null)
             return await ResolveEntryAsync(entry, cancellationToken);
+
+        // A built-in entry wins over an alias; an alias wins over the type used verbatim as a catalog key.
+        if (aliasIndex is not null && !string.IsNullOrWhiteSpace(type))
+        {
+            var alias = await aliasIndex.FindAsync(type, cancellationToken);
+            if (alias.Failure is { } failure)
+                return Elsa3Resolution.Failed(failure.Code, failure.Message, failure.Guidance);
+            if (alias.DefinitionId is not null &&
+                await ResolveCatalogAsync(alias.DefinitionId, Elsa3ResolvedSource.Alias, null, cancellationToken) is { } aliased)
+                return aliased;
+        }
 
         if (!string.IsNullOrWhiteSpace(type))
         {

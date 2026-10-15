@@ -4,6 +4,8 @@ using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Reconciliation;
 using Elsa.Activities.Design.Core.Reconciliation.Models;
+using Elsa.Activities.Design.Persistence.Core.Entities;
+using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Primitives.Exceptions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -25,7 +27,7 @@ namespace Elsa3.Mapping.Tests.Support;
 /// resolve real type keys, versions, input keys, slots and outcomes through it (spec 236 SC-002), never a stub that
 /// answers any key.
 /// </summary>
-internal sealed class RealActivityCatalog : IActivityDefinitionLookup
+internal sealed class RealActivityCatalog : IActivityDefinitionLookup, IActivityDefinitionVersionStore
 {
     private static readonly Lazy<IReadOnlyList<ActivityVersionReconciliationModel>> Shipped = new(() => Scan(ShippedAssemblies!));
 
@@ -95,6 +97,22 @@ internal sealed class RealActivityCatalog : IActivityDefinitionLookup
         return this;
     }
 
+    /// <summary>
+    /// Adds a newer version of <paramref name="activityTypeKey"/> without the design facet <paramref name="facetKind"/>,
+    /// as when an activity drops a declaration in a new version.
+    /// </summary>
+    public RealActivityCatalog WithVersionWithoutFacet(string activityTypeKey, string version, string facetKind)
+    {
+        var template = _versions.First(item => StringComparer.Ordinal.Equals(item.Definition.ActivityTypeKey, activityTypeKey));
+        _versions.Add(template with
+        {
+            Id = ActivityCatalogStableIds.VersionId(activityTypeKey, version)!,
+            Version = version,
+            DesignFacets = template.DesignFacets.Where(facet => facet.Kind != facetKind).ToArray()
+        });
+        return this;
+    }
+
     /// <summary>Adds a version whose version string is not valid SemVer, which resolution must ignore.</summary>
     public RealActivityCatalog WithInvalidVersion(string activityTypeKey, string version)
     {
@@ -154,6 +172,27 @@ internal sealed class RealActivityCatalog : IActivityDefinitionLookup
             .Where(item => StringComparer.Ordinal.Equals(item.DefinitionId, definitionId))
             .Select(item => new ActivityDefinitionVersionSummary(item.Id, item.Version, DateTimeOffset.UnixEpoch, item.ExecutionType))
             .ToArray());
+
+    public Task<IReadOnlyList<ActivityDefinitionVersion>> ListAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ActivityDefinitionVersion>>(_versions.Select(item => ActivityDefinitionVersion.From(item)).ToArray());
+
+    public Task<ActivityDefinitionVersion> GetAsync(string versionId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(ActivityDefinitionVersion.From(_versions.Single(item => item.Id == versionId)));
+
+    public Task<ActivityDefinitionVersion> GetWithDefinitionAsync(string versionId, CancellationToken cancellationToken = default) =>
+        GetAsync(versionId, cancellationToken);
+
+    public Task<ActivityDefinitionVersion?> FindByDefinitionAndSortKeyAsync(string definitionId, string semVerSortKey, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException("The conversion tests read the catalog through ListAsync only.");
+
+    public Task<IReadOnlyList<ActivityDefinitionVersion>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ActivityDefinitionVersion>>(_versions.Where(item => item.DefinitionId == definitionId).Select(item => ActivityDefinitionVersion.From(item)).ToArray());
+
+    public Task<IReadOnlyList<ActivityDefinitionVersion>> ListByDefinitionIdsAsync(IEnumerable<string> definitionIds, CancellationToken cancellationToken = default)
+    {
+        var ids = definitionIds.ToHashSet(StringComparer.Ordinal);
+        return Task.FromResult<IReadOnlyList<ActivityDefinitionVersion>>(_versions.Where(item => ids.Contains(item.DefinitionId)).Select(item => ActivityDefinitionVersion.From(item)).ToArray());
+    }
 
     private IEnumerable<IActivityDefinition> Definitions() =>
         _versions.Select(item => item.Definition).Concat(_orphanDefinitions).Distinct();

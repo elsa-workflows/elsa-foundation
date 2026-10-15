@@ -26,6 +26,7 @@ public class Elsa3MappingFeature : IShellFeature
     {
         // The built-in map is a static table: one per application (§2.5.1). Resolution caches per conversion scope.
         services.AddSingleton<IElsa3ActivityMap, Elsa3BuiltInActivityMap>();
+        services.AddScoped<Elsa3ReplacedActivityTypeIndex>();
         services.AddScoped<Elsa3ActivityResolver>();
         services.AddSingleton<IElsa3NodeRewrite, Elsa3SwitchValueSynthesisRewrite>();
         services.AddSingleton<IElsa3NodeRewrite, Elsa3VariableReferenceRewrite>();

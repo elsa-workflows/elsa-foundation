@@ -17,6 +17,8 @@ internal static class ConversionServices
     {
         var services = new ServiceCollection();
         services.AddSingleton(catalog);
+        if (catalog is Elsa.Activities.Design.Persistence.Core.Stores.IActivityDefinitionVersionStore store)
+            services.AddSingleton(store);
         services.AddSingleton(TypeRegistry());
         new Elsa3MappingFeature().ConfigureServices(services);
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
