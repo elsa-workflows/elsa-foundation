@@ -324,20 +324,20 @@ refused with a stable code, statement-form expressions are wrapped faithfully, a
 `x + 1`. A RunJavaScript `getA() + getB()` written with `getVariable` converts to `return args.a + args.b;` with
 `arguments` bound.
 
-- [ ] T065 [US2] In `M/Services/Elsa3ExpressionRewriter.cs`, refuse (VF-IMP-005) `new Date()`; member access or calls on
+- [X] T065 [US2] In `M/Services/Elsa3ExpressionRewriter.cs`, refuse (VF-IMP-005) `new Date()`; member access or calls on
   `DateTime`, `DateTimeOffset`, `TimeSpan`, `Guid`, `Random`, `_`, `moment`; reads of a bare `args`; and
   assignment or update through a lowered read (D-14). Remove the lowering of `getOutput`/`input.x`/`output.x`, which
   Elsa 3 does not have: those names are ordinary locals.
-- [ ] T066 [US2] In `M/Services/Elsa3ExpressionRewriter.cs`, wrap statement-form expressions (D-15): several statements,
+- [X] T066 [US2] In `M/Services/Elsa3ExpressionRewriter.cs`, wrap statement-form expressions (D-15): several statements,
   or one non-expression statement, become `(function () { …; return <last expression>; })()`. A last statement that
   is not an expression → VF-IMP-006.
-- [ ] T067 [US1] Rewrite RunJavaScript scripts (D-16):
+- [X] T067 [US1] Rewrite RunJavaScript scripts (D-16):
   - a script mode in the rewriter: same lowering and refusals, `setOutcome(s)` refused, the final expression statement
     turned into `return`;
   - the lowerer sends the literal `script` of a RunJavaScript node through it and writes the parameter bindings to
     Elsa 4's `arguments` input;
   - map rule `Script` stays Carry; `arguments` is filled by the rewrite.
-- [ ] T068 [US2] Tests `MT/Elsa3JavaScriptConversionTests.cs`:
+- [X] T068 [US2] Tests `MT/Elsa3JavaScriptConversionTests.cs`:
   - one row per D-14 construct with its code;
   - the D-15 wrap (completion value preserved, non-expression tail refused);
   - D-16 script lowering, `arguments` and `return`, `setOutcome` refused;

@@ -69,6 +69,9 @@ internal sealed class Elsa3NodePlan(Elsa3Activity node, string jsonPath, Elsa3Ac
     /// <summary>The Elsa 3 property name each renamed Elsa 4 key came from, for diagnostics after normalization.</summary>
     public Dictionary<string, string> SourceNames { get; } = new(StringComparer.Ordinal);
 
+    /// <summary>The Elsa 4 key of the node's script body, rewritten in script mode, when the node runs a script.</summary>
+    public string? ScriptProperty { get; set; }
+
     /// <summary>Whether normalization reported an error on this node.</summary>
     public bool Failed { get; set; }
 }

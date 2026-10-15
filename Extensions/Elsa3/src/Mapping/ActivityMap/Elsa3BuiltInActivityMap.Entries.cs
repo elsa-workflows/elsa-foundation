@@ -276,7 +276,7 @@ internal sealed partial class Elsa3BuiltInActivityMap
     [
         Catalog("RunJavaScript", RunJavaScript,
             [
-                Carry("Script", "script"),
+                Narrow("Script", "script", Elsa3ValueContract.ScriptBody),
                 Carry("PossibleOutcomes", "possibleOutcomes", ScriptOutcomeRouting),
                 CarryOutput("Result", "result")
             ]),

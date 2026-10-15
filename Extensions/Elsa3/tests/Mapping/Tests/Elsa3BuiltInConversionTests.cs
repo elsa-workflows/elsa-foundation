@@ -63,7 +63,7 @@ public sealed class Elsa3BuiltInConversionTests
     [Fact]
     public async Task A_captured_script_result_is_read_from_the_elsa4_result_output()
     {
-        var script = Activity("script", "Elsa.RunJavaScript", ("script", Literal("return 1;")), ("result", Captured("script-result")));
+        var script = Activity("script", "Elsa.RunJavaScript", ("script", Literal("1")), ("result", Captured("script-result")));
         var write = Activity("write", "Elsa.WriteLine", ("text", Captured("script-result")));
 
         var state = await ConvertAsync(RealActivityCatalog.Create(), Sequence("root", script, write));
@@ -191,7 +191,7 @@ public sealed class Elsa3BuiltInConversionTests
             Activity("publish", "Elsa.PublishEvent", ("eventName", Literal("e"))),
             Activity("read", "Elsa.ReadLine"),
             Activity("for", "Elsa.For", ("start", Literal("0", "Int32")), ("end", Literal("1", "Int32"))),
-            Activity("script", "Elsa.RunJavaScript", ("script", Literal("return 1;"))),
+            Activity("script", "Elsa.RunJavaScript", ("script", Literal("1"))),
             Activity("send", "Elsa.FlowSendHttpRequest", ("url", Literal("https://example.org"))),
             Activity("respond", "Elsa.WriteHttpResponse", ("statusCode", Literal("OK"))),
             Activity("execute", "Elsa.ExecuteWorkflow", ("workflowDefinitionId", Literal("child"))),

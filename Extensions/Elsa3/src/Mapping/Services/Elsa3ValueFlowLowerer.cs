@@ -18,7 +18,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         Elsa3MemoryReferenceInventory inventory,
         IReadOnlyDictionary<string, string> diagnosticMetadata,
         IReadOnlyDictionary<Elsa3Activity, string>? jsonPaths = null,
-        Func<Elsa3Activity, string, string>? sourceNameOf = null)
+        Func<Elsa3Activity, string, string>? sourceNameOf = null,
+        Func<Elsa3Activity, string, bool>? isScriptBody = null)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(inventory);
@@ -76,7 +77,10 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
 
             if (property.Expression is not null)
             {
-                LowerExpression(definition, input, property, outputs, nodeOrder, diagnostics);
+                if (isScriptBody?.Invoke(property.Activity, property.PropertyName) == true)
+                    LowerScript(definition, input, property, outputs, nodeOrder, diagnostics);
+                else
+                    LowerExpression(definition, input, property, outputs, nodeOrder, diagnostics);
                 continue;
             }
 
@@ -281,6 +285,95 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             rewrite.Definition!.Language,
             JsonSerializer.SerializeToElement(rewrite.Definition));
     }
+
+    /// <summary>The Elsa 4 RunJavaScript input that carries the values a converted script reads.</summary>
+    internal const string ScriptArgumentsKey = "arguments";
+
+    /// <summary>
+    /// A RunJavaScript body (plan D-16). Elsa 3 stores it as a literal and runs it with its host functions; Elsa 4 runs
+    /// it as a function body that sees only <c>args</c>. The body is rewritten in script mode: its reads become
+    /// <c>args.&lt;name&gt;</c>, bound by an <c>arguments</c> object expression, and its completion value is returned.
+    /// </summary>
+    private void LowerScript(
+        Elsa3WorkflowDefinition definition,
+        DiagnosticScope input,
+        ActivityProperty property,
+        IReadOnlyList<Elsa3MemoryOccurrence> outputs,
+        IReadOnlyDictionary<string, int> nodeOrder,
+        List<Elsa3MigrationDiagnostic> diagnostics)
+    {
+        var expression = property.Expression!;
+        if (!expression.Type.Equals("Literal", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(expression.Value))
+        {
+            LowerExpression(definition, input, property, outputs, nodeOrder, diagnostics);
+            return;
+        }
+
+        var rewrite = expressionRewriter.Rewrite(
+            "JavaScript",
+            expression.Value,
+            new TypeReference("Object"),
+            ambient => ResolveAmbient(definition, property, outputs, nodeOrder, ambient),
+            Elsa3JavaScriptMode.Script);
+        if (!rewrite.Succeeded)
+        {
+            foreach (var issue in rewrite.Issues)
+                diagnostics.Add(CreateDiagnostic(input, property, issue.Code, issue.Message, issue.Guidance, $"{property.JsonPath}.expression.value"));
+            return;
+        }
+
+        var resultCaptured = outputs.Any(output => output.ActivityNodeId.Equals(property.ActivityNodeId, StringComparison.Ordinal));
+        if (rewrite.CompletionValueLost && resultCaptured)
+        {
+            diagnostics.Add(CreateDiagnostic(
+                input,
+                property,
+                Elsa3ImportDiagnosticCodes.DynamicAccessor,
+                "The script's result is captured, but the script ends with a statement, so its Elsa 3 completion value has no Elsa 4 return.",
+                "End the script with the expression whose value it produces.",
+                $"{property.JsonPath}.expression.value"));
+            return;
+        }
+
+        var definitionResult = rewrite.Definition!;
+        property.Activity.AdditionalProperties[property.PropertyName] = StripMemoryReference(
+            Elsa3Literal(property.Value, definitionResult.Source));
+        if (definitionResult.Parameters.Count == 0)
+            return;
+
+        var members = definitionResult.Parameters.Keys
+            .Order(StringComparer.Ordinal)
+            .Select(name => $"{JsonSerializer.Serialize(name)}: {ArgumentAccess(name)}");
+        var arguments = new ExpressionDefinition(
+            "JavaScript",
+            $"({{ {string.Join(", ", members)} }})",
+            new TypeReference("Object"),
+            definitionResult.Parameters,
+            JsonSerializer.SerializeToElement(new { }),
+            ExpressionCapabilityProfiles.BindingPureV1);
+        property.Activity.AdditionalProperties[ScriptArgumentsKey] = JsonSerializer.SerializeToElement(new JsonObject
+        {
+            ["typeName"] = "Object",
+            ["expression"] = new JsonObject
+            {
+                ["type"] = "JavaScript",
+                ["value"] = JsonNode.Parse(JsonSerializer.Serialize(arguments)),
+            },
+        });
+    }
+
+    private static JsonElement Elsa3Literal(JsonElement original, string value)
+    {
+        var node = JsonNode.Parse(original.GetRawText())?.AsObject() ?? new JsonObject();
+        node["expression"] = new JsonObject { ["type"] = "Literal", ["value"] = value };
+        return JsonSerializer.SerializeToElement(node);
+    }
+
+    private static string ArgumentAccess(string name) =>
+        name.Length > 0 && (char.IsLetter(name[0]) || name[0] is '_' or '$') &&
+        name.Skip(1).All(character => char.IsLetterOrDigit(character) || character is '_' or '$')
+            ? $"args.{name}"
+            : $"args[{JsonSerializer.Serialize(name)}]";
 
     private static Elsa3ExpressionParameterResolution ResolveAmbient(
         Elsa3WorkflowDefinition definition,

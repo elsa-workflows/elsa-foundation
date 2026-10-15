@@ -75,7 +75,7 @@ public sealed class Elsa3MemoryReferenceImportTests
             "request",
             Activity("request-node", "Elsa.Consumer", new Dictionary<string, JsonElement>
             {
-                ["Value"] = Argument("JavaScript", "input.customerId", memoryId),
+                ["Value"] = Argument("JavaScript", "getInput(\"customerId\")", memoryId),
             }),
             inputs:
             [
@@ -119,24 +119,23 @@ public sealed class Elsa3MemoryReferenceImportTests
     private static ValidImportCase ActivityResultCase()
     {
         const string producerMemoryId = "legacy:receipt-result";
-        const string consumerMemoryId = "legacy:receipt-consumer";
         var producer = Activity("producer", "Elsa.Producer", new Dictionary<string, JsonElement>
         {
             ["ReceiptId"] = MemoryReference(producerMemoryId),
         });
+        // Elsa 3 JavaScript has no getOutput; a consumer reads a prior result through its own memory reference.
         var consumer = Activity("consumer", "Elsa.Consumer", new Dictionary<string, JsonElement>
         {
-            ["Value"] = Argument("JavaScript", "getOutput(\"receiptId\")", consumerMemoryId),
+            ["Value"] = MemoryReference(producerMemoryId),
         });
         var definition = Workflow("result", Activity("root", "Elsa.Sequence", children: [producer, consumer]));
 
-        return Case(definition, [Container(), Producer(), Consumer()], [producerMemoryId, consumerMemoryId], version =>
+        return Case(definition, [Container(), Producer(), Consumer()], [producerMemoryId], version =>
         {
-            var expression = ReadPortableExpression(ReadValue(FindInput(version, "consumer", ValueInputKey)));
-            Assert.Equal("args.receiptId", expression.Source);
-            var parameter = Assert.IsType<ActivityResultExpressionParameterBinding>(expression.Parameters["receiptId"]);
-            Assert.Equal("producer", parameter.ProducerNodeId);
-            Assert.Equal("key:receipt-id", parameter.ProjectionKey);
+            var value = ReadValue(FindInput(version, "consumer", ValueInputKey));
+            Assert.Equal("ActivityResult", value.ExpressionType);
+            Assert.Equal("producer", GetProperty(value.Value, "producerNodeId").GetString());
+            Assert.Equal("key:receipt-id", GetProperty(value.Value, "projectionKey").GetString());
         });
     }
 

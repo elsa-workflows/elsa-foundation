@@ -240,7 +240,7 @@ public sealed class Elsa3ConversionDiagnosticsTests
             case Elsa3ActivityDiagnosticCodes.ExecuteWorkflowDurable:
                 return Sequence("root", Activity("node", "Elsa.ExecuteWorkflow", ("workflowDefinitionId", Literal("child"))));
             case Elsa3ActivityDiagnosticCodes.ScriptOutcomeRouting:
-                return Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal("return 'a';")), ("possibleOutcomes", Literal("[\"a\"]", "Object"))));
+                return Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal("'a'")), ("possibleOutcomes", Literal("[\"a\"]", "Object"))));
             default:
                 throw new ArgumentOutOfRangeException(nameof(code), code, null);
         }

@@ -88,5 +88,11 @@ public enum Elsa3ValueContract
     LiteralTimeSpanToString,
 
     /// <summary>An HTTP method Elsa 4 sends; PATCH and OPTIONS have no counterpart (R6).</summary>
-    HttpMethodSupported
+    HttpMethodSupported,
+
+    /// <summary>
+    /// A RunJavaScript body (plan D-16): rewritten in script mode, its Elsa 3 reads bound through the activity's
+    /// <c>arguments</c> input and its completion value returned.
+    /// </summary>
+    ScriptBody
 }

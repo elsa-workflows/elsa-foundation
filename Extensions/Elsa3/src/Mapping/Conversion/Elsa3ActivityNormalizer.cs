@@ -211,6 +211,8 @@ internal sealed class Elsa3ActivityNormalizer(
                     Warn(context, warning, propertyName);
                 break;
             case Elsa3MemberRuleKind.NarrowedContract:
+                if (rule.Contract == Elsa3ValueContract.ScriptBody)
+                    context.Node.ScriptProperty = rule.Elsa4Key;
                 if (CheckContract(context, rule, propertyName, value) is { } fitted)
                     Add(context, rule.Elsa4Key!, propertyName, fitted, result, boundBy);
                 break;
