@@ -26,7 +26,7 @@ research.md (R-1 to R-10), data-model.md, contracts/, quickstart.md.
 
 ## Phase 1: Setup
 
-- [ ] T001 Add test-only project references to `MT/Elsa3.Mapping.Tests.csproj`:
+- [X] T001 Add test-only project references to `MT/Elsa3.Mapping.Tests.csproj`:
   - the Elsa 4 activity assemblies the map targets (Primitives, Flow/control, Http, Scheduling, JavaScript, Graph
     Runtime, which holds `Elsa.Activities.Graph.Runtime.Activities.Complete`);
   - `Elsa.Activities.Design.Reconciliation.Clr` (scanner);
@@ -34,7 +34,7 @@ research.md (R-1 to R-10), data-model.md, contracts/, quickstart.md.
 
   The production `M/Elsa3.Mapping.csproj` gains **no** Graph reference (plan, Testing). Restore and build the test
   project.
-- [ ] T002 [P] Create the test-owned Elsa 3 surface fixture `MT/Fixtures/elsa3-activity-surface.json` (R-4):
+- [X] T002 [P] Create the test-owned Elsa 3 surface fixture `MT/Fixtures/elsa3-activity-surface.json` (R-4):
   - start from `docs/reports/evidence/activity-contract-parity/` (67 classes in five modules);
   - remove the spurious `Result` outputs;
   - add `SetOutput`, the plain properties, the ports (`then`, `else`, `body`, `cases`, `default`, `branches`) and the
@@ -46,31 +46,31 @@ research.md (R-1 to R-10), data-model.md, contracts/, quickstart.md.
 
 ## Phase 2: Foundational (blocks every story)
 
-- [ ] T003 [P] Create `Extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs`: a public static class with the 14
+- [X] T003 [P] Create `Extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs`: a public static class with the 14
   `ELS3-ACTIVITY-*` and 12 `ELS3-BEHAVIOUR-*` constants exactly as in `contracts/diagnostic-codes.md`. That includes
   `OutcomeUndeclared` and `OutcomeUnreached`, and excludes the removed `BoundaryOutcomeUnsupported` (D-10).
-- [ ] T004 [P] Create the public map model types in `M/ActivityMap/` (data-model §1–§4, immutable records, ordinal keys):
+- [X] T004 [P] Create the public map model types in `M/ActivityMap/` (data-model §1–§4, immutable records, ordinal keys):
   - `Elsa3ActivityMapEntry.cs`;
   - `Elsa3ActivityTarget.cs` (closed hierarchy: `CatalogActivity`, `Intrinsic`, `GraphLevel`, `NoCounterpart`);
   - `Elsa3MemberRule.cs` with `Elsa3MemberKind`, `Elsa3MemberRuleKind` and `Elsa3ValueContract`;
   - `Elsa3OutcomeRule.cs`;
   - `Elsa3NodeRewriteKind.cs` (the 8 kinds of data-model §6).
-- [ ] T005 Create `M/ActivityMap/IElsa3ActivityMap.cs` (public replacement contract) and
+- [X] T005 Create `M/ActivityMap/IElsa3ActivityMap.cs` (public replacement contract) and
   `M/ActivityMap/Elsa3BuiltInActivityMap.cs` (internal sealed). The static table is empty for now, with ordinal
   lookup dictionaries built once. Register it as a singleton in `M/Elsa3MappingFeature.cs` (`ConfigureServices` stays
   virtual).
-- [ ] T006 [P] Create the conversion contracts and models in `M/Conversion/` (data-model §7, §7a, §8;
+- [X] T006 [P] Create the conversion contracts and models in `M/Conversion/` (data-model §7, §7a, §8;
   `contracts/converter-api.md`):
   - `IElsa3DefinitionConverter.cs`, `IElsa3NodeConverter.cs`;
   - `Elsa3ConversionRequest.cs`;
   - `Elsa3ConvertedDefinition.cs` (`State`, `OutputMappings`, `BoundaryOutcomes` as
     `IReadOnlyList<ActivityOutcomeContract>`, `OutcomeMappings`);
   - `Elsa3GraphOutputMapping.cs`, `Elsa3GraphOutcomeMapping.cs`.
-- [ ] T007 Create `MT/Support/RealActivityCatalog.cs`: it runs `ClrAssemblyScanner` over the Elsa 4 activity assemblies
+- [X] T007 Create `MT/Support/RealActivityCatalog.cs`: it runs `ClrAssemblyScanner` over the Elsa 4 activity assemblies
   from T001 into an in-memory `IActivityDefinitionVersionStore` / `IActivityDefinitionLookup`, so tests resolve real
   type keys and versions (SC-002). It also supports adding test-assembly activities and extra versions (US1 scenario
   3, US3).
-- [ ] T008 Create `MT/Elsa3ActivityMapCoverageTests.cs` (SC-001, R-4):
+- [X] T008 Create `MT/Elsa3ActivityMapCoverageTests.cs` (SC-001, R-4):
   - **Elsa 3 side**: every activity and member in `elsa3-activity-surface.json` has exactly one map entry and member
     rule.
   - **Elsa 4 side**: every targeted type key, member key, slot and outcome exists ordinally in `RealActivityCatalog`.
@@ -78,7 +78,7 @@ research.md (R-1 to R-10), data-model.md, contracts/, quickstart.md.
   - Every behaviour constant is used by a map entry or a rewrite strategy (`OutcomeUndeclared` and `OutcomeUnreached`
     by `TerminalPlacement`).
   - The test is red until T015.
-- [ ] T009 Create `M/Resolution/Elsa3ActivityResolver.cs` (internal sealed, scoped; R-5; data-model §5):
+- [X] T009 Create `M/Resolution/Elsa3ActivityResolver.cs` (internal sealed, scoped; R-5; data-model §5):
   - resolution order: plan replacement → built-in map → *(alias step, filled in T037)* → verbatim catalog key →
     `UnmappedType`;
   - highest valid-SemVer pick via `IActivityDefinitionLookup.ListVersions` + `SemVer.TryParse`/`CompareTo`, build
@@ -88,10 +88,10 @@ research.md (R-1 to R-10), data-model.md, contracts/, quickstart.md.
   - per-scope cache by Elsa 3 type name.
 
   Register it as scoped in `M/Elsa3MappingFeature.cs`.
-- [ ] T010 [P] Change `M/Services/Elsa3ValueFlowLowerer.cs` to take an `IReadOnlyDictionary<string,string>` of
+- [X] T010 [P] Change `M/Services/Elsa3ValueFlowLowerer.cs` to take an `IReadOnlyDictionary<string,string>` of
   diagnostic metadata instead of `Elsa3WorkflowDefinitionImportInput` (R-8). `M/Services/Elsa3WorkflowDefinitionImporter.cs`
   builds the dictionary from its input exactly as today. Existing `Elsa3MemoryReference*Tests` stay green.
-- [ ] T011 Create `M/Conversion/Elsa3DefinitionConverter.cs` (internal sealed, scoped; FR-015):
+- [X] T011 Create `M/Conversion/Elsa3DefinitionConverter.cs` (internal sealed, scoped; FR-015):
   - pipeline: clone → normalize (T017) → collect memory-reference graph + lower → map to `WorkflowDefinitionState`;
   - never mutates `request.Definition`;
   - gathers every diagnostic, ordered by (JSON path, code) (FR-014);
@@ -99,7 +99,7 @@ research.md (R-1 to R-10), data-model.md, contracts/, quickstart.md.
   - returns `Elsa3MigrationResult<Elsa3ConvertedDefinition>`.
 
   Register `IElsa3DefinitionConverter` and `IElsa3NodeConverter` in `M/Elsa3MappingFeature.cs`.
-- [ ] T012 Create `MT/Elsa3ActivityResolverTests.cs`:
+- [X] T012 Create `MT/Elsa3ActivityResolverTests.cs`:
   - each resolution step and its precedence;
   - the SemVer pick (`1.0.0` vs `1.1.0+abc` → `1.1.0+abc`; non-SemVer ignored; none valid → `VersionUnavailable`);
   - intrinsics;
@@ -119,7 +119,7 @@ renamed, defaults made explicit (R2), ports routed to native child slots, and in
 **Independent test**: `Elsa3BuiltInConversionTests` converts a definition with one node of each convertible built-in
 against `RealActivityCatalog`. It finishes with 0 errors and warnings only where W applies.
 
-- [ ] T013 [US1] Fill `M/ActivityMap/Elsa3BuiltInActivityMap.cs` for the **Workflows.Core control and primitives**
+- [X] T013 [US1] Fill `M/ActivityMap/Elsa3BuiltInActivityMap.cs` for the **Workflows.Core control and primitives**
   sections of member-map.md:
   - If, FlowDecision → If, Switch, FlowSwitch → Switch, For, ForEach, While, Break, Sequence, Parallel, Fork, Delay,
     WriteLine, ReadLine, Fault;
@@ -127,7 +127,7 @@ against `RealActivityCatalog`. It finishes with 0 errors and warnings only where
   - Flowchart, FlowFork, FlowJoin and Start as `GraphLevel` (#2705);
   - the shared R9 base list (`name`, `metadata`, `nodeId`);
   - `Elsa3OutcomeRule`s per FR-004d.
-- [ ] T014 [US1] Fill `M/ActivityMap/Elsa3BuiltInActivityMap.cs` for the **Workflows.Runtime, Http, Scheduling and
+- [X] T014 [US1] Fill `M/ActivityMap/Elsa3BuiltInActivityMap.cs` for the **Workflows.Runtime, Http, Scheduling and
   JavaScript** sections:
   - DispatchWorkflow, ExecuteWorkflow → DispatchWorkflow;
   - HttpEndpoint, WriteHttpResponse, SendHttpRequest, FlowSendHttpRequest → SendHttpRequest;
@@ -135,12 +135,12 @@ against `RealActivityCatalog`. It finishes with 0 errors and warnings only where
   - RunJavaScript;
   - every §3 activity as `NoCounterpart` with its reason;
   - `Inline`, `DynamicActivity`, `NotFoundActivity`, `StateMachine`, `Workflow`, `CompositeWithResult` per member-map.md.
-- [ ] T015 [US1] Run `MT/Elsa3ActivityMapCoverageTests.cs` and fix the table until both sides are green (SC-001).
-- [ ] T016 [US1] Create `M/Conversion/Elsa3NativeStructureBuilder.cs` (internal sealed; R-6): it builds a container's
+- [X] T015 [US1] Run `MT/Elsa3ActivityMapCoverageTests.cs` and fix the table until both sides are green (SC-001).
+- [X] T016 [US1] Create `M/Conversion/Elsa3NativeStructureBuilder.cs` (internal sealed; R-6): it builds a container's
   native Elsa 4 structure from the resolved target's structure design facet (kind, schema, slots, cardinality, initial
   payload). It routes Elsa 3 `activities` and port children into slots by the entry's `ChildSlot` rules. A Flowchart
   container yields `GraphConversionPending`, but its children are still converted per node (FR-006).
-- [ ] T017 [US1] Create `M/Conversion/Elsa3ActivityNormalizer.cs` (internal sealed): per node it resolves through
+- [X] T017 [US1] Create `M/Conversion/Elsa3ActivityNormalizer.cs` (internal sealed): per node it resolves through
   `Elsa3ActivityResolver` and applies the member rules:
   - R1 carry/rename to the exact Elsa 4 key, with case-insensitive matching of Elsa 3 names;
   - R2 emits the Elsa 3 default;
@@ -154,12 +154,12 @@ against `RealActivityCatalog`. It finishes with 0 errors and warnings only where
   - `MaxNestingDepth` (14) → `NestingTooDeep`;
   - two properties binding one input → `DuplicateInputBinding`;
   - it dispatches the entry's `Rewrite` to the strategies below.
-- [ ] T018 [P] [US1] Create the rewrite contract `M/ActivityMap/Rewrites/IElsa3NodeRewrite.cs` and the strategies
+- [X] T018 [P] [US1] Create the rewrite contract `M/ActivityMap/Rewrites/IElsa3NodeRewrite.cs` and the strategies
   `Elsa3SwitchValueSynthesisRewrite.cs` (MatchFirst literal or absent only; synthesized `Value` returns the first true
   case's label; `cases[].match` = label; MatchAny or expression mode → `UnsupportedMode`) and
   `Elsa3VariableReferenceRewrite.cs` (`VariableReference(referenceKey, declaringScopeId)` with the computed declaring
   scope).
-- [ ] T019 [P] [US1] Create the strategies:
+- [X] T019 [P] [US1] Create the strategies:
   - `M/ActivityMap/Rewrites/Elsa3ExecuteWorkflowAsDispatchRewrite.cs`: `WaitForCompletion = true`; captured `Result`
     or expression target → unconvertible; `ExecuteWorkflowDurable` warning;
   - `Elsa3ParallelBranchNamesRewrite.cs`: `Branch {n}`, 1-based document order; JoinMode → `threshold`;
@@ -167,26 +167,26 @@ against `RealActivityCatalog`. It finishes with 0 errors and warnings only where
     the loop as declaring scope;
   - `Elsa3HttpTriggerResponseModeRewrite.cs`: `ResponseMode = Sync` plus the `Result`/`Headers`/`QueryStringData`
     projections.
-- [ ] T020 [US1] Create `M/ActivityMap/Rewrites/Elsa3TerminalPlacementRewrite.cs`, **plain-workflow branch only**
+- [X] T020 [US1] Create `M/ActivityMap/Rewrites/Elsa3TerminalPlacementRewrite.cs`, **plain-workflow branch only**
   (data-model §6). Finish and End/Complete in the root flowchart with ≤ 1 literal outcome → `elsa.intrinsic.finish@1`
   with `outcome`; anything else → `UnsupportedMode`. The reusable branch comes in T048. Until then, a call with
   `IsReusable = true` returns `UnsupportedMode`, so nothing falls back to `finish`.
-- [ ] T021 [US1] Rewire `M/Mappings/Elsa3ActivityToState.cs`:
+- [X] T021 [US1] Rewire `M/Mappings/Elsa3ActivityToState.cs`:
   - use `Elsa3ActivityResolver` and `Elsa3NativeStructureBuilder` instead of `GetVersion`'s `"{n}.0.0"` lookup and the
     opaque `elsa3.imported-activity.structure`;
   - remove every input-caused throw, including the Flowchart `Connections` `NotSupportedException`, which becomes
     `GraphConversionPending`.
-- [ ] T022 [US1] Rewire `M/Services/Elsa3MemoryReferenceGraph.cs`: `GetVersionAsync` delegates to
+- [X] T022 [US1] Rewire `M/Services/Elsa3MemoryReferenceGraph.cs`: `GetVersionAsync` delegates to
   `Elsa3ActivityResolver`, so lowering and mapping cannot disagree (FR-011). Normalizing first means it sees Elsa 4
   member names (R-8).
-- [ ] T023 [US1] Move `M/Services/Elsa3WorkflowDefinitionImporter.cs` onto `IElsa3DefinitionConverter`
+- [X] T023 [US1] Move `M/Services/Elsa3WorkflowDefinitionImporter.cs` onto `IElsa3DefinitionConverter`
   (`IsReusable = false`, no replacements). Keep `ELS3-REUSABLE-SELECTION-INVALID` for reusable definitions unchanged.
-- [ ] T024 [US1] Migrate the existing tests to real keys (plan §2.21.1 ACTION): the stub lookups that answer any key in
+- [X] T024 [US1] Migrate the existing tests to real keys (plan §2.21.1 ACTION): the stub lookups that answer any key in
   `MT/Elsa3ActivityToStateTests.cs`, `MT/Elsa3MemoryReferenceImportFixture.cs`, `MT/Elsa3MemoryReferenceImportTests.cs`
   and `MT/Elsa3MemoryReferenceDiagnosticsTests.cs` move to `RealActivityCatalog` or explicitly registered real keys.
   Delete `MT/Elsa3ImportedActivityStructureTests.cs`, whose behaviour is removed by R-6, and record the deletion for
   the PR description.
-- [ ] T025 [US1] Create `MT/Elsa3BuiltInConversionTests.cs` covering US1 scenarios 1–8 and SC-002:
+- [X] T025 [US1] Create `MT/Elsa3BuiltInConversionTests.cs` covering US1 scenarios 1–8 and SC-002:
   - WriteLine → Primitives WriteLine with `text`;
   - the renames (`Duration`, `Expression`, `Collection`, `Body`/`Headers`, `Inputs`, `Value`);
   - the SemVer pick;
@@ -196,10 +196,10 @@ against `RealActivityCatalog`. It finishes with 0 errors and warnings only where
   - `If.Then`/`If.Else` native slots;
   - FlowDecision → If and FlowSwitch → Switch;
   - one all-built-ins definition with 0 errors.
-- [ ] T026 [P] [US1] Create `MT/Elsa3NativeStructureBuilderTests.cs` and `MT/Elsa3NodeRewriteTests.cs`: Parallel branch
+- [X] T026 [P] [US1] Create `MT/Elsa3NativeStructureBuilderTests.cs` and `MT/Elsa3NodeRewriteTests.cs`: Parallel branch
   names and threshold, Switch synthesis and case order, VariableReference declaring scopes, loop variables, the
   HttpEndpoint projections, and plain-workflow `TerminalPlacement`.
-- [ ] T027 [US1] Add a determinism test (SC-005, FR-020) to `MT/Elsa3BuiltInConversionTests.cs`: converting twice
+- [X] T027 [US1] Add a determinism test (SC-005, FR-020) to `MT/Elsa3BuiltInConversionTests.cs`: converting twice
   against the same catalog gives byte-identical serialized state and identical diagnostics.
 
 **Checkpoint**: single-definition import converts built-ins against a real catalog. US1 is independently shippable.
@@ -213,11 +213,11 @@ ordered. No exception escapes either path.
 
 **Independent test**: one input per cause gives exactly that code. The whole Elsa 3 suite has 0 escaped exceptions.
 
-- [ ] T028 [US2] Audit `M/Mappings/Elsa3ActivityToState.cs`, `M/Mappings/Elsa3WorkflowDefinitionToState.cs`,
+- [X] T028 [US2] Audit `M/Mappings/Elsa3ActivityToState.cs`, `M/Mappings/Elsa3WorkflowDefinitionToState.cs`,
   `M/Services/Elsa3MemoryReferenceGraph.cs`, `M/Services/Elsa3ValueFlowLowerer.cs` and the new `M/Conversion/*` for
   any remaining `throw` reachable from input or catalog content. Each one becomes an Error diagnostic carrying
   definition id and version, node id, JSON path, property, Elsa 3 type and guidance (FR-012).
-- [ ] T029 [US2] Create `MT/Elsa3ConversionDiagnosticsTests.cs` with a theory of one row per `ELS3-ACTIVITY-*` code
+- [X] T029 [US2] Create `MT/Elsa3ConversionDiagnosticsTests.cs` with a theory of one row per `ELS3-ACTIVITY-*` code
   (SC-003), with exact code and location:
   - `NoCounterpart`: StartAt, StateMachine, ParallelForEach, RunTask, BulkDispatchWorkflows, DownloadHttpFile,
     WriteFileHttpResponse;
@@ -230,16 +230,41 @@ ordered. No exception escapes either path.
   - `UnsupportedMode`: Switch with a JavaScript `mode`;
   - `ValueOutsideContract`, `OutputNotRepresentable`, `RequiredInputUnbound`, `NestingTooDeep`,
     `DuplicateInputBinding`.
-- [ ] T030 [US2] Add to `MT/Elsa3ConversionDiagnosticsTests.cs`:
+- [X] T030 [US2] Add to `MT/Elsa3ConversionDiagnosticsTests.cs`:
   - multi-cause completeness and deterministic (JSON path, code) order (US2 scenario 7, FR-014);
   - a theory of one row per `ELS3-BEHAVIOUR-*` code from a map entry (`FormPostNotParsed` from a captured
     `HttpEndpoint.parsedContent` converts with one warning, US2 scenario 10; the rest per `contracts/diagnostic-codes.md`);
   - cancellation still throws `OperationCanceledException`.
-- [ ] T031 [US2] Add a suite-wide guard to `MT/Elsa3ConversionDiagnosticsTests.cs`: converting every Elsa 3 definition
+- [X] T031 [US2] Add a suite-wide guard to `MT/Elsa3ConversionDiagnosticsTests.cs`: converting every Elsa 3 definition
   fixture used across `MT/` returns a result and never throws, and `ELS3-MIGRATION-DEFINITION-MAPPING-FAILED` is
   unreachable from those inputs (R-3).
 
 **Checkpoint**: US1 + US2 make the P1 increment: built-ins convert, and everything else is reported by code.
+
+**MVP implementation notes (2026-10-15), for the checkpoint review:**
+- *Pulled forward from US4.* T042 (credential walk over native structures; `Elsa3ImportedActivityStructure` removed) and
+  the core of T039 (the materializer converts each item through `IElsa3DefinitionConverter` and refuses the apply with
+  `ReusableActivityImportValidationException`). Native structures land in US1, and without these the collection import
+  would lose nested nodes. Still open in US4: T039 lowering metadata and replacement checks, T040, T041, T043–T054.
+- *Model additions.* `Elsa3MemberRuleKind.UseRestriction` and `SemanticsChanged`, `Elsa3MemberKind.Synthetic`,
+  `Elsa3MemberRule.WhenBound`, `Elsa3ValueContract.HttpMethodSupported`. They let the table express R6 uses, the captured
+  `ParsedContent` rule, Elsa 4-only defaults and the ContentType rule as data.
+- *Rewrites not needed as code.* ExecuteWorkflowAsDispatch and HttpTriggerResponseMode are expressed as member rules
+  (a synthetic default and default flips); their enum values stay, with no strategy registered.
+- *Nesting.* A JSON-level budget (58 levels for a node) replaces the flat 14-container limit. Sequence nesting keeps
+  14 (`Elsa3ActivityNormalizer.MaxSequenceNestingDepth`); Parallel/Switch nesting allows fewer, which the old flat limit
+  silently overran.
+- *Value-flow type check.* VF-IMP-008 now compares simple type names, treats Object/JsonElement/Any as untyped, and lets
+  a String expression or reference bind a scalar member. A String literal must still parse as a numeric, boolean, time
+  span, GUID or date member. Secret-typed values pass through lowering unchanged, like literals.
+- *Order of stages.* Lowering runs only when node conversion reported no errors, so an unresolved node is not also
+  reported as a value-flow error.
+- *Behaviour changes asserted by migrated tests.* A duplicate binding, too-deep nesting and an unknown member are
+  diagnostics (422 on the collection apply instead of a 400 ArgumentException). A ForEach body comes from its `body` port.
+- *Open questions.* Fork's default join mode is taken as WaitAny (Elsa 3's default), giving threshold 1 plus a warning.
+  `HttpEndpoint.Headers`/`QueryStringData` captures (projections `Request.Headers`/`Request.Query`) are reported
+  unconvertible until a binding can project a sub-path. `customProperties.commitStrategy` is dropped by the Elsa 3
+  model before conversion sees it.
 
 ---
 
@@ -318,7 +343,7 @@ reusable workflow validates and compiles with the expected `outputMappings`, `ou
   - copy them in `IMP/Services/ReusableActivityCollectionImporter.cs`;
   - return them from `IMP/Endpoints/Collections/Apply/Endpoint.cs`;
   - the persisted receipt is unchanged.
-- [ ] T042 [US4] Replace the credential-literal admission walk in `IMP/Services/ReusableActivityCollectionImporter.cs`:
+- [X] T042 [US4] Replace the credential-literal admission walk in `IMP/Services/ReusableActivityCollectionImporter.cs`:
   - the shared design tree walk over native structures replaces `Elsa3ImportedActivityStructure.Nodes()` (R-6);
   - update the class remarks that describe the opaque structure;
   - then delete `IMP/Models/Elsa3ImportedActivityStructure.cs` once nothing references it, keeping `MaxNestingDepth`

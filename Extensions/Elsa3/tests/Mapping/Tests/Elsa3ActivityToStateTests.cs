@@ -178,7 +178,7 @@ public sealed class Elsa3ActivityToStateTests
     {
         var result = await ConversionServices.ConvertAsync(catalog, ConversionServices.Definition(leaf));
         Assert.True(result.Succeeded, string.Join(Environment.NewLine, result.Diagnostics.Select(diagnostic => $"{diagnostic.Code}: {diagnostic.Message}")));
-        return result.Value!.State.RootActivity;
+        return result.Value!.State.RootActivity!;
     }
 
     /// <summary>A leaf Elsa 3 activity, node <c>node-1</c>, carrying <paramref name="properties"/>.</summary>

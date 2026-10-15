@@ -27,7 +27,7 @@ namespace Elsa3.Mapping.Tests.Support;
 /// </summary>
 internal sealed class RealActivityCatalog : IActivityDefinitionLookup
 {
-    private static readonly Lazy<IReadOnlyList<ActivityVersionReconciliationModel>> Shipped = new(() => Scan(ShippedAssemblies));
+    private static readonly Lazy<IReadOnlyList<ActivityVersionReconciliationModel>> Shipped = new(() => Scan(ShippedAssemblies!));
 
     private readonly List<CatalogVersion> _versions = [];
 

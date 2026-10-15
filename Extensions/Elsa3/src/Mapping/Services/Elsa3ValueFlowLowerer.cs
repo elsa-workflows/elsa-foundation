@@ -61,7 +61,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
 
             if ((property.Expression is not null || property.MemoryReferenceId is not null) &&
                 property.InputContract is not null &&
-                !TypesMatch(ReadType(property.Value), property.InputContract.Type))
+                !ValueFits(property, property.InputContract.Type))
             {
                 diagnostics.Add(CreateDiagnostic(
                     input,
@@ -170,7 +170,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 contract.ActivityNodeId.Equals(producer.ActivityNodeId, StringComparison.Ordinal) &&
                 contract.StablePropertyKey.Equals(producer.StablePropertyKey, StringComparison.Ordinal));
             if (property.InputContract is not null && producerContract is not null &&
-                !TypesMatch(property.InputContract.Type, producerContract.Type))
+                !TypesMatch(producerContract.Type, property.InputContract.Type))
             {
                 diagnostics.Add(CreateDiagnostic(
                     input,
@@ -538,17 +538,65 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     }
 
     /// <summary>
-    /// Whether a value of one type may bind a member of the other. <c>Object</c> on either side accepts any type: Elsa 3
-    /// declares untyped values as Object, and an Elsa 4 Object member takes any value.
+    /// Whether a value of type <paramref name="value"/> may bind a member of type <paramref name="member"/>. Aliases are
+    /// compared by simple name (Elsa 3 writes <c>String</c>, the catalog <c>System.String</c> or
+    /// <c>System.Text.Json.JsonElement?</c>). An untyped side (<c>Object</c>, <c>JsonElement</c>, <c>Any</c>) matches
+    /// anything, and a String value may bind a scalar member, which Elsa 4 converts from text (a URI, a number, an enum).
     /// </summary>
-    private static bool TypesMatch(TypeReference left, TypeReference right) =>
-        IsObject(left) || IsObject(right) ||
-        left.Alias.Equals(right.Alias, StringComparison.OrdinalIgnoreCase) &&
-        left.CollectionKind == right.CollectionKind;
+    private static bool TypesMatch(TypeReference value, TypeReference member)
+    {
+        var valueName = SimpleName(value.Alias);
+        var memberName = SimpleName(member.Alias);
+        if (IsUntyped(value, valueName) || IsUntyped(member, memberName))
+            return true;
+        if (valueName.Equals("String", StringComparison.OrdinalIgnoreCase) &&
+            value.CollectionKind == CollectionKind.Single &&
+            member.CollectionKind == CollectionKind.Single)
+            return true;
+        return valueName.Equals(memberName, StringComparison.OrdinalIgnoreCase) && value.CollectionKind == member.CollectionKind;
+    }
 
-    private static bool IsObject(TypeReference type) =>
+    /// <summary>
+    /// Whether the property's declared value may bind the member. A literal must also parse as the member's scalar type
+    /// when that type is a number, boolean, time span, GUID or date; other literals (an enum name, a URI) are text
+    /// Elsa 4 converts.
+    /// </summary>
+    private static bool ValueFits(ActivityProperty property, TypeReference member)
+    {
+        var declared = ReadType(property.Value);
+        if (property.Expression is null ||
+            !property.Expression.Type.Equals("Literal", StringComparison.OrdinalIgnoreCase) ||
+            !SimpleName(declared.Alias).Equals("String", StringComparison.OrdinalIgnoreCase) ||
+            member.CollectionKind != CollectionKind.Single)
+            return TypesMatch(declared, member);
+
+        var text = property.Expression.Value;
+        var invariant = System.Globalization.CultureInfo.InvariantCulture;
+        return SimpleName(member.Alias) switch
+        {
+            "Int16" or "Int32" or "Int64" or "Byte" => long.TryParse(text, System.Globalization.NumberStyles.Integer, invariant, out _),
+            "Single" or "Double" or "Decimal" => decimal.TryParse(text, System.Globalization.NumberStyles.Number, invariant, out _),
+            "Boolean" => bool.TryParse(text, out _),
+            "TimeSpan" => TimeSpan.TryParse(text, invariant, out _),
+            "Guid" => Guid.TryParse(text, out _),
+            "DateTime" or "DateTimeOffset" => DateTimeOffset.TryParse(text, invariant, System.Globalization.DateTimeStyles.None, out _),
+            _ => TypesMatch(declared, member)
+        };
+    }
+
+    private static bool IsUntyped(TypeReference type, string simpleName) =>
         type.CollectionKind == CollectionKind.Single &&
-        (type.Alias.Equals("Object", StringComparison.OrdinalIgnoreCase) || type.Alias.Equals("Elsa.Any", StringComparison.Ordinal));
+        simpleName is "Object" or "object" or "JsonElement" or "JsonNode" or "Any" or "ExpandoObject";
+
+    private static string SimpleName(string alias)
+    {
+        var name = alias.Trim().TrimEnd('?');
+        var generic = name.IndexOfAny(['`', '<']);
+        if (generic >= 0)
+            name = name[..generic];
+        var dot = name.LastIndexOf('.');
+        return dot >= 0 ? name[(dot + 1)..] : name;
+    }
 
     private static JsonElement StripMemoryReference(JsonElement value)
     {

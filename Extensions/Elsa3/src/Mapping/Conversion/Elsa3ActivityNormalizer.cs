@@ -357,6 +357,15 @@ internal sealed class Elsa3ActivityNormalizer(
     {
         foreach (var rule in entry.Members)
         {
+            // A removed input whose Elsa 4 behaviour differs from Elsa 3's default warns when absent too (for example
+            // DisableAuthorizationHeaderValidation: Elsa 3 validated by default, Elsa 4 never does).
+            if (rule is { Rule: Elsa3MemberRuleKind.RemovedInput, BehaviourWarning: not null } &&
+                !properties.Any(property => StringComparer.OrdinalIgnoreCase.Equals(property.Key, rule.Elsa3Name)))
+            {
+                CheckRemoved(context, rule, Elsa3ConversionDiagnostics.JsonName(rule.Elsa3Name), default);
+                continue;
+            }
+
             if (rule.Elsa3Default is not { ValueKind: JsonValueKind.String } elsa3Default || rule.Elsa4Key is null)
                 continue;
             if (rule.Rule is not (Elsa3MemberRuleKind.DefaultFlip or Elsa3MemberRuleKind.NarrowedContract))
