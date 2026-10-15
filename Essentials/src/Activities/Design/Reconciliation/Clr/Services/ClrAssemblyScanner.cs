@@ -167,7 +167,8 @@ public sealed class ClrAssemblyScanner(
                 // Null rather than false when not declared, so an input that declares nothing keeps its catalog hash.
                 IsSensitive: isSensitive ? true : null,
                 IsCredential: isCredential ? true : null,
-                // Presentation only; the hasher strips this even when set.
+                // Presentation only, but part of the descriptor hash: a tier-only change on an existing version
+                // is refreshed in place by reconciliation instead of raising a hash mismatch.
                 Tier: metadata.Tier));
         }
 
