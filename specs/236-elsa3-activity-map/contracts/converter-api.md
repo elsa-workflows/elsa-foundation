@@ -56,14 +56,29 @@ value (§2.5.1).
 ```csharp
 public interface IElsa3NodeConverter
 {
-    /// Converts one node and its non-graph descendants into an ActivityNode within a conversion scope opened by
-    /// IElsa3DefinitionConverter; graph-level members (connections, start, join and fork) are left to the caller.
+    /// Normalizes and lowers the whole definition, as IElsa3DefinitionConverter.ConvertAsync does. A graph-level node
+    /// is deferred (listed in the context's Deferred) instead of stopping the rest; its children are lowered too.
+    ValueTask<Elsa3MigrationResult<Elsa3NodeConversionContext>> PrepareAsync(
+        Elsa3ConversionRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// Maps one node and its non-graph descendants from the prepared, lowered definition; graph-level members
+    /// (connections, start, join and fork) are left to the caller. Fails when the node or a descendant is graph-level.
     ValueTask<Elsa3MigrationResult<ActivityNode>> ConvertNodeAsync(
         Elsa3NodeConversionContext context,
         Elsa3Activity node,
         CancellationToken cancellationToken = default);
 }
+
+public sealed class Elsa3NodeConversionContext   // created only by PrepareAsync (internal constructor)
+{
+    public Elsa3ConversionRequest Request { get; }
+    public IReadOnlyList<Elsa3MigrationDiagnostic> Deferred { get; }   // one GRAPH-CONVERSION-PENDING per graph node
+}
 ```
+
+Both converters share one preparation step, so an Elsa 3 expression is lowered or refused the same way on both
+paths (plan D-18).
 
 #2705 calls this for each Flowchart child, and replaces `ELS3-ACTIVITY-GRAPH-CONVERSION-PENDING` by building the native
 Flowchart structure from the converted children plus the outcome rules (`Elsa3OutcomeRule`).

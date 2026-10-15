@@ -9,7 +9,9 @@ namespace Elsa3.Mapping.Conversion;
 /// <summary>
 /// Converts one Elsa 3 definition: clone → normalize → collect the memory-reference graph and lower value flow → map
 /// to Elsa 4 state (spec FR-015, research R-8). Lowering runs once the activity diagnostics are clear, so an unresolved
-/// node never yields value-flow noise on top of its own error. Diagnostics are ordered by (JSON path, code).
+/// node never yields value-flow noise on top of its own error; a deferred graph-level node (Flowchart) does not stop it,
+/// so its children are lowered too. Whole-definition and node conversion share that preparation, so one rule lowers or
+/// refuses every expression on both paths. Diagnostics are ordered by (JSON path, code).
 /// </summary>
 internal sealed class Elsa3DefinitionConverter(
     Elsa3ActivityNormalizer normalizer,
@@ -29,10 +31,7 @@ internal sealed class Elsa3DefinitionConverter(
 
         try
         {
-            var clone = Clone(request.Definition);
-            var plan = await normalizer.NormalizeAsync(request, clone, cancellationToken);
-            var boundaryOutcomes = request.IsReusable ? Elsa3OutcomeKey.Assemble(plan) : [];
-            await LowerAsync(plan, cancellationToken);
+            var (plan, boundaryOutcomes) = await PrepareCoreAsync(request, cancellationToken);
             if (plan.HasErrors)
                 return Elsa3MigrationResult<Elsa3ConvertedDefinition>.Failure(Ordered(plan.Diagnostics));
 
@@ -51,36 +50,93 @@ internal sealed class Elsa3DefinitionConverter(
         }
     }
 
-    public async ValueTask<Elsa3MigrationResult<ActivityNode>> ConvertNodeAsync(
+    public async ValueTask<Elsa3MigrationResult<Elsa3NodeConversionContext>> PrepareAsync(
+        Elsa3ConversionRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.Definition.Root is null)
+            return Elsa3MigrationResult<Elsa3NodeConversionContext>.Failure(
+                MappingFailed(request, new InvalidOperationException("The definition has no root activity.")));
+
+        try
+        {
+            var (plan, _) = await PrepareCoreAsync(request, cancellationToken);
+            if (plan.Diagnostics.Any(diagnostic => diagnostic.IsError && !IsDeferred(diagnostic)))
+                return Elsa3MigrationResult<Elsa3NodeConversionContext>.Failure(Ordered(plan.Diagnostics));
+
+            var deferred = Ordered(plan.Diagnostics.Where(IsDeferred));
+            return Elsa3MigrationResult<Elsa3NodeConversionContext>.Success(
+                new Elsa3NodeConversionContext(request, plan, deferred),
+                Ordered(plan.Diagnostics.Where(diagnostic => !diagnostic.IsError)));
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            return Elsa3MigrationResult<Elsa3NodeConversionContext>.Failure(MappingFailed(request, exception));
+        }
+    }
+
+    public ValueTask<Elsa3MigrationResult<ActivityNode>> ConvertNodeAsync(
         Elsa3NodeConversionContext context,
         Elsa3Activity node,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(node);
+        cancellationToken.ThrowIfCancellationRequested();
+        var plan = context.Plan;
+        var nodeId = Elsa3ConversionDiagnostics.NodeId(node);
+        var matches = plan.Nodes.Where(item => StringComparer.Ordinal.Equals(Elsa3ConversionDiagnostics.NodeId(item.Key), nodeId)).ToArray();
+        if (matches.Length != 1)
+            throw new ArgumentException(
+                matches.Length == 0
+                    ? $"Node '{nodeId}' is not part of the definition this context was prepared from."
+                    : $"Node id '{nodeId}' is used by more than one node of the prepared definition.",
+                nameof(node));
+
+        var (prepared, nodePlan) = (matches[0].Key, matches[0].Value);
         try
         {
-            var definition = Clone(context.Request.Definition);
-            definition.Root = JsonSerializer.SerializeToElement(node).Deserialize<Elsa3Activity>()
-                              ?? throw new JsonException("Elsa 3 activity clone produced no value.");
-            var plan = await normalizer.NormalizeAsync(context.Request, definition, cancellationToken);
-            if (plan.HasErrors)
-                return Elsa3MigrationResult<ActivityNode>.Failure(Ordered(plan.Diagnostics));
+            var diagnostics = Ordered(plan.Diagnostics.Where(diagnostic => IsWithin(diagnostic.Path, nodePlan.JsonPath)));
+            if (diagnostics.Any(diagnostic => diagnostic.IsError))
+                return ValueTask.FromResult(Elsa3MigrationResult<ActivityNode>.Failure(diagnostics));
 
-            var mapped = activityMapper.Map(plan, definition.Root);
-            return mapped is null
-                ? Elsa3MigrationResult<ActivityNode>.Failure(MappingFailed(context.Request, new InvalidOperationException("The node produced no Elsa 4 activity.")))
-                : Elsa3MigrationResult<ActivityNode>.Success(mapped, Ordered(plan.Diagnostics));
+            var mapped = activityMapper.Map(plan, prepared);
+            return ValueTask.FromResult(mapped is null
+                ? Elsa3MigrationResult<ActivityNode>.Failure(MappingFailed(context.Request, new InvalidOperationException($"Node '{nodeId}' produced no Elsa 4 activity.")))
+                : Elsa3MigrationResult<ActivityNode>.Success(mapped, diagnostics));
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            return Elsa3MigrationResult<ActivityNode>.Failure(MappingFailed(context.Request, exception));
+            return ValueTask.FromResult(Elsa3MigrationResult<ActivityNode>.Failure(MappingFailed(context.Request, exception)));
         }
     }
 
+    /// <summary>Normalizes a clone of the request's definition and lowers its value flow: the steps both entry points share.</summary>
+    private async ValueTask<(Elsa3ConversionPlan Plan, IReadOnlyList<Elsa.Activities.Design.Core.Models.ActivityOutcomeContract> BoundaryOutcomes)> PrepareCoreAsync(
+        Elsa3ConversionRequest request,
+        CancellationToken cancellationToken)
+    {
+        var clone = Clone(request.Definition);
+        var plan = await normalizer.NormalizeAsync(request, clone, cancellationToken);
+        var boundaryOutcomes = request.IsReusable ? Elsa3OutcomeKey.Assemble(plan) : [];
+        await LowerAsync(plan, cancellationToken);
+        return (plan, boundaryOutcomes);
+    }
+
+    /// <summary>A graph-level node left to graph conversion (#2705); it does not stop lowering of the rest.</summary>
+    private static bool IsDeferred(Elsa3MigrationDiagnostic diagnostic) =>
+        StringComparer.Ordinal.Equals(diagnostic.Code, Elsa3ActivityDiagnosticCodes.GraphConversionPending);
+
+    /// <summary>Whether <paramref name="path"/> is the node at <paramref name="nodePath"/> or inside it.</summary>
+    private static bool IsWithin(string? path, string nodePath) =>
+        path is not null &&
+        path.StartsWith(nodePath, StringComparison.Ordinal) &&
+        (path.Length == nodePath.Length || path[nodePath.Length] is '.' or '[');
+
     private async ValueTask LowerAsync(Elsa3ConversionPlan plan, CancellationToken cancellationToken)
     {
-        if (plan.HasErrors || plan.Definition.Root is null)
+        if (plan.Definition.Root is null || plan.Diagnostics.Any(diagnostic => diagnostic.IsError && !IsDeferred(diagnostic)))
             return;
 
         var jsonPaths = plan.JsonPaths;

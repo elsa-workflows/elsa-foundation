@@ -270,7 +270,8 @@ produces for the same definition.
   bump plus golden-output re-record). This spec does not introduce R.
 - **FR-006**: The map MUST be usable per node, independently of the workflow-level importer, so that a Flowchart
   importer (#2705) can map Flowchart child nodes and replace the "graph conversion pending" outcome for FlowFork
-  and FlowJoin.
+  and FlowJoin. A node converted on its own MUST be lowered or refused exactly as it would be within whole-definition
+  conversion (plan D-18).
 
 **Resolution**
 

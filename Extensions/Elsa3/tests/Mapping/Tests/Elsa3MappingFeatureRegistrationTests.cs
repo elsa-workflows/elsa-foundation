@@ -79,6 +79,9 @@ public sealed class Elsa3MappingFeatureRegistrationTests
         public ValueTask<Elsa3MigrationResult<Elsa3ConvertedDefinition>> ConvertAsync(Elsa3ConversionRequest request, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
+        public ValueTask<Elsa3MigrationResult<Elsa3NodeConversionContext>> PrepareAsync(Elsa3ConversionRequest request, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
         public ValueTask<Elsa3MigrationResult<ActivityNode>> ConvertNodeAsync(Elsa3NodeConversionContext context, Elsa3Activity node, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
     }

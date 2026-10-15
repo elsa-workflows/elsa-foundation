@@ -33,9 +33,17 @@ as well, or resolving one fails with a message saying so.
 
 ### `IElsa3NodeConverter` *(Replacement contract — `Elsa3.Mapping`)*
 
-- **Signature:** `ValueTask<Elsa3MigrationResult<ActivityNode>> ConvertNodeAsync(Elsa3NodeConversionContext, Elsa3Activity, CancellationToken)`.
-- **Purpose:** Converts one node and its non-graph descendants, for graph conversion (#2705) to call per Flowchart
-  child. Definition-wide value-flow lowering is the definition converter's job.
+- **Signature:**
+  - `ValueTask<Elsa3MigrationResult<Elsa3NodeConversionContext>> PrepareAsync(Elsa3ConversionRequest, CancellationToken)`;
+  - `ValueTask<Elsa3MigrationResult<ActivityNode>> ConvertNodeAsync(Elsa3NodeConversionContext, Elsa3Activity, CancellationToken)`.
+- **Purpose:** Converts nodes one at a time, for graph conversion (#2705) to call per Flowchart child.
+  - `PrepareAsync` normalizes and lowers the whole definition, exactly as `IElsa3DefinitionConverter.ConvertAsync`
+    does. A graph-level node (Flowchart) is deferred rather than stopping the rest: it is listed in the context's
+    `Deferred`, and its children are lowered too, including value flow between siblings.
+  - `ConvertNodeAsync` maps one node and its non-graph descendants from that lowered result. It fails when the node or
+    a descendant is graph-level, so a graph never loses a child silently.
+  - One rule for both paths: an Elsa 3 expression is lowered or refused the same way whichever converter reaches it.
+  - Only a node converter creates an `Elsa3NodeConversionContext` (its constructor is internal).
 - **Default implementation:** `Elsa3DefinitionConverter` (the same scoped instance).
 
 ### `IElsa3ActivityMap` *(Replacement contract — `Elsa3.Mapping`)*

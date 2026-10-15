@@ -73,7 +73,9 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   - Several outcomes or an expression outcome → `ELS3-ACTIVITY-UNSUPPORTED-MODE`. An undeclared outcome is declared
     with a warning; a declared outcome nothing reaches is dropped with a warning.
 - **Flowcharts** report `ELS3-ACTIVITY-GRAPH-CONVERSION-PENDING` until graph conversion (#2705). Their children are
-  still converted node by node.
+  still converted node by node, and their value flow is lowered with the rest of the definition, so a child's
+  JavaScript is lowered or refused as anywhere else. `IElsa3NodeConverter` converts them one at a time from that same
+  lowered definition (`PrepareAsync`, then `ConvertNodeAsync` per child).
 - **Imported reusable activities** are not yet published, so they do not run as graphs until #2796.
 
 ## Nesting budget
