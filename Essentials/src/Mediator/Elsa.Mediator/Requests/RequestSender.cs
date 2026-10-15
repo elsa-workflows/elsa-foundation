@@ -1,5 +1,5 @@
 using Elsa.Mediator.Core.Contracts;
-using Elsa.Mediator.Core.Models;
+using Elsa.Mediator.Pipeline;
 
 namespace Elsa.Mediator.Requests;
 
@@ -7,7 +7,7 @@ namespace Elsa.Mediator.Requests;
 /// Sends requests through the shared mediator pipeline. Requests resolve their handler through the
 /// closed <see cref="IRequestHandler{TRequest,TResponse}"/> generic.
 /// </summary>
-public sealed class RequestSender(RequestPipeline requestPipeline, IServiceProvider serviceProvider) : IRequestSender
+internal sealed class RequestSender(RequestPipeline requestPipeline, IServiceProvider serviceProvider) : IRequestSender
 {
     private const string Kind = "request";
 

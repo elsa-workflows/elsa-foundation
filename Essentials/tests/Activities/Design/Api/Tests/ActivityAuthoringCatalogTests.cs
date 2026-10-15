@@ -78,7 +78,8 @@ public sealed class ActivityAuthoringCatalogTests
             "Ports",
             "ContainerStructure",
             "AuthoringTemplate",
-            "Provenance");
+            "Provenance",
+            "IconName");
 
         var provenance = descriptor.GetProperty("Provenance")!.PropertyType;
         AssertProperties(provenance, "SourceKind", "SourceId", "FeatureId");

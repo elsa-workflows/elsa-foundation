@@ -9,7 +9,7 @@ namespace Elsa.Events.Services;
 /// returns before handlers run; the background worker drains the queue and shields handler failures.
 /// The wrapper IS the whole implementation; it owns no pipeline logic of its own.
 /// </summary>
-public sealed class DeferredEventPublisher(IEventPublisher eventPublisher) : IDeferredEventPublisher
+internal sealed class DeferredEventPublisher(IEventPublisher eventPublisher) : IDeferredEventPublisher
 {
     public Task Publish(IEvent @event, CancellationToken cancellationToken = default) =>
         eventPublisher.Publish(@event, EventPublishingStrategy.Background, cancellationToken);

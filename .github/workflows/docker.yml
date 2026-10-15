@@ -9,15 +9,13 @@ name: Docker Images
 #   - pushes to main produce latest + 4.0.0-preview.<run_number>
 # That tag is a build number and names no package version. The Elsa assemblies in both images
 # carry the versions the Packages workflow computes for the same commit (the versions job below).
-# Pull requests that change a Dockerfile, docker/, .dockerignore, this workflow or its guard scripts build
-# both images for both platforms but push nothing, so a Dockerfile that no longer builds fails on the PR,
-# not on main. Until #2622 every src/** and root build-file change triggered that build too; it was narrowed
-# because Actions was queueing. The cost is known: #2087 added a root props file the Dockerfiles did not
-# copy and main stayed red for three merges before anyone saw it, and a change like that now reaches main
-# untested again and fails the post-merge build. A PR's run also checks its merge with main as of when it
-# ran, not as of when it merges, so a root file that lands on main in between reached main untested even
-# before (#2114's PackageRanges.targets). With push off
-# the builder skips registry login and signing, so fork PRs need no secrets.
+# Images are built only after a merge into main (once the Packages workflow completes for it) and on
+# manual dispatch for a commit on main (#2751). Pull requests build no image; until #2751 a PR that
+# changed a Dockerfile or another image input built both images without pushing. The cost is known:
+# a change that breaks an image build (a Dockerfile, Directory.Build.props, Directory.Packages.props,
+# the analyzers under Essentials/build/Analyzers) is caught only by the post-merge build. #2087 is the
+# precedent: it added a root props file the Dockerfiles did not copy, and main stayed red for three
+# merges before anyone saw it.
 # Docker's maintained builder fans the platforms out to native x64 and ARM64
 # GitHub-hosted runners, then assembles the multi-platform manifest.
 #
@@ -40,9 +38,7 @@ name: Docker Images
 # reusable workflow lets a caller override to an arbitrary historical commit. So the versions job
 # also refuses outright, rather than building silently against the wrong tree, if main has moved
 # past the commit the Packages run (or the dispatch input) named - see the "Refuse to build a commit
-# main has moved past" step. PR and non-main branch builds are unaffected: they still compute their
-# own plan on `pull_request`, exactly as before, and never write to publish-state, so there is no
-# race to avoid.
+# main has moved past" step.
 #
 # POLICY DEPENDENCY: the job below calls a reusable workflow from another
 # organization, so elsa-workflows must allow-list it under
@@ -65,17 +61,6 @@ on:
     workflows: [Packages]
     types: [completed]
     branches: [main]
-  pull_request:
-    branches: [main]
-    # Narrowed to the image definitions themselves (#2622); the post-merge build after Packages is unchanged.
-    # '**/Dockerfile' matches Essentials/apps/Elsa.Workbench/Dockerfile and Essentials/apps/Elsa.Foundation.Host/Dockerfile.
-    paths:
-      - '**/Dockerfile'
-      - '**/*.Dockerfile'
-      - 'docker/**'
-      - .dockerignore
-      - .github/workflows/docker.yml
-      - tools/contributor-checkpoints/**
   workflow_dispatch:
     inputs:
       commit:
@@ -119,13 +104,10 @@ jobs:
     # Both images are built with computed package versions (ADR 0067, spec 150, #2084, #2126), so each deps.json
     # records every Elsa package at the version the feed carries, and each production configuration declares its
     # Elsa shares host-provided: Nuplane then refuses a feed package that needs a newer one than the image carries.
-    # For a pull request the versions come from this job's own plan, exactly as the Packages workflow computes them
-    # for the same ref and commit, at branch-scoped versions (PRs never touch publish-state, so there is nothing to
-    # race). For a push to main the versions come from the Packages workflow run that triggered this one instead -
-    # never a plan this job computes itself - because that is the run whose plan may have just been written back to
-    # publish-state (see the header comment: spec 150 FR-020, #2084). Either way the versions reach each image build
-    # as one build arg, the pack-properties file gzipped and base64-encoded, because the builder takes build args
-    # one per line and checks out the commit itself.
+    # The versions come from the Packages workflow run for the commit being built - never a plan this job computes
+    # itself - because that is the run whose plan may have just been written back to publish-state (see the header
+    # comment: spec 150 FR-020, #2084). They reach each image build as one build arg, the pack-properties file
+    # gzipped and base64-encoded, because the builder takes build args one per line and checks out the commit itself.
     if: needs.admission.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -138,12 +120,11 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
-      # main (workflow_run, workflow_dispatch): find the Packages run to take the computation from, rather than
-      # planning again - the run that triggered this one, or for a manual dispatch, the newest successful push/manual
-      # Packages run for the requested commit. Metadata-only release runs do not carry a computation artifact.
+      # Find the Packages run to take the computation from, rather than planning again - the run that triggered this
+      # one, or for a manual dispatch, the newest successful push/manual Packages run for the requested commit.
+      # Metadata-only release runs do not carry a computation artifact.
       - name: Resolve the Packages run to build from
         id: resolve
-        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -181,7 +162,6 @@ jobs:
       # docker/github-builder builds the git context at this run's own commit, not an arbitrary one this job
       # names, so a resolved commit main has since moved past would be built silently wrong. Refuse instead.
       - name: Refuse to build a commit main has moved past
-        if: github.event_name != 'pull_request'
         run: |
           if [ "$GITHUB_SHA" != "${{ steps.resolve.outputs.commit }}" ]; then
             echo "::error title=Commit drift::main is at $GITHUB_SHA, past the requested commit ${{ steps.resolve.outputs.commit }}. Refusing rather than building the wrong commit."
@@ -189,39 +169,12 @@ jobs:
           fi
 
       - name: Download the Packages run's computation
-        if: github.event_name != 'pull_request'
         uses: actions/download-artifact@v4
         with:
           name: elsa-foundation-nuget-packages
           path: ${{ runner.temp }}/versions
           github-token: ${{ github.token }}
           run-id: ${{ steps.resolve.outputs.run-id }}
-
-      # pull_request: no Packages run to take a computation from - branch-scoped versions, planned here.
-      - name: Checkout
-        if: github.event_name == 'pull_request'
-        uses: actions/checkout@v4
-        with:
-          # The calculator compares trees at the commits the record names and proves ancestry (FR-021).
-          fetch-depth: 0
-
-      - uses: actions/setup-dotnet@v4
-        if: github.event_name == 'pull_request'
-        with:
-          dotnet-version: 10.x
-
-      # Restore is locked (#2122) against the publisher's own committed lock file.
-      - name: Build the publisher
-        if: github.event_name == 'pull_request'
-        run: dotnet build tools/versioning/Elsa.Versioning.Publisher -c Release -p:RestoreLockedMode=true
-
-      - name: Plan
-        if: github.event_name == 'pull_request'
-        env:
-          REF: refs/heads/${{ github.head_ref }}
-        run: >-
-          dotnet run --project tools/versioning/Elsa.Versioning.Publisher -c Release --no-build --
-          plan --ref "$REF" --commit "$GITHUB_SHA" --output "$RUNNER_TEMP/versions"
 
       - name: Encode
         id: encode
@@ -242,7 +195,7 @@ jobs:
       id-token: write
     with:
       output: image
-      push: ${{ github.event_name != 'pull_request' }}
+      push: true
       context: .
       file: Essentials/apps/Elsa.Workbench/Dockerfile
       # An empty value fails the build rather than falling back to a source build (see the Dockerfile).
@@ -278,7 +231,7 @@ jobs:
       id-token: write
     with:
       output: image
-      push: ${{ github.event_name != 'pull_request' }}
+      push: true
       context: .
       file: Essentials/apps/Elsa.Foundation.Host/Dockerfile
       # An empty value fails the build rather than falling back to a source build (see the Dockerfile).

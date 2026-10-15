@@ -1,6 +1,5 @@
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
-using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
@@ -24,7 +23,6 @@ public sealed class RuntimeEntityFrameworkCoreDispatchWorkflowTests : DispatchWo
     public override async Task DisposeAsync()
     {
         await base.DisposeAsync();
-        SqliteConnection.ClearAllPools();
         foreach (var file in new[] { _databasePath, $"{_databasePath}-wal", $"{_databasePath}-shm" })
             File.Delete(file);
     }

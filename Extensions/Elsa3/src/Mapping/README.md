@@ -8,14 +8,10 @@ and publication match ordinally; an output keeps the Elsa 3 property name; a pro
 Two properties that bind one input, or a property that matches several declared inputs only ignoring case, refuse the
 mapping with an `ArgumentException` naming the node, the properties and the input, never a value.
 
-## Cross-domain contributions
+## Mappings
 
-This feature implements contributor interfaces from other domains:
-
-- **`IObjectMapping<TSource, TTarget>`** *(Core — `Elsa.Mapping.Core`)* — multiple mappings convert Elsa3 models to Elsa4 models. Each mapping is resolved per type-pair by `ObjectMapper` in `Elsa.Mapping`.
-  - Known impls:
-    - `Elsa3ActivityToState` — `IObjectMapping<Elsa3Activity, ActivityNode>`
-    - `Elsa3ArgumentDefinitionToInputOutput` — `IObjectMapping<Elsa3WorkflowArgumentDefinition, InputDefinition>` and `IObjectMapping<Elsa3WorkflowArgumentDefinition, OutputDefinition>`
-    - `Elsa3WorkflowDefinitionToState` — `IObjectMapping<Elsa3WorkflowDefinition, WorkflowDefinitionState>`
-    - `Elsa3WorkflowDefinitionToWorkflowDefinitionVersion` — `IObjectMapping<Elsa3WorkflowDefinition, IWorkflowDefinitionVersion>`
-  - Catalog: [`Elsa.Mapping/EXTENSION_POINTS.md`](../Elsa.Mapping/EXTENSION_POINTS.md)
+`Elsa3ActivityToState`, `Elsa3ArgumentDefinitionToInputOutput`, `Elsa3WorkflowDefinitionToState` and
+`Elsa3WorkflowDefinitionToWorkflowDefinitionVersion` are concrete scoped services. They inject one another, and the
+importer and the reusable-activity materializer inject them directly. They implement no shared mapping contract, so
+there is nothing to replace per type pair. The feature's replaceable contracts are in its
+[extension-point catalog](EXTENSION_POINTS.md).

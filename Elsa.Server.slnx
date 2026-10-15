@@ -74,6 +74,9 @@
     <Project Path="Essentials/apps/Elsa.Foundation.Host/Elsa.Foundation.Host.csproj" />
     <Project Path="Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj" />
   </Folder>
+  <Folder Name="/Essentials/build/">
+    <Project Path="Essentials/build/Analyzers/Elsa.Architecture.Analyzers.csproj" />
+  </Folder>
   <Folder Name="/Essentials/src/">
     <Project Path="Essentials/src/Git/Elsa.Git.csproj" />
   </Folder>
@@ -362,6 +365,9 @@
     <Project Path="Essentials/tests/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj" />
     <Project Path="Essentials/tests/Activities/Http/Tests/Elsa.Activities.Http.Tests.csproj" />
   </Folder>
+  <Folder Name="/Essentials/tests/Activities/Http/CommandCost/">
+    <Project Path="Essentials/tests/Activities/Http/CommandCost/Tests/Elsa.Activities.Http.CommandCost.Tests.csproj" />
+  </Folder>
   <Folder Name="/Essentials/tests/Activities/Http/Fixtures/">
     <Project Path="Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/ResponseReplayHost.csproj" />
   </Folder>
@@ -376,6 +382,7 @@
   </Folder>
   <Folder Name="/Essentials/tests/Activities/Design/Fixtures/">
     <Project Path="Essentials/tests/Activities/Design/Fixtures/ClrFixture/Elsa.Activities.Design.Tests.ClrFixture.csproj" />
+    <Project Path="Essentials/tests/Activities/Design/Fixtures/ClrIconFixture/Elsa.Activities.Design.Tests.ClrIconFixture.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Activities/Design/Persistence/" />
   <Folder Name="/Essentials/tests/Activities/Design/Persistence/EntityFrameworkCore/">
@@ -395,6 +402,9 @@
   </Folder>
   <Folder Name="/Essentials/tests/Architecture/">
     <Project Path="Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/tests/Architecture/Analyzers/">
+    <Project Path="Essentials/tests/Architecture/Analyzers/Tests/Elsa.Architecture.Analyzers.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Architecture/ExtensionBoundary/">
     <Project Path="Essentials/tests/Architecture/ExtensionBoundary/Tests/Elsa.Architecture.ExtensionBoundary.Tests.csproj" />
@@ -464,6 +474,7 @@
     <Project Path="Essentials/tests/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/Tests/Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Expressions/">
+    <Project Path="Essentials/tests/Expressions/Testing/Elsa.Expressions.Testing.csproj" />
     <Project Path="Essentials/tests/Expressions/Tests/Elsa.Expressions.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Foundation/" />
@@ -579,9 +590,11 @@
     <Project Path="Essentials/tests/Studio/Preferences/Persistence/EntityFrameworkCore/Tests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Serialization/">
+    <Project Path="Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj" />
     <Project Path="Essentials/tests/Serialization/Tests/Elsa.Serialization.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Tasks/">
+    <Project Path="Essentials/tests/Tasks/Testing/Elsa.Tasks.Testing.csproj" />
     <Project Path="Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Workbench/">

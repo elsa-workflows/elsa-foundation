@@ -62,7 +62,7 @@ public interface IClusterMembership
     /// change, a new report, a lapse, a displacement or an expiry (#2097, owner decision). It carries no
     /// dependency on the Events feature: <see cref="IChangeToken"/> (Microsoft.Extensions.Primitives) is the pattern
     /// this framework already uses for a signal a consumer polls or re-registers against (Elsa.Caching's
-    /// <c>IChangeTokenSignaler</c>), so membership uses it too rather than introducing an <c>IObservable</c>
+    /// <c>ICacheManager.GetToken</c>), so membership uses it too rather than introducing an <c>IObservable</c>
     /// dependency the rest of the codebase does not otherwise take. Call this again after the token completes to
     /// observe the next change. A consumer MUST NOT depend on it as its only way to learn of a change; it MUST also
     /// compare successive reads.

@@ -5,7 +5,7 @@ namespace Elsa.Expressions.Models;
 /// <summary>
 /// Describes a variable declaration. Runtime values are owned by variable frames/scopes.
 /// </summary>
-public class Variable : IVariable
+internal class Variable : IVariable
 {
     /// <inheritdoc />
     public Variable()
@@ -61,7 +61,7 @@ public class Variable : IVariable
 /// Describes a strongly typed variable declaration.
 /// </summary>
 /// <typeparam name="T">The type of the variable.</typeparam>
-public sealed class Variable<T> : Variable, IVariable<T>
+internal sealed class Variable<T> : Variable, IVariable<T>
 {
     /// <inheritdoc />
     public Variable()

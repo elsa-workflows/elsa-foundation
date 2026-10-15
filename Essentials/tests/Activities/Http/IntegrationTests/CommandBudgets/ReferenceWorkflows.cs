@@ -33,9 +33,26 @@ internal static class ReferenceWorkflows
 
     /// <summary>A Sequence of <paramref name="lines"/> WriteLine activities.</summary>
     public static WorkflowExecutable WriteLineSequence(string artifactId, int lines) =>
-        Executable(artifactId, Sequence("sequence", Enumerable.Range(1, lines)
-            .Select(line => Clr($"write-{line}", typeof(WriteLine), [("text", $"line {line}")]))
-            .ToArray()));
+        Executable(artifactId, Sequence("sequence", WriteLines(lines)));
+
+    /// <summary>
+    /// A Sequence of a synchronous POST HttpEndpoint at <paramref name="path"/> that starts the workflow,
+    /// <paramref name="lines"/> WriteLine activities, and a WriteHttpResponse that answers the request after them.
+    /// </summary>
+    public static WorkflowExecutable HttpTriggeredWriteLineSequence(string artifactId, string path, int lines)
+    {
+        var endpoint = SyncPostEndpoint("http-in", path);
+        var response = Clr(
+            "write-response",
+            typeof(WriteHttpResponse),
+            [(nameof(WriteHttpResponse.StatusCode), 200), (nameof(WriteHttpResponse.ContentType), "text/plain"), (nameof(WriteHttpResponse.Body), "done")]);
+
+        return Executable(
+            artifactId,
+            Sequence("root", [endpoint, .. WriteLines(lines), response]),
+            [],
+            ResumeTarget(endpoint.ExecutableNodeId, HttpEndpoint.ResumeTargetId));
+    }
 
     /// <summary>
     /// The four-activity HTTP workflow: a Sequence of a synchronous POST HttpEndpoint that captures its request into
@@ -44,17 +61,10 @@ internal static class ReferenceWorkflows
     /// </summary>
     public static WorkflowExecutable HttpReference()
     {
-        var endpoint = Clr(
+        var endpoint = SyncPostEndpoint(
             "http-in",
-            typeof(HttpEndpoint),
-            [
-                (nameof(HttpEndpoint.Path), HttpPath),
-                (nameof(HttpEndpoint.CanStartWorkflow), true),
-                (nameof(HttpEndpoint.SupportedMethods), new[] { "POST" }),
-                (nameof(HttpEndpoint.Authorize), false),
-                (nameof(HttpEndpoint.ResponseMode), ResponseMode.Sync)
-            ],
-            outputCaptures: [Capture("Request", "request"), Capture("RouteData", "route"), Capture("ParsedContent", "content")]);
+            HttpPath,
+            [Capture("Request", "request"), Capture("RouteData", "route"), Capture("ParsedContent", "content")]);
         var setReferenceText = SetVariable(
             "set-reference-text",
             "referenceText",
@@ -114,6 +124,25 @@ internal static class ReferenceWorkflows
             storageDriverRequirements: null,
             IncidentStrategyBuiltIns.FaultReference,
             workflowVariables: variables);
+
+    private static ExecutableNode[] WriteLines(int lines) =>
+        Enumerable.Range(1, lines)
+            .Select(line => Clr($"write-{line}", typeof(WriteLine), [("text", $"line {line}")]))
+            .ToArray();
+
+    /// <summary>A synchronous POST HttpEndpoint that can start its workflow, open to anonymous requests.</summary>
+    private static ExecutableNode SyncPostEndpoint(string nodeId, string path, RuntimeOutputCapture[]? outputCaptures = null) =>
+        Clr(
+            nodeId,
+            typeof(HttpEndpoint),
+            [
+                (nameof(HttpEndpoint.Path), path),
+                (nameof(HttpEndpoint.CanStartWorkflow), true),
+                (nameof(HttpEndpoint.SupportedMethods), new[] { "POST" }),
+                (nameof(HttpEndpoint.Authorize), false),
+                (nameof(HttpEndpoint.ResponseMode), ResponseMode.Sync)
+            ],
+            outputCaptures: outputCaptures);
 
     /// <summary>Builds a sequence node with child slots and execution order derived from the supplied children.</summary>
     internal static ExecutableNode Sequence(string nodeId, params ExecutableNode[] children) =>

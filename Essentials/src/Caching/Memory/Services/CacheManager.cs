@@ -7,7 +7,7 @@ using Microsoft.Extensions.Primitives;
 namespace Elsa.Caching.Memory.Services;
 
 /// <inheritdoc />
-public sealed class CacheManager(IMemoryCache memoryCache, IChangeTokenSignaler changeTokenSignaler, IOptions<CachingOptions> options) : ICacheManager
+internal sealed class CacheManager(IMemoryCache memoryCache, ChangeTokenSignaler changeTokenSignaler, IOptions<CachingOptions> options) : ICacheManager
 {
     /// <inheritdoc />
     public TimeSpan CacheDuration => options.Value.CacheDuration;

@@ -5,7 +5,7 @@ namespace Elsa.Primitives.Extensions;
 /// <summary>
 /// Provides extension methods for <see cref="IQueryable{T}"/>.
 /// </summary>
-public static class QueryableExtensions
+internal static class QueryableExtensions
 {
     /// <summary>
     /// Orders the queryable by the specified order.

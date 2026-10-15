@@ -1,5 +1,6 @@
-﻿using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
+﻿using Elsa.Expressions.JavaScript.Rendering.Contracts;
 using Elsa.Expressions.JavaScript.Rendering.Core.Models;
+using Elsa.Expressions.JavaScript.Rendering.Models;
 using System.Text;
 
 namespace Elsa.Expressions.JavaScript.Rendering.Services;

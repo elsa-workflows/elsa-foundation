@@ -102,6 +102,7 @@ public sealed class WorkflowDrainOwnershipLifecycleTests
             outbox,
             new InMemoryWorkflowSchedulerWorkQueue(),
             coalescingScopeFactory: NonFoldingDrainScopeFactory.Instance,
+            persistenceModeResolver: NonFoldingDrainScopeFactory.Resolver,
             timeProvider: TimeProvider.System);
     }
 

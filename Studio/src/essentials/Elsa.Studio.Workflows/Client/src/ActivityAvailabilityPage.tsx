@@ -32,8 +32,8 @@ import {
 } from "./activityAvailability";
 import { formatTypeName } from "./activityProperties";
 import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem } from "./workflowTypes";
-import { resolveActivityIcon } from "./workflowAdapter";
-import { renderActivityIcon } from "./workflowFormatting";
+import { resolveActivityIcon } from "./activityIcons";
+import { renderActivityIcon } from "./activityIconView";
 import "./activityAvailability.css";
 
 /** Unique row identity for React keys and details-panel selection (rule keys can collide across versions). */
@@ -61,7 +61,7 @@ function getSwitchLockTitle(effective: EffectiveActivityAvailability): string | 
 }
 
 function ActivityIconChip({ icon }: { icon: ReturnType<typeof resolveActivityIcon> }) {
-  return <span className="wf-activity-icon" data-icon={icon} aria-hidden="true">{renderActivityIcon(icon)}</span>;
+  return <span className="wf-activity-icon" data-icon={icon} aria-hidden="true">{renderActivityIcon(icon, "activity")}</span>;
 }
 
 export function ActivityAvailabilityPage({ context }: { context: StudioEndpointContext }) {

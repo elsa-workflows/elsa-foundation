@@ -12,7 +12,7 @@ namespace Elsa.Serialization.Newtonsoft;
     name: "Serialization.Newtonsoft",
     DisplayName = "Serialization - Newtonsoft",
     Description = "Contributes Newtonsoft JSON island handling for the payload serializer.")]
-public sealed class NewtonsoftSerializationFeature : IShellFeature
+public class NewtonsoftSerializationFeature : IShellFeature
 {
     public void ConfigureServices(IServiceCollection services)
     {

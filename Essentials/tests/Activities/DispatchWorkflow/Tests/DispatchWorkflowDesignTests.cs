@@ -1,3 +1,4 @@
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Services;
 using System.Text.Json;
@@ -16,7 +17,6 @@ using Elsa.Events;
 using Elsa.Events.Core.Contracts;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa.Workflows.Design.Persistence.Core.Filters;
@@ -162,7 +162,7 @@ public sealed class DispatchWorkflowDesignTests
         var sourceStore = new InMemoryWorkflowExecutableSourceReferenceStore();
         await executableStore.SaveAsync(childExecutable);
         await sourceStore.SaveAsync(childSource);
-        var typeRegistry = new WellKnownTypeRegistry();
+        var typeRegistry = SerializationServices.TypeRegistry();
         typeRegistry.RegisterType(typeof(string), "String");
         var services = new ServiceCollection();
         services.AddSingleton<IWorkflowDefinitionVersionStore>(new StubWorkflowVersionStore(workflowVersion));
@@ -763,7 +763,7 @@ public sealed class DispatchWorkflowDesignTests
 
     private static IWorkflowExecutableInputValidator InputValidator()
     {
-        var registry = new WellKnownTypeRegistry();
+        var registry = SerializationServices.TypeRegistry();
         registry.RegisterType(typeof(string), "String");
         registry.RegisterType(typeof(int), "Int32");
         registry.RegisterType(typeof(bool), "Boolean");

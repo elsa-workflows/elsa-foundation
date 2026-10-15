@@ -5,18 +5,12 @@ namespace Elsa.Events.Core.Contracts;
 /// former domain-event / notification / lifecycle-event senders.
 /// </summary>
 /// <remarks>
-/// The optional <see cref="IEventPublishingStrategy"/> controls HOW handlers are dispatched.
-/// When omitted, the configured default strategy is used (Sequential: synchronous, in-order,
-/// awaited, and CAN break the caller). Pass an explicit strategy to override per call — e.g.
-/// <c>EventPublishingStrategy.Background</c> for fire-and-forget.
-/// <para>
-/// Most call sites should prefer the intent-revealing <see cref="IInlineEventPublisher"/> (awaits
-/// handler effects) or <see cref="IDeferredEventPublisher"/> (fire-and-forget) over selecting a
-/// strategy here; those faces make the wrong delivery semantics unrepresentable at the dependency
-/// level. This strategy-selecting surface is retained for callers that need explicit control.
-/// </para>
+/// The <see cref="IEventPublishingStrategy"/> controls HOW handlers are dispatched. This interface is internal to the
+/// Events feature: <see cref="IInlineEventPublisher"/> (Sequential, awaits handler effects) and
+/// <see cref="IDeferredEventPublisher"/> (Background, fire-and-forget) are built on it and are the public way to
+/// publish, and the background worker drains queued events through it with handler isolation.
 /// </remarks>
-public interface IEventPublisher
+internal interface IEventPublisher
 {
-    Task Publish(IEvent @event, IEventPublishingStrategy? strategy = null, CancellationToken cancellationToken = default);
+    Task Publish(IEvent @event, IEventPublishingStrategy strategy, CancellationToken cancellationToken = default);
 }

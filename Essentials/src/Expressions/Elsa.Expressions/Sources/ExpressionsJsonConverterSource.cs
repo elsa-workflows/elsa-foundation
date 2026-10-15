@@ -9,7 +9,7 @@ namespace Elsa.Expressions.Sources;
 /// Contributes the Expressions feature's <see cref="VariableConverterFactory"/> for
 /// <c>Variable&lt;T&gt;</c> payloads (resolved via <see cref="IVariableMapper"/>).
 /// </summary>
-public sealed class ExpressionsJsonConverterSource(IVariableMapper variableMapper) : IJsonConverterSource
+internal sealed class ExpressionsJsonConverterSource(IVariableMapper variableMapper) : IJsonConverterSource
 {
     public IEnumerable<JsonConverter> GetConverters()
     {

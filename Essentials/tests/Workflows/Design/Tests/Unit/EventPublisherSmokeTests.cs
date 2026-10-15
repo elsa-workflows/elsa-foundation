@@ -1,9 +1,8 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Events;
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Core.Extensions;
-using Elsa.Events.Services;
-using Elsa.Events.Strategies;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations;
@@ -20,8 +19,8 @@ namespace Elsa.Workflows.Design.Tests.Unit;
 
 /// <summary>
 /// Smoke test for the production event pipeline (handler-invoker middleware, no shielding)
-/// against handlers registered via <c>AddEventHandlersFrom</c> and a default Sequential
-/// publishing strategy.
+/// against handlers registered via <c>AddEventHandlersFrom</c>, published inline through
+/// <see cref="IInlineEventPublisher"/>, which dispatches on the Sequential strategy.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -52,7 +51,7 @@ public sealed class EventPublisherSmokeTests
             services.AddScoped<IDraftValidator, StartActivityValidator>();
         });
 
-        var publisher = provider.GetRequiredService<IEventPublisher>();
+        var publisher = provider.GetRequiredService<IInlineEventPublisher>();
         var evt = new DraftValidating(EmptyDraft());
 
         await publisher.Publish(evt, cancellationToken: CancellationToken.None);
@@ -72,7 +71,7 @@ public sealed class EventPublisherSmokeTests
             services.AddEventHandler<DraftValidating, StubValidator>();
         });
 
-        var publisher = provider.GetRequiredService<IEventPublisher>();
+        var publisher = provider.GetRequiredService<IInlineEventPublisher>();
         var evt = new DraftValidating(EmptyDraft());
 
         await publisher.Publish(evt, cancellationToken: CancellationToken.None);
@@ -90,7 +89,7 @@ public sealed class EventPublisherSmokeTests
             services.TryAddEventHandler<DraftValidating, StubValidator>();
         });
 
-        var publisher = provider.GetRequiredService<IEventPublisher>();
+        var publisher = provider.GetRequiredService<IInlineEventPublisher>();
         var evt = new DraftValidating(EmptyDraft());
 
         await publisher.Publish(evt, cancellationToken: CancellationToken.None);
@@ -111,7 +110,7 @@ public sealed class EventPublisherSmokeTests
             services.TryAddEventHandler<DraftValidating, StubValidator>();
         });
 
-        var publisher = provider.GetRequiredService<IEventPublisher>();
+        var publisher = provider.GetRequiredService<IInlineEventPublisher>();
         var evt = new DraftValidating(EmptyDraft());
 
         await publisher.Publish(evt, cancellationToken: CancellationToken.None);
@@ -130,7 +129,7 @@ public sealed class EventPublisherSmokeTests
             services.AddScoped<IEventHandler, StubValidator>();
         });
 
-        var publisher = provider.GetRequiredService<IEventPublisher>();
+        var publisher = provider.GetRequiredService<IInlineEventPublisher>();
         var evt = new DraftValidating(EmptyDraft());
 
         await publisher.Publish(evt, cancellationToken: CancellationToken.None);
@@ -143,7 +142,7 @@ public sealed class EventPublisherSmokeTests
     {
         await using var provider = BuildProvider(_ => { });
 
-        var publisher = provider.GetRequiredService<IEventPublisher>();
+        var publisher = provider.GetRequiredService<IInlineEventPublisher>();
         var evt = new DraftValidating(EmptyDraft());
 
         await publisher.Publish(evt, cancellationToken: CancellationToken.None);
@@ -162,7 +161,7 @@ public sealed class EventPublisherSmokeTests
             services.AddEventHandler<DraftValidating, SecondStubValidator>();
         });
 
-        var publisher = provider.GetRequiredService<IEventPublisher>();
+        var publisher = provider.GetRequiredService<IInlineEventPublisher>();
         var evt = new DraftValidating(EmptyDraft());
 
         await publisher.Publish(evt, cancellationToken: CancellationToken.None);
@@ -177,9 +176,8 @@ public sealed class EventPublisherSmokeTests
         var services = new ServiceCollection();
         services.AddOptions();
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
-        services.AddScoped<IEventPublisher, EventPublisher>();
-        services.AddSingleton<IEventPipeline, EventPipeline>();
-        services.AddSingleton<IEventPublishingStrategy>(EventPublishingStrategy.Sequential);
+        // The production publishers and pipeline, as the feature composes them.
+        new EventsFeature().ConfigureServices(services);
 
         configure(services);
 

@@ -942,7 +942,7 @@ public sealed class IdentityIamEntityFrameworkCoreBehaviorTests
     private static IdentityIamSqliteDbContext CreateContext(string databasePath, params IInterceptor[] interceptors)
     {
         var builder = new DbContextOptionsBuilder<IdentityIamSqliteDbContext>()
-            .UseSqlite($"Data Source={databasePath};Default Timeout=5");
+            .UseSqlite(ConnectionTo(databasePath));
         if (interceptors.Length > 0)
             builder.AddInterceptors(interceptors);
         return new IdentityIamSqliteDbContext(builder.Options);
@@ -957,7 +957,9 @@ public sealed class IdentityIamEntityFrameworkCoreBehaviorTests
     private static string TemporaryDatabasePath() =>
         Path.Join(Path.GetTempPath(), $"elsa-identity-iam-{Guid.NewGuid():N}.db");
 
-    private static void DeleteDatabaseFiles(string databasePath) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles(databasePath);
+    private static string ConnectionTo(string databasePath) => $"Data Source={databasePath};Default Timeout=5";
+
+    private static void DeleteDatabaseFiles(string databasePath) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles(ConnectionTo(databasePath));
 
     private sealed class FixedAccess(PersistenceAccessContext current) : IPersistenceAccessContextAccessor
     {

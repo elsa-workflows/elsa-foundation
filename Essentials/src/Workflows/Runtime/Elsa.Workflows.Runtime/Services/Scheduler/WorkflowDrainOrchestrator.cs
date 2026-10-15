@@ -338,12 +338,17 @@ public sealed class WorkflowDrainOrchestrator : IWorkflowDrainOrchestrator
                 "Call AddPersistenceModes() after the workflows runtime and its persistence provider are registered.");
         }
 
-        // The mode is resolved per execution: the mode the run recorded at start on later drains, otherwise the pinned
-        // workflow's choice, otherwise the host default. Without a resolver the host default is Durable, and whether the
-        // run has a record is unknown, so assuming it has one keeps its completion committed.
-        var resolved = _persistenceModeResolver is not null
-            ? await _persistenceModeResolver.ResolveAsync(envelope, cancellationToken)
-            : new ResolvedPersistenceMode(PersistenceMode.Durable, RunHasRecord: true);
+        // Nor can a run drain in a mode nothing resolved for it.
+        if (_persistenceModeResolver is null)
+        {
+            throw new InvalidOperationException(
+                $"Workflow execution '{request.WorkflowExecutionId}' cannot drain because this host has no persistence-mode resolver. " +
+                "AddWorkflowRuntime() registers one.");
+        }
+
+        // The mode is resolved per execution: the mode the run recorded at its first commit, or before that the mode its
+        // start carries, whichever command starts this drain.
+        var resolved = await _persistenceModeResolver.ResolveAsync(envelope, cancellationToken);
 
         // The session folds the run's checkpoints between commits: one activity's into each commit under Durable, up to
         // the host's cap under Balanced, and until a boundary under Ephemeral. Establish it for the drain, then

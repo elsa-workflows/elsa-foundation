@@ -10,7 +10,7 @@ using Microsoft.Extensions.Logging;
 namespace Elsa.Expressions.Services;
 
 /// <inheritdoc />
-public sealed class VariableMapper(IWellKnownTypeRegistry wellKnownTypeRegistry, IObjectConverter objectConverter, IVariableDefaultValueFormatter variableFormatter, ILogger<VariableMapper> logger) : IVariableMapper
+internal sealed class VariableMapper(IWellKnownTypeRegistry wellKnownTypeRegistry, IObjectConverter objectConverter, IVariableDefaultValueFormatter variableFormatter, ILogger<VariableMapper> logger) : IVariableMapper
 {
     /// <inheritdoc />
     public IVariable Map(VariableDefinition source)

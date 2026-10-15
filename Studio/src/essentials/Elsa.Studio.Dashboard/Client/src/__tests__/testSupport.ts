@@ -1,5 +1,6 @@
 import { vi } from "vitest";
 import type { ElsaStudioModuleApi, StudioDashboardWidgetContribution } from "@elsa-workflows/studio-sdk";
+import { homeLayoutLocalStoragePrefix } from "../homeLayout";
 
 export function widget(overrides: Partial<StudioDashboardWidgetContribution> = {}): StudioDashboardWidgetContribution {
   return {
@@ -25,6 +26,7 @@ export function stubApi(): ElsaStudioModuleApi {
     const items: T[] = [];
     return { add: (item: T) => items.push(item), list: () => items, compose: () => [], slot: { id: "test", kind: "test", owner: { kind: "host", id: "host" } } };
   };
+  const widgets = makeRegistry();
   const notFound = async () => {
     const error = new Error("missing") as Error & { status: number };
     error.status = 404;
@@ -32,10 +34,42 @@ export function stubApi(): ElsaStudioModuleApi {
   };
   return {
     host: { baseUrl: "https://studio.example", hostVersion: "1", sdkVersion: "1", http: {} },
-    backend: { baseUrl: "https://backend.example", http: { getJson: notFound, putJson: vi.fn(async (_url, body) => ({ namespace: "dashboard", schemaVersion: 1, value: (body as { value: unknown }).value })) } },
-    runtime: { hostId: "test", dashboard: { defaultRefreshIntervalMs: 300_000, widgetTimeoutMs: 10_000 } },
-    navigation: makeRegistry(), routes: makeRegistry(), dashboardWidgets: makeRegistry(), settingEditors: makeRegistry()
+    backend: {
+      baseUrl: "https://backend.example",
+      http: {
+        getJson: notFound,
+        putJson: vi.fn(async (_url, body) => ({
+          source: "user",
+          namespace: "home-layout",
+          schemaVersion: 1,
+          revision: "rev-1",
+          value: (body as { value: unknown }).value
+        })),
+        deleteJson: vi.fn(async () => ({}))
+      }
+    },
+    runtime: { hostId: "test", dashboard: { defaultRefreshIntervalMs: 300_000, widgetTimeoutMs: 10_000 }, enabledFeatures: ["workflows"] },
+    navigation: makeRegistry(),
+    routes: makeRegistry(),
+    dashboardWidgets: widgets,
+    homeWidgets: widgets,
+    settingEditors: makeRegistry()
   } as unknown as ElsaStudioModuleApi;
+}
+
+export function seedHomeLayout(api: ElsaStudioModuleApi, widgetIds: string[], subjectId = "anonymous") {
+  const scope = {
+    studioHostId: api.runtime.hostId ?? "default",
+    backendBaseUrl: api.backend.baseUrl,
+    subjectId,
+    tenantId: "default"
+  };
+  localStorage.setItem(`${homeLayoutLocalStoragePrefix}${encodeURIComponent(JSON.stringify(scope))}`, JSON.stringify({
+    source: "local",
+    namespace: "home-layout",
+    schemaVersion: 1,
+    value: { widgets: widgetIds.map(id => ({ id, size: "wide", visible: true })) }
+  }));
 }
 
 export async function flush() {
@@ -44,7 +78,7 @@ export async function flush() {
 }
 
 export async function waitUntil(predicate: () => boolean) {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
     if (predicate()) return;
     await new Promise(resolve => setTimeout(resolve, 0));
   }

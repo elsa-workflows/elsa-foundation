@@ -55,7 +55,10 @@ holding application-wide static state (§2.5.1).
   contract. The scanner is where a credential input declaration (`[ActivityInput(IsCredential = true)]`) is
   checked to be bindable to a secret reference (spec 188, FR-006), so a replacement that copies the declaration
   into the catalog must refuse the same unbindable declarations: a default value, a property that is not a
-  `string`, an input named in `[RefusesSecretBinding]`, and a checkpoint participant.
+  `string`, an input named in `[RefusesSecretBinding]`, and a checkpoint participant. A valid
+  `[Activity(Icon = …)]` is copied onto an `elsa.activity-icon` design facet (`ActivityIconName`); an
+  unknown or unsafe value is dropped. The facet is presentation only and is excluded from the
+  descriptor hash, so adding or changing an icon does not throw `ActivityVersionHashMismatchException`.
 
 ---
 
@@ -78,5 +81,5 @@ reconciliation feature's handler.
 
 - Reconciliation lifecycle + the source contract: [`Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](../Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md).
 - Activity abstractions + `[Version]`: `Elsa.Activities.Runtime.Core`.
-- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 (DI-source), §E2.2 (Design→Runtime edge), §E2.8 (author semver).

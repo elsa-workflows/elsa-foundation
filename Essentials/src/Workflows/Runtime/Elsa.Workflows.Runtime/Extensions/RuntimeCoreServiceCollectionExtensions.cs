@@ -463,7 +463,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<IWorkflowExecutionPartitionAccessor>(),
                 policies[0],
                 serviceProvider.GetService<IWorkflowDispatchStore>(),
-                serviceProvider.GetService<IWorkflowExecutionStateStore>());
+                serviceProvider.GetService<IWorkflowExecutionStateStore>(),
+                serviceProvider.GetRequiredService<IRuntimePersistenceModeResolver>());
         });
         services.TryAddScoped<IWorkflowDispatchRetentionCollector, WorkflowDispatchRetentionCollector>();
         services.TryAddSingleton<WorkflowDispatchRetentionCursor>();

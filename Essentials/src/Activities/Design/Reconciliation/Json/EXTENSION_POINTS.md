@@ -62,8 +62,8 @@ reconciliation feature's handler.
 ## Cross-references
 
 - Reconciliation lifecycle + the source contract: [`Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md`](../Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md).
-- The sibling CLR source: [`Elsa.Activities.Design.Reconciliation.Clr/EXTENSION_POINTS.md`](../Elsa.Activities.Design.Reconciliation.Clr/EXTENSION_POINTS.md).
+- The sibling CLR source: [`Elsa.Activities.Design.Reconciliation.Clr/EXTENSION_POINTS.md`](../Clr/EXTENSION_POINTS.md).
 - Shared serializer contract: `Elsa.Serialization.Core` (`IPayloadSerializer`).
-- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../EXTENSION_POINTS.md).
+- Repo-wide index: [`../../EXTENSION_POINTS.md`](../../../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 (DI-source), §2.5 / §2.5.1 (contract registration, lifetimes),
   §2.23.5 (domain-scoped faults).

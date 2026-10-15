@@ -42,9 +42,10 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         Assert.IsType<CoalescingRuntimeCheckpointCommitStore>(provider.GetRequiredService<IRuntimeCheckpointCommitStore>());
         Assert.IsType<CoalescingWorkflowSchedulerWorkQueue>(provider.GetRequiredService<IWorkflowSchedulerWorkQueue>());
         Assert.IsType<CoalescingRuntimePostCommitOutboxStore>(provider.GetRequiredService<IRuntimePostCommitOutboxStore>());
+        // The lookup the runtime registered is wrapped, not replaced.
         Assert.Same(
-            provider.GetRequiredService<IRuntimePostCommitOutboxStore>(),
-            provider.GetRequiredService<IPostCommitOutboxLookupStore>());
+            provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>(),
+            provider.GetRequiredService<CoalescingInner<IPostCommitOutboxLookupStore>>().Value);
         Assert.IsType<CoalescingWorkflowExecutionStateStore>(provider.GetRequiredService<IWorkflowExecutionStateStore>());
         Assert.IsType<CoalescingActivityExecutionStateStore>(provider.GetRequiredService<IActivityExecutionStateStore>());
         Assert.IsType<CoalescingDurableValueStateStore>(provider.GetRequiredService<IDurableValueStateStore>());
@@ -893,6 +894,20 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task TheRunRecordsTheModeItsDrainRan_WhichIsTheOneItsStartCarries()
+    {
+        // The start dispatcher decided Balanced for this run. On a Durable host, for a workflow that chose nothing, the
+        // drain runs Balanced and the run must record Balanced: a record that named the host default would put the next
+        // drain in a mode this one did not run.
+        var run = await DriveAsync(hostMode: PersistenceMode.Durable, startedMode: PersistenceMode.Balanced);
+
+        Assert.Equal(WorkflowExecutionStatus.Completed, run.State?.Status);
+        Assert.NotEmpty(run.Sessions);
+        Assert.All(run.Sessions, session => Assert.Equal(PersistenceMode.Balanced, session.Mode));
+        Assert.Equal(nameof(PersistenceMode.Balanced), run.State!.SystemMetadata[RuntimeMetadataKeys.PersistenceMode]);
+    }
+
+    [Fact]
     public async Task ChosenBalanced_UnderDurableHost_FoldsAtTheHostCap_AndRecordsBalanced()
     {
         // The workflow's choice wins in both directions. A Durable host default must not turn a workflow that chose
@@ -1580,7 +1595,8 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
 
     private static async Task<(IReadOnlyList<(string NodeId, ActivityExecutionStatus Status)> Snapshot, int CommitCount, WorkflowExecutionState? State, IReadOnlyList<(PersistenceMode Mode, int? MaxActivitiesPerCommit)> Sessions)> DriveAsync(
         PersistenceMode? chosenMode = null,
-        PersistenceMode hostMode = PersistenceMode.Balanced)
+        PersistenceMode hostMode = PersistenceMode.Balanced,
+        PersistenceMode? startedMode = null)
     {
         var services = new ServiceCollection();
         new WorkflowsRuntimeApiFeature().ConfigureServices(services);
@@ -1592,7 +1608,7 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
 
         using var provider = services.BuildServiceProvider();
         await SeedAsync(provider, chosenMode);
-        await EnqueueStartAsync(provider);
+        await EnqueueStartAsync(provider, startedMode);
 
         var snapshot = await SnapshotAsync(provider);
         var commitCount = provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits().Count;
@@ -1619,12 +1635,12 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
         await store.SaveAsync(NewExecutable(chosenMode));
     }
 
-    private static async ValueTask EnqueueStartAsync(ServiceProvider provider)
+    private static async ValueTask EnqueueStartAsync(ServiceProvider provider, PersistenceMode? startedMode = null)
     {
         var executable = NewExecutable();
         var agentProvider = provider.GetRequiredService<IWorkflowExecutionActorProvider>();
         var agent = await agentProvider.GetAgentAsync(NewActivationRequest("wfexec-1"));
-        await agent.EnqueueAsync(NewStartEnvelope(executable.Identity));
+        await agent.EnqueueAsync(NewStartEnvelope(executable.Identity, startedMode));
     }
 
     private static async Task<IReadOnlyList<(string NodeId, ActivityExecutionStatus Status)>> SnapshotAsync(ServiceProvider provider)
@@ -1652,22 +1668,25 @@ public sealed class RuntimeCheckpointCoalescingTests(ITestOutputHelper output)
             Now,
             visibilityTimeout: TimeSpan.FromMinutes(1));
 
-    private static WorkflowExecutionCommandEnvelope NewStartEnvelope(WorkflowExecutableIdentity pinnedExecutable)
+    // A start as WorkflowStartDispatcher.CreateDispatchMetadata shapes it: the artifact id, and the mode the dispatcher
+    // decided for the run when one is given.
+    private static WorkflowExecutionCommandEnvelope NewStartEnvelope(WorkflowExecutableIdentity pinnedExecutable, PersistenceMode? startedMode = null)
     {
         var payload = new WorkflowExecutionStartCommandPayload(pinnedExecutable, pinnedExecutable.ArtifactId);
+        var metadata = new Dictionary<string, string>
+        {
+            ["source"] = "test",
+            ["runtime.artifactId"] = pinnedExecutable.ArtifactId
+        };
+        if (startedMode is { } mode)
+            metadata[RuntimeMetadataKeys.PersistenceMode] = mode.ToString();
         var command = new WorkflowExecutionCommand(
             CommandId: "command-start",
             WorkflowExecutionId: "wfexec-1",
             Kind: WorkflowExecutionCommandKind.Start,
             EnqueuedAt: Now,
             Payload: JsonSerializer.SerializeToElement(payload),
-            Metadata: new Dictionary<string, string>
-            {
-                ["source"] = "test",
-                // Mirrors WorkflowStartDispatcher.CreateDispatchMetadata: the artifact-id breadcrumb the per-execution
-                // cadence resolver reads on the first drain, before any WorkflowExecutionState row exists.
-                ["runtime.artifactId"] = pinnedExecutable.ArtifactId
-            });
+            Metadata: metadata);
 
         return new(
             envelopeId: "envelope-start",

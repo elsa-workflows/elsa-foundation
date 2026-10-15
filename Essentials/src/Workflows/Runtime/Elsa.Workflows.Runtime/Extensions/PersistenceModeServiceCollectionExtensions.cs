@@ -1,6 +1,7 @@
 using Elsa.Workflows.Runtime.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -18,9 +19,11 @@ namespace Elsa.Workflows.Runtime.Extensions;
 public static class PersistenceModeServiceCollectionExtensions
 {
     /// <summary>
-    /// Replaces the per-checkpoint persistence policy with the folding policy and wraps the runtime
-    /// checkpoint/queue/outbox/state stores so a run's checkpoints fold into atomic commits on its mode's schedule.
-    /// Safe to call more than once: the stores are wrapped on the first call only.
+    /// Replaces the runtime's per-checkpoint persistence policy with the folding policy and wraps the runtime
+    /// checkpoint/queue/outbox/state stores and the outbox lookup so a run's checkpoints fold into atomic commits on its
+    /// mode's schedule. Safe to call more than once: the stores are wrapped on the first call only. A persistence policy
+    /// a host registered is refused, naming both, rather than replaced: the commit boundaries every mode keeps depend on
+    /// the folding policy. A policy registered afterwards, or a second persistence-mode resolver, fails shell activation.
     /// </summary>
     /// <param name="services">The service collection.</param>
     /// <param name="configureOptions">
@@ -54,18 +57,15 @@ public static class PersistenceModeServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IRuntimeCoalescingSessionAccessor, AsyncLocalRuntimeCoalescingSessionAccessor>();
 
-        // Select the folding policy in place of the per-checkpoint default.
-        services.RemoveAll<IRuntimeCheckpointPersistencePolicy>();
-        services.AddSingleton<IRuntimeCheckpointPersistencePolicy, CoalescingRuntimeCheckpointPersistencePolicy>();
+        // Select the folding policy in place of the runtime's per-checkpoint default.
+        var policy = ReplaceRuntimeDefaultPolicy(services);
 
         // Decorate the durable stores the coalescing session overlays. Each decorator passes through byte-for-byte when
         // no session is active; only an active session (established by the drain scope) redirects to the working set.
         decorations.Add(services.DecorateWithCoalescing<IRuntimeCheckpointCommitStore, CoalescingRuntimeCheckpointCommitStore>());
         decorations.Add(services.DecorateWithCoalescing<IWorkflowSchedulerWorkQueue, CoalescingWorkflowSchedulerWorkQueue>());
         decorations.Add(services.DecorateWithCoalescing<IRuntimePostCommitOutboxStore, CoalescingRuntimePostCommitOutboxStore>());
-        services.RemoveAll<IPostCommitOutboxLookupStore>();
-        services.AddScoped<IPostCommitOutboxLookupStore>(serviceProvider =>
-            (IPostCommitOutboxLookupStore)serviceProvider.GetRequiredService<IRuntimePostCommitOutboxStore>());
+        decorations.Add(services.DecorateWithCoalescing<IPostCommitOutboxLookupStore, CoalescingPostCommitOutboxLookupStore>());
         decorations.Add(services.DecorateWithCoalescing<IWorkflowExecutionStateStore, CoalescingWorkflowExecutionStateStore>());
         decorations.Add(services.DecorateWithCoalescing<IActivityExecutionStateStore, CoalescingActivityExecutionStateStore>());
         decorations.Add(services.DecorateWithCoalescing<IDurableValueStateStore, CoalescingDurableValueStateStore>());
@@ -83,8 +83,32 @@ public static class PersistenceModeServiceCollectionExtensions
         var reuseRegistrationDescriptor = ServiceDescriptor.Singleton(durableValueReuse);
         services.Add(reuseRegistrationDescriptor);
         durableValueReuse.CaptureAfterDecoration(decorations, markerDescriptor, reuseRegistrationDescriptor);
+        PersistenceModeCompositionValidator.Register(services, policy);
 
         return services;
+    }
+
+    // The runtime registers a per-checkpoint policy as a placeholder until the persistence modes are added. Any other
+    // registration is a host's own policy, which the modes cannot run on.
+    private static ServiceDescriptor ReplaceRuntimeDefaultPolicy(IServiceCollection services)
+    {
+        var registered = services
+            .Where(descriptor => descriptor.ServiceType == typeof(IRuntimeCheckpointPersistencePolicy) && !descriptor.IsKeyedService)
+            .ToArray();
+        var hostPolicies = registered.Where(descriptor => descriptor.ImplementationType != typeof(ImmediateRuntimeCheckpointPersistencePolicy)).ToArray();
+        if (hostPolicies.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"Cannot register the persistence modes: '{typeof(IRuntimeCheckpointPersistencePolicy)}' is already registered as " +
+                $"{string.Join(", ", hostPolicies.Select(PersistenceModeCompositionValidator.Describe))}, and the persistence modes register " +
+                $"'{typeof(CoalescingRuntimeCheckpointPersistencePolicy)}', on which the commit boundaries of every mode depend. Remove the other registration.");
+        }
+
+        foreach (var descriptor in registered)
+            services.Remove(descriptor);
+        var policy = ServiceDescriptor.Singleton<IRuntimeCheckpointPersistencePolicy, CoalescingRuntimeCheckpointPersistencePolicy>();
+        services.Add(policy);
+        return policy;
     }
 
     /// <summary>

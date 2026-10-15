@@ -392,8 +392,9 @@ public sealed class SqliteTopologyTests
         return path;
     }
 
-    private static SqliteConnection NewConnection(string path) =>
-        new($"Data Source={path};Cache=Shared;Default Timeout=1");
+    private static SqliteConnection NewConnection(string path) => new(ConnectionTo(path));
+
+    private static string ConnectionTo(string path) => $"Data Source={path};Cache=Shared;Default Timeout=1";
 
     private static async Task ConfigureSqliteAsync(SqliteConnection connection)
     {
@@ -440,7 +441,7 @@ public sealed class SqliteTopologyTests
         "The commit outcome is unknown; recovery must inspect durable markers.",
         new IOException("connection dropped after commit request"));
 
-    private static void DeleteDatabase(string path) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles(path);
+    private static void DeleteDatabase(string path) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles(ConnectionTo(path));
 }
 
 internal static class TopologyPolicy

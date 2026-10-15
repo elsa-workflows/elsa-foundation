@@ -2,7 +2,7 @@
 
 namespace Elsa.Expressions.Services;
 
-public sealed class DefaultExpressionDescriptorProvider : IExpressionDescriptorProvider
+internal sealed class DefaultExpressionDescriptorProvider : IExpressionDescriptorProvider
 {
     public IEnumerable<IExpressionDescriptor> GetDescriptors()
     {

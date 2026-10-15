@@ -188,6 +188,29 @@ if (authenticatedLandingJavaScript.includes(variableTargetPickerMarker)) {
   throw new Error("The variable-target picker leaked into an eager Workflows landing closure.");
 }
 
+const activityIconTableMarker = "FlagTriangleRight";
+if (await readJavaScript(entryJavaScriptFiles).then(source => source.includes(activityIconTableMarker))) {
+  throw new Error("The activity icon table leaked into the Workflows JavaScript entry.");
+}
+if (authenticatedLandingJavaScript.includes(activityIconTableMarker)) {
+  throw new Error("The activity icon table leaked into an eager Workflows landing closure.");
+}
+
+const activityIconGlyphsChunk = Object.values(manifest).find(entry =>
+  typeof entry.src === "string" && entry.src.endsWith("activityIconGlyphs.tsx")
+);
+if (!activityIconGlyphsChunk) throw new Error("Bundle manifest is missing the activityIconGlyphs chunk.");
+if (!activityIconGlyphsChunk.isDynamicEntry) {
+  throw new Error("activityIconGlyphs is no longer emitted as a deferred entry.");
+}
+if (
+  entryFiles.has(activityIconGlyphsChunk.file)
+  || definitionsLandingFiles.has(activityIconGlyphsChunk.file)
+  || upgradeLandingFiles.has(activityIconGlyphsChunk.file)
+) {
+  throw new Error("activityIconGlyphs leaked into an eager Workflows landing closure.");
+}
+
 const [entrySize, stylesheetSize, definitionsLandingSize, definitionsLandingTotalSize, upgradeLandingTotalSize] = await Promise.all([
   measure(entryJavaScriptFiles),
   measure(stylesheetFiles),

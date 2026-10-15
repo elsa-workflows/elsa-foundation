@@ -112,9 +112,9 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
 
         services.TryAddScoped<IActivityInspectionContextAsync>(sp => sp.GetRequiredService<HttpContextActivityExecutionInspectionAuthorizationContext>());
         services.EnsureReplacementContract<IActivityInspectionContextAsync, HttpContextActivityExecutionInspectionAuthorizationContext>();
-        // Resolves the persistence mode for the instance detail view. Reads the host options optionally (via
-        // IEnumerable), so a run that recorded no mode reports the host default, or Durable on a host that composes the
-        // runtime without the persistence modes.
+        // Resolves the persistence mode for the instance detail view: the mode a run recorded, otherwise the host default
+        // from the options the persistence modes register. It reads them only when it reports a default, so the view
+        // resolves on a host that has not added them yet.
         services.TryAddScoped<RuntimePersistenceModeInspector>();
         services.TryAddScoped<ActivityExecutionHierarchyReader>();
         services.TryAddScoped<IActivityExecutionDescendantsReader>(sp => sp.GetRequiredService<ActivityExecutionHierarchyReader>());

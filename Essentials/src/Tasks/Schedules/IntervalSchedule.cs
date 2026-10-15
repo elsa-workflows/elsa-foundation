@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Tasks.Schedules;
 
-public sealed class IntervalSchedule(TimeSpan interval, ILogger logger) : ITaskSchedule
+internal sealed class IntervalSchedule(TimeSpan interval, ILogger logger) : ITaskSchedule
 {
     public IScheduledTaskExecution ScheduleExecution(Func<Task> action)
     {

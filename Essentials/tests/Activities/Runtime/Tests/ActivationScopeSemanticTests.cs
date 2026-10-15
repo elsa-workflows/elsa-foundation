@@ -4,7 +4,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Runtime.Services;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -24,7 +24,7 @@ public sealed class ActivationScopeSemanticTests : IAsyncDisposable
 
     private readonly DependencyLog _log = new();
     private readonly ServiceProvider _root;
-    private readonly JsonPayloadSerializer _serializer = new(new JsonPayloadConverterRegistry());
+    private readonly IPayloadSerializer _serializer = SerializationServices.PayloadSerializer();
     private readonly IActivityActivator _activator;
 
     public ActivationScopeSemanticTests()
@@ -35,7 +35,7 @@ public sealed class ActivationScopeSemanticTests : IAsyncDisposable
             .AddScoped<ScopedDisposableDependency>()
             .AddScoped<TransitiveScopedDependency>()
             .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
-        var registry = new WellKnownTypeRegistry();
+        var registry = SerializationServices.TypeRegistry();
         foreach (var activityType in new[] { typeof(TransientDependencyActivity), typeof(ScopedDisposableActivity), typeof(FailingActivity) })
             registry.RegisterType(activityType, activityType.FullName!);
         _activator = new ActivityActivator(

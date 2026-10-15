@@ -12,7 +12,7 @@ using Elsa.Activities.Design.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Locking.Core;
 using Elsa.Primitives.Contracts;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
@@ -96,7 +96,6 @@ internal sealed class ActivityUpgradeDatabase : IAsyncDisposable
 
     public ValueTask DisposeAsync()
     {
-        SqliteConnection.ClearAllPools();
         foreach (var suffix in new[] { "", "-wal", "-shm" })
             File.Delete(path + suffix);
         return ValueTask.CompletedTask;
@@ -189,7 +188,7 @@ internal static class ActivityUpgradeFixtures
 
     public static readonly DateTimeOffset Now = new(2026, 7, 15, 12, 0, 0, TimeSpan.Zero);
 
-    public static IPayloadSerializer Serializer() => new JsonPayloadSerializer(new JsonPayloadConverterRegistry());
+    public static IPayloadSerializer Serializer() => SerializationServices.PayloadSerializer();
 
     public static JsonElement Json(string json) => JsonDocument.Parse(json).RootElement.Clone();
 

@@ -299,7 +299,6 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
         finally
         {
             gate.Release();
-            SqliteConnection.ClearAllPools();
             if (completed)
                 DeleteDatabaseFiles(databasePath);
             else
@@ -358,7 +357,6 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
             if (completed)
                 DeleteDatabaseFiles(databasePath);
             else
@@ -393,7 +391,6 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
             if (completed)
                 DeleteDatabaseFiles(databasePath);
             else
@@ -479,7 +476,6 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
         }
         finally
         {
-            SqliteConnection.ClearAllPools();
             if (completed)
                 DeleteDatabaseFiles(databasePath);
             else
@@ -537,7 +533,6 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
         finally
         {
             gate.Release();
-            SqliteConnection.ClearAllPools();
             if (completed)
                 DeleteDatabaseFiles(databasePath);
             else
@@ -743,7 +738,6 @@ public sealed class EfReplaySafeFusionCapRecoveryTests
         finally
         {
             gate.Release();
-            SqliteConnection.ClearAllPools();
             if (completed)
             {
                 DeleteDatabaseFiles(sourceDatabasePath);

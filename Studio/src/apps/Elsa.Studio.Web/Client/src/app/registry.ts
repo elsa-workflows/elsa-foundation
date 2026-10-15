@@ -3,6 +3,7 @@ import {
   createAiContributionApi,
   createContributionRegistry,
   createDashboardWidgetRegistry,
+  registerActivityIcons,
   studioSlots,
   type ElsaStudioHostContext,
   type ElsaStudioModuleApi,
@@ -38,6 +39,7 @@ export function createStudioRegistry(
   const navigation = createContributionRegistry<StudioNavigationContribution>({ slot: studioSlots.navigation });
   const routes = createContributionRegistry<StudioRouteContribution>({ slot: studioSlots.routes });
   const featureAreas = createFeatureAreaRegistry(navigation, routes);
+  const dashboardWidgets = createDashboardWidgetRegistry();
 
   return {
     host: hostContext,
@@ -46,7 +48,8 @@ export function createStudioRegistry(
     featureAreas,
     navigation,
     routes,
-    dashboardWidgets: createDashboardWidgetRegistry(),
+    dashboardWidgets,
+    homeWidgets: dashboardWidgets,
     diagnosticsWidgets: createContributionRegistry<StudioDiagnosticsWidgetContribution>({ slot: studioSlots.diagnosticsWidgets }),
     panels: createContributionRegistry({ slot: studioSlots.panels }),
     toolbarActions: createContributionRegistry({ slot: studioSlots.toolbarActions }),
@@ -67,7 +70,8 @@ export function createStudioRegistry(
     workflowDesigner: {
       nodeRenderers: createContributionRegistry({ slot: studioSlots.workflowDesignerNodeRenderers }),
       toolboxItems: createContributionRegistry({ slot: studioSlots.workflowDesignerToolboxItems }),
-      panels: createContributionRegistry({ slot: studioSlots.workflowDesignerPanels })
+      panels: createContributionRegistry({ slot: studioSlots.workflowDesignerPanels }),
+      registerActivityIcons
     },
     ai: createAiContributionApi(),
     dialogs: dialogController.api,
@@ -114,15 +118,21 @@ function createNavigationContributions(featureArea: StudioFeatureAreaContributio
     return [parent];
   }
 
-  const children = featureArea.nav.items.map((item, index) => ({
-    id: item.id ?? `${featureArea.id}-${slug(item.title)}`,
-    label: item.title,
-    path: item.path,
-    activePathPrefix: item.path,
-    order: (featureArea.order ?? 500) + index + 1,
-    iconColor: item.iconColor ?? parent.iconColor,
-    parentId: parent.id
-  }));
+  const children = featureArea.nav.items
+    .filter(item => item.path !== parent.path)
+    .map((item, index) => {
+      const contribution = {
+        id: item.id ?? `${featureArea.id}-${slug(item.title)}`,
+        label: item.title,
+        path: item.path,
+        activePathPrefix: item.path,
+        order: item.order ?? (featureArea.order ?? 500) + index + 1,
+        iconColor: item.iconColor ?? parent.iconColor,
+        parentId: item.placement ? undefined : parent.id,
+        ...copyPlacementMetadata(item)
+      };
+      return contribution;
+    });
 
   return [parent, ...children];
 }
@@ -137,8 +147,23 @@ function createNavigationContribution(
     label: nav.title,
     path: nav.path,
     activePathPrefix,
-    order: featureArea.order,
-    iconColor: nav.iconColor
+    order: nav.order ?? featureArea.order,
+    iconColor: nav.iconColor,
+    ...copyPlacementMetadata(nav)
+  };
+}
+
+function copyPlacementMetadata(nav: {
+  placement?: StudioFeatureAreaNavContribution["placement"];
+  requiresFeature?: StudioFeatureAreaNavContribution["requiresFeature"];
+  requiresRole?: StudioFeatureAreaNavContribution["requiresRole"];
+  requiresPermission?: StudioFeatureAreaNavContribution["requiresPermission"];
+}) {
+  return {
+    ...(nav.placement ? { placement: nav.placement } : {}),
+    ...(nav.requiresFeature ? { requiresFeature: nav.requiresFeature } : {}),
+    ...(nav.requiresRole ? { requiresRole: nav.requiresRole } : {}),
+    ...(nav.requiresPermission ? { requiresPermission: nav.requiresPermission } : {})
   };
 }
 

@@ -40,7 +40,6 @@ public sealed class RuntimeCoalescingSession
     private readonly Dictionary<string, DurableValueState> _durableValueUpserts = new(StringComparer.Ordinal);
     private readonly HashSet<string> _durableValueTombstones = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ActivityExecutionInspectionProjection> _inspectionUpserts = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, ActivityExecutionInspectionProjection?> _inspectionBaselines = new(StringComparer.Ordinal);
     private readonly Dictionary<string, WorkflowDispatchRecord> _workflowDispatchUpserts = new(StringComparer.Ordinal);
 
     private readonly List<string> _outboxOrder = [];
@@ -82,7 +81,8 @@ public sealed class RuntimeCoalescingSession
         Mode = mode.Mode;
         HasDurableRecord = mode.RunHasRecord;
         RecordCompletion = options.RecordCompletion;
-        // Durable commits once per activity whatever the host's Balanced cap is; Ephemeral has no intermediate commits.
+        // Durable commits once per activity whatever the host's Balanced cap is. Ephemeral has no cap: it commits only at
+        // boundaries, however many activities it folds.
         MaxActivitiesPerCommit = Mode switch
         {
             PersistenceMode.Durable => 1,
@@ -90,7 +90,6 @@ public sealed class RuntimeCoalescingSession
             _ => options.MaxActivitiesPerCommit
         };
         CoalesceDurableValueReads = options.CoalesceDurableValueReads;
-        CoalesceInspectionReads = options.CoalesceInspectionReads;
         _durableValuePageMemo = options.CoalesceDurableValueReads
             ? new RuntimeCoalescingDurableValuePageMemo()
             : null;
@@ -103,8 +102,8 @@ public sealed class RuntimeCoalescingSession
 
     /// <summary>
     /// The most activities one segment folds before the next new activity forces an intermediate commit: one under
-    /// Durable, the host's setting under Balanced, and <see langword="null"/> under Ephemeral, which has no
-    /// intermediate commits.
+    /// Durable, the host's setting under Balanced, and <see langword="null"/> under Ephemeral, whose intermediate commits
+    /// come only from boundaries, never from a count of activities.
     /// </summary>
     public int? MaxActivitiesPerCommit { get; }
 
@@ -117,7 +116,6 @@ public sealed class RuntimeCoalescingSession
     /// </summary>
     public bool HasDurableRecord { get; private set; }
     public bool CoalesceDurableValueReads { get; }
-    public bool CoalesceInspectionReads { get; }
     internal RuntimeCoalescingDurableValuePageMemo? DurableValuePageMemo => _durableValuePageMemo;
 
     /// <summary>
@@ -444,27 +442,6 @@ public sealed class RuntimeCoalescingSession
         projection = recorded;
         return found;
     }
-
-    // ---- Inspection durable-baseline memo --------------------------------------------------------------------------
-    // Store-read coalescing for IActivityExecutionInspectionStore.FindAsync: the memo holds what the
-    // durable store returned (a cached null records a durable miss), never the buffered overlay state, so a memoized
-    // read is byte-identical to a fresh durable read. Validity rests on the single-writer ownership lease: while the
-    // session is active, the only path that can change durable inspection rows is this session's own flush, and every
-    // flush invalidates the memo via InvalidateInspectionBaselines.
-
-    /// <summary>Returns a memoized durable-baseline inspection read. A hit may carry <see langword="null"/> (a cached durable miss).</summary>
-    public bool TryGetInspectionBaseline(string activityExecutionId, out ActivityExecutionInspectionProjection? projection) =>
-        _inspectionBaselines.TryGetValue(activityExecutionId, out projection);
-
-    /// <summary>Memoizes the result of a durable inspection read (including a null miss) until the next durable flush.</summary>
-    public void CacheInspectionBaseline(string activityExecutionId, ActivityExecutionInspectionProjection? projection)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
-        _inspectionBaselines[activityExecutionId] = projection;
-    }
-
-    /// <summary>Drops all memoized baselines. Must be called whenever a durable checkpoint commit lands for this session.</summary>
-    public void InvalidateInspectionBaselines() => _inspectionBaselines.Clear();
 
     // ---- State overlay reads ---------------------------------------------------------------------------------------
 

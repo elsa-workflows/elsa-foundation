@@ -19,7 +19,7 @@ service and a recurring pump that re-drives interrupted executions. See the work
 ### `RuntimeResumptionPumpTask : IRecurringTask` *(`Elsa.Workflows.Runtime.Resumption`)*
 - **Kind:** Contributor (recurring task; scheduled by the Tasks domain `TaskManager`).
 - **Behavior:** each tick runs one `IRuntimeResumptionService.SweepAsync`. A whole-sweep geometric backoff (bounded by `MaxBackoffInterval`) throttles after consecutive sweep failures; a per-execution geometric backoff parks individual re-drive failures (passed to the sweep as `ExcludedWorkflowExecutionIds`) so one poisoned execution cannot starve the sweep. `MaxExecutionsPerSweep` bounds the executions re-driven per tick, and the recovery scanner keeps half of it, alternating at a cap of one (#2188). Only `OperationCanceledException` propagates; other sweep exceptions are logged and counted.
-- **Schedule:** `AdaptiveIntervalSchedule` *(`Elsa.Tasks.Schedules`)* re-evaluates the interval each run from `RuntimeResumptionOptions.SweepInterval` and the current backoff. Shared by every adaptive pump in the runtime (resumption, durable timers, recurring triggers, reference GC, placement, alterations).
+- **Schedule:** the pump derives from `BackoffSweepWorkerTask` *(`Elsa.Tasks.Schedules`)*, which supplies an adaptive schedule that re-evaluates the interval each run from `RuntimeResumptionOptions.SweepInterval` and the current backoff. Every adaptive pump in the runtime derives from it (resumption, durable timers, recurring triggers, reference GC, placement, alterations).
 - **Register:** provided by `WorkflowsRuntimeResumptionFeature`; not intended for standalone registration.
 
 Post-commit intent kinds can contribute their own retry policy. Parent-resume delivery uses an unbounded positive-backoff policy because acknowledgement is safe only after durable bookmark consumption is observable. The outbox processor persists each failed attempt before logging a payload-free structured warning, allowing operators to alert on an indefinitely retrying stable item/kind/attempt tuple without exposing intent payloads or exception text. Unsupported kinds continue through the existing policy-selected failed/final path and are never silently acknowledged.
@@ -36,5 +36,5 @@ Post-commit intent kinds can contribute their own retry policy. Parent-resume de
 - Swept contracts: `IRuntimeResumptionService`, `IWorkflowSchedulerWorkQueue.ListClaimableWorkflowExecutionIdsAsync`, `IRuntimeRecoveryScanner`, `IRuntimePostCommitOutboxProcessor`, `IPostCommitOutboxLookupStore`, and `IWorkflowOutputSource` — see [`../EXTENSION_POINTS.md`](../Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
 - Durable queue bridge: `EfSchedulerWorkQueueStore` (`Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore`).
 - Worked reference: [docs/runtime-durable-resumption.md](../../../../../docs/runtime-durable-resumption.md).
-- Repo-wide index: [`../../../EXTENSION_POINTS.md`](../../../EXTENSION_POINTS.md).
+- Repo-wide index: [`EXTENSION_POINTS.md`](../../../../../EXTENSION_POINTS.md).
 - Constitutional basis: §2.6.1 + §2.6.2 + §2.22.1.

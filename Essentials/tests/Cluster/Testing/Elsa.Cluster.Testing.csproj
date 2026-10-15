@@ -26,6 +26,7 @@
          spec 184, FR-032): the runtime, and the registries its placement requirement check reads. -->
     <ProjectReference Include="..\..\..\src\Workflows\Runtime\Distributed\Elsa.Workflows.Runtime.Distributed\Elsa.Workflows.Runtime.Distributed.csproj" />
     <ProjectReference Include="..\..\..\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
+    <ProjectReference Include="..\..\Serialization\Testing\Elsa.Serialization.Testing.csproj" />
   </ItemGroup>
 
 </Project>

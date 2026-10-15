@@ -42,7 +42,7 @@ The in-process composition mechanism is the **event**. A domain that wants to be
 
 Features extend a domain by **registering a handler (`IEventHandler<T>`) for one of its published events**. They do not register arbitrary provider interfaces; the domain's event vocabulary is the only contribution surface.
 
-**One concept, one publisher, three failure/dispatch concerns.** There is a single event marker (`IEvent`), a single handler shape (`IEventHandler<T>` with `Task Handle(T, CancellationToken)`), and a single publisher (`IEventPublisher.Publish`). What varies is the **delivery strategy** (§2.6.6), not the type name. The framework does not ship separate "domain event" / "notification" / "lifecycle event" concepts — that distinction was collapsed; the real axes are publisher-owned delivery, publisher-owned dispatcher failure policy, and subscriber-owned failure classification.
+**One concept, one publisher, three failure/dispatch concerns.** There is a single event marker (`IEvent`), a single handler shape (`IEventHandler<T>` with `Task Handle(T, CancellationToken)`), and one publish operation, reached through `IInlineEventPublisher` (Sequential) or `IDeferredEventPublisher` (Background). What varies is the **delivery strategy** (§2.6.6), not the type name. The framework does not ship separate "domain event" / "notification" / "lifecycle event" concepts — that distinction was collapsed; the real axes are publisher-owned delivery, publisher-owned dispatcher failure policy, and subscriber-owned failure classification.
 
 **The framework provides the dispatch mechanism.** The application supplies the publisher and a pipeline with shared middleware (logging, diagnostics). The pipeline invokes every handler for the published event under common infrastructure. Domain code does not roll its own `foreach` + `try`/`catch` loop.
 
@@ -51,7 +51,7 @@ Features extend a domain by **registering a handler (`IEventHandler<T>`) for one
 - Handlers are async methods (return `Task`).
 - The default strategy is **Sequential**: the publisher invokes handlers in DI-resolution order and **awaits the completion of every handler** before returning. *"Synchronous"* here means **awaited end-to-end** — not single-threaded sync in the C# language sense.
 - **A handler exception propagates to the publisher's caller.** The default path ships **no exception-shielding middleware**. If a handler throws under the Sequential strategy, the publish fails and the caller sees the exception — exactly as a direct method call would. This is deliberate: when a publisher needs its handlers to have run (contribution, validation, precondition), a swallowed handler failure is a silent correctness bug. Fail-fast is the safe default.
-- **Resilience is a strategy choice, not a default.** Fire-and-forget isolation lives **only** in the Background strategy (and its `BackgroundEventPublisher`), which owns the `try`/`catch` + silent logging. A publisher that wants "subscriber must never break me" semantics selects `EventPublishingStrategy.Background` explicitly (§2.6.6). It does not get that behaviour for free on the default path.
+- **Resilience is a strategy choice, not a default.** Fire-and-forget isolation lives **only** in the Background strategy (and the background worker that drains it), which owns the `try`/`catch` + silent logging. A publisher that wants "subscriber must never break me" semantics depends on `IDeferredEventPublisher` (§2.6.6). It does not get that behavior from `IInlineEventPublisher`.
 
 **Boundaries and expectations.**
 
@@ -70,11 +70,11 @@ When a registry-style or index-style consumer needs access to contributions from
 
 1. The domain defines a **Registry** with a `Register<T>(item)` method (and accessor methods).
 2. The domain publishes an `<RegistryName>Initializing` event whose payload exposes a directly-accessible `ICollection<T>`.
-3. The feature implementing the domain registers a **StartUp task** that publishes the event Sequentially and flushes the contributions into the registry:
+3. The feature implementing the domain registers a **StartUp task** that takes an `IInlineEventPublisher`, publishes the event through it and flushes the contributions into the registry. The inline publisher runs every handler in order before `Publish` returns, so the contributions can be read back:
 
    ```
    var event = new <RegistryName>Initializing();
-   await eventPublisher.Publish(event);   // default Sequential — contributions read back
+   await inlineEventPublisher.Publish(event);
    registry.RegisterAll(event.Items);
    ```
 
@@ -198,7 +198,7 @@ This rule is a **discipline rule**, not a behaviour rule. It does not change wha
 |---|---|---|---|---|
 | 1 | **Three-layer separation per feature** | §2.1 | Decompose a feature into `.Core` (contracts) / helper (optional thin impl) / implementation (DI activation). | Every new feature follows this shape; cross-feature consumption happens through `.Core`. |
 | 2 | **Feature inheritance** | §2.5 | Extend, decorate, or specialise an existing feature's registration pipeline. | The only sanctioned form of *structural* cross-feature coupling. |
-| 3 | **Events — in-process pub/sub + contribution** | §2.6.1 | One `IEvent` concept; `IEventPublisher.Publish` with a pluggable delivery strategy. Sequential (default) for contribution; Background for notification. | Cross-feature composition through named events in a domain's `.Core`. |
+| 3 | **Events — in-process pub/sub + contribution** | §2.6.1 | One `IEvent` concept; `IInlineEventPublisher` (Sequential) for contribution, `IDeferredEventPublisher` (Background) for notification. | Cross-feature composition through named events in a domain's `.Core`. |
 | 3a | *sub-pattern:* Registry + StartUp Task | §2.6.1 | Sync access to async-gathered contributions. | The dispatch site is sync (e.g. a JsonConverter callback); contributions are stable at startup. |
 | 3b | *sub-pattern:* Contributor interface + single aggregating handler | §2.6.1 | Many features contribute to one fan-in event without each shipping its own handler. | Domain `.Core` defines `I<X>Source` (returns), `I<X>Contributor` (receives context + acts), or `I<X>PreProcessor`/`I<X>PostProcessor` (acts on a lifecycle context at the before/after event of an Xxxing / Xxxed pair); features register the impl via DI; exactly one action-named `IEventHandler<PhaseEvent>` injects `IEnumerable<TContributor>` and writes the event's directly-accessible `ICollection<T>` / context. |
 | 3c | *sub-rule:* Default Sequential CAN break the caller | §2.6.1 | No exception-shielding on the default path; a handler throw fails the publish (fail-fast). | Default for every Sequential publish. Resilience is opt-in via the Background strategy, NOT a default middleware. |

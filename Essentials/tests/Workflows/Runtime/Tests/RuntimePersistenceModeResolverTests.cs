@@ -1,119 +1,208 @@
+using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
-using Elsa.Workflows.Runtime.Services.Checkpoints;
-using Elsa.Workflows.Runtime.Services.Coalescing;
-using Elsa.Workflows.Runtime.Services.Executables;
-using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Workflows.Runtime.Tests;
 
 /// <summary>
-/// Unit matrix for the per-execution persistence-mode resolver. Precedence under test: the mode the run recorded at
-/// start, then the workflow's chosen mode (read off the pinned executable), then the host default. Boundary checkpoints
-/// flush in every mode; that guarantee lives in the commit layer and is covered by the folding policy/store tests.
+/// Unit matrix for the per-execution persistence-mode resolver, as the runtime composes it. A run's mode is the one its
+/// first commit recorded; before that, the one its start carries, read off the start command or, for any other command,
+/// off the start the queue still holds; a start without one is resolved from its pinned workflow, whose choice wins over
+/// the host default. A run whose mode cannot be determined is refused. Boundary checkpoints flush in every mode; that
+/// guarantee lives in the commit layer and is covered by the folding policy/store tests.
 /// </summary>
-public sealed class RuntimePersistenceModeResolverTests
+public sealed class RuntimePersistenceModeResolverTests : IAsyncDisposable
 {
+    private const string WorkflowExecutionId = "wfexec-1";
+    private const string ArtifactId = "artifact-1";
     private static readonly DateTimeOffset Now = new(2026, 7, 20, 12, 0, 0, TimeSpan.Zero);
 
-    private readonly InMemoryWorkflowExecutableStore _executableStore = new();
-    private readonly InMemoryWorkflowExecutionStateStore _stateStore = new();
+    private ServiceProvider? _provider;
 
-    private RuntimePersistenceModeResolver Resolver(PersistenceMode? hostMode) =>
-        new(
-            _executableStore,
-            _stateStore,
-            hostMode is { } mode
-                ? [new PersistenceModeOptions { Mode = mode }]
-                : []);
+    public ValueTask DisposeAsync() => _provider?.DisposeAsync() ?? ValueTask.CompletedTask;
 
-    [Fact]
-    public void NoChoice_UsesHostDefault()
+    public static TheoryData<PersistenceMode, PersistenceMode> ChosenAndHostModes()
     {
-        Assert.Equal(PersistenceMode.Durable, Resolver(hostMode: null).Resolve(Executable(null)));
-        Assert.Equal(PersistenceMode.Balanced, Resolver(hostMode: PersistenceMode.Balanced).Resolve(Executable(null)));
-        Assert.Equal(PersistenceMode.Durable, Resolver(hostMode: PersistenceMode.Durable).Resolve(Executable(null)));
-    }
-
-    public static TheoryData<PersistenceMode?, PersistenceMode> HostAndChosenModes()
-    {
-        var data = new TheoryData<PersistenceMode?, PersistenceMode>();
-        foreach (var host in new PersistenceMode?[] { null }.Concat(Enum.GetValues<PersistenceMode>().Cast<PersistenceMode?>()))
+        var data = new TheoryData<PersistenceMode, PersistenceMode>();
+        foreach (var host in Enum.GetValues<PersistenceMode>())
         foreach (var chosen in Enum.GetValues<PersistenceMode>())
             data.Add(host, chosen);
         return data;
     }
 
     [Theory]
-    [MemberData(nameof(HostAndChosenModes))]
-    public async Task TheWorkflowsChoiceWinsOverEveryHostDefault(PersistenceMode? hostMode, PersistenceMode chosen)
+    [MemberData(nameof(ChosenAndHostModes))]
+    public async Task TheWorkflowsChoiceWinsOverEveryHostDefault(PersistenceMode hostMode, PersistenceMode chosen)
     {
-        // A null host is one that composed the runtime without the persistence modes. The resolver still reports the
-        // workflow's choice there; the drain, not the resolver, refuses a mode the host cannot run, so the choice is
-        // never silently replaced.
-        await _executableStore.SaveAsync(Executable(chosen));
+        var resolver = Compose(hostMode);
+        await SaveExecutableAsync(chosen);
 
-        Assert.Equal(chosen, Resolver(hostMode).Resolve(Executable(chosen)));
-        Assert.Equal(new ResolvedPersistenceMode(chosen, RunHasRecord: false), await Resolver(hostMode).ResolveAsync(Envelope(artifactIdMetadata: "artifact-1")));
+        Assert.Equal(chosen, resolver.Resolve(Executable(chosen)));
+        Assert.Equal(new ResolvedPersistenceMode(chosen, RunHasRecord: false), await resolver.ResolveAsync(StartEnvelope()));
+    }
+
+    [Theory]
+    [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Ephemeral)]
+    public async Task AWorkflowThatChoosesNothingRunsTheHostDefault(PersistenceMode hostMode)
+    {
+        var resolver = Compose(hostMode);
+        await SaveExecutableAsync(chosen: null);
+
+        Assert.Equal(hostMode, resolver.Resolve(Executable(null)));
+        Assert.Equal(new ResolvedPersistenceMode(hostMode, RunHasRecord: false), await resolver.ResolveAsync(StartEnvelope()));
     }
 
     [Fact]
-    public async Task ResolveAsync_PrefersTheRecordedMode_OverExecutableAndHost()
+    public async Task TheRecordedModeWinsOverTheWorkflowAndTheHost()
     {
-        // The run recorded Durable at start; a later host reconfiguration to Balanced (or the executable's chosen
-        // Balanced) must not change what this run executes under on later drains.
-        await _stateStore.SaveAsync(State(recordedMode: nameof(PersistenceMode.Durable)));
-        await _executableStore.SaveAsync(Executable(PersistenceMode.Balanced));
+        // The run recorded Durable at its first commit; a later host reconfiguration to Balanced (or the executable's
+        // chosen Balanced) must not change what this run executes under on later drains.
+        var resolver = Compose(PersistenceMode.Balanced);
+        await SaveStateAsync(recordedMode: nameof(PersistenceMode.Durable));
+        await SaveExecutableAsync(PersistenceMode.Balanced);
 
-        var resolved = await Resolver(hostMode: PersistenceMode.Balanced).ResolveAsync(Envelope());
-
-        Assert.Equal(new ResolvedPersistenceMode(PersistenceMode.Durable, RunHasRecord: true), resolved);
+        Assert.Equal(new ResolvedPersistenceMode(PersistenceMode.Durable, RunHasRecord: true), await resolver.ResolveAsync(RedriveEnvelope()));
     }
 
     [Fact]
-    public async Task ResolveAsync_ReadsARecordedBalancedMode()
+    public async Task AStartCommandThatCarriesAModeIsResolvedToIt_WhateverTheWorkflowAndHostSay()
     {
-        await _stateStore.SaveAsync(State(recordedMode: nameof(PersistenceMode.Balanced)));
+        // The start dispatcher decided the mode when it started the run; that decision holds even when the host default
+        // has changed since, and without reading the workflow again.
+        var resolver = Compose(PersistenceMode.Ephemeral);
 
-        var resolved = await Resolver(hostMode: PersistenceMode.Durable).ResolveAsync(Envelope());
+        Assert.Equal(
+            new ResolvedPersistenceMode(PersistenceMode.Balanced, RunHasRecord: false),
+            await resolver.ResolveAsync(StartEnvelope(stampedMode: nameof(PersistenceMode.Balanced))));
+    }
 
-        Assert.Equal(new ResolvedPersistenceMode(PersistenceMode.Balanced, RunHasRecord: true), resolved);
+    [Theory]
+    [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Ephemeral)]
+    public async Task AnyOtherCommandForARunNeverCommitted_ResolvesTheModeOfTheStartTheQueueHolds(PersistenceMode chosen)
+    {
+        // A drain the resumption sweep starts carries nothing but its source. The run's start is still queued, because
+        // nothing of the run was committed, and it decides the mode.
+        var resolver = Compose(chosen == PersistenceMode.Ephemeral ? PersistenceMode.Balanced : PersistenceMode.Ephemeral);
+        await QueueAsync(StartEnvelope(stampedMode: chosen.ToString()));
+
+        Assert.Equal(new ResolvedPersistenceMode(chosen, RunHasRecord: false), await resolver.ResolveAsync(RedriveEnvelope()));
+    }
+
+    [Theory]
+    [InlineData(PersistenceMode.Balanced, PersistenceMode.Ephemeral)]
+    [InlineData(PersistenceMode.Ephemeral, PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Durable, PersistenceMode.Balanced)]
+    public async Task ARedeliveredStart_ResolvesTheModeOfTheStartTheQueueKept_AsALaterRedriveDoes(PersistenceMode kept, PersistenceMode redelivered)
+    {
+        // A keyed or retained-dispatch start delivered again after the host default changed carries another mode. The
+        // queue keeps the first delivery, so that is the start the drain runs and the one a later redrive reads.
+        var resolver = Compose(redelivered);
+        await QueueAsync(StartEnvelope(stampedMode: kept.ToString()));
+        var redelivery = StartEnvelope(stampedMode: redelivered.ToString());
+        await QueueAsync(redelivery);
+
+        var expected = new ResolvedPersistenceMode(kept, RunHasRecord: false);
+        Assert.Equal(expected, await resolver.ResolveAsync(redelivery));
+        Assert.Equal(expected, await resolver.ResolveAsync(RedriveEnvelope()));
     }
 
     [Fact]
-    public async Task ResolveAsync_OnFirstDrain_ResolvesFromThePinnedExecutable_ViaEnvelopeArtifactId()
+    public async Task AQueuedStartWithoutAMode_IsResolvedFromItsPinnedWorkflow()
     {
-        // No state row yet (first drain of a new run): the artifact-id breadcrumb on the command metadata locates the
-        // pinned executable, whose chosen mode wins over the host default.
-        await _executableStore.SaveAsync(Executable(PersistenceMode.Durable));
+        var resolver = Compose(PersistenceMode.Ephemeral);
+        await SaveExecutableAsync(PersistenceMode.Durable);
+        await QueueAsync(StartEnvelope());
 
-        var resolved = await Resolver(hostMode: PersistenceMode.Balanced).ResolveAsync(Envelope(artifactIdMetadata: "artifact-1"));
-
-        Assert.Equal(new ResolvedPersistenceMode(PersistenceMode.Durable, RunHasRecord: false), resolved);
+        Assert.Equal(new ResolvedPersistenceMode(PersistenceMode.Durable, RunHasRecord: false), await resolver.ResolveAsync(RedriveEnvelope()));
     }
 
     [Fact]
-    public async Task ResolveAsync_StateWithoutRecordedMode_FallsBackToThePinnedExecutable()
+    public async Task ARecordWithoutAMode_IsResolvedFromItsPinnedWorkflow()
     {
-        await _stateStore.SaveAsync(State(recordedMode: null));
-        await _executableStore.SaveAsync(Executable(PersistenceMode.Durable));
+        // A run faulted into existence by a start that carried no mode.
+        var resolver = Compose(PersistenceMode.Balanced);
+        await SaveStateAsync(recordedMode: null);
+        await SaveExecutableAsync(PersistenceMode.Durable);
 
-        var resolved = await Resolver(hostMode: PersistenceMode.Balanced).ResolveAsync(Envelope());
-
-        Assert.Equal(new ResolvedPersistenceMode(PersistenceMode.Durable, RunHasRecord: true), resolved);
+        Assert.Equal(new ResolvedPersistenceMode(PersistenceMode.Durable, RunHasRecord: true), await resolver.ResolveAsync(RedriveEnvelope()));
     }
 
     [Fact]
-    public async Task ResolveAsync_NoStateNoArtifactId_UsesHostDefault()
+    public async Task ACommandForARunWithNeitherARecordNorAQueuedStart_RunsTheHostDefault()
     {
-        var resolved = await Resolver(hostMode: PersistenceMode.Balanced).ResolveAsync(Envelope());
+        // Nothing of the run is durable, so there is no choice to keep: a command for a run that never started here, or
+        // for an Ephemeral run that completed without a record.
+        var resolver = Compose(PersistenceMode.Balanced);
 
-        Assert.Equal(new ResolvedPersistenceMode(PersistenceMode.Balanced, RunHasRecord: false), resolved);
+        Assert.Equal(new ResolvedPersistenceMode(PersistenceMode.Balanced, RunHasRecord: false), await resolver.ResolveAsync(RedriveEnvelope()));
     }
 
-    private static WorkflowExecutable Executable(PersistenceMode? persistenceMode)
+    [Fact]
+    public async Task ARunWhoseModeCannotBeDetermined_IsRefused()
+    {
+        // Each of these is a run that started, so running it in the host default could contradict its choice.
+        var unknownRecordedMode = Compose(PersistenceMode.Balanced);
+        await SaveStateAsync(recordedMode: "Coalesced");
+        await AssertRefusedAsync(unknownRecordedMode, RedriveEnvelope(), "'Coalesced'");
+
+        var queuedStartOfAMissingWorkflow = Compose(PersistenceMode.Balanced);
+        await QueueAsync(StartEnvelope());
+        await AssertRefusedAsync(queuedStartOfAMissingWorkflow, RedriveEnvelope(), $"'{ArtifactId}'");
+
+        var startOfAMissingWorkflow = Compose(PersistenceMode.Balanced);
+        await AssertRefusedAsync(startOfAMissingWorkflow, StartEnvelope(), $"'{ArtifactId}'");
+
+        var unknownStampedMode = Compose(PersistenceMode.Balanced);
+        await AssertRefusedAsync(unknownStampedMode, StartEnvelope(stampedMode: "balanced"), "'balanced'");
+    }
+
+    private static async Task AssertRefusedAsync(IRuntimePersistenceModeResolver resolver, WorkflowExecutionCommandEnvelope envelope, string named)
+    {
+        var refusal = await Assert.ThrowsAsync<InvalidOperationException>(async () => await resolver.ResolveAsync(envelope));
+        Assert.Contains(WorkflowExecutionId, refusal.Message, StringComparison.Ordinal);
+        Assert.Contains(named, refusal.Message, StringComparison.Ordinal);
+    }
+
+    // The resolver as AddWorkflowRuntime registers it, over the runtime's in-memory stores. Each call starts a new host.
+    private IRuntimePersistenceModeResolver Compose(PersistenceMode hostMode)
+    {
+        _provider?.Dispose();
+        var services = new ServiceCollection().AddWorkflowRuntime();
+        services.AddPersistenceModeOptions(new PersistenceModeOptions { Mode = hostMode });
+        _provider = services.BuildServiceProvider();
+        return _provider.CreateScope().ServiceProvider.GetRequiredService<IRuntimePersistenceModeResolver>();
+    }
+
+    private ValueTask SaveExecutableAsync(PersistenceMode? chosen) =>
+        _provider!.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(Executable(chosen));
+
+    private async Task SaveStateAsync(string? recordedMode) =>
+        await _provider!.GetRequiredService<IWorkflowExecutionStateStore>().SaveAsync(State(recordedMode));
+
+    private async Task QueueAsync(WorkflowExecutionCommandEnvelope start) =>
+        await _provider!.GetRequiredService<IWorkflowSchedulerWorkQueue>().EnqueueAsync(new RuntimeSchedulerWorkItem(
+            workItemId: start.EnvelopeId,
+            workflowExecutionId: WorkflowExecutionId,
+            commandId: start.Command.CommandId,
+            commandKind: start.Command.Kind,
+            envelopeId: start.EnvelopeId,
+            idempotencyKey: start.IdempotencyKey,
+            enqueuedAt: Now,
+            recordedAt: Now,
+            payload: start.Command.Payload,
+            commandMetadata: start.Command.Metadata,
+            envelopeMetadata: start.Metadata));
+
+    internal static WorkflowExecutable Executable(PersistenceMode? persistenceMode)
     {
         var node = new ExecutableNode(
             executableNodeId: "node-1",
@@ -123,12 +212,12 @@ public sealed class RuntimePersistenceModeResolverTests
             descriptor: new RuntimeActivityDescriptor(
                 "test",
                 RuntimeActivityDescriptor.InitialSchemaVersion,
-                System.Text.Json.JsonSerializer.SerializeToElement(new { type = "test" })),
+                JsonSerializer.SerializeToElement(new { type = "test" })),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>());
 
         return new(
-            identity: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            identity: Identity,
             rootActivity: node,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: Now,
@@ -141,6 +230,8 @@ public sealed class RuntimePersistenceModeResolverTests
             persistenceMode: persistenceMode);
     }
 
+    private static readonly WorkflowExecutableIdentity Identity = new(ArtifactId, "definition-1", "version-1", "1.0.0", "sha256:test");
+
     private static WorkflowExecutionState State(string? recordedMode)
     {
         var metadata = new Dictionary<string, string>();
@@ -148,8 +239,8 @@ public sealed class RuntimePersistenceModeResolverTests
             metadata[RuntimeMetadataKeys.PersistenceMode] = recordedMode;
 
         return new(
-            WorkflowExecutionId: "wfexec-1",
-            PinnedExecutable: new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:test"),
+            WorkflowExecutionId: WorkflowExecutionId,
+            PinnedExecutable: Identity,
             Status: WorkflowExecutionStatus.Running,
             SubStatus: null,
             CreatedAt: Now,
@@ -162,26 +253,35 @@ public sealed class RuntimePersistenceModeResolverTests
             SystemMetadata: metadata);
     }
 
-    private static WorkflowExecutionCommandEnvelope Envelope(string? artifactIdMetadata = null)
+    // A start as the start dispatcher makes one, with the mode it decided when one is given.
+    private static WorkflowExecutionCommandEnvelope StartEnvelope(string? stampedMode = null)
     {
-        var metadata = new Dictionary<string, string> { ["source"] = "test" };
-        if (artifactIdMetadata is not null)
-            metadata["runtime.artifactId"] = artifactIdMetadata;
+        var metadata = new Dictionary<string, string> { ["runtime.artifactId"] = ArtifactId };
+        if (stampedMode is not null)
+            metadata[RuntimeMetadataKeys.PersistenceMode] = stampedMode;
 
-        var command = new WorkflowExecutionCommand(
-            CommandId: "command-1",
-            WorkflowExecutionId: "wfexec-1",
-            Kind: WorkflowExecutionCommandKind.Start,
-            EnqueuedAt: Now,
-            Payload: null,
-            Metadata: metadata);
-
-        return new(
-            envelopeId: "envelope-1",
-            workflowExecutionId: "wfexec-1",
-            command: command,
-            idempotencyKey: "wfexec-1:test",
-            deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
-            enqueuedAt: Now);
+        return Envelope(
+            WorkflowExecutionCommandKind.Start,
+            "start",
+            JsonSerializer.SerializeToElement(new WorkflowExecutionStartCommandPayload(Identity, ArtifactId)),
+            metadata);
     }
+
+    // A drain the resumption sweep starts: a RunSchedulerWork command that carries only its source.
+    private static WorkflowExecutionCommandEnvelope RedriveEnvelope() =>
+        Envelope(WorkflowExecutionCommandKind.RunSchedulerWork, "redrive", payload: null, new Dictionary<string, string> { ["source"] = "runtime-resumption" });
+
+    private static WorkflowExecutionCommandEnvelope Envelope(
+        WorkflowExecutionCommandKind kind,
+        string name,
+        JsonElement? payload,
+        IReadOnlyDictionary<string, string> metadata) =>
+        new(
+            envelopeId: $"envelope-{name}",
+            workflowExecutionId: WorkflowExecutionId,
+            command: new WorkflowExecutionCommand($"command-{name}", WorkflowExecutionId, kind, Now, payload, metadata),
+            idempotencyKey: $"{WorkflowExecutionId}:{name}",
+            deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
+            enqueuedAt: Now,
+            metadata: metadata);
 }

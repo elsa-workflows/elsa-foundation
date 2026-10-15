@@ -111,7 +111,8 @@ export function register(api: ElsaStudioModuleApi) {
     id: "feature-management",
     label: "Features",
     path: "/features",
-    order: 130
+    order: 40,
+    placement: "admin"
   });
 
   api.routes.add({

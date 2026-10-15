@@ -8,11 +8,12 @@ namespace Elsa.Workflows.Runtime.Api.Coalescing;
 
 /// <summary>
 /// The shell's persistence-mode settings. Durable commits once per activity; Balanced folds checkpoints between commits
-/// and accepts that the activities since the last commit run again after a crash; Ephemeral commits only when a run
-/// suspends, faults or completes, and can skip the completion record of a run that never needed one. The services that
-/// run each mode come
-/// with the runtime API itself, so a shell that does not list this feature still runs Balanced with these defaults;
-/// list it to choose a different default or cap.
+/// and accepts that the activities since the last commit run again after a crash; Ephemeral commits when a run
+/// suspends, faults or is cancelled, on an incident or an alteration, when it dispatches a child workflow, before an
+/// activity that is not safe to repeat, at the end of a pass that does not complete the run and at completion, and can
+/// skip the completion record of a run that was never committed. Every mode commits the claim before an activity that
+/// is not safe to repeat. The services that run each mode come with the runtime API itself, so a shell that does not
+/// list this feature still runs Balanced with these defaults; list it to choose a different default or cap.
 /// </summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("Workflows")]
@@ -23,11 +24,11 @@ namespace Elsa.Workflows.Runtime.Api.Coalescing;
     DisplayName = "Workflows Runtime Checkpoint Persistence",
     Description = "Sets the default persistence mode (Durable, Balanced or Ephemeral), how much work Balanced folds into one commit, and whether Ephemeral records completions.",
     DependsOn = new object[] { "WorkflowsRuntimeApi" })]
-public sealed class WorkflowsRuntimeCheckpointPersistenceFeature : IShellFeature
+public class WorkflowsRuntimeCheckpointPersistenceFeature : IShellFeature
 {
     [ManifestSetting(
         DisplayName = "Persistence mode",
-        Description = "The mode a run uses when its workflow does not choose one. Durable commits once per activity; Balanced folds checkpoints and commits at suspension, fault, completion, the end of each execution pass and after a bounded amount of work; Ephemeral commits only at suspension, fault and completion.",
+        Description = "The mode a run uses when its workflow does not choose one. Durable commits once per activity; Balanced folds checkpoints and commits at suspension, fault, completion, the end of each execution pass and after a bounded amount of work; Ephemeral commits at suspension, fault, cancellation, an incident or an alteration, on a child dispatch, at the end of a pass that does not complete the run, and at completion. Every mode commits before an activity that is not safe to repeat.",
         Category = "Runtime",
         DefaultValue = "Balanced")]
     public PersistenceMode Mode { get; set; } = PersistenceMode.Balanced;
@@ -41,38 +42,26 @@ public sealed class WorkflowsRuntimeCheckpointPersistenceFeature : IShellFeature
 
     [ManifestSetting(
         DisplayName = "Record completion",
-        Description = "Under Ephemeral, whether a run that completes without ever having been committed writes a completion record. Off leaves no trace of such a run; a run that already has a record always gets its completion committed.",
+        Description = "Under Ephemeral, whether a run that completes without ever having been committed writes a completion record. Off leaves no trace of such a run, one that completes in one pass with no earlier commit; a run that already has a record always gets its completion committed.",
         Category = "Runtime",
         DefaultValue = "true")]
     public bool RecordCompletion { get; set; } = true;
 
     [ManifestSetting(
         DisplayName = "Coalesce durable-value reads",
-        Description = "Reuse equivalent durable-value pages within an eligible Balanced session. Disable to issue each logical page read to the durable store.",
+        Description = "Reuse equivalent durable-value pages within an eligible drain session, in any mode. Disable to issue each logical page read to the durable store.",
         Category = "Runtime",
         DefaultValue = "true")]
     public bool CoalesceDurableValueReads { get; set; } = true;
 
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        // Refuse a bad setting while the shell is composed. A workflow can choose Balanced on a Durable host, so the cap
-        // is checked whatever the default mode is.
-        if (!Enum.IsDefined(Mode))
-        {
-            throw new InvalidOperationException(
-                $"Feature 'WorkflowsRuntimeCheckpointPersistence' received unsupported persistence mode '{(int)Mode}'.");
-        }
-
-        if (MaxActivitiesPerCommit <= 0)
-        {
-            throw new InvalidOperationException(
-                $"Feature 'WorkflowsRuntimeCheckpointPersistence': {nameof(MaxActivitiesPerCommit)} must be greater than zero.");
-        }
-
-        // Only the options are registered here. The runtime API feature wraps the stores after every feature has
-        // registered its own, and keeps these options because they are already present.
+        // Only the options are registered here, and registering them refuses a bad setting while the shell is composed.
+        // A workflow can choose Balanced on a Durable host, so the cap is checked whatever the default mode is. The
+        // runtime API feature wraps the stores after every feature has registered its own, and keeps these options
+        // because they are already present.
         services.AddPersistenceModeOptions(new PersistenceModeOptions
         {
             Mode = Mode,

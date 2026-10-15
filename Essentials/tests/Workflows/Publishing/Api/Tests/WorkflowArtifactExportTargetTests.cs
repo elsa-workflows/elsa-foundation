@@ -1,6 +1,6 @@
 using System.Text;
 using Elsa.Serialization.Core;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -23,7 +23,7 @@ public sealed class WorkflowArtifactExportTargetTests
         var services = new ServiceCollection();
         new WorkflowsPublishingFeature().ConfigureServices(services);
         new WorkflowsPublishingApiFeature().ConfigureServices(services);
-        services.TryAddSingleton<IPayloadSerializer>(new JsonPayloadSerializer(new JsonPayloadConverterRegistry()));
+        services.TryAddSingleton<IPayloadSerializer>(SerializationServices.PayloadSerializer());
         services.TryAddSingleton<IWorkflowArtifactClosureSerializer, WorkflowArtifactClosureSerializer>();
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
@@ -42,7 +42,7 @@ public sealed class WorkflowArtifactExportTargetTests
         var services = new ServiceCollection();
         new WorkflowsPublishingApiFeature().ConfigureServices(services);
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IWorkflowArtifactExportTarget, FolderTargetStandIn>());
-        services.TryAddSingleton<IPayloadSerializer>(new JsonPayloadSerializer(new JsonPayloadConverterRegistry()));
+        services.TryAddSingleton<IPayloadSerializer>(SerializationServices.PayloadSerializer());
         services.TryAddSingleton<IWorkflowArtifactClosureSerializer, WorkflowArtifactClosureSerializer>();
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
@@ -62,7 +62,7 @@ public sealed class WorkflowArtifactExportTargetTests
         var services = new ServiceCollection();
         new WorkflowsPublishingApiFeature().ConfigureServices(services);
         new WorkflowsPublishingApiFeature().ConfigureServices(services);
-        services.TryAddSingleton<IPayloadSerializer>(new JsonPayloadSerializer(new JsonPayloadConverterRegistry()));
+        services.TryAddSingleton<IPayloadSerializer>(SerializationServices.PayloadSerializer());
         services.TryAddSingleton<IWorkflowArtifactClosureSerializer, WorkflowArtifactClosureSerializer>();
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();

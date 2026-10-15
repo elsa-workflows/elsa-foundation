@@ -3,7 +3,7 @@ namespace Elsa.Expressions.Core.Contracts;
 /// <summary>
 /// Creates instances of type <see cref="IVariable"/> and <see cref="IVariable{T}"/>.
 /// </summary>
-public interface IVariableFactory
+internal interface IVariableFactory
 {
     /// <summary>
     /// Creates a new variable with the specified name, value and id. The type of the variable is determined by the type of the value parameter. If the value parameter is null, the variable will be created with a type of object.

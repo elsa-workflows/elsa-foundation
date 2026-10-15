@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Mediator.MediatorFeature
+Elsa.Mediator.MediatorFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Mediator.MediatorFeature.MediatorFeature() -> void

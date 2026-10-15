@@ -63,7 +63,7 @@ public sealed class EfModuleMigratorShellDrainTests : IAsyncLifetime
     {
         _round.Release();
         await _root.DisposeAsync();
-        SqliteConnection.ClearAllPools();
+        SqliteConnection.ClearPool(new SqliteConnection($"Data Source={_file}"));
         foreach (var file in new[] { _file, _file + "-journal", _file + "-wal", _file + "-shm" })
             File.Delete(file);
     }

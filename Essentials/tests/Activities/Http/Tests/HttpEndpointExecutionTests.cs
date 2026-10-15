@@ -11,7 +11,7 @@ using Elsa.Http.Services;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
-using Elsa.Serialization.SystemText.Services;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -635,6 +635,5 @@ public sealed class HttpEndpointExecutionTests
     private static bool CompletedEndpoint(WorkflowExecutionRun run) =>
         run.ActivityStates.Any(s => s.Execution.ExecutableNodeId == NodeId && s.Status == ActivityExecutionStatus.Completed);
 
-    private static IPayloadSerializer Serializer =>
-        TestPayloadSerializers.NewPayloadSerializer();
+    private static readonly IPayloadSerializer Serializer = SerializationServices.PayloadSerializer();
 }
