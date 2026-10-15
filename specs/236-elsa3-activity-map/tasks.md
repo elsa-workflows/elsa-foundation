@@ -270,7 +270,80 @@ ordered. No exception escapes either path.
   - Fork default join mode: verified in elsa-core `5b0c2d73`: `JoinMode = ForkJoinMode.WaitAll`, enum
     WaitAll = 0, WaitAny = 1. Absent now converts to a Parallel with no threshold and no warning. Fixed.
   - `customProperties.commitStrategy`: left as is (silently dropped by the Elsa 3 model).
-  - `HttpEndpoint.Headers`/`QueryStringData` captures: open, under discussion.
+  - `HttpEndpoint.Headers`/`QueryStringData` captures: synthesized workflow variable with the Elsa 3 shape (plan D-11 to
+    D-13, Phase 4b).
+  - Elsa 3 JavaScript: verified (research R-11). 236 closes the silent gaps (D-14), wraps statement-form expressions
+    (D-15) and rewrites RunJavaScript scripts (D-16), in Phase 4c. Widening what converts is the follow-up (#2717).
+
+---
+
+## Phase 4b: HttpEndpoint request projections (plan D-11 to D-13, added 2026-10-15)
+
+**Goal**: a captured Elsa 3 `HttpEndpoint.Headers` or `QueryStringData` converts through a synthesized workflow variable
+that keeps the Elsa 3 shape, so every consumer kind keeps working.
+
+**Independent test**: an endpoint in a Sequence whose captured headers are read by a WriteLine (direct binding) and by a
+JavaScript expression converts with 0 errors. The synthesized `set` node follows the endpoint, and both consumers read
+`elsa3.http.{node}.headers`.
+
+- [ ] T061 [US1] Implement `M/ActivityMap/Rewrites/Elsa3HttpTriggerResponseModeRewrite.cs` (kind `HttpTriggerResponseMode`,
+  set on the HttpEndpoint entry):
+  - for each captured `Headers`/`QueryStringData` property, plan a synthesized workflow variable and a `set` node
+    (ids per D-13);
+  - remove the property from the endpoint;
+  - register the memory id so lowering binds consumers to the variable;
+  - an endpoint at the root or in a single-child slot → `OutputNotRepresentable` (D-12).
+
+  Change the two rules in `Elsa3BuiltInActivityMap.Entries.cs` from `Lost(..., "Request.*")` to `Structure(...)` outputs
+  consumed by the rewrite, and keep the coverage test green.
+- [ ] T062 [US1] Insert the synthesized node in `M/Conversion/Elsa3ActivityNormalizer.cs`: an `Elsa3Activity` placed right
+  after the endpoint in its parent's `Activities` (and slot list), with a plan that resolves to `elsa.intrinsic.set@1`, a
+  workflow-scoped Object variable target, and a `value` input. The value is a portable JavaScript expression with one
+  `ActivityResult` parameter bound to the endpoint's `Request` output, whose source rebuilds the Elsa 3 shape.
+  Declare the variable on the clone's workflow variables.
+- [ ] T063 [US1] In `M/Services/Elsa3ValueFlowLowerer.cs` (or via the memory-reference graph), resolve a consumer of the
+  captured memory id to a `Variable` binding on the synthesized variable (workflow scope); JavaScript reads resolve
+  through the same variable.
+- [ ] T064 [US1] Tests in `MT/Elsa3HttpRequestProjectionTests.cs`:
+  - headers read by a direct binding and by JavaScript;
+  - query string;
+  - both captured on one endpoint;
+  - deterministic ids;
+  - endpoint at the root → `OutputNotRepresentable`;
+  - the synthesized value's source maps a one-item list to a string and keeps a several-item list (asserted on the
+    expression source).
+
+---
+
+## Phase 4c: JavaScript gaps (plan D-14 to D-16, research R-11, added 2026-10-15)
+
+**Goal**: no Elsa 3 JavaScript converts silently and then fails or returns null at run time: what Elsa 4 cannot run is
+refused with a stable code, statement-form expressions are wrapped faithfully, and RunJavaScript scripts are rewritten.
+
+**Independent test**: each gap construct of R-11 gives its code. `var x = 1; x + 1` converts to an IIFE returning
+`x + 1`. A RunJavaScript `getA() + getB()` written with `getVariable` converts to `return args.a + args.b;` with
+`arguments` bound.
+
+- [ ] T065 [US2] In `M/Services/Elsa3ExpressionRewriter.cs`, refuse (VF-IMP-005) `new Date()`; member access or calls on
+  `DateTime`, `DateTimeOffset`, `TimeSpan`, `Guid`, `Random`, `_`, `moment`; reads of a bare `args`; and
+  assignment or update through a lowered read (D-14). Remove the lowering of `getOutput`/`input.x`/`output.x`, which
+  Elsa 3 does not have: those names are ordinary locals.
+- [ ] T066 [US2] In `M/Services/Elsa3ExpressionRewriter.cs`, wrap statement-form expressions (D-15): several statements,
+  or one non-expression statement, become `(function () { …; return <last expression>; })()`. A last statement that
+  is not an expression → VF-IMP-006.
+- [ ] T067 [US1] Rewrite RunJavaScript scripts (D-16):
+  - a script mode in the rewriter: same lowering and refusals, `setOutcome(s)` refused, the final expression statement
+    turned into `return`;
+  - the lowerer sends the literal `script` of a RunJavaScript node through it and writes the parameter bindings to
+    Elsa 4's `arguments` input;
+  - map rule `Script` stays Carry; `arguments` is filled by the rewrite.
+- [ ] T068 [US2] Tests `MT/Elsa3JavaScriptConversionTests.cs`:
+  - one row per D-14 construct with its code;
+  - the D-15 wrap (completion value preserved, non-expression tail refused);
+  - D-16 script lowering, `arguments` and `return`, `setOutcome` refused;
+  - existing VF tests stay green.
+- [ ] T069 Comment on #2717 with R-11: the list of refusals 236 now reports, that `getHttpRequestBody` is a host
+  extension, the accessor-precedence and value-shape risks. Only with the maintainer's go-ahead.
 
 ---
 

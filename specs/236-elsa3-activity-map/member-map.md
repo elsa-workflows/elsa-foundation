@@ -131,7 +131,7 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 | HttpEndpoint.Result | `Request` (`HttpRequestModel`) | R4 → projection `Request` only when its consumers read members `HttpRequestModel` has; otherwise unconvertible | 30 |
 | HttpEndpoint.ParsedContent | `ParsedContent` (`JsonElement?`) | R1 + **W** (form posts not parsed; text becomes a string) | 30 (22 captured) |
 | HttpEndpoint.RouteData | `RouteData` | R1 | 30 (1 captured) |
-| HttpEndpoint.QueryStringData / Headers | — | R4 with exact projection `Request.Query` / `Request.Headers` | 30 (2 / 12 captured) |
+| HttpEndpoint.QueryStringData / Headers | synthesized workflow variable `elsa3.http.{node}.query` / `.headers`, set right after the endpoint from `Request.Query` / `Request.Headers` in the Elsa 3 shape (one value → string, several → array); consumers bind to the variable | R7 (plan D-11 to D-13). Elsa 3 values are a string or a string array; Elsa 4 values are always lists, and a binding cannot project a sub-path. Endpoint as root or in a single-child slot → R4 unconvertible | 30 (2 / 12 captured) |
 | HttpEndpoint.Files / File | — | R4 | 30 / 13 (1 captured → unconvertible) |
 | (Elsa 4) HttpEndpoint.ResponseMode | default `Async` (immediate 202) | R2: emit `Sync` | 30 |
 | SendHttpRequest / FlowSendHttpRequest → `SendHttpRequest` | | R1 | 0 |
@@ -184,7 +184,7 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 
 | Activity.member | Elsa 4 | Rule | JTest |
 |---|---|---|---|
-| RunJavaScript.Script | `script` (sandbox sees `args` only) | R1; the script body goes through the expression rewriter, whose limits (VF-IMP-005 for unknown host functions) are tracked separately | 17 |
+| RunJavaScript.Script | `script` (sandbox sees `args` only) + `arguments` | R1 + R7 (plan D-16): the literal body is rewritten in script mode. `getVariable`/`getInput`/`variables.x` become `arguments` entries read as `args.<name>`, and an Elsa 3 completion value becomes `return`. `setOutcome(s)` and other host calls → VF-IMP-005 (follow-up #2717) | 17 |
 | RunJavaScript.PossibleOutcomes | `possibleOutcomes` | R1 + **W** (routing by return value; `setOutcomes` with several outcomes is refused by the rewriter) | 17 |
 | RunJavaScript.Result | `result` | R1 | 17 (9 captured) |
 

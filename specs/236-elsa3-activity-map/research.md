@@ -272,3 +272,41 @@ collection import persists or publishes.
 **Alternatives considered**: widening spec 236 to publish through `ActivityDefinitionPublisher` (rejected: a different
 bounded context, the Import package and publishing, much larger scope); holding spec 236 again (rejected: the
 converter's output is independently verifiable).
+
+## R-11 Elsa 3 JavaScript surface versus the converter and the Elsa 4 engine (found 2026-10-15)
+
+**Decision**: spec 236 closes the silent gaps: everything Elsa 4 cannot run is refused at conversion with a stable code.
+Making more Elsa 3 functions convert is a follow-up issue and spec (#2717). See plan D-14 to D-16.
+
+**Findings** (elsa-core `5b0c2d73`; `w236` on `47e02fd42`):
+
+- **Elsa 3 surface** (`Elsa.Expressions.JavaScript/Handlers/ConfigureEngineWithCommonFunctions.cs`,
+  `ConfigureEngineWithVariablesAndInputOutputAccessors.cs`):
+  - `getVariable`/`setVariable`, `getInput`, `getOutputFrom`, `getLastResult`;
+  - workflow and correlation accessors;
+  - helpers (`isNullOrEmpty`, `toJson`, `newGuid`, base64/bytes);
+  - generated `get{Var}()`/`set{Var}()`, `get{Input}()` and `get{Output}From{Activity}()`;
+  - a `variables` object, CLR type globals (`DateTime`, `Guid`, …) and optional lodash/moment;
+  - RunJavaScript only: `setOutcome(s)`.
+  
+  Elsa 3 evaluates source as a statement script whose completion value is the result. `getHttpRequestBody` (110 JTest
+  uses) is **not** an Elsa 3 core function; it comes from a host extension.
+- **Elsa 4** expressions run as `"use strict"; (<source>)` (`JintPortableJavaScriptEvaluator.cs:47`), so the source must
+  be one expression. They see frozen `args`, plus `getVariable`, `variables` and generated `get<Name>()` for referenced
+  variables; `Date`, `Math.random` and `Intl` are removed. Scripts run as `"use strict"; (() => { <source> })()`
+  (`JintJavaScriptScriptEvaluator.cs:20`), see only `args`, and must `return`; no `setOutcome`.
+- **The rewriter** (`Elsa3ExpressionRewriter.cs`) lowers `getVariable("x")`, `getInput("x")` and `variables.x` to
+  parameter bindings read as `args.<name>`. It refuses every other bare call with VF-IMP-005 (L324), generated
+  accessors included. Gaps it lets through, which then fail at run time:
+  - `new Date()`;
+  - member calls on CLR globals or libraries (`DateTime.Now`, `Guid.NewGuid()`, `_.map`);
+  - Elsa 3 `args.x`;
+  - mutating a read value;
+  - multi-statement expressions.
+- **RunJavaScript scripts are never rewritten**: Elsa 3 stores `script` as a Literal, and lowering returns early for
+  literals (`Elsa3ValueFlowLowerer.cs:249-255`). A converted script silently fails, or returns null where Elsa 3 used a
+  completion value. member-map.md's RunJavaScript row promised otherwise.
+- **Silent-mismatch risks for the follow-up:**
+  - an Elsa 3 input accessor shadows a variable accessor of the same name;
+  - Elsa 3 hands scripts mutable CLR values (`newGuid` returns a Guid), Elsa 4 frozen JSON;
+  - the rewriter matches variable names ignoring case.

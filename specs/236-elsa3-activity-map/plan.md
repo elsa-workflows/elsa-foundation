@@ -238,6 +238,24 @@ Extensions/Elsa3/tests/Mapping/Tests/
 | D-9 | Import publication is split out to #2796. This spec proves reusable output with `GraphActivityProvider.ValidateAsync` + `CompileAsync` in tests. SC-006's run-time check follows #2796. | Keeps this spec in the Elsa 3 mapping context (R-10). |
 | D-10 | The reserved `ELS3-ACTIVITY-BOUNDARY-OUTCOME-UNSUPPORTED` is removed. | Never released, so the never-reuse rule is not affected. |
 
+## HttpEndpoint request projections (maintainer decision, 2026-10-15)
+
+| # | Decision | Rationale |
+|---|---|---|
+| D-11 | A captured Elsa 3 `HttpEndpoint.Headers` or `QueryStringData` converts through a **synthesized workflow variable**. Right after the endpoint, in the same container slot, the conversion inserts one `set` intrinsic node per captured output. It writes workflow variable `elsa3.http.{endpointNodeId}.headers` (or `.query`), typed Object, with a JavaScript value. The value reads the endpoint's `Request` output through an `ActivityResult` parameter and rebuilds the Elsa 3 shape: a header or query key with one value becomes a string, with several values an array. Every consumer of the captured memory reference binds to that variable, so JavaScript, Liquid and direct bindings all work. | Elsa 4 has no Headers/QueryStringData output. `Request.Headers`/`Request.Query` are lists per key, and an `ActivityResult` binding cannot project a sub-path, so a projection would be both impossible and shape-unfaithful. The variable keeps Elsa 3 semantics for every consumer kind. |
+| D-12 | Placement: the endpoint must sit in a list slot (a Sequence's `activities`), so the node can follow it. In a Flowchart the insertion also needs connections, which #2705 adds with the rest of the graph; until then the Flowchart reports graph conversion pending, as every Flowchart does. An endpoint that is the workflow root, or sits in a single-child slot, cannot be followed: `ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`, with guidance to wrap it in a Sequence. | The synthesized node must run after the request exists and before any consumer. |
+| D-13 | Synthesized ids are deterministic: the node id is `{endpointNodeId}.elsa3-http-headers` (or `-query`) and the variable key as in D-11. The synthesized node is real authored content, visible in the converted workflow. | Determinism (FR-020) and reviewability. |
+
+## JavaScript conversion (maintainer decision, 2026-10-15; research R-11)
+
+| # | Decision | Rationale |
+|---|---|---|
+| D-14 | **Close the silent gaps.** Every JavaScript construct Elsa 4 cannot run is refused at conversion with a stable code, never carried over to fail at run time: `new Date()`, member calls on Elsa 3 CLR globals and libraries (`DateTime`, `DateTimeOffset`, `TimeSpan`, `Guid`, `Random`, `_`, `moment`), reads of Elsa 3's own `args`, and mutation of a read value (`getVariable('o').y = 1`). Generated accessors, `getCorrelationId`, helpers and `newGuid` stay refused (VF-IMP-005). | A refusal names the cause, while a run-time failure surfaces only in production. A follow-up issue and spec (#2717) turn these known refusals into conversions. |
+| D-15 | **Statement-form expressions are wrapped faithfully.** An Elsa 3 expression with several statements, or a single non-expression statement, becomes `(function () { …; return <last expression>; })()`, keeping Elsa 3's completion-value semantics. If the last statement is not an expression, the item is refused (VF-IMP-006). | Elsa 3 evaluated a statement script, Elsa 4 evaluates one expression (`"use strict"; (<source>)`). The wrap is exact for the completion value. |
+| D-16 | **RunJavaScript scripts are rewritten in script mode.** The literal `script` goes through the rewriter: `getVariable`/`getInput`/`variables.x` become entries of Elsa 4's `arguments` input and are read as `args.<name>`; an Elsa 3 completion value becomes a `return`; `setOutcome(s)` and every other host call are refused (VF-IMP-005) until #2717 lowers them. | Today scripts are carried verbatim and silently fail, or return null. Elsa 4 scripts see only `args` and must `return`. |
+
+This is the `HttpTriggerResponseMode` rewrite of data-model §6 (which already lists the request projections). ResponseMode `Sync` stays a synthetic member default.
+
 **Caveat that stays.** Most Elsa 3 reusable workflows have a Flowchart root, which reports
 `ELS3-ACTIVITY-GRAPH-CONVERSION-PENDING` until #2705. Until then, `Complete` emission is exercised end to end with
 non-Flowchart containers (Sequence, loops, Parallel) and reaches real Flowchart-based definitions once #2705 lands.
