@@ -52,36 +52,14 @@ async function selectNotifyBuyer(page: import("@playwright/test").Page) {
   await expect(node).toHaveAttribute("aria-pressed", "true");
 }
 
-function focusIsInsideReadyCodeEditor() {
-  const root = document.querySelector("[data-studio-code-editor][data-studio-code-editor-ready='true']");
-  const surface = root?.querySelector(
+function focusReadyCodeEditor(root: HTMLElement) {
+  const surface = root.querySelector(
     ".cm-content, .monaco-editor textarea.inputarea, textarea.studio-code-editor-input, [data-studio-code-editor-surface]"
   );
-  if (!(root instanceof HTMLElement) || !(surface instanceof HTMLElement)) return false;
-  if (document.activeElement !== surface && !surface.contains(document.activeElement) && !root.contains(document.activeElement)) {
-    surface.focus();
-  }
+  if (!(surface instanceof HTMLElement)) return false;
+  if (!root.contains(document.activeElement)) surface.focus();
   const active = document.activeElement;
-  return active instanceof Element && Boolean(active.closest("[data-studio-code-editor]"));
-}
-
-function dispatchDuplicateShortcutFromFocusedEditor() {
-  const root = document.querySelector("[data-studio-code-editor][data-studio-code-editor-ready='true']");
-  const active = document.activeElement;
-  const surface = active instanceof HTMLElement && root?.contains(active)
-    ? active
-    : root?.querySelector(".cm-content, .monaco-editor textarea.inputarea, textarea.studio-code-editor-input, [data-studio-code-editor-surface]");
-  if (!(root instanceof HTMLElement) || !(surface instanceof HTMLElement) || !root.contains(surface)) return false;
-  surface.focus();
-  if (!root.contains(document.activeElement)) return false;
-  return surface.dispatchEvent(new KeyboardEvent("keydown", {
-    key: "d",
-    code: "KeyD",
-    ctrlKey: true,
-    bubbles: true,
-    cancelable: true,
-    composed: true
-  }));
+  return active instanceof Element && root.contains(active);
 }
 
 async function dispatchCanvasShortcut(page: import("@playwright/test").Page, key: "c" | "v" | "d" | "z") {
@@ -141,23 +119,16 @@ test("Ctrl+D does nothing while the designer code editor is focused", async ({ p
 
   const readyEditor = inspector.locator("[data-studio-code-editor][data-studio-code-editor-ready='true']");
   await expect(readyEditor).toBeVisible({ timeout: 15_000 });
-  await expect.poll(() => page.evaluate(focusIsInsideReadyCodeEditor), { timeout: 15_000 }).toBe(true);
+  await expect.poll(() => readyEditor.evaluate(focusReadyCodeEditor), { timeout: 15_000 }).toBe(true);
 
   const nodes = page.locator(".wf-canvas .wf-node");
   const startingCount = await nodes.count();
-  expect(await page.evaluate(dispatchDuplicateShortcutFromFocusedEditor)).toBe(true);
+  await page.keyboard.press("ControlOrMeta+d");
 
-  let stableMatches = 0;
   await expect.poll(async () => {
-    const count = await nodes.count();
-    const duplicated = await page.locator(".wf-editor-save-status").textContent();
-    if (duplicated?.includes("Duplicated") || count !== startingCount) {
-      stableMatches = 0;
-      return count;
-    }
-    stableMatches += 1;
-    return stableMatches >= 3 ? startingCount : Number.NaN;
-  }, { timeout: 3_000, intervals: [50, 50, 50, 100, 100, 200] }).toBe(startingCount);
+    const duplicated = (await page.locator(".wf-editor-save-status").textContent())?.includes("Duplicated") === true;
+    return { duplicated, count: await nodes.count() };
+  }).toEqual({ duplicated: false, count: startingCount });
   await expect(page.locator(".wf-canvas .wf-node").filter({ hasText: "Notify buyer (copy)" })).toHaveCount(0);
   await expect(page.locator(".wf-editor-save-status")).not.toContainText("Duplicated");
 });

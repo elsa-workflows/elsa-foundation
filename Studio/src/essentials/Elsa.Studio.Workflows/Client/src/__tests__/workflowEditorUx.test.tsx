@@ -125,17 +125,19 @@ describe("isWorkflowEditorKeyboardTarget", () => {
   });
 
   it("walks the keydown composedPath through a shadow tree into the code editor", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
     const editor = document.createElement("section");
     editor.dataset.studioCodeEditor = "true";
-    const host = document.createElement("div");
-    editor.appendChild(host);
-    document.body.appendChild(editor);
     const inner = document.createElement("span");
-    host.attachShadow({ mode: "open" }).appendChild(inner);
+    editor.appendChild(inner);
+    host.attachShadow({ mode: "open" }).appendChild(editor);
 
     let blocked: boolean | undefined;
+    let targetOnly: boolean | undefined;
     const listener = (event: KeyboardEvent) => {
-      blocked = isActivityClipboardShortcutBlocked(event, editor);
+      targetOnly = isWorkflowEditorKeyboardTarget(event.target);
+      blocked = isActivityClipboardShortcutBlocked(event);
     };
     window.addEventListener("keydown", listener, true);
     inner.dispatchEvent(new KeyboardEvent("keydown", {
@@ -146,8 +148,9 @@ describe("isWorkflowEditorKeyboardTarget", () => {
     }));
     window.removeEventListener("keydown", listener, true);
 
+    expect(targetOnly).toBe(false);
     expect(blocked).toBe(true);
-    editor.remove();
+    host.remove();
   });
 
   it("treats Monaco and text-node targets as editor-owned without reading document.activeElement", () => {

@@ -13,6 +13,7 @@ import { Compartment, EditorState, Prec, Transaction } from "@codemirror/state";
 import { EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers, type KeyBinding } from "@codemirror/view";
 import { useEffect, useRef } from "react";
 import { applyCodeMirrorDiagnostics } from "./codeMirrorDiagnostics";
+import { markCodeEditorReady } from "./markCodeEditorReady";
 import {
   cancelCodeMirrorIntelligence,
   createCodeMirrorCodeIntelligenceExtensions,
@@ -69,6 +70,7 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    const root = container.closest("[data-studio-code-editor]");
     const mountedAuthorizationGeneration = authorizationGeneration;
 
     const view = claimCompactView(entry, props.profile, container)
@@ -85,7 +87,7 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
     void loadLanguageSupport(view, props.document.language, entry);
 
     return () => {
-      markCodeEditorReady(container, false);
+      markCodeEditorReady(root instanceof HTMLElement ? root : container, false);
       entry.runtime.tabEscapeArmed = false;
       entry.state = view.state;
       setStudioCodeEditorSessionEntry(props.session, props.document.uri, entry);
@@ -144,13 +146,6 @@ export function CodeMirrorStudioCodeEditor(props: StudioCodeEditorEngineProps) {
       style={{ minHeight: props.minHeight }}
     />
   );
-}
-
-function markCodeEditorReady(element: HTMLElement | null, ready: boolean) {
-  const root = element?.closest("[data-studio-code-editor]");
-  if (!(root instanceof HTMLElement)) return;
-  if (ready) root.dataset.studioCodeEditorReady = "true";
-  else delete root.dataset.studioCodeEditorReady;
 }
 
 function claimCompactView(entry: CodeMirrorSessionEntry, profile: StudioCodeEditorEngineProps["profile"], container: HTMLElement) {

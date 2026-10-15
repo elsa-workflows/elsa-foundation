@@ -2,8 +2,9 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StudioCodeEditor } from "../StudioCodeEditor";
+import { FallbackCodeEditor } from "../engines/FallbackCodeEditor";
 import { javaScriptLanguageAdapter } from "../languages/javascript";
-import type { StudioCodeDocument, StudioCodeEditorProps } from "../types";
+import type { StudioCodeDocument, StudioCodeEditorEngineProps, StudioCodeEditorProps } from "../types";
 
 beforeEach(() => {
   window.dispatchEvent(new Event("elsa:auth-session-started"));
@@ -25,6 +26,36 @@ describe("StudioCodeEditor", () => {
     expect(onChange).toHaveBeenCalledWith({ ...document, value: "{{ subtotal }}" });
     expect(container.querySelector(".studio-code-editor-rich")).toBeNull();
     unmount();
+  });
+
+  it("clears the ready flag on a surviving code-editor root when FallbackCodeEditor unmounts", () => {
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const wrapper = document.createElement("section");
+    wrapper.dataset.studioCodeEditor = "true";
+    host.appendChild(wrapper);
+    const mount = document.createElement("div");
+    wrapper.appendChild(mount);
+    const root = createRoot(mount);
+    const props: StudioCodeEditorEngineProps = {
+      document: codeDocument({ language: "liquid", value: "{{ total }}" }),
+      profile: "expanded",
+      session: { id: "fallback-unmount" },
+      readOnly: false,
+      theme: "studio",
+      minHeight: "220px",
+      ariaLabel: "Expression",
+      diagnostics: [],
+      onChange: vi.fn()
+    };
+
+    flushSync(() => root.render(<FallbackCodeEditor {...props} />));
+    expect(wrapper.getAttribute("data-studio-code-editor-ready")).toBe("true");
+
+    flushSync(() => root.unmount());
+    expect(wrapper.isConnected).toBe(true);
+    expect(wrapper.hasAttribute("data-studio-code-editor-ready")).toBe(false);
+    host.remove();
   });
 
   it("keeps readonly documents selectable without emitting changes", () => {

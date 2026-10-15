@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ChangeEvent, type KeyboardEvent } from "react";
+import { markCodeEditorReady } from "./markCodeEditorReady";
 import type { StudioCodeEditorEngineProps } from "../types";
 
 /** A safe generic editor when a language module or rich editor chunk is unavailable. */
@@ -19,9 +20,11 @@ export function FallbackCodeEditor({
   const tabEscapeArmed = useRef(false);
 
   useEffect(() => {
-    markCodeEditorReady(inputRef.current, true);
-    if (autoFocus) inputRef.current?.focus();
-    return () => markCodeEditorReady(inputRef.current, false);
+    const input = inputRef.current;
+    const root = input?.closest("[data-studio-code-editor]");
+    markCodeEditorReady(input, true);
+    if (autoFocus) input?.focus();
+    return () => markCodeEditorReady(root instanceof HTMLElement ? root : null, false);
   }, [autoFocus]);
 
   const handleChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
@@ -80,13 +83,6 @@ export function FallbackCodeEditor({
       onKeyDown={handleKeyDown}
     />
   );
-}
-
-function markCodeEditorReady(element: HTMLElement | null, ready: boolean) {
-  const root = element?.closest("[data-studio-code-editor]");
-  if (!(root instanceof HTMLElement)) return;
-  if (ready) root.dataset.studioCodeEditorReady = "true";
-  else delete root.dataset.studioCodeEditorReady;
 }
 
 function applyTabIndent(
