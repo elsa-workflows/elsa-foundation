@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "4764f246a2a811e6e4562981df29af01bb37f3fa",
+  "last_publish_commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -19,33 +19,33 @@
     },
     {
       "package_id": "Elsa.Activities.Design.Api",
-      "version": "4.0.11-preview",
-      "commit": "d2acadc1c7eda9f2de3f35d481493ae4896cdb04"
+      "version": "4.0.12-preview",
+      "commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c"
     },
     {
       "package_id": "Elsa.Activities.Design.Core",
-      "version": "4.0.7-preview",
-      "commit": "d2acadc1c7eda9f2de3f35d481493ae4896cdb04"
+      "version": "4.0.8-preview",
+      "commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c"
     },
     {
       "package_id": "Elsa.Activities.Design.Persistence.Core",
-      "version": "4.0.7-preview",
-      "commit": "d2acadc1c7eda9f2de3f35d481493ae4896cdb04"
+      "version": "4.0.8-preview",
+      "commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c"
     },
     {
       "package_id": "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
-      "version": "4.0.16-preview",
-      "commit": "d2acadc1c7eda9f2de3f35d481493ae4896cdb04"
+      "version": "4.0.17-preview",
+      "commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c"
     },
     {
       "package_id": "Elsa.Activities.Design.Reconciliation",
-      "version": "4.0.9-preview",
-      "commit": "d2acadc1c7eda9f2de3f35d481493ae4896cdb04"
+      "version": "4.0.10-preview",
+      "commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c"
     },
     {
       "package_id": "Elsa.Activities.Design.Reconciliation.Clr",
-      "version": "4.0.8-preview",
-      "commit": "d2acadc1c7eda9f2de3f35d481493ae4896cdb04"
+      "version": "4.0.9-preview",
+      "commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c"
     },
     {
       "package_id": "Elsa.Activities.Design.Reconciliation.Json",
@@ -79,8 +79,8 @@
     },
     {
       "package_id": "Elsa.Activities.Http",
-      "version": "4.0.11-preview",
-      "commit": "d2acadc1c7eda9f2de3f35d481493ae4896cdb04"
+      "version": "4.0.12-preview",
+      "commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c"
     },
     {
       "package_id": "Elsa.Activities.Primitives",
@@ -94,8 +94,8 @@
     },
     {
       "package_id": "Elsa.Activities.Runtime.Core",
-      "version": "4.0.11-preview",
-      "commit": "d2acadc1c7eda9f2de3f35d481493ae4896cdb04"
+      "version": "4.0.12-preview",
+      "commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c"
     },
     {
       "package_id": "Elsa.Activities.Scheduling",
@@ -154,13 +154,13 @@
     },
     {
       "package_id": "Elsa.Attention.Core",
-      "version": "4.0.9-preview",
-      "commit": "05b9f23246a6ddbfe0ca1278781da935555c9415"
+      "version": "4.0.10-preview",
+      "commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c"
     },
     {
       "package_id": "Elsa.Caching.Core",
-      "version": "4.0.9-preview",
-      "commit": "05b9f23246a6ddbfe0ca1278781da935555c9415"
+      "version": "4.0.10-preview",
+      "commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c"
     },
     {
       "package_id": "Elsa.Caching.Memory",
@@ -234,8 +234,8 @@
     },
     {
       "package_id": "Elsa.Events.Core",
-      "version": "4.0.9-preview",
-      "commit": "05b9f23246a6ddbfe0ca1278781da935555c9415"
+      "version": "4.0.10-preview",
+      "commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c"
     },
     {
       "package_id": "Elsa.Events.Strategies",
@@ -254,8 +254,8 @@
     },
     {
       "package_id": "Elsa.Expressions.Core",
-      "version": "4.0.9-preview",
-      "commit": "05b9f23246a6ddbfe0ca1278781da935555c9415"
+      "version": "4.0.10-preview",
+      "commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c"
     },
     {
       "package_id": "Elsa.Expressions.JavaScript",
@@ -364,8 +364,8 @@
     },
     {
       "package_id": "Elsa.Locking.Core",
-      "version": "4.0.9-preview",
-      "commit": "05b9f23246a6ddbfe0ca1278781da935555c9415"
+      "version": "4.0.10-preview",
+      "commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c"
     },
     {
       "package_id": "Elsa.Locking.Database",
@@ -384,8 +384,8 @@
     },
     {
       "package_id": "Elsa.Mediator.Core",
-      "version": "4.0.9-preview",
-      "commit": "05b9f23246a6ddbfe0ca1278781da935555c9415"
+      "version": "4.0.10-preview",
+      "commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c"
     },
     {
       "package_id": "Elsa.Modularity.Api",
@@ -424,13 +424,13 @@
     },
     {
       "package_id": "Elsa.Pipelines.Core",
-      "version": "4.0.9-preview",
-      "commit": "05b9f23246a6ddbfe0ca1278781da935555c9415"
+      "version": "4.0.10-preview",
+      "commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c"
     },
     {
       "package_id": "Elsa.Primitives",
-      "version": "4.0.9-preview",
-      "commit": "05b9f23246a6ddbfe0ca1278781da935555c9415"
+      "version": "4.0.10-preview",
+      "commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c"
     },
     {
       "package_id": "Elsa.Primitives.Hosting",
@@ -469,8 +469,8 @@
     },
     {
       "package_id": "Elsa.Serialization.Core",
-      "version": "4.0.9-preview",
-      "commit": "05b9f23246a6ddbfe0ca1278781da935555c9415"
+      "version": "4.0.10-preview",
+      "commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c"
     },
     {
       "package_id": "Elsa.Serialization.Newtonsoft",
@@ -504,8 +504,8 @@
     },
     {
       "package_id": "Elsa.Tasks.Core",
-      "version": "4.0.9-preview",
-      "commit": "05b9f23246a6ddbfe0ca1278781da935555c9415"
+      "version": "4.0.10-preview",
+      "commit": "18bcc485b99dec9b2d41b2180d8abacd8f98465c"
     },
     {
       "package_id": "Elsa.Tasks.Schedules",
