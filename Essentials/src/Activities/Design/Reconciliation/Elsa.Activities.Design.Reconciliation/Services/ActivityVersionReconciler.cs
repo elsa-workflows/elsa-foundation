@@ -30,7 +30,11 @@ namespace Elsa.Activities.Design.Reconciliation.Services;
 ///    with immutable provenance (including ProvisioningHash).
 /// 4. If <c>(DefinitionId, Version)</c> is already persisted, compute the incoming hash
 ///    and compare to the persisted ProvisioningHash:
-///    - Any hash difference → <see cref="ActivityVersionHashMismatchException"/> (the source
+///    - Hash difference that is only input <c>Tier</c> (or another newly hashed catalog field)
+///      → refresh the stored version in place so the catalog picks up the new disclosure group.
+///      Pre-GA: the first upgrade after those fields enter the hash re-reconciles existing rows
+///      rather than throwing.
+///    - Any other hash difference → <see cref="ActivityVersionHashMismatchException"/> (the source
 ///      is broken — same logical identity, different content).
 ///    - Hashes match → skip or throw per the <see cref="DuplicateHandling"/> option.
 ///
@@ -54,6 +58,7 @@ public sealed class ActivityVersionReconciler(
     IActivityDefinitionVersionStore versionStore,
     IAddActivityDefinitionCommand addNewDefinitionCommand,
     IAddActivityDefinitionVersionCommand addVersionCommand,
+    IRefreshActivityDefinitionVersionCommand refreshVersionCommand,
     IEnumerable<IActivitySourceVersionPublisher>? sourceVersionPublishers = null
 )
     : IActivityVersionReconciler
@@ -174,6 +179,29 @@ public sealed class ActivityVersionReconciler(
                 return;
             }
 
+            if (IsInputTierOnlyChange(definition, existingVersion, incomingVersion))
+            {
+                var expectedOldHash = existingVersion.Hash;
+                var refresh = ActivityDefinitionVersion.From(incomingVersion, definition.Id);
+                refresh.Id = existingVersion.Id;
+                refresh.TenantId = existingVersion.TenantId;
+                refresh.Definition = definition;
+                await refreshVersionCommand.RefreshAsync(
+                    CreateOperationKey("refresh", incomingVersion),
+                    refresh,
+                    expectedOldHash,
+                    cancellationToken);
+                existingVersion.Inputs = incomingVersion.Inputs.ToArray();
+                existingVersion.Hash = incomingHash;
+                existingVersion.LastModifiedAt = refresh.LastModifiedAt;
+                if (sourceVersionPublisher is not null)
+                {
+                    existingVersion.Definition ??= definition;
+                    await sourceVersionPublisher.PublishAsync(definition, existingVersion, cancellationToken);
+                }
+                return;
+            }
+
             // Same identity, different content — the source is broken. Throw loudly.
             throw new ActivityVersionHashMismatchException(
                 definitionId: definition.Id,
@@ -286,6 +314,40 @@ public sealed class ActivityVersionReconciler(
         var compatibilityHash = hasher.Hash(incomingDefinition, incomingRebasedToPersistedVersion);
         return string.Equals(existingVersion.Hash, compatibilityHash, StringComparison.Ordinal);
     }
+
+    private bool IsInputTierOnlyChange(
+        ActivityDefinition definition,
+        IActivityDefinitionVersion existingVersion,
+        IActivityDefinitionVersion incomingVersion)
+    {
+        var existingStripped = WithStrippedInputTiers(existingVersion, definition);
+        var incomingStripped = WithStrippedInputTiers(incomingVersion, incomingVersion.Definition);
+        return string.Equals(
+            hasher.Hash(definition, existingStripped),
+            hasher.Hash(incomingVersion.Definition, incomingStripped),
+            StringComparison.Ordinal);
+    }
+
+    private static ActivityDefinitionVersionModel WithStrippedInputTiers(
+        IActivityDefinitionVersion version,
+        IActivityDefinition definition) =>
+        new(
+            Id: version.Id,
+            Version: version.Version,
+            DefinitionId: version.DefinitionId,
+            ProviderKey: version.ProviderKey,
+            ProviderSchemaVersion: version.ProviderSchemaVersion,
+            ConsumerKey: version.ConsumerKey,
+            ConsumerSchemaVersion: version.ConsumerSchemaVersion,
+            DescriptorPayload: version.DescriptorPayload,
+            SourceKind: version.SourceKind,
+            SourceId: version.SourceId,
+            Definition: definition,
+            Inputs: version.Inputs.Select(input => input.Tier is null ? input : input with { Tier = null }).ToArray(),
+            Outputs: version.Outputs,
+            DesignFacets: version.DesignFacets,
+            ExecutionType: version.ExecutionType,
+            Hash: string.Empty);
 
     private void LogSkipBuildMetadataOnlyDuplicate(
         string definitionId,

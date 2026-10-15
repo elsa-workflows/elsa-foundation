@@ -170,7 +170,10 @@ public sealed class ClrAssemblyScanner(
                 DefaultSyntax: metadata.DefaultSyntax,
                 // Null rather than false when not declared, so an input that declares nothing keeps its catalog hash.
                 IsSensitive: isSensitive ? true : null,
-                IsCredential: isCredential ? true : null));
+                IsCredential: isCredential ? true : null,
+                // Presentation only, but part of the descriptor hash: a tier-only change on an existing version
+                // is refreshed in place by reconciliation instead of raising a hash mismatch.
+                Tier: metadata.Tier));
         }
 
         var resultType = FindTypedActivityResult(type);
@@ -547,6 +550,9 @@ public sealed class ClrAssemblyScanner(
         var defaultSyntax = attribute is null ? null : ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.DefaultSyntax));
         var uiHint = attribute is null ? null : ReadNamedStringArgument(attribute, nameof(ActivityInputAttribute.UIHint));
         var uiSpecifications = ReadOptionSpecifications(property, valueType, inputNames, activityTypeName);
+        var tier = attribute is not null && HasNamedArgument(attribute, nameof(ActivityInputAttribute.Tier))
+            ? ReadNamedEnumArgument<InputTier>(attribute, nameof(ActivityInputAttribute.Tier))
+            : null;
 
         return new ActivityInputMetadata(
             order,
@@ -556,8 +562,17 @@ public sealed class ClrAssemblyScanner(
             string.IsNullOrWhiteSpace(defaultValue) ? null : ParseDefaultValue(defaultValue, valueType),
             defaultSyntax,
             string.IsNullOrWhiteSpace(uiHint) ? null : uiHint.Trim(),
-            uiSpecifications);
+            uiSpecifications,
+            ToInputTierWire(tier));
     }
+
+    private static string? ToInputTierWire(InputTier? tier) => tier switch
+    {
+        InputTier.Essential => ActivityInputTiers.Essential,
+        InputTier.Optional => ActivityInputTiers.Optional,
+        InputTier.Setting => ActivityInputTiers.Setting,
+        _ => null
+    };
 
     private static JsonElement? ReadOptionSpecifications(
         PropertyInfo property,
@@ -904,7 +919,8 @@ public sealed class ClrAssemblyScanner(
         JsonElement? DefaultValue,
         string? DefaultSyntax,
         string? UiHint,
-        JsonElement? UiSpecifications);
+        JsonElement? UiSpecifications,
+        string? Tier);
 
     private sealed record ActivityInputOptionSpecification(string Label, JsonElement Value);
 

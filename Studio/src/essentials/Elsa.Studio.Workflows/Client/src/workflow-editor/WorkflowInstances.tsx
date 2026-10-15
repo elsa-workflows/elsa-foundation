@@ -6,6 +6,7 @@ import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight
 import type { StudioActivityInputDescriptor, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
 import { getActivityExecutionInspection, getExecutable, getExecutableInputSources, getWorkflowInstance, listWorkflowInstances, supportsActivityExecutionInspection, supportsWorkflowInstanceHealthFilter, WorkflowInstanceHealthFilterUnavailableError, type WorkflowInstanceListPage } from "../api/runtime";
+import { formatNamedIdentityTitle, loadDefinitionDisplayNames, resolveNamedIdentity } from "./definitionDisplayNames";
 import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import { formatActivitySummary } from "../activitySummary";
 import { isMaskedInput, readSecretReference } from "../maskedInput";
@@ -102,6 +103,7 @@ export function WorkflowInstances({ context, navigate }: {
   const [state, setState] = useState<"loading" | "ready" | "failed" | "unsupported">("loading");
   const [error, setError] = useState("");
   const [page, setPage] = useState<WorkflowInstanceListPage>(emptyRunHistoryPage);
+  const [definitionNames, setDefinitionNames] = useState<Map<string, string>>(() => new Map());
   const [healthFilterSupported, setHealthFilterSupported] = useState<boolean | null>(null);
   const requestSequence = useRef(0);
   const cursorScope = { backend: context, query: buildRunHistoryUrl({ ...location, cursor: null }) };
@@ -134,6 +136,10 @@ export function WorkflowInstances({ context, navigate }: {
       if (requestId !== requestSequence.current) return;
       setPage(nextPage);
       setState("ready");
+      void loadDefinitionDisplayNames(context, nextPage.items.map(item => item.definitionId)).then(names => {
+        if (requestId !== requestSequence.current) return;
+        setDefinitionNames(names);
+      });
     } catch (e) {
       if (requestId !== requestSequence.current) return;
       setError(e instanceof Error ? e.message : String(e));
@@ -285,10 +291,11 @@ export function WorkflowInstances({ context, navigate }: {
               <span>{formatRunKind(instance.runKind)}</span>
               <span><WorkflowStatusBadge status={instance.status} subStatus={instance.subStatus} /></span>
               <span><CurrentIncidentHealthLabel instance={instance} /></span>
-              <span>
-                <strong>{instance.definitionId}</strong>
-                <small>{instance.definitionVersionId}</small>
-              </span>
+              <NamedIdentity
+                name={definitionNames.get(instance.definitionId)}
+                id={instance.definitionId}
+                secondary={instance.definitionVersionId}
+              />
               <span>
                 <strong>{instance.activityCount} activities</strong>
                 <small>{instance.incidentCount} incidents</small>
@@ -442,6 +449,7 @@ function toUtcIso(value: string) {
 }
 
 interface WorkflowInstanceWorkbenchData extends WorkflowInstanceInspectionData {
+  definitionName?: string | null;
   executableGraph: ExecutableActivityGraph | null;
   incidentActivityExecutions: ActivityExecutionStateSummary[];
   incidentAssociationLookupIncomplete: boolean;
@@ -579,6 +587,15 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
       if (initialEvidence) {
         requestAnimationFrame(() => requestAnimationFrame(() => focusSelectedCanvasActivity(initialEvidence)));
       }
+      void loadDefinitionDisplayNames(context, [details.instance.definitionId]).then(
+        definitionNames => {
+          if (generation !== loadGeneration.current) return;
+          const definitionName = definitionNames.get(details.instance.definitionId);
+          if (!definitionName) return;
+          setData(current => current ? applyDefinitionDisplayName(current, definitionName) : current);
+        },
+        () => undefined
+      );
     } catch (e) {
       if (generation !== loadGeneration.current) return;
       setData(null);
@@ -925,6 +942,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
             onSelectActivityExecution={selectActivityExecution}
             activityCatalog={data.activityCatalog}
             executableGraph={data.executableGraph}
+            definitionName={data.definitionName ?? data.definitionVersion?.definition.name}
             expressionEditors={expressionEditors}
             graphNodeIds={data.definitionVersion ? collectWorkflowGraphNodeIds(data.definitionVersion, data.activityCatalog) : undefined}
             rootNodeId={data.definitionVersion?.state.rootActivity?.nodeId}
@@ -943,11 +961,35 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
   );
 }
 
+export function applyDefinitionDisplayName<T extends {
+  details: Pick<WorkflowInstanceDetails, "instance">;
+  definitionVersion: WorkflowDefinitionVersionDetails | null;
+  definitionName?: string | null;
+}>(data: T, definitionName: string | null | undefined): T & { definitionName: string } {
+  const name = resolveNamedIdentity(definitionName, data.details.instance.definitionId).label;
+  const nextVersion = data.definitionVersion && data.definitionVersion.definition.name !== name
+    ? {
+        ...data.definitionVersion,
+        definition: {
+          ...data.definitionVersion.definition,
+          name
+        }
+      }
+    : data.definitionVersion;
+  if (data.definitionName === name && nextVersion === data.definitionVersion) return { ...data, definitionName: name };
+  return {
+    ...data,
+    definitionName: name,
+    definitionVersion: nextVersion
+  };
+}
+
 export function projectPinnedExecutable(
   executable: WorkflowExecutableDetails,
   details: WorkflowInstanceDetails,
   catalog: ActivityCatalogItem[],
-  executableGraph?: ExecutableActivityGraph
+  executableGraph?: ExecutableActivityGraph,
+  definitionName?: string | null
 ): WorkflowDefinitionVersionDetails {
   const timestamp = executable.createdAt ?? details.instance.createdAt;
   const graph = executableGraph ?? buildExecutableActivityGraph(
@@ -962,7 +1004,7 @@ export function projectPinnedExecutable(
     version: details.instance.artifactVersion,
     definition: {
       id: details.instance.definitionId,
-      name: details.instance.definitionId,
+      name: resolveNamedIdentity(definitionName, details.instance.definitionId).label,
       description: `Pinned Runtime executable ${executable.artifactId}`,
       createdAt: timestamp,
       lastModifiedAt: timestamp
@@ -1216,7 +1258,7 @@ function WorkflowInstanceCanvas({
       <header>
         <div>
           <span>Pinned Runtime executable</span>
-          <h3>{definitionVersion ? (
+          <h3 title={definitionVersion ? `${definitionVersion.definition.name} (${definitionVersion.definition.id})` : undefined}>{definitionVersion ? (
             <>
               {definitionVersion.definition.name} <small>{definitionVersion.version}</small>
             </>
@@ -1461,6 +1503,7 @@ function WorkflowInstanceInspector({
   rootNodeId,
   activityCatalog = [],
   executableGraph,
+  definitionName,
   expressionEditors = [],
   collapsed = false,
   expanded = true,
@@ -1495,6 +1538,7 @@ function WorkflowInstanceInspector({
   rootNodeId?: string | null;
   activityCatalog?: ActivityCatalogItem[];
   executableGraph?: ExecutableActivityGraph | null;
+  definitionName?: string | null;
   expressionEditors?: StudioExpressionEditorContribution[];
   collapsed?: boolean;
   expanded?: boolean;
@@ -1631,7 +1675,7 @@ function WorkflowInstanceInspector({
                     onViewInput={onViewInput}
                     onLoadMoreIncidentAssociations={onLoadMoreIncidentAssociations}
                   />
-                  <WorkflowUnmatchedEvidence details={details} graphNodeIds={graphNodeIds} rootNodeId={rootNodeId} />
+                  <WorkflowUnmatchedEvidence details={details} graphNodeIds={graphNodeIds} rootNodeId={rootNodeId} activityCatalog={activityCatalog} executableGraph={executableGraph} />
                 </>
               ) : (
                 <dl className="wf-instance-meta">
@@ -1642,7 +1686,13 @@ function WorkflowInstanceInspector({
                   <dt>Artifact</dt>
                   <dd>{summary.artifactId} <small>{summary.artifactVersion}</small></dd>
                   <dt>Definition</dt>
-                  <dd>{summary.definitionId} <small>{summary.definitionVersionId}</small></dd>
+                  <dd>
+                    <NamedIdentity
+                      name={definitionName}
+                      id={summary.definitionId}
+                      secondary={summary.definitionVersionId}
+                    />
+                  </dd>
                   <dt>Created</dt>
                   <dd>{formatDate(summary.createdAt)}</dd>
                   <dt>Started</dt>
@@ -2565,7 +2615,7 @@ export function WorkflowIncidentList({
   );
 }
 
-function getIncidentActivityLabel(
+export function getIncidentActivityLabel(
   activity: Pick<ActivityExecutionStateSummary, "activityType" | "activityTypeVersion"> | null | undefined,
   catalog: ActivityCatalogItem[],
   presentation?: ExecutableGraphNodeFacts["presentation"]
@@ -2640,7 +2690,32 @@ function previewStackTrace(stackTrace: string) {
   return preview.length > 120 ? `${preview.slice(0, 117)}...` : preview;
 }
 
-function WorkflowUnmatchedEvidence({ details, graphNodeIds, rootNodeId }: { details: WorkflowInstanceDetails; graphNodeIds?: Set<string>; rootNodeId?: string | null }) {
+function NamedIdentity({
+  name,
+  id,
+  secondary
+}: {
+  name?: string | null;
+  id: string;
+  secondary?: string | null;
+}) {
+  const identity = resolveNamedIdentity(name, id, [secondary]);
+  const secondaryText = identity.secondaryIds.join(" · ") || null;
+  return (
+    <span className="wf-identity-cell" title={formatNamedIdentityTitle(identity.label, identity.secondaryIds)}>
+      <strong>{identity.label}</strong>
+      {secondaryText ? <small>{secondaryText}</small> : null}
+    </span>
+  );
+}
+
+function WorkflowUnmatchedEvidence({ details, graphNodeIds, rootNodeId, activityCatalog, executableGraph }: {
+  details: WorkflowInstanceDetails;
+  graphNodeIds?: Set<string>;
+  rootNodeId?: string | null;
+  activityCatalog?: ActivityCatalogItem[];
+  executableGraph?: ExecutableActivityGraph | null;
+}) {
   if (!graphNodeIds) return null;
 
   const unmatchedActivities = details.activities.filter(activity => {
@@ -2656,8 +2731,8 @@ function WorkflowUnmatchedEvidence({ details, graphNodeIds, rootNodeId }: { deta
       <div className="wf-instance-unmatched-list">
         {unmatchedActivities.map(activity => (
           <div className="wf-instance-unmatched" key={`activity-${activity.activityExecutionId}`}>
-            <strong>{shortTypeName(activity.activityType) ?? activity.activityType}</strong>
-            <small>{activity.activityExecutionId}</small>
+            <strong>{getIncidentActivityLabel(activity, activityCatalog ?? [], findExecutableNodeFacts(executableGraph, activity)?.presentation)}</strong>
+            <small title={activity.activityExecutionId}>{activity.activityExecutionId}</small>
           </div>
         ))}
       </div>

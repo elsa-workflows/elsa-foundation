@@ -552,22 +552,22 @@ export function WorkflowEditor({
       if (!(event.metaKey || event.ctrlKey)) return;
       const clipboardShortcut = matchActivityClipboardShortcut(event);
       if (clipboardShortcut === "copy") {
-        if (isActivityClipboardShortcutBlocked(event.target, editorRootRef.current)) return;
+        if (isActivityClipboardShortcutBlocked(event, editorRootRef.current)) return;
         if (hasNonCollapsedTextSelection()) return;
         if (copySelectedActivities()) event.preventDefault();
         return;
       }
       if (clipboardShortcut === "paste") {
-        if (isActivityClipboardShortcutBlocked(event.target, editorRootRef.current)) return;
+        if (isActivityClipboardShortcutBlocked(event, editorRootRef.current)) return;
         if (pasteCopiedActivities()) event.preventDefault();
         return;
       }
       if (clipboardShortcut === "duplicate") {
-        if (isActivityClipboardShortcutBlocked(event.target, editorRootRef.current)) return;
+        if (isActivityClipboardShortcutBlocked(event, editorRootRef.current)) return;
         if (duplicateSelectedActivities()) event.preventDefault();
         return;
       }
-      if (isWorkflowEditorKeyboardTarget(event.target)) return;
+      if (isWorkflowEditorKeyboardTarget(event)) return;
       const key = event.key.toLowerCase();
       if (key === "z" && !event.shiftKey) {
         event.preventDefault();
