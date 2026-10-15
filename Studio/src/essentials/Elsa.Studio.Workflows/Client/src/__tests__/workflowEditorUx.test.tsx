@@ -180,6 +180,44 @@ describe("isWorkflowEditorKeyboardTarget", () => {
     editor.remove();
     previouslyFocused.remove();
   });
+
+  it("blocks a keydown outside the editor when the caret is still inside it", () => {
+    const editor = document.createElement("section");
+    editor.dataset.studioCodeEditor = "true";
+    const surface = document.createElement("textarea");
+    editor.appendChild(surface);
+    document.body.appendChild(editor);
+    surface.focus();
+
+    const event = new KeyboardEvent("keydown", { key: "d", ctrlKey: true, bubbles: true, composed: true });
+    document.body.dispatchEvent(event);
+
+    expect(document.activeElement).toBe(surface);
+    expect(isWorkflowEditorKeyboardTarget(event.target)).toBe(false);
+    expect(isActivityClipboardShortcutBlocked(event)).toBe(true);
+
+    editor.remove();
+  });
+
+  it("blocks shortcuts while a code editor is swapping engines, but not for an idle compact preview", () => {
+    const designer = document.createElement("section");
+    const canvas = document.createElement("div");
+    designer.appendChild(canvas);
+    document.body.appendChild(designer);
+
+    const swapping = document.createElement("section");
+    swapping.dataset.studioCodeEditor = "true";
+    designer.appendChild(swapping);
+    expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(true);
+
+    const preview = document.createElement("button");
+    preview.className = "studio-code-editor-preview";
+    swapping.appendChild(preview);
+    expect(isActivityClipboardShortcutBlocked(canvas, designer)).toBe(false);
+
+    swapping.remove();
+    designer.remove();
+  });
 });
 
 describe("activity clipboard shortcut gating", () => {

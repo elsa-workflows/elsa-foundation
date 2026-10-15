@@ -1,7 +1,7 @@
 export const workflowEditorOverlaySelector = "[role='dialog'], [aria-modal='true'], [role='menu'], .wf-connect-menu";
 
 const designerOwnedOverlaySelector = ".wf-connect-menu, .wf-dialog, .wf-dialog-backdrop, .wf-editor-actions-popover";
-const monacoEditorSelector = ".monaco-editor, .monaco-mouse-cursor-text, textarea.inputarea";
+const codeEditorSurfaceSelector = ".cm-editor, .cm-content, .monaco-editor, .monaco-mouse-cursor-text, textarea.inputarea";
 
 export function isWorkflowEditorKeyboardTarget(targetOrEvent: EventTarget | Event | null) {
   return collectShortcutNodes(targetOrEvent).some(isEditableOrCodeEditorNode);
@@ -37,6 +37,7 @@ export function isActivityClipboardShortcutBlocked(
   designer: HTMLElement | null = null
 ) {
   if (isWorkflowEditorKeyboardTarget(targetOrEvent)) return true;
+  if (isCodeEditorEngineSwapping(designer)) return true;
   if (isWorkflowEditorOverlayOpen(designer)) return true;
   const target = resolvePrimaryTarget(targetOrEvent);
   if (!(target instanceof Element)) return false;
@@ -60,10 +61,20 @@ export function hasNonCollapsedTextSelection() {
 function collectShortcutNodes(targetOrEvent: EventTarget | Event | null): EventTarget[] {
   if (targetOrEvent instanceof Event) {
     const path = typeof targetOrEvent.composedPath === "function" ? targetOrEvent.composedPath() : [];
-    if (path.length > 0) return path;
-    return targetOrEvent.target != null ? [targetOrEvent.target] : [];
+    const nodes = path.length > 0 ? [...path] : targetOrEvent.target != null ? [targetOrEvent.target] : [];
+    if (typeof document !== "undefined" && document.activeElement) nodes.push(document.activeElement);
+    return nodes;
   }
   return targetOrEvent != null ? [targetOrEvent] : [];
+}
+
+function isCodeEditorEngineSwapping(designer: ParentNode | null) {
+  const scope = designer ?? (typeof document === "undefined" ? null : document);
+  if (!scope) return false;
+  return Array.from(scope.querySelectorAll("[data-studio-code-editor]")).some(element => {
+    if (!(element instanceof HTMLElement) || element.dataset.studioCodeEditorReady === "true") return false;
+    return !element.querySelector(":scope > .studio-code-editor-preview");
+  });
 }
 
 function resolvePrimaryTarget(targetOrEvent: EventTarget | Event | null): EventTarget | null {
@@ -78,7 +89,7 @@ function isEditableOrCodeEditorNode(node: EventTarget | null) {
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(element.tagName)) return true;
   if (element.closest("[contenteditable='true']")) return true;
   if (element.closest("[data-studio-code-editor]")) return true;
-  if (element.closest(monacoEditorSelector)) return true;
+  if (element.closest(codeEditorSurfaceSelector)) return true;
   return false;
 }
 

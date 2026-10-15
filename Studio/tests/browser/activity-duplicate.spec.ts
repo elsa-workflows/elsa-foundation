@@ -1,6 +1,12 @@
 import { expect, test } from "@playwright/test";
 import axe from "axe-core";
 
+test.use({
+  screenshot: "only-on-failure",
+  video: "retain-on-failure",
+  trace: "retain-on-failure"
+});
+
 test("duplicates the selected activity from the context menu with a fresh name", async ({ page }) => {
   await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto("/?mode=activity-duplicate&theme=light");
@@ -52,17 +58,15 @@ async function selectNotifyBuyer(page: import("@playwright/test").Page) {
   await expect(node).toHaveAttribute("aria-pressed", "true");
 }
 
-function focusReadyCodeEditor(root: HTMLElement) {
-  const surface =
-    root.querySelector(".cm-content") ??
-    root.querySelector(".monaco-editor textarea.inputarea, textarea.studio-code-editor-input");
-  if (!(surface instanceof HTMLElement)) return false;
-  const activeBefore = document.activeElement;
-  if (!(activeBefore === surface || (activeBefore instanceof Element && surface.contains(activeBefore)))) {
-    surface.focus();
-  }
+function describeActiveElement() {
   const active = document.activeElement;
-  return active === surface || (active instanceof Element && surface.contains(active));
+  return {
+    tag: active instanceof HTMLElement ? active.tagName : String(active),
+    className: active instanceof HTMLElement ? active.className : "",
+    inEditor: active instanceof Element && Boolean(active.closest("[data-studio-code-editor]")),
+    ready: Boolean(document.querySelector("[data-studio-code-editor][data-studio-code-editor-ready='true']")),
+    surface: document.querySelector("[data-studio-code-editor-surface]")?.getAttribute("data-studio-code-editor-surface") ?? null
+  };
 }
 
 async function dispatchCanvasShortcut(page: import("@playwright/test").Page, key: "c" | "v" | "d" | "z") {
@@ -122,16 +126,21 @@ test("Ctrl+D does nothing while the designer code editor is focused", async ({ p
 
   const readyEditor = inspector.locator("[data-studio-code-editor][data-studio-code-editor-ready='true']");
   await expect(readyEditor).toBeVisible({ timeout: 15_000 });
-  await expect.poll(() => readyEditor.evaluate(focusReadyCodeEditor), { timeout: 15_000 }).toBe(true);
+  const settledContent = readyEditor.locator("[data-studio-code-editor-surface='codemirror'] .cm-content");
+  await expect(settledContent).toBeVisible({ timeout: 15_000 });
+  await settledContent.focus();
+  await expect(settledContent).toBeFocused();
 
   const nodes = page.locator(".wf-canvas .wf-node");
   const startingCount = await nodes.count();
   await page.keyboard.press("ControlOrMeta+d");
+  const activeAfterPress = await page.evaluate(describeActiveElement);
+  console.log("activeElement after Ctrl+D", activeAfterPress);
 
   await expect.poll(async () => {
     const duplicated = (await page.locator(".wf-editor-save-status").textContent())?.includes("Duplicated") === true;
-    return { duplicated, count: await nodes.count() };
-  }).toEqual({ duplicated: false, count: startingCount });
+    return { duplicated, count: await nodes.count(), activeAfterPress };
+  }).toEqual({ duplicated: false, count: startingCount, activeAfterPress });
   await expect(page.locator(".wf-canvas .wf-node").filter({ hasText: "Notify buyer (copy)" })).toHaveCount(0);
   await expect(page.locator(".wf-editor-save-status")).not.toContainText("Duplicated");
 });

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { FallbackCodeEditor } from "./engines/FallbackCodeEditor";
 import {
   getStudioCodeEditorSession,
@@ -91,6 +91,7 @@ export function StudioCodeEditor({
   void authorizationGeneration;
   const session = suppliedSession ?? getStudioCodeEditorSession(sessionKey ?? document.uri);
   const isCompactPreview = profile === "compact" && !compactActive;
+  const editorHadFocusRef = useRef(false);
   const engineProps: StudioCodeEditorEngineProps = {
     document,
     profile,
@@ -99,7 +100,7 @@ export function StudioCodeEditor({
     theme,
     minHeight,
     ariaLabel,
-    autoFocus: profile === "compact" || focusOnMount === true,
+    autoFocus: profile === "compact" || focusOnMount === true || editorHadFocusRef.current,
     diagnostics: visibleDiagnostics,
     completions,
     completionProvider,
@@ -134,14 +135,23 @@ export function StudioCodeEditor({
       data-profile={profile}
       data-theme={theme}
       data-readonly={readOnly}
+      onFocusCapture={() => {
+        editorHadFocusRef.current = true;
+      }}
       onBlurCapture={event => {
-        if (profile !== "compact") return;
-        // CodeMirror may hand focus directly to another compact preview while its lazy editor is
-        // resolving. Observe the section boundary as well as the engine callback so a blurred
-        // compact editor always returns to its lightweight preview.
         const editorElement = event.currentTarget;
+        if (profile === "compact") {
+          // CodeMirror may hand focus directly to another compact preview while its lazy editor is
+          // resolving. Observe the section boundary as well as the engine callback so a blurred
+          // compact editor always returns to its lightweight preview.
+          queueMicrotask(() => {
+            if (!editorElement.contains(globalThis.document.activeElement)) releaseCompactSession(compactSession);
+          });
+        }
+        // A null relatedTarget is the engine-swap unmount. Keep autoFocus so CodeMirror restores the caret.
+        if (event.relatedTarget == null) return;
         queueMicrotask(() => {
-          if (!editorElement.contains(globalThis.document.activeElement)) releaseCompactSession(compactSession);
+          if (!editorElement.contains(globalThis.document.activeElement)) editorHadFocusRef.current = false;
         });
       }}
     >
