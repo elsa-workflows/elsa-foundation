@@ -69,6 +69,12 @@ models whose meaning changed on import ([#2736](https://github.com/elsa-workflow
 The remaining decisions in this ADR apply to that work as to any other, including D3's public-surface rules
 and D7's human merge for runtime and persistence PRs.
 
+**Owner amendment, 15 October 2026:** the [Elsa 3.8/3.9 Parity](../program-goals/elsa3-parity.md) program
+(#2771) is created as a named exception to D0's parking and the two-program cap, like the 11 and 14 October
+exceptions, by [owner decision on valence-works/strategy#8](https://github.com/valence-works/strategy/issues/8#issuecomment-6183509892)
+(maintainers only). Its decisions are recorded in [ADR 0085](0085-elsa-3-parity-identity-administration-and-scope.md);
+its first units are Phase 1, users and roles. The remaining decisions in this ADR apply to that work as to any other.
+
 ### D1 — Risk-based testing
 
 - Test observable behaviour at the cheapest level that proves it; unit-test logic that carries real risk.

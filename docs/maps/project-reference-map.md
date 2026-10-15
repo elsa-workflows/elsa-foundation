@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 141
 - Test projects: 146
-- Direct project references: 1522
+- Direct project references: 1523
 
 ## Projects
 
@@ -256,7 +256,7 @@ Records direct project references only.
 | [Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Tests](../../Essentials/tests/Studio/Preferences/Persistence/EntityFrameworkCore/Tests/Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Studio | net10.0 | false | Elsa.Studio.Preferences.Core<br>Elsa.Studio.Preferences.Persistence.EntityFrameworkCore |
 | [Elsa.Studio.Preferences.Tests](../../Essentials/tests/Studio/Preferences/Tests/Elsa.Studio.Preferences.Tests.csproj) | test | Elsa.Studio | - | false | Elsa.Api.AspNetCore<br>Elsa.Api.Compatibility.Testing<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Studio.Preferences.Api<br>Elsa.Studio.Preferences.Core<br>Elsa.Testing |
 | [Elsa.Tasks.Testing](../../Essentials/tests/Tasks/Testing/Elsa.Tasks.Testing.csproj) | test | Elsa.Tasks | - | false | Elsa.Tasks |
-| [Elsa.Tasks.Tests](../../Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj) | test | Elsa.Tasks | - | false | Elsa.Cluster.Core<br>Elsa.Locking.Core<br>Elsa.Tasks<br>Elsa.Tasks.Schedules<br>Elsa.Tasks.Testing |
+| [Elsa.Tasks.Tests](../../Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj) | test | Elsa.Tasks | - | false | Elsa.Cluster.Core<br>Elsa.Locking.Core<br>Elsa.Tasks<br>Elsa.Tasks.Schedules<br>Elsa.Tasks.Testing<br>Elsa.Testing |
 | [Elsa.Testing](../../Essentials/tests/Testing/Elsa.Testing.csproj) | test | Elsa.Testing | - | false | Elsa.Primitives |
 | [Elsa.Versioning.Calculator.Tests](../../Essentials/tests/Versioning/Calculator/Tests/Elsa.Versioning.Calculator.Tests.csproj) | test | Elsa.Versioning | - | false | Elsa.Versioning.Calculator |
 | [Elsa.Versioning.Publisher.Tests](../../Essentials/tests/Versioning/Publisher/Tests/Elsa.Versioning.Publisher.Tests.csproj) | test | Elsa.Versioning | - | false | Elsa.Versioning.Publisher |

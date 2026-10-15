@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript.Core.Contracts;
+using Elsa.Expressions.JavaScript.Core.Exceptions;
 using Elsa.Expressions.JavaScript.Jint.Options;
 using Jint;
 using Jint.Native;
@@ -81,11 +82,3 @@ internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> f
     private static Regex IdentifierReference(string capability) =>
         new($@"(?<![\w$.]){Regex.Escape(capability)}(?![\w$])", RegexOptions.CultureInvariant);
 }
-
-/// <summary>
-/// Raised when a portable JavaScript binding expression fails because it reached for an ambient capability the
-/// deterministic binding sandbox withholds. Carries the actionable message; the original Jint error is the inner
-/// exception.
-/// </summary>
-public sealed class JavaScriptBindingEvaluationException(string message, Exception innerException)
-    : InvalidOperationException(message, innerException);

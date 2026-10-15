@@ -118,7 +118,7 @@ Every event the Workflows.Design domain publishes is an `IEvent` (framework §2.
 
 Heading convention: `### <EventClassName>`. Every published `IEvent` type of the `Elsa.Workflows.Design.Core` design namespace has a heading here, and every such heading names one; review keeps the two in step.
 
-**Background / notification** (§2.6.6) — published via `EventPublishingStrategy.Background`. Queued on `IEventChannel`; `BackgroundEventPublisher` drains asynchronously. Subscriber exceptions are caught + logged; one flaky subscriber cannot break the publish.
+**Background / notification** (§2.6.6): published through `IDeferredEventPublisher`, which queues the event and returns before handlers run; the Events domain's background worker drains the queue asynchronously. Subscriber exceptions are caught + logged; one flaky subscriber cannot break the publish.
 
 **Lifecycle — origination + disposal.**
 

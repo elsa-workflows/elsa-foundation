@@ -1,6 +1,1 @@
 #nullable enable
-Elsa.Events.Strategies.EventHandlerInvoker
-Elsa.Events.Strategies.EventPublishingStrategy
-static Elsa.Events.Strategies.EventHandlerInvoker.Invoke(this Elsa.Events.Core.Contracts.IEventHandler! handler, Elsa.Events.Core.Contracts.IEventContext! eventContext) -> System.Threading.Tasks.Task!
-static readonly Elsa.Events.Strategies.EventPublishingStrategy.Background -> Elsa.Events.Core.Contracts.IEventPublishingStrategy!
-static readonly Elsa.Events.Strategies.EventPublishingStrategy.Sequential -> Elsa.Events.Core.Contracts.IEventPublishingStrategy!

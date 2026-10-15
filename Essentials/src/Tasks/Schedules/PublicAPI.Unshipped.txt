@@ -11,6 +11,9 @@ Elsa.Tasks.Schedules.BackoffSweepWorkerTask.GetSchedule() -> Elsa.Tasks.Core.ITa
 Elsa.Tasks.Schedules.BackoffSweepWorkerTask.Logger.get -> Microsoft.Extensions.Logging.ILogger!
 Elsa.Tasks.Schedules.BackoffSweepWorkerTask.StartAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
 Elsa.Tasks.Schedules.BackoffSweepWorkerTask.StopAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+Elsa.Tasks.Schedules.TaskSchedule
 static Elsa.Tasks.Schedules.BackoffSweepWorkerTask.ComputeBackoff(System.TimeSpan baseInterval, System.TimeSpan maxInterval, int failures) -> System.TimeSpan
+static Elsa.Tasks.Schedules.TaskSchedule.Cron(string! expression, Elsa.Primitives.Contracts.ISystemClock! systemClock, Microsoft.Extensions.Logging.ILogger! logger) -> Elsa.Tasks.Core.ITaskSchedule!
+static Elsa.Tasks.Schedules.TaskSchedule.Every(System.TimeSpan interval, Microsoft.Extensions.Logging.ILogger! logger) -> Elsa.Tasks.Core.ITaskSchedule!
 virtual Elsa.Tasks.Schedules.BackoffSweepWorkerTask.IsHandledSweepException(System.Exception! exception) -> bool
 virtual Elsa.Tasks.Schedules.BackoffSweepWorkerTask.ShouldRethrowCancellation(System.OperationCanceledException! exception, System.Threading.CancellationToken cancellationToken) -> bool

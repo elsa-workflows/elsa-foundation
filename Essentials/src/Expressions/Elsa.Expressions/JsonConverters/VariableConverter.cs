@@ -1,6 +1,6 @@
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Exceptions;
 using Elsa.Expressions.Core.Models;
-using Elsa.Serialization.Core.Exceptions;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 

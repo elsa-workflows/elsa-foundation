@@ -15,6 +15,9 @@ public interface IEventPipeline
     /// <summary>The composed delegate. Lazy-initialized to the default pipeline on first read.</summary>
     PipelineDelegate<IEventContext> Pipeline { get; }
 
-    /// <summary>Dispatches the given context through the composed pipeline.</summary>
+    /// <summary>
+    /// Dispatches the given context through the composed pipeline. The handlers of a context implemented outside the
+    /// Events feature run in sequence and are awaited.
+    /// </summary>
     Task ExecuteAsync(IEventContext context);
 }

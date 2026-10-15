@@ -2,7 +2,7 @@ using Elsa.Expressions.Core.Models;
 
 namespace Elsa.Expressions.Core.Contracts;
 
-public interface IVariableMapper
+internal interface IVariableMapper
 {
     /// <summary>
     /// Maps a <see cref="VariableDefinition"/> to a <see cref="IVariable"/>.
