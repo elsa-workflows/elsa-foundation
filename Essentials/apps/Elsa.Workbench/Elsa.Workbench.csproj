@@ -196,11 +196,11 @@
 
 	<ItemGroup>
 		<!--
-			Documented exception to the §2.23.3 no-InternalsVisibleTo rule: the host-only module-management
-			registry builder (ModuleManagementRegistryBuilder) is a host-private helper exercised directly by
-			ModuleManagementRegistryBuilderTests. Publicizing it to satisfy tests would promote a host-private
-			API into the public surface. Tracked by the InternalsVisibleTo allow-list guard test
-			(ArchitectureGuardTests.InternalsVisibleTo_occurrences_are_limited_to_documented_exceptions).
+			The one listed exception to §2.23.3: hosts have no domain, so they grant nothing else. The host-only
+			module-management registry builder (ModuleManagementRegistryBuilder) is a host-private helper exercised
+			directly by ModuleManagementRegistryBuilderTests. Publicizing it to satisfy tests would promote a
+			host-private API into the public surface. Checked by
+			ArchitectureGuardTests.InternalsVisibleTo_grants_stay_within_the_granting_domain.
 		-->
 		<InternalsVisibleTo Include="Elsa.Modularity.Tests" />
 	</ItemGroup>

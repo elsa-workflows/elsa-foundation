@@ -1,5 +1,5 @@
 using Elsa.Expressions.JavaScript.Rendering.Core.Contracts;
-using Elsa.Expressions.JavaScript.Rendering.Core.Events;
+using Elsa.Expressions.JavaScript.Rendering.Events;
 using Elsa.Events.Core.Contracts;
 
 namespace Elsa.Expressions.JavaScript.Rendering.Handlers;

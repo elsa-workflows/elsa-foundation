@@ -11,6 +11,7 @@ using Elsa.Workflows.Design.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Primitives.Contracts;
 using Elsa.Primitives.Hosting;
 using Elsa.Serialization.SystemText;
+using Elsa.Testing;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
@@ -98,7 +99,7 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         var services = new ServiceCollection();
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         new PrimitivesFeature().ConfigureServices(services);
-        services.AddSingleton<IIdentityGenerator, GuidIdentityGenerator>();
+        services.AddSingleton<IIdentityGenerator, TestIdentityGenerator>();
 
         // Real activity structure projection (flattening) — the command-driven tests depend on it.
         services.AddSingleton<IActivityStructureHandler, TestActivityStructureHandler>();
@@ -182,10 +183,5 @@ internal sealed class WorkflowsDesignTestHost : IDisposable
         // the async path (tests keep a synchronous `using var host`).
         _services.DisposeAsync().AsTask().GetAwaiter().GetResult();
         DeleteDirectory(_directory);
-    }
-
-    private sealed class GuidIdentityGenerator : IIdentityGenerator
-    {
-        public string Generate() => Guid.NewGuid().ToString("N");
     }
 }

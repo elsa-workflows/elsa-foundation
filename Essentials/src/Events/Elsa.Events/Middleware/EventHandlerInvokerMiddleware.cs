@@ -1,5 +1,6 @@
 using Elsa.Events.Core.Contracts;
 using Elsa.Events.Contexts;
+using Elsa.Events.Strategies;
 using Elsa.Pipelines.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Concurrent;
@@ -8,7 +9,8 @@ namespace Elsa.Events.Middleware;
 
 /// <summary>
 /// Resolves all <c>IEventHandler&lt;TEvent&gt;</c> for the event type then hands off to the
-/// chosen <see cref="IEventPublishingStrategy"/>.
+/// chosen <see cref="IEventPublishingStrategy"/>. A context the publishers did not create carries no strategy, so its
+/// handlers run on <see cref="EventPublishingStrategy.Sequential"/>.
 /// </summary>
 internal sealed class EventHandlerInvokerMiddleware(PipelineDelegate<IEventContext> next)
     : IEventMiddleware
@@ -38,7 +40,8 @@ internal sealed class EventHandlerInvokerMiddleware(PipelineDelegate<IEventConte
             context.CancellationToken
         );
 
-        await context.Strategy.PublishAsync(strategyContext);
+        var strategy = (context as EventContext)?.Strategy ?? EventPublishingStrategy.Sequential;
+        await strategy.PublishAsync(strategyContext);
 
         await next(context);
     }

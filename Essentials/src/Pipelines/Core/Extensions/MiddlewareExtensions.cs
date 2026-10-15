@@ -27,7 +27,7 @@ public static class MiddlewareExtensions
     /// Gets the Invoke or InvokeAsync method from the middleware type.
     /// </summary>
     /// <exception cref="InvalidOperationException">Thrown when the Invoke or InvokeAsync method cannot be found or the return type is not Task or ValueTask.</exception>
-    public static MethodInfo GetInvokeMethod<TMiddleware>()
+    internal static MethodInfo GetInvokeMethod<TMiddleware>()
         where TMiddleware : IMiddleware
     {
         const string invokeMethodName = "Invoke";
@@ -56,7 +56,7 @@ public static class MiddlewareExtensions
     /// <paramref name="services"/>, with <paramref name="next"/> and <paramref name="args"/>
     /// prepended) and binds its Invoke method to a <typeparamref name="TDelegate"/>.
     /// </summary>
-    public static TDelegate BuildMiddlewareDelegate<TMiddleware, TDelegate>(
+    internal static TDelegate BuildMiddlewareDelegate<TMiddleware, TDelegate>(
         IServiceProvider services,
         TDelegate next,
         object[] args)

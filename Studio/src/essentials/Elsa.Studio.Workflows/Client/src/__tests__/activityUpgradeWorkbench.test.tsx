@@ -47,7 +47,8 @@ describe("Activity upgrade workbench", () => {
         throw new Error(`Unexpected POST ${url}`);
       }
     });
-    const rendered = renderWorkbench(context);
+    const navigateToStudioPath = vi.fn();
+    const rendered = renderWorkbench(context, navigateToStudioPath);
 
     await waitForText(rendered.container, "ActivityVersion");
     expect(rendered.container.textContent).toContain("Immutable root · the plan must clone a draft");
@@ -71,6 +72,8 @@ describe("Activity upgrade workbench", () => {
     expect(childLink?.getAttribute("href")).toContain("section=editor");
     expect(childLink?.getAttribute("href")).toContain("draft=activity-child-draft");
     expect(childLink?.getAttribute("href")).toContain("returnPlan=plan-1");
+    childLink?.click();
+    expect(navigateToStudioPath).toHaveBeenCalledWith(expect.stringMatching(/section=editor.*draft=activity-child-draft.*returnPlan=plan-1/));
 
     const publishedVersion = inputByLabel(rendered.container, "Published version for activity-child-draft");
     setInput(publishedVersion, "activity-child-v2");
@@ -290,11 +293,11 @@ describe("Activity upgrade workbench", () => {
   });
 });
 
-function renderWorkbench(context: StudioEndpointContext) {
+function renderWorkbench(context: StudioEndpointContext, navigateToStudioPath?: (path: string) => void) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
-  flushSync(() => root.render(<ActivityUpgradeWorkbenchPage context={context} />));
+  flushSync(() => root.render(<ActivityUpgradeWorkbenchPage context={context} navigateToStudioPath={navigateToStudioPath} />));
   return {
     container,
     unmount: async () => flushSync(() => root.unmount())

@@ -1,4 +1,4 @@
-namespace Elsa.Serialization.Core.Exceptions;
+namespace Elsa.Expressions.Core.Exceptions;
 
 /// <summary>
 /// Thrown when an authored argument definition (variable/input/output) cannot be deserialized from its

@@ -26,11 +26,9 @@
 
   <ItemGroup>
     <!--
-      Documented exception to the §2.23.3 no-InternalsVisibleTo rule: the Extension Builder subsystem is a large,
-      host-private surface (~80 interlocking internal types) whose contracts are not meant for consumption outside
-      this module. Publicizing it to satisfy tests would promote a host-private API into the public surface. Tracked
-      by the InternalsVisibleTo allow-list guard test
-      (ArchitectureGuardTests.InternalsVisibleTo_occurrences_are_limited_to_documented_exceptions).
+      The Extension Builder subsystem is a large, host-private surface (~80 interlocking internal types) whose
+      contracts are not meant for consumption outside this module, so its tests reach them through a grant to this
+      domain's test assembly (§2.23.3, checked by ArchitectureGuardTests.InternalsVisibleTo_grants_stay_within_the_granting_domain).
     -->
     <InternalsVisibleTo Include="Elsa.ExtensionBuilder.Api.Tests" />
   </ItemGroup>

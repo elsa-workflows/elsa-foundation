@@ -172,7 +172,7 @@ function ActivityDefinitionRoutesFixture() {
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
   return path.startsWith("/workflows/activity-definitions/upgrades")
-    ? <ActivityUpgradeWorkbenchPage context={endpointContext} />
+    ? <ActivityUpgradeWorkbenchPage context={endpointContext} navigateToStudioPath={navigate} />
     : <QueryClientProvider client={queryClient}><ActivityDefinitionsPage context={endpointContext} activityEditors={() => [activityGraphImplementationEditorContribution]} runtime={{ identity: { tenantId: "browser-tenant", subject: "browser-author" }, activityDefinitions: { localRecovery: { enabled: true, ttlMinutes: 30 } } }} navigateToStudioPath={navigate} /></QueryClientProvider>;
 }
 

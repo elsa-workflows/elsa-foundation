@@ -1,10 +1,10 @@
 using System.Text.Json;
 using Elsa.Expressions.Core.Contracts;
+using Elsa.Expressions.Core.Exceptions;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JsonConverters;
 using Elsa.Expressions.Models;
 using Elsa.Expressions.Services;
-using Elsa.Serialization.Core.Exceptions;
 using Elsa.Serialization.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;

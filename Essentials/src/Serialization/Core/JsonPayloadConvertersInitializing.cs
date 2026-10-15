@@ -14,7 +14,7 @@ namespace Elsa.Serialization.Core;
 /// handler writes into it; the startup task reads it after the chain completes. Sources do not
 /// touch the event — they return their converters via <see cref="IJsonConverterSource.GetConverters"/>.
 /// </remarks>
-public sealed class JsonPayloadConvertersInitializing : IEvent
+internal sealed class JsonPayloadConvertersInitializing : IEvent
 {
     /// <summary>The accumulated converters. Populated by the aggregating handler.</summary>
     public ICollection<JsonConverter> Converters { get; } = [];

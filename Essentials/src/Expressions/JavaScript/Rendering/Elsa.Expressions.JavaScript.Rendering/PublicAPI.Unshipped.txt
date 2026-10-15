@@ -4,7 +4,6 @@ Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingEndpointsFeature.Config
 Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingEndpointsFeature.JavaScriptRenderingEndpointsFeature() -> void
 Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingEndpointsFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void
 Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingFeature
-Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingFeature.FunctionDeclarations.get -> System.Collections.Generic.IEnumerable<Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptFunctionDeclaration!>!
 Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingFeature.FunctionDeclarations.set -> void
 Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingFeature.JavaScriptRenderingFeature() -> void
@@ -12,3 +11,4 @@ Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingFeature.TypeDeclaration
 Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingFeature.TypeDeclarations.set -> void
 Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingFeature.VariableDeclarations.get -> System.Collections.Generic.IEnumerable<Elsa.Expressions.JavaScript.Rendering.Core.Models.JavaScriptVariableDeclaration!>!
 Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingFeature.VariableDeclarations.set -> void
+virtual Elsa.Expressions.JavaScript.Rendering.JavaScriptRenderingFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

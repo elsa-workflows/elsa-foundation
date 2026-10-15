@@ -64,9 +64,6 @@ Elsa.Primitives.Exceptions.SchemaWriteRefusedException.SchemaWriteRefusedExcepti
 Elsa.Primitives.Exceptions.SchemaWriteRefusedException.WriteVersion.get -> string!
 Elsa.Primitives.Extensions.StringExtensions
 Elsa.Primitives.Extensions.TypeExtensions
-Elsa.Primitives.Identity.GuidIdentityGenerator
-Elsa.Primitives.Identity.GuidIdentityGenerator.Generate() -> string!
-Elsa.Primitives.Identity.GuidIdentityGenerator.GuidIdentityGenerator() -> void
 Elsa.Primitives.Identity.IdentityGeneratorKind
 Elsa.Primitives.Identity.IdentityGeneratorKind.Guid = 3 -> Elsa.Primitives.Identity.IdentityGeneratorKind
 Elsa.Primitives.Identity.IdentityGeneratorKind.Short = 1 -> Elsa.Primitives.Identity.IdentityGeneratorKind
@@ -75,21 +72,12 @@ Elsa.Primitives.Identity.IdentityGeneratorKind.UuidV7 = 0 -> Elsa.Primitives.Ide
 Elsa.Primitives.Identity.ShortIdentityGenerator
 Elsa.Primitives.Identity.ShortIdentityGenerator.Generate() -> string!
 Elsa.Primitives.Identity.ShortIdentityGenerator.ShortIdentityGenerator(Elsa.Primitives.Contracts.ISystemClock! systemClock) -> void
-Elsa.Primitives.Identity.SnowflakeIdentityGenerator
-Elsa.Primitives.Identity.SnowflakeIdentityGenerator.Generate() -> string!
-Elsa.Primitives.Identity.SnowflakeIdentityGenerator.SnowflakeIdentityGenerator(Elsa.Primitives.Contracts.ISystemClock! systemClock, Elsa.Primitives.Identity.SnowflakeIdentitySequence! sequence) -> void
 Elsa.Primitives.Identity.SnowflakeIdentityGeneratorOptions
 Elsa.Primitives.Identity.SnowflakeIdentityGeneratorOptions.Epoch.get -> System.DateTimeOffset
 Elsa.Primitives.Identity.SnowflakeIdentityGeneratorOptions.Epoch.set -> void
 Elsa.Primitives.Identity.SnowflakeIdentityGeneratorOptions.SnowflakeIdentityGeneratorOptions() -> void
 Elsa.Primitives.Identity.SnowflakeIdentityGeneratorOptions.WorkerId.get -> long
 Elsa.Primitives.Identity.SnowflakeIdentityGeneratorOptions.WorkerId.set -> void
-Elsa.Primitives.Identity.SnowflakeIdentitySequence
-Elsa.Primitives.Identity.SnowflakeIdentitySequence.Next(Elsa.Primitives.Contracts.ISystemClock! systemClock) -> long
-Elsa.Primitives.Identity.SnowflakeIdentitySequence.SnowflakeIdentitySequence(Elsa.Primitives.Identity.SnowflakeIdentityGeneratorOptions! options) -> void
-Elsa.Primitives.Identity.UuidV7IdentityGenerator
-Elsa.Primitives.Identity.UuidV7IdentityGenerator.Generate() -> string!
-Elsa.Primitives.Identity.UuidV7IdentityGenerator.UuidV7IdentityGenerator(Elsa.Primitives.Contracts.ISystemClock! systemClock) -> void
 Elsa.Primitives.Models.ClrActivityDescriptor
 Elsa.Primitives.Models.ClrActivityDescriptor.<Clone>$() -> Elsa.Primitives.Models.ClrActivityDescriptor!
 Elsa.Primitives.Models.ClrActivityDescriptor.ClrActivityDescriptor(string! TypeAlias) -> void
