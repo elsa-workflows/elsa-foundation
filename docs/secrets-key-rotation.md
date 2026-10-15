@@ -1,18 +1,34 @@
 # Secrets master-key rotation
 
-Elsa protects secret values with AES-GCM using a **key-ring**: a set of symmetric keys where
-exactly one key is *active* for encryption, while every key in the ring can be used for
-*decryption*. This lets you rotate the encryption key without losing access to values that were
-written under an older key.
+## Why rotate
+
+Elsa encrypts stored secret values (AES-GCM) with a master key. You rotate that key when it may have leaked, when a person who knew it leaves, or simply on a schedule. Rotation must not make existing secrets unreadable.
+
+Elsa makes that possible with a **key-ring**: a set of keys where exactly one is *active* for encrypting new values, and every key in the ring can still *decrypt*. Each stored value records which key encrypted it.
+
+## Rotation in four steps
+
+1. **Add a new key** to `Keys` with a fresh `KeyId`. Leave the existing keys in place.
+2. **Point `ActiveKeyId`** at the new key.
+3. **Restart** the host. New writes are encrypted under the new key (`v2:<newKeyId>:...`); existing
+   values remain readable because their original key is still in the ring.
+4. **(Optional) lazily re-encrypt.** Rotating a secret (or any write) re-encrypts its value under
+   the active key. Once every value that used an old key has been re-written, you may remove the old
+   key from `Keys`.
+
+> **Do not remove a key** while any stored value was encrypted under it — that value would become
+> permanently unreadable. Keep old keys in the ring until you are sure nothing depends on them.
+
+The rest of this page is the reference behind those steps.
 
 ## Payload format
 
 Protected values are stored in a colon-delimited format:
 
-- `v2:<keyId>:<nonce>:<tag>:<ciphertext>` — current format. The `keyId` records exactly which key
-  encrypted the value, so it can still be decrypted after the active key changes.
-- `v1:<nonce>:<tag>:<ciphertext>` — legacy format written before the key-ring existed. It is read
-  using the reserved `legacy` key derived from `Elsa:Secrets:EncryptionKey`.
+| Format | Meaning |
+|---|---|
+| `v2:<keyId>:<nonce>:<tag>:<ciphertext>` | Current format. The `keyId` records which key encrypted the value, so it can still be decrypted after the active key changes. |
+| `v1:<nonce>:<tag>:<ciphertext>` | Legacy format, written before the key-ring existed. Read with the reserved `legacy` key derived from `Elsa:Secrets:EncryptionKey`. |
 
 ## Configuration
 
@@ -95,16 +111,3 @@ built — misconfiguration fails fast at startup rather than at the first encryp
 
 If no `ActiveKeyId` is set, the active key is the `legacy` key when present, otherwise the single
 configured key. With multiple keys and no `ActiveKeyId`, startup fails and asks you to choose one.
-
-## Rotation procedure
-
-1. **Add a new key** to `Keys` with a fresh `KeyId`. Leave the existing keys in place.
-2. **Point `ActiveKeyId`** at the new key.
-3. **Restart** the host. New writes are encrypted under the new key (`v2:<newKeyId>:...`); existing
-   values remain readable because their original key is still in the ring.
-4. **(Optional) lazily re-encrypt.** Rotating a secret (or any write) re-encrypts its value under
-   the active key. Once every value that used an old key has been re-written, you may remove the old
-   key from `Keys`.
-
-> **Do not remove a key** while any stored value was encrypted under it — that value would become
-> permanently unreadable. Keep old keys in the ring until you are sure nothing depends on them.

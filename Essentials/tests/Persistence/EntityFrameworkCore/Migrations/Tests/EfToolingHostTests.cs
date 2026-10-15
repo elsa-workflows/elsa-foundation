@@ -56,18 +56,20 @@ public sealed class EfToolingHostTests : IDisposable
     private readonly string root = Directory.CreateTempSubdirectory("elsa-ef-tooling-").FullName;
 
     /// <summary>
-    /// Clears the connection pool before removing the directory, for the reason recorded on
-    /// <c>TemporarySqliteDatabase</c> in <c>Essentials/tests/Persistence/EntityFramework/Tests</c> (#1884):
-    /// Microsoft.Data.Sqlite pools connections, so a bare delete can still find the file handle held —
-    /// harmless on macOS/Linux, an <see cref="IOException"/> on Windows. This fixture owns a whole temp
-    /// directory rather than one database path, so it clears the pool and removes the tree itself instead
-    /// of delegating to that type's per-file teardown, which is also why that file is not compiled in here.
-    /// A residual lock is swallowed for the same reason it is there: teardown must never fail an
-    /// otherwise-green test.
+    /// Clears the connection pools of this fixture's databases before removing the directory, for the reasons
+    /// recorded on <c>TemporarySqliteDatabase</c> in <c>Essentials/tests/Persistence/EntityFramework/Tests</c>
+    /// (#1884, #2185): Microsoft.Data.Sqlite pools connections, so a bare delete can still find the file handle
+    /// held — harmless on macOS/Linux, an <see cref="IOException"/> on Windows — and clearing every pool instead
+    /// can dispose the handle of a connection another test is opening. This fixture owns a whole temp
+    /// directory rather than one database path, so it clears the pool of each database in it and removes the
+    /// tree itself instead of delegating to that type's per-file teardown, which is also why that file is not
+    /// compiled in here. A residual lock is swallowed for the same reason it is there: teardown must never fail
+    /// an otherwise-green test.
     /// </summary>
     public void Dispose()
     {
-        SqliteConnection.ClearAllPools();
+        foreach (var database in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+            SqliteConnection.ClearPool(new SqliteConnection($"Data Source={database}"));
         try
         {
             Directory.Delete(root, recursive: true);

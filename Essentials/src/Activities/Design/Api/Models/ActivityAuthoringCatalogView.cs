@@ -22,7 +22,12 @@ public sealed record ActivityAuthoringDescriptorView(
     JsonElement? ContainerStructure,
     ActivityAuthoringTemplateView AuthoringTemplate,
     ActivityAuthoringIntrinsicView? Intrinsic = null,
-    ActivityAuthoringProvenanceView? Provenance = null);
+    ActivityAuthoringProvenanceView? Provenance = null,
+    /// <summary>
+    /// Optional designer icon from <c>[Activity(Icon)]</c>: a lucide name, <c>asset:package/path</c>,
+    /// or <c>ext:name</c>. Null when the activity does not declare one or the value was unsafe.
+    /// </summary>
+    string? IconName = null);
 
 /// <summary>
 /// Provenance of a persisted catalog entry: which reconciliation source produced the version

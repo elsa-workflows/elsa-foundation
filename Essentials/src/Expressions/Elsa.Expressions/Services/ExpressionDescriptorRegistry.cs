@@ -3,7 +3,7 @@ using Elsa.Expressions.Core.Contracts;
 namespace Elsa.Expressions.Services;
 
 /// <inheritdoc />
-public sealed class ExpressionDescriptorRegistry : IExpressionDescriptorRegistry
+internal sealed class ExpressionDescriptorRegistry : IExpressionDescriptorRegistry
 {
     private readonly IDictionary<string, IExpressionDescriptor> _expressionSyntaxDescriptors = new Dictionary<string, IExpressionDescriptor>(StringComparer.OrdinalIgnoreCase);
 

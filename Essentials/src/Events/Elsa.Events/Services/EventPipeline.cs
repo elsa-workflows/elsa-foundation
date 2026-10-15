@@ -7,16 +7,19 @@ using Elsa.Pipelines.Core.Contracts;
 namespace Elsa.Events.Services;
 
 /// <inheritdoc />
-public sealed class EventPipeline(IServiceProvider serviceProvider) : IEventPipeline
+internal sealed class EventPipeline(IServiceProvider serviceProvider) : IEventPipeline
 {
     private volatile PipelineDelegate<IEventContext>? _pipeline;
 
     public PipelineDelegate<IEventContext> Pipeline => _pipeline ??= CreateDefaultPipeline();
 
+    // The handler invoker always ends the pipeline, after whatever the caller composed, so a setup adds middleware in
+    // front of dispatch and cannot drop it: events keep reaching their handlers.
     public PipelineDelegate<IEventContext> Setup(Action<IPipelineBuilder<IEventContext>> setup)
     {
         var builder = new PipelineBuilder<IEventContext>(serviceProvider);
         setup(builder);
+        builder.UseMiddleware<EventHandlerInvokerMiddleware>();
         _pipeline = builder.Build();
         return _pipeline;
     }
@@ -26,8 +29,5 @@ public sealed class EventPipeline(IServiceProvider serviceProvider) : IEventPipe
     // Default pipeline = handler invoker only. No exception-shielding middleware: a default
     // (Sequential) publish is synchronous and CAN break the caller. Resilience is the
     // Background strategy's responsibility, not a global middleware concern.
-    private PipelineDelegate<IEventContext> CreateDefaultPipeline() => Setup(builder =>
-    {
-        builder.UseMiddleware<EventHandlerInvokerMiddleware>();
-    });
+    private PipelineDelegate<IEventContext> CreateDefaultPipeline() => Setup(_ => { });
 }

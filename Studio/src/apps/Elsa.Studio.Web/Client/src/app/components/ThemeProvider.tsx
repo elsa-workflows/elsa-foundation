@@ -7,19 +7,24 @@ import {
   getThemeColorScheme,
   getThemeModeDefinition,
   isMaterialTheme,
-  isThemeMode,
   resolveThemeMode,
   toTheme
 } from "../themes/presets";
 import {
   getThemeNavMode,
-  isNavModePreference,
   navModeAttribute,
-  navModeStorageKey,
   resolveNavMode,
   type NavMode,
   type NavModePreference
 } from "../themes/navMode";
+import {
+  readAppearancePreferences,
+  resetAppearancePreferences,
+  resolveModePreference,
+  watchSystemThemeMode,
+  writeAppearancePreferences,
+  type ThemeModePreference
+} from "../themes/appearance";
 import { findSelectableTheme, getSelectableThemes, getThemeStore, normalizeThemeStore, type ThemeStoreResponse } from "../themes/themeStoreApi";
 
 interface ThemeContextType {
@@ -28,8 +33,14 @@ interface ThemeContextType {
   mode: ThemeMode;
   /** The mode the user asked for; differs from `mode` when the current theme lacks it. */
   preferredMode: ThemeMode;
+  /** The stored mode choice, including `system` (follow the OS). */
+  modePreference: ThemeModePreference;
   setTheme: (themeId: string) => void;
-  setMode: (mode: ThemeMode) => void;
+  /** Accepts a concrete mode or `system`. Same implementation as `setModePreference`. */
+  setMode: (mode: ThemeModePreference) => void;
+  setModePreference: (preference: ThemeModePreference) => void;
+  /** Clears every stored appearance choice so the configured defaults apply again. */
+  resetAppearance: () => void;
   supportedModes: ThemeMode[];
   /** Where the main navigation is rendered: the user's override, else the theme's own default. */
   navMode: NavMode;
@@ -62,7 +73,10 @@ export function ThemeProvider({
   const [currentTheme, setCurrentTheme] = useState<Theme>(builtInThemeDefinitions[0]);
   // The preferred mode survives theme switches: picking High contrast, visiting a light/dark-only
   // theme, and coming back restores High contrast rather than whatever that theme fell back to.
-  const [preferredMode, setPreferredMode] = useState<ThemeMode>("light");
+  const [modePreference, setModePreferenceState] = useState<ThemeModePreference>("system");
+  const [systemModeVersion, setSystemModeVersion] = useState(0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- re-resolve `system` when the OS preference changes
+  const preferredMode = React.useMemo(() => resolveModePreference(modePreference), [modePreference, systemModeVersion]);
   const [navModePreference, setNavModePreferenceState] = useState<NavModePreference>("theme");
   const [mounted, setMounted] = useState(false);
   const [persistThemeSelection, setPersistThemeSelection] = useState(false);
@@ -74,17 +88,20 @@ export function ThemeProvider({
   // OS contrast and colour-scheme preferences while the user has never chosen a mode. Once chosen,
   // the stored mode always wins. The stored theme id is only written back once the store has loaded.
   useEffect(() => {
-    const savedThemeId = getStoredPreference("elsa-studio-theme");
-    const savedMode = getStoredPreference("elsa-studio-theme-mode");
-    const savedNavMode = getStoredPreference(navModeStorageKey);
-    const nextTheme = findSelectableTheme(store, savedThemeId);
+    const saved = readAppearancePreferences();
+    const nextTheme = findSelectableTheme(store, saved.themeId);
 
-    setPreferredMode(isThemeMode(savedMode) ? savedMode : getSystemPreferredMode());
-    setNavModePreferenceState(isNavModePreference(savedNavMode) ? savedNavMode : "theme");
+    setModePreferenceState(saved.mode);
+    setNavModePreferenceState(saved.navigation);
     setCurrentTheme(nextTheme);
     setPersistThemeSelection(storeLoaded);
     setMounted(true);
   }, [store, storeLoaded]);
+
+  useEffect(() => {
+    if (modePreference !== "system") return undefined;
+    return watchSystemThemeMode(() => setSystemModeVersion(version => version + 1));
+  }, [modePreference]);
 
   useEffect(() => {
     let disposed = false;
@@ -142,7 +159,7 @@ export function ThemeProvider({
     }
 
     if (persistThemeSelection) {
-      setStoredPreference("elsa-studio-theme", currentTheme.id);
+      writeAppearancePreferences({ themeId: currentTheme.id });
     }
   }, [currentTheme, activeMode, navMode, mounted, persistThemeSelection]);
 
@@ -151,14 +168,23 @@ export function ThemeProvider({
     setCurrentTheme(findSelectableTheme(store, themeId));
   };
 
-  const handleSetMode = (nextMode: ThemeMode) => {
-    setPreferredMode(nextMode);
-    setStoredPreference("elsa-studio-theme-mode", nextMode);
+  const handleSetModePreference = (preference: ThemeModePreference) => {
+    setModePreferenceState(preference);
+    writeAppearancePreferences({ mode: preference });
   };
 
   const handleSetNavModePreference = (preference: NavModePreference) => {
     setNavModePreferenceState(preference);
-    setStoredPreference(navModeStorageKey, preference);
+    writeAppearancePreferences({ navigation: preference });
+  };
+
+  const handleResetAppearance = () => {
+    const defaults = resetAppearancePreferences();
+    setModePreferenceState(defaults.mode);
+    setNavModePreferenceState(defaults.navigation);
+    // Not persisted: the configured default theme applies until the user picks one again.
+    setPersistThemeSelection(false);
+    setCurrentTheme(findSelectableTheme(store, defaults.themeId));
   };
 
   const handlePreviewTheme = (theme: StudioThemeDefinition) => {
@@ -178,7 +204,10 @@ export function ThemeProvider({
         mode: activeMode,
         preferredMode,
         setTheme: handleSetTheme,
-        setMode: handleSetMode,
+        modePreference,
+        setMode: handleSetModePreference,
+        setModePreference: handleSetModePreference,
+        resetAppearance: handleResetAppearance,
         supportedModes,
         navMode,
         navModePreference,
@@ -198,35 +227,6 @@ export function ThemeProvider({
 /** Fetches the theme store, or returns the built-ins without a store context. Undefined means the fetch failed. */
 function loadThemeStore(storeContext: StudioEndpointContext | undefined) {
   return storeContext ? getThemeStore(storeContext) : Promise.resolve(normalizeThemeStore());
-}
-
-function getSystemPreferredMode(): ThemeMode {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
-    return "light";
-  }
-
-  if (window.matchMedia("(prefers-contrast: more)").matches) return "high-contrast";
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
-
-function getStoredPreference(key: string) {
-  try {
-    const storage = typeof window === "undefined" ? undefined : window.localStorage;
-    return typeof storage?.getItem === "function" ? storage.getItem(key) : null;
-  } catch {
-    return null;
-  }
-}
-
-function setStoredPreference(key: string, value: string) {
-  try {
-    const storage = typeof window === "undefined" ? undefined : window.localStorage;
-    if (typeof storage?.setItem === "function") {
-      storage.setItem(key, value);
-    }
-  } catch {
-    // Local theme selection is a best-effort user preference; storage failures must not block Studio.
-  }
 }
 
 export function applyMaterialVariables(root: HTMLElement, material: ThemeMaterialMode | undefined) {

@@ -15,7 +15,7 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// Recurring background pump that fires due <see cref="DurableTimer"/>s. Each tick runs one bounded sweep:
 /// it loads at most <see cref="DurableTimerPumpOptions.MaxTimersPerTick"/> due timers and dispatches each
 /// as a bookmark resume through the single-writer <see cref="IBookmarkResumeDispatcher"/> (the same mailbox
-/// path every other resume uses). Whole-sweep failure backoff comes from <see cref="BackoffSweepPumpTask"/>;
+/// path every other resume uses). Whole-sweep failure backoff comes from <see cref="BackoffSweepWorkerTask"/>;
 /// on top of it the pump parks individually failing timers.
 /// </summary>
 /// <remarks>
@@ -40,7 +40,7 @@ namespace Elsa.Workflows.Runtime.Scheduling;
 /// logged and skipped; it never ends the sweep for the timers behind it.
 /// </para>
 /// </remarks>
-public sealed class DurableTimerPumpTask : BackoffSweepPumpTask
+public sealed class DurableTimerPumpTask : BackoffSweepWorkerTask
 {
     private static readonly PersistenceScope DirectConstructionScope = new(PersistenceScope.DefaultValue);
 

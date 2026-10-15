@@ -87,12 +87,19 @@
   --wf-label-transform: uppercase;
   --wf-label-tracking: 0.04em;
 
-  /* Activity icon accents — themeable instead of hardcoded hex. The hex values are defaults;
-     a host may override the layer-2 --studio-wf-activity-* aliases to re-tint per brand. */
-  --wf-activity-terminal: var(--studio-wf-activity-terminal, #10b981);
-  --wf-activity-composite: var(--studio-wf-activity-composite, #0284c7);
-  --wf-activity-runtime: var(--studio-wf-activity-runtime, #d97706);
-  --wf-activity-trigger: var(--studio-wf-activity-trigger, #db2777);
+  /* Activity icon accents — category tones honour the documented host override
+     `--studio-wf-activity-*`, then fall back to `--studio-*` semantic tokens. */
+  --wf-activity-terminal: var(--studio-wf-activity-terminal, var(--studio-success));
+  --wf-activity-composite: var(--studio-wf-activity-composite, var(--studio-accent));
+  --wf-activity-runtime: var(--studio-wf-activity-runtime, var(--studio-warning));
+  --wf-activity-trigger: var(--studio-wf-activity-trigger, var(--studio-warning));
+  --wf-icon-tone-terminal: var(--wf-activity-terminal);
+  --wf-icon-tone-composite: var(--wf-activity-composite);
+  --wf-icon-tone-runtime: var(--wf-activity-runtime);
+  --wf-icon-tone-trigger: var(--wf-activity-trigger);
+  --wf-icon-tone-success: var(--studio-success);
+  --wf-icon-tone-danger: var(--studio-danger);
+  --wf-icon-tone-accent: var(--studio-accent);
 
   /* Disabled foreground — explicit colour rather than opacity-only (a11y contrast). */
   --wf-disabled-text: var(--wf-muted-text);
@@ -3715,7 +3722,18 @@ html[data-theme-appearance="high-contrast"] .wf-node[data-trigger-enabled="true"
   color: var(--wf-accent);
 }
 
-.wf-node[data-icon="terminal"] .wf-node-icon {
+.wf-node-icon img,
+.wf-activity-icon img,
+.wf-activity-icon-asset {
+  width: 15px;
+  height: 15px;
+  display: block;
+  object-fit: contain;
+}
+
+.wf-node[data-icon="terminal"] .wf-node-icon,
+.wf-node[data-tone="terminal"] .wf-node-icon,
+.wf-node-icon[data-tone="terminal"] {
   border-color: color-mix(in srgb, var(--wf-activity-terminal) 34%, var(--wf-border));
   background:
     linear-gradient(color-mix(in srgb, var(--wf-activity-terminal) 12%, transparent) 0 0),
@@ -3725,7 +3743,9 @@ html[data-theme-appearance="high-contrast"] .wf-node[data-trigger-enabled="true"
 
 .wf-node[data-icon="flowchart"] .wf-node-icon,
 .wf-node[data-icon="sequence"] .wf-node-icon,
-.wf-node[data-icon="reusable"] .wf-node-icon {
+.wf-node[data-icon="reusable"] .wf-node-icon,
+.wf-node[data-tone="composite"] .wf-node-icon,
+.wf-node-icon[data-tone="composite"] {
   border-color: color-mix(in srgb, var(--wf-activity-composite) 34%, var(--wf-border));
   background:
     linear-gradient(color-mix(in srgb, var(--wf-activity-composite) 12%, transparent) 0 0),
@@ -3733,12 +3753,41 @@ html[data-theme-appearance="high-contrast"] .wf-node[data-trigger-enabled="true"
   color: var(--wf-activity-composite);
 }
 
-.wf-node[data-icon="runtime"] .wf-node-icon {
+.wf-node[data-icon="runtime"] .wf-node-icon,
+.wf-node[data-tone="runtime"] .wf-node-icon,
+.wf-node-icon[data-tone="runtime"] {
   border-color: color-mix(in srgb, var(--wf-activity-runtime) 35%, var(--wf-border));
   background:
     linear-gradient(color-mix(in srgb, var(--wf-activity-runtime) 12%, transparent) 0 0),
     var(--wf-panel);
   color: var(--wf-activity-runtime);
+}
+
+.wf-node[data-tone="trigger"] .wf-node-icon,
+.wf-node-icon[data-tone="trigger"] {
+  border-color: color-mix(in srgb, var(--wf-activity-trigger) 35%, var(--wf-border));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-activity-trigger) 12%, transparent) 0 0),
+    var(--wf-panel);
+  color: var(--wf-activity-trigger);
+}
+
+.wf-node[data-tone="success"] .wf-node-icon,
+.wf-node-icon[data-tone="success"] {
+  border-color: color-mix(in srgb, var(--wf-icon-tone-success) 34%, var(--wf-border));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-icon-tone-success) 12%, transparent) 0 0),
+    var(--wf-panel);
+  color: var(--wf-icon-tone-success);
+}
+
+.wf-node[data-tone="danger"] .wf-node-icon,
+.wf-node-icon[data-tone="danger"] {
+  border-color: color-mix(in srgb, var(--wf-icon-tone-danger) 34%, var(--wf-border));
+  background:
+    linear-gradient(color-mix(in srgb, var(--wf-icon-tone-danger) 12%, transparent) 0 0),
+    var(--wf-panel);
+  color: var(--wf-icon-tone-danger);
 }
 
 .wf-node-copy {
@@ -3912,29 +3961,45 @@ button.wf-node-slot-badge:focus-visible {
   line-height: 0;
 }
 
-.wf-activity-icon[data-icon="terminal"] {
+.wf-activity-icon[data-icon="terminal"],
+.wf-activity-icon[data-tone="terminal"] {
   border-color: color-mix(in srgb, var(--wf-activity-terminal) 34%, var(--wf-border));
   background: color-mix(in srgb, var(--wf-activity-terminal) 12%, transparent);
   color: var(--wf-activity-terminal);
 }
 
 .wf-activity-icon[data-icon="flowchart"],
-.wf-activity-icon[data-icon="sequence"] {
+.wf-activity-icon[data-icon="sequence"],
+.wf-activity-icon[data-tone="composite"] {
   border-color: color-mix(in srgb, var(--wf-activity-composite) 34%, var(--wf-border));
   background: color-mix(in srgb, var(--wf-activity-composite) 12%, transparent);
   color: var(--wf-activity-composite);
 }
 
-.wf-activity-icon[data-icon="runtime"] {
+.wf-activity-icon[data-icon="runtime"],
+.wf-activity-icon[data-tone="runtime"] {
   border-color: color-mix(in srgb, var(--wf-activity-runtime) 35%, var(--wf-border));
   background: color-mix(in srgb, var(--wf-activity-runtime) 12%, transparent);
   color: var(--wf-activity-runtime);
 }
 
-.wf-activity-icon[data-icon="trigger"] {
+.wf-activity-icon[data-icon="trigger"],
+.wf-activity-icon[data-tone="trigger"] {
   border-color: color-mix(in srgb, var(--wf-activity-trigger) 35%, var(--wf-border));
   background: color-mix(in srgb, var(--wf-activity-trigger) 12%, transparent);
   color: var(--wf-activity-trigger);
+}
+
+.wf-activity-icon[data-tone="success"] {
+  border-color: color-mix(in srgb, var(--wf-icon-tone-success) 34%, var(--wf-border));
+  background: color-mix(in srgb, var(--wf-icon-tone-success) 12%, transparent);
+  color: var(--wf-icon-tone-success);
+}
+
+.wf-activity-icon[data-tone="danger"] {
+  border-color: color-mix(in srgb, var(--wf-icon-tone-danger) 34%, var(--wf-border));
+  background: color-mix(in srgb, var(--wf-icon-tone-danger) 12%, transparent);
+  color: var(--wf-icon-tone-danger);
 }
 
 .wf-node .react-flow__handle {

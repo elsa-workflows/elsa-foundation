@@ -2485,7 +2485,7 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
     private static IdentityIamSqliteDbContext CreateContext(string databasePath, params IInterceptor[] interceptors)
     {
         var builder = new DbContextOptionsBuilder<IdentityIamSqliteDbContext>()
-            .UseSqlite($"Data Source={databasePath};Default Timeout=5");
+            .UseSqlite(ConnectionTo(databasePath));
         if (interceptors.Length > 0)
             builder.AddInterceptors(interceptors);
         return new IdentityIamSqliteDbContext(builder.Options);
@@ -2579,7 +2579,9 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
         SchemaVersion = IdentityIamEfModule.SchemaVersion
     };
 
-    private static void DeleteDatabaseFiles(string databasePath) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles(databasePath);
+    private static string ConnectionTo(string databasePath) => $"Data Source={databasePath};Default Timeout=5";
+
+    private static void DeleteDatabaseFiles(string databasePath) => TemporarySqliteDatabase.ClearPoolAndDeleteFiles(ConnectionTo(databasePath));
 
     private sealed class EfIdentityScope : IAsyncDisposable
     {
@@ -2624,7 +2626,7 @@ public sealed class IdentityAuthorityEntityFrameworkCoreBehaviorTests
             services.AddIdentityIamEntityFrameworkCore(new()
             {
                 Provider = "Sqlite",
-                ConnectionString = $"Data Source={databasePath};Default Timeout=5"
+                ConnectionString = ConnectionTo(databasePath)
             });
             var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
             var scope = provider.CreateAsyncScope();

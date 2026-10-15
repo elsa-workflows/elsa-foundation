@@ -11,13 +11,17 @@ public sealed class HostEndpointMetadataTests
     /// <summary>
     /// Every project the host restores reaches the restore layer with its committed lock file (#2122): the restores are
     /// locked, and a locked restore of a project with no lock file writes one and carries on, unlocked, without a word.
+    /// That includes the projects the root Directory.Build.props adds to every production project, such as the naming
+    /// analyzer: a context without it builds the host without the analyzer, warning only.
     /// </summary>
     [Fact]
     public void Foundation_host_Dockerfile_includes_its_project_reference_graph()
     {
         var projectPath = Path.Combine(RepoRoot, "Essentials", "apps", "Elsa.Foundation.Host", "Elsa.Foundation.Host.csproj");
         var dockerfile = ReadSource("Essentials/apps/Elsa.Foundation.Host/Dockerfile");
-        var projectReferences = DiscoverProjectReferences(projectPath);
+        var projectReferences = DiscoverProjectReferences(projectPath)
+            .Concat(ProjectGraph.BuildWideProjectReferences(RepoRoot))
+            .ToArray();
 
         Assert.NotEmpty(projectReferences);
         foreach (var restoredProjectPath in projectReferences.Append(Path.GetFullPath(projectPath)))

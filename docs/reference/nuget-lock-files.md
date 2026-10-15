@@ -119,7 +119,7 @@ first commit of the lock files.
 
 - **Packages Nuplane loads at runtime.** Feature packages a host takes from its module feed are resolved by Nuplane, not
   by a project restore; Nuplane has its own lock file for them
-  ([Pinning and integrity](../foundation-host-feeds.md#pinning-and-integrity)).
+  ([Pinning and integrity](../host-feeds/pinning-and-closures.md#pinning-and-integrity)).
 - **Repository-local .NET tools.** `dotnet tool restore` reads `.config/dotnet-tools.json`, which pins each tool's version
   and has no lock file.
 - **Projects outside `Elsa.Server.slnx`**, such as the repros under `docs/reports/repros/`. Restoring one writes a lock

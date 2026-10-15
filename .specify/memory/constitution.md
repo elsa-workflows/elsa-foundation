@@ -1,4 +1,14 @@
 <!--
+SYNC IMPACT REPORT — 6.0.1 -> 6.0.2 (2026-10-14)
+PATCH: re-pins framework v6.1.0 (§2.23.3: same-domain production grants under the sibling test, #2591). No Elsa specialization restates §2.23.3, and no Elsa rule changed.
+Approval: Sipke Schoorstra, 2026-10-14 (#2591).
+-->
+<!--
+SYNC IMPACT REPORT — 6.0.0 -> 6.0.1 (2026-10-13)
+PATCH: re-pins framework v6.0.1 (§2.23.3 wording, #2591). No Elsa rule changed.
+Approval: Sipke Schoorstra, 2026-10-13 (#2591).
+-->
+<!--
 SYNC IMPACT REPORT — 5.0.0 -> 6.0.0 (2026-10-12)
 MAJOR: compaction to enforceable gates (#2578, ADR 0080 D6), tracking framework 6.0.0. Owner decisions D1–D9 per #2578.
 Removed: §E1 (case study in docs/reference/elsa-worked-examples.md); §E3 (index only; the examples stay in docs/reference/elsa-worked-examples.md); §E4 (-> framework Deferred); §E2.4 (-> docs/reference/architecture-rationale.md#repository-organisation, D2); the §E5 Line A/B, commit-count patch digit, selective publishing and Line A stability rules (D5; computed versions, bounded ranges and the magnitude rule stay; ADR 0067 keeps the reasoning, #2576 retires Line A); the §E6 R4 `On` bullet (framework §2.6.6 owns it).
@@ -9,7 +19,7 @@ Approval: Sipke Schoorstra, 2026-10-12 (#2578), on his authority alone; open to 
 -->
 # Elsa Workflow Engine Constitution
 
-**Version:** 6.0.0 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-10-12 | **Derives from:** [framework constitution](constitution-framework.md) **v6.0.0**
+**Version:** 6.0.2 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-10-14 | **Derives from:** [framework constitution](constitution-framework.md) **v6.1.0**
 
 **Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance calls for consensus among Joey Barten, Sipke Schoorstra and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Sections marked draft or provisional (§E2.8 activity versioning and Model X, §E2.9) are **not** covered by it.
 

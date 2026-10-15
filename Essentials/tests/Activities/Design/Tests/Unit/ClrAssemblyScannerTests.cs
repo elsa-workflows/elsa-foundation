@@ -8,11 +8,11 @@ using Elsa.Activities.Design.Reconciliation.Clr.Services;
 using Elsa.Activities.Design.Core.Reconciliation.Models;
 using Elsa.Activities.Design.Persistence.Core.Services;
 using Elsa.Activities.Design.Tests.ClrFixture;
+using Elsa.Activities.Design.Tests.ClrIconFixture;
 using Elsa.Activities.Runtime.Core;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
-using Elsa.Primitives.Identity;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -195,7 +195,7 @@ public sealed class ClrAssemblyScannerTests
         ActivityVersionReconciliationModel content,
         Assembly assembly)
     {
-        var identityGenerator = new GuidIdentityGenerator();
+        var identityGenerator = new TestIdentityGenerator();
         var definition = new ActivityDefinitionFactory(identityGenerator).Create(
             identity.ActivityTypeKey,
             identity.Category ?? string.Empty,
@@ -709,6 +709,70 @@ public sealed class ClrAssemblyScannerTests
         Assert.Contains("DerivedOutcome", portNames);
         Assert.Contains("Done", portNames);
         Assert.Contains("BaseOutcome", portNames);
+    }
+
+    [Theory]
+    [InlineData(typeof(LucideIconFixtureActivity), "Rocket")]
+    [InlineData(typeof(KebabLucideIconFixtureActivity), "git-branch")]
+    [InlineData(typeof(AssetIconFixtureActivity), "asset:Acme.Slack/icons/slack.svg")]
+    [InlineData(typeof(ExtensionIconFixtureActivity), "ext:slack")]
+    [InlineData(typeof(InheritedIconFixtureActivity), "Boxes")]
+    public void ActivityIcon_MapsToDesignFacet(Type activityType, string expectedIcon)
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(activityType.Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == activityType.FullName);
+        var facet = Assert.Single(model.DesignFacets, candidate => candidate.Kind == ActivityIconName.FacetKind);
+
+        Assert.Equal(ActivityIconName.FacetSchemaVersion, facet.SchemaVersion);
+        Assert.Equal(expectedIcon, facet.Payload.GetProperty(ActivityIconName.PayloadProperty).GetString());
+    }
+
+    [Fact]
+    public void ActivityIconFacet_IsExcludedFromTheCatalogHash()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(LucideIconFixtureActivity).Assembly);
+        var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == typeof(LucideIconFixtureActivity).FullName);
+        Assert.Contains(model.DesignFacets, facet => facet.Kind == ActivityIconName.FacetKind);
+
+        var withIcon = CatalogVersion(model, model, typeof(LucideIconFixtureActivity).Assembly);
+        var withoutIcon = CatalogVersion(
+            model,
+            model with { DesignFacets = model.DesignFacets.Where(facet => facet.Kind != ActivityIconName.FacetKind).ToArray() },
+            typeof(LucideIconFixtureActivity).Assembly);
+
+        Assert.Equal(withoutIcon.Hash, withIcon.Hash);
+    }
+
+    public static TheoryData<Type, string> BuiltInCatalogHashesUnchangedFromMain => new()
+    {
+        // Snapshot of origin/main at 14dd6f6e7 (#2716). Built-ins declare no [Activity(Icon)], and the
+        // icon facet is excluded from the hash, so these stay the values main already persisted.
+        { typeof(HttpEndpoint), "E7E0CBCEC193A6377AD9102415555997268AC479B89FDDE58578244A5EBF7C88" },
+        { typeof(WriteLine), "618BB61870A3FADC2551123EA520F7F5852CB0D00CD4AE5E6DB8A80D7677EF2C" },
+        { typeof(ParallelActivity), "A466AC1D4873108D85B6BA08D2058ACD9FD51A60571E8BA043043A17B20CCC82" },
+        { typeof(SendHttpRequest), "7AD368DDFFE9850E7581CDCA314FBCD451CBD3EF43DB8FDCBC59DB10D47C27E1" }
+    };
+
+    [Theory]
+    [MemberData(nameof(BuiltInCatalogHashesUnchangedFromMain))]
+    public void BuiltInDescriptorHashes_MatchMainSnapshot(Type activityType, string expectedHash)
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(activityType.Assembly);
+        var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == activityType.FullName);
+
+        Assert.DoesNotContain(model.DesignFacets, facet => facet.Kind == ActivityIconName.FacetKind);
+        Assert.Equal(expectedHash, CatalogVersion(model, model, activityType.Assembly).Hash);
+    }
+
+    [Fact]
+    public void InvalidActivityIcon_DoesNotEmitAFacet()
+    {
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(InvalidIconFixtureActivity).Assembly);
+
+        var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == typeof(InvalidIconFixtureActivity).FullName);
+
+        Assert.DoesNotContain(model.DesignFacets, facet => facet.Kind == ActivityIconName.FacetKind);
     }
 
     [Fact]

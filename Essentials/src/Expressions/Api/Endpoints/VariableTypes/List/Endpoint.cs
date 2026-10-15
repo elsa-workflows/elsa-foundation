@@ -10,7 +10,7 @@ namespace Elsa.Expressions.Api.Endpoints.VariableTypes.List;
 
 [Get("expressions/variable-types")]
 [RequirePermission(ExpressionsPermissions.Read)]
-public sealed class Endpoint(IRequestSender sender) : ApiEndpointWithoutRequest<VariableTypeDescriptorsResponse>
+internal sealed class Endpoint(IRequestSender sender) : ApiEndpointWithoutRequest<VariableTypeDescriptorsResponse>
 {
     public override void Configure(ApiEndpointOptions options) => options.Operation = "ListVariableTypeDescriptors";
 

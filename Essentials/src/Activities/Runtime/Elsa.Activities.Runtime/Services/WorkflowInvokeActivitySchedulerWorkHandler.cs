@@ -253,6 +253,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         ActivityFault? returnedFault = null;
         string? returnedCancellationReason = null;
         IReadOnlyCollection<RuntimeSchedulerWorkItem> parentNotificationWorkItems = [];
+        IReadOnlyCollection<RuntimeSchedulerWorkItem> ancestorNotificationWorkItems = [];
         var stagedState = state;
         try
         {
@@ -311,6 +312,28 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 context.GetParentNotificationRequests(),
                 structuralContinuation ?? RuntimeStructuralContinuation.Defer,
                 cancellationToken);
+
+            // An ancestor notification is addressed to the nearest committed ancestor with the requested consumer
+            // key and rides ahead of this activity's own completion. No matching ancestor faults the activity with
+            // a stable code instead of completing it.
+            try
+            {
+                ancestorNotificationWorkItems = await ParentNotificationEvaluation.BuildAncestorAsync(
+                    activityExecutionStateStore,
+                    TimeProvider,
+                    workItem,
+                    executable,
+                    stagedState,
+                    context.GetAncestorNotificationRequests(),
+                    structuralContinuation ?? RuntimeStructuralContinuation.Defer,
+                    cancellationToken);
+            }
+            catch (AncestorNotificationTargetNotFoundException targetNotFound)
+            {
+                parentNotificationWorkItems = [];
+                returnedTransition = ActivityTransition.Fault<ActivityUnit>(
+                    new ActivityFault(AncestorNotificationTargetNotFoundException.FaultCode, targetNotFound.Message));
+            }
 
             if (returnedTransition is IStatefulActivitySuspensionTransition statefulSuspension)
             {
@@ -628,6 +651,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             completedState,
             SchedulerWorkHandlerHelpers.ReadCompletionOutcomeNames(completedState, SkippedSubStatus),
             parentNotificationWorkItems,
+            ancestorNotificationWorkItems,
             valueSnapshots,
             durableValueChanges,
             workflowVariableWriteBack,
@@ -1031,6 +1055,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         ActivityExecutionState completedState,
         IReadOnlyCollection<string> outcomeNames,
         IReadOnlyCollection<RuntimeSchedulerWorkItem> parentNotifications,
+        IReadOnlyCollection<RuntimeSchedulerWorkItem> ancestorNotifications,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
         RuntimeStateChange<WorkflowExecutionState>? workflowVariableWriteBack,
@@ -1059,11 +1084,16 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         var notificationIntents = parentNotifications
             .Select(workItem => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, workItem, occurredAt))
             .ToArray();
+        // An ancestor notification rides AHEAD of the completion cascade intent, and carries a lower sequence, so the
+        // addressed ancestor evaluates it before this activity's direct parent sees the completion.
+        var ancestorIntents = ancestorNotifications
+            .Select(workItem => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(invokeWorkItem, invokePayload.ActivityExecutionId, workItem, occurredAt))
+            .ToArray();
         // Staged publish intents ride behind the completion cascade + notification intents and ahead of any
         // staged dispatch start intent (on core.Commit.PostCommitIntents), folding onto PostCommitIntents only.
         var commit = core.Commit with
         {
-            PostCommitIntents = [completionIntent, .. notificationIntents, .. publishIntents, .. core.Commit.PostCommitIntents]
+            PostCommitIntents = [.. ancestorIntents, completionIntent, .. notificationIntents, .. publishIntents, .. core.Commit.PostCommitIntents]
         };
 
         await checkpointCommitter.CommitAsync(commit, cancellationToken);

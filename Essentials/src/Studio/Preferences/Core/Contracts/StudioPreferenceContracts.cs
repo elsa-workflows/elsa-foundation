@@ -28,6 +28,8 @@ public interface IStudioPreferenceStore
         StudioPreferenceWriteCondition condition,
         DateTimeOffset updatedAt,
         CancellationToken cancellationToken = default);
+
+    ValueTask<bool> DeleteAsync(StudioPreferenceKey key, CancellationToken cancellationToken = default);
 }
 
 public interface IStudioPreferenceService
@@ -39,4 +41,6 @@ public interface IStudioPreferenceService
         StudioPreferenceWrite write,
         StudioPreferenceWriteCondition condition,
         CancellationToken cancellationToken = default);
+
+    ValueTask<bool> DeleteAsync(StudioPreferenceKey key, CancellationToken cancellationToken = default);
 }

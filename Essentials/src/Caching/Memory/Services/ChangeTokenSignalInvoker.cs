@@ -1,10 +1,9 @@
-using Elsa.Caching.Core;
 using Microsoft.Extensions.Primitives;
 using System.Collections.Concurrent;
 
 namespace Elsa.Caching.Memory.Services;
 
-/// <inheritdoc />
+/// <summary>Holds the change token of each key and triggers it.</summary>
 /// <remarks>
 /// Concurrency notes (issue #396):
 /// <list type="bullet">
@@ -21,12 +20,12 @@ namespace Elsa.Caching.Memory.Services;
 /// before/without a listener, consumed on the next <see cref="GetToken"/>.</item>
 /// </list>
 /// </remarks>
-public sealed class ChangeTokenSignalInvoker : IChangeTokenSignalInvoker
+internal sealed class ChangeTokenSignalInvoker
 {
     private readonly ConcurrentDictionary<string, Lazy<ChangeTokenInfo>> _changeTokens = new();
     private readonly ConcurrentDictionary<string, byte> _pendingTriggers = new();
 
-    /// <inheritdoc />
+    /// <summary>Gets a change token for the specified key.</summary>
     public IChangeToken GetToken(string key)
     {
         var entry = _changeTokens.GetOrAdd(key, _ => new Lazy<ChangeTokenInfo>(static () =>
@@ -51,7 +50,7 @@ public sealed class ChangeTokenSignalInvoker : IChangeTokenSignalInvoker
         return entry.Value.ChangeToken;
     }
 
-    /// <inheritdoc />
+    /// <summary>Triggers the change token for the specified key.</summary>
     public ValueTask TriggerTokenAsync(string key, CancellationToken cancellationToken = default)
     {
         // Mark first, so a GetToken racing this call observes the invalidation even when the entry is

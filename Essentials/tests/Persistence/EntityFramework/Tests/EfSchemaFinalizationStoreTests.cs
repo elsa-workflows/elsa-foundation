@@ -330,7 +330,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
         var first = await CreatedAsync();
         var second = await Store().GetOrCreateAsync("Another", "2", Chain, Operator);
         await DisposeContextsAsync();
-        SqliteConnection.ClearAllPools();
+        SqliteConnection.ClearPool(new SqliteConnection(database.ConnectionString));
 
         Assert.Equal(identity, await Store().GetOrCreateDatabaseIdentityAsync());
         Assert.Equal(identity, await Store().FindDatabaseIdentityAsync());
@@ -421,7 +421,7 @@ public sealed class EfSchemaFinalizationStoreTests : IAsyncLifetime
     {
         var before = await Store().GetOrCreateDatabaseIdentityAsync();
         await DisposeContextsAsync();
-        TemporarySqliteDatabase.ClearPoolAndDeleteFiles(database.Path);
+        TemporarySqliteDatabase.ClearPoolAndDeleteFiles(database.ConnectionString);
         await Context().Database.EnsureCreatedAsync();
 
         Assert.Null(await Store().FindDatabaseIdentityAsync());

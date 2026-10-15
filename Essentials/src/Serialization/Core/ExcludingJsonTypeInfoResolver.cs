@@ -11,7 +11,7 @@ namespace Elsa.Serialization.Core;
 /// <see cref="PropertyInfo.Name"/>. Excluded properties stay on the type info;
 /// they are not removed.
 /// </summary>
-public sealed class ExcludingJsonTypeInfoResolver : IJsonTypeInfoResolver
+internal sealed class ExcludingJsonTypeInfoResolver : IJsonTypeInfoResolver
 {
     private readonly HashSet<string> excludedMembers;
     private readonly IJsonTypeInfoResolver inner;

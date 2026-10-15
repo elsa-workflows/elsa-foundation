@@ -153,7 +153,7 @@ describe("workflow adapter", () => {
       structure: null
     });
     expect(canvas.nodes[0]?.data).toMatchObject({
-      icon: "reusable",
+      activityDefinitionId: "invoice-definition",
       activityDefinitionVersion: "2.0.0"
     });
   });
@@ -401,7 +401,6 @@ describe("workflow adapter", () => {
         label: "Write Line",
         category: "Primitives",
         executionType: "Action",
-        icon: "terminal",
         suppressFlowPorts: true,
         sourcePorts: [],
         childSlots: [expect.objectContaining({ property: "embedded", activities: [expect.objectContaining({ nodeId: "child" })] })]
@@ -412,7 +411,7 @@ describe("workflow adapter", () => {
   it("uses explicit known activity icon metadata before fallback icon resolution", () => {
     const canvas = buildUnsupportedActivityCanvas(node("explicit-icon"), [{ ...writeLine, icon: "trigger" }], []);
 
-    expect(canvas.nodes[0].data.icon).toBe("trigger");
+    expect(canvas.nodes[0].data.catalogIcon).toBe("trigger");
   });
 
   it("uses the Sequence adapter to preserve ordered child activities", () => {

@@ -13,7 +13,7 @@
     "test:browser:performance": "playwright test --config tests/browser/playwright.performance.config.ts",
     "typecheck": "pnpm -r typecheck",
     "lint": "cd .. && eslint --ext .js,.mjs,.cjs,.ts,.tsx --config Studio/eslint.config.js Studio \"Extensions/*/studio/*/Client/**/*.{js,mjs,cjs,ts,tsx}\" && cd Studio && pnpm lint:css && pnpm lint:layout",
-    "lint:css": "stylelint --config .stylelintrc.json \"src/essentials/*/Client/src/**/*.css\" \"../Extensions/*/studio/*/Client/src/**/*.css\"",
+    "lint:css": "stylelint --config .stylelintrc.json \"src/essentials/*/Client/src/**/*.css\" \"../Extensions/*/studio/*/Client/src/**/*.css\" && stylelint --config .stylelintrc.disclosure.json \"src/apps/Elsa.Studio.Web/Client/src/app/ui/disclosure/**/*.css\"",
     "lint:layout": "node scripts/check-module-layout.mjs"
   },
   "devDependencies": {

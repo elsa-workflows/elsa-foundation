@@ -7,7 +7,7 @@ namespace Elsa.Events.Core.Contracts;
 /// to compose. A strategy that decouples from the caller (e.g. Background) owns its own
 /// resilience — catching and logging handler failures so they never reach the publisher.
 /// </summary>
-public interface IEventPublishingStrategy
+internal interface IEventPublishingStrategy
 {
     Task PublishAsync(IEventStrategyContext context);
 }

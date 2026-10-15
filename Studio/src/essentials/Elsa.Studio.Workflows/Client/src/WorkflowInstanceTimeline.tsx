@@ -1,8 +1,9 @@
 import { useMemo } from "react";
 import { resolveActivityLabel } from "./activityPresentation";
 import { findExecutableNodeFacts, type ExecutableActivityGraph } from "./executableGraph";
-import { resolveActivityIcon } from "./workflowAdapter";
-import { formatDuration, renderActivityIcon, shortTypeName } from "./workflowFormatting";
+import { resolveActivityIcon, resolveActivityIconFallback } from "./activityIcons";
+import { renderActivityIcon } from "./activityIconView";
+import { formatDuration, shortTypeName } from "./workflowFormatting";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary } from "./workflowTypes";
 
 export function WorkflowExecutionTimeline({ activities, activityCatalog, executableGraph, selectedEvidenceId = null, onSelectEvidence }: {
@@ -40,7 +41,7 @@ export function WorkflowExecutionTimeline({ activities, activityCatalog, executa
               data-selected={activity.activityExecutionId === selectedEvidenceId}
               onClick={() => onSelectEvidence?.(activity.activityExecutionId)}
             >
-              <span className="wf-timeline-icon wf-activity-icon" data-icon={icon} aria-hidden="true">{renderActivityIcon(icon)}</span>
+              <span className="wf-timeline-icon wf-activity-icon" data-icon={icon} aria-hidden="true">{renderActivityIcon(icon, resolveActivityIconFallback(catalogItem))}</span>
               <span className="wf-timeline-body">
                 <strong title={label}>{label}</strong>
                 <small title={typeName}>{typeName}</small>

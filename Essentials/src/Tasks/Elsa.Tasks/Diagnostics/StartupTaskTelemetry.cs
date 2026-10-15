@@ -6,7 +6,7 @@ namespace Elsa.Tasks.Diagnostics;
 /// <summary>
 /// Stable diagnostics vocabulary for shell startup tasks.
 /// </summary>
-public static class StartupTaskTelemetry
+internal static class StartupTaskTelemetry
 {
     public const string ActivitySourceName = "Elsa.Tasks.Startup";
     public const string MeterName = ActivitySourceName;

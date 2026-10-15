@@ -133,7 +133,10 @@ public sealed class ShellLifecycleHandOffTests : IAsyncDisposable
     private static ExecutionPlacementPumpTask Pump(IShell shell) =>
         shell.ServiceProvider.GetServices<IRecurringTask>().OfType<ExecutionPlacementPumpTask>().Single();
 
-    /// <summary>The old generation's terminators ran, so its placement pump was stopped before these assertions.</summary>
+    /// <summary>
+    /// The old generation's terminators ran, so its placement pump was stopped before these assertions. The Tasks
+    /// terminator is internal to Elsa.Tasks, so its type name is written out.
+    /// </summary>
     private static void AssertTerminated(DrainResult drained) =>
-        Assert.Contains(drained.TerminatorResults, result => result.TerminatorTypeName == nameof(Elsa.Tasks.Services.StopShellTasksTerminator) && result.Completed);
+        Assert.Contains(drained.TerminatorResults, result => result.TerminatorTypeName == "StopShellTasksTerminator" && result.Completed);
 }

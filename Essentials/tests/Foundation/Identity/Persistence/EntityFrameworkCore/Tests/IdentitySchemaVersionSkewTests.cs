@@ -26,7 +26,7 @@ public sealed class IdentitySchemaVersionSkewTests : IAsyncLifetime
     private const string Tenant = "tenant-a";
     private const string UserId = "user-a";
     private const string RoleId = "role-a";
-    private readonly string databasePath = Path.Join(Path.GetTempPath(), $"elsa-identity-skew-{Guid.NewGuid():N}.db");
+    private readonly string connectionString = $"Data Source={Path.Join(Path.GetTempPath(), $"elsa-identity-skew-{Guid.NewGuid():N}.db")};Default Timeout=5";
     private ServiceProvider provider = null!;
     private AsyncServiceScope scope;
 
@@ -39,7 +39,7 @@ public sealed class IdentitySchemaVersionSkewTests : IAsyncLifetime
         services.AddIdentityIamEntityFrameworkCore(new()
         {
             Provider = "Sqlite",
-            ConnectionString = $"Data Source={databasePath};Default Timeout=5"
+            ConnectionString = connectionString
         });
         provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         scope = provider.CreateAsyncScope();
@@ -65,7 +65,7 @@ public sealed class IdentitySchemaVersionSkewTests : IAsyncLifetime
     {
         await scope.DisposeAsync();
         await provider.DisposeAsync();
-        TemporarySqliteDatabase.ClearPoolAndDeleteFiles(databasePath);
+        TemporarySqliteDatabase.ClearPoolAndDeleteFiles(connectionString);
     }
 
     [Fact]

@@ -33,6 +33,7 @@ namespace Elsa.Studio.Preferences.Tests.Support;
 public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
 {
     public const string IdentityHeader = "X-Canary-Identity";
+    public const string SubjectHeader = "X-Canary-Subject";
     public const string HostId = "studio-primary";
     public const string SubjectId = "user-7";
     public const string TenantId = "tenant-3";
@@ -63,6 +64,7 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
                     services.AddElsaEndpoints();
                     services.AddLogging();
                     services.AddRouting();
+                    services.AddHttpContextAccessor();
                     services.AddAuthentication(CanaryAuthenticationHandler.SchemeName)
                         .AddScheme<AuthenticationSchemeOptions, CanaryAuthenticationHandler>(
                             CanaryAuthenticationHandler.SchemeName, _ => { });
@@ -158,18 +160,24 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
         host.Dispose();
     }
 
-    private sealed class CanaryAuthSessionService : IAuthSessionService
+    private sealed class CanaryAuthSessionService(IHttpContextAccessor accessor) : IAuthSessionService
     {
-        public ValueTask<AuthSession> GetAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(new AuthSession(
+        public ValueTask<AuthSession> GetAsync(ClaimsPrincipal principal, CancellationToken cancellationToken = default)
+        {
+            var subject = accessor.HttpContext?.Request.Headers[SubjectHeader].ToString();
+            if (string.IsNullOrWhiteSpace(subject))
+                subject = SubjectId;
+
+            return ValueTask.FromResult(new AuthSession(
                 "authenticated",
-                SubjectId,
+                subject,
                 "Ada",
                 TenantId,
                 new HashSet<string>(StringComparer.Ordinal),
                 new HashSet<string>(StringComparer.Ordinal),
                 "fresh",
                 CanaryAuthenticationHandler.SchemeName));
+        }
     }
 
     private sealed class CanaryPermissionResourceHandler(IHttpContextAccessor accessor) : IPermissionResourceHandler
@@ -206,6 +214,9 @@ public sealed class StudioPreferencesCanaryHost : IAsyncDisposable
                 "write" => [StudioPreferencesPermissions.Write],
                 "wildcard" => [PermissionKey.Wildcard],
                 "resource-denied" => [StudioPreferencesPermissions.Read, StudioPreferencesPermissions.Write],
+                "host-read" => ["module-management.read"],
+                "host-manage" => ["module-management.manage"],
+                "manage-defaults" => [StudioPreferencesPermissions.ManageDefaults],
                 _ => Array.Empty<string>()
             };
             var claims = new List<Claim>

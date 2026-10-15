@@ -1,0 +1,10 @@
+#nullable enable
+Elsa.Caching.Memory.MemoryCacheFeature
+Elsa.Caching.Memory.MemoryCacheFeature.CacheDuration.get -> System.TimeSpan
+Elsa.Caching.Memory.MemoryCacheFeature.CacheDuration.set -> void
+Elsa.Caching.Memory.MemoryCacheFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Caching.Memory.MemoryCacheFeature.MemoryCacheFeature() -> void
+Elsa.Caching.Memory.Options.CachingOptions
+Elsa.Caching.Memory.Options.CachingOptions.CacheDuration.get -> System.TimeSpan
+Elsa.Caching.Memory.Options.CachingOptions.CacheDuration.set -> void
+Elsa.Caching.Memory.Options.CachingOptions.CachingOptions() -> void

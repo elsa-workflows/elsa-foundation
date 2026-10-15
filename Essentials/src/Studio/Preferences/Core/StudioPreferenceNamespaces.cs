@@ -7,6 +7,7 @@ public static class StudioPreferenceNamespaces
 {
     public const string Dashboard = "dashboard";
     public const string Attention = "attention";
+    public const string HomeLayout = "home-layout";
 }
 
 public abstract class ObjectPreferenceNamespace : IStudioPreferenceNamespace

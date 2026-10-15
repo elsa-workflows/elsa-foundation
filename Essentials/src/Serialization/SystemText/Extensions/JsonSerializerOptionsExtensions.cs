@@ -6,7 +6,7 @@ namespace Elsa.Serialization.SystemText.Extensions;
 /// <summary>
 /// Adds extension methods to <see cref="JsonSerializerOptions"/>.
 /// </summary>
-public static class JsonSerializerOptionsExtensions
+internal static class JsonSerializerOptionsExtensions
 {
     /// <summary>
     /// Adds the specified converters to the options.

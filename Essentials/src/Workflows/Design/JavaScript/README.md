@@ -8,4 +8,4 @@ This feature implements contributor interfaces from other domains:
 
 - **`IJavaScriptDeclarationContributor`** *(Core — `Elsa.Expressions.JavaScript.Rendering.Core`)* — `BindingPureArgsDeclarationContributor` contributes the single read-only `args` global. Ambient workflow functions, configuration helpers, variable mutation, and output lookup are intentionally absent because they do not exist in the runtime capability profile. Aggregated by `BuildDeclarationsDocument` in `Elsa.Expressions.JavaScript.Rendering`.
   - Known impl: `BindingPureArgsDeclarationContributor`.
-  - Catalog: [`Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md`](../Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md)
+  - Catalog: [`Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md`](../../../Expressions/JavaScript/Rendering/Elsa.Expressions.JavaScript.Rendering/EXTENSION_POINTS.md)

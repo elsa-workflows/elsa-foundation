@@ -199,7 +199,9 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // It moved once when the contracts left the Api.Core assembly: a constructed generic type's
         // FullName embeds its arguments' assembly-qualified names, so the strings changed while the
         // JSON wire shape did not. It moved again when ActivityInputDescriptorView gained IsSensitive and IsCredential.
-        Assert.Equal("65a2e201710a9485fd2db5898d629568818a06fc95feca44fc87448ff3332847", PublicShapeHash(ContractTypes));
+        // It moved again when ActivityAuthoringDescriptorView gained IconName, the catalog field projected
+        // from the presentation-only elsa.activity-icon facet (ActivityIconName).
+        Assert.Equal("ae401e58d0296e8e392f7140f8504f0f8c532106a5f5b3f43dec73632b600041", PublicShapeHash(ContractTypes));
     }
 
     [Fact]

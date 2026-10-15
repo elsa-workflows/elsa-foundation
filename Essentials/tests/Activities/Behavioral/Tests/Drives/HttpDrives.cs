@@ -10,6 +10,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.SystemText;
+using Elsa.Serialization.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -114,7 +115,7 @@ public sealed class SendHttpRequestDrive : IActivityDrive
             ActivityValuePolicy.Default));
 
         var alias = TypeAliasConvention.CanonicalAlias(typeof(SendHttpRequest));
-        var descriptorPayload = ClrConstruction.Payload(TestPayloadSerializers.NewPayloadSerializer(), typeof(SendHttpRequest));
+        var descriptorPayload = ClrConstruction.Payload(SerializationServices.PayloadSerializer(), typeof(SendHttpRequest));
         var contract = new ActivityContract(
             alias,
             "1.0.0",
