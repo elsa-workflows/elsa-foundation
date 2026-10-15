@@ -121,7 +121,7 @@ describe("Object Expression Editor Contribution", () => {
     expect(contribution.createDefaultValue?.(context(input))).toEqual([]);
   });
 
-  it("uses the dictionary editor for string-keyed Object expressions", () => {
+  it("uses the dictionary editor for string-keyed Object expressions", async () => {
     const contribution = createObjectExpressionEditorContribution(() => []);
     const Inline = contribution.surfaces.inline!;
     const input = descriptor(
@@ -138,7 +138,7 @@ describe("Object Expression Editor Contribution", () => {
       />
     );
 
-    expect(container.querySelector(".wf-dictionary-editor.inline")).not.toBeNull();
+    await vi.waitFor(() => expect(container.querySelector(".wf-dictionary-editor.inline")).not.toBeNull());
     expect(container.querySelector<HTMLInputElement>("input[aria-label='Key 1']")?.value).toBe("Accept");
   });
 
