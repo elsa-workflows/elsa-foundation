@@ -184,10 +184,14 @@ describe("Runtime-pinned workflow instance rendering", () => {
     const named = applyDefinitionDisplayName({ details, definitionVersion: projected }, "Order fulfillment");
 
     expect(projected.definition.name).toBe("definition-1");
+    expect(named.definitionName).toBe("Order fulfillment");
     expect(named.definitionVersion?.definition.name).toBe("Order fulfillment");
     expect(named.definitionVersion?.state).toBe(projected.state);
     expect(applyDefinitionDisplayName({ details, definitionVersion: projected }, "  ").definitionVersion?.definition.name)
       .toBe("definition-1");
+    const withoutExecutable = applyDefinitionDisplayName({ details, definitionVersion: null }, "Order fulfillment");
+    expect(withoutExecutable.definitionVersion).toBeNull();
+    expect(withoutExecutable.definitionName).toBe("Order fulfillment");
   });
 
   it("resolves unmatched activity labels against the instance activity type version", () => {

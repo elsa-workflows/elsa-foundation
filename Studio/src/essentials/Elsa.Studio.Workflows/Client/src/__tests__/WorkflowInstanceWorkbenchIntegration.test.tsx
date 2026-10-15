@@ -833,6 +833,56 @@ describe("workflow run workbench definition names", () => {
     expect(container.querySelector(".wf-instance-canvas-shell h3")?.textContent).toContain("1.0.0");
   });
 
+  it("keeps definition and version ids on the Details row before and after the name loads", async () => {
+    const lookup = deferred<{ definitions: Array<{ id: string; name: string }>; page: number; pageSize: number; totalCount: number }>();
+    designApi.listDefinitions.mockReturnValue(lookup.promise);
+
+    renderWorkbench("details");
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-instance-inspector .wf-identity-cell")).toBeTruthy());
+    const definitionCell = () => container.querySelector(".wf-instance-inspector .wf-identity-cell");
+    expect(definitionCell()?.querySelector("strong")?.textContent).toBe("definition-1");
+    expect(definitionCell()?.querySelector("small")?.textContent).toBe("version-1");
+    expect(definitionCell()?.getAttribute("title")).toBe("definition-1 (version-1)");
+
+    lookup.resolve({
+      definitions: [{ id: "definition-1", name: "Order fulfillment" }],
+      page: 1,
+      pageSize: 100,
+      totalCount: 1
+    });
+
+    await vi.waitFor(() => expect(definitionCell()?.querySelector("strong")?.textContent).toBe("Order fulfillment"));
+    expect(definitionCell()?.querySelector("small")?.textContent).toBe("definition-1 · version-1");
+    expect(definitionCell()?.getAttribute("title")).toBe("Order fulfillment (definition-1 · version-1)");
+  });
+
+  it("keeps a resolved workflow name when the pinned executable is unavailable", async () => {
+    api.getExecutable.mockRejectedValue(new Error("executable unavailable"));
+    const lookup = deferred<{ definitions: Array<{ id: string; name: string }>; page: number; pageSize: number; totalCount: number }>();
+    designApi.listDefinitions.mockReturnValue(lookup.promise);
+
+    renderWorkbench("details");
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-instance-inspector .wf-identity-cell")).toBeTruthy());
+    expect(container.textContent).toContain("Executable graph unavailable");
+    expect(container.querySelector(".wf-instance-inspector .wf-identity-cell")?.querySelector("strong")?.textContent)
+      .toBe("definition-1");
+
+    lookup.resolve({
+      definitions: [{ id: "definition-1", name: "Order fulfillment" }],
+      page: 1,
+      pageSize: 100,
+      totalCount: 1
+    });
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-instance-inspector .wf-identity-cell")?.querySelector("strong")?.textContent)
+      .toBe("Order fulfillment"));
+    expect(container.querySelector(".wf-instance-inspector .wf-identity-cell")?.querySelector("small")?.textContent)
+      .toBe("definition-1 · version-1");
+    expect(container.querySelector(".wf-error-card")).toBeNull();
+  });
+
   it("keeps the inspector ready when the optional workflow-name lookup fails", async () => {
     designApi.listDefinitions.mockRejectedValue(new Error("Design is unavailable"));
     designApi.getDefinition.mockRejectedValue(new Error("Design is unavailable"));
@@ -850,12 +900,12 @@ function buttonByText(scope: ParentNode, text: string) {
   return [...scope.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.trim() === text);
 }
 
-function renderWorkbench() {
+function renderWorkbench(initialInspectorTab: "issues" | "details" | "timeline" | "activity" = "issues") {
   flushSync(() => root.render(<WorkflowInstanceDetailsWorkbench
     context={{} as StudioEndpointContext}
     ai={{ promptActions: { list: () => [] } } as unknown as StudioAiContributionApi}
     workflowExecutionId="run-1"
-    initialInspectorTab="issues"
+    initialInspectorTab={initialInspectorTab}
     navigate={() => {}}
   />));
 }

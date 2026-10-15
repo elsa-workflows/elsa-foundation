@@ -2838,25 +2838,33 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("shows workflow names in the runs list and keeps the definition id as secondary text", async () => {
+  it("shows definition and version ids in the runs list before and after the name loads", async () => {
+    let resolveDefinitions!: (value: Response) => void;
+    const definitions = new Promise<Response>(done => { resolveDefinitions = done; });
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.startsWith("https://server.example/runtime/workflows/instances")) {
         return response([workflowInstance({ definitionId: "definition-1" })]);
       }
       if (url.startsWith("https://server.example/design/workflows/definitions")) {
-        return response({ items: [definition({ id: "definition-1", name: "Order fulfillment" })] });
+        return definitions;
       }
       throw new Error(`Unexpected request ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances");
 
+    await waitForText(container, "wfexec-1");
+    const definitionCell = () => container.querySelector(".wf-identity-cell");
+    expect(definitionCell()?.querySelector("strong")?.textContent).toBe("definition-1");
+    expect(definitionCell()?.querySelector("small")?.textContent).toBe("version-1");
+    expect(definitionCell()?.getAttribute("title")).toBe("definition-1 (version-1)");
+
+    resolveDefinitions(response({ items: [definition({ id: "definition-1", name: "Order fulfillment" })] }));
     await waitForText(container, "Order fulfillment");
-    const definitionCell = container.querySelector(".wf-identity-cell");
-    expect(definitionCell?.querySelector("strong")?.textContent).toBe("Order fulfillment");
-    expect(definitionCell?.querySelector("small")?.textContent).toBe("definition-1");
-    expect(definitionCell?.getAttribute("title")).toContain("definition-1");
+    expect(definitionCell()?.querySelector("strong")?.textContent).toBe("Order fulfillment");
+    expect(definitionCell()?.querySelector("small")?.textContent).toBe("definition-1 · version-1");
+    expect(definitionCell()?.getAttribute("title")).toBe("Order fulfillment (definition-1 · version-1)");
 
     await unmount();
   });
@@ -2936,7 +2944,8 @@ describe("workflows module", () => {
     expect(container.textContent).toContain("Published Run");
     const definitionCell = container.querySelector(".wf-instance-inspector .wf-identity-cell");
     expect(definitionCell?.querySelector("strong")?.textContent).toBe("Order fulfillment");
-    expect(definitionCell?.querySelector("small")?.textContent).toBe("definition-1");
+    expect(definitionCell?.querySelector("small")?.textContent).toBe("definition-1 · version-1");
+    expect(definitionCell?.getAttribute("title")).toBe("Order fulfillment (definition-1 · version-1)");
     // Incidents live under the Issues tab.
     await click(buttonByText(container, "Issues"));
     expect(container.textContent).toContain("No incidents recorded.");

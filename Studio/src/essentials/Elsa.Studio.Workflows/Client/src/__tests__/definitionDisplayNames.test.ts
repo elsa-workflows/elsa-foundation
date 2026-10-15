@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getDefinition, listDefinitions } from "../api/workflowDesign";
-import { loadDefinitionDisplayNames, resolveNamedIdentity, uniqueDefinitionIds } from "../workflow-editor/definitionDisplayNames";
+import { formatNamedIdentityTitle, loadDefinitionDisplayNames, resolveNamedIdentity, uniqueDefinitionIds } from "../workflow-editor/definitionDisplayNames";
 
 vi.mock("../api/workflowDesign", () => ({
   listDefinitions: vi.fn(),
@@ -14,14 +14,21 @@ describe("definition display names", () => {
     vi.mocked(getDefinition).mockReset();
   });
 
-  it("uses the name as the primary label and keeps the id as secondary text", () => {
-    expect(resolveNamedIdentity("Order fulfillment", "def-1")).toEqual({
-      label: "Order fulfillment",
-      secondaryId: "def-1"
-    });
-    expect(resolveNamedIdentity("  ", "def-1")).toEqual({
+  it("uses the name as the primary label and keeps both distinct ids as secondary text", () => {
+    expect(resolveNamedIdentity(undefined, "def-1", ["version-1"])).toEqual({
       label: "def-1",
-      secondaryId: null
+      secondaryIds: ["version-1"]
+    });
+    expect(formatNamedIdentityTitle("def-1", ["version-1"])).toBe("def-1 (version-1)");
+    expect(resolveNamedIdentity("Order fulfillment", "def-1", ["version-1"])).toEqual({
+      label: "Order fulfillment",
+      secondaryIds: ["def-1", "version-1"]
+    });
+    expect(formatNamedIdentityTitle("Order fulfillment", ["def-1", "version-1"]))
+      .toBe("Order fulfillment (def-1 · version-1)");
+    expect(resolveNamedIdentity("  ", "def-1", ["def-1", "version-1"])).toEqual({
+      label: "def-1",
+      secondaryIds: ["version-1"]
     });
     expect(uniqueDefinitionIds(["def-1", "def-1", " ", null, "def-2"])).toEqual(["def-1", "def-2"]);
   });

@@ -6,7 +6,7 @@ import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight
 import type { StudioActivityInputDescriptor, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
 import { getActivityExecutionInspection, getExecutable, getExecutableInputSources, getWorkflowInstance, listWorkflowInstances, supportsActivityExecutionInspection, supportsWorkflowInstanceHealthFilter, WorkflowInstanceHealthFilterUnavailableError, type WorkflowInstanceListPage } from "../api/runtime";
-import { loadDefinitionDisplayNames, resolveNamedIdentity } from "./definitionDisplayNames";
+import { formatNamedIdentityTitle, loadDefinitionDisplayNames, resolveNamedIdentity } from "./definitionDisplayNames";
 import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import { formatActivitySummary } from "../activitySummary";
 import { isMaskedInput, readSecretReference } from "../maskedInput";
@@ -449,6 +449,7 @@ function toUtcIso(value: string) {
 }
 
 interface WorkflowInstanceWorkbenchData extends WorkflowInstanceInspectionData {
+  definitionName?: string | null;
   executableGraph: ExecutableActivityGraph | null;
   incidentActivityExecutions: ActivityExecutionStateSummary[];
   incidentAssociationLookupIncomplete: boolean;
@@ -941,7 +942,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
             onSelectActivityExecution={selectActivityExecution}
             activityCatalog={data.activityCatalog}
             executableGraph={data.executableGraph}
-            definitionName={data.definitionVersion?.definition.name}
+            definitionName={data.definitionName ?? data.definitionVersion?.definition.name}
             expressionEditors={expressionEditors}
             graphNodeIds={data.definitionVersion ? collectWorkflowGraphNodeIds(data.definitionVersion, data.activityCatalog) : undefined}
             rootNodeId={data.definitionVersion?.state.rootActivity?.nodeId}
@@ -963,19 +964,23 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
 export function applyDefinitionDisplayName<T extends {
   details: Pick<WorkflowInstanceDetails, "instance">;
   definitionVersion: WorkflowDefinitionVersionDetails | null;
-}>(data: T, definitionName: string | null | undefined): T {
-  if (!data.definitionVersion) return data;
+  definitionName?: string | null;
+}>(data: T, definitionName: string | null | undefined): T & { definitionName: string } {
   const name = resolveNamedIdentity(definitionName, data.details.instance.definitionId).label;
-  if (data.definitionVersion.definition.name === name) return data;
+  const nextVersion = data.definitionVersion && data.definitionVersion.definition.name !== name
+    ? {
+        ...data.definitionVersion,
+        definition: {
+          ...data.definitionVersion.definition,
+          name
+        }
+      }
+    : data.definitionVersion;
+  if (data.definitionName === name && nextVersion === data.definitionVersion) return { ...data, definitionName: name };
   return {
     ...data,
-    definitionVersion: {
-      ...data.definitionVersion,
-      definition: {
-        ...data.definitionVersion.definition,
-        name
-      }
-    }
+    definitionName: name,
+    definitionVersion: nextVersion
   };
 }
 
@@ -2694,10 +2699,10 @@ function NamedIdentity({
   id: string;
   secondary?: string | null;
 }) {
-  const identity = resolveNamedIdentity(name, id);
-  const secondaryText = identity.secondaryId ?? secondary ?? null;
+  const identity = resolveNamedIdentity(name, id, [secondary]);
+  const secondaryText = identity.secondaryIds.join(" · ") || null;
   return (
-    <span className="wf-identity-cell" title={secondaryText ? `${identity.label} (${secondaryText})` : identity.label}>
+    <span className="wf-identity-cell" title={formatNamedIdentityTitle(identity.label, identity.secondaryIds)}>
       <strong>{identity.label}</strong>
       {secondaryText ? <small>{secondaryText}</small> : null}
     </span>

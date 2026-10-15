@@ -5,12 +5,26 @@ export function uniqueDefinitionIds(ids: Iterable<string | null | undefined>) {
   return [...new Set([...ids].map(id => id?.trim()).filter((id): id is string => Boolean(id)))];
 }
 
-export function resolveNamedIdentity(name: string | null | undefined, id: string) {
+export function resolveNamedIdentity(
+  name: string | null | undefined,
+  id: string,
+  extraIds: Iterable<string | null | undefined> = []
+) {
   const trimmed = name?.trim();
-  return {
-    label: trimmed || id,
-    secondaryId: trimmed && trimmed !== id ? id : null
-  };
+  const label = trimmed || id;
+  const secondaryIds: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of [trimmed && trimmed !== id ? id : null, ...extraIds]) {
+    const value = raw?.trim();
+    if (!value || value === label || seen.has(value)) continue;
+    seen.add(value);
+    secondaryIds.push(value);
+  }
+  return { label, secondaryIds };
+}
+
+export function formatNamedIdentityTitle(label: string, secondaryIds: readonly string[]) {
+  return secondaryIds.length > 0 ? `${label} (${secondaryIds.join(" · ")})` : label;
 }
 
 export async function loadDefinitionDisplayNames(
