@@ -1,5 +1,7 @@
 using System.Text;
 using System.Text.Json;
+using Acornima;
+using Acornima.Ast;
 using static Elsa3.Models.Elsa3ActivityDiagnosticCodes;
 using Elsa3.Mapping.Conversion;
 
@@ -61,17 +63,18 @@ internal sealed class Elsa3SwitchValueSynthesisRewrite : IElsa3NodeRewrite
                 continue;
             }
 
-            if (!TryCondition(@case, out var condition))
+            if (!TryCondition(@case, out var condition, out var reason))
             {
                 context.Error(UnsupportedMode,
-                    $"The condition of switch case '{label}' is not JavaScript or a literal, so it cannot be combined into one Elsa 4 value.",
-                    "Write the case condition in JavaScript.",
+                    $"The condition of switch case '{label}' {reason}, so it cannot be combined into one Elsa 4 value.",
+                    "Write the case condition as one JavaScript expression.",
                     $"{casePath}.condition");
                 index++;
                 continue;
             }
 
-            script.Append(" if (").Append(condition).Append(") { return ").Append(JsonSerializer.Serialize(label)).Append("; }");
+            // One case per line, so no case's source can reach into the next.
+            script.Append("\n  if (").Append(condition).Append(") { return ").Append(JsonSerializer.Serialize(label)).Append("; }");
             if (@case.TryGetProperty("activity", out var activity) && activity.ValueKind == JsonValueKind.Object)
                 context.AddChild(CaseSlot, label, activity, $"{context.Node.JsonPath}.{casesProperty}[{index}].activity");
             else
@@ -79,15 +82,16 @@ internal sealed class Elsa3SwitchValueSynthesisRewrite : IElsa3NodeRewrite
             index++;
         }
 
-        script.Append(" return null; })()");
+        script.Append("\n  return null;\n})()");
         if (labels.Count > 0)
             context.SetProperty(ValueKey, Elsa3TypedValues.CreateExpression("String", "JavaScript", script.ToString()));
         return ValueTask.CompletedTask;
     }
 
-    private static bool TryCondition(JsonElement @case, out string condition)
+    private static bool TryCondition(JsonElement @case, out string condition, out string reason)
     {
         condition = "false";
+        reason = "is not JavaScript or a literal";
         if (!@case.TryGetProperty("condition", out var value) || !Elsa3TypedValues.IsBound(value))
             return true;
         if (Elsa3TypedValues.TryGetLiteral(value, out var literal))
@@ -100,10 +104,38 @@ internal sealed class Elsa3SwitchValueSynthesisRewrite : IElsa3NodeRewrite
             string.Equals(type, "JavaScript", StringComparison.OrdinalIgnoreCase) &&
             expression.ValueKind == JsonValueKind.String)
         {
-            condition = $"({expression.GetString()})";
-            return true;
+            return TryConditionExpression(expression.GetString() ?? string.Empty, out condition, out reason);
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// The case's single expression, without a statement terminator or trailing comment, which would otherwise break
+    /// the combined script.
+    /// </summary>
+    private static bool TryConditionExpression(string source, out string condition, out string reason)
+    {
+        condition = "false";
+        Script parsed;
+        try
+        {
+            parsed = new Parser().ParseScript(source);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            reason = $"could not be parsed ({exception.Message})";
+            return false;
+        }
+
+        if (parsed.Body is not [ExpressionStatement statement])
+        {
+            reason = "is not a single JavaScript expression";
+            return false;
+        }
+
+        condition = $"({source[statement.Expression.Start..statement.Expression.End]})";
+        reason = string.Empty;
+        return true;
     }
 }

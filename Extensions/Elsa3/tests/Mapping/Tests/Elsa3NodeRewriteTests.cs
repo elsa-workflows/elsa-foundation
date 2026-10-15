@@ -30,6 +30,31 @@ public sealed class Elsa3NodeRewriteTests
         Assert.Equal(["a", "b"], payload.GetProperty("branches").EnumerateArray().Select(branch => branch.GetProperty("activity").GetProperty("nodeId").GetString()));
     }
 
+    [Theory]
+    [InlineData("0", null)]
+    [InlineData("1", 1)]
+    public async Task A_numeric_fork_join_mode_maps_by_its_enum_value(string joinMode, int? threshold)
+    {
+        var result = await ConvertForkAsync(JsonDocument.Parse(joinMode).RootElement);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var payload = Node(result.Value!.State, "fork").Structure!.Payload;
+        Assert.Equal(threshold, payload.GetProperty("threshold").ValueKind == JsonValueKind.Null ? null : payload.GetProperty("threshold").GetInt32());
+    }
+
+    [Theory]
+    [InlineData("2")]
+    [InlineData("1.5")]
+    [InlineData("99999999999")]
+    public async Task An_unknown_numeric_fork_join_mode_is_unconvertible(string joinMode)
+    {
+        var result = await ConvertForkAsync(JsonDocument.Parse(joinMode).RootElement);
+
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, diagnostic.Code);
+        Assert.Contains($"'{joinMode}'", diagnostic.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Fork_without_a_join_mode_waits_for_all_branches_like_elsa3()
     {
@@ -132,5 +157,41 @@ public sealed class Elsa3NodeRewriteTests
         Assert.Equal("one", single.GetProperty("match").GetString());
         Assert.Equal("one-body", single.GetProperty("activity").GetProperty("nodeId").GetString());
         Assert.Equal("fallback", payload.GetProperty("default").GetProperty("nodeId").GetString());
+    }
+
+    [Fact]
+    public async Task Switch_conditions_with_a_terminator_or_a_trailing_comment_combine_into_one_value()
+    {
+        var result = await ConvertSwitchAsync("1 > 2;", "2 > 1 // adult", "true");
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal(3, Node(result.Value!.State, "switch").Structure!.Payload.GetProperty("cases").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task A_switch_condition_of_several_statements_is_unconvertible_at_its_case()
+    {
+        var result = await ConvertSwitchAsync("true", "var a = 1; a > 0");
+
+        var diagnostic = Assert.Single(result.Diagnostics);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, diagnostic.Code);
+        Assert.Contains("'case1'", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("cases[1].condition", diagnostic.Path, StringComparison.Ordinal);
+    }
+
+    private static Task<Elsa3MigrationResult<Elsa3.Mapping.Conversion.Elsa3ConvertedDefinition>> ConvertForkAsync(JsonElement joinMode)
+    {
+        var fork = Activity("fork", "Elsa.Fork", ("joinMode", joinMode));
+        fork.AdditionalProperties["branches"] = JsonSerializer.SerializeToElement(new[] { Port(Activity("a", "Elsa.WriteLine", ("text", Literal("a")))) });
+        return ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", fork)));
+    }
+
+    private static Task<Elsa3MigrationResult<Elsa3.Mapping.Conversion.Elsa3ConvertedDefinition>> ConvertSwitchAsync(params string[] conditions)
+    {
+        var @switch = Activity("switch", "Elsa.Switch");
+        @switch.AdditionalProperties["cases"] = JsonSerializer.SerializeToElement(conditions
+            .Select((condition, index) => new { label = $"case{index}", condition = new { expression = new { type = "JavaScript", value = condition } } })
+            .ToArray());
+        return ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Sequence("root", @switch)));
     }
 }

@@ -44,6 +44,18 @@ public sealed class Elsa3ReplacedActivityTypeTests
     }
 
     [Fact]
+    public async Task A_removed_claimant_no_longer_makes_the_alias_ambiguous()
+    {
+        var catalog = RealActivityCatalog.CreateWith(typeof(SendInvoiceActivity).Assembly)
+            .WithRemoved(typeof(SecondSharedClaimActivity).FullName!);
+
+        var result = await ConversionServices.ConvertAsync(catalog, ConversionServices.Definition(Sequence("root", Activity("shared", "Acme.Shared"))));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal(catalog.VersionIdOf(typeof(FirstSharedClaimActivity).FullName!), Node(result.Value!.State, "shared").ActivityVersionId);
+    }
+
+    [Fact]
     public async Task A_newer_version_without_the_declaration_ends_the_alias()
     {
         var catalog = RealActivityCatalog.CreateWith(typeof(SendInvoiceActivity).Assembly)

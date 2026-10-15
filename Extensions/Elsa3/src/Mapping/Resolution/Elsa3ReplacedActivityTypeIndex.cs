@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa.Primitives.Versioning;
 using Elsa3.Models;
@@ -9,10 +10,13 @@ namespace Elsa3.Mapping.Resolution;
 /// Which catalog activity replaces an Elsa 3 type (spec FR-009, research R-2). CLR reconciliation records an
 /// activity's <c>[ReplacesActivityType]</c> declarations as design facet <c>elsa.replaced-activity-types</c>; the index
 /// reads each definition's highest valid-SemVer version once per conversion scope, so removing the declaration in a
-/// new version ends the alias. Two definitions claiming one type make it ambiguous.
+/// new version ends the alias. Two definitions claiming one type make it ambiguous. A removed definition claims
+/// nothing.
 /// </summary>
 /// <remarks>The store is optional: a host without an activity version store has no aliases.</remarks>
-internal sealed class Elsa3ReplacedActivityTypeIndex(IActivityDefinitionVersionStore? store = null)
+internal sealed class Elsa3ReplacedActivityTypeIndex(
+    IActivityDefinitionVersionStore? store = null,
+    IActivityDefinitionLookup? lookup = null)
 {
     /// <summary>The facet the CLR scanner writes (<c>ClrAssemblyScanner.ReplacedActivityTypesFacetKind</c>).</summary>
     internal const string FacetKind = "elsa.replaced-activity-types";
@@ -40,7 +44,12 @@ internal sealed class Elsa3ReplacedActivityTypeIndex(IActivityDefinitionVersionS
             return new Dictionary<string, string[]>(StringComparer.Ordinal);
 
         var versions = await store.ListAsync(cancellationToken);
+        // The store keeps removed definitions' versions; the lookup lists only definitions that are not removed.
+        var active = lookup is null
+            ? null
+            : (await lookup.ListDefinitions(cancellationToken: cancellationToken)).Select(definition => definition.Id).ToHashSet(StringComparer.Ordinal);
         var highest = versions
+            .Where(version => active is null || active.Contains(version.DefinitionId))
             .Select(version => (version, valid: SemVer.TryParse(version.Version, out var semVer), semVer))
             .Where(item => item.valid)
             .GroupBy(item => item.version.DefinitionId, StringComparer.Ordinal)

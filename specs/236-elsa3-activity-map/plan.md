@@ -81,7 +81,9 @@ version pick per distinct Elsa 3 type (cached). Conversion stays linear in node 
 - No exception from input (FR-012).
 - The analyzer and the materializer helpers are not restructured (FR-019).
 - §E2.7: no Elsa 3 knowledge in Essentials.
-- `MaxNestingDepth` 14 is unchanged.
+- The flat `MaxNestingDepth` of 14 becomes a JSON-level budget: a node may sit at most at level 58, and each
+  container adds the levels of its native payload (member-map.md, "Nesting budget"); 14 Sequences is one case of it
+  (`Elsa3ActivityNormalizer.MaxSequenceNestingDepth`).
 
 **Scale/Scope**:
 - 67 Elsa 3 activity classes in five modules, plus SetOutput.

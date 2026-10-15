@@ -154,7 +154,7 @@ public sealed class ReusableActivityCollectionCredentialLiteralTests : IAsyncDis
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Nesting_deeper_than_supported_refuses_the_apply_with_400_naming_the_limit(bool reusable)
+    public async Task Nesting_deeper_than_supported_refuses_the_apply_with_422_naming_the_limit(bool reusable)
     {
         var refusal = await Assert.ThrowsAsync<ReusableActivityImportValidationException>(() => ApplyAsync(
             Source("source", reusable, Elsa3ActivityNormalizer.MaxSequenceNestingDepth + 1, NodeId, Argument(CredentialInput, "Literal", Literal))));
@@ -204,7 +204,7 @@ public sealed class ReusableActivityCollectionCredentialLiteralTests : IAsyncDis
 
     [Theory]
     [MemberData(nameof(SourcesAndDepths))]
-    public async Task Two_spellings_of_the_credential_input_refuse_the_apply_with_400_rather_than_keep_one(bool reusable, int depth)
+    public async Task Two_spellings_of_the_credential_input_refuse_the_apply_with_422_rather_than_keep_one(bool reusable, int depth)
     {
         var refusal = await Assert.ThrowsAsync<ReusableActivityImportValidationException>(() => ApplyAsync(Source("source", reusable, depth, NodeId,
             Argument(CredentialInput, "Secret", new { name = "service-key" }),

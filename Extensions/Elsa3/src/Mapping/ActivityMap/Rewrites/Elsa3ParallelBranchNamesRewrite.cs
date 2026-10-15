@@ -35,8 +35,8 @@ internal sealed class Elsa3ParallelBranchNamesRewrite : IElsa3NodeRewrite
         var mode = joinMode.ValueKind switch
         {
             JsonValueKind.String => joinMode.GetString(),
-            // ForkJoinMode: WaitAll = 0, WaitAny = 1.
-            JsonValueKind.Number => joinMode.GetInt32() == 0 ? "WaitAll" : "WaitAny",
+            // ForkJoinMode: WaitAll = 0, WaitAny = 1, mapped below; any other number is reported.
+            JsonValueKind.Number => joinMode.GetRawText(),
             _ => Elsa3TypedValues.TryGetLiteral(joinMode, out var literal) ? literal : null
         };
         mode = mode?.Trim() switch { "0" => "WaitAll", "1" => "WaitAny", var other => other };

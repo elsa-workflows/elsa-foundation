@@ -342,8 +342,9 @@ produces for the same definition.
 
 - **SC-006**: A reusable workflow that sets a declared output with `SetOutput`, used as an activity by another
   workflow, gives the calling workflow that output value after conversion, and leaves the calling workflow's own
-  outputs unchanged. Within this spec it is proven at compile level (provider validation and compilation of the
-  converted reusable workflow). The run-time check is proven once #2796 publishes imported reusables.
+  outputs unchanged. Within this spec it is proven by provider validation of the converted reusable workflow.
+  Compilation needs the activity published, so the compile and run-time checks are proven once #2796 publishes
+  imported reusables.
 
 - **SC-001**: Every activity and member in member-map.md is classified by the map; the coverage test reports 0
   unclassified.

@@ -131,6 +131,17 @@ internal sealed class RealActivityCatalog : IActivityDefinitionLookup, IActivity
     }
 
     private readonly List<IActivityDefinition> _orphanDefinitions = [];
+    private readonly HashSet<string> _removedDefinitionIds = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Marks the definition of <paramref name="activityTypeKey"/> removed, as reconciliation does when its provider no
+    /// longer ships it: its versions stay in the store, but the picker query no longer lists it.
+    /// </summary>
+    public RealActivityCatalog WithRemoved(string activityTypeKey)
+    {
+        _removedDefinitionIds.Add(ActivityCatalogStableIds.DefinitionId(activityTypeKey)!);
+        return this;
+    }
 
     /// <summary>The catalog version id of the highest shipped version of <paramref name="activityTypeKey"/>.</summary>
     public string VersionIdOf(string activityTypeKey) =>
@@ -154,7 +165,7 @@ internal sealed class RealActivityCatalog : IActivityDefinitionLookup, IActivity
         string? description = null,
         bool? tenantAgnostic = null,
         CancellationToken cancellationToken = default) =>
-        Task.FromResult<IEnumerable<IActivityDefinition>>(Definitions().ToArray());
+        Task.FromResult<IEnumerable<IActivityDefinition>>(Definitions().Where(item => !_removedDefinitionIds.Contains(item.Id)).ToArray());
 
     public Task<IActivityDefinitionVersion> GetVersion(string versionId, CancellationToken cancellationToken = default)
     {

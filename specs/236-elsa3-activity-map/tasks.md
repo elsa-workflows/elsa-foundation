@@ -482,8 +482,8 @@ reusable workflow validates and compiles with the expected `outputMappings`, `ou
   the outcomes stop.
 - [X] T051 [US4] Create `MT/Support/GraphProviderProof.cs`: given an `Elsa3ConvertedDefinition` and the reusable's
   inputs and outputs, it builds the `DesignActivityContract` (inputs, outputs, `BoundaryOutcomes`) and the schema-2
-  `ActivityProviderManifest`. It runs `GraphActivityProvider.ValidateAsync` and `CompileAsync` against
-  `RealActivityCatalog` and returns diagnostics plus the compiled boundary payload (R-10).
+  `ActivityProviderManifest`. It runs `GraphActivityProvider.ValidateAsync` against `RealActivityCatalog` and
+  returns its diagnostics (R-10). `CompileAsync` needs the activity published and stays outstanding for #2796.
 - [X] T052 [US4] Create `MT/Elsa3ReusableTerminalTests.cs` (D-1 to D-8; quickstart step 8; reusable definitions with
   non-Flowchart containers such as Sequence, loops and Parallel, since Flowchart is pending until #2705):
   - `Complete("fail")` nested in a loop inside Parallel converts to a `Complete` node with `outcome = "fail"`;
