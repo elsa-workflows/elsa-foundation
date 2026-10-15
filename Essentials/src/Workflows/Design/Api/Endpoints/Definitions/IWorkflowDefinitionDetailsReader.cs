@@ -1,6 +1,7 @@
 using Elsa.Workflows.Design.Api.Models;
 using Elsa.Workflows.Design.Api.Projections;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Persistence.Core.Contracts;
 using Elsa.Workflows.Design.Persistence.Core.Stores;
 
 namespace Elsa.Workflows.Design.Api.Endpoints.Definitions;
@@ -22,7 +23,8 @@ public interface IWorkflowDefinitionDetailsReader
 public sealed class WorkflowDefinitionDetailsReader(
     IWorkflowDefinitionVersionStore versionStore,
     IWorkflowDefinitionStore definitionStore,
-    IWorkflowDefinitionDraftStore draftStore) : IWorkflowDefinitionDetailsReader
+    IWorkflowDefinitionDraftStore draftStore,
+    IWorkflowDefinitionPublicationStateLookup? publicationStateLookup = null) : IWorkflowDefinitionDetailsReader
 {
     public async Task<WorkflowDefinitionDetailsView> ReadAsync(string definitionId, CancellationToken cancellationToken)
     {
@@ -33,9 +35,12 @@ public sealed class WorkflowDefinitionDetailsReader(
         var metadata = draft is null
             ? null
             : await draftStore.FindWithLayoutByIdAsync(draft.Id, cancellationToken);
+        var publicationStates = publicationStateLookup is null
+            ? null
+            : await publicationStateLookup.ListByDefinitionIdsAsync([definitionId], cancellationToken);
 
         return new WorkflowDefinitionDetailsView(
-            definition.ToView(),
+            definition.ToView().WithPublicationState(publicationStates),
             draft is null
                 ? null
                 : WorkflowDraftView.From(

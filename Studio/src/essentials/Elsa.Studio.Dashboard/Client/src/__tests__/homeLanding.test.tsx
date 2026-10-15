@@ -6,6 +6,8 @@ import { builtInHomeLayout, homeFeatureTokensMatch, isHomeWidgetFeatureEnabled }
 import { GetStartedWidget, homeDocsLinks } from "../widgets/GetStartedWidget";
 import { QuickActionsWidget, RecentRunsWidget, RecentWorkflowsWidget, TasksWidget } from "../widgets/HomeListWidget";
 import { runStatusTone } from "../widgets/homeData";
+import { registerCoreHomeWidgets } from "../widgets/registerCoreHomeWidgets";
+import { stubApi } from "./testSupport";
 
 describe("Home default landing", () => {
   it("ships Get started, quick actions, recent lists, attention, and gated Tasks", () => {
@@ -28,6 +30,25 @@ describe("Home default landing", () => {
     expect(homeFeatureTokensMatch("workflows", "Elsa.Studio.WorkflowsX")).toBe(false);
     expect(homeFeatureTokensMatch("workflows", "Elsa.Studio.Other.Workflows")).toBe(false);
     expect(homeFeatureTokensMatch("workflows", "Contoso.Workflows")).toBe(false);
+    expect(homeFeatureTokensMatch("workflows", "Elsa.Studio.Workflows.Extra")).toBe(false);
+    expect(homeFeatureTokensMatch("workflows", "Elsa.Studio.XWorkflows")).toBe(false);
+    expect(homeFeatureTokensMatch("workflows", "Elsa.Workflows")).toBe(false);
+    expect(homeFeatureTokensMatch("workflows", "Studio.Workflows")).toBe(false);
+    expect(homeFeatureTokensMatch("workflows", "workflows-extra")).toBe(false);
+    expect(homeFeatureTokensMatch("workflows", "extra-workflows")).toBe(false);
+    expect(homeFeatureTokensMatch("user-tasks", "Elsa.Studio.UserTasksX")).toBe(false);
+    expect(homeFeatureTokensMatch("user-tasks", "Contoso.UserTasks")).toBe(false);
+  });
+
+  it("registers Tasks as a user-tasks inbox entry point without a data loader", () => {
+    const api = stubApi();
+    registerCoreHomeWidgets(api);
+    const tasks = (api.homeWidgets ?? api.dashboardWidgets).list().find(widget => widget.id === "home.tasks");
+    expect(tasks?.requiresFeature).toBe("user-tasks");
+    expect(tasks?.load).toBeUndefined();
+    expect(tasks?.description).toMatch(/tasks inbox/i);
+    expect(tasks?.description).not.toMatch(/when user tasks are enabled/i);
+    expect(tasks?.description).not.toMatch(/assigned tasks appear here/i);
   });
 
   it("fails closed when enabledFeatures is omitted", () => {

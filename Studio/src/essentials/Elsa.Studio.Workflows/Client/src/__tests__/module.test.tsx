@@ -294,6 +294,26 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("shows Retracted and Retired from the server publication state even when a version remains", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => response({
+      items: [
+        definition({ id: "retracted", name: "Retracted workflow", draftId: "draft-r", latestVersionId: "version-r", latestVersion: "1.0.0", versionCount: 1, publicationState: "retracted" }),
+        definition({ id: "retired", name: "Retired workflow", draftId: null, latestVersionId: "version-t", latestVersion: "2.0.0", versionCount: 1, publicationState: "retired" })
+      ]
+    })));
+    const { container, unmount } = await renderRegisteredRoute();
+
+    await waitForText(container, "Retracted workflow");
+    const retractedRow = rowByLabel(container, "Open workflow definition Retracted workflow");
+    const retiredRow = rowByLabel(container, "Open workflow definition Retired workflow");
+
+    await waitForStatusBadge(retractedRow, "Retracted");
+    expect(retractedRow?.textContent).not.toContain("Published");
+    await waitForStatusBadge(retiredRow, "Retired");
+    expect(retiredRow?.textContent).not.toContain("Published");
+    await unmount();
+  });
+
   it("shows published, published-with-draft, and unpublished draft status from version fields rather than draftId", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => response({
       items: [
@@ -310,11 +330,11 @@ describe("workflows module", () => {
     const newerDraftRow = rowByLabel(container, "Open workflow definition Published with draft");
 
     expect(container.querySelector(".wf-grid-head")?.textContent).toContain("Status");
-    expect(draftRow?.textContent).toMatch(/Draft/);
+    await waitForStatusBadge(draftRow, "Draft");
     expect(draftRow?.textContent).not.toContain("Published");
-    expect(publishedRow?.querySelector(".wf-status-badge")?.textContent).toBe("Published");
+    await waitForStatusBadge(publishedRow, "Published");
     expect(publishedRow?.textContent).not.toContain("Newer draft");
-    expect(newerDraftRow?.querySelector(".wf-status-badge")?.textContent).toBe("Published");
+    await waitForStatusBadge(newerDraftRow, "Published");
     expect(newerDraftRow?.textContent).toContain("Newer draft");
     await unmount();
   });
@@ -5509,6 +5529,14 @@ async function waitForText(container: HTMLElement, text: string) {
   await vi.waitFor(() => {
     if (!container.textContent?.includes(text)) {
       throw new Error(`Timed out waiting for text: ${text}. Rendered: ${container.textContent}`);
+    }
+  }, { timeout: 5_000, interval: 20 });
+}
+
+async function waitForStatusBadge(row: Element | null, text: string) {
+  await vi.waitFor(() => {
+    if (row?.querySelector(".wf-status-badge")?.textContent !== text) {
+      throw new Error(`Timed out waiting for status badge '${text}'.`);
     }
   }, { timeout: 5_000, interval: 20 });
 }

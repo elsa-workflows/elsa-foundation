@@ -20,6 +20,9 @@ import {
 } from "./workflowDefinitionBrowseLocation";
 import "./workflowFolders.css";
 
+const DefinitionStatusBadge = lazy(() =>
+  import("./DefinitionStatusBadge").then(module => ({ default: module.DefinitionStatusBadge }))
+);
 const MoveWorkflowDefinitionsDialog = lazy(() =>
   import("./MoveWorkflowDefinitionsDialog").then(module => ({ default: module.MoveWorkflowDefinitionsDialog }))
 );
@@ -436,7 +439,6 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
             </div>
             {definitions.map(definition => {
               const isDeleted = Boolean(definition.deletedAt);
-              const publication = resolveDefinitionPublicationStatus(definition);
               return (
               <div
                 className="wf-grid-row"
@@ -471,12 +473,9 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
                 <span>{definition.latestVersion ?? "No version"}</span>
                 <span>
                   {listState === "deleted" ? formatDate(definition.deletedAt) : (
-                    <>
-                      <span className="wf-status-badge" data-status={isDeleted ? "cancelled" : publication === "draft" ? "suspended" : "completed"}>
-                        {isDeleted ? "Deleted" : publication === "draft" ? "Draft" : "Published"}
-                      </span>
-                      {publication === "published-with-draft" ? <small>Newer draft</small> : isDeleted ? <small>{formatDate(definition.deletedAt)}</small> : null}
-                    </>
+                    <Suspense fallback={<span className="wf-status-badge" role="status"><span className="wf-visually-hidden">Loading status</span></span>}>
+                      <DefinitionStatusBadge definition={definition} />
+                    </Suspense>
                   )}
                 </span>
                 <span>{formatDate(definition.lastModifiedAt)}</span>
@@ -569,8 +568,3 @@ function ResultFolderBreadcrumb({
   );
 }
 
-export function resolveDefinitionPublicationStatus(definition: Pick<WorkflowDefinitionSummary, "draftId" | "latestVersionId" | "latestVersion" | "versionCount" | "deletedAt">) {
-  if (definition.deletedAt) return "deleted";
-  if (definition.latestVersionId || definition.latestVersion || definition.versionCount) return definition.draftId ? "published-with-draft" : "published";
-  return "draft";
-}
