@@ -11,7 +11,7 @@ public sealed class StudioPreferencesApiAuthorizationTests
     [InlineData(null, 401)]
     [InlineData("denied", 403)]
     [InlineData("read", 200)]
-    [InlineData("write", 200)]
+    [InlineData("write", 403)]
     [InlineData("wildcard", 200)]
     [InlineData("untrusted", 401)]
     [InlineData("resource-denied", 403)]

@@ -22,8 +22,7 @@ public sealed class StudioPreferencesPermissionContributor : IPermissionContribu
             StudioPreferencesPermissions.Write,
             "Write Studio preferences",
             "Studio",
-            "Create and update personal Studio preference documents.",
-            new HashSet<string> { StudioPreferencesPermissions.Read }),
+            "Create and update personal Studio preference documents."),
         new(
             StudioPreferencesPermissions.ManageDefaults,
             "Manage Studio preference defaults",

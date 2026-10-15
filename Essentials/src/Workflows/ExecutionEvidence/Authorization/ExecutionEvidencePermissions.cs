@@ -18,11 +18,6 @@ public sealed class ExecutionEvidencePermissionContributor : IPermissionContribu
     [
         new(ExecutionEvidencePermissionKeys.Read, "Read execution evidence", "Execution evidence", "Read workflow execution evidence pages and correlation queries."),
         new(ExecutionEvidencePermissionKeys.Delete, "Delete execution evidence", "Execution evidence", "Delete one workflow's execution evidence."),
-        new(ExecutionEvidencePermissionKeys.Manage, "Manage execution evidence", "Execution evidence", "Delete and administer execution evidence.",
-            new HashSet<string>(StringComparer.Ordinal)
-            {
-                ExecutionEvidencePermissionKeys.Delete,
-                ExecutionEvidencePermissionKeys.Read
-            })
+        new(ExecutionEvidencePermissionKeys.Manage, "Manage execution evidence", "Execution evidence", "Delete and administer execution evidence.")
     ];
 }

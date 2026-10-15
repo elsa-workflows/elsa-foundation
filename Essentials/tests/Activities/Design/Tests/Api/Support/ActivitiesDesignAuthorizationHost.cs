@@ -68,7 +68,6 @@ public sealed class ActivitiesDesignAuthorizationHost : IAsyncDisposable
                     services.AddAuthorization();
                     services.AddFoundationIdentityAbstractions(options =>
                         options.NormalizedAuthenticationTypes = new HashSet<string>([AuthorizationAuthenticationHandler.SchemeName], StringComparer.Ordinal));
-                    services.AddPermissionContributor<ActivitiesDesignAuthorizationContributor>();
                     services.AddSingleton<AuthorizationObservationState>();
                     services.ReplacePermissionEvaluator<RecordingPermissionEvaluator>();
                     services.AddScoped<IPermissionResourceHandler, AuthorizationResourceHandler>();
@@ -154,25 +153,6 @@ public sealed class ActivitiesDesignAuthorizationHost : IAsyncDisposable
     }
 }
 
-public sealed class ActivitiesDesignAuthorizationContributor : IPermissionContributor
-{
-    public string OwnerId => "Elsa.Activities.Design.Tests.Authorization";
-
-    public IEnumerable<Permission> Contribute() =>
-    [
-        new(
-            "activity-design.admin",
-            "Activities Design test administrator",
-            "Activities Design tests",
-            "Test-only implied permission.",
-            new HashSet<string>(StringComparer.Ordinal)
-            {
-                "activities/design:read",
-                "activities/design:manage"
-            })
-    ];
-}
-
 public sealed class AuthorizationObservationState
 {
     private int _resourceCalls;
@@ -237,11 +217,9 @@ public sealed class AuthorizationObservationState
     internal void RecordNormalizer() => Interlocked.Increment(ref _normalizerCalls);
 }
 
-public sealed class RecordingPermissionEvaluator(
-    AuthorizationObservationState observations,
-    IPermissionCatalog catalog) : IPermissionEvaluator
+public sealed class RecordingPermissionEvaluator(AuthorizationObservationState observations) : IPermissionEvaluator
 {
-    private readonly ClaimsPermissionEvaluator _inner = new(catalog);
+    private readonly ClaimsPermissionEvaluator _inner = new();
 
     public ValueTask<PermissionEvaluationResult> EvaluateAsync(
         PermissionEvaluationContext context,
@@ -389,10 +367,10 @@ public sealed class AuthorizationAuthenticationHandler(
         var permissions = fixture switch
         {
             "exact" or "normalized" or "tenant-b" or "route-mismatch" or "no-tenant" => new[] { "activities/design:read" },
-            "implied-no-tenant" => new[] { "activity-design.admin" },
+            "implied-no-tenant" => new[] { "activities/design:*" },
             "wildcard-no-tenant" => new[] { PermissionKey.Wildcard },
             "manage" => new[] { "activities/design:read", "activities/design:manage" },
-            "implied" => new[] { "activity-design.admin" },
+            "implied" => new[] { "activities/design:*" },
             "wildcard" => new[] { PermissionKey.Wildcard },
             "provider-author" => new[] { "activities/design:manage", HttpContextActivityDesignAuthorizationContext.AuthorPermission },
             "provider-payload" => new[] { "activities/design:read", HttpContextActivityDesignAuthorizationContext.ProviderPayloadReadPermission },
@@ -403,11 +381,11 @@ public sealed class AuthorizationAuthenticationHandler(
                 HttpContextActivityDesignAuthorizationContext.AuthorPermission,
                 HttpContextActivityDesignAuthorizationContext.ProviderPayloadReadPermission
             },
-            _ => new[] { "activity-design.other" }
+            _ => new[] { "activities/design:other" }
         };
 
         if (fixture == "normalized")
-            permissions[0] = "ACTIVITY-DESIGN.READ";
+            permissions[0] = "ACTIVITIES/DESIGN:READ";
 
         var tenant = fixture.EndsWith("-no-tenant", StringComparison.Ordinal) || fixture == "no-tenant"
             ? null

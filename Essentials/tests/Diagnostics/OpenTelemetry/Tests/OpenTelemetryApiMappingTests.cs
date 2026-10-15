@@ -40,7 +40,7 @@ public sealed class OpenTelemetryApiMappingTests
         {
             var policy = Assert.Single(route.Metadata.GetOrderedMetadata<AuthorizeAttribute>());
             var parsed = new PermissionPolicyCodec().Parse(policy.Policy!);
-            Assert.Equal(["DIAGNOSTICS:OPENTELEMETRY.READ"], parsed.Descriptor!.Permissions);
+            Assert.Equal(["DIAGNOSTICS/OPENTELEMETRY:READ"], parsed.Descriptor!.Permissions);
         });
         Assert.Equal(3, routes.Count(route => route.RoutePattern.RawText!.StartsWith("/elsa/otlp/v1/", StringComparison.Ordinal)));
         Assert.All(routes.Where(route => route.RoutePattern.RawText!.StartsWith("/elsa/otlp/v1/", StringComparison.Ordinal)), route =>

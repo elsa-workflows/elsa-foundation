@@ -20,16 +20,6 @@ public sealed class OpenTelemetryPermissionContributor : IPermissionContributor
         {
             OwnerId = OwnerId,
             ContributorType = ContributorType
-        },
-        new Permission(
-            OpenTelemetryPermissions.LegacyPolicy,
-            "Legacy OpenTelemetry diagnostics access",
-            "Diagnostics",
-            "Compatibility alias for existing grants; use diagnostics/opentelemetry:read for new assignments.",
-            new HashSet<string>(StringComparer.Ordinal) { OpenTelemetryPermissions.Read })
-        {
-            OwnerId = OwnerId,
-            ContributorType = ContributorType
         }
     ];
 }

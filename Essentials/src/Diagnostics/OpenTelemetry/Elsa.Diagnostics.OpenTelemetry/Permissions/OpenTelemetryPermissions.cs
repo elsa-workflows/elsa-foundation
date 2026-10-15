@@ -11,7 +11,6 @@ public static class OpenTelemetryPermissions
 {
     public const string OwnerId = "Elsa.Diagnostics.OpenTelemetry";
     public const string Read = "diagnostics/opentelemetry:read";
-    public const string LegacyPolicy = "Diagnostics:OpenTelemetry";
     // Source compatibility for callers that used the old constant; endpoint metadata must use Read.
     public const string Policy = Read;
 }

@@ -100,7 +100,7 @@ public sealed class StudioHomeLayoutApiTests
     [InlineData(null, 401)]
     [InlineData("denied", 403)]
     [InlineData("read", 200)]
-    [InlineData("write", 200)]
+    [InlineData("write", 403)]
     [InlineData("wildcard", 200)]
     [InlineData("host-read", 403)]
     [InlineData("host-manage", 403)]

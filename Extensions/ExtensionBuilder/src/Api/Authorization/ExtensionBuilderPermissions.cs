@@ -37,7 +37,6 @@ public sealed class ExtensionBuilderPermissionContributor : IPermissionContribut
             ExtensionBuilderPermissionKeys.Manage,
             "Manage Extension Builder",
             Category,
-            "Edit repositories, run builds, and promote or roll back extension packages on the backend host.",
-            new HashSet<string> { ExtensionBuilderPermissionKeys.Read });
+            "Edit repositories, run builds, and promote or roll back extension packages on the backend host.");
     }
 }

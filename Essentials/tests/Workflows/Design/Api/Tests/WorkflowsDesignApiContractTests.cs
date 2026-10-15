@@ -726,9 +726,9 @@ internal sealed class AuthorizationProbe
     public int ResourceCalls { get; set; }
 }
 
-internal sealed class RecordingPermissionEvaluator(IPermissionCatalog catalog, AuthorizationProbe probe) : IPermissionEvaluator
+internal sealed class RecordingPermissionEvaluator(AuthorizationProbe probe) : IPermissionEvaluator
 {
-    private readonly ClaimsPermissionEvaluator inner = new(catalog);
+    private readonly ClaimsPermissionEvaluator inner = new();
 
     public ValueTask<PermissionEvaluationResult> EvaluateAsync(
         PermissionEvaluationContext context,

@@ -37,7 +37,6 @@ public sealed class ModuleManagementPermissionContributor : IPermissionContribut
             ModuleManagementPermissionKeys.Manage,
             "Manage modules",
             Category,
-            "Apply feature/module configuration changes on the backend host.",
-            new HashSet<string> { ModuleManagementPermissionKeys.Read });
+            "Apply feature/module configuration changes on the backend host.");
     }
 }

@@ -72,9 +72,9 @@ public sealed class PermissionEndpointAdapterIntegrationTests : IAsyncLifetime
                     app.UseAuthorization();
                     app.UseEndpoints(endpoints =>
                     {
-                        endpoints.MapGet("/minimal/single", () => Results.Ok()).RequirePermission("read");
-                        endpoints.MapGet("/minimal/any", () => Results.Ok()).RequireAnyPermission("read", "write");
-                        endpoints.MapGet("/minimal/all", () => Results.Ok()).RequireAllPermissions("read", "write");
+                        endpoints.MapGet("/minimal/single", () => Results.Ok()).RequirePermission("orders:read");
+                        endpoints.MapGet("/minimal/any", () => Results.Ok()).RequireAnyPermission("orders:read", "orders:write");
+                        endpoints.MapGet("/minimal/all", () => Results.Ok()).RequireAllPermissions("orders:read", "orders:write");
                         endpoints.MapGet("/minimal/implied", () => Results.Ok())
                             .RequirePermission(DefaultIdentityPermissionKeys.IdentityUsersRead);
                         endpoints.MapGet("/minimal/wildcard", () => Results.Ok()).RequirePermission("*");
@@ -117,9 +117,9 @@ public sealed class PermissionEndpointAdapterIntegrationTests : IAsyncLifetime
     [InlineData("raw", HttpStatusCode.Unauthorized, "", "")]
     [InlineData("unmarked", HttpStatusCode.Unauthorized, "", "")]
     [InlineData("ambiguous", HttpStatusCode.Unauthorized, "", "")]
-    [InlineData("denied", HttpStatusCode.Forbidden, "READ", "*,READ")]
-    [InlineData("read", HttpStatusCode.OK, "READ", "*,READ")]
-    [InlineData("wildcard", HttpStatusCode.OK, "READ", "*")]
+    [InlineData("denied", HttpStatusCode.Forbidden, "ORDERS:READ", "*,ORDERS:READ")]
+    [InlineData("read", HttpStatusCode.OK, "ORDERS:READ", "*,ORDERS:READ")]
+    [InlineData("wildcard", HttpStatusCode.OK, "ORDERS:READ", "*")]
     [InlineData("normalizer-failure", HttpStatusCode.Unauthorized, "", "")]
     public async Task SinglePermissionOutcomesMatchAcrossEndpointStyles(
         string? identity,
@@ -155,10 +155,10 @@ public sealed class PermissionEndpointAdapterIntegrationTests : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData("read", HttpStatusCode.OK, "READ", "*,READ")]
-    [InlineData("write", HttpStatusCode.OK, "READ,WRITE", "*,READ,WRITE")]
-    [InlineData("denied", HttpStatusCode.Forbidden, "READ,WRITE", "*,READ,WRITE")]
-    [InlineData("wildcard", HttpStatusCode.OK, "READ", "*")]
+    [InlineData("read", HttpStatusCode.OK, "ORDERS:READ", "*,ORDERS:READ")]
+    [InlineData("write", HttpStatusCode.OK, "ORDERS:READ,ORDERS:WRITE", "*,ORDERS:READ,ORDERS:WRITE")]
+    [InlineData("denied", HttpStatusCode.Forbidden, "ORDERS:READ,ORDERS:WRITE", "*,ORDERS:READ,ORDERS:WRITE")]
+    [InlineData("wildcard", HttpStatusCode.OK, "ORDERS:READ", "*")]
     public async Task AnyPermissionOutcomesMatchAcrossEndpointStyles(
         string identity,
         HttpStatusCode expected,
@@ -191,8 +191,8 @@ public sealed class PermissionEndpointAdapterIntegrationTests : IAsyncLifetime
         Assert.Equal(expected, await SendAsync("/fast/all", identity));
         var fast = state.Snapshot();
         AssertParity(minimal, fast);
-        AssertNormalCallSequence(minimal, "READ,WRITE");
-        AssertNormalCallSequence(fast, "READ,WRITE");
+        AssertNormalCallSequence(minimal, "ORDERS:READ,ORDERS:WRITE");
+        AssertNormalCallSequence(fast, "ORDERS:READ,ORDERS:WRITE");
     }
 
     [Fact]
@@ -227,7 +227,7 @@ public sealed class PermissionEndpointAdapterIntegrationTests : IAsyncLifetime
             state.Reset();
             Assert.Equal(HttpStatusCode.OK, await SendAsync(path, "trusted-plus-untrusted"));
             Assert.Equal(1, state.LastPrincipalIdentityCount);
-            Assert.Equal(["read"], state.LastPrincipalPermissions);
+            Assert.Equal(["orders:read"], state.LastPrincipalPermissions);
         }
     }
 
@@ -239,12 +239,12 @@ public sealed class PermissionEndpointAdapterIntegrationTests : IAsyncLifetime
         state.Reset();
         Assert.Equal(HttpStatusCode.OK, await SendAsync("/minimal/single", "projected-read"));
         var minimal = state.Snapshot();
-        AssertNormalCallSequence(minimal, "READ");
+        AssertNormalCallSequence(minimal, "ORDERS:READ");
 
         state.Reset();
         Assert.Equal(HttpStatusCode.OK, await SendAsync("/fast/single", "projected-read"));
         var fast = state.Snapshot();
-        AssertNormalCallSequence(fast, "*,READ");
+        AssertNormalCallSequence(fast, "*,ORDERS:READ");
 
         AssertParity(minimal, fast);
         Assert.All(minimal.ResourceObservations.Concat(minimal.EvaluatorObservations), AssertProjectedContext);
@@ -296,13 +296,13 @@ public sealed class PermissionEndpointAdapterIntegrationTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, await SendAsync("/fast/any", "resource-any"));
         var fastResourceAny = state.Snapshot();
         AssertParity(minimalResourceAny, fastResourceAny);
-        AssertExactCalls(minimalResourceAny, ["READ", "WRITE"], [], 2);
+        AssertExactCalls(minimalResourceAny, ["ORDERS:READ", "ORDERS:WRITE"], [], 2);
         AssertExactCalls(fastResourceAny, ["*"], [], 1);
 
         state.Reset();
         await Assert.ThrowsAsync<TimeoutException>(() => SendAsync("/minimal/single", "resource-timeout"));
         var minimalResourceTimeout = state.Snapshot();
-        AssertExactCalls(minimalResourceTimeout, ["READ"], [], 0);
+        AssertExactCalls(minimalResourceTimeout, ["ORDERS:READ"], [], 0);
 
         state.Reset();
         await Assert.ThrowsAsync<TimeoutException>(() => SendAsync("/fast/single", "resource-timeout"));
@@ -313,18 +313,18 @@ public sealed class PermissionEndpointAdapterIntegrationTests : IAsyncLifetime
         state.Reset();
         await Assert.ThrowsAsync<TimeoutException>(() => SendAsync("/minimal/all", "evaluator-timeout"));
         var minimalEvaluatorTimeout = state.Snapshot();
-        AssertExactCalls(minimalEvaluatorTimeout, ["READ"], ["READ"], 1);
+        AssertExactCalls(minimalEvaluatorTimeout, ["ORDERS:READ"], ["ORDERS:READ"], 1);
 
         state.Reset();
         await Assert.ThrowsAsync<TimeoutException>(() => SendAsync("/fast/all", "evaluator-timeout"));
         var fastEvaluatorTimeout = state.Snapshot();
         AssertParity(minimalEvaluatorTimeout, fastEvaluatorTimeout);
-        AssertExactCalls(fastEvaluatorTimeout, ["READ"], ["READ"], 1);
+        AssertExactCalls(fastEvaluatorTimeout, ["ORDERS:READ"], ["ORDERS:READ"], 1);
 
         state.Reset();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => SendAsync("/minimal/single", "cancelled"));
         var minimalCancelled = state.Snapshot();
-        AssertCancellationPropagation(minimalCancelled, "READ");
+        AssertCancellationPropagation(minimalCancelled, "ORDERS:READ");
 
         state.Reset();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => SendAsync("/fast/single", "cancelled"));
@@ -527,7 +527,7 @@ public sealed class PermissionEndpointAdapterIntegrationTests : IAsyncLifetime
                 if (fixture == "cancelled")
                     throw new OperationCanceledException(cancellationToken);
                 if (fixture == "resource-any")
-                    return ValueTask.FromResult<PermissionEvaluationResult?>(context.Permission == "READ"
+                    return ValueTask.FromResult<PermissionEvaluationResult?>(context.Permission == "ORDERS:READ"
                         ? PermissionEvaluationResult.Denied()
                         : PermissionEvaluationResult.Success);
             }
@@ -547,11 +547,9 @@ public sealed class PermissionEndpointAdapterIntegrationTests : IAsyncLifetime
         }
     }
 
-    private sealed class RecordingClaimsPermissionEvaluator(
-        AdapterCallState state,
-        IPermissionCatalog catalog) : IPermissionEvaluator
+    private sealed class RecordingClaimsPermissionEvaluator(AdapterCallState state) : IPermissionEvaluator
     {
-        private readonly ClaimsPermissionEvaluator _inner = new(catalog);
+        private readonly ClaimsPermissionEvaluator _inner = new();
 
         public ValueTask<PermissionEvaluationResult> EvaluateAsync(
             PermissionEvaluationContext context,
@@ -621,42 +619,42 @@ public sealed class PermissionEndpointAdapterIntegrationTests : IAsyncLifetime
 
             ClaimsPrincipal principal = fixture switch
             {
-                "raw" => Principal("raw-provider", marked: true, "read"),
-                "unmarked" => Principal(SchemeName, marked: false, "read"),
+                "raw" => Principal("raw-provider", marked: true, "orders:read"),
+                "unmarked" => Principal(SchemeName, marked: false, "orders:read"),
                 "ambiguous" => new ClaimsPrincipal(new[]
                 {
-                    Identity(SchemeName, marked: true, "read"),
-                    Identity(SchemeName, marked: true, "write")
+                    Identity(SchemeName, marked: true, "orders:read"),
+                    Identity(SchemeName, marked: true, "orders:write")
                 }),
                 "ambiguous-tenants" => new ClaimsPrincipal(new[]
                 {
-                    TrustedIdentity("tenant-a", "provider-a", "read"),
-                    TrustedIdentity("tenant-b", "provider-b", "write")
+                    TrustedIdentity("tenant-a", "provider-a", "orders:read"),
+                    TrustedIdentity("tenant-b", "provider-b", "orders:write")
                 }),
                 "trusted-plus-untrusted" => new ClaimsPrincipal(new[]
                 {
-                    Identity(SchemeName, marked: true, "read"),
-                    Identity("raw-provider", marked: true, "write")
+                    Identity(SchemeName, marked: true, "orders:read"),
+                    Identity("raw-provider", marked: true, "orders:write")
                 }),
                 "anonymous-first" => new ClaimsPrincipal(new[]
                 {
                     new ClaimsIdentity(),
-                    Identity("raw-provider", marked: true, "read")
+                    Identity("raw-provider", marked: true, "orders:read")
                 }),
                 "untrusted-first" => new ClaimsPrincipal(new[]
                 {
-                    Identity("raw-provider", marked: true, "read"),
+                    Identity("raw-provider", marked: true, "orders:read"),
                     new ClaimsIdentity()
                 }),
                 "host-access" => new ClaimsPrincipal(new ClaimsIdentity(
                     [new Claim("host-access", "true")],
                     "raw-provider")),
-                "read" => Principal(SchemeName, marked: true, "read"),
+                "read" => Principal(SchemeName, marked: true, "orders:read"),
                 "capabilities-exact" => Principal(SchemeName, marked: true, DefaultIdentityPermissionKeys.IdentityProvidersRead),
                 "capabilities-implied" => Principal(SchemeName, marked: true, DefaultIdentityPermissionKeys.IdentityProvidersManage),
-                "projected-read" => new ClaimsPrincipal(TrustedIdentity("tenant-a", "provider-a", "read")),
-                "write" => Principal(SchemeName, marked: true, "write"),
-                "read-write" => Principal(SchemeName, marked: true, "read", "write"),
+                "projected-read" => new ClaimsPrincipal(TrustedIdentity("tenant-a", "provider-a", "orders:read")),
+                "write" => Principal(SchemeName, marked: true, "orders:write"),
+                "read-write" => Principal(SchemeName, marked: true, "orders:read", "orders:write"),
                 "implied" => Principal(SchemeName, marked: true, DefaultIdentityPermissionKeys.IdentityUsersManage),
                 "resource-any" or "resource-timeout" or "evaluator-timeout" or "cancelled" => Principal(SchemeName, marked: true),
                 "wildcard" => Principal(SchemeName, marked: true, "*"),
@@ -696,7 +694,7 @@ public sealed class FastSinglePermissionEndpoint : ElsaEndpointWithoutRequest<st
     public override void Configure()
     {
         Get("/fast/single");
-        ConfigurePermissions("read");
+        ConfigurePermissions("orders:read");
     }
 
     public override Task HandleAsync(CancellationToken ct) => Send.OkAsync("ok", ct);
@@ -707,7 +705,7 @@ public sealed class FastAnyPermissionEndpoint : ElsaEndpointWithoutRequest<strin
     public override void Configure()
     {
         Get("/fast/any");
-        ConfigurePermissions("read", "write");
+        ConfigurePermissions("orders:read", "orders:write");
     }
 
     public override Task HandleAsync(CancellationToken ct) => Send.OkAsync("ok", ct);
@@ -720,7 +718,7 @@ public sealed class FastAllPermissionEndpoint : ElsaEndpointWithoutRequest<strin
         Get("/fast/all");
         // The transitional base preserves FastEndpoints' action-permission OR contract; all-of is
         // available through the same Foundation policy provider when an endpoint needs it explicitly.
-        Policies(new PermissionPolicyCodec().Format(PermissionPolicyDescriptor.All("read", "write")));
+        Policies(new PermissionPolicyCodec().Format(PermissionPolicyDescriptor.All("orders:read", "orders:write")));
     }
 
     public override Task HandleAsync(CancellationToken ct) => Send.OkAsync("ok", ct);

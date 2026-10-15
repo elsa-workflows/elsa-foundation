@@ -13,38 +13,38 @@ public sealed class PermissionAuthorizationSemanticsTests
     public async Task AnyAndAllEvaluateCanonicalMembersInOrderAndShortCircuit()
     {
         var state = new EvaluationState();
-        state.Results["READ"] = false;
-        state.Results["WRITE"] = true;
+        state.Results["ORDERS:READ"] = false;
+        state.Results["ORDERS:WRITE"] = true;
         using var provider = BuildProvider(state);
         var authorization = provider.GetRequiredService<IAuthorizationService>();
         var codec = provider.GetRequiredService<IPermissionPolicyCodec>();
 
         var any = await authorization.AuthorizeAsync(TrustedPrincipal(), null,
-            codec.Format(PermissionPolicyDescriptor.Any("write", "read", "READ")));
+            codec.Format(PermissionPolicyDescriptor.Any("orders:write", "orders:read", "ORDERS:READ")));
         Assert.True(any.Succeeded);
-        Assert.Equal(["READ", "WRITE"], state.EvaluatorCalls);
+        Assert.Equal(["ORDERS:READ", "ORDERS:WRITE"], state.EvaluatorCalls);
 
         state.Reset();
-        state.Results["READ"] = true;
+        state.Results["ORDERS:READ"] = true;
         var anyShortCircuit = await authorization.AuthorizeAsync(TrustedPrincipal(), null,
-            codec.Format(PermissionPolicyDescriptor.Any("write", "read")));
+            codec.Format(PermissionPolicyDescriptor.Any("orders:write", "orders:read")));
         Assert.True(anyShortCircuit.Succeeded);
-        Assert.Equal(["READ"], state.EvaluatorCalls);
+        Assert.Equal(["ORDERS:READ"], state.EvaluatorCalls);
 
         state.Reset();
-        state.Results["READ"] = true;
-        state.Results["WRITE"] = false;
+        state.Results["ORDERS:READ"] = true;
+        state.Results["ORDERS:WRITE"] = false;
         var all = await authorization.AuthorizeAsync(TrustedPrincipal(), null,
-            codec.Format(PermissionPolicyDescriptor.All("write", "read")));
+            codec.Format(PermissionPolicyDescriptor.All("orders:write", "orders:read")));
         Assert.False(all.Succeeded);
-        Assert.Equal(["READ", "WRITE"], state.EvaluatorCalls);
+        Assert.Equal(["ORDERS:READ", "ORDERS:WRITE"], state.EvaluatorCalls);
 
         state.Reset();
-        state.Results["READ"] = false;
+        state.Results["ORDERS:READ"] = false;
         var allShortCircuit = await authorization.AuthorizeAsync(TrustedPrincipal(), null,
-            codec.Format(PermissionPolicyDescriptor.All("write", "read")));
+            codec.Format(PermissionPolicyDescriptor.All("orders:write", "orders:read")));
         Assert.False(allShortCircuit.Succeeded);
-        Assert.Equal(["READ"], state.EvaluatorCalls);
+        Assert.Equal(["ORDERS:READ"], state.EvaluatorCalls);
     }
 
     [Fact]
@@ -60,17 +60,17 @@ public sealed class PermissionAuthorizationSemanticsTests
         var codec = provider.GetRequiredService<IPermissionPolicyCodec>();
 
         var deniedSingle = await authorization.AuthorizeAsync(TrustedPrincipal(), new DomainResource("tenant-a"),
-            codec.Format(PermissionPolicyDescriptor.Single("read")));
+            codec.Format(PermissionPolicyDescriptor.Single("orders:read")));
         Assert.False(deniedSingle.Succeeded);
         Assert.Empty(state.EvaluatorCalls);
 
         var any = await authorization.AuthorizeAsync(TrustedPrincipal(), new DomainResource("tenant-a"),
-            codec.Format(PermissionPolicyDescriptor.Any("read", "write")));
+            codec.Format(PermissionPolicyDescriptor.Any("orders:read", "orders:write")));
         Assert.True(any.Succeeded);
         Assert.Empty(state.EvaluatorCalls);
 
         var all = await authorization.AuthorizeAsync(TrustedPrincipal(), new DomainResource("tenant-a"),
-            codec.Format(PermissionPolicyDescriptor.All("read", "write")));
+            codec.Format(PermissionPolicyDescriptor.All("orders:read", "orders:write")));
         Assert.False(all.Succeeded);
         Assert.Empty(state.EvaluatorCalls);
     }
@@ -87,7 +87,7 @@ public sealed class PermissionAuthorizationSemanticsTests
         {
             var authorization = provider.GetRequiredService<IAuthorizationService>();
             var policy = provider.GetRequiredService<IPermissionPolicyCodec>()
-                .Format(PermissionPolicyDescriptor.Single("read"));
+                .Format(PermissionPolicyDescriptor.Single("orders:read"));
 
             await Assert.ThrowsAsync<TimeoutException>(() => authorization.AuthorizeAsync(TrustedPrincipal(), null, policy));
             Assert.Equal(0, state.LaterResourceCalls);
@@ -100,12 +100,12 @@ public sealed class PermissionAuthorizationSemanticsTests
         {
             var authorization = provider.GetRequiredService<IAuthorizationService>();
             var policy = provider.GetRequiredService<IPermissionPolicyCodec>()
-                .Format(PermissionPolicyDescriptor.Single("read"));
+                .Format(PermissionPolicyDescriptor.Single("orders:read"));
 
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
                 () => authorization.AuthorizeAsync(TrustedPrincipal(), null, policy));
             Assert.Equal("evaluator failed", exception.Message);
-            Assert.Equal(["READ"], state.EvaluatorCalls);
+            Assert.Equal(["ORDERS:READ"], state.EvaluatorCalls);
         }
     }
 
@@ -117,7 +117,7 @@ public sealed class PermissionAuthorizationSemanticsTests
             services.AddScoped<IPermissionResourceHandler, CancellationRecordingResourceHandler>());
         var authorization = provider.GetRequiredService<IAuthorizationService>();
         var policy = provider.GetRequiredService<IPermissionPolicyCodec>()
-            .Format(PermissionPolicyDescriptor.Single("read"));
+            .Format(PermissionPolicyDescriptor.Single("orders:read"));
 
         using var source = new CancellationTokenSource();
         var httpContext = new DefaultHttpContext { RequestServices = provider, RequestAborted = source.Token };
@@ -156,7 +156,7 @@ public sealed class PermissionAuthorizationSemanticsTests
         });
         var authorization = provider.GetRequiredService<IAuthorizationService>();
         var policy = provider.GetRequiredService<IPermissionPolicyCodec>()
-            .Format(PermissionPolicyDescriptor.Single("read"));
+            .Format(PermissionPolicyDescriptor.Single("orders:read"));
 
         using (var alreadyCancelled = new CancellationTokenSource())
         {
@@ -186,7 +186,7 @@ public sealed class PermissionAuthorizationSemanticsTests
         }
 
         state.Reset();
-        state.Results["READ"] = true;
+        state.Results["ORDERS:READ"] = true;
         using var evaluatorProvider = BuildProvider(state);
         var evaluatorAuthorization = evaluatorProvider.GetRequiredService<IAuthorizationService>();
         using (var cancelledByEvaluator = new CancellationTokenSource())
@@ -197,7 +197,7 @@ public sealed class PermissionAuthorizationSemanticsTests
             await Assert.ThrowsAnyAsync<OperationCanceledException>(
                 () => evaluatorAuthorization.AuthorizeAsync(TrustedPrincipal(), context, policy));
 
-            Assert.Equal(["READ"], state.EvaluatorCalls);
+            Assert.Equal(["ORDERS:READ"], state.EvaluatorCalls);
         }
     }
 
@@ -213,7 +213,7 @@ public sealed class PermissionAuthorizationSemanticsTests
         var authorization = provider.GetRequiredService<IPermissionAuthorizationService>();
         using var cancellation = new CancellationTokenSource();
         var operation = authorization.AuthorizeAsync(
-            new PermissionEvaluationContext(TrustedPrincipal(), "read"),
+            new PermissionEvaluationContext(TrustedPrincipal(), "orders:read"),
             cancellation.Token).AsTask();
 
         await probe.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -236,7 +236,7 @@ public sealed class PermissionAuthorizationSemanticsTests
         using var contextCancellation = new CancellationTokenSource();
 
         var result = await authorization.AuthorizeAsync(
-            new PermissionEvaluationContext(TrustedPrincipal(), "read")
+            new PermissionEvaluationContext(TrustedPrincipal(), "orders:read")
             {
                 CancellationToken = contextCancellation.Token
             });
@@ -263,7 +263,7 @@ public sealed class PermissionAuthorizationSemanticsTests
         var authorization = provider.GetRequiredService<IPermissionAuthorizationService>();
 
         var operation = authorization.AuthorizeAsync(
-            new PermissionEvaluationContext(TrustedPrincipal(), "read")
+            new PermissionEvaluationContext(TrustedPrincipal(), "orders:read")
             {
                 CancellationToken = contextCancellation.Token
             },
@@ -360,7 +360,7 @@ public sealed class PermissionAuthorizationSemanticsTests
         public ValueTask<PermissionEvaluationResult?> EvaluateAsync(
             PermissionEvaluationContext context,
             CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<PermissionEvaluationResult?>(context.Permission == "READ"
+            ValueTask.FromResult<PermissionEvaluationResult?>(context.Permission == "ORDERS:READ"
                 ? PermissionEvaluationResult.Denied()
                 : null);
     }

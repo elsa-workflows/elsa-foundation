@@ -13,8 +13,8 @@ public sealed class PermissionOwnershipValidatorTests
     public void Allows_cross_owner_consumption_when_catalog_owner_is_unique()
     {
         var result = PermissionOwnershipValidator.Validate(
-            [new Contributor("catalog-owner", "orders.read")],
-            [new PermissionConsumption(new EndpointIdentity("/orders", "GET"), "route-owner", "orders.read")]);
+            [new Contributor("catalog-owner", "orders:read")],
+            [new PermissionConsumption(new EndpointIdentity("/orders", "GET"), "route-owner", "orders:read")]);
 
         Assert.True(result.IsValid);
     }
@@ -23,9 +23,9 @@ public sealed class PermissionOwnershipValidatorTests
     public void Reports_missing_conflicting_and_wildcard_permissions()
     {
         var result = PermissionOwnershipValidator.Validate(
-            [new Contributor("one", "orders.read"), new Contributor("two", "orders.read")],
+            [new Contributor("one", "orders:read"), new Contributor("two", "orders:read")],
             [
-                new PermissionConsumption(new EndpointIdentity("/missing", "GET"), "owner", "missing.read"),
+                new PermissionConsumption(new EndpointIdentity("/missing", "GET"), "owner", "missing:read"),
                 new PermissionConsumption(new EndpointIdentity("/wildcard", "GET"), "owner", "*")
             ]);
 
@@ -37,12 +37,12 @@ public sealed class PermissionOwnershipValidatorTests
     [Fact]
     public void Ignores_wildcard_grant_when_policy_also_contains_an_action_permission()
     {
-        var policy = new PermissionPolicyCodec().Format(PermissionPolicyDescriptor.Any("orders.read", "*"));
+        var policy = new PermissionPolicyCodec().Format(PermissionPolicyDescriptor.Any("orders:read", "*"));
         var entry = new EndpointManifestEntry(
             new NormalizedRoute("/orders"), ["GET"], "orders", "route-owner", EndpointAuthoringModels.MinimalApi,
             EndpointSecurityDispositionMetadata.Permission(policy), [], [], null);
 
-        var result = new PermissionOwnershipValidator([new Contributor("catalog-owner", "orders.read")]).Validate([entry]);
+        var result = new PermissionOwnershipValidator([new Contributor("catalog-owner", "orders:read")]).Validate([entry]);
 
         Assert.True(result.IsValid);
     }
