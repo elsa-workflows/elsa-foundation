@@ -9,7 +9,7 @@
 - Every step a workflow takes is saved in a **checkpoint** together with the follow-up work it implies.
 - A background task, the **resumption pump**, sweeps the database every 10 seconds (by default) for work that was saved but never finished, and restarts it.
 - Restarting always goes through the run's **mailbox**, so there is still only one writer per run.
-- Work can be delivered **more than once** after a crash. Every consumer is idempotent, so a repeat has no extra effect. This is why running the sweep again is always safe.
+- Work can be delivered **more than once** after a crash. Consumers are idempotent **while the item is still queued**; a late scheduler-work repeat after its chain has drained can conflict (see [the late-repeat limit](#the-idempotency-rule)). Running the sweep again is safe on the queued path.
 - Under the faster [persistence modes](../website/docs/essentials/persistence-modes.md), a crash can make the last few activities run again. External effects are never sent before their state is saved.
 
 ## Words you will meet
@@ -69,20 +69,20 @@ The pump is a recurring background task. It ships in its own package, `Elsa.Work
 
 One sweep does three things:
 
-1. **Re-delivers stranded outbox items, for every run and every kind**, including `FailedRetryable` items whose retry time has come. Normal per-run delivery during a drain only handles `EnqueueSchedulerWork`, so cross-run work never runs inside another run's mailbox. The sweep's claim takes every claimable item, including continuations a live drain has just committed; the drain accounts for that before it reports it is done (see [When the sweep takes a live drain's continuation](#when-the-sweep-takes-a-live-drains-continuation)).
+1. **Re-delivers stranded outbox items, for every run and every kind, up to the outbox batch limit** (`OutboxBatchSize`, 100 by default), including `FailedRetryable` items whose retry time has come. Normal per-run delivery during a drain only handles `EnqueueSchedulerWork`, so cross-run work never runs inside another run's mailbox. One sweep pass claims at most that many items, including continuations a live drain has just committed; the drain accounts for that before it reports it is done (see [When the sweep takes a live drain's continuation](#when-the-sweep-takes-a-live-drains-continuation)).
 2. **Finds interrupted runs:** runs with queued work that a claim could take right now, plus runs the recovery scanner reports.
 3. **Re-drives each run** by sending a `RunSchedulerWork` command **to its mailbox**. The sweep never drains a run itself, so the mailbox stays the only writer.
 
 > *Why a "claimable now" list?* After a restart, nothing else remembers which runs were interrupted. The queue answers "which runs have work a claim could take now", returning distinct run ids in ordinal order after a bound (#2188). Both the in-memory and database queues implement it and pass the same contract tests. An older method that lists every run with *any* queued work still exists; the sweep falls back to it only for a queue that lacks the newer one.
 
-The durable queue itself is a document-store bridge (document kind `schedulerWorkItem`) swapped in by the EF Core feature. Adding is idempotent by (run id, work item id); listing and taking are first-in-first-out by (recorded time, sequence, work item id); taking loads first, then deletes.
+The durable queue itself is an EF Core store (`EfSchedulerWorkQueueStore` over `RuntimeDbContext.SchedulerWorkItems`) swapped in by the EF Core feature, with fenced claims. Adding is idempotent by (run id, work item id); listing is first-in-first-out by (recorded time, sequence, work item id). A claim uses the row's revision for compare-and-set; consuming or completing a claimed item fences on owner and token, so a renewed claim can still be finished by its original claimant.
 
 ## The idempotency rule
 
-Delivery is **at least once on both sides**: work can be added twice and taken twice. Every consumer is idempotent, so no crash window strands an activity and running the sweep again is always safe.
+Delivery is **at least once on both sides**: work can be added twice and taken twice. Consumers are idempotent **while the item is still queued**, so no crash window strands an activity and running the sweep again is safe on that path. A scheduler-work repeat after its chain has drained can re-run a checkpoint whose replay conflicts (the late-repeat limit below).
 
 - **Adding work.** The outbox can be delivered again, by the drain during normal running or by the sweep after a crash. So the same work can be queued twice. The queue absorbs duplicates by (run id, work item id). Re-drive commands carry a fresh key per sweep, while the work items behind them stay single. A run whose backlog survives (for example, a dispatch that raced a crash) is simply re-driven by the next sweep.
-- **Taking work.** The drain does not remove a step before running it. It reads the head of the queue, runs it in place, and only removes it **after** the step's effect is saved: after a successful commit, or, when the handler faults, before the poison record or the immediate retry is queued. A crash before removal leaves the step queued, backlog discovery re-drives it, and the handler runs again idempotently. The queue's own "take" contract is unchanged (load, then delete); only the moment of removal moved.
+- **Taking work.** The drain does not remove a step before running it. On the EF store it claims the FIFO head (revision compare-and-set), runs it in place, and only removes it **after** the step's effect is saved, by completing that claim (owner and token): after a successful commit, or, when the handler faults, before the poison record or the immediate retry is queued. A crash before that complete leaves the step queued, backlog discovery re-drives it, and the handler runs again idempotently. A store without claim transitions still dequeues the FIFO head after the effect is saved.
 
 ## Keeping the pump bounded
 
@@ -130,6 +130,7 @@ Both follow one shared rule: **renew a claim just before acting on it, and never
 
 Other loops use the same claim, renew and fenced-complete shape without the shared helper. Scheduler work claims one item at a time and runs it at once, and its renewal has drain-specific rules (a dispatch deadline, and a claim its own checkpoint consumes). Alteration jobs and transport items are fenced inside the checkpoint commit itself.
 
+<a id="a-live-drains-continuation-in-the-sweeps-hands-2225"></a>
 ## When the sweep takes a live drain's continuation
 
 The sweep claims work across every run, so it can grab a continuation that a live drain has just committed, before the drain's own delivery step gets to it. The drain then finds nothing to deliver, or sees the item reported as superseded (#1798).
@@ -161,6 +162,8 @@ Now the drain treats such a continuation as still its own. It reports *Quiesced*
 
 The sweep itself is unchanged, so crash recovery still happens at the sweep interval. The cost is latency under contention, plus two reads for a drain that finishes: the claimed-continuations listing, and the one-item queue read after a drain that ran steps.
 
+<a id="persistence-modes-and-the-deferred-flush-window"></a>
+<a id="coalescing-checkpoint-persistence--the-deferred-flush-window-e3-6--rt-10"></a>
 ## Persistence modes and the deferred-save window
 
 [Persistence modes](../website/docs/essentials/persistence-modes.md) is the user guide: what Durable, Balanced (the default) and Ephemeral save, how to choose one per host or per workflow, and what a crash costs in each. This section covers the mechanics behind them.
@@ -179,7 +182,7 @@ Every shell with the runtime API has this machinery: the runtime API feature cal
 
 **What is buffered:** writes to run, activity execution, durable value and scheduler state, and continuation intents (`EnqueueSchedulerWork`), which are consumed from the buffer within the segment so a folded segment does not save its own continuation.
 
-**What is never buffered:** lease, heartbeat and ownership writes and the `EnsureOwnershipAsync` fencing go straight to the operational store. The folded commit still goes through the single checkpoint committer, so ownership fencing guards it exactly as it guards an immediate commit: a stale writer is refused before anything is saved.
+**What is never buffered:** lease, heartbeat and ownership writes go straight to the operational store. The folded commit still goes through the single checkpoint committer, which stamps the drain's ownership lease as `ExpectedFence` so a stale writer is refused before anything is saved.
 
 **Boundaries that always save.** These checkpoints are never folded away:
 
@@ -266,7 +269,7 @@ The two nested-invoke handlers are the exception: their commits go through a dyn
 | Live drain vs sweep | `LiveDrainSweepContentionContract` on in-memory, SQLite and PostgreSQL: the real sweep at the drain's read, and a claimant that delivers late, dies or gets stuck; retry scenarios under the registered policy (drain's own delivery fails then sweep delivers; sweep fails before drain's first read, answered *AcceptedButFaulted* then delivered; every attempt fails until *FailedFinal*) |
 | Drain wait outcomes | `WorkflowDrainContinuationSettlementTests`: cancellation, failed attempts before and during the wait, queue-read skip rules, back-off, lapse and per-request deadline on a fake clock, and a batch with a mailbox-needing item ahead of the continuation |
 | Batch order and renewals | `RuntimePostCommitOutboxProcessorTests` |
-| Mid-segment crash | `CoalescingCrashConvergenceTests.Coalescing_CrashMidSegment_QueueRetainsSegmentEntry_ThenHonestSweepConvergesWithoutDuplicateEffects` (two generations over one store: the first crashes mid-segment, the second's sweep converges to the crash-free result); `RuntimeCheckpointCoalescingTests.CrashMidSegment_DurableQueueStillHoldsSegmentEntry_AndNoPartialCheckpointPersisted` |
+| Mid-segment crash | `RuntimeCheckpointCoalescingTests.CrashMidSegment_DurableQueueStillHoldsSegmentEntry_AndNoPartialCheckpointPersisted` |
 | Bookmarks saved at once | `RuntimeCheckpointCoalescingTests.Coalescing_BookmarkSuspend_FlushesDurableBookmarkImmediately` (so the durable timer pump, which reads the saved bookmark store, never races an in-memory bookmark) |
 | Timer and bookmark stores never buffered | `RuntimeCheckpointCoalescingTests.Coalescing_DoesNotDecorateDurableTimerOrBookmarkStores_SoDelaySuspensionStaysDurable` |
 | Every mode | `PersistenceModeFlushTests`: suspension, resume, fault, handler fault, cancellation and ownership loss |
@@ -276,7 +279,7 @@ The two nested-invoke handlers are the exception: their commits go through a dyn
 
 | Role | Types and members |
 |---|---|
-| Work queue | `IWorkflowSchedulerWorkQueue` (`ListClaimableWorkflowExecutionIdsAsync(RuntimeSchedulerClaimableBacklogQuery)`, older `ListPendingWorkflowExecutionIdsAsync(int limit)`, `DequeueAsync`); work item `RuntimeSchedulerWorkItem`; durable queue `EfSchedulerWorkQueueStore` (an `IDocumentStore` bridge), swapped in by `AddRuntimeEntityFrameworkCore` |
+| Work queue | `IWorkflowSchedulerWorkQueue` (`ListClaimableWorkflowExecutionIdsAsync(RuntimeSchedulerClaimableBacklogQuery)`, older `ListPendingWorkflowExecutionIdsAsync(int limit)`, `ClaimAsync` / `CompleteClaimAsync` / `ConsumeClaimedAsync`); work item `RuntimeSchedulerWorkItem`; durable queue `EfSchedulerWorkQueueStore` (EF Core store over `RuntimeDbContext.SchedulerWorkItems`, with fenced claims), swapped in by `AddRuntimeEntityFrameworkCore` |
 | Drain | `WorkflowSchedulerDrainer`; `WorkflowDrainOrchestrator`; `WorkflowDrainOrchestratorOptions.ContinuationClaimWaitLimit` and `ContinuationClaimWaitMargin`; scheduler claim timeout `RuntimeSchedulerWorkClaimOptions.VisibilityTimeout` |
 | Sweep | `IRuntimeResumptionService` / `RuntimeResumptionService` (`SweepAsync`); outbox re-delivery is `ProcessAsync(workflowExecutionId: null, intentKind: null)`; `RuntimeResumptionSweepRequest.MaxExecutionsPerSweep` and `ExcludedWorkflowExecutionIds`; backlog position `RuntimeResumptionDiscoveryStateStore`; recovery scanner `IRuntimeRecoveryScanner` |
 | Pump | `WorkflowsRuntimeResumptionFeature`, `RuntimeResumptionPumpTask` (an `IRecurringTask` scheduled by the Tasks domain), `MaxBackoffInterval` |
