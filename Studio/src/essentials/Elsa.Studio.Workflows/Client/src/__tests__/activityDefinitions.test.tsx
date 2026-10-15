@@ -526,6 +526,7 @@ describe("Activity Definitions experience", () => {
 
     await waitForText(rendered.container, "Retire");
     click(buttonByText(rendered.container, "Retire"));
+    await waitForText(rendered.container, "Continue with no recommended version");
     click(controlByLabel<HTMLInputElement>(rendered.container, "Continue with no recommended version"));
     change(controlByLabel<HTMLTextAreaElement>(rendered.container, "Reason"), "Lifecycle cleanup");
     click(controlByLabel<HTMLInputElement>(rendered.container, "I reviewed"));
