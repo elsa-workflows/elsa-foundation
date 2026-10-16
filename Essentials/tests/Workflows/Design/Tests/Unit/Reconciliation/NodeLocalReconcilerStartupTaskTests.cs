@@ -89,7 +89,7 @@ public sealed class NodeLocalReconcilerStartupTaskTests
 
         Assert.Equal(1, reconciler.Passes);
         Assert.Equal(1, reconcilerRegistrations);
-        Assert.Single(services.Where(x => x.ServiceType == typeof(IOptions<WorkflowVersionReconcilerOptions>)));
+        Assert.Single(services, x => x.ServiceType == typeof(IOptions<WorkflowVersionReconcilerOptions>));
         Assert.Same(features[0].ReconcilerOptions, provider.GetRequiredService<IOptions<WorkflowVersionReconcilerOptions>>().Value);
     }
 

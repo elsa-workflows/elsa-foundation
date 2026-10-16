@@ -48,11 +48,14 @@ public class JsonWorkflowReconciliationFeature : WorkflowsDesignReconciliationFe
     {
         var additionalSources = AdditionalSources.ToArray();
         var sourceIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var options in new[] { Options }.Concat(additionalSources))
+        var sourceOptions = new[] { Options }.Concat(additionalSources).ToArray();
+        for (var index = 0; index < sourceOptions.Length; index++)
         {
-            ValidateOptions(options);
+            var options = sourceOptions[index];
+            var location = index == 0 ? nameof(Options) : $"{nameof(AdditionalSources)}[{index - 1}]";
+            ValidateOptions(options, location);
             if (!sourceIds.Add(options.SourceId))
-                throw new InvalidOperationException($"{nameof(JsonWorkflowReconciliationFeature)} requires distinct source identities; duplicate {nameof(JsonWorkflowReconciliationOptions.SourceId)} '{options.SourceId}'.");
+                throw new InvalidOperationException($"{nameof(JsonWorkflowReconciliationFeature)} {location} requires distinct source identities; duplicate {nameof(JsonWorkflowReconciliationOptions.SourceId)} '{options.SourceId}'.");
         }
 
         base.ConfigureServices(services);
@@ -71,11 +74,11 @@ public class JsonWorkflowReconciliationFeature : WorkflowsDesignReconciliationFe
     /// (scanned directory) — never more than one, never none. Centralising the check here keeps the
     /// source itself free of configuration policy.
     /// </summary>
-    private static void ValidateOptions(JsonWorkflowReconciliationOptions options)
+    private static void ValidateOptions(JsonWorkflowReconciliationOptions options, string location)
     {
         if (string.IsNullOrWhiteSpace(options.SourceId))
             throw new InvalidOperationException(
-                $"{nameof(JsonWorkflowReconciliationFeature)} requires a non-empty {nameof(JsonWorkflowReconciliationOptions.SourceId)}.");
+                $"{nameof(JsonWorkflowReconciliationFeature)} {location} requires a non-empty {nameof(JsonWorkflowReconciliationOptions.SourceId)}.");
 
         var configuredPathOptions = new[]
         {
@@ -86,7 +89,7 @@ public class JsonWorkflowReconciliationFeature : WorkflowsDesignReconciliationFe
 
         if (configuredPathOptions != 1)
             throw new InvalidOperationException(
-                $"{nameof(JsonWorkflowReconciliationFeature)} requires exactly one of "
+                $"{nameof(JsonWorkflowReconciliationFeature)} {location} (SourceId '{options.SourceId}') requires exactly one of "
                 + $"{nameof(JsonWorkflowReconciliationOptions.FilePath)}, {nameof(JsonWorkflowReconciliationOptions.Files)}, "
                 + $"or {nameof(JsonWorkflowReconciliationOptions.FolderPath)} to be configured — not several, and not none.");
     }

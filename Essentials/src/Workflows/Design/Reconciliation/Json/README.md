@@ -76,6 +76,10 @@ paths and publication flag. Enabling `WorkflowsDesignGitReconciliation` alongsid
 source to the same reconcile pass; the shared reconciler and import startup task are registered once.
 `ReconcilerOptions` is a shared policy supplied by the first registration. Configure the same policy on
 both source features when their registration order should not affect it.
+Do not use JSON property order to select the policy: `IConfiguration` enumerates object-shaped `Features`
+sections by key, so JSON reconciliation precedes Git in that configuration enumeration even if Git is
+written first in the file. A policy configured only on a later source does not replace the shared one;
+set matching `ReconcilerOptions` on both source features.
 
 Source IDs record provenance; they do not isolate workflow identities or publication authority. Use
 distinct definition IDs across independently managed catalogs. With the default `DuplicateHandling: Skip`,

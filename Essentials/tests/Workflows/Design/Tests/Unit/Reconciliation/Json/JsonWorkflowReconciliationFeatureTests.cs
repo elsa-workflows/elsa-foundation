@@ -40,15 +40,29 @@ public sealed class JsonWorkflowReconciliationFeatureTests
     }
 
     [Theory]
-    [InlineData("", "secondary.json", null)]
-    [InlineData("primary", "secondary.json", null)]
-    [InlineData("secondary", null, null)]
-    [InlineData("secondary", "secondary.json", "/defs")]
-    public void Invalid_additional_source_configuration_fails_registration(string sourceId, string? filePath, string? folderPath)
+    [InlineData("", "secondary.json", null, "non-empty SourceId")]
+    [InlineData("primary", "secondary.json", null, "distinct source identities")]
+    [InlineData("secondary", null, null, "exactly one of FilePath, Files, or FolderPath")]
+    [InlineData("secondary", "secondary.json", "/defs", "exactly one of FilePath, Files, or FolderPath")]
+    public void Invalid_additional_source_configuration_fails_registration(string sourceId, string? filePath, string? folderPath, string expectedRule)
     {
         var feature = BindAdditionalSource(sourceId, filePath, folderPath);
 
-        Assert.Throws<InvalidOperationException>(() => feature.ConfigureServices(new ServiceCollection()));
+        var exception = Assert.Throws<InvalidOperationException>(() => feature.ConfigureServices(new ServiceCollection()));
+        Assert.Contains("AdditionalSources[0]", exception.Message);
+        Assert.Contains(expectedRule, exception.Message);
+    }
+
+    [Fact]
+    public void Invalid_later_source_names_its_index_and_identity()
+    {
+        var feature = BindAdditionalSource("secondary", "secondary.json", null);
+        feature.AdditionalSources = [feature.AdditionalSources.Single(), new() { SourceId = "third" }];
+
+        var exception = Assert.Throws<InvalidOperationException>(() => feature.ConfigureServices(new ServiceCollection()));
+        Assert.Contains("AdditionalSources[1]", exception.Message);
+        Assert.Contains("third", exception.Message);
+        Assert.Contains("exactly one of FilePath, Files, or FolderPath", exception.Message);
     }
 
     private static JsonWorkflowReconciliationFeature BindAdditionalSource(
@@ -80,7 +94,9 @@ public sealed class JsonWorkflowReconciliationFeatureTests
             Options = { FilePath = "catalog.json" },
         };
 
-        Assert.Throws<InvalidOperationException>(() => feature.ConfigureServices(new ServiceCollection()));
+        var exception = Assert.Throws<InvalidOperationException>(() => feature.ConfigureServices(new ServiceCollection()));
+        Assert.Contains("Options", exception.Message);
+        Assert.Contains("non-empty SourceId", exception.Message);
     }
 
     [Fact]
