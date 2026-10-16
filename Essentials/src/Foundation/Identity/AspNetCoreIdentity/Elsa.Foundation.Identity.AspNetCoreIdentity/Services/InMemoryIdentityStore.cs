@@ -30,6 +30,29 @@ public sealed class InMemoryIdentityStore : IUserStore, IRoleStore, IExternalIde
         return ValueTask.CompletedTask;
     }
 
+    public ValueTask<bool> SetStatusAsync(string tenantId, string userId, UserStatus status, CancellationToken cancellationToken = default)
+    {
+        lock (_syncRoot)
+        {
+            var index = _users.FindIndex(x => Same(x.TenantId, tenantId) && Same(x.Id, userId));
+            if (index < 0)
+                return ValueTask.FromResult(false);
+            _users[index] = _users[index] with { Status = status };
+            return ValueTask.FromResult(true);
+        }
+    }
+
+    public ValueTask<bool> DeleteAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
+    {
+        lock (_syncRoot)
+        {
+            // As in the EF store, the user's external logins and tenant membership go with it.
+            _externalIdentities.RemoveAll(x => Same(x.TenantId, tenantId) && Same(x.UserId, userId));
+            _memberships.RemoveAll(x => Same(x.TenantId, tenantId) && Same(x.UserId, userId));
+            return ValueTask.FromResult(_users.RemoveAll(x => Same(x.TenantId, tenantId) && Same(x.Id, userId)) > 0);
+        }
+    }
+
     ValueTask<RoleRecord?> IRoleStore.FindAsync(string tenantId, string roleId, CancellationToken cancellationToken)
     {
         lock (_syncRoot)

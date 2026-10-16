@@ -104,6 +104,7 @@ public static class IdentityIamEntityFrameworkCoreRegistration
         services.RemoveAll<IdentityAuthorityStoreBackend>();
         services.RemoveAll<IUserStore>();
         services.RemoveAll<IRevisionAwareUserStore>();
+        services.RemoveAll<IPagedUserStore>();
         services.RemoveAll<IRoleStore>();
         services.RemoveAll<IRevisionAwareRoleStore>();
         services.RemoveAll<IPagedRoleStore>();
@@ -135,6 +136,7 @@ public static class IdentityIamEntityFrameworkCoreRegistration
         services.AddScoped<EfTenantMembershipStore>();
         services.Add(ServiceDescriptor.Scoped<IUserStore>(provider => provider.GetRequiredService<EfUserStore>()));
         services.Add(ServiceDescriptor.Scoped<IRevisionAwareUserStore>(provider => provider.GetRequiredService<EfUserStore>()));
+        services.Add(ServiceDescriptor.Scoped<IPagedUserStore>(provider => provider.GetRequiredService<EfUserStore>()));
         services.Add(ServiceDescriptor.Scoped<IRoleStore>(provider => provider.GetRequiredService<EfRoleStore>()));
         services.Add(ServiceDescriptor.Scoped<IRevisionAwareRoleStore>(provider => provider.GetRequiredService<EfRoleStore>()));
         services.Add(ServiceDescriptor.Scoped<IPagedRoleStore>(provider => provider.GetRequiredService<EfRoleStore>()));

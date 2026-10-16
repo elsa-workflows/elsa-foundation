@@ -528,6 +528,23 @@ public sealed class EfCoreIdentityFrameworkContractTests
     }
 
     [Fact]
+    public async Task Cookie_of_a_user_disabled_after_sign_in_is_rejected_and_signed_out()
+    {
+        await using var scenario = await EfCoreIdentityScenario.CreateAsync();
+        var user = await scenario.CreateUserAsync("CookieDisabled");
+        var events = scenario.Services.GetRequiredService<EfCoreIdentityCookieEvents>();
+        var beforeDisable = CreateCookieContext(scenario.Services, user.Id, scenario.TenantId, user.SecurityStamp);
+        await events.ValidatePrincipal(beforeDisable);
+
+        Assert.True(await scenario.Services.GetRequiredService<IUserStore>().SetStatusAsync(scenario.TenantId, user.Id, UserStatus.Disabled));
+        var afterDisable = CreateCookieContext(scenario.Services, user.Id, scenario.TenantId, user.SecurityStamp);
+        await events.ValidatePrincipal(afterDisable);
+
+        Assert.NotNull(beforeDisable.Principal);
+        Assert.Null(afterDisable.Principal);
+    }
+
+    [Fact]
     public async Task Cookie_missing_security_stamp_is_rejected_and_signed_out()
     {
         await using var scenario = await EfCoreIdentityScenario.CreateAsync();
@@ -962,6 +979,7 @@ public sealed class EfCoreIdentityFrameworkContractTests
             typeof(IdentityIamDbContext),
             typeof(IUserStore),
             typeof(IRevisionAwareUserStore),
+            typeof(IPagedUserStore),
             typeof(IRoleStore),
             typeof(IRevisionAwareRoleStore),
             typeof(IPagedRoleStore),
