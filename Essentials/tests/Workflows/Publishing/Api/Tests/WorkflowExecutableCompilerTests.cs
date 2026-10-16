@@ -1128,14 +1128,16 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.NotNull(capture.ConversionPlan);
     }
 
-    [Fact]
-    public void Leaf_result_projection_without_an_authored_target_produces_no_capture()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Leaf_result_projection_without_an_authored_target_produces_no_capture(bool isRequired)
     {
         var projection = new ActivityResultProjectionContract(
             "Value",
             "value",
             new ValueTypeDescriptor("String"),
-            isRequired: false,
+            isRequired: isRequired,
             policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result });
 
         var captures = LeafOutputCompiler().CompileResultProjectionOutputs(
@@ -1143,6 +1145,19 @@ public sealed class WorkflowExecutableCompilerTests
             [projection],
             [],
             [new("orderId", "OrderId", new TypeReference("String"), null, null)]);
+
+        Assert.Empty(captures);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Reusable_output_without_an_authored_target_produces_no_capture(bool isRequired)
+    {
+        var output = new ActivityOutputContract(
+            "result", "Result", new TypeReference("String"), isRequired, false, "elsa.json");
+
+        var captures = LeafOutputCompiler().CompileBoundaryOutputs("use-reusable", [output], [], []);
 
         Assert.Empty(captures);
     }
