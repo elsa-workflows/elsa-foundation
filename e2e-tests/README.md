@@ -123,7 +123,8 @@ take no server argument and can run while yours is up:
 # In another terminal, wait until http://localhost:5295/health/ready reports ready, then use the same $base for each script.
 $base = 'http://localhost:5295'
 $selfHosted = 'Test-RestartRecovery.ps1', 'Test-AlterationReplayAndRestart.ps1', 'Test-FileBasedDeployment.ps1',
-              'Test-SharedPersistence.ps1', 'Test-SharedDiagnosticsPersistence.ps1', 'Test-ServerLifecycleGuard.ps1'
+              'Test-SharedPersistence.ps1', 'Test-SharedDiagnosticsPersistence.ps1', 'Test-ServerLifecycleGuard.ps1',
+              'Test-JsonSourceComposition.ps1'
 $failed = @()
 Get-ChildItem ./e2e-tests -Recurse -Filter 'Test-*.ps1' | Sort-Object FullName | ForEach-Object {
     if ($_.Name -in $selfHosted) { pwsh -NoProfile -File $_.FullName }

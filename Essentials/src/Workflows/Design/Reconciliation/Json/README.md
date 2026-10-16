@@ -77,6 +77,13 @@ source to the same reconcile pass; the shared reconciler and import startup task
 `ReconcilerOptions` is a shared policy supplied by the first registration. Configure the same policy on
 both source features when their registration order should not affect it.
 
+Source IDs record provenance; they do not isolate workflow identities or publication authority. Use
+distinct definition IDs across independently managed catalogs. With the default `DuplicateHandling: Skip`,
+two sources contributing the same definition ID and version share the stored version: a content mismatch
+is logged, and a publishing source can publish content imported by an import-only source. Treat all
+catalog writers in a shell as trusted to contribute executable workflows. `DuplicateHandling: Throw`
+fails reconciliation on duplicates, including unchanged versions on restart.
+
 ## Authoring definition files
 
 A file is a top-level JSON array of version envelopes (camelCase):
