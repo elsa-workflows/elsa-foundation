@@ -37,9 +37,9 @@ try {
     }
 
     $settingsPath = Join-Path $contentRoot 'shells.json'
-    $settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json -AsHashtable
+    $settings = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
     $features = $settings.CShells.Shells.default.Features
-    $features.JsonWorkflowReconciliation = @{
+    $features | Add-Member -NotePropertyName JsonWorkflowReconciliation -Force -NotePropertyValue @{
         ReconcilerOptions = @{ DuplicateHandling = 'Throw' }
         Options = @{ SourceId = 'primary'; FilePath = $catalogs.primary }
         AdditionalSources = @(@{ SourceId = 'secondary'; FilePath = $catalogs.secondary })
