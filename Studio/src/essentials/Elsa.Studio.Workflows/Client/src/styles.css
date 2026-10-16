@@ -4620,8 +4620,14 @@ button.wf-node-slot-badge:focus-visible {
 
 .wf-runtime-reason {
   display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: 6px;
   color: var(--wf-warning-text);
+}
+
+.wf-runtime-reason-text {
+  flex: 1 1 200px;
 }
 
 .wf-runtime-equivalence {

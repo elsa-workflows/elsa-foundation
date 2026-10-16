@@ -37,8 +37,8 @@ test("narrow keyboard users preserve workflow browse context through global sear
 
   const requests = await page.evaluate(() =>
     (window as Window & { browseRequests?: string[] }).browseRequests ?? []);
-  expect(requests.some(url => url.includes("folderId=folder-operations") && url.includes("state=all") && url.includes("search=workflow"))).toBe(true);
-  expect(requests.some(url => !url.includes("folderId=") && url.includes("state=all") && url.includes("search=workflow"))).toBe(true);
+  expect(requests.some(url => url.includes("folderId=folder-operations") && url.includes("state=all") && url.includes("searchTerm=workflow"))).toBe(true);
+  expect(requests.some(url => !url.includes("folderId=") && url.includes("state=all") && url.includes("searchTerm=workflow"))).toBe(true);
 
   await page.reload();
   await expect(page.getByText("Operations workflow")).toBeVisible();

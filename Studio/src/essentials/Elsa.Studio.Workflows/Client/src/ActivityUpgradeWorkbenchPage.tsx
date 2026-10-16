@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, ArrowLeft, CheckCircle2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { ActivityUpgradePlanReview } from "./ActivityUpgradePlanReview";
@@ -29,6 +29,7 @@ import {
 } from "./api/activityUpgrades";
 import { ApiCapabilityUnavailableError } from "./api/capabilities";
 import { observeActivityDefinitions, type ActivityDefinitionsObservation } from "./activityDefinitionObservability";
+import { defaultStudioPathNavigation, StudioLink } from "./StudioLink";
 import "./activityDefinitions.css";
 import "./activityUpgradeWorkbench.css";
 
@@ -280,7 +281,7 @@ export function ActivityUpgradeWorkbenchPage({
   const complete = Boolean(plan && normalizePlanStatus(plan.status) === "Applied" && currentPlanResult?.receiptId);
 
   return <main className="ad-page au-page" aria-labelledby="activity-upgrade-title">
-    <a className="ad-back" href="/workflows/activity-definitions"><ArrowLeft size={16} aria-hidden /> Activity Definitions</a>
+    <StudioLink className="ad-back" href="/workflows/activity-definitions" navigateToStudioPath={navigateToStudioPath}><ArrowLeft size={16} aria-hidden /> Activity Definitions</StudioLink>
     <header className="ad-page-header">
       <div>
         <span className="ad-kicker">Activity Definition maintenance</span>
@@ -466,21 +467,11 @@ function HandoffRow({ handoff, planId, value, onOpenDraft, onChange }: { handoff
   const href = handoff.draftKind === "ActivityDraft"
     ? `/workflows/activity-definitions?definition=${encodeURIComponent(handoff.definitionId)}&section=editor&draft=${encodeURIComponent(handoff.draftId)}&returnPlan=${encodeURIComponent(planId)}`
     : `/workflows/definitions?definition=${encodeURIComponent(handoff.definitionId)}&draft=${encodeURIComponent(handoff.draftId)}&returnPlan=${encodeURIComponent(planId)}`;
-  const openDraft = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    event.preventDefault();
-    onOpenDraft(href);
-  };
   return <article>
     <div><strong>{handoff.draftKind}</strong><code>{handoff.draftId}</code><span>Revision {handoff.revision} · required by {handoff.requiredByStageIds.join(", ")}</span></div>
-    <a href={href} onClick={openDraft}>Open next required draft</a>
+    <StudioLink href={href} navigateToStudioPath={onOpenDraft}>Open next required draft</StudioLink>
     <label><span>Actual published version</span><input aria-label={`Published version for ${handoff.draftId}`} value={value} onChange={event => onChange(event.target.value)} placeholder="Exact immutable version ID" /></label>
   </article>;
-}
-
-function defaultStudioPathNavigation(path: string) {
-  window.history.pushState({}, "", path);
-  window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
 function readLocationSeed() {

@@ -213,7 +213,7 @@ export async function listDefinitions(context: StudioEndpointContext, request: D
     state: request.state ?? "active"
   });
   const search = request.search.trim();
-  if (search) parameters.set("search", search);
+  if (search) parameters.set("searchTerm", search);
 
   const pagedPath = await definitionPagePath(context);
   if (pagedPath) {

@@ -23,6 +23,7 @@ import { readContainerVariables, shadowingWarningMap, writeContainerVariables } 
 import { describeSlotContents } from "./editorHelpers";
 import { ConnectMenu } from "./graph";
 import { activityDescriptionMaxLength, activityDisplayNameMaxLength } from "../activityPresentation";
+import { StudioLink } from "../StudioLink";
 
 // The open change-activity picker. Holds only the slot ID (not the ChildSlot descriptor): the menu can
 // stay open across draft edits (autosave merge, Weaver batch), so the pick handler re-resolves the slot
@@ -462,8 +463,8 @@ function ReusableActivityIdentity({
         }}>
           <Repeat2 size={14} /> Change exact version
         </button>
-        <a href={sourceUrl}>Open exact source definition</a>
-        <a href={draftUrl}>Create a separate draft</a>
+        <StudioLink href={sourceUrl}>Open exact source definition</StudioLink>
+        <StudioLink href={draftUrl}>Create a separate draft</StudioLink>
       </div>
       {recommendedVersion ? <p className="wf-upgrade-available">Recommended v{recommendedVersion.version} available</p> : null}
     </section>
