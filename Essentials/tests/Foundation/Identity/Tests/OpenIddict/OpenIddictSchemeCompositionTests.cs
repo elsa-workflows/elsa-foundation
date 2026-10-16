@@ -1,4 +1,6 @@
 using System.Security.Cryptography;
+using Elsa.Foundation.Identity.Api.ApiKeys;
+using Elsa.Foundation.Identity.Api.Extensions;
 using Elsa.Foundation.Identity.AspNetCoreIdentity;
 using Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore.Authentication;
 using Elsa.Foundation.Identity.Core.Authentication;
@@ -198,6 +200,32 @@ public sealed class OpenIddictSchemeCompositionTests : IAsyncDisposable
         var context = CreateContext(provider, cookie: "Elsa.Identity.Cookie=session-value");
 
         Assert.Equal("Elsa.Identity.Cookie", OpenIddictSchemeSelector.SelectScheme(context));
+    }
+
+    [Fact]
+    public void Selector_Routes_Api_Key_Requests_To_The_Api_Key_Scheme_Even_With_A_Session_Cookie()
+    {
+        // A bad key must fail as a key, never authenticate the request as whoever owns the browser's session cookie.
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddAuthentication().AddCookie("Elsa.Identity.Cookie");
+        services.AddFoundationIdentityApplications();
+        services.AddOpenIddictVendorForTests(
+            builder => builder.UseInMemoryDatabase($"openiddict-{Guid.NewGuid():n}"));
+        services.AddFoundationIdentityOpenIddict(options => options.IsDevelopmentOrDemo = true);
+        using var provider = services.BuildServiceProvider();
+
+        var context = CreateContext(provider, authorization: "ApiKey elsa_ak.a.b", cookie: "Elsa.Identity.Cookie=session-value");
+
+        Assert.Equal(ApiKeyAuthenticationDefaults.AuthenticationScheme, OpenIddictSchemeSelector.SelectScheme(context));
+    }
+
+    [Fact]
+    public void Selector_Routes_Api_Key_Requests_To_The_Validation_Handler_When_No_Api_Key_Scheme_Exists()
+    {
+        var context = CreateContext(_fixture.Services, authorization: "ApiKey elsa_ak.a.b");
+
+        Assert.Equal(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme, OpenIddictSchemeSelector.SelectScheme(context));
     }
 
     [Fact]

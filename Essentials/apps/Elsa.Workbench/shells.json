@@ -41,6 +41,7 @@
           "FoundationAgentApi": {},
           "FoundationIdentityAbstractions": {},
           "FoundationIdentityApi": {},
+          "FoundationIdentityApplications": {},
           "FoundationIdentityAspNetCoreIdentity": {
             "IsDefault": true,
             "AllowedReturnUrlOrigins": [

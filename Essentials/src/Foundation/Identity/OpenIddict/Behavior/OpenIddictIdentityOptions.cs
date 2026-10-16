@@ -58,6 +58,13 @@ public sealed class OpenIddictIdentityOptions
     public string ExternalBearerScheme { get; set; } = "Elsa.Identity.Oidc.Jwt";
 
     /// <summary>
+    /// The authentication scheme the selector forwards an <c>Authorization: ApiKey</c> request to. Defaults to the
+    /// identity API's application API-key scheme (<c>ApiKeyAuthenticationDefaults.AuthenticationScheme</c>); only used
+    /// when that scheme is registered.
+    /// </summary>
+    public string ApiKeyScheme { get; set; } = "Elsa.Identity.ApiKey";
+
+    /// <summary>
     /// The cookie authentication scheme the selector forwards to for interactive (cookie-carrying) requests.
     /// Defaults to the ASP.NET Core Identity module's cookie scheme (<c>AspNetCoreIdentityDefaults.CookieScheme</c>);
     /// only used when that scheme is registered.

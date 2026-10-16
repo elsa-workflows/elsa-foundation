@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 107
+- Discovered feature classes: 108
 
 ## Features
 
@@ -53,6 +53,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | LiquidExpressionsFeature | direct IShellFeature | Elsa.Expressions.Liquid | IShellFeature | [LiquidExpressionsFeature.cs](../../Essentials/src/Expressions/Liquid/LiquidExpressionsFeature.cs) |
 | FoundationIdentityAbstractionsFeature | direct IShellFeature | Elsa.Foundation.Identity | IShellFeature, IMiddlewareShellFeature | [FoundationIdentityAbstractionsFeature.cs](../../Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/FoundationIdentityAbstractionsFeature.cs) |
 | FoundationIdentityApiFeature | direct IWebShellFeature | Elsa.Foundation.Identity.Api | IWebShellFeature | [FoundationIdentityApiFeature.cs](../../Essentials/src/Foundation/Identity/Api/FoundationIdentityApiFeature.cs) |
+| FoundationIdentityApplicationsFeature | direct IWebShellFeature | Elsa.Foundation.Identity.Api | IWebShellFeature | [FoundationIdentityApplicationsFeature.cs](../../Essentials/src/Foundation/Identity/Api/FoundationIdentityApplicationsFeature.cs) |
 | AspNetCoreIdentityFeature | direct IWebShellFeature | Elsa.Foundation.Identity.AspNetCoreIdentity | IWebShellFeature | [AspNetCoreIdentityFeature.cs](../../Essentials/src/Foundation/Identity/AspNetCoreIdentity/Elsa.Foundation.Identity.AspNetCoreIdentity/AspNetCoreIdentityFeature.cs) |
 | AspNetCoreIdentityEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore | IShellFeature | [AspNetCoreIdentityEntityFrameworkCoreFeature.cs](../../Essentials/src/Foundation/Identity/AspNetCoreIdentity/EntityFrameworkCore/AspNetCoreIdentityEntityFrameworkCoreFeature.cs) |
 | OidcAuthenticationFeature | direct IShellFeature | Elsa.Foundation.Identity.Oidc | IShellFeature | [OidcAuthenticationFeature.cs](../../Essentials/src/Foundation/Identity/Oidc/OidcAuthenticationFeature.cs) |

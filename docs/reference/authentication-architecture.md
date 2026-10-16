@@ -58,8 +58,9 @@ authorization selects exactly one matching identity and passes only that identit
 zero or multiple matches are challenged so tenants/providers cannot be unioned accidentally.
 
 The built-in trusted runtime types are `Elsa.Foundation.Identity` for the normalized external
-principal factory, the ASP.NET Core Identity cookie scheme for reconstructed cookie requests, and
-the OpenIddict validation scheme for validated bearer requests. OpenIddict's token-construction
+principal factory, the ASP.NET Core Identity cookie scheme for reconstructed cookie requests,
+the OpenIddict validation scheme for validated bearer requests, and the application API-key scheme
+(`Elsa.Identity.ApiKey`) for requests that carry an application's key. OpenIddict's token-construction
 identity type (`openiddict`) is deliberately not trusted as an endpoint identity. Custom adapters
 call `AddNormalizedAuthenticationType(...)` only after implementing the same strip-map-mark rule.
 
@@ -90,6 +91,7 @@ The stack is a set of composable CShells features. You enable them per shell in 
 | `FoundationIdentityOpenIddict` | `…Identity.OpenIddict` | **Be your own IdP:** first-party JWT issuance (`ITokenService` over the OpenIddict pipeline) + local bearer validation, plus the composite scheme selector. | protocol |
 | `FoundationIdentityOidc` | `…Identity.Oidc` | **Trust an external IdP:** the external OIDC provider module + ASP.NET Core `OpenIdConnect` / `JwtBearer` handler configuration (Keycloak, Entra, Auth0, …). | protocol |
 | `FoundationIdentityApi` | `…Identity.Api` | The `/_elsa/identity/*` HTTP surface (see §6) including the `GET /_elsa/identity/token` cookie→bearer exchange and shared Foundation policy enforcement. | protocol |
+| `FoundationIdentityApplications` | `…Identity.Api` | Application management under `/_elsa/identity/applications` and the API-key scheme that authenticates `Authorization: ApiKey` requests as an application (see §6 and [identity configuration](identity-configuration.md#foundationidentityapplications)). Needs an application and credential store, such as `IdentityIamEntityFrameworkCore`. | IAM / protocol |
 | `IdentityIamEntityFrameworkCore` | `…Identity.Persistence.EntityFrameworkCore` | Lower-level durable substrate: replaces the in-memory IAM stores with EF Core-backed ones (users/roles/external identities/tenant memberships). The ASP.NET Core Identity EF feature composes this with the framework services. | IAM |
 
 > **Note on ASP.NET Core Identity split.** The domain half (`FoundationIdentityAspNetCoreIdentity`)
@@ -177,12 +179,13 @@ request it forwards to the right concrete handler:
 
 | Request shape | Forwards to |
 |---|---|
+| `Authorization: ApiKey` | the application API-key scheme (`Elsa.Identity.ApiKey`), if registered, even when a cookie is present |
 | `Authorization: Bearer` with a **first-party** JWT (issuer matches `OpenIddictIdentityOptions.Issuer`, or unparseable) | OpenIddict validation handler |
 | `Authorization: Bearer` with a **foreign** issuer | the external OIDC JwtBearer scheme (`Elsa.Identity.Oidc.Jwt`), if registered |
 | No bearer, but the identity cookie is present | the cookie scheme (`Elsa.Identity.Cookie`), if registered |
 | Anything else | OpenIddict validation handler (its challenge is a clean `401`) |
 
-Forward targets from the cookie and OIDC modules are referenced **by name only** and checked against
+Forward targets from the cookie, OIDC and identity API modules are referenced **by name only** and checked against
 the scheme provider before use, so the OpenIddict module composes with — but never depends on — them.
 
 ---
@@ -197,12 +200,13 @@ Enable these feature sets per shell. All scenarios also require `FoundationIdent
 ```jsonc
 "FoundationIdentityAbstractions": {},
 "FoundationIdentityApi": {},
+"FoundationIdentityApplications": {},
 "FoundationIdentityAspNetCoreIdentity": {},
 "FoundationIdentityAspNetCoreIdentityEntityFrameworkCore": { "IsDevelopmentOrDemo": true },
 "FoundationIdentityOpenIddict": { "IsDevelopmentOrDemo": true }
 ```
 
-Local users and roles, the backend login page, a seeded dev admin (`admin` / `Password123!`, sourced from the
+Local users and roles, applications with API keys, the backend login page, a seeded dev admin (`admin` / `Password123!`, sourced from the
 `SeedAdmin*` settings in `shells.json` under `IsDevelopmentOrDemo` only — no credential constants in code),
 cookie sign-in, and first-party JWT issuance. This is exactly what the
 checked-in `Essentials/apps/Elsa.Workbench/shells.json` enables. **`FoundationIdentityOidc` is also enabled in
@@ -288,6 +292,10 @@ The `/_elsa/identity/*` surface (`FoundationIdentityApi`):
 | `_elsa/identity/refresh` | POST | Token-based refresh (`ITokenService.RefreshAsync`) for first-party/API clients. | anonymous (validates the refresh token) |
 | `_elsa/identity/logout/{provider}` | POST | Clears the session / provider sign-out. | anonymous |
 | `_elsa/identity/login` | GET / POST | The backend-served login page (GET) and credential post (POST) — from the ASP.NET Core Identity EF Core feature. | anonymous |
+| `_elsa/identity/applications` | GET / POST | Page the tenant's applications (`skip`, `take`); create one, which returns its API key once (`201`). From the `FoundationIdentityApplications` feature, like the rows below. | `identity/applications:read` / `identity/applications:manage` |
+| `_elsa/identity/applications/{applicationId}` | GET / PUT / DELETE | Read an application; replace its display name, roles and enabled state; delete it with its key. | `identity/applications:read` / `identity/applications:manage` |
+| `_elsa/identity/applications/{applicationId}/api-key/rotate` | POST | Issue a new key, returned once; the previous key stops working at once. | `identity/applications:manage` |
+| `_elsa/identity/applications/{applicationId}/api-key/revoke` | POST | Revoke the key; it stops working at once. | `identity/applications:manage` |
 
 The Studio cookie-refresh loop **re-probes `GET /_elsa/identity/session`** and, on a live cookie,
 re-fetches `GET /_elsa/identity/token`; it does not use the token-based `POST /refresh` (that endpoint

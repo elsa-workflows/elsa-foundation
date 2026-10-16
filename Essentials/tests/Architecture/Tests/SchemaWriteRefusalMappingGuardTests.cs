@@ -6,6 +6,7 @@ using CShells.Features;
 using Elsa.Activities.Bpmn.Interchange;
 using Elsa.Activities.Design.Api;
 using Elsa.Api.AspNetCore;
+using Elsa.Foundation.Identity.Api;
 using Elsa.Modularity.Api;
 using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Design.Api;
@@ -48,6 +49,7 @@ public sealed class SchemaWriteRefusalMappingGuardTests
     [
         typeof(ActivitiesBpmnInterchangeFeature),
         typeof(ActivitiesDesignApiFeature),
+        typeof(FoundationIdentityApplicationsFeature),
         typeof(ModularityApiFeature),
         typeof(WorkflowsDesignApiFeature),
         typeof(WorkflowsPublishingApiFeature),
