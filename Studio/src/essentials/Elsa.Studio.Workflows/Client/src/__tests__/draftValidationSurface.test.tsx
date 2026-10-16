@@ -197,6 +197,7 @@ describe("ValidationPanel", () => {
       />
     ));
     expect(container.querySelector(".wf-validation-summary")?.textContent).toContain("1 validation issue");
+    expect(container.querySelector(".wf-validation-message")?.getAttribute("title")).toBe("orphan");
     const goTo = container.querySelector<HTMLButtonElement>(".wf-validation-repair")!;
     flushSync(() => goTo.click());
     expect(selected).toEqual(["orphan"]);

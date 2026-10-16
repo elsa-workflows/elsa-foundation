@@ -14,6 +14,9 @@ import {
 } from "../workflow-editor/activityClipboardShortcuts";
 import { WorkflowAlert } from "../workflow-editor/WorkflowAlert";
 import { WorkflowRuntimePanel } from "../workflow-editor/editorPanels";
+import { createValidationActivityLabels } from "../validationActivityLabels";
+import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
+import { flowchartStructureKind } from "../flowchartStartNode";
 import { useAiProviderAvailability } from "../workflow-editor/useAiProviderAvailability";
 import { formatActivityVersion } from "../workflowFormatting";
 import type { WorkflowTestRunView } from "../workflowTypes";
@@ -432,6 +435,57 @@ describe("accepted test runs with incidents", () => {
     flushSync(() => runLink?.click());
 
     expect(onOpenRun).toHaveBeenCalledWith("run-generic");
+  });
+
+  it("rewrites a VF-ACT-003 rejection into user terms and keeps the code secondary", () => {
+    const writeLine: ActivityCatalogItem = {
+      activityVersionId: "write-line-v1",
+      activityTypeKey: "Elsa.Activities.Console.WriteLine",
+      version: "1.0.0",
+      category: "Console",
+      displayName: "Write Line",
+      executionType: "Task",
+      inputs: [{ referenceKey: "text", name: "Text", displayName: "Text" }],
+      outputs: []
+    };
+    const named: ActivityNode = {
+      nodeId: "writeline-22ab948a",
+      activityVersionId: writeLine.activityVersionId,
+      inputs: [],
+      outputs: []
+    };
+    const flowchartRoot: ActivityNode = {
+      nodeId: "root",
+      activityVersionId: "flowchart-v1",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: flowchartStructureKind,
+        schemaVersion: "1",
+        payload: { activities: [named], connections: [], startNodeId: named.nodeId }
+      }
+    };
+    const activityLabels = createValidationActivityLabels({
+      root: flowchartRoot,
+      presentation: [{ nodeId: named.nodeId, displayName: "Say hello" }],
+      catalogByVersion: new Map([[writeLine.activityVersionId, writeLine]])
+    });
+    const testRun: WorkflowTestRunView = {
+      testRunId: "test-run-rejected",
+      definitionId: "definition-1",
+      definitionVersionId: "draft:1",
+      status: "Rejected",
+      reason: "VF-ACT-003: Activity node 'writeline-22ab948a' omits required input 'text', which has no pinned default. Every published input must lower to exactly one canonical binding."
+    };
+    flushSync(() => root.render(
+      <WorkflowRuntimePanel testRun={testRun} onOpenRun={() => {}} activityLabels={activityLabels} />
+    ));
+
+    expect(container.querySelector(".wf-runtime-reason-text")?.textContent)
+      .toBe("Required input \"Text\" on \"Say hello\" (Write Line) is empty.");
+    expect(container.querySelector(".wf-alert-code")?.textContent).toBe("VF-ACT-003");
+    expect(container.querySelector(".wf-runtime-reason")?.getAttribute("title")).toContain("writeline-22ab948a");
+    expect(container.textContent).not.toMatch(/pinned default|canonical binding/i);
   });
 
   it("keeps an ordinary accepted legacy receipt green when no fault evidence is present", () => {
