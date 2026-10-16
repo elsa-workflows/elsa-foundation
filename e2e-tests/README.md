@@ -124,7 +124,7 @@ take no server argument and can run while yours is up:
 $base = 'http://localhost:5295'
 $selfHosted = 'Test-RestartRecovery.ps1', 'Test-AlterationReplayAndRestart.ps1', 'Test-FileBasedDeployment.ps1',
               'Test-SharedPersistence.ps1', 'Test-SharedDiagnosticsPersistence.ps1', 'Test-ServerLifecycleGuard.ps1',
-              'Test-JsonSourceComposition.ps1'
+              'Test-JsonSourceComposition.ps1', 'Test-UnknownFeatures.ps1'
 $failed = @()
 Get-ChildItem ./e2e-tests -Recurse -Filter 'Test-*.ps1' | Sort-Object FullName | ForEach-Object {
     if ($_.Name -in $selfHosted) { pwsh -NoProfile -File $_.FullName }
@@ -222,6 +222,7 @@ The former `get-endpoints` and `write-endpoints` suites (GET / CRUD status-and-s
 | `workflow-version-override/Test-WorkflowVersionOverride.ps1` | automatic/exact promotion preflight, exact SemVer promotion, immutable version read |
 | `file-deployment/Test-FileBasedDeployment.ps1` | file-based deployment at startup (spec 147) on a server the script owns: definitions folder composed via env vars (`JsonWorkflowReconciliation` + `PublishOnReconcile`), `/health/ready` gate, imported + published + executable, idempotent restart |
 | `file-deployment/Test-JsonSourceComposition.ps1` | fresh owned Workbench: two independent JSON catalogs import at readiness through exactly one workflow reconcile startup pass |
+| `composition/Test-UnknownFeatures.ps1` | owned Workbench with an unknown requested feature: readiness stays lenient and the feature catalog reports its missing runtime descriptor explicitly |
 
 **Events note:** Foundation has no classic `PublishEvent` activity. An `Event` activity is a start trigger;
 you publish an event by POSTing a stimulus `{ stimulusType:"Event", stimulusHash:"sha256:"+hex(SHA256(eventName)), mode:"StartOnly" }`

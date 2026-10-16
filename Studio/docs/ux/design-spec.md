@@ -52,10 +52,10 @@ code.
 
 | Region | Status | Rule |
 |---|---|---|
-| Shell | `exists` | Sidebar or top menubar (theme or user choice). The top bar holds the page title, global actions and the theme control (`ThemeSwitcher`). |
+| Shell | `exists` | Sidebar or top menubar (theme or user choice). The top bar holds the page title, global actions, the theme control (`ThemeSwitcher`) and, when sign-in is on, the user menu. |
 | Navigation placement | `exists` | Each nav contribution may declare `placement` (`main` \| `more` \| `settings` \| `admin`), `order`, `requiresFeature` and `requiresRole` / `requiresPermission`. Unset `placement` is `more` at the top level; a child inherits its parent unless it declares a different placement, in which case it renders there. Main holds Home, Workflows, Runs and Tasks (Tasks only when the user-tasks feature is enabled). Extensions land under **More tools** (open state in `elsa-studio.ui.nav.more`). `settings` items (Appearance) render under Studio in the Settings shell and stay visible to every session. `admin` items render under Administration and use the host-control read gate. The sidebar keeps one Settings entry; searching still reveals the individual sections. Anonymous/demo sessions still see Administration when sign-in is off. Disabled features contribute nothing; role-gated items are hidden. Home is the customizable landing page at `/`, `/dashboard` and `/overview`; there is no separate Dashboard entry. |
 | Settings shell | `exists` | `/settings` is a two-pane shell (section list + content). Sections are deep-linkable as `/settings/<id>`. Original admin paths (`/modules`, `/theme-builder`, …) open the same shell and the same gate; a signed-in user without host-control read sees those sections as unavailable. The route is lazy-loaded. |
-| User menu | `target, phase 4` | See [User menu and sign-out](#user-menu-and-sign-out). Live has none. |
+| User menu | `exists` | See [User menu and sign-out](#user-menu-and-sign-out). |
 | Bottom dock | `exists` | Remembers the user's last state in `elsa-studio-bottom-panel-collapsed`, `elsa-studio-bottom-panel-height`, `elsa-studio-bottom-panel-maximized` and `elsa-studio-active-bottom-panel`. With no stored value the dock is **open** on desktop (`collapsed=false`) and collapsed at ≤640px. |
 | Bottom dock default | `target, phase 1` | Collapsed by default when no stored value, including on desktop. |
 | Bottom dock errors | `target, phase 2` | A status dot on the collapsed dock signals new errors. |
@@ -117,14 +117,15 @@ owns the live state; this module owns the shape, defaults, persistence and resol
 
 ## User menu and sign-out
 
-`target, phase 4`. Live Studio has no user menu. The topbar today is title, Weaver (when
-enabled), two GitHub links and `ThemeSwitcher`.
+`exists` (ADR 0085 D7). `UserMenu` sits on the topbar after the theme control.
 
-- Place the user menu on the topbar, after the theme control.
-- Contents: signed-in display name (or account id) and **Sign out**.
-- Sign out calls `useAuthContext().logout()` (`AuthProvider.logout` already exists; only the
-  menu is missing).
-- When no auth provider is configured, omit the menu.
+- The trigger shows the signed-in display name (or the account id when there is none).
+- The menu repeats the name under "Signed in as" and offers **Sign out**.
+- Sign out calls `useAuthContext().logout()`, which posts to `/_elsa/identity/logout/{provider}`.
+  The session it leaves is anonymous, so `RequireAuth` sends the browser to the provider's
+  challenge: the backend-owned login page. Studio renders no login page of its own.
+- A failed sign-out keeps the menu open and says so in place.
+- When no auth provider is configured, the menu is omitted.
 
 ## Toasts vs banners
 

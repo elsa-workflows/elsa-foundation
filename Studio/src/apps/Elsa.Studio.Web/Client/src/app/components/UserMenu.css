@@ -1,0 +1,141 @@
+/* The account control sits at the end of the top-bar cluster with the same 40px height, border and
+   radius as the theme selector, so the cluster reads as one row. */
+.user-menu {
+  display: flex;
+  min-width: 0;
+}
+
+.user-menu-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 220px;
+  height: 40px;
+  padding: 0 12px 0 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  color: var(--foreground);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.user-menu-button:hover {
+  background: var(--muted);
+  border-color: var(--primary);
+}
+
+.user-menu-button[aria-expanded="true"] {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+.user-menu-button:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
+}
+
+.user-menu-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: calc(var(--radius) - 2px);
+  background: color-mix(in srgb, var(--primary) 14%, var(--card));
+  color: var(--foreground);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+
+.user-menu-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Positioning is handled by Radix (portaled Content with align="end"/sideOffset). */
+.user-menu-content {
+  min-width: 220px;
+  max-width: min(320px, calc(100vw - 32px));
+  padding: 6px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xl);
+  color: var(--foreground);
+  z-index: 1000;
+}
+
+.user-menu-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+}
+
+.user-menu-label-caption {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+
+.user-menu-label-name {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-menu-separator {
+  height: 1px;
+  margin: 4px 0;
+  background: color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.user-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Radix menu items are focused via roving tabindex; keyboard focus is conveyed by [data-highlighted]. */
+.user-menu-item:focus,
+.user-menu-item:focus-visible {
+  outline: none;
+}
+
+.user-menu-item[data-highlighted] {
+  background: var(--muted);
+  border-color: var(--border);
+}
+
+.user-menu-item[data-disabled] {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.user-menu-error {
+  margin: 4px 10px 6px;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+[data-theme-mode="dark"] .user-menu-content {
+  box-shadow: 0 18px 40px color-mix(in srgb, black 45%, transparent);
+}

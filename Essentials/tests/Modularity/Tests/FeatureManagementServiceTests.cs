@@ -1,4 +1,5 @@
 using System.Text.Json;
+using CShells.Features;
 using Elsa.Modularity.Core.Contracts;
 using Elsa.Modularity.Core.Exceptions;
 using Elsa.Modularity.Core.Models;
@@ -30,6 +31,28 @@ public sealed class FeatureManagementServiceTests
 
         Assert.Contains(catalog.Features, x => x.Id == "EnabledFeature" && x.Enabled);
         Assert.Contains(catalog.Features, x => x.Id == "AvailableFeature" && !x.Enabled);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CatalogJsonDistinguishesRequestedFeaturesFromRuntimeAvailability(bool knownEnabled)
+    {
+        _store.Features["MissingFeature"] = Json("{}");
+        if (knownEnabled)
+            _store.Features["KnownFeature"] = Json("{}");
+        var service = CreateService(new RuntimeFeatureCatalogContributor(new FakeRuntimeFeatureCatalog(
+            new ShellFeatureDescriptor("KnownFeature"))));
+
+        var catalog = JsonSerializer.SerializeToElement(await service.GetCatalogAsync(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var features = catalog.GetProperty("features").EnumerateArray().ToArray();
+        var missing = Assert.Single(features, feature => feature.GetProperty("id").GetString() == "MissingFeature");
+        var known = Assert.Single(features, feature => feature.GetProperty("id").GetString() == "KnownFeature");
+
+        Assert.True(missing.GetProperty("enabled").GetBoolean());
+        Assert.False(missing.GetProperty("runtimeAvailable").GetBoolean());
+        Assert.Equal(knownEnabled, known.GetProperty("enabled").GetBoolean());
+        Assert.True(known.GetProperty("runtimeAvailable").GetBoolean());
     }
 
     [Fact]
