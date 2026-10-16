@@ -5,6 +5,7 @@ using Elsa.Foundation.Identity.OpenIddict;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using OpenIddict.Abstractions;
 using OpenIddict.Validation.AspNetCore;
 
 namespace Elsa.Foundation.Identity.Tests.OpenIddict;
@@ -76,6 +77,22 @@ public sealed class OpenIddictTokenServiceTests : IAsyncDisposable
         var result = await expiring.TokenService.ValidateAsync(new TokenValidationRequest(issued.AccessToken));
 
         Assert.False(result.Succeeded);
+    }
+
+    [Fact]
+    public async Task RevokeSubject_Revokes_Live_Entries_And_Leaves_Expired_Ones_Unwritten()
+    {
+        // The access entry is born expired while its refresh entry is live, so one subject holds both kinds.
+        await using var expiring = new OpenIddictIdentityFixture(options => options.AccessTokenLifetime = TimeSpan.FromMinutes(-15));
+        var issued = await expiring.IssueAsync("user-expired");
+        var manager = expiring.Services.GetRequiredService<IOpenIddictTokenManager>();
+        var accessEntry = (await manager.FindByIdAsync(new JsonWebToken(issued.AccessToken).GetClaim("oi_tkn_id").Value))!;
+        var refreshEntry = (await manager.FindByReferenceIdAsync(issued.RefreshToken!))!;
+
+        await expiring.TokenService.RevokeSubjectAsync("user-expired");
+
+        Assert.True(await manager.HasStatusAsync(accessEntry, OpenIddictConstants.Statuses.Valid), "an expired entry must not be written");
+        Assert.True(await manager.HasStatusAsync(refreshEntry, OpenIddictConstants.Statuses.Revoked));
     }
 
     [Fact]

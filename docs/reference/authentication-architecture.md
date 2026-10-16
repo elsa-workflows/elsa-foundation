@@ -286,7 +286,7 @@ The `/_elsa/identity/*` surface (`FoundationIdentityApi`):
 | `_elsa/identity/session` | GET | The current `AuthSession` (status/subject/roles/permissions/freshness) for the caller. | anonymous (reports "anonymous" when no session) |
 | `_elsa/identity/token` | GET | **Cookie→bearer exchange.** Mints a JWT for the cookie principal; bare `401` when anonymous. | interactive schemes only |
 | `_elsa/identity/refresh` | POST | Token-based refresh (`ITokenService.RefreshAsync`) for first-party/API clients. | anonymous (validates the refresh token) |
-| `_elsa/identity/logout/{provider}` | POST | Clears the session / provider sign-out, and revokes every token the exchange issued to the normalized subject, so an old refresh token gets `401`. | anonymous |
+| `_elsa/identity/logout/{provider}` | POST | Revokes every live token the exchange issued to the normalized subject, so an old refresh token gets `401`, then clears the session / provider sign-out. If revocation fails it answers `503` and leaves the session intact, so the sign-out can be retried. | anonymous |
 | `_elsa/identity/login` | GET / POST | The backend-served login page (GET) and credential post (POST) — from the ASP.NET Core Identity EF Core feature. | anonymous |
 
 The Studio cookie-refresh loop **re-probes `GET /_elsa/identity/session`** and, on a live cookie,

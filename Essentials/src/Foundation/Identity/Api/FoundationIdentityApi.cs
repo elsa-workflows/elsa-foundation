@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using System.Text.Json;
@@ -213,14 +214,21 @@ public static class FoundationIdentityApi
         var descriptor = await resolver.FindAsync(provider, allowGlobalFallback: true, cancellationToken: context.RequestAborted);
         var schemeName = descriptor?.Challenge?.Scheme ?? provider;
 
+        // Revoke before invalidating: a revocation fault then leaves the session (cookie and security stamp)
+        // intact, so a retry still authenticates as the subject and can revoke. The fault answers a bare 503,
+        // which Studio reports as a failed sign-out, never a 204 that would leave live tokens behind.
+        if (descriptor is not null && !await TryRevokeSubjectTokensAsync(context))
+        {
+            await Results.StatusCode(StatusCodes.Status503ServiceUnavailable).ExecuteAsync(context);
+            return;
+        }
+
         var invalidator = descriptor is null
             ? null
             : services.GetServices<IAuthenticationSessionInvalidator>().SingleOrDefault(candidate =>
                 string.Equals(candidate.ProviderId, descriptor.Id, StringComparison.OrdinalIgnoreCase));
         if (invalidator is not null)
             await invalidator.InvalidateAsync(new AuthenticationSessionInvalidationContext(context.User), context.RequestAborted);
-        if (descriptor is not null)
-            await RevokeSubjectTokensAsync(context);
 
         if (!string.IsNullOrEmpty(schemeName) &&
             await services.GetRequiredService<IAuthenticationSchemeProvider>().GetSchemeAsync(schemeName) is not null)
@@ -235,17 +243,29 @@ public static class FoundationIdentityApi
     }
 
     // Revokes under the normalized subject, the one the token exchange issues under, so a stale tab can neither
-    // refresh nor keep its bearer. An un-normalized principal revokes nothing.
-    private static async Task RevokeSubjectTokensAsync(HttpContext context)
+    // refresh nor keep its bearer. An un-normalized principal revokes nothing. False when revocation faulted.
+    private static async Task<bool> TryRevokeSubjectTokensAsync(HttpContext context)
     {
         var tokens = context.RequestServices.GetService<ITokenService>();
         if (tokens is null ||
             !context.RequestServices.GetRequiredService<NormalizedPrincipalValidator>().TryGetNormalizedPrincipal(context.User, out var principal))
-            return;
+            return true;
 
         var subject = Subject(principal);
-        if (!string.IsNullOrWhiteSpace(subject))
+        if (string.IsNullOrWhiteSpace(subject))
+            return true;
+
+        try
+        {
             await tokens.RevokeSubjectAsync(subject, context.RequestAborted);
+            return true;
+        }
+        catch (Exception exception) when (!(exception is OperationCanceledException && context.RequestAborted.IsCancellationRequested))
+        {
+            context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(FoundationIdentityApi))
+                .LogError(exception, "Sign-out could not revoke the subject's tokens; the session was left intact so the sign-out can be retried.");
+            return false;
+        }
     }
 
     private static async Task HandleRefreshAsync(HttpContext context)

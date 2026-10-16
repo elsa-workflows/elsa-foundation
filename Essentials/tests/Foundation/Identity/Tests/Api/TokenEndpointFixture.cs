@@ -51,7 +51,7 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
     /// Mapping the unrelated FastEndpoints canaries mutates process-global state, so the calling test class must join
     /// <see cref="FastEndpointsHostCollection"/>.
     /// </remarks>
-    public static async Task<TokenEndpointFixture> StartAsync()
+    public static async Task<TokenEndpointFixture> StartAsync(Action<IServiceCollection>? configureServices = null)
     {
         var databaseSuffix = Guid.NewGuid().ToString("n");
 
@@ -104,6 +104,7 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
                     services.AddFoundationIdentityApi();
 
                     services.AddFastEndpoints();
+                    configureServices?.Invoke(services);
                 });
                 webHost.Configure(app =>
                 {

@@ -115,8 +115,14 @@ public sealed class OpenIddictTokenService(
         await foreach (var entry in tokenManager.FindBySubjectAsync(subjectId, cancellationToken))
             entries.Add(entry);
 
+        // Live entries only: an expired or no-longer-valid entry is already dead, so it is left unwritten. Filtered
+        // here: the untyped token manager has no store-agnostic subject + expiry query (its ListAsync is over object).
+        var now = DateTimeOffset.UtcNow;
         foreach (var entry in entries)
         {
+            if (await tokenManager.GetExpirationDateAsync(entry, cancellationToken) is { } expiresAt && expiresAt <= now)
+                continue;
+
             if (await tokenManager.HasStatusAsync(entry, OpenIddictConstants.Statuses.Valid, cancellationToken))
                 await tokenManager.TryRevokeAsync(entry, cancellationToken);
         }
