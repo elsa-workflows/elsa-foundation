@@ -801,6 +801,7 @@ function ActivityInspectorTabsFixture() {
               referenceKind: "ActivityType",
               reason: "This fixture activity is intentionally unavailable."
             }}
+            selectedReusableDefinitionId="browser-definition"
             selectedSlots={activityInspectorTabSlots}
             inspectingScopeOwner
             catalog={[]}
