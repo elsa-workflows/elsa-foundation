@@ -89,6 +89,7 @@ for the interactive contributor route.
 >   server runs from its own temporary content root with its own SQLite files. To reuse a port, stop your
 >   server yourself.
 > - **The platform source harness also owns its server** and uses the same lifecycle helper and free-port rules.
+> - **`http/Test-HttpResponseFlowchart.ps1` owns an isolated server** and takes no `-BaseUrl` argument.
 > - **Every other server-dependent script only sends HTTP requests** to `-BaseUrl` (default `http://localhost:5095`).
 > - **Do not add `Stop-Process`, `kill`, or a port lookup that feeds one, to a script.** Use
 >   `Start-OwnedElsaServer` / `Restart-OwnedElsaServer` / `Remove-OwnedElsaServer`. `Test-ServerLifecycleGuard.ps1`
@@ -124,7 +125,7 @@ take no server argument and can run while yours is up:
 $base = 'http://localhost:5295'
 $selfHosted = 'Test-RestartRecovery.ps1', 'Test-AlterationReplayAndRestart.ps1', 'Test-FileBasedDeployment.ps1',
               'Test-SharedPersistence.ps1', 'Test-SharedDiagnosticsPersistence.ps1', 'Test-ServerLifecycleGuard.ps1',
-              'Test-JsonSourceComposition.ps1', 'Test-UnknownFeatures.ps1'
+              'Test-JsonSourceComposition.ps1', 'Test-UnknownFeatures.ps1', 'Test-HttpResponseFlowchart.ps1'
 $failed = @()
 Get-ChildItem ./e2e-tests -Recurse -Filter 'Test-*.ps1' | Sort-Object FullName | ForEach-Object {
     if ($_.Name -in $selfHosted) { pwsh -NoProfile -File $_.FullName }
@@ -205,6 +206,7 @@ The former `get-endpoints` and `write-endpoints` suites (GET / CRUD status-and-s
 | `javascript/Test-JavaScriptExpressions.ps1` | pure-ES JS in a Sync HTTP response body (array/object/json/optional-chaining/nullish/flat/replaceAll) |
 | `http/Test-HttpMethods.ps1` | one HttpEndpoint accepting GET/POST/PUT/DELETE, each returning a sync response |
 | `http/Test-HttpEcho.ps1` | capture request data (`ParsedContent`/`RouteData`/`Request`) into workflow variables and echo it back in a sync response (request-body, route-parameter, query-parameter, header; #972/#984) |
+| `http/Test-HttpResponseFlowchart.ps1` | imports the corrected [HTTP demo export](http/fixtures/test-http.json), resolves activity versions from the local catalog, publishes, and asserts HTTP 200 with the authored JSON body through `HttpEndpoint → SetCorrelationId → WriteHttpResponse`. Owns an isolated Workbench with fresh SQLite databases; build Workbench first. `-WorkflowPath <original-export>` reproduces the missing-`ResponseMode: Sync` failure. |
 | `http/Test-RuntimeConcurrencyCorrectness.ps1` | the #2392 reference HTTP workflow under concurrent clients (default 16 × 4, `-PersistenceMode Durable`/`Balanced`): every request ends in HTTP 200 `Alice Smith`, one Completed instance per request, zero incidents. A 429 is admission backpressure: it is retried per `Retry-After` (`-MaxShedRetries`, default 30) and reported, and fails only if still shed after the last retry (#2548). Correctness only; no timings (#2532) |
 | `http/Test-SendHttpRequestStatusOutcomes.ps1` | the per-status outcome ports the compiler pins from `SendHttpRequest.ExpectedStatusCodes` are connectable on the PUBLISHED node and route correctly, including the `Unmatched status code` catch-all (#1119) |
 | `bpmn/Test-BpmnCallActivity.ps1` | BPMN `callActivity` bound to a REAL waited `DispatchWorkflow` child (spec 133): child completes -> parent resumes via `Completed`; child faults -> the error boundary routes (no parent incident) |
