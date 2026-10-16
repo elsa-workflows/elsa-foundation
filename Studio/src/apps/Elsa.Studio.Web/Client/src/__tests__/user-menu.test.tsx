@@ -98,6 +98,13 @@ describe("app-bar user menu", () => {
     expect(trigger()!.textContent).toContain("user-1");
   });
 
+  it("takes whole code points for the avatar initials, so a non-BMP first letter is not split", async () => {
+    session = { ...alice, displayName: "\u{1D49C}da Lovelace" };
+    await renderShell(manager);
+
+    expect(trigger()!.querySelector(".user-menu-avatar")!.textContent).toBe("\u{1D49C}L");
+  });
+
   it("signs out through the provider, then hands the anonymous session to the login redirect", async () => {
     await renderShell(manager);
     await openMenu();

@@ -113,7 +113,7 @@ test.describe("app-bar user menu", () => {
       await account(page).click();
       await expect(page.getByRole("menuitem", { name: "Sign out" })).toBeVisible();
 
-      // Colour contrast is part of the axe run, so this is also the legibility check for the theme.
+      // Color contrast is part of the axe run, so this is also the legibility check for the theme.
       await expectNoSeriousAxeViolations(page);
 
       const shot = await page.screenshot({ clip: { x: 760, y: 0, width: 680, height: 240 } });

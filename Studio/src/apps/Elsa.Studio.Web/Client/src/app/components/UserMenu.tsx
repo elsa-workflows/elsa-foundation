@@ -5,7 +5,7 @@ import { AuthContext } from "../../auth/AuthContext";
 import "./UserMenu.css";
 
 function initials(name: string) {
-  return name.split(/[\s._@-]+/).filter(Boolean).slice(0, 2).map(part => part[0].toUpperCase()).join("");
+  return name.split(/[\s._@-]+/).filter(Boolean).slice(0, 2).map(part => Array.from(part)[0].toUpperCase()).join("");
 }
 
 /**
