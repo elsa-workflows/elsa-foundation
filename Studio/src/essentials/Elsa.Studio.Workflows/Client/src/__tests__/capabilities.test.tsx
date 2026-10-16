@@ -38,7 +38,7 @@ describe("API capability bootstrap", () => {
     expect(getJson).toHaveBeenCalledWith("/shell-a/capabilities");
   });
 
-  it.each(["", "test://custom-transport"])("retains root capability paths for a custom transport with base %s", async baseUrl => {
+  it.each(["", "test://custom-transport", "options-test"])("retains root capability paths for a custom transport with base %s", async baseUrl => {
     const getJson = vi.fn().mockResolvedValue({ capabilities: [{
       id: capabilityIds.workflowDesign,
       contractVersion: "1",

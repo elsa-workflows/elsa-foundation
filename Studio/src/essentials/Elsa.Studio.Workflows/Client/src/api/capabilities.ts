@@ -74,7 +74,7 @@ export function getApiCapabilities(context: StudioEndpointContext): Promise<ApiC
   const cached = documentsByShell.get(key);
   if (cached) return cached;
 
-  const basePath = context.baseUrl ? shellBaseUrl(context).pathname : "/";
+  const basePath = capabilityBasePath(context);
   const request = context.http.getJson<ApiCapabilityDocument>(`${basePath}capabilities`)
     .then(document => ({ capabilities: Array.isArray(document?.capabilities) ? document.capabilities : [] }))
     .catch(error => {
@@ -115,7 +115,7 @@ export async function resolveCapabilityLink(
   parameters: Record<string, string> = {}
 ) {
   const href = await resolveCapabilityHref(context, capabilityId, relation, parameters);
-  const basePath = context.baseUrl ? shellBaseUrl(context).pathname : "/";
+  const basePath = capabilityBasePath(context);
   return `${basePath}${href.replace(/^\/+/, "")}`;
 }
 
@@ -175,6 +175,16 @@ export async function resolveRelativeCapabilityUrl(
     throw new Error(`Capability link '${relation}' resolved outside the active shell route base.`);
   }
   return resolved;
+}
+
+/** Custom transports may use opaque connection keys; only HTTP URLs contribute a shell route prefix. */
+function capabilityBasePath(context: StudioEndpointContext): string {
+  try {
+    const base = shellBaseUrl(context);
+    return base.protocol === "http:" || base.protocol === "https:" ? base.pathname : "/";
+  } catch {
+    return "/";
+  }
 }
 
 /** Give the active shell route base directory semantics when composing relative capability paths. */
