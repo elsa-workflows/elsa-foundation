@@ -32,12 +32,12 @@ Notes come only from explicit `**Notes**:` metadata; see [Spec status metadata](
 | [021-runtime-inprocess-agent-provider](../../specs/021-runtime-inprocess-agent-provider/spec.md) | Runtime In-Process Execution Agent Provider | Implemented — all tasks checked in 7213d26d2 | - | 0 | 0 | - |
 | [022-runtime-scheduler-work-queue](../../specs/022-runtime-scheduler-work-queue/spec.md) | Runtime Scheduler Work Queue | Implemented — all tasks checked in b5d1c9a5c | - | 0 | 0 | - |
 | [023-runtime-scheduler-drain-contract](../../specs/023-runtime-scheduler-drain-contract/spec.md) | Runtime Scheduler Drain Contract | Implemented — all tasks checked in e83f44793 | - | 0 | 0 | - |
-| [024-runtime-scheduler-command-drain-dispatch](../../specs/024-runtime-scheduler-command-drain-dispatch/spec.md) | 024-runtime-scheduler-command-drain-dispatch | unknown | - | 0 | 0 | - |
-| [025-runtime-api-agent-dispatch](../../specs/025-runtime-api-agent-dispatch/spec.md) | 025-runtime-api-agent-dispatch | unknown | - | 0 | 0 | - |
-| [026-runtime-start-command-scheduling](../../specs/026-runtime-start-command-scheduling/spec.md) | 026-runtime-start-command-scheduling | unknown | - | 0 | 0 | - |
-| [027-runtime-schedule-activity-state](../../specs/027-runtime-schedule-activity-state/spec.md) | 027-runtime-schedule-activity-state | unknown | - | 0 | 0 | - |
-| [028-runtime-activity-start-state](../../specs/028-runtime-activity-start-state/spec.md) | 028-runtime-activity-start-state | unknown | - | 0 | 0 | - |
-| [029-runtime-activity-invocation-boundary](../../specs/029-runtime-activity-invocation-boundary/spec.md) | 029-runtime-activity-invocation-boundary | unknown | - | 0 | 0 | - |
+| [024-runtime-scheduler-command-drain-dispatch](../../specs/024-runtime-scheduler-command-drain-dispatch/spec.md) | Runtime Scheduler Command Drain Dispatch | unknown | - | 0 | 0 | - |
+| [025-runtime-api-agent-dispatch](../../specs/025-runtime-api-agent-dispatch/spec.md) | Runtime API Agent Dispatch | unknown | - | 0 | 0 | - |
+| [026-runtime-start-command-scheduling](../../specs/026-runtime-start-command-scheduling/spec.md) | Runtime Start Command Scheduling | unknown | - | 0 | 0 | - |
+| [027-runtime-schedule-activity-state](../../specs/027-runtime-schedule-activity-state/spec.md) | Runtime Schedule Activity State Creation | unknown | - | 0 | 0 | - |
+| [028-runtime-activity-start-state](../../specs/028-runtime-activity-start-state/spec.md) | Runtime Activity Start State Transition | unknown | - | 0 | 0 | - |
+| [029-runtime-activity-invocation-boundary](../../specs/029-runtime-activity-invocation-boundary/spec.md) | Runtime Activity Invocation Boundary | unknown | - | 0 | 0 | - |
 | [030-runtime-activity-completion-work-enqueue](../../specs/030-runtime-activity-completion-work-enqueue/spec.md) | Runtime Activity Completion Work Enqueue | Draft | - | 7 | 1 | - |
 | [031-runtime-parent-completion-evaluation](../../specs/031-runtime-parent-completion-evaluation/spec.md) | Runtime Parent Completion Evaluation Enqueue | Draft | - | 6 | 1 | - |
 | [032-runtime-continuation-scheduling-enqueue](../../specs/032-runtime-continuation-scheduling-enqueue/spec.md) | Runtime Continuation Scheduling Enqueue | Draft | - | 6 | 1 | - |
@@ -120,31 +120,31 @@ Notes come only from explicit `**Notes**:` metadata; see [Spec status metadata](
 | [109-runtime-inprocess-hop-fast-path](../../specs/109-runtime-inprocess-hop-fast-path/spec.md) | In-process-hop payload short-circuit (ADR 0031 fast path, item a) | unknown | - | 0 | 0 | - |
 | [110-drain-turn-durable-roundtrips](../../specs/110-drain-turn-durable-roundtrips/spec.md) | Collapse per-drain-turn durable round-trips — characterize, and eliminate the redundant executable-artifact reads | Draft (characterization complete; premise re-aimed by evidence) | - | 4 | 7 | - |
 | [111-burst-scoped-reconstructible-cache](../../specs/111-burst-scoped-reconstructible-cache/spec.md) | Burst-Scoped Reconstructible Cache + Executable-Artifact Read Cache | Implemented | - | 0 | 0 | - |
-| [112-runtime-child-subtree-cancellation](../../specs/112-runtime-child-subtree-cancellation/spec.md) | 112-runtime-child-subtree-cancellation | unknown | - | 0 | 0 | - |
+| [112-runtime-child-subtree-cancellation](../../specs/112-runtime-child-subtree-cancellation/spec.md) | Runtime child-subtree cancellation (BPMN Phase 2, seam A) | unknown | - | 0 | 0 | - |
 | [113-terminal-resumption-purge](../../specs/113-terminal-resumption-purge/spec.md) | Stop the perpetual post-completion resumption re-drive of terminal workflows | Implemented — merged in PR #894 | - | 12 | 0 | - |
 | [114-concurrency-throughput-instrument](../../specs/114-concurrency-throughput-instrument/spec.md) | Concurrency / throughput instrument for the in-process runtime | Draft (instrument delivered; scaling curve captured — see [research.md](./research.md)) | - | 0 | 0 | - |
-| [115-runtime-handled-child-fault](../../specs/115-runtime-handled-child-fault/spec.md) | 115-runtime-handled-child-fault | unknown | - | 0 | 0 | - |
-| [116-bpmn-catch-events](../../specs/116-bpmn-catch-events/spec.md) | 116-bpmn-catch-events | Implemented | - | 0 | 0 | - |
-| [117-bpmn-event-start-events](../../specs/117-bpmn-event-start-events/spec.md) | 117-bpmn-event-start-events | Implemented | - | 0 | 0 | - |
-| [118-bpmn-interchange-event-definitions](../../specs/118-bpmn-interchange-event-definitions/spec.md) | 118-bpmn-interchange-event-definitions | Implemented | - | 0 | 0 | - |
+| [115-runtime-handled-child-fault](../../specs/115-runtime-handled-child-fault/spec.md) | Runtime handled child fault (BPMN Phase 2, seam B) | unknown | - | 0 | 0 | - |
+| [116-bpmn-catch-events](../../specs/116-bpmn-catch-events/spec.md) | BPMN timer/message/signal intermediate catch events (BPMN Phase 2, catch-events slice) | Implemented | - | 0 | 0 | - |
+| [117-bpmn-event-start-events](../../specs/117-bpmn-event-start-events/spec.md) | BPMN event-defined start events (message/signal/timer) (BPMN Phase 2, event-start slice) | Implemented | - | 0 | 0 | - |
+| [118-bpmn-interchange-event-definitions](../../specs/118-bpmn-interchange-event-definitions/spec.md) | BPMN interchange eventDefinition wiring (timer/message/signal) (BPMN Phase 2, interchange slice) | Implemented | - | 0 | 0 | - |
 | [119-publish-time-routing-tables](../../specs/119-publish-time-routing-tables/spec.md) | Publish-time routing tables, recomputed on materialization (ADR 0047 D3) | unknown | - | 0 | 0 | - |
-| [120-bpmn-boundary-events](../../specs/120-bpmn-boundary-events/spec.md) | 120-bpmn-boundary-events | Implemented | - | 0 | 0 | - |
-| [121-bpmn-multi-instance](../../specs/121-bpmn-multi-instance/spec.md) | 121-bpmn-multi-instance | Implemented | - | 0 | 0 | - |
-| [122-bpmn-cyclic-flows](../../specs/122-bpmn-cyclic-flows/spec.md) | 122-bpmn-cyclic-flows | Implemented | - | 0 | 0 | - |
-| [123-runtime-scoped-variable-read](../../specs/123-runtime-scoped-variable-read/spec.md) | 123-runtime-scoped-variable-read | unknown | - | 0 | 0 | - |
-| [124-bpmn-compensation](../../specs/124-bpmn-compensation/spec.md) | 124-bpmn-compensation | Implemented | - | 0 | 0 | - |
-| [125-bpmn-transactions](../../specs/125-bpmn-transactions/spec.md) | 125-bpmn-transactions | Implemented | - | 0 | 0 | - |
-| [126-runtime-child-parent-notification](../../specs/126-runtime-child-parent-notification/spec.md) | 126-runtime-child-parent-notification | unknown | - | 0 | 0 | - |
-| [127-bpmn-escalation](../../specs/127-bpmn-escalation/spec.md) | 127-bpmn-escalation | Implemented | - | 0 | 0 | - |
-| [128-bpmn-event-subprocesses](../../specs/128-bpmn-event-subprocesses/spec.md) | 128-bpmn-event-subprocesses | Implemented | - | 0 | 0 | - |
-| [129-cold-start-phase-instrument](../../specs/129-cold-start-phase-instrument/spec.md) | 129-cold-start-phase-instrument | unknown | - | 0 | 0 | - |
+| [120-bpmn-boundary-events](../../specs/120-bpmn-boundary-events/spec.md) | BPMN boundary events (timer/message/signal listener-child + error absorption) (BPMN Phase 2, events tier, seam-A + seam-B consumer) | Implemented | - | 0 | 0 | - |
+| [121-bpmn-multi-instance](../../specs/121-bpmn-multi-instance/spec.md) | BPMN multi-instance activities (sequential + parallel; graphs stay acyclic) (BPMN Phase 2, events tier, iteration-frame + seam-A/B consumer) | Implemented | - | 0 | 0 | - |
+| [122-bpmn-cyclic-flows](../../specs/122-bpmn-cyclic-flows/spec.md) | BPMN cyclic sequence flows (token iteration keys) (BPMN Phase 2, events tier — CLOSING unit) | Implemented | - | 0 | 0 | - |
+| [123-runtime-scoped-variable-read](../../specs/123-runtime-scoped-variable-read/spec.md) | Runtime scoped-variable read seam + BPMN collection-mode multi-instance (BPMN Phase 3 warm-up, spec-121 follow-up) | unknown | - | 0 | 0 | - |
+| [124-bpmn-compensation](../../specs/124-bpmn-compensation/spec.md) | BPMN compensation (reverse-order compensation log; compensation boundary events + compensate throw/end events) (BPMN Phase 3, first large construct) | Implemented | - | 0 | 0 | - |
+| [125-bpmn-transactions](../../specs/125-bpmn-transactions/spec.md) | BPMN transactions + cancel events (transaction subprocess, cancel end event, cancel boundary event — riding the spec-124 compensation log) (BPMN Phase 3) | Implemented | - | 0 | 0 | - |
+| [126-runtime-child-parent-notification](../../specs/126-runtime-child-parent-notification/spec.md) | Runtime seam C: non-terminal child→parent structural notification (BPMN Phase 3 prerequisite for escalation + event subprocesses) | unknown | - | 0 | 0 | - |
+| [127-bpmn-escalation](../../specs/127-bpmn-escalation/spec.md) | BPMN escalation (escalation throw/end events + escalation boundary events, riding runtime seam C) (BPMN Phase 3) | Implemented | - | 0 | 0 | - |
+| [128-bpmn-event-subprocesses](../../specs/128-bpmn-event-subprocesses/spec.md) | BPMN event subprocesses, tier 1: escalation + error triggers (dormant catchers; scheduled-start seeding) (BPMN Phase 3) | Implemented | - | 0 | 0 | - |
+| [129-cold-start-phase-instrument](../../specs/129-cold-start-phase-instrument/spec.md) | Boot / first-request phase-timing instrument + cold-start baseline (Cold-Start Readiness, program unit 1) | unknown | - | 0 | 0 | - |
 | [130-runtime-envelope-build-cpu](../../specs/130-runtime-envelope-build-cpu/spec.md) | Per-hop envelope-building CPU — measure-first characterization | Complete — **KILL verdict** (envelope-building-CPU hypothesis refuted; instrument landed as permanent tripwire; store-read follow-up re-aimed). See [research.md](./research.md). | - | 0 | 0 | - |
-| [131-coalesced-inspection-read-memo](../../specs/131-coalesced-inspection-read-memo/spec.md) | 131-coalesced-inspection-read-memo | unknown | - | 0 | 0 | - |
-| [132-deferred-fault-absorption](../../specs/132-deferred-fault-absorption/spec.md) | 132-deferred-fault-absorption | unknown | - | 0 | 0 | - |
-| [133-schema-admission-skip-and-batch](../../specs/133-schema-admission-skip-and-batch/spec.md) | 133-schema-admission-skip-and-batch | unknown | - | 0 | 0 | - |
-| [134-bpmn-event-subprocess-tier2](../../specs/134-bpmn-event-subprocess-tier2/spec.md) | 134-bpmn-event-subprocess-tier2 | Implemented | - | 0 | 0 | - |
-| [135-bpmn-message-send](../../specs/135-bpmn-message-send/spec.md) | 135-bpmn-message-send | Implemented | - | 0 | 0 | - |
-| [136-bpmn-collaboration-import](../../specs/136-bpmn-collaboration-import/spec.md) | 136-bpmn-collaboration-import | Implemented | - | 0 | 0 | - |
+| [131-coalesced-inspection-read-memo](../../specs/131-coalesced-inspection-read-memo/spec.md) | Spec 131: Coalesced inspection-store read memo (candidate A, re-aimed from spec 130) | unknown | - | 0 | 0 | - |
+| [132-deferred-fault-absorption](../../specs/132-deferred-fault-absorption/spec.md) | Fix deferred seam-B fault absorption (issue #989): stop the fault-marker metadata leak; un-gate error event subprocesses (runtime fix + BPMN consumer proof) | unknown | - | 0 | 0 | - |
+| [133-schema-admission-skip-and-batch](../../specs/133-schema-admission-skip-and-batch/spec.md) | Schema-admission skip-if-current + apply batching (Cold-Start Readiness, program unit 3) | unknown | - | 0 | 0 | - |
+| [134-bpmn-event-subprocess-tier2](../../specs/134-bpmn-event-subprocess-tier2/spec.md) | BPMN event subprocesses, tier 2: message/signal/timer triggers (scope listeners, token-kind discriminator, listener-aware completion) (BPMN Phase 3) | Implemented | - | 0 | 0 | - |
+| [135-bpmn-message-send](../../specs/135-bpmn-message-send/spec.md) | BPMN message send surface: PublishEvent primitive (durable-first stimulus publish) + message throw/end events and send/receive tasks (BPMN Phase 3, collaborations slice 1 of 2) | Implemented | - | 0 | 0 | - |
+| [136-bpmn-collaboration-import](../../specs/136-bpmn-collaboration-import/spec.md) | BPMN collaboration/pool import: N-process documents, participants, message-flow wiring (BPMN Phase 3, collaborations slice 2 of 2 — final construct slice) | Implemented | - | 0 | 0 | - |
 | [137-dispatch-cancel-on-subtree](../../specs/137-dispatch-cancel-on-subtree/spec.md) | Cancel Waited Dispatches on Subtree Teardown | Implemented — all tasks checked in 98877621b (PR #1035) | - | 12 | 0 | - |
 | [138-reusable-boundary-outcomes](../../specs/138-reusable-boundary-outcomes/spec.md) | Reusable Activity Boundary Outcomes | Draft | - | 18 | 1 | - |
 | [139-groundwork-diagnostics-persistence](../../specs/139-groundwork-diagnostics-persistence/spec.md) | Durable Diagnostics Persistence | Draft | - | 48 | 14 | - |
@@ -201,7 +201,7 @@ Notes come only from explicit `**Notes**:` metadata; see [Spec status metadata](
 | [190-worker-oidc-normalization](../../specs/190-worker-oidc-normalization/spec.md) | Opt-in external bearer normalization for a Worker host | Implemented — [PR #2315](https://github.com/elsa-workflows/elsa-foundation/pull/2315) merged as `b435c4acd4993017d2fc65883fd52c4d441e576f`; [resulting-main qualification](https://github.com/elsa-workflows/elsa-foundation/issues/2308#issuecomment-5958186720) passed. T028 closed through [PR #2325](https://github.com/elsa-workflows/elsa-foundation/pull/2325), with [final main qualification and claim release](https://github.com/elsa-workflows/elsa-foundation/issues/2308#issuecomment-5959522498). Worker profile publication is a separate outcome. | - | 28 | 0 | - |
 | [191-worker-http-profile](../../specs/191-worker-http-profile/spec.md) | Worker HTTP starting profile | Implemented — [PR #2370](https://github.com/elsa-workflows/elsa-foundation/pull/2370) merged as `edffd0a4ea18a17c4faa2c3f8ce073f48bc09af6`; resulting-main publication and closeout evidence are recorded on [#2326](https://github.com/elsa-workflows/elsa-foundation/issues/2326). | - | 20 | 0 | - |
 | [192-incident-troubleshooting](../../specs/192-incident-troubleshooting/spec.md) | Workflow Incident Troubleshooting | Implemented — Foundation [#2371](https://github.com/elsa-workflows/elsa-foundation/pull/2371) and Studio [#556](https://github.com/elsa-workflows/elsa-foundation-studio/pull/556) merged; resulting-main CI/Maps and real operator acceptance passed. Evidence follow-through and closure status are documented in [acceptance](../../docs/reports/incident-troubleshooting/acceptance.md). | - | 23 | 0 | - |
-| [193-bounded-coalesced-pagination](../../specs/193-bounded-coalesced-pagination/spec.md) | 193-bounded-coalesced-pagination | Implemented — [PR #2442](https://github.com/elsa-workflows/elsa-foundation/pull/2442) | - | 13 | 0 | - |
+| [193-bounded-coalesced-pagination](../../specs/193-bounded-coalesced-pagination/spec.md) | Bounded Coalesced Runtime-Store Page Merging | Implemented — [PR #2442](https://github.com/elsa-workflows/elsa-foundation/pull/2442) | - | 13 | 0 | - |
 | [194-portable-private-inputs](../../specs/194-portable-private-inputs/spec.md) | Portable compositions with required private inputs | Draft — specification checkpoint #2457; no production portability delivered | - | 0 | 0 | - |
 | [195-authoring-api-boundary](../../specs/195-authoring-api-boundary/spec.md) | Authoring-only API | Draft | - | 0 | 0 | - |
 | [196-coalesced-command-scope](../../specs/196-coalesced-command-scope/spec.md) | Coalesced Command Scope | Implemented | - | 10 | 1 | - |
@@ -233,14 +233,14 @@ Notes come only from explicit `**Notes**:` metadata; see [Spec status metadata](
 | [222-groundwork-aspnetcore-identity](../../specs/222-groundwork-aspnetcore-identity/spec.md) | Groundwork ASP.NET Core Identity | Draft | - | 87 | 2 | - |
 | [223-runtime-intent-handlers](../../specs/223-runtime-intent-handlers/spec.md) | Contributed Runtime Intent Handlers | Approved | - | 24 | 0 | - |
 | [224-openiddict-groundwork-stores](../../specs/224-openiddict-groundwork-stores/spec.md) | OpenIddict Groundwork Stores | Draft | - | 11 | 62 | - |
-| [225-bpmn-container-activity](../../specs/225-bpmn-container-activity/spec.md) | 225-bpmn-container-activity | Implemented | - | 0 | 0 | - |
+| [225-bpmn-container-activity](../../specs/225-bpmn-container-activity/spec.md) | BPMN Container Activity (Phase 1 slice) | Implemented | - | 0 | 0 | - |
 | [226-group-commit-fsync-sharing](../../specs/226-group-commit-fsync-sharing/spec.md) | Group-commit / cross-drain fsync sharing on the shared durable writer | Draft (design + implementation; measurement gated — see [research.md](./research.md)) | - | 0 | 0 | - |
-| [227-bpmn-event-based-gateway](../../specs/227-bpmn-event-based-gateway/spec.md) | 227-bpmn-event-based-gateway | Implemented | - | 0 | 0 | - |
+| [227-bpmn-event-based-gateway](../../specs/227-bpmn-event-based-gateway/spec.md) | BPMN event-based gateway (first-catch-wins race) (BPMN Phase 2, events tier, seam-A consumer) | Implemented | - | 0 | 0 | - |
 | [228-replaysafe-hop-fusion](../../specs/228-replaysafe-hop-fusion/spec.md) | ReplaySafe hop fusion — fused schedule→start→invoke + inline single-predecessor completion (ADR 0047 D1+D2) | Implemented — original D1/D2 delivery; corrective #2497 delivery gates are tracked below. | - | 0 | 0 | - |
 | [229-runtime-actor-terminal-eviction](../../specs/229-runtime-actor-terminal-eviction/spec.md) | In-process workflow-execution actor terminal eviction / passivation trigger | Implemented — merged in PR #983 | - | 0 | 0 | - |
-| [230-eager-shell-activation](../../specs/230-eager-shell-activation/spec.md) | 230-eager-shell-activation | unknown | - | 0 | 0 | - |
-| [231-bpmn-call-activity](../../specs/231-bpmn-call-activity/spec.md) | 231-bpmn-call-activity | Implemented | - | 0 | 0 | - |
-| [232-container-readytorun-publish](../../specs/232-container-readytorun-publish/spec.md) | 232-container-readytorun-publish | unknown | - | 0 | 0 | - |
+| [230-eager-shell-activation](../../specs/230-eager-shell-activation/spec.md) | Opt-in eager shell activation (Cold-Start Readiness, program unit 4) | unknown | - | 0 | 0 | - |
+| [231-bpmn-call-activity](../../specs/231-bpmn-call-activity/spec.md) | BPMN call activity (invoke a published workflow via DispatchWorkflow; engine-owned fault-outcome translation) (BPMN Phase 3) | Implemented | - | 0 | 0 | - |
+| [232-container-readytorun-publish](../../specs/232-container-readytorun-publish/spec.md) | ReadyToRun container publish (Cold-Start Readiness, program unit 2) | unknown | - | 0 | 0 | - |
 | [233-receive-correlation](../../specs/233-receive-correlation/spec.md) | Receive Event Correlation | Implemented — all tasks checked in ac027653e | - | 15 | 0 | - |
 | [234-hop-chain-collapse](../../specs/234-hop-chain-collapse/spec.md) | Collapse the per-activity hop chain under per-hop persistence | Draft | - | 0 | 68 | - |
 | [236-elsa3-activity-map](../../specs/236-elsa3-activity-map/spec.md) | Elsa 3 activity map — convert Elsa 3 activity types, versions and members to Elsa 4 | Draft | - | 69 | 0 | - |
