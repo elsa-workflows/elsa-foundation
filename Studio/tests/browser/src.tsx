@@ -101,6 +101,7 @@ const navBeforeFixture = searchParams.get("mode") === "nav-before";
 const homeFixture = searchParams.get("mode") === "home" || searchParams.get("mode") === "home-before";
 const settingsBeforeFixture = searchParams.get("mode") === "settings-before";
 const settingsFixture = searchParams.get("mode") === "settings";
+const userMenuFixture = searchParams.get("mode") === "user-menu";
 const expressionCodeIntelligenceFixture = searchParams.get("mode") === "expression-code-intelligence";
 const expressionToolingUnavailable = searchParams.get("tooling") === "unavailable";
 const expressionFieldCount = Math.max(1, Math.min(50, Number(searchParams.get("fields") ?? 1)));
@@ -1611,7 +1612,7 @@ function browserVersion(
 // Activity-icon shots default to Classic light — Studio 4's default theme.
 const darkVariant = searchParams.get("theme") === "dark";
 const fixtureTheme = activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture ? "classic" : "meridian";
-if (!navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture && !homeFixture) {
+if (!navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture && !homeFixture && !userMenuFixture) {
   document.documentElement.dataset.theme = fixtureTheme;
   document.documentElement.dataset.themeLayout = "classic";
   document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
@@ -1645,6 +1646,11 @@ async function renderRequestedFixture() {
   if (settingsFixture) {
     const { SettingsFixture } = await import("./settingsFixture");
     root.render(<SettingsFixture />);
+    return;
+  }
+  if (userMenuFixture) {
+    const { UserMenuFixture } = await import("./userMenuFixture");
+    root.render(<UserMenuFixture />);
     return;
   }
   if (navPlacementFixture) {

@@ -43,6 +43,7 @@ import { StudioAuthBoundary, createStudioAuthManager, createStudioEndpointContex
 import { loadStudioModules } from "./loader";
 import { ThemeProvider, useNavMode } from "./components/ThemeProvider";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
+import { UserMenu } from "./components/UserMenu";
 import { defaultThemeStoreCapabilities, getThemeStoreCapabilities, type ThemeStoreCapabilities } from "./themes/themeStoreApi";
 import { QueryProvider } from "./providers/QueryProvider";
 import { useStudioManifest } from "./hooks/useStudioManifest";
@@ -702,6 +703,7 @@ export function ShellFrame({
               <ExternalLink size={18} />
             </a>
             {themeAction}
+            <UserMenu />
           </div>
         </header>
         <main className="content">{children}</main>

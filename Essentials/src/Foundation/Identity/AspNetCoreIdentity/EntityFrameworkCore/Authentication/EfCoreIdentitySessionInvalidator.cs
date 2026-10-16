@@ -29,9 +29,11 @@ public sealed class EfCoreIdentitySessionInvalidator(
             throw new InvalidOperationException("The authenticated Identity session is missing its subject or tenant binding.");
 
         BindTenant(tenantId);
+        // A subject that is no tenant-bound Identity user (a bearer issued to another subject kind) holds no
+        // Identity session, so there is no stamp to rotate.
         var user = await userManager.FindByIdAsync(subject);
         if (user is null || !string.Equals(user.TenantId, tenantId, StringComparison.Ordinal))
-            throw new InvalidOperationException("The authenticated Identity session no longer resolves to its tenant-bound user.");
+            return;
 
         var result = await userManager.UpdateSecurityStampAsync(user);
         if (!result.Succeeded)
