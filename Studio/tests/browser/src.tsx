@@ -89,6 +89,8 @@ const activityDefinitionsFixture = searchParams.get("mode") === "activity-defini
 const reusableBoundaryFixture = searchParams.get("mode") === "reusable-boundary";
 const versionChangeFixture = searchParams.get("mode") === "version-change";
 const activityInspectorTabsFixture = searchParams.get("mode") === "activity-inspector-tabs";
+const validationLabelsFixture = searchParams.get("mode") === "validation-labels"
+  || searchParams.get("mode") === "validation-labels-before";
 const publicationReviewFixture = searchParams.get("mode") === "publication-review";
 const activityGraphAuthoringFixture = searchParams.get("mode") === "activity-definition-graph-authoring";
 const activityIconsFixture = searchParams.get("mode") === "activity-icons";
@@ -1603,12 +1605,12 @@ function browserVersion(
 // writes the chosen theme palette onto <html> itself, the way the provider does at runtime.
 // Activity-icon shots default to Classic light — Studio 4's default theme.
 const darkVariant = searchParams.get("theme") === "dark";
-const fixtureTheme = activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture ? "classic" : "meridian";
+const fixtureTheme = activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture ? "classic" : "meridian";
 if (!navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture && !homeFixture) {
   document.documentElement.dataset.theme = fixtureTheme;
   document.documentElement.dataset.themeLayout = "classic";
   document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
-  if (darkVariant || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture) {
+  if (darkVariant || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture) {
     const palette = getTheme(fixtureTheme)![darkVariant ? "dark" : "light"];
     for (const token of themeTokenNames) {
       document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
@@ -1658,6 +1660,11 @@ async function renderRequestedFixture() {
   if (activityDuplicateEditorFixture) {
     const { ActivityDuplicateEditorFixture } = await import("./activityDuplicateEditorFixture");
     root.render(<ActivityDuplicateEditorFixture />);
+    return;
+  }
+  if (validationLabelsFixture) {
+    const { ValidationLabelsFixture } = await import("./validationLabelsFixture");
+    root.render(<ValidationLabelsFixture />);
     return;
   }
 

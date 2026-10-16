@@ -6,6 +6,7 @@ import {
   collectVariableRepairItems,
   parseValidationErrorPath
 } from "../validationDiagnostics";
+import type { ValidationActivityLabels } from "../validationActivityLabels";
 import { formatDate } from "../workflowFormatting";
 import { isRejectedTestRun } from "./editorHelpers";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
@@ -64,7 +65,7 @@ export function ValidationPanel({
           const startNodeFix = onSetAsStartNode && nodeId && isStartNodeError(error) ? nodeId : null;
           return (
             <li key={index} className={repair ? "wf-validation-item repairable" : "wf-validation-item"}>
-              <span className="wf-validation-message">{error.message ?? "Validation issue."}</span>
+              <span className="wf-validation-message" title={nodeId ?? undefined}>{error.message ?? "Validation issue."}</span>
               {startNodeFix ? (
                 <button type="button" className="wf-validation-repair" onClick={() => onSetAsStartNode?.(startNodeFix)}>
                   <Flag size={12} /> Set as start
@@ -115,10 +116,11 @@ export function TestRunStatus({
   );
 }
 
-export function WorkflowRuntimePanel({ testRun, publishedEquivalent, onOpenRun }: {
+export function WorkflowRuntimePanel({ testRun, publishedEquivalent, onOpenRun, activityLabels }: {
   testRun: WorkflowTestRunView | null;
   publishedEquivalent?: WorkflowExecutableSummary | null;
   onOpenRun(workflowExecutionId: string, initialTab?: "issues"): void;
+  activityLabels?: ValidationActivityLabels;
 }) {
   if (!testRun) {
     return (
@@ -148,7 +150,7 @@ export function WorkflowRuntimePanel({ testRun, publishedEquivalent, onOpenRun }
           <WorkflowStatusBadge status={testRun.status} subStatus={testRun.commandDispatchStatus ?? undefined} />
         </header>
         <p>Ephemeral - not saved, promoted, or published.</p>
-        {rejected && testRun.reason ? <div className="wf-runtime-reason"><AlertCircle size={14} /> {testRun.reason}</div> : null}
+        {rejected && testRun.reason ? <RejectedReason reason={testRun.reason} activityLabels={activityLabels} /> : null}
         {acceptedWithIncidents ? (
           <div className="wf-runtime-incident-warning" role="status">
             <AlertCircle size={14} aria-hidden="true" />
@@ -197,4 +199,21 @@ function acceptedRuntimeIssueLabel(testRun: WorkflowTestRunView) {
 function formatEvidenceCount(count: number | null | undefined, label: string) {
   if (typeof count !== "number") return "Available on linked Run";
   return `${count} ${label}${count === 1 ? "" : "s"}`;
+}
+
+function RejectedReason({
+  reason,
+  activityLabels
+}: {
+  reason: string;
+  activityLabels?: ValidationActivityLabels;
+}) {
+  const humanized = activityLabels?.humanizeMessage(reason) ?? { message: reason };
+  return (
+    <div className="wf-runtime-reason" title={reason}>
+      <AlertCircle size={14} />
+      <span className="wf-runtime-reason-text">{humanized.message}</span>
+      {humanized.code ? <span className="wf-alert-code">{humanized.code}</span> : null}
+    </div>
+  );
 }

@@ -57,6 +57,7 @@ import { ValidationPanel, TestRunStatus, WorkflowRuntimePanel } from "./editorPa
 import { useDraftValidations } from "./useDraftValidations";
 import { useExecutableArtifactExport } from "./useExecutableArtifactExport";
 import { combineValidationErrors, detectStructuralValidationErrors } from "../draftValidation";
+import { createValidationActivityLabels, humanizeValidationErrors } from "../validationActivityLabels";
 import { WorkflowArtifactsPanel } from "./WorkflowExecutables";
 import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
 import { useSidePanelLayout } from "./useSidePanelLayout";
@@ -308,16 +309,23 @@ export function WorkflowEditor({
   // simply renders no button.
   const executableArtifactExport = useExecutableArtifactExport({ context, definitionId, publishedArtifactId });
   const publishedExecutable = executableArtifactExport.target;
+  const activityLabels = useMemo(
+    () => createValidationActivityLabels({
+      root: draft?.state.rootActivity,
+      presentation: draft?.activityPresentation,
+      catalogByVersion
+    }),
+    [catalogByVersion, draft?.activityPresentation, draft?.state.rootActivity]);
   const structuralValidationErrors = useMemo(
-    () => detectStructuralValidationErrors(draft?.state),
-    [draft?.state]);
+    () => detectStructuralValidationErrors(draft?.state, activityLabels),
+    [activityLabels, draft?.state]);
   const combinedValidationErrors = useMemo(
-    () => combineValidationErrors({
+    () => humanizeValidationErrors(combineValidationErrors({
       draftErrors: draft?.validationErrors,
       serverErrors: draftValidations.available ? draftValidations.errors : null,
       structuralErrors: structuralValidationErrors
-    }),
-    [draft?.validationErrors, draftValidations.available, draftValidations.errors, structuralValidationErrors]);
+    }), activityLabels),
+    [activityLabels, draft?.validationErrors, draftValidations.available, draftValidations.errors, structuralValidationErrors]);
   const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
   const proposeUpdateAction = findAiAction(ai, "weaver.workflows.propose-update");
   const aiProviderAvailable = useAiProviderAvailability(ai);
@@ -998,7 +1006,7 @@ export function WorkflowEditor({
       title: "Runtime",
       order: 5,
       icon: <Play size={15} />,
-      render: () => <WorkflowRuntimePanel testRun={renderedTestRun} publishedEquivalent={publishedEquivalent} onOpenRun={openWorkflowRun} />
+      render: () => <WorkflowRuntimePanel testRun={renderedTestRun} publishedEquivalent={publishedEquivalent} onOpenRun={openWorkflowRun} activityLabels={activityLabels} />
     },
     {
       id: "artifacts",
