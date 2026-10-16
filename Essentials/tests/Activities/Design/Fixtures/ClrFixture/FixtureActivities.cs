@@ -362,3 +362,20 @@ public abstract class NonStringCredentialFixtureActivity : FixtureActivity
     [ActivityInput(Key = nameof(ApiKey), IsCredential = true)]
     public int ApiKey { get; set; }
 }
+
+/// <summary>
+/// An open generic activity. It can never be instantiated, so the scanner must not catalog it (issue #385).
+/// </summary>
+public sealed class OpenGenericFixtureActivity<T> : FixtureActivity;
+
+/// <summary>A generic class whose nested activity is itself an open generic definition (it inherits <c>T</c>).</summary>
+public sealed class GenericFixtureHost<T>
+{
+    public sealed class NestedFixtureActivity : FixtureActivity;
+}
+
+/// <summary>An open generic base activity, abstract and so never cataloged itself.</summary>
+public abstract class GenericFixtureActivityBase<T> : FixtureActivity;
+
+/// <summary>A closed subclass of a generic base. It can be instantiated, so the scanner catalogs it.</summary>
+public sealed class ClosedGenericFixtureActivity : GenericFixtureActivityBase<string>;
