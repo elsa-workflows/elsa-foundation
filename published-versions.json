@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "cf44e71118b63029194947a9c4749dae8552f80e",
+  "last_publish_commit": "f4ddd62f20ee85292132888f473dd73d4fad6a74",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -299,8 +299,8 @@
     },
     {
       "package_id": "Elsa.Foundation.Identity",
-      "version": "4.0.12-preview",
-      "commit": "c976625675e93fe5724b8cdd02a4125bb21cf08c"
+      "version": "4.0.13-preview",
+      "commit": "f4ddd62f20ee85292132888f473dd73d4fad6a74"
     },
     {
       "package_id": "Elsa.Foundation.Identity.Api",
@@ -309,18 +309,18 @@
     },
     {
       "package_id": "Elsa.Foundation.Identity.AspNetCoreIdentity",
-      "version": "4.0.12-preview",
-      "commit": "c976625675e93fe5724b8cdd02a4125bb21cf08c"
+      "version": "4.0.13-preview",
+      "commit": "f4ddd62f20ee85292132888f473dd73d4fad6a74"
     },
     {
       "package_id": "Elsa.Foundation.Identity.AspNetCoreIdentity.EntityFrameworkCore",
-      "version": "4.0.14-preview",
-      "commit": "c976625675e93fe5724b8cdd02a4125bb21cf08c"
+      "version": "4.0.15-preview",
+      "commit": "f4ddd62f20ee85292132888f473dd73d4fad6a74"
     },
     {
       "package_id": "Elsa.Foundation.Identity.Core",
-      "version": "4.0.7-preview",
-      "commit": "c358b4ab2ea1eb54e485b5e51d5f654a05e838f4"
+      "version": "4.0.8-preview",
+      "commit": "f4ddd62f20ee85292132888f473dd73d4fad6a74"
     },
     {
       "package_id": "Elsa.Foundation.Identity.Oidc",
@@ -339,8 +339,8 @@
     },
     {
       "package_id": "Elsa.Foundation.Identity.Persistence.EntityFrameworkCore",
-      "version": "4.0.17-preview",
-      "commit": "c976625675e93fe5724b8cdd02a4125bb21cf08c"
+      "version": "4.0.18-preview",
+      "commit": "f4ddd62f20ee85292132888f473dd73d4fad6a74"
     },
     {
       "package_id": "Elsa.Git",
