@@ -89,6 +89,7 @@ for the interactive contributor route.
 >   server runs from its own temporary content root with its own SQLite files. To reuse a port, stop your
 >   server yourself.
 > - **The platform source harness also owns its server** and uses the same lifecycle helper and free-port rules.
+> - **`http/Test-HttpResponseFlowchart.ps1` owns an isolated server** and takes no `-BaseUrl` argument.
 > - **Every other server-dependent script only sends HTTP requests** to `-BaseUrl` (default `http://localhost:5095`).
 > - **Do not add `Stop-Process`, `kill`, or a port lookup that feeds one, to a script.** Use
 >   `Start-OwnedElsaServer` / `Restart-OwnedElsaServer` / `Remove-OwnedElsaServer`. `Test-ServerLifecycleGuard.ps1`
@@ -124,7 +125,7 @@ take no server argument and can run while yours is up:
 $base = 'http://localhost:5295'
 $selfHosted = 'Test-RestartRecovery.ps1', 'Test-AlterationReplayAndRestart.ps1', 'Test-FileBasedDeployment.ps1',
               'Test-SharedPersistence.ps1', 'Test-SharedDiagnosticsPersistence.ps1', 'Test-ServerLifecycleGuard.ps1',
-              'Test-JsonSourceComposition.ps1', 'Test-UnknownFeatures.ps1'
+              'Test-JsonSourceComposition.ps1', 'Test-UnknownFeatures.ps1', 'Test-HttpResponseFlowchart.ps1'
 $failed = @()
 Get-ChildItem ./e2e-tests -Recurse -Filter 'Test-*.ps1' | Sort-Object FullName | ForEach-Object {
     if ($_.Name -in $selfHosted) { pwsh -NoProfile -File $_.FullName }
