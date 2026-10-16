@@ -27,6 +27,7 @@ public sealed class Elsa3FlowchartDiagnosticsTests
         { "start-into-two", Elsa3ActivityDiagnosticCodes.GraphStartAmbiguous, "$.root.activities[0]", "start" },
         { "connections-on-sequence", Elsa3ActivityDiagnosticCodes.GraphConnectionInvalid, "$.root.connections", "root" },
         { "start-trigger-with-inbound", Elsa3ActivityDiagnosticCodes.GraphStartTriggerMisplaced, "$.root.activities[2]", "second" },
+        { "ambiguous-child-id", Elsa3ActivityDiagnosticCodes.GraphConnectionInvalid, "$.root.connections[0]", "root" },
     };
 
     [Theory]
@@ -161,6 +162,15 @@ public sealed class Elsa3FlowchartDiagnosticsTests
                 chart = Sequence("root", Write("a"), Write("b"));
                 chart.Connections = [Connect("a", "Done", "b")];
                 break;
+            case "ambiguous-child-id":
+            {
+                // 'b' reuses 'a's Elsa 3 id, so a connection naming 'a' cannot say which one it means.
+                var shadow = Write("b");
+                shadow.Id = "a";
+                chart = Flowchart("root", Write("a"), shadow, Write("c"));
+                chart.Connections = [Connect("a", "Done", "c")];
+                break;
+            }
             case "start-trigger-with-inbound":
                 // Spec 238 D8: a run started by 'second' cannot begin there, because 'a' leads into it.
                 chart = Flowchart("root", StartTrigger("first"), Write("a"), StartTrigger("second"));

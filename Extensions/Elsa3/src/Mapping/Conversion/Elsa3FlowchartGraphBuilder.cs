@@ -80,11 +80,12 @@ internal static class Elsa3FlowchartGraphBuilder
             var edges = new List<Edge>();
             var connections = flowchart.Node.Connections ?? [];
             var byId = new Dictionary<string, Elsa3Activity>(StringComparer.Ordinal);
+            var ambiguous = new HashSet<string>(StringComparer.Ordinal);
             foreach (var child in _children)
             {
                 if (!string.IsNullOrWhiteSpace(child.Id))
-                    byId.TryAdd(child.Id, child);
-                byId.TryAdd(Elsa3ConversionDiagnostics.NodeId(child), child);
+                    Register(child.Id, child);
+                Register(Elsa3ConversionDiagnostics.NodeId(child), child);
             }
 
             for (var index = 0; index < connections.Count; index++)
@@ -92,6 +93,16 @@ internal static class Elsa3FlowchartGraphBuilder
                 var connection = connections[index];
                 var sourceId = connection?.Source?.Activity;
                 var targetId = connection?.Target?.Activity;
+                // An identifier two children share cannot name either one: refuse rather than pick the first.
+                var shared = new[] { sourceId, targetId }.FirstOrDefault(id => id is not null && ambiguous.Contains(id));
+                if (shared is not null)
+                {
+                    Error(GraphConnectionInvalid, ConnectionPath(index), flowchart.Node,
+                        $"Connection {index} of flowchart '{NodeId(flowchart.Node)}' names '{shared}', which more than one activity of this flowchart uses as its id.",
+                        "Give every activity of the flowchart a unique id before converting.");
+                    continue;
+                }
+
                 var source = sourceId is null ? null : byId.GetValueOrDefault(sourceId);
                 var target = targetId is null ? null : byId.GetValueOrDefault(targetId);
                 if (source is null || target is null)
@@ -108,6 +119,12 @@ internal static class Elsa3FlowchartGraphBuilder
             }
 
             return edges;
+
+            void Register(string id, Elsa3Activity child)
+            {
+                if (!byId.TryAdd(id, child) && !ReferenceEquals(byId[id], child))
+                    ambiguous.Add(id);
+            }
         }
 
         /// <summary>

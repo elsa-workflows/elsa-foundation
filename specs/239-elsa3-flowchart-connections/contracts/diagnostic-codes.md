@@ -7,7 +7,7 @@ or reused, and spec 235 skips and reports by code. Every diagnostic carries the 
 
 | Constant | Code | Raised when | Guidance (gist) | FR |
 |---|---|---|---|---|
-| `GraphConnectionInvalid` | `ELS3-ACTIVITY-GRAPH-CONNECTION-INVALID` | a connection names a node that is not a child of its flowchart; `connections` on a container that is not a flowchart | Remove or reconnect the connection in Elsa 3 | FR-012 |
+| `GraphConnectionInvalid` | `ELS3-ACTIVITY-GRAPH-CONNECTION-INVALID` | a connection names a node that is not a child of its flowchart, or an id two children share; `connections` on a container that is not a flowchart | Remove or reconnect the connection in Elsa 3 | FR-012 |
 | `GraphOutcomeUnmapped` | `ELS3-ACTIVITY-GRAPH-OUTCOME-UNMAPPED` | a connection's port is not mapped and the Elsa 4 activity does not emit it (including dynamic outcomes bound by expression) | Connect from an outcome the activity has, or make the outcome list literal | FR-003 |
 | `GraphJoinUnsupported` | `ELS3-ACTIVITY-GRAPH-JOIN-UNSUPPORTED` | `WaitAny` join with concurrent inbound paths; `WaitAll` join with an inbound path that may not run; join mode by expression | Use `WaitAll`/`WaitAllActive`, remove the parallel branches, or make every branch unconditional | FR-006 |
 | `GraphLoopUnsupported` | `ELS3-ACTIVITY-GRAPH-LOOP-UNSUPPORTED` | a back connection to anything but a start node with no other inbound connection; any back connection into a FlowFork or FlowJoin | Use a While, For or ForEach activity for the loop | FR-009 |
