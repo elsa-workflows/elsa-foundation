@@ -201,6 +201,8 @@ internal static class IdentityIamProviderSmoke
         Assert.Equal(application.Ownership, readback.Ownership);
         Assert.True(application.AllowedGrantTypes.SetEquals(readback.AllowedGrantTypes));
         Assert.True(application.Scopes.SetEquals(readback.Scopes));
+        Assert.True(application.RoleIds.SetEquals(readback.RoleIds));
+        Assert.Equal(application.Status, readback.Status);
     }
 
     private static async Task AssertCredentialReadbackAsync(
@@ -226,7 +228,8 @@ internal static class IdentityIamProviderSmoke
         {
             Id = "app-deterministic",
             AllowedGrantTypes = new HashSet<string>(application.AllowedGrantTypes.Reverse(), StringComparer.Ordinal),
-            Scopes = new HashSet<string>(application.Scopes.Reverse(), StringComparer.Ordinal)
+            Scopes = new HashSet<string>(application.Scopes.Reverse(), StringComparer.Ordinal),
+            RoleIds = new HashSet<string>(application.RoleIds.Reverse(), StringComparer.Ordinal)
         };
         await store.SaveAsync(equivalent);
 
@@ -236,6 +239,7 @@ internal static class IdentityIamProviderSmoke
             .SingleAsync(entity => entity.ApplicationId == equivalent.Id);
         Assert.Equal(first.AllowedGrantTypesJson, second.AllowedGrantTypesJson);
         Assert.Equal(first.ScopesJson, second.ScopesJson);
+        Assert.Equal(first.RoleIdsJson, second.RoleIdsJson);
     }
 
     private static async Task AssertCreateConflictAndCasAsync(
@@ -505,7 +509,9 @@ internal static class IdentityIamProviderSmoke
         ApplicationType.Confidential,
         ResourceOwnership.Foundation,
         new HashSet<string>(new[] { "client_credentials", "authorization_code", "grant-😀" }, StringComparer.Ordinal),
-        new HashSet<string>(new[] { "scope:z", "scope:a", "scope-😀" }, StringComparer.Ordinal));
+        new HashSet<string>(new[] { "scope:z", "scope:a", "scope-😀" }, StringComparer.Ordinal),
+        new HashSet<string>(new[] { "role:z", "role:a", "role-😀" }, StringComparer.Ordinal),
+        ApplicationStatus.Disabled);
 
     private static CredentialRecord Credential(string tenant, string id, DateTimeOffset expiresAt) => new(
         id,

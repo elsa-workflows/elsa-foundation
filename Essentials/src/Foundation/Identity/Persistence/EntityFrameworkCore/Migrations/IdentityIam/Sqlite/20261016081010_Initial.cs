@@ -49,13 +49,17 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     Id = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                     TenantId = table.Column<string>(type: "TEXT", nullable: false),
+                    TenantLookupKey = table.Column<string>(type: "TEXT", unicode: false, maxLength: 64, nullable: false),
                     ApplicationId = table.Column<string>(type: "TEXT", nullable: false),
+                    ApplicationIdOrderKey = table.Column<byte[]>(type: "BLOB", maxLength: 802, nullable: false),
                     ClientId = table.Column<string>(type: "TEXT", nullable: false),
                     DisplayName = table.Column<string>(type: "TEXT", nullable: false),
                     Type = table.Column<int>(type: "INTEGER", nullable: false),
                     Ownership = table.Column<int>(type: "INTEGER", nullable: false),
+                    Status = table.Column<int>(type: "INTEGER", nullable: false),
                     AllowedGrantTypesJson = table.Column<string>(type: "TEXT", nullable: false),
                     ScopesJson = table.Column<string>(type: "TEXT", nullable: false),
+                    RoleIdsJson = table.Column<string>(type: "TEXT", nullable: false),
                     Revision = table.Column<long>(type: "INTEGER", nullable: false),
                     SchemaVersion = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false)
                 },
@@ -395,6 +399,11 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 name: "IX___ElsaSchemaFinalization_ElsaIdentityIam_SchemaVersion",
                 table: "__ElsaSchemaFinalization_ElsaIdentityIam",
                 column: "SchemaVersion");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_identity_applications_page",
+                table: "identity_applications",
+                columns: new[] { "TenantLookupKey", "ApplicationIdOrderKey", "Id" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_identity_applications_SchemaVersion",

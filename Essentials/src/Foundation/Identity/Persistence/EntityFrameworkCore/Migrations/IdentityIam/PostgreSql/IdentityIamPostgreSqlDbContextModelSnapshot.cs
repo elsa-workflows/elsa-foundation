@@ -34,6 +34,11 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .HasColumnType("text")
                         .UseCollation("C");
 
+                    b.Property<byte[]>("ApplicationIdOrderKey")
+                        .IsRequired()
+                        .HasMaxLength(802)
+                        .HasColumnType("bytea");
+
                     b.Property<string>("ClientId")
                         .IsRequired()
                         .HasColumnType("text")
@@ -50,6 +55,10 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
 
+                    b.Property<string>("RoleIdsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -59,9 +68,19 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
                     b.Property<string>("TenantId")
                         .IsRequired()
                         .HasColumnType("text")
+                        .UseCollation("C");
+
+                    b.Property<string>("TenantLookupKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("character varying(64)")
                         .UseCollation("C");
 
                     b.Property<int>("Type")
@@ -70,6 +89,9 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                     b.HasKey("Id");
 
                     b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("TenantLookupKey", "ApplicationIdOrderKey", "Id")
+                        .HasDatabaseName("ix_identity_applications_page");
 
                     b.ToTable("identity_applications", (string)null);
                 });

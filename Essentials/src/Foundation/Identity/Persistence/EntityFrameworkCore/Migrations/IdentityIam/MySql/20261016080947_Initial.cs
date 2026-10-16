@@ -54,13 +54,17 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     Id = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
                     TenantId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    TenantLookupKey = table.Column<string>(type: "varchar(64)", unicode: false, maxLength: 64, nullable: false, collation: "utf8mb4_0900_bin"),
                     ApplicationId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
+                    ApplicationIdOrderKey = table.Column<byte[]>(type: "varbinary(802)", maxLength: 802, nullable: false),
                     ClientId = table.Column<string>(type: "longtext", nullable: false, collation: "utf8mb4_0900_bin"),
                     DisplayName = table.Column<string>(type: "longtext", nullable: false),
                     Type = table.Column<int>(type: "int", nullable: false),
                     Ownership = table.Column<int>(type: "int", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
                     AllowedGrantTypesJson = table.Column<string>(type: "longtext", nullable: false),
                     ScopesJson = table.Column<string>(type: "longtext", nullable: false),
+                    RoleIdsJson = table.Column<string>(type: "longtext", nullable: false),
                     Revision = table.Column<long>(type: "bigint", nullable: false),
                     SchemaVersion = table.Column<string>(type: "varchar(32)", maxLength: 32, nullable: false)
                 },
@@ -415,6 +419,11 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 name: "IX___ElsaSchemaFinalization_ElsaIdentityIam_SchemaVersion",
                 table: "__ElsaSchemaFinalization_ElsaIdentityIam",
                 column: "SchemaVersion");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_identity_applications_page",
+                table: "identity_applications",
+                columns: new[] { "TenantLookupKey", "ApplicationIdOrderKey", "Id" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_identity_applications_SchemaVersion",

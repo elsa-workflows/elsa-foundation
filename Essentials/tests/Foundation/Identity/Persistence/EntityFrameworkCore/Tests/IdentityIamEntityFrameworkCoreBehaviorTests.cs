@@ -31,7 +31,9 @@ public sealed class IdentityIamEntityFrameworkCoreBehaviorTests
                 ApplicationType.Confidential,
                 ResourceOwnership.External,
                 Set("grant\udc00", "authorization_code", ""),
-                Set("scope\ud800", "openid", "😀"));
+                Set("scope\ud800", "openid", "😀"),
+                Set("role\ud800", "operators", "😀"),
+                ApplicationStatus.Disabled);
 
             await using (var context = CreateContext(databasePath))
                 await ApplicationStore(context, expected.TenantId).SaveAsync(expected);
@@ -200,12 +202,14 @@ public sealed class IdentityIamEntityFrameworkCoreBehaviorTests
             var first = Application("acme", "json", "first") with
             {
                 AllowedGrantTypes = Set("z", "a", "grant\ud800"),
-                Scopes = Set("scope-z", "scope-a", "scope\udc00")
+                Scopes = Set("scope-z", "scope-a", "scope\udc00"),
+                RoleIds = Set("role-z", "role-a", "role\udc00")
             };
             var second = first with
             {
                 AllowedGrantTypes = Set("grant\ud800", "z", "a"),
-                Scopes = Set("scope\udc00", "scope-a", "scope-z")
+                Scopes = Set("scope\udc00", "scope-a", "scope-z"),
+                RoleIds = Set("role\udc00", "role-a", "role-z")
             };
 
             await using var context = CreateContext(databasePath);
@@ -214,11 +218,13 @@ public sealed class IdentityIamEntityFrameworkCoreBehaviorTests
             var firstRow = await context.Applications.AsNoTracking().SingleAsync();
             var firstGrantJson = firstRow.AllowedGrantTypesJson;
             var firstScopeJson = firstRow.ScopesJson;
+            var firstRoleJson = firstRow.RoleIdsJson;
 
             await store.SaveAsync(second);
             var secondRow = await context.Applications.AsNoTracking().SingleAsync();
             Assert.Equal(firstGrantJson, secondRow.AllowedGrantTypesJson);
             Assert.Equal(firstScopeJson, secondRow.ScopesJson);
+            Assert.Equal(firstRoleJson, secondRow.RoleIdsJson);
             AssertApplication(second, Assert.IsType<ApplicationRecord>(await store.FindAsync("acme", "json")));
         }
         finally
@@ -880,7 +886,9 @@ public sealed class IdentityIamEntityFrameworkCoreBehaviorTests
         ApplicationType.Public,
         ResourceOwnership.Foundation,
         Set("client_credentials", "authorization_code"),
-        Set("openid", "profile"));
+        Set("openid", "profile"),
+        Set("role-a"),
+        ApplicationStatus.Active);
 
     private static CredentialRecord Credential(string tenantId, string id, string hash) => new(
         id,
@@ -905,6 +913,8 @@ public sealed class IdentityIamEntityFrameworkCoreBehaviorTests
         Assert.Equal(expected.Ownership, actual.Ownership);
         AssertSet(expected.AllowedGrantTypes, actual.AllowedGrantTypes);
         AssertSet(expected.Scopes, actual.Scopes);
+        AssertSet(expected.RoleIds, actual.RoleIds);
+        Assert.Equal(expected.Status, actual.Status);
     }
 
     private static void AssertCredential(CredentialRecord expected, CredentialRecord actual)

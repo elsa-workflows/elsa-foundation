@@ -55,6 +55,12 @@ public interface IApplicationStore
     ValueTask<ApplicationRecord?> FindAsync(string tenantId, string applicationId, CancellationToken cancellationToken = default);
 
     ValueTask SaveAsync(ApplicationRecord application, CancellationToken cancellationToken = default);
+
+    /// <summary>Pages the tenant's applications in a stable order, by application id.</summary>
+    ValueTask<IamPage<ApplicationRecord>> ListPageAsync(string tenantId, IamPageRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the application; returns <c>false</c> when it does not exist.</summary>
+    ValueTask<bool> DeleteAsync(string tenantId, string applicationId, CancellationToken cancellationToken = default);
 }
 
 [ReplacementContract]
@@ -71,6 +77,9 @@ public interface ICredentialStore
     ValueTask<CredentialRecord?> FindAsync(string tenantId, string credentialId, CancellationToken cancellationToken = default);
 
     ValueTask SaveAsync(CredentialRecord credential, CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the credential; returns <c>false</c> when it does not exist.</summary>
+    ValueTask<bool> DeleteAsync(string tenantId, string credentialId, CancellationToken cancellationToken = default);
 }
 
 [ReplacementContract]
@@ -265,6 +274,10 @@ public sealed record RoleRecord(
     IReadOnlySet<string> Permissions,
     bool System);
 
+/// <summary>
+/// A non-interactive client of the tenant. <see cref="RoleIds"/> grant its permissions the way a user's roles do, and
+/// only an <see cref="ApplicationStatus.Active"/> application authenticates.
+/// </summary>
 public sealed record ApplicationRecord(
     string Id,
     string TenantId,
@@ -273,7 +286,9 @@ public sealed record ApplicationRecord(
     ApplicationType Type,
     ResourceOwnership Ownership,
     IReadOnlySet<string> AllowedGrantTypes,
-    IReadOnlySet<string> Scopes);
+    IReadOnlySet<string> Scopes,
+    IReadOnlySet<string> RoleIds,
+    ApplicationStatus Status);
 
 public sealed record CredentialRecord(
     string Id,
@@ -342,6 +357,12 @@ public enum ApplicationType
 {
     Public,
     Confidential
+}
+
+public enum ApplicationStatus
+{
+    Active,
+    Disabled
 }
 
 public enum CredentialSubjectType

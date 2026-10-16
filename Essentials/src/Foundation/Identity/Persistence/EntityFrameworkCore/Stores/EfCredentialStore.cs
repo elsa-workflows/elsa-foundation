@@ -46,6 +46,18 @@ public sealed class EfCredentialStore(
     public ValueTask SaveAsync(CredentialRecord credential, CancellationToken cancellationToken = default) =>
         new(SaveUnconditionallyAsync(credential, cancellationToken));
 
+    public async ValueTask<bool> DeleteAsync(string tenantId, string credentialId, CancellationToken cancellationToken = default)
+    {
+        ValidateIdentity(tenantId, nameof(tenantId));
+        ValidateIdentity(credentialId, nameof(credentialId));
+        PrepareTenant(tenantId, cancellationToken);
+        return await EfIdentityRevisionedRowWrite.DeleteAsync(
+            context,
+            "Identity credential",
+            token => FindEntityForWriteAsync(tenantId, credentialId, token),
+            cancellationToken);
+    }
+
     public async ValueTask<IamRevisionedRecord<CredentialRecord>?> FindWithRevisionAsync(
         string tenantId,
         string credentialId,
@@ -107,21 +119,22 @@ public sealed class EfCredentialStore(
 
     private EfIdentityRevisionedRow<CredentialEntity> Row(CredentialRecord credential) => new(
         "Identity credential",
-        cancellationToken => FindEntityForWriteAsync(credential, cancellationToken),
+        cancellationToken => FindEntityForWriteAsync(credential.TenantId, credential.Id, cancellationToken),
         cancellationToken => ExistsAsync(credential, cancellationToken),
         static () => new CredentialEntity(),
         entity => Apply(entity, credential));
 
     private async Task<CredentialEntity?> FindEntityForWriteAsync(
-        CredentialRecord credential,
+        string tenantId,
+        string credentialId,
         CancellationToken cancellationToken)
     {
-        IdentityEntityFrameworkAccessGuard.EnsureTenant(accessContextAccessor, credential.TenantId);
+        IdentityEntityFrameworkAccessGuard.EnsureTenant(accessContextAccessor, tenantId);
         cancellationToken.ThrowIfCancellationRequested();
         var row = await context.Credentials.SingleOrDefaultAsync(
-            candidate => candidate.Id == StorageId(credential.TenantId, credential.Id),
+            candidate => candidate.Id == StorageId(tenantId, credentialId),
             cancellationToken);
-        return row is null || !Matches(row, credential.TenantId, credential.Id) ? null : row;
+        return row is null || !Matches(row, tenantId, credentialId) ? null : row;
     }
 
     private async Task<bool> ExistsAsync(CredentialRecord credential, CancellationToken cancellationToken) =>
