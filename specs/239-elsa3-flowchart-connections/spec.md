@@ -90,6 +90,7 @@ a review session with the maintainer on 2026-10-15 and 2026-10-16.
 | G-5 | **`WaitAll`** converts when every inbound path provably runs. Otherwise it is refused (`ELS3-ACTIVITY-GRAPH-JOIN-UNSUPPORTED`). |
 | G-6 | **Implicit joins and `WaitAllActive`** convert to Elsa 4 implicit joins. |
 | G-7 | **Outbound connections of terminal nodes** (`Complete`, `End`, `Break`) and of FlowFork ports outside its branches never fire in Elsa 3. They are removed with a warning, never silently. |
+| G-8 | **Start triggers follow spec 238's start-path rule** (Joey, 2026-10-16, after #2856 merged). A start-capable flowchart child that another activity leads into and that is not the start node is refused at conversion (`ELS3-ACTIVITY-GRAPH-START-TRIGGER-MISPLACED`), not left to fail at publish. Placement through nested containers stays with 238's publish preflight. |
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -251,6 +252,9 @@ the node or connection and say what to change. Nothing throws; nothing is droppe
    `ELS3-ACTIVITY-GRAPH-CONNECTION-INVALID`.
 7. **Given** several causes in one definition, **When** converted, **Then** every cause is reported in deterministic
    order.
+8. **Given** a start-capable child (`canStartWorkflow`) that another activity leads into and that is not the start
+   node, **When** converted, **Then** `ELS3-ACTIVITY-GRAPH-START-TRIGGER-MISPLACED` names it, with guidance to move it to
+   an entry or make it a mid-flow wait (G-8).
 
 ### Edge Cases
 
@@ -309,10 +313,12 @@ the node or connection and say what to change. Nothing throws; nothing is droppe
   non-flowchart container, MUST fail with `GRAPH-CONNECTION-INVALID`.
 - **FR-013**: The HttpEndpoint projection node of spec 236 D-12 MUST be placed in a flowchart by connection: endpoint
   `Done` → projection node, and the endpoint's outbound connections leave from the projection node.
+- **FR-013a**: A start-capable direct child of a flowchart that has an inbound connection and is not the start node
+  MUST fail with `GRAPH-START-TRIGGER-MISPLACED` (G-8, spec 238 D8).
 - **FR-014**: New codes MUST be public constants in `Elsa3ActivityDiagnosticCodes`, never renamed or reused:
   errors `ELS3-ACTIVITY-GRAPH-CONNECTION-INVALID`, `ELS3-ACTIVITY-GRAPH-OUTCOME-UNMAPPED`,
   `ELS3-ACTIVITY-GRAPH-JOIN-UNSUPPORTED`, `ELS3-ACTIVITY-GRAPH-LOOP-UNSUPPORTED`,
-  `ELS3-ACTIVITY-GRAPH-START-AMBIGUOUS`; warning `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`. Each diagnostic MUST carry
+  `ELS3-ACTIVITY-GRAPH-START-AMBIGUOUS`, `ELS3-ACTIVITY-GRAPH-START-TRIGGER-MISPLACED`; warning `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`. Each diagnostic MUST carry
   the definition, node id (the connection's source for a connection), JSON path and guidance, as spec 236's do.
 - **FR-015**: Conversion MUST stay deterministic (same input and catalog → byte-identical output), never throw for
   input or catalog content, and keep the nesting budget (a Flowchart adds 4 levels; connections add none).

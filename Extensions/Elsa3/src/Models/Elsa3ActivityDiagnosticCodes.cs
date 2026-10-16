@@ -64,6 +64,12 @@ public static class Elsa3ActivityDiagnosticCodes
     /// <summary>A Start activity or a FlowFork at the start leads to more than one node; an Elsa 4 flowchart starts at one.</summary>
     public const string GraphStartAmbiguous = "ELS3-ACTIVITY-GRAPH-START-AMBIGUOUS";
 
+    /// <summary>
+    /// A start trigger sits where an Elsa 4 run cannot begin: a flowchart child with an inbound connection that is not the
+    /// start node (spec 238's start-path rule, which refuses it at publish).
+    /// </summary>
+    public const string GraphStartTriggerMisplaced = "ELS3-ACTIVITY-GRAPH-START-TRIGGER-MISPLACED";
+
     /// <summary>Activities nest deeper than the conversion supports.</summary>
     public const string NestingTooDeep = "ELS3-ACTIVITY-NESTING-TOO-DEEP";
 

@@ -26,6 +26,7 @@ public sealed class Elsa3FlowchartDiagnosticsTests
         { "fork-branches-expression", Elsa3ActivityDiagnosticCodes.UnsupportedMode, "$.root.activities[0].branches", "fork" },
         { "start-into-two", Elsa3ActivityDiagnosticCodes.GraphStartAmbiguous, "$.root.activities[0]", "start" },
         { "connections-on-sequence", Elsa3ActivityDiagnosticCodes.GraphConnectionInvalid, "$.root.connections", "root" },
+        { "start-trigger-with-inbound", Elsa3ActivityDiagnosticCodes.GraphStartTriggerMisplaced, "$.root.activities[2]", "second" },
     };
 
     [Theory]
@@ -160,6 +161,11 @@ public sealed class Elsa3FlowchartDiagnosticsTests
                 chart = Sequence("root", Write("a"), Write("b"));
                 chart.Connections = [Connect("a", "Done", "b")];
                 break;
+            case "start-trigger-with-inbound":
+                // Spec 238 D8: a run started by 'second' cannot begin there, because 'a' leads into it.
+                chart = Flowchart("root", StartTrigger("first"), Write("a"), StartTrigger("second"));
+                chart.Connections = [Connect("first", "Done", "a"), Connect("a", "Done", "second")];
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(@case), @case, null);
         }
@@ -172,6 +178,13 @@ public sealed class Elsa3FlowchartDiagnosticsTests
         var flowchart = Activity(nodeId, "Elsa.Flowchart");
         flowchart.Activities = children.ToList();
         return flowchart;
+    }
+
+    private static Elsa3Activity StartTrigger(string nodeId)
+    {
+        var endpoint = Activity(nodeId, "Elsa.HttpEndpoint", ("path", Literal($"/{nodeId}")));
+        endpoint.CustomProperties = new Elsa3ActivityCustomProperties { CanStartWorkflow = true };
+        return endpoint;
     }
 
     internal static Elsa3Activity Write(string nodeId) => Activity(nodeId, "Elsa.WriteLine", ("text", Literal(nodeId)));

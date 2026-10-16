@@ -66,6 +66,7 @@ internal static class Elsa3FlowchartGraphBuilder
                 return;
 
             var collapsed = Collapse(edges, ref start);
+            CheckStartTriggers(collapsed, start);
             if (_failed)
                 return;
 
@@ -595,6 +596,24 @@ internal static class Elsa3FlowchartGraphBuilder
             return list
                 .DistinctBy(edge => (edge.Source, edge.Port, edge.Target))
                 .ToList();
+        }
+
+        /// <summary>
+        /// Spec 238's start-path rule: an Elsa 4 run started by a trigger begins at it only when it is the start node or has
+        /// no inbound connection. Elsa 3 started at any triggered direct child, so a start trigger something else leads
+        /// into is refused here instead of at publish. Placement through nested containers is left to publish preflight.
+        /// </summary>
+        private void CheckStartTriggers(List<Elsa4Edge> edges, Elsa3Activity? start)
+        {
+            foreach (var child in _children.Where(child => child.CustomProperties?.CanStartWorkflow == true && !ReferenceEquals(child, start)))
+            {
+                if (Construct(child) is not null || !edges.Any(edge => ReferenceEquals(edge.Target, child)))
+                    continue;
+
+                Error(GraphStartTriggerMisplaced, plan.Find(child)!.JsonPath, child,
+                    $"'{NodeId(child)}' ({child.Type}) can start the workflow, but another activity leads into it and it is not the start node of flowchart '{NodeId(flowchart.Node)}'. Elsa 4 begins a run at a trigger only where nothing leads into it, or at the start node.",
+                    "Move the trigger to an entry position with no incoming connection, or make it a mid-flow wait (clear 'Can start workflow'), before converting.");
+            }
         }
 
         // ── Stage 7: write the structure fields, remove the constructs ──────────────────────────────────────────

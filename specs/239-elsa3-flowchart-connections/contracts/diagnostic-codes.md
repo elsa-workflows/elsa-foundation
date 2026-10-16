@@ -11,6 +11,7 @@ or reused, and spec 235 skips and reports by code. Every diagnostic carries the 
 | `GraphOutcomeUnmapped` | `ELS3-ACTIVITY-GRAPH-OUTCOME-UNMAPPED` | a connection's port is not mapped and the Elsa 4 activity does not emit it (including dynamic outcomes bound by expression) | Connect from an outcome the activity has, or make the outcome list literal | FR-003 |
 | `GraphJoinUnsupported` | `ELS3-ACTIVITY-GRAPH-JOIN-UNSUPPORTED` | `WaitAny` join with concurrent inbound paths; `WaitAll` join with an inbound path that may not run; join mode by expression | Use `WaitAll`/`WaitAllActive`, remove the parallel branches, or make every branch unconditional | FR-006 |
 | `GraphLoopUnsupported` | `ELS3-ACTIVITY-GRAPH-LOOP-UNSUPPORTED` | a back connection to anything but a start node with no other inbound connection; any back connection into a FlowFork or FlowJoin | Use a While, For or ForEach activity for the loop | FR-009 |
+| `GraphStartTriggerMisplaced` | `ELS3-ACTIVITY-GRAPH-START-TRIGGER-MISPLACED` | a start-capable flowchart child that another activity leads into and that is not the start node (spec 238 D8 would refuse it at publish) | Move the trigger to an entry with no incoming connection, or make it a mid-flow wait | FR-013a |
 | `GraphStartAmbiguous` | `ELS3-ACTIVITY-GRAPH-START-AMBIGUOUS` | a Start activity or a FlowFork at the start leads to more than one node | Put one activity first; an Elsa 4 flowchart starts at exactly one node | FR-008 |
 
 Existing codes gain uses: `ELS3-ACTIVITY-NO-COUNTERPART` for a connection on a port the map marks unsupported;

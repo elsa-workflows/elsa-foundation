@@ -97,7 +97,9 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     (a `Start` or fork at the start that leads to several nodes).
   - A connection Elsa 3 never follows (leaving `Complete`, `End` or `Break`, or a fork port outside its branches) is
     removed with `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`.
-  - Several start triggers stay in one flowchart. Elsa 4 starts a run at the trigger that fired (spec 238).
+  - Several start triggers stay in one flowchart. Elsa 4 starts a run at the trigger that fired (spec 238). A start
+    trigger that another activity leads into, and that is not the start node, is
+    `ELS3-ACTIVITY-GRAPH-START-TRIGGER-MISPLACED`: Elsa 4 cannot begin a run there.
   - Conversion assumes the host's default `deadPathJoin` flowchart join option.
 - **Imported reusable activities** are not yet published, so they do not run as graphs until #2796.
 
