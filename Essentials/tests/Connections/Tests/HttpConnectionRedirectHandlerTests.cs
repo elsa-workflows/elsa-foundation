@@ -1,10 +1,13 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Sockets;
 using System.Text;
+using Elsa.Activities.Http.Constants;
 using Elsa.Connections.Core.Contracts;
 using Elsa.Connections.Core.Exceptions;
 using Elsa.Connections.Core.Models;
 using Elsa.Connections.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Connections.Tests;
@@ -196,6 +199,40 @@ public sealed class HttpConnectionRedirectHandlerTests
     }
 
     [Fact]
+    public async Task NoConnection_StripsAuthorizationOnSameOriginRedirect()
+    {
+        var inner = new RecordingHandler(new Uri(Origin + LandingPath));
+        using var handler = new HttpConnectionRedirectHandler(inner);
+        using var client = new HttpClient(handler);
+        using var request = new HttpRequestMessage(HttpMethod.Get, Origin + StartPath);
+        request.Headers.TryAddWithoutValidation("Authorization", "Bearer supplied");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("Bearer supplied", inner.Requests[0].Authorization);
+        Assert.Null(inner.Requests[1].Authorization);
+    }
+
+    [Fact]
+    public async Task NoConnection_StripsAuthorizationOnSameOriginRedirect_WhenConnectionsWorkflowsIsComposed()
+    {
+        await using var server = new SameOriginLoopback();
+        await using var provider = ConnectionsTestComposition.CreateProvider(workflows: true);
+        var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient(HttpActivityConstants.HttpClientName);
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(server.BaseAddress, StartPath.TrimStart('/')));
+        request.Headers.TryAddWithoutValidation("Authorization", "Bearer supplied");
+
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(2, server.Requests.Count);
+        Assert.Equal("Bearer supplied", server.Requests[0].Authorization);
+        Assert.Null(server.Requests[1].Authorization);
+        Assert.Equal(LandingPath, server.Requests[1].Path);
+    }
+
+    [Fact]
     public async Task NoConnection_RefusesHttpsToHttpRedirect()
     {
         var inner = new RecordingHandler(new Uri("http://origin.example" + LandingPath));
@@ -368,6 +405,100 @@ public sealed class HttpConnectionRedirectHandlerTests
                 request.Method.Method,
                 body,
                 uri.Port);
+        }
+    }
+
+    private sealed class SameOriginLoopback : IAsyncDisposable
+    {
+        private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
+        private readonly CancellationTokenSource _stop = new();
+        private readonly List<CapturedRequest> _requests = [];
+        private readonly List<Task> _connections = [];
+        private readonly Task _accepting;
+
+        public SameOriginLoopback()
+        {
+            _listener.Start();
+            BaseAddress = new Uri($"http://127.0.0.1:{((IPEndPoint)_listener.LocalEndpoint).Port}/");
+            _accepting = AcceptAsync();
+        }
+
+        public Uri BaseAddress { get; }
+        public IReadOnlyList<CapturedRequest> Requests
+        {
+            get
+            {
+                lock (_requests)
+                    return _requests.ToArray();
+            }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await _stop.CancelAsync();
+            _listener.Stop();
+            await _accepting;
+            Task[] connections;
+            lock (_connections)
+                connections = _connections.ToArray();
+            await Task.WhenAll(connections);
+            _stop.Dispose();
+        }
+
+        private async Task AcceptAsync()
+        {
+            while (!_stop.IsCancellationRequested)
+            {
+                TcpClient client;
+                try
+                {
+                    client = await _listener.AcceptTcpClientAsync(_stop.Token);
+                }
+                catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or SocketException)
+                {
+                    return;
+                }
+
+                lock (_connections)
+                    _connections.Add(ServeAsync(client));
+            }
+        }
+
+        private async Task ServeAsync(TcpClient client)
+        {
+            using var _ = client;
+            try
+            {
+                await using var stream = client.GetStream();
+                using var reader = new StreamReader(stream, Encoding.ASCII, leaveOpen: true);
+                var requestLine = await reader.ReadLineAsync(_stop.Token);
+                if (requestLine is null)
+                    return;
+
+                var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                while (await reader.ReadLineAsync(_stop.Token) is { Length: > 0 } line)
+                {
+                    var separator = line.IndexOf(':', StringComparison.Ordinal);
+                    if (separator > 0)
+                        headers[line[..separator]] = line[(separator + 1)..].Trim();
+                }
+
+                var path = requestLine.Split(' ')[1];
+                headers.TryGetValue("Authorization", out var authorization);
+                lock (_requests)
+                    _requests.Add(new CapturedRequest("127.0.0.1", path, "", authorization, null, "GET", null, ((IPEndPoint)_listener.LocalEndpoint).Port));
+
+                var status = path == StartPath ? 302 : 200;
+                var response = new StringBuilder()
+                    .Append(FormattableString.Invariant($"HTTP/1.1 {status} Stub\r\nContent-Length: 0\r\nConnection: close\r\n"));
+                if (status == 302)
+                    response.Append("Location: ").Append(new Uri(BaseAddress, LandingPath.TrimStart('/')).AbsoluteUri).Append("\r\n");
+                response.Append("\r\n");
+                await stream.WriteAsync(Encoding.ASCII.GetBytes(response.ToString()), _stop.Token);
+            }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException or OperationCanceledException)
+            {
+            }
         }
     }
 

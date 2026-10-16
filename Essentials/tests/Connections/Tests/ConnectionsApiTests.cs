@@ -84,6 +84,42 @@ public sealed class ConnectionsApiTests
         Assert.Contains("Revoked", result.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Test_WithoutTestPermission_Returns403()
+    {
+        await using var host = await StartHostAsync();
+        using var client = host.GetTestClient();
+
+        using var created = await client.SendAsync(Authed(HttpMethod.Post, "/connections", BearerBody("needs-test")));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        using var tested = await client.SendAsync(Authed(
+            HttpMethod.Post,
+            "/connections/needs-test/test",
+            permissions: "connections:manage"));
+        Assert.Equal(HttpStatusCode.Forbidden, tested.StatusCode);
+        var body = await tested.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("succeeded", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Test_WithTestPermissionOnly_DoesNotRequireUse()
+    {
+        await using var host = await StartHostAsync();
+        using var client = host.GetTestClient();
+
+        using var created = await client.SendAsync(Authed(HttpMethod.Post, "/connections", BearerBody("test-only")));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        using var tested = await client.SendAsync(Authed(
+            HttpMethod.Post,
+            "/connections/test-only/test",
+            permissions: "connections:test"));
+        Assert.Equal(HttpStatusCode.OK, tested.StatusCode);
+        var result = await tested.Content.ReadFromJsonAsync<ConnectionTestResult>(Json);
+        Assert.True(result!.Succeeded);
+    }
+
     private static object BearerBody(string name) => new
     {
         name,
@@ -93,10 +129,12 @@ public sealed class ConnectionsApiTests
         secretFields = new { token = new { value = "tok" } }
     };
 
-    private static HttpRequestMessage Authed(HttpMethod method, string path, object? body = null)
+    private static HttpRequestMessage Authed(HttpMethod method, string path, object? body = null, string? permissions = null)
     {
         var request = new HttpRequestMessage(method, path);
         request.Headers.Add("X-Test-Identity", "admin");
+        if (!string.IsNullOrWhiteSpace(permissions))
+            request.Headers.Add("X-Test-Permissions", permissions);
         if (body is not null)
             request.Content = JsonContent.Create(body);
         return request;
@@ -150,13 +188,14 @@ public sealed class ConnectionsApiTests
             if (!Request.Headers.TryGetValue("X-Test-Identity", out var identity) || string.IsNullOrWhiteSpace(identity))
                 return Task.FromResult(AuthenticateResult.NoResult());
 
-            var claims = new[]
-            {
-                new Claim(IdentityClaimTypes.Permission, PermissionKey.Wildcard),
-                new Claim(IdentityClaimTypes.Normalized, "v1"),
-                new Claim(IdentityClaimTypes.Provider, "test"),
-                new Claim(IdentityClaimTypes.TenantId, "tenant-a")
-            };
+            var permissions = Request.Headers.TryGetValue("X-Test-Permissions", out var requested) && !string.IsNullOrWhiteSpace(requested)
+                ? requested.ToString().Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                : [PermissionKey.Wildcard];
+            var claims = permissions
+                .Select(permission => new Claim(IdentityClaimTypes.Permission, permission))
+                .Append(new Claim(IdentityClaimTypes.Normalized, "v1"))
+                .Append(new Claim(IdentityClaimTypes.Provider, "test"))
+                .Append(new Claim(IdentityClaimTypes.TenantId, "tenant-a"));
             var principal = new ClaimsPrincipal(new ClaimsIdentity(claims, Scheme.Name));
             return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(principal, Scheme.Name)));
         }

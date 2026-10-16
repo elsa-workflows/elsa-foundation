@@ -185,8 +185,16 @@ public static class ConnectionsApi
         if (tenantId is null)
             return;
 
-        var deleted = await Manager(context).DeleteAsync(tenantId, RouteName(context), context.RequestAborted);
-        await (deleted ? Results.NoContent() : Results.NotFound()).ExecuteAsync(context);
+        try
+        {
+            var deleted = await Manager(context).DeleteAsync(tenantId, RouteName(context), context.RequestAborted);
+            await (deleted ? Results.NoContent() : Results.NotFound()).ExecuteAsync(context);
+        }
+        catch (Exception exception)
+        {
+            if (!await WriteMappedErrorAsync(context, exception))
+                throw;
+        }
     }
 
     private static async Task HandleRevokeAsync(HttpContext context)
@@ -195,8 +203,16 @@ public static class ConnectionsApi
         if (tenantId is null)
             return;
 
-        var result = await Manager(context).RevokeAsync(tenantId, RouteName(context), context.RequestAborted);
-        await (result is null ? Results.NotFound() : Json(result)).ExecuteAsync(context);
+        try
+        {
+            var result = await Manager(context).RevokeAsync(tenantId, RouteName(context), context.RequestAborted);
+            await (result is null ? Results.NotFound() : Json(result)).ExecuteAsync(context);
+        }
+        catch (Exception exception)
+        {
+            if (!await WriteMappedErrorAsync(context, exception))
+                throw;
+        }
     }
 
     private static async Task HandleTestAsync(HttpContext context)
@@ -205,8 +221,16 @@ public static class ConnectionsApi
         if (tenantId is null)
             return;
 
-        var result = await Manager(context).TestAsync(tenantId, RouteName(context), context.RequestAborted);
-        await Json(result).ExecuteAsync(context);
+        try
+        {
+            var result = await Manager(context).TestAsync(tenantId, RouteName(context), context.RequestAborted);
+            await Json(result).ExecuteAsync(context);
+        }
+        catch (Exception exception)
+        {
+            if (!await WriteMappedErrorAsync(context, exception))
+                throw;
+        }
     }
 
     private static async Task<bool> WriteMappedErrorAsync(HttpContext context, Exception exception)

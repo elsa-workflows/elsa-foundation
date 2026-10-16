@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Elsa.Connections.Core.Contracts;
+using Elsa.Connections.Core.Exceptions;
 using Elsa.Connections.Core.Models;
 
 namespace Elsa.Connections.Services;
@@ -56,8 +57,28 @@ internal sealed class InMemoryConnectionRepository : IConnectionRepository
     {
         ArgumentNullException.ThrowIfNull(document);
         Validate(document.Definition.TenantId, document.Definition.Name);
-        _documents[Key(document.Definition.TenantId, document.Definition.Name)] = Clone(document)!;
-        return ValueTask.CompletedTask;
+        var key = Key(document.Definition.TenantId, document.Definition.Name);
+        var next = Clone(document)!;
+        next.State.Version = document.State.Version + 1;
+        while (true)
+        {
+            if (!_documents.TryGetValue(key, out var current))
+            {
+                throw new ConnectionConflictException(
+                    document.Definition.Name,
+                    $"Connection '{document.Definition.Name}' was changed by another request.");
+            }
+
+            if (current.State.Version != document.State.Version)
+            {
+                throw new ConnectionConflictException(
+                    document.Definition.Name,
+                    $"Connection '{document.Definition.Name}' was changed by another request.");
+            }
+
+            if (_documents.TryUpdate(key, next, current))
+                return ValueTask.CompletedTask;
+        }
     }
 
     public ValueTask<bool> DeleteAsync(string tenantId, string name, CancellationToken cancellationToken = default)
@@ -109,9 +130,9 @@ internal sealed class InMemoryConnectionRepository : IConnectionRepository
                 GrantSecretName = document.State.GrantSecretName,
                 GrantSecretVersion = document.State.GrantSecretVersion,
                 LastTestedAt = document.State.LastTestedAt,
-                LastUsedAt = document.State.LastUsedAt,
                 CreatedAt = document.State.CreatedAt,
-                UpdatedAt = document.State.UpdatedAt
+                UpdatedAt = document.State.UpdatedAt,
+                Version = document.State.Version
             }
         };
     }

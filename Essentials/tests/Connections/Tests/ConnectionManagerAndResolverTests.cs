@@ -1,10 +1,14 @@
 using Elsa.Connections.Core.Contracts;
 using Elsa.Connections.Core.Exceptions;
 using Elsa.Connections.Core.Models;
+using Elsa.Connections.Services;
+using Elsa.Primitives.Persistence;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
+using Elsa.Secrets.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Elsa.Connections.Tests;
@@ -359,6 +363,132 @@ public sealed class ConnectionManagerAndResolverTests
     }
 
     [Fact]
+    public async Task Create_CleansUpOwnedSecretsWhenALaterFieldFails()
+    {
+        await using var provider = ConnectionsTestComposition.CreateProvider(configure: services =>
+        {
+            services.RemoveAll<ISecretManager>();
+            services.AddScoped<ISecretManager>(sp =>
+                new FailOnNthSecretCreate(ActivatorUtilities.CreateInstance<DefaultSecretManager>(sp), failOn: 2));
+        });
+        await using var scope = provider.CreateAsyncScope();
+        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
+        var secrets = scope.ServiceProvider.GetRequiredService<ISecretManager>();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => manager.CreateAsync(Tenant, new CreateConnectionRequest
+        {
+            Name = "partial",
+            AuthScheme = HttpAuthSchemes.Bearer,
+            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                ["token"] = new() { Value = "first" },
+                ["extra"] = new() { Value = "second" }
+            }
+        }).AsTask());
+
+        Assert.Null(await manager.FindAsync(Tenant, "partial"));
+        Assert.Null(await secrets.FindAsync(Tenant, "connection:partial:token"));
+        Assert.Null(await secrets.FindAsync(Tenant, "connection:partial:extra"));
+    }
+
+    [Fact]
+    public async Task Rebind_DeletesThePreviousOwnedSecret()
+    {
+        await using var provider = CreateProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
+        var secrets = scope.ServiceProvider.GetRequiredService<ISecretManager>();
+        var resolver = scope.ServiceProvider.GetRequiredService<IConnectionResolver>();
+
+        await manager.CreateAsync(Tenant, new CreateConnectionRequest
+        {
+            Name = "rebind",
+            AuthScheme = HttpAuthSchemes.Bearer,
+            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new() { Value = "owned-value" }
+            }
+        });
+        await secrets.CreateAsync(Tenant, new CreateSecretRequest
+        {
+            Name = "shared-token",
+            Value = "shared-value",
+            TypeName = SecretTypeNames.Text
+        });
+
+        await manager.UpdateAsync(Tenant, "rebind", new UpdateConnectionRequest
+        {
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new() { ExistingSecretName = "shared-token" }
+            }
+        });
+
+        Assert.Null(await secrets.FindAsync(Tenant, "connection:rebind:token"));
+        await using var resolved = await resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "rebind" });
+        Assert.Equal("shared-value", (await resolved.GetSensitiveAsync(HttpConnectionSecretFields.Token)).Reveal());
+    }
+
+    [Fact]
+    public async Task Update_DoesNotOverwriteAConcurrentRevoke()
+    {
+        var interceptor = new SaveInterceptor();
+        await using var provider = ConnectionsTestComposition.CreateProvider(configure: services =>
+        {
+            services.RemoveAll<IConnectionRepository>();
+            services.AddSingleton<IConnectionRepository>(_ => new InterceptingConnectionRepository(new InMemoryConnectionRepository(), interceptor));
+        });
+        await using var scope = provider.CreateAsyncScope();
+        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
+
+        await manager.CreateAsync(Tenant, new CreateConnectionRequest
+        {
+            Name = "raced",
+            AuthScheme = HttpAuthSchemes.Bearer,
+            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" }
+        });
+
+        interceptor.BeforeOuterSave = () => manager.RevokeAsync(Tenant, "raced").AsTask();
+        await Assert.ThrowsAsync<ConnectionConflictException>(() => manager.UpdateAsync(Tenant, "raced", new UpdateConnectionRequest
+        {
+            DisplayName = "Hijacked"
+        }).AsTask());
+
+        var current = await manager.FindAsync(Tenant, "raced");
+        Assert.Equal(ConnectionStatuses.Revoked, current!.Status);
+        Assert.NotEqual("Hijacked", current.DisplayName);
+    }
+
+    [Fact]
+    public async Task Test_DoesNotOverwriteAConcurrentRevoke()
+    {
+        var interceptor = new SaveInterceptor();
+        await using var provider = ConnectionsTestComposition.CreateProvider(configure: services =>
+        {
+            services.RemoveAll<IConnectionRepository>();
+            services.AddSingleton<IConnectionRepository>(_ => new InterceptingConnectionRepository(new InMemoryConnectionRepository(), interceptor));
+        });
+        await using var scope = provider.CreateAsyncScope();
+        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
+
+        await manager.CreateAsync(Tenant, new CreateConnectionRequest
+        {
+            Name = "raced-test",
+            AuthScheme = HttpAuthSchemes.Bearer,
+            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" }
+        });
+
+        interceptor.BeforeOuterSave = () => manager.RevokeAsync(Tenant, "raced-test").AsTask();
+        await Assert.ThrowsAsync<ConnectionConflictException>(() => manager.TestAsync(Tenant, "raced-test").AsTask());
+
+        var current = await manager.FindAsync(Tenant, "raced-test");
+        Assert.Equal(ConnectionStatuses.Revoked, current!.Status);
+        Assert.Null(current.LastTestedAt);
+    }
+
+    [Fact]
     public void CoreContracts_HaveNoAzureOrValenceTypes()
     {
         foreach (var type in typeof(IConnectionResolver).Assembly.GetExportedTypes())
@@ -370,4 +500,79 @@ public sealed class ConnectionManagerAndResolverTests
 
     private static ServiceProvider CreateProvider(IConfiguration? configuration = null) =>
         ConnectionsTestComposition.CreateProvider(configuration);
+
+    private sealed class FailOnNthSecretCreate(ISecretManager inner, int failOn) : ISecretManager
+    {
+        private int _creates;
+
+        public ValueTask<SecretMetadata> CreateAsync(string tenantId, CreateSecretRequest request, CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Increment(ref _creates) >= failOn)
+                throw new InvalidOperationException("Simulated secret create failure.");
+            return inner.CreateAsync(tenantId, request, cancellationToken);
+        }
+
+        public ValueTask<SecretMetadata?> FindAsync(string tenantId, string name, CancellationToken cancellationToken = default) =>
+            inner.FindAsync(tenantId, name, cancellationToken);
+
+        public ValueTask<Page<SecretMetadata>> ListAsync(string tenantId, SecretQuery query, CancellationToken cancellationToken = default) =>
+            inner.ListAsync(tenantId, query, cancellationToken);
+
+        public ValueTask<SecretMetadata> UpdateAsync(string tenantId, string name, UpdateSecretMetadataRequest request, CancellationToken cancellationToken = default) =>
+            inner.UpdateAsync(tenantId, name, request, cancellationToken);
+
+        public ValueTask<SecretMetadata> RotateAsync(string tenantId, string name, RotateSecretRequest request, CancellationToken cancellationToken = default) =>
+            inner.RotateAsync(tenantId, name, request, cancellationToken);
+
+        public ValueTask<SecretMetadata?> RevokeAsync(string tenantId, string name, CancellationToken cancellationToken = default) =>
+            inner.RevokeAsync(tenantId, name, cancellationToken);
+
+        public ValueTask<bool> DeleteAsync(string tenantId, string name, CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(tenantId, name, cancellationToken);
+
+        public ValueTask<SecretTestResult> TestAsync(string tenantId, string name, CancellationToken cancellationToken = default) =>
+            inner.TestAsync(tenantId, name, cancellationToken);
+    }
+
+    private sealed class SaveInterceptor
+    {
+        public Func<Task>? BeforeOuterSave { get; set; }
+    }
+
+    private sealed class InterceptingConnectionRepository(IConnectionRepository inner, SaveInterceptor interceptor) : IConnectionRepository
+    {
+        private int _saveDepth;
+
+        public ValueTask<ConnectionDocument?> FindAsync(string tenantId, string name, CancellationToken cancellationToken = default) =>
+            inner.FindAsync(tenantId, name, cancellationToken);
+
+        public ValueTask<IReadOnlyList<ConnectionDocument>> ListAsync(string tenantId, ConnectionQuery? query = null, CancellationToken cancellationToken = default) =>
+            inner.ListAsync(tenantId, query, cancellationToken);
+
+        public ValueTask<bool> TryAddAsync(ConnectionDocument document, CancellationToken cancellationToken = default) =>
+            inner.TryAddAsync(document, cancellationToken);
+
+        public async ValueTask SaveAsync(ConnectionDocument document, CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Increment(ref _saveDepth) == 1)
+            {
+                var hook = interceptor.BeforeOuterSave;
+                interceptor.BeforeOuterSave = null;
+                if (hook is not null)
+                    await hook();
+            }
+
+            try
+            {
+                await inner.SaveAsync(document, cancellationToken);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _saveDepth);
+            }
+        }
+
+        public ValueTask<bool> DeleteAsync(string tenantId, string name, CancellationToken cancellationToken = default) =>
+            inner.DeleteAsync(tenantId, name, cancellationToken);
+    }
 }

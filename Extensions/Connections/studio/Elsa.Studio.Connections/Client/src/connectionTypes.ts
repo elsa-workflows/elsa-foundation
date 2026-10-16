@@ -12,7 +12,6 @@ export interface ConnectionMetadata {
   owner: string;
   status: ConnectionStatus;
   lastTestedAt?: string | null;
-  lastUsedAt?: string | null;
   createdAt: string;
   tags: string[];
 }

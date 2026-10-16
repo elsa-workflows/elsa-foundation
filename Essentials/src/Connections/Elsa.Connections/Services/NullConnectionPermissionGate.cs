@@ -10,6 +10,9 @@ internal sealed class NullConnectionPermissionGate : IConnectionPermissionGate
     public ValueTask EnsureUseAsync(string tenantId, CancellationToken cancellationToken = default) =>
         ValueTask.CompletedTask;
 
+    public ValueTask EnsureTestAsync(string tenantId, CancellationToken cancellationToken = default) =>
+        ValueTask.CompletedTask;
+
     public ValueTask EnsureBindSecretAsync(string tenantId, CancellationToken cancellationToken = default) =>
         ValueTask.CompletedTask;
 }

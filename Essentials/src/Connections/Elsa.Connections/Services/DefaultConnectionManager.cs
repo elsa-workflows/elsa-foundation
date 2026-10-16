@@ -1,6 +1,7 @@
 using Elsa.Connections.Core.Contracts;
 using Elsa.Connections.Core.Exceptions;
 using Elsa.Connections.Core.Models;
+using Elsa.Connections.Http;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 
@@ -60,7 +61,7 @@ internal sealed class DefaultConnectionManager(
 
         try
         {
-            document.Definition.SecretFields = await WriteSecretFieldsAsync(tenantId, name, request.SecretFields, cancellationToken);
+            await WriteSecretFieldsAsync(tenantId, name, request.SecretFields, document.Definition.SecretFields, cancellationToken);
             await repository.SaveAsync(document, cancellationToken);
         }
         catch
@@ -116,7 +117,7 @@ internal sealed class DefaultConnectionManager(
             var previous = document.Definition.SecretFields;
             document.Definition.SecretFields = await MergeSecretFieldsAsync(
                 tenantId, document.Definition.Name, previous, request.SecretFields, cancellationToken);
-            await DeleteRemovedOwnedSecretsAsync(tenantId, document.Definition.Name, previous, document.Definition.SecretFields, cancellationToken);
+            await DeleteReplacedOwnedSecretsAsync(tenantId, document.Definition.Name, previous, document.Definition.SecretFields, cancellationToken);
         }
 
         document.State.UpdatedAt = timeProvider.GetUtcNow();
@@ -126,6 +127,8 @@ internal sealed class DefaultConnectionManager(
 
     public async ValueTask<ConnectionTestResult> TestAsync(string tenantId, string name, CancellationToken cancellationToken = default)
     {
+        await permissionGate.EnsureTestAsync(tenantId, cancellationToken);
+
         var document = await repository.FindAsync(tenantId, ConnectionName.Normalize(name), cancellationToken);
         if (document is null)
             return new ConnectionTestResult { Succeeded = false, Message = "Connection not found." };
@@ -140,7 +143,8 @@ internal sealed class DefaultConnectionManager(
             {
                 TenantId = tenantId,
                 Name = document.Definition.Name,
-                RequiredType = document.Definition.TypeName
+                RequiredType = document.Definition.TypeName,
+                CheckUsePermission = false
             }, cancellationToken);
 
             var result = await type.TestAsync(resolved, cancellationToken);
@@ -156,6 +160,7 @@ internal sealed class DefaultConnectionManager(
 
     public async ValueTask<ConnectionMetadata?> RevokeAsync(string tenantId, string name, CancellationToken cancellationToken = default)
     {
+        await permissionGate.EnsureManageAsync(tenantId, cancellationToken);
         var document = await repository.FindAsync(tenantId, ConnectionName.Normalize(name), cancellationToken);
         if (document is null)
             return null;
@@ -168,6 +173,7 @@ internal sealed class DefaultConnectionManager(
 
     public async ValueTask<bool> DeleteAsync(string tenantId, string name, CancellationToken cancellationToken = default)
     {
+        await permissionGate.EnsureManageAsync(tenantId, cancellationToken);
         var document = await repository.FindAsync(tenantId, ConnectionName.Normalize(name), cancellationToken);
         if (document is null)
             return false;
@@ -194,21 +200,19 @@ internal sealed class DefaultConnectionManager(
         }
     }
 
-    private async ValueTask<IDictionary<string, ConnectionSecretField>> WriteSecretFieldsAsync(
+    private async ValueTask WriteSecretFieldsAsync(
         string tenantId,
         string connectionName,
         IDictionary<string, ConnectionSecretFieldInput> inputs,
+        IDictionary<string, ConnectionSecretField> fields,
         CancellationToken cancellationToken)
     {
-        var fields = new Dictionary<string, ConnectionSecretField>(StringComparer.Ordinal);
         foreach (var (fieldName, input) in inputs)
         {
             var field = await WriteSecretFieldAsync(tenantId, connectionName, fieldName, input, cancellationToken);
             if (field is not null)
                 fields[fieldName] = field;
         }
-
-        return fields;
     }
 
     private async ValueTask<IDictionary<string, ConnectionSecretField>> MergeSecretFieldsAsync(
@@ -301,8 +305,8 @@ internal sealed class DefaultConnectionManager(
         if (!HasBoundExistingCredential(document))
             return false;
 
-        return !HostsEqual(document.Definition.Settings, nextSettings)
-            || !SchemesEqual(document.Definition.Settings, nextSettings)
+        return !SettingEquals(document.Definition.Settings, nextSettings, HttpConnectionSettingKeys.AllowedHosts)
+            || !OriginsEqual(document.Definition.Settings, nextSettings)
             || !InsecureFlagsEqual(document.Definition.Settings, nextSettings);
     }
 
@@ -323,12 +327,14 @@ internal sealed class DefaultConnectionManager(
         return false;
     }
 
-    private static bool HostsEqual(IDictionary<string, string> previous, IDictionary<string, string> next) =>
-        SettingEquals(previous, next, HttpConnectionSettingKeys.AllowedHosts) &&
-        string.Equals(HostOf(previous), HostOf(next), StringComparison.OrdinalIgnoreCase);
-
-    private static bool SchemesEqual(IDictionary<string, string> previous, IDictionary<string, string> next) =>
-        string.Equals(SchemeOf(previous), SchemeOf(next), StringComparison.OrdinalIgnoreCase);
+    private static bool OriginsEqual(IDictionary<string, string> previous, IDictionary<string, string> next)
+    {
+        var hasPrevious = TryBaseUri(previous, out var previousUri);
+        var hasNext = TryBaseUri(next, out var nextUri);
+        if (hasPrevious && hasNext)
+            return !HttpOrigin.IsCrossOrigin(previousUri, nextUri);
+        return hasPrevious == hasNext;
+    }
 
     private static bool InsecureFlagsEqual(IDictionary<string, string> previous, IDictionary<string, string> next) =>
         AllowInsecure(previous) == AllowInsecure(next);
@@ -339,12 +345,6 @@ internal sealed class DefaultConnectionManager(
         next.TryGetValue(key, out var right);
         return string.Equals(left?.Trim(), right?.Trim(), StringComparison.OrdinalIgnoreCase);
     }
-
-    private static string? HostOf(IDictionary<string, string> settings) =>
-        TryBaseUri(settings, out var uri) ? uri.IdnHost : null;
-
-    private static string? SchemeOf(IDictionary<string, string> settings) =>
-        TryBaseUri(settings, out var uri) ? uri.Scheme : null;
 
     private static bool AllowInsecure(IDictionary<string, string> settings) =>
         settings.TryGetValue(HttpConnectionSettingKeys.AllowInsecureHttp, out var flag) &&
@@ -359,7 +359,7 @@ internal sealed class DefaultConnectionManager(
             Uri.TryCreate(baseUrl, UriKind.Absolute, out uri!);
     }
 
-    private async ValueTask DeleteRemovedOwnedSecretsAsync(
+    private async ValueTask DeleteReplacedOwnedSecretsAsync(
         string tenantId,
         string connectionName,
         IDictionary<string, ConnectionSecretField> previous,
@@ -368,7 +368,8 @@ internal sealed class DefaultConnectionManager(
     {
         foreach (var (fieldName, field) in previous)
         {
-            if (next.ContainsKey(fieldName))
+            if (next.TryGetValue(fieldName, out var current) &&
+                string.Equals(current.SecretName, field.SecretName, StringComparison.Ordinal))
                 continue;
             await DeleteOwnedSecretAsync(tenantId, connectionName, field, cancellationToken);
         }
@@ -431,7 +432,6 @@ internal sealed class DefaultConnectionManager(
         Owner = document.Definition.Owner,
         Status = document.State.Status,
         LastTestedAt = document.State.LastTestedAt,
-        LastUsedAt = document.State.LastUsedAt,
         CreatedAt = document.State.CreatedAt,
         Tags = document.Definition.Tags
     };

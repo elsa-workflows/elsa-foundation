@@ -17,6 +17,9 @@ internal sealed class HttpContextConnectionPermissionGate(
     public ValueTask EnsureUseAsync(string tenantId, CancellationToken cancellationToken = default) =>
         EnsureAsync(ConnectionsPermissions.Use, tenantId, cancellationToken);
 
+    public ValueTask EnsureTestAsync(string tenantId, CancellationToken cancellationToken = default) =>
+        EnsureAsync(ConnectionsPermissions.Test, tenantId, cancellationToken);
+
     public ValueTask EnsureBindSecretAsync(string tenantId, CancellationToken cancellationToken = default) =>
         EnsureAsync(ConnectionsPermissions.BindSecret, tenantId, cancellationToken);
 

@@ -247,6 +247,9 @@ public sealed class ConnectionDraftValidatorTests
         public ValueTask EnsureUseAsync(string tenantId, CancellationToken cancellationToken = default) =>
             throw new ConnectionUnavailableException("connection", ConnectionFaultCodes.Forbidden, "Permission connections:use is required.");
 
+        public ValueTask EnsureTestAsync(string tenantId, CancellationToken cancellationToken = default) =>
+            ValueTask.CompletedTask;
+
         public ValueTask EnsureBindSecretAsync(string tenantId, CancellationToken cancellationToken = default) =>
             ValueTask.CompletedTask;
     }

@@ -107,13 +107,10 @@ internal sealed class HttpConnectionRedirectHandler : DelegatingHandler
 
         request.RequestUri = next;
 
-        if (crossOrigin)
-        {
-            if (applied is not null)
-                StripAppliedCredentials(request, applied);
-            else
-                request.Headers.Remove("Authorization");
-        }
+        if (applied is null)
+            request.Headers.Remove("Authorization");
+        else if (crossOrigin)
+            StripAppliedCredentials(request, applied);
 
         RewriteMethodIfRequired(request, status);
     }
@@ -131,15 +128,7 @@ internal sealed class HttpConnectionRedirectHandler : DelegatingHandler
         }
     }
 
-    internal static bool IsCrossOrigin(Uri? previous, Uri next)
-    {
-        if (previous is null)
-            return false;
-
-        return !string.Equals(previous.Scheme, next.Scheme, StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(previous.IdnHost, next.IdnHost, StringComparison.OrdinalIgnoreCase)
-            || previous.Port != next.Port;
-    }
+    internal static bool IsCrossOrigin(Uri? previous, Uri next) => HttpOrigin.IsCrossOrigin(previous, next);
 
     private static Uri CopyQueryCredential(Uri previous, Uri next, string queryName)
     {

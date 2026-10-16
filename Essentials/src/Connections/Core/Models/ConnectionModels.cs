@@ -106,9 +106,9 @@ public sealed class ConnectionState
     public string? GrantSecretName { get; set; }
     public int? GrantSecretVersion { get; set; }
     public DateTimeOffset? LastTestedAt { get; set; }
-    public DateTimeOffset? LastUsedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? UpdatedAt { get; set; }
+    public int Version { get; set; }
 }
 
 public sealed class ConnectionDocument
@@ -130,7 +130,6 @@ public sealed class ConnectionMetadata
     public string Owner { get; set; } = ConnectionOwners.Tenant;
     public string Status { get; set; } = ConnectionStatuses.Ready;
     public DateTimeOffset? LastTestedAt { get; set; }
-    public DateTimeOffset? LastUsedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public ICollection<string> Tags { get; set; } = [];
 }
@@ -183,11 +182,6 @@ public sealed class ConnectionResolveRequest
     public required string Name { get; init; }
     public string? RequiredType { get; init; }
     public string Owner { get; init; } = ConnectionOwners.Tenant;
-    /// <summary>
-    /// Publisher or binder identity recorded at publish or bind time. Runtime of a published
-    /// workflow passes this rather than the identity that triggered the run.
-    /// </summary>
-    public string? RunAs { get; init; }
     /// <summary>
     /// When false, skip the live principal use check. Set for already-published workflow runtime;
     /// use was recorded against the publisher at publish time.
