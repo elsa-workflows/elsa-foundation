@@ -43,6 +43,25 @@ describe("HTTP workflow starter", () => {
     expect(() => createHttpStarterState([flowchartActivity, { ...endpoint, available: false }, response])).toThrow(/starter needs/);
   });
 
+  it("selects the highest available activity version by semantic precedence", () => {
+    const oldEndpoint = { ...endpoint, activityVersionId: "old-http-endpoint", version: "1.0.0" };
+    const currentEndpoint = { ...endpoint, activityVersionId: "current-http-endpoint-v1.1", version: "1.1.0" };
+    const currentState = createHttpStarterState([flowchartActivity, oldEndpoint, currentEndpoint, response]);
+    const currentPayload = currentState.rootActivity.structure!.payload as { activities: ActivityNode[] };
+    expect(currentPayload.activities[0]!.activityVersionId).toBe("current-http-endpoint-v1.1");
+
+    const prerelease = { ...endpoint, activityVersionId: "http-endpoint-prerelease", version: "1.2.0-rc.1" };
+    const stable = { ...endpoint, activityVersionId: "http-endpoint-stable", version: "1.2.0" };
+    expect(httpStarterActivities([flowchartActivity, prerelease, stable, response])[1]!.activityVersionId).toBe("http-endpoint-stable");
+
+    const lowerNumericVersion = { ...endpoint, activityVersionId: "http-endpoint-1.0.9", version: "1.0.9" };
+    const higherNumericVersion = { ...endpoint, activityVersionId: "http-endpoint-1.0.10", version: "1.0.10" };
+    expect(httpStarterActivities([flowchartActivity, lowerNumericVersion, higherNumericVersion, response])[1]!.activityVersionId).toBe("http-endpoint-1.0.10");
+
+    const unavailable = { ...endpoint, activityVersionId: "unavailable-http-endpoint", version: "2.0.0", available: false };
+    expect(httpStarterActivities([flowchartActivity, unavailable, currentEndpoint, response])[1]!.activityVersionId).toBe("current-http-endpoint-v1.1");
+  });
+
   it("does not mutate catalog templates or reuse node identities across definitions", () => {
     const before = structuredClone(catalog);
     const first = createHttpStarterState(catalog);

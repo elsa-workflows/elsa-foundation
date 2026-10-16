@@ -1,4 +1,5 @@
 import type { ActivityCatalogItem } from "../workflowTypes";
+import { compareSemVer, parseSemVer } from "../semver";
 import { createActivityNode } from "../workflowAdapter";
 import { flowchartStructureKind } from "../flowchartStartNode";
 
@@ -9,7 +10,15 @@ const starterActivityTypes = [
 ] as const;
 
 export function httpStarterActivities(catalog: ActivityCatalogItem[]) {
-  return starterActivityTypes.map(type => catalog.find(activity => activity.activityTypeKey === type && activity.available !== false));
+  return starterActivityTypes.map(type => {
+    const matching = catalog.filter(activity => activity.activityTypeKey === type && activity.available !== false);
+    const versioned = matching.flatMap(activity => {
+      const version = parseSemVer(activity.version);
+      return version ? [{ activity, version }] : [];
+    });
+    if (!versioned.length) return matching[0];
+    return versioned.reduce((latest, candidate) => compareSemVer(candidate.version, latest.version) > 0 ? candidate : latest).activity;
+  });
 }
 
 export function createHttpStarterState(catalog: ActivityCatalogItem[]) {

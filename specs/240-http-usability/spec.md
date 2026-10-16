@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/1177-http-usability`
 **Created**: 2026-10-16
-**Status**: Implemented; prepared for PR review
+**Status**: Implemented
 **Issue**: #1177
 **Program-goal state**: none/free-flow (one customer-reported HTTP usability improvement).
 

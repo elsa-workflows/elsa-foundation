@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, LoaderCircle, Send, X } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { StudioLink } from "../StudioLink";
 import { getExecutable, getExecutableInputSources } from "../api/runtime";
 import {
   describeHttpEndpointAcceptedResponse,
@@ -301,7 +302,7 @@ export function HttpTestRequestDialog({
               {result.acceptedMessage ? (
                 <p className="wf-http-test-accepted" role="status">
                   <AlertTriangle size={15} /> {result.acceptedMessage}{" "}
-                  <a href="/workflows/instances">Inspect workflow runs</a>
+                  <StudioLink href="/workflows/instances">Inspect workflow runs</StudioLink>
                 </p>
               ) : null}
               <dl>
