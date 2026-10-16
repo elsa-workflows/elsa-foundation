@@ -313,9 +313,7 @@ public sealed class TokenEndpointTests : IAsyncLifetime
         var other = await IssueForAsync(_fixture, sessionToken, subject: "other-user");
 
         // The selector would pick the bearer, but logout acts on the provider's cookie session.
-        using var logout = new HttpRequestMessage(HttpMethod.Post, LogoutRoute) { Content = JsonContent.Create(new { }) };
-        logout.Headers.Authorization = new AuthenticationHeaderValue("Bearer", other.AccessToken);
-        Assert.Equal(HttpStatusCode.NoContent, (await client.SendAsync(logout)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, await LogoutWithBearerAsync(client, other.AccessToken));
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(TokenRoute)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = sessionRefresh })).StatusCode);
@@ -325,22 +323,40 @@ public sealed class TokenEndpointTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Bearer_Only_Logout_Has_No_Provider_Session_To_End_And_Is_A_No_Op()
+    public async Task Bearer_Only_Logout_Signs_Out_The_Bearers_Own_Subject_And_No_Other()
     {
         var client = _fixture.Client;
         await LoginTestHelper.LoginAsync(client);
         var accessToken = await FetchAccessTokenAsync(client);
         var refreshToken = await IssueRefreshTokenForAsync(accessToken);
-        var cookie = client.DefaultRequestHeaders.GetValues("Cookie").Single();
-        client.DefaultRequestHeaders.Remove("Cookie");
+        var other = await IssueForAsync(_fixture, accessToken, subject: "other-user");
+        var cookie = WithoutCookie(client);
 
-        using var logout = new HttpRequestMessage(HttpMethod.Post, LogoutRoute) { Content = JsonContent.Create(new { }) };
-        logout.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        Assert.Equal(HttpStatusCode.NoContent, (await client.SendAsync(logout)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, await LogoutWithBearerAsync(client, accessToken));
 
-        // Nothing was revoked or invalidated: the bearer, its refresh token and the untouched cookie all still work.
-        Assert.Equal(HttpStatusCode.OK, await CallProtectedAsync(client, accessToken));
-        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, await CallProtectedAsync(client, accessToken));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = other.RefreshToken })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, await CallProtectedAsync(client, other.AccessToken));
+
+        // The subject is an Identity user, so its security stamp rotated: the cookie it also held is dead too.
+        client.DefaultRequestHeaders.Add("Cookie", cookie);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(TokenRoute)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Bearer_Only_Logout_Of_A_Subject_That_Is_No_Identity_User_Revokes_And_Returns_204()
+    {
+        var client = _fixture.Client;
+        await LoginTestHelper.LoginAsync(client);
+        var other = await IssueForAsync(_fixture, await FetchAccessTokenAsync(client), subject: "other-user");
+        var cookie = WithoutCookie(client);
+
+        // No Identity user resolves, so there is no stamp to rotate: revoke, then 204, never a 500.
+        Assert.Equal(HttpStatusCode.NoContent, await LogoutWithBearerAsync(client, other.AccessToken));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, await CallProtectedAsync(client, other.AccessToken));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = other.RefreshToken })).StatusCode);
         client.DefaultRequestHeaders.Add("Cookie", cookie);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(TokenRoute)).StatusCode);
     }
@@ -407,6 +423,22 @@ public sealed class TokenEndpointTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync(LogoutRoute, new { })).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken })).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, await CallProtectedAsync(client, accessToken));
+    }
+
+    /// <summary>Posts logout carrying the bearer (plus whatever cookie the client holds).</summary>
+    private static async Task<HttpStatusCode> LogoutWithBearerAsync(HttpClient client, string accessToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, LogoutRoute) { Content = JsonContent.Create(new { }) };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        return (await client.SendAsync(request)).StatusCode;
+    }
+
+    /// <summary>Drops the client's cookie so the next request carries no provider session; returns it.</summary>
+    private static string WithoutCookie(HttpClient client)
+    {
+        var cookie = client.DefaultRequestHeaders.GetValues("Cookie").Single();
+        client.DefaultRequestHeaders.Remove("Cookie");
+        return cookie;
     }
 
     private async Task<string> IssueRefreshTokenForAsync(string accessToken) => (await IssueForAsync(_fixture, accessToken)).RefreshToken!;

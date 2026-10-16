@@ -216,11 +216,13 @@ public static class FoundationIdentityApi
         var schemeRegistered = !string.IsNullOrEmpty(schemeName) &&
             await services.GetRequiredService<IAuthenticationSchemeProvider>().GetSchemeAsync(schemeName) is not null;
 
-        // The provider session being ended is the principal of the provider's own scheme, never the request's
+        // The provider session being ended is the principal of the provider's own scheme, not the request's
         // selected principal: the selector prefers a bearer, which may name another subject than the session.
-        // Revocation, invalidation and sign-out all act on that session, so a bearer never decides whose
-        // tokens are revoked. Without a provider session (bearer-only) there is nothing to end: 204, no-op.
-        var session = descriptor is not null && schemeRegistered ? await AuthenticateSessionAsync(context, schemeName) : null;
+        // Revocation and invalidation act on that session, so beside a session a bearer never decides whose
+        // tokens are revoked. Bearer-only, the bearer's own subject is signed out everywhere instead.
+        var session = descriptor is null
+            ? null
+            : (schemeRegistered ? await AuthenticateSessionAsync(context, schemeName) : null) ?? context.User;
 
         // Revoke before invalidating: a revocation fault then leaves the session (cookie and security stamp)
         // intact, so a retry still authenticates as the subject and can revoke. The fault answers a bare 503,
