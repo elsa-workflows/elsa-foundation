@@ -13,8 +13,12 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $WorkflowPath = "$PSScriptRoot/fixtures/test-http.json"
+    [string] $WorkflowPath
 )
+# Windows PowerShell 5.1 does not populate PSScriptRoot during parameter-default binding.
+if (-not $PSBoundParameters.ContainsKey('WorkflowPath')) {
+    $WorkflowPath = Join-Path $PSScriptRoot 'fixtures/test-http.json'
+}
 . "$PSScriptRoot/../_ElsaCommon.ps1"
 . "$PSScriptRoot/../_ServerLifecycle.ps1"
 
