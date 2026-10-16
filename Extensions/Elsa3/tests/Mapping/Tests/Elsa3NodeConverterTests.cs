@@ -18,7 +18,7 @@ public sealed class Elsa3NodeConverterTests
 {
     private static readonly Elsa3Variable Variable = new() { Id = "o", Name = "o", TypeName = "Object" };
 
-    /// <summary>The JavaScript rows: what lowers or is approved, and what stays refused (#2717's list).</summary>
+    /// <summary>The JavaScript rows: what lowers or is approved, and what is refused today (#2717 lowers some of them).</summary>
     public static TheoryData<string> JavaScriptCases() =>
     [
         // Lower or approve.
@@ -29,7 +29,7 @@ public sealed class Elsa3NodeConverterTests
         "var a = 1; a + getVariable('o')",
         "(() => { const f = x => x; return f(1); })()",
         "'a'.length",
-        // Stay refused.
+        // Refused today.
         "new Date()",
         "Date.now",
         "Math.random()",
@@ -131,6 +131,22 @@ public sealed class Elsa3NodeConverterTests
         await Assert.ThrowsAsync<ArgumentException>(() =>
             converter.ConvertNodeAsync(prepared.Value!, Activity("elsewhere", "Elsa.WriteLine")).AsTask());
     }
+
+    [Fact]
+    public async Task A_context_another_node_converter_created_is_rejected()
+    {
+        await using var provider = ConversionServices.Create(RealActivityCatalog.Create());
+        await using var scope = provider.CreateAsyncScope();
+        var converter = scope.ServiceProvider.GetRequiredService<IElsa3NodeConverter>();
+        var definition = ConversionServices.Definition(Flowchart("root", Activity("node", "Elsa.WriteLine", ("text", Literal("x")))));
+        var foreign = new ForeignContext(new Elsa3ConversionRequest(definition));
+
+        var refusal = await Assert.ThrowsAsync<ArgumentException>(() =>
+            converter.ConvertNodeAsync(foreign, definition.Root!.Activities![0]).AsTask());
+        Assert.Equal("context", refusal.ParamName);
+    }
+
+    private sealed class ForeignContext(Elsa3ConversionRequest request) : Elsa3NodeConversionContext(request, []);
 
     private static async Task<(Elsa3MigrationResult<Elsa3NodeConversionContext> Prepared, Elsa3MigrationResult<Elsa.Workflows.Design.Core.Models.ActivityNode>? Node)> ConvertChildAsync(
         RealActivityCatalog catalog,

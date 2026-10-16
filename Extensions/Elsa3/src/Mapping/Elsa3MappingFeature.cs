@@ -28,7 +28,7 @@ public class Elsa3MappingFeature : IShellFeature
     {
         // IElsa3ActivityMap, IElsa3DefinitionConverter and IElsa3NodeConverter are replacement contracts (§2.6.2): the
         // defaults are registered with TryAdd, so a host's own registration wins, and composing more than one fails
-        // shell activation.
+        // shell activation, as does a host replacing only one of the two converters.
         Elsa3MappingCompositionCheck.Register(services);
 
         // The built-in map is a static table: one per application (§2.5.1). Resolution caches per conversion scope.
@@ -44,14 +44,9 @@ public class Elsa3MappingFeature : IShellFeature
         services.AddSingleton<IElsa3NodeRewrite, Elsa3ReusableOutputWriteRewrite>();
         services.AddScoped<Elsa3ActivityNormalizer>();
         services.AddScoped<Elsa3DefinitionConverter>();
-        services.TryAddScoped<IElsa3DefinitionConverter>(provider => provider.GetRequiredService<Elsa3DefinitionConverter>());
-        // The node converter follows whichever definition converter is composed, so the two cannot disagree. A host
-        // whose definition converter does not also convert nodes registers its own node converter too.
-        services.TryAddScoped<IElsa3NodeConverter>(provider =>
-            provider.GetRequiredService<IElsa3DefinitionConverter>() as IElsa3NodeConverter
-            ?? throw new InvalidOperationException(
-                $"The composed {nameof(IElsa3DefinitionConverter)} does not implement {nameof(IElsa3NodeConverter)}. " +
-                $"Register an {nameof(IElsa3NodeConverter)} alongside it, so node and definition conversion follow one policy."));
+        services.TryAddScoped(Elsa3DefaultConverters.DefinitionConverter);
+        // The default node converter forwards to whichever definition converter is composed.
+        services.TryAddScoped(Elsa3DefaultConverters.NodeConverter);
         services.AddScoped<Elsa3ArgumentDefinitionToInputOutput>();
         services.AddScoped<Elsa3MemoryReferenceGraph>();
         services.AddScoped<Elsa3ExpressionRewriter>();

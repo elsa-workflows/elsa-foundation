@@ -16,8 +16,14 @@ implementation each per container (framework §2.6.2). `Elsa3MappingFeature` reg
 host replaces one by registering its own **before** the feature, or with `services.Replace(...)`. Composing a second
 registration of any of them fails shell activation with `MultipleElsa3MappingRegistrationsException`, which names every
 registration. The default `IElsa3NodeConverter` is whichever `IElsa3DefinitionConverter` is composed, so the two follow
-one policy; a host whose definition converter does not also implement `IElsa3NodeConverter` registers a node converter
-as well, or resolving one fails with a message saying so.
+one policy. A host that replaces only one of the two converters fails shell activation with
+`PartialElsa3ConverterReplacementException`:
+
+- a host `IElsa3NodeConverter` beside the default `IElsa3DefinitionConverter`;
+- a host `IElsa3DefinitionConverter` whose type does not implement `IElsa3NodeConverter`, beside the default node
+  converter. A factory registration hides its type, so that case is reported when a node converter is first resolved.
+
+Replace both: implement both contracts on one class, or register a node converter alongside the definition converter.
 
 ### `IElsa3DefinitionConverter` *(Replacement contract — `Elsa3.Mapping`)*
 
@@ -43,7 +49,10 @@ as well, or resolving one fails with a message saying so.
   - `ConvertNodeAsync` maps one node and its non-graph descendants from that lowered result. It fails when the node or
     a descendant is graph-level, so a graph never loses a child silently.
   - One rule for both paths: an Elsa 3 expression is lowered or refused the same way whichever converter reaches it.
-  - Only a node converter creates an `Elsa3NodeConversionContext` (its constructor is internal).
+  - `Elsa3NodeConversionContext` is abstract, with a protected `(Request, Deferred)` constructor: each node converter
+    derives its own context to carry what its `PrepareAsync` computed, and its `ConvertNodeAsync` accepts only the
+    contexts it created. The default converter's context holds the lowered plan internally, and it throws
+    `ArgumentException` for a context another converter created.
 - **Default implementation:** `Elsa3DefinitionConverter` (the same scoped instance).
 
 ### `IElsa3ActivityMap` *(Replacement contract — `Elsa3.Mapping`)*
