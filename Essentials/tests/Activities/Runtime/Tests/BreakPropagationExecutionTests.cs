@@ -139,7 +139,8 @@ public sealed class BreakPropagationExecutionTests
     public async Task FlowchartTriggerStart_ForLoopFlowchartBody_RestartsAtTriggerEachPass()
     {
         // Spec 238 (D3): the trigger id is workflow-wide, so a Flowchart started again by each For pass begins at
-        // the trigger child on every pass, never at its start node.
+        // the trigger child on every pass, never at its start node. Publishing refuses a start trigger in a loop body
+        // (the start-path rule); this pins the runtime for artifacts published before it.
         await using var harness = NewHarness(Enumerable.Range(1, 12).Select(index => $"actexec-{index}").ToArray());
 
         var body = NewFlowchartNode("node-flowchart",

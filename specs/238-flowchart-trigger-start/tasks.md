@@ -183,14 +183,14 @@ point (FR-008 to FR-013).
 
 **Purpose**: Settle the open points the revision depends on before writing code.
 
-- [ ] T031 Verify the startup-reconciliation risk (research R12):
+- [X] T031 Verify the startup-reconciliation risk (research R12):
   - Trace `WorkflowArtifactReconciler` for a mounted artifact that is already active and identical. Does it reach
     `TryFindTriggerSurfaceFault` → `Evaluate`?
   - Record the answer under "Revision notes" below.
   - If it does and there is no clean way to skip the re-evaluation for an identical, already-active artifact, stop
     and ask Joey before T040.
-- [ ] T032 [P] Verify FR-027: does `BpmnDocumentImporter` (`src/Activities/Bpmn/Interchange/Services/BpmnDocumentImporter.cs:225-233`) emit nested `BpmnProcess` nodes, and can they carry event-defined starts? Record the evidence under "Revision notes". If it emits none, mark T046 void.
-- [ ] T033 [P] Baseline the revision suites on the current branch tip and record the counts under "Revision notes":
+- [X] T032 [P] Verify FR-027: does `BpmnDocumentImporter` (`src/Activities/Bpmn/Interchange/Services/BpmnDocumentImporter.cs:225-233`) emit nested `BpmnProcess` nodes, and can they carry event-defined starts? Record the evidence under "Revision notes". If it emits none, mark T046 void.
+- [X] T033 [P] Baseline the revision suites on the current branch tip and record the counts under "Revision notes":
   - `Elsa.Workflows.Runtime.Tests`
   - `Elsa.Workflows.Runtime.Scheduling.Tests`
   - `Elsa.Activities.Sequence.Tests`
@@ -201,7 +201,62 @@ point (FR-008 to FR-013).
 
 ### Revision notes
 
-_Filled in by T031–T033._
+- **T031 (startup reconciliation)**:
+  - Every pass runs Gate 3b (`TryFindTriggerSurfaceFault` → `Evaluate`) for each mounted closure whose envelope
+    carries bindings, before the already-active check.
+  - `RejectUnit` only logs and records a report entry, and `WorkflowArtifactReconcilerStartupTask` logs rejections
+    instead of throwing.
+  - So an already-active mounted artifact with a misplaced start trigger **stays active**, with its bindings
+    untouched (FR-025). The only effect is a startup log line naming the trigger and the guidance.
+  - No reconciliation change is needed, so T040 is reduced to the import test in T050.
+- **T032 (BPMN nesting)**:
+  - `BpmnDocumentImporter.MaterializeChild` maps `BpmnWorkBinding.NestedProcess` to `BuildProcessNode`, a nested
+    `Elsa.BpmnProcess` node with no inputs, so `CanStartWorkflow` defaults to true.
+  - On `BpmnProcess`, `CanStartWorkflow` gates only start-binding emission (the trigger stimulus and recurring
+    schedule providers). So authoring it false on nested processes is safe, and T046 stands.
+- **T033 baselines** (branch tip `ec8e55289`):
+
+| Suite | Passed | Failed |
+|---|---|---|
+| `Elsa.Workflows.Runtime.Tests` | 2313 | 0 |
+| `Elsa.Workflows.Runtime.Scheduling.Tests` | 87 | 0 |
+| `Elsa.Workflows.Runtime.Reconciliation.Tests` | 30 | 0 |
+| `Elsa.Activities.Sequence.Tests` | 18 | 0 |
+| `Elsa.Workflows.Publishing.Api.Tests` | 750 | 0 |
+| `Elsa.Activities.Bpmn.Interchange.Tests` | 106 | 0 |
+| `Elsa.Activities.Bpmn.Tests` | 251 | 0 |
+
+  Studio client tests cannot run on this machine (no Node.js or pnpm installed), so Studio CI runs them.
+- **Implementation notes (T034–T057)**:
+  - **T036.** Start-entry provider failures (`ArgumentException`, `FormatException`, `InvalidOperationException`)
+    are wrapped as facet `StartEntryRecognition`, and a duplicate kind as facet `StartEntryProviderIdentity`. Both
+    are non-placement facets. The Flowchart and Sequence providers rethrow their own structure exceptions as
+    `InvalidOperationException`, so a malformed structure cannot escape preflight untyped.
+  - **T037.** No DI change was needed: `TryAddSingleton<IWorkflowTriggerBindingExtractor, WorkflowTriggerBindingExtractor>()`
+    picks the overload that takes `IEnumerable<IStructuralStartEntryProvider>`.
+  - **T040.** No reconciliation change, per T031.
+  - **T043.** Tests changed, each for the same reason (FR-028). Their roots were structure-less `Elsa.Sequence`
+    nodes with start triggers below them, which the start-path rule refuses. Each now carries a test structure plus
+    a test start-entry provider, and what each test asserts is unchanged:
+    - `WorkflowTriggerBindingExtractorTests.Evaluate_RejectsWholePreflightWhenLaterTriggerNodeIsInvalid`
+    - `WorkflowTriggerBindingExtractorTests.Evaluate_CallsEveryProviderExactlyOncePerTriggerNode`
+    - `WorkflowTriggerBindingExtractorTests.Extract_WalksChildSlots`
+    - `WorkflowTriggerIndexerTests.Index_InvalidLaterNode_LeavesEverySeededBindingUntouched`
+    - The two `RecurringTriggerScheduleIndexerTests` the census listed were not affected (87/87 unchanged).
+  - **T047.** `PublishMisplacedStartTriggerEndpointTests` drives the real publish endpoint and handler with an
+    extractor that fails with each facet. A `Placement` failure answers 400 with no executable and no activation
+    slot saved; another facet does not answer 400. The real placement walk is covered by T042 and T048.
+  - **T049.** Covered by `ImportGateStartTriggerPlacementTests.A_misplaced_start_trigger_without_carried_bindings_is_never_activated`.
+    It drives the activation coordinator → `IWorkflowTriggerIndexer.PrepareActivationAsync` → extractor path,
+    which `RestorePublicationSlotRequestHandler` also uses. No separate restore-endpoint test was added.
+  - **T054.** Studio's reachability warning ("cannot be reached from the start node") also contradicted D8: a
+    second trigger's branch was flagged unreachable. Its walk now starts from the start node plus every start
+    trigger that nothing connects into.
+  - **T055.** Studio tests changed:
+    - `flowchartStartNode.test.ts` `findMisplacedStartTriggers`: the repro case and the "connected into" case
+      swapped expectations under D13, and multi-trigger and mid-flow cases were added.
+    - `draftValidationSurface.test.tsx` "start-trigger detection": the same flip, plus a multi-trigger case that
+      asserts neither warning.
 
 ---
 
@@ -215,35 +270,35 @@ nothing is saved. Child 0 publishes.
 
 ### Contract and runtime
 
-- [ ] T034 [US4] Add `IStructuralStartEntryProvider` (`string StructureKind { get; }`, `ExecutableNode? SelectStartChild(ExecutableNode composite, string triggerNodeId)`) to `src/Workflows/Runtime/Core/Contracts/IStructuralStartEntryProvider.cs`. The XML doc covers three points (research R10):
+- [X] T034 [US4] Add `IStructuralStartEntryProvider` (`string StructureKind { get; }`, `ExecutableNode? SelectStartChild(ExecutableNode composite, string triggerNodeId)`) to `src/Workflows/Runtime/Core/Contracts/IStructuralStartEntryProvider.cs`. The XML doc covers three points (research R10):
   - the provider names the child a run started by that trigger begins at;
   - it returns null when no such run can begin inside the composite;
   - it is keyed by `ExecutableActivityStructure.Kind`.
-- [ ] T035 [US4] In `src/Workflows/Runtime/Core/Exceptions/WorkflowTriggerPreflightException.cs`:
+- [X] T035 [US4] In `src/Workflows/Runtime/Core/Exceptions/WorkflowTriggerPreflightException.cs`:
   - add the facet constant `Placement`;
   - add optional `CompositeNodeId` and `CompositeStructureKind` properties, following the existing constructor style;
   - keep every existing constructor and property unchanged.
-- [ ] T036 [US4] In `src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Triggers/WorkflowTriggerBindingExtractor.cs`:
+- [X] T036 [US4] In `src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Triggers/WorkflowTriggerBindingExtractor.cs`:
   - Add a constructor overload that takes `IEnumerable<IStructuralStartEntryProvider>`; the existing constructors pass an empty set.
   - Build the kind map once. A duplicate kind throws `WorkflowTriggerPreflightException` with a non-placement facet, at the first `Evaluate`.
   - After a node's outcome is `Registered`, walk the root-to-node path (track parents in `Flatten`, or compute the path on demand). Throw facet `Placement` on the first composite that does not begin at the next path node, that has no structure, or whose kind has no provider (FR-017, FR-018, FR-022).
   - Use the guidance text from research R11.
   - Update the class XML doc.
-- [ ] T037 [US4] Make the DI registration resolve the provider set. Check how `IWorkflowTriggerBindingExtractor` is registered (feature in `src/Workflows/Runtime/Elsa.Workflows.Runtime`). If it is constructed through `IEnumerable<IActivityTriggerStimulusProvider>`, add the new enumerable the same way, so the extractor gets every registered provider.
-- [ ] T038 [P] [US4] Add `src/Activities/Flowchart/Internal/FlowchartStartEntryProvider.cs` (FR-019) and register it in `ActivitiesFlowchartFeature`:
+- [X] T037 [US4] Make the DI registration resolve the provider set. Check how `IWorkflowTriggerBindingExtractor` is registered (feature in `src/Workflows/Runtime/Elsa.Workflows.Runtime`). If it is constructed through `IEnumerable<IActivityTriggerStimulusProvider>`, add the new enumerable the same way, so the extractor gets every registered provider.
+- [X] T038 [P] [US4] Add `src/Activities/Flowchart/Internal/FlowchartStartEntryProvider.cs` (FR-019) and register it in `ActivitiesFlowchartFeature`:
   - `StructureKind = FlowchartActivity.StructureKind`.
   - Use `FlowchartGraph.From(composite)`.
   - Return the trigger when it is a direct child and either is not a connection target or is `SelectStartNode()`.
   - Return null when it is a direct child that is a connection target and not the start node.
   - Otherwise return `SelectStartNode()`.
   - If no inbound helper exists on `FlowchartGraph`, add a small `HasInboundConnection(nodeId)` there.
-- [ ] T039 [P] [US4] Add `src/Activities/Sequence/Internal/SequenceStartEntryProvider.cs` (FR-020): `StructureKind = SequenceActivity.StructureKind`, returning `SequenceNavigator` over the composite `.SelectFirst()`. Register it in `ActivitiesSequenceFeature`.
-- [ ] T040 [US4] Apply the outcome of T031. If the reconciler re-evaluates identical, already-active artifacts, ensure that path does not refuse or deactivate them (FR-025). Change only what T031 identified, and add a pinning test in the reconciliation test project.
-- [ ] T041 [US4] In `src/Workflows/Publishing/Api/Endpoints/WorkflowPublishingExceptionTranslator.cs`, map a `WorkflowTriggerPreflightException` whose facet is `Placement` to 400 with its message. Leave every other facet unmapped (FR-023). Update the class XML doc listing.
+- [X] T039 [P] [US4] Add `src/Activities/Sequence/Internal/SequenceStartEntryProvider.cs` (FR-020): `StructureKind = SequenceActivity.StructureKind`, returning `SequenceNavigator` over the composite `.SelectFirst()`. Register it in `ActivitiesSequenceFeature`.
+- [X] T040 [US4] Apply the outcome of T031. If the reconciler re-evaluates identical, already-active artifacts, ensure that path does not refuse or deactivate them (FR-025). Change only what T031 identified, and add a pinning test in the reconciliation test project.
+- [X] T041 [US4] In `src/Workflows/Publishing/Api/Endpoints/WorkflowPublishingExceptionTranslator.cs`, map a `WorkflowTriggerPreflightException` whose facet is `Placement` to 400 with its message. Leave every other facet unmapped (FR-023). Update the class XML doc listing.
 
 ### Tests
 
-- [ ] T042 [US4] Create `tests/Workflows/Runtime/Tests/WorkflowTriggerPlacementTests.cs`. It uses `WorkflowTriggerBindingExtractor` with a fake stimulus provider and fake start-entry providers for two test kinds (`test.first-child` and `test.none`). Assert facet and node ids only:
+- [X] T042 [US4] Create `tests/Workflows/Runtime/Tests/WorkflowTriggerPlacementTests.cs`. It uses `WorkflowTriggerBindingExtractor` with a fake stimulus provider and fake start-entry providers for two test kinds (`test.first-child` and `test.none`). Assert facet and node ids only:
   - a root trigger is valid;
   - a trigger at child 0 under `test.first-child` is valid;
   - a trigger at child 1 is refused (`Placement`, with the composite id);
@@ -252,29 +307,29 @@ nothing is saved. Child 0 publishes.
   - a trigger two levels deep, valid at each level, is accepted; invalid at the inner level, it is refused naming the inner composite;
   - an `IntentionallyNonStarting` trigger anywhere is never checked;
   - a duplicate provider kind fails with a non-placement facet.
-- [ ] T043 [US4] Update the structure-less `Elsa.Sequence` roots in `tests/Workflows/Runtime/Tests/WorkflowTriggerBindingExtractorTests.cs` (around l.182, 200, 326), `WorkflowTriggerIndexerTests.cs` (around l.194) and `tests/Workflows/Runtime/Scheduling/Tests/RecurringTriggerScheduleIndexerTests.cs` (around l.79, 176). Give each a structure plus the test start-entry provider, or make the trigger the root, whichever keeps what the test asserts. List each test and its reason under "Revision notes" for the PR (FR-028).
-- [ ] T044 [P] [US4] Create `tests/Activities/Flowchart/Tests/FlowchartStartEntryProviderTests.cs` covering:
+- [X] T043 [US4] Update the structure-less `Elsa.Sequence` roots in `tests/Workflows/Runtime/Tests/WorkflowTriggerBindingExtractorTests.cs` (around l.182, 200, 326), `WorkflowTriggerIndexerTests.cs` (around l.194) and `tests/Workflows/Runtime/Scheduling/Tests/RecurringTriggerScheduleIndexerTests.cs` (around l.79, 176). Give each a structure plus the test start-entry provider, or make the trigger the root, whichever keeps what the test asserts. List each test and its reason under "Revision notes" for the PR (FR-028).
+- [X] T044 [P] [US4] Create `tests/Activities/Flowchart/Tests/FlowchartStartEntryProviderTests.cs` covering:
   - a no-inbound direct-child trigger → itself;
   - a start-node trigger with an inbound loop-back → itself;
   - an inbound non-start trigger → null;
   - a deeper trigger → the start node;
   - no `startNodeId` → the `SelectStartNode` fallback.
-- [ ] T045 [P] [US4] Create `tests/Activities/Sequence/Tests/SequenceStartEntryProviderTests.cs`: returns child 0 for any trigger id; null for an empty Sequence.
-- [ ] T046 [P] [US4] (FR-027; void if T032 says so) In `src/Activities/Bpmn/Interchange/Services/BpmnDocumentImporter.cs`, author `Literal("CanStartWorkflow", false)` on every nested `BpmnProcess` node. Add a test in `tests/Activities/Bpmn/Interchange/Tests` asserting the nested node carries it and the extractor reports it `IntentionallyNonStarting`.
-- [ ] T047 [US4] In `tests/Workflows/Publishing/Api/Tests`, add a publish-endpoint test, modelled on `PublishWorkflowTriggerIndexingTests`:
+- [X] T045 [P] [US4] Create `tests/Activities/Sequence/Tests/SequenceStartEntryProviderTests.cs`: returns child 0 for any trigger id; null for an empty Sequence.
+- [X] T046 [P] [US4] (FR-027; void if T032 says so) In `src/Activities/Bpmn/Interchange/Services/BpmnDocumentImporter.cs`, author `Literal("CanStartWorkflow", false)` on every nested `BpmnProcess` node. Add a test in `tests/Activities/Bpmn/Interchange/Tests` asserting the nested node carries it and the extractor reports it `IntentionallyNonStarting`.
+- [X] T047 [US4] In `tests/Workflows/Publishing/Api/Tests`, add a publish-endpoint test, modelled on `PublishWorkflowTriggerIndexingTests`:
   - publish a draft whose root Sequence has a start trigger at child 1;
   - assert 400, and that no executable, binding or publication was saved;
   - publish the same with the trigger at child 0 and assert success.
-- [ ] T048 [US4] In `tests/Activities/Http/IntegrationTests`, add `MisplacedStartTriggerEndToEndTests` on `HttpEndpointHostFixture` that drives the real extractor:
+- [X] T048 [US4] In `tests/Activities/Http/IntegrationTests`, add `MisplacedStartTriggerEndToEndTests` on `HttpEndpointHostFixture` that drives the real extractor:
   - a Sequence with a start-capable endpoint at child 1 is refused with facet `Placement`, and no binding exists;
   - a root Flowchart with an inbound-connected start-capable endpoint that is not the start node is refused;
   - an outer Flowchart whose start node is an inner Flowchart with a no-inbound trigger child is accepted;
   - the same inner Flowchart reached through a non-start child is refused (US4-4).
   - If the fixture's Sequence nodes lack a structure the provider can read, fix the fixture first (R13).
-- [ ] T049 [US4] Add a restore test (US4-6, D12) in the Publishing API tests, or wherever `RestorePublicationSlotRequestHandler` is tested:
+- [X] T049 [US4] Add a restore test (US4-6, D12) in the Publishing API tests, or wherever `RestorePublicationSlotRequestHandler` is tested:
   - a retired publication whose executable has a misplaced trigger fails to restore with an activation failure;
   - its saved executable is unchanged.
-- [ ] T050 [US4] Add an import test (US4-7) in the reconciliation test project: an artifact closure with a misplaced start trigger and carried bindings is refused with the "cannot materialize" diagnostic.
+- [X] T050 [US4] Add an import test (US4-7) in the reconciliation test project: an artifact closure with a misplaced start trigger and carried bindings is refused with the "cannot materialize" diagnostic.
 - [ ] T051 [US4] Run, as whole projects, and compare with the T033 baseline plus the new tests:
   - `Elsa.Workflows.Runtime.Tests`
   - `Elsa.Workflows.Runtime.Scheduling.Tests`
@@ -294,18 +349,18 @@ unchanged.
 
 ## Phase 9: User Story 5 - Studio's misplaced-trigger warning matches the rule (Priority: P2)
 
-- [ ] T053 [US5] In `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/flowchartStartNode.ts`, change `findMisplacedStartTriggers` to report a start-capable child that is a connection target and not the start node. A start-capable child with no inbound connection is no longer reported. Update its doc comment (FR-029, D13).
-- [ ] T054 [US5] Check `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/draftValidation.ts` and the UI that offers "set as start". Update any copy that says the trigger "can never be reached" so it matches the publish guidance (R11). Keep "set as start" for the misplaced case.
-- [ ] T055 [US5] Update `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/flowchartStartNode.test.ts`, and the `draftValidationSurface` tests if they pin the old shape. Cover US5 scenarios 1–2, and name each changed test and its reason under "Revision notes". Run the Studio client tests for those files.
+- [X] T053 [US5] In `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/flowchartStartNode.ts`, change `findMisplacedStartTriggers` to report a start-capable child that is a connection target and not the start node. A start-capable child with no inbound connection is no longer reported. Update its doc comment (FR-029, D13).
+- [X] T054 [US5] Check `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/draftValidation.ts` and the UI that offers "set as start". Update any copy that says the trigger "can never be reached" so it matches the publish guidance (R11). Keep "set as start" for the misplaced case.
+- [X] T055 [US5] Update `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/flowchartStartNode.test.ts`, and the `draftValidationSurface` tests if they pin the old shape. Cover US5 scenarios 1–2, and name each changed test and its reason under "Revision notes". Run the Studio client tests for those files.
 
 ---
 
 ## Phase 10: Revision polish
 
-- [ ] T056 [P] Update `EXTENSION_POINTS.md` (FR-026):
+- [X] T056 [P] Update `EXTENSION_POINTS.md` (FR-026):
   - `src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md` (or the Runtime.Core catalog that owns contracts): the new implementable contract, with signature, registration and Known implementations (Flowchart, Sequence, intra-domain); and the extractor usage text, which gains the placement step.
   - `src/Activities/Flowchart/EXTENSION_POINTS.md` and `src/Activities/Sequence/EXTENSION_POINTS.md`: their implementations.
-- [ ] T057 [P] Update the "Where a run starts" bullet in `src/Activities/Flowchart/README.md` and add one line to `src/Activities/Sequence/README.md`. Both say where a start trigger may sit, and that other placements are refused at publish.
+- [X] T057 [P] Update the "Where a run starts" bullet in `src/Activities/Flowchart/README.md` and add one line to `src/Activities/Sequence/README.md`. Both say where a start trigger may sit, and that other placements are refused at publish.
 - [ ] T058 Gate evidence, then post it as a PR comment on #2856:
   - all touched test projects as whole projects, with `--list-tests` counts;
   - `bash tools/architecture/restore-ci-project-graph.sh` and the full architecture project;

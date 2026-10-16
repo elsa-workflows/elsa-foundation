@@ -28,5 +28,7 @@ public class ActivitiesSequenceFeature : IShellFeature
         // A sequence successor is single-predecessor by construction; this
         // probe lets the ReplaySafe fused completion pump prove it via the routing memo.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IReplaySafeSuccessorRoutingProbe, SequenceReplaySafeSuccessorRoutingProbe>());
+        // Tells the trigger binding preflight that a run always enters a Sequence at its first child (spec 238).
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStructuralStartEntryProvider, SequenceStartEntryProvider>());
     }
 }

@@ -46,5 +46,7 @@ public class ActivitiesFlowchartFeature : IShellFeature
         // Lets the ReplaySafe fused completion pump prove a flowchart
         // successor edge single-predecessor via the routing memo; fan-in/join edges keep the discrete cascade.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IReplaySafeSuccessorRoutingProbe, FlowchartReplaySafeSuccessorRoutingProbe>());
+        // Tells the trigger binding preflight where a run started by a trigger enters a Flowchart (spec 238).
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IStructuralStartEntryProvider, FlowchartStartEntryProvider>());
     }
 }

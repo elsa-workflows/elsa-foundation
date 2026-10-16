@@ -122,6 +122,26 @@ public sealed class FlowchartGraph
             ? triggerNode
             : SelectStartNode();
 
+    /// <summary>
+    /// The child a run started by <paramref name="triggerNodeId"/> legitimately begins at, for the publish-time
+    /// start-path rule (spec 238):
+    /// <list type="bullet">
+    /// <item>the trigger itself, when it is a direct child with no inbound connection or is the start node;</item>
+    /// <item><c>null</c>, when it is a direct child with an inbound connection that is not the start node, because
+    /// such a node is a mid-flow position and a run starting there would skip the work upstream of it;</item>
+    /// <item>otherwise the start node, because a deeper trigger is reached through it.</item>
+    /// </list>
+    /// </summary>
+    public ExecutableNode? SelectTriggerStartChild(string triggerNodeId)
+    {
+        var startNode = SelectStartNode();
+        if (!_nodesById.TryGetValue(triggerNodeId, out var triggerNode))
+            return startNode;
+
+        var isStartNode = startNode is not null && StringComparer.Ordinal.Equals(startNode.ExecutableNodeId, triggerNodeId);
+        return isStartNode || !_inboundByTarget.ContainsKey(triggerNodeId) ? triggerNode : null;
+    }
+
     public IReadOnlyCollection<ExecutableNode> SelectTargets(string completedChildExecutableNodeId, IReadOnlyCollection<string> outcomeNames)
     {
         var targetIds = SelectOutboundConnections(completedChildExecutableNodeId, outcomeNames)

@@ -56,6 +56,7 @@ public sealed class FlowchartTriggerStartTests
     [Fact]
     public async Task TriggerChild_WithInboundConnection_StartsThereAsRootPath()
     {
+        // Publishing refuses this placement (the start-path rule); this pins the runtime for artifacts published before it.
         await using var fixture = await FlowchartRuntimeFixture.CreateAsync(ActivityExecutionIds);
         var executable = fixture.NewExecutable(
             children: [fixture.NewProbeNode("node-a"), fixture.NewProbeNode("node-b"), fixture.NewProbeNode("node-c")],
@@ -121,6 +122,7 @@ public sealed class FlowchartTriggerStartTests
     [Fact]
     public async Task NestedFlowchart_TriggerIsInnerChild_OuterStartsAtStartNode_InnerStartsAtTrigger()
     {
+        // Publishing refuses this placement (the start-path rule); this pins the runtime for artifacts published before it.
         await using var fixture = await FlowchartRuntimeFixture.CreateAsync(ActivityExecutionIds);
         var inner = NewFlowchartNode(
             "node-inner",

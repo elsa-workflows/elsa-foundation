@@ -524,40 +524,78 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     /// (<c>node-second-endpoint</c>) on <paramref name="secondPath"/>. Both are indexed. A request to either path starts
     /// a run at that endpoint (spec 238); the other endpoint never runs.
     /// </summary>
-    public async Task PublishTwoHttpEndpointFlowchartWorkflowAsync(string artifactId, string firstPath, string secondPath, string method)
+    public Task PublishTwoHttpEndpointFlowchartWorkflowAsync(string artifactId, string firstPath, string secondPath, string method)
     {
-        var serializer = Services.GetRequiredService<IPayloadSerializer>();
-        var first = NewHttpEndpointNode($"{artifactId}-first", firstPath, $"{artifactId}-first-result", [method],
-            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: true, isTriggerNode: true,
-            nodeId: "node-first-endpoint");
-        var second = NewHttpEndpointNode($"{artifactId}-second", secondPath, $"{artifactId}-second-result", [method],
-            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: true, isTriggerNode: true,
-            nodeId: "node-second-endpoint");
+        var first = NewStartEndpointNode(artifactId, firstPath, method, "node-first-endpoint");
+        var second = NewStartEndpointNode(artifactId, secondPath, method, "node-second-endpoint");
+        return PublishRootAsync(artifactId, NewFlowchartNode("node-flowchart", [first, second], [], first.ExecutableNodeId));
+    }
 
-        var flowchartDescriptorPayload = ClrConstruction.Payload(serializer, typeof(FlowchartActivity));
-        var flowchartNode = new ExecutableNode(
-            executableNodeId: "node-flowchart",
-            authoredActivityId: "authored-flowchart",
+    // ---- Start-path placement builders (spec 238) ----
+
+    /// <summary>A start-trigger <see cref="HttpEndpoint"/> (<c>CanStartWorkflow = true</c>, trigger-marked) on <paramref name="path"/>.</summary>
+    public ExecutableNode NewStartEndpointNode(string artifactId, string path, string method, string nodeId) =>
+        NewHttpEndpointNode($"{artifactId}-{nodeId}", path, $"{artifactId}-{nodeId}-result", [method],
+            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: true, isTriggerNode: true, nodeId: nodeId);
+
+    /// <summary>A mid-flow <see cref="HttpEndpoint"/> wait (<c>CanStartWorkflow = false</c>, not trigger-marked).</summary>
+    public ExecutableNode NewWaitEndpointNode(string artifactId, string path, string method, string nodeId) =>
+        NewHttpEndpointNode($"{artifactId}-{nodeId}", path, $"{artifactId}-{nodeId}-result", [method],
+            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: false, isTriggerNode: false, nodeId: nodeId);
+
+    /// <summary>A real Flowchart node over <paramref name="children"/>, with its connections and start node.</summary>
+    public ExecutableNode NewFlowchartNode(
+        string nodeId,
+        IReadOnlyList<ExecutableNode> children,
+        IReadOnlyCollection<(string Source, string Target)> connections,
+        string startNodeId)
+    {
+        var descriptorPayload = ClrConstruction.Payload(Services.GetRequiredService<IPayloadSerializer>(), typeof(FlowchartActivity));
+        var flowchartConnections = connections
+            .Select(connection => new FlowchartConnection(new FlowchartEndpoint(connection.Source, null), new FlowchartEndpoint(connection.Target)))
+            .ToArray();
+        return new ExecutableNode(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
             activityType: typeof(FlowchartActivity).FullName!,
             activityTypeVersion: "1.0.0",
-            descriptor: ClrRuntimeDescriptor(flowchartDescriptorPayload),
+            descriptor: ClrRuntimeDescriptor(descriptorPayload),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>(),
-            childSlots: [new ExecutableChildSlot(FlowchartActivity.ActivitiesSlotName, [first, second])],
+            childSlots: [new ExecutableChildSlot(FlowchartActivity.ActivitiesSlotName, children)],
             structure: new ExecutableActivityStructure(
                 FlowchartActivity.StructureKind,
                 FlowchartActivity.StructureSchemaVersion,
-                JsonSerializer.SerializeToElement(new FlowchartStructure([], first.ExecutableNodeId))),
-            activityContract: UnitActivityContract(typeof(FlowchartActivity), flowchartDescriptorPayload, [], [ActivityOutcomes.Done, ActivityOutcomes.Break]));
+                JsonSerializer.SerializeToElement(new FlowchartStructure(flowchartConnections, startNodeId))),
+            activityContract: UnitActivityContract(typeof(FlowchartActivity), descriptorPayload, [], [ActivityOutcomes.Done, ActivityOutcomes.Break]));
+    }
 
-        await PublishAsync(new WorkflowExecutable(
+    /// <summary>A real Sequence node over <paramref name="children"/>, in order.</summary>
+    public ExecutableNode NewSequenceNode(string nodeId, IReadOnlyList<ExecutableNode> children)
+    {
+        var descriptorPayload = ClrConstruction.Payload(Services.GetRequiredService<IPayloadSerializer>(), typeof(SequenceActivity));
+        return new ExecutableNode(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
+            activityType: typeof(SequenceActivity).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptor: ClrRuntimeDescriptor(descriptorPayload),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            metadata: new Dictionary<string, string>(),
+            childSlots: SequenceShape.ChildSlots(children),
+            structure: SequenceShape.Structure(children),
+            activityContract: UnitActivityContract(typeof(SequenceActivity), descriptorPayload, [], [ActivityOutcomes.Done, ActivityOutcomes.Break]));
+    }
+
+    /// <summary>Publishes and indexes a workflow whose root activity is <paramref name="root"/>.</summary>
+    public Task PublishRootAsync(string artifactId, ExecutableNode root) =>
+        PublishAsync(new WorkflowExecutable(
             identity: NewIdentity(artifactId),
-            rootActivity: flowchartNode,
+            rootActivity: root,
             resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
             createdAt: DateTimeOffset.UtcNow,
             compatibilityMetadata: new Dictionary<string, string>(),
             incidentStrategy: IncidentStrategyBuiltIns.FaultReference));
-    }
 
     // ---- Synchronous response publish helpers ----
 
