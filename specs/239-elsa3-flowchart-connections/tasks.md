@@ -223,7 +223,7 @@ converts with both outcomes declared and the connections into them kept.
 - [X] T032 Tests in `MT/Elsa3FlowchartValidationTests.cs` (SC-004): each converted fixture from T014, T021 (accepted
   shapes) and T030 deserializes as `FlowchartAuthoredStructure`, compiles through the Flowchart structure handler,
   and passes `ValueFlowValidator` (start node set, endpoints known, no duplicate hits, no rejected loop).
-- [X] T033 Test (H-1 halt point) in `MT/Elsa3FlowchartValidationTests.cs`: the T026 multi-trigger fixtures pass *(Written and skipped; verified that, unskipped, it fails today with `ValueFlow/UnavailableProducer`.)*
+- [X] T033 Test (H-1 halt point) in `MT/Elsa3FlowchartValidationTests.cs`: the T026 multi-trigger fixtures pass *(Written skipped, verified to fail without spec 238 (`ValueFlow/UnavailableProducer`); unskipped and passing after rebasing onto #2856 (6b3ad8c3d), 2026-10-16 — H-1 cleared.)*
   `ValueFlowValidator`. Mark it `[Fact(Skip = "Needs spec 238 (#2850): multi-entry value-flow validation.")]`.
 - [X] T034 Collection path: add one flowchart case (reusable workflow with a flowchart root and a caller connecting on
   its `succeed`/`fail` ports) to `MT/ReusableActivityCollectionApplyTests.cs`; assert the caller's connections use

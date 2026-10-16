@@ -24,7 +24,6 @@ namespace Elsa3.Mapping.Tests;
 /// </summary>
 public sealed class Elsa3FlowchartValidationTests
 {
-    private const string MultiEntryHalt = "Needs spec 238 (#2850): value-flow validation from every trigger's entry point (H-1).";
     // The options the Flowchart structure handler reads its payload with (FlowchartStructureHandler).
     private static readonly JsonSerializerOptions FlowchartJson = new(JsonSerializerDefaults.Web)
     {
@@ -58,7 +57,7 @@ public sealed class Elsa3FlowchartValidationTests
         Assert.Empty(await ValidateAsync(result.Value.State));
     }
 
-    [Fact(Skip = MultiEntryHalt)]
+    [Fact]
     public async Task A_converted_multi_trigger_flowchart_passes_value_flow_validation()
     {
         // The second trigger's handler reads that trigger's result: valid only once validation enters at every trigger.
