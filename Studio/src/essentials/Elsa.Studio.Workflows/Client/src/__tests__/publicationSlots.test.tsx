@@ -30,18 +30,20 @@ afterEach(() => {
 });
 
 describe("publication channel UX", () => {
-  it("prioritizes channel, effect, version, readiness, baseline, and compact changes", () => {
+  it("starts with a short confirmation and keeps changes and publishing options collapsed", () => {
     const container = render(review());
-
-    expect(text(container)).toContain("Publication channel");
-    expect(text(container)).toContain("default (normal)");
-    expect(text(container)).toContain("Replace the current publication in default");
-    expect(text(container)).toContain("Assigned automatically by version policy");
-    expect(text(container)).toContain("Ready to publish");
-    expect(text(container)).toContain("Baseline:");
-    expect(text(container)).toContain("current captured editor state is included and saved");
-    expect(text(container)).not.toContain("Publication behavior");
-    expect(text(container)).not.toContain("Replace authority in this slot");
+    expect(container.querySelector("h3")?.textContent).toBe("Publish workflow");
+    expect(container.querySelector(".wf-publication-header p")?.textContent).toBe("Make your latest changes available to run.");
+    expect(container.querySelectorAll(".wf-publication-body > details")).toHaveLength(2);
+    const options = summary(container, "Publishing options")!.parentElement as HTMLDetailsElement;
+    const changes = summary(container, "Review changes")!.parentElement as HTMLDetailsElement;
+    expect(options.open).toBe(false);
+    expect(changes.open).toBe(false);
+    expect(container.querySelector("select[aria-label='Publication channel']")?.closest("details")).toBe(options);
+    expect(container.querySelector(".wf-publication-baseline")?.closest("details")).toBe(changes);
+    expect(container.querySelector("#publication-review-status")?.getAttribute("data-visible")).toBe("false");
+    expect(button(container, "Publish").disabled).toBe(false);
+    expect(text(container)).not.toContain("captured editor state");
   });
 
   it("keeps technical evidence in progressive disclosures", () => {
@@ -52,8 +54,10 @@ describe("publication channel UX", () => {
       })
     }));
 
-    expect(summary(container, "Changes details")).toBeDefined();
-    expect(summary(container, "Advanced details")).toBeDefined();
+    const changes = summary(container, "Review changes")!.parentElement as HTMLDetailsElement;
+    const technical = summary(container, "Technical details")!.parentElement as HTMLDetailsElement;
+    expect(technical.open).toBe(false);
+    expect(technical.parentElement?.closest("details")).toBe(changes);
     expect(text(container)).toContain("Policy");
     expect(text(container)).toContain("host · revision 7");
     expect(text(container)).toContain("http:orders (exclusive)");
@@ -73,7 +77,7 @@ describe("publication channel UX", () => {
     changeSelect(select, "__create-publication-channel__");
 
     expect(container.querySelector("input[aria-label='New publication channel']")).not.toBeNull();
-    expect(text(container)).toContain("Enter a channel name.");
+    expect(text(container)).toContain("Enter a channel name before publishing.");
     expect(button(container, "Publish").disabled).toBe(true);
   });
 
@@ -84,7 +88,7 @@ describe("publication channel UX", () => {
 
     changeSelect(select, "blue");
 
-    expect(text(container)).toContain("Replace the current publication in blue");
+    expect(container.querySelector(".wf-publication-header p")?.textContent).toBe("Update the published workflow in blue.");
     expect(button(container, "Publish").disabled).toBe(true);
     expect(onReview).toHaveBeenCalledWith(
       expect.anything(),
@@ -100,7 +104,7 @@ describe("publication channel UX", () => {
     }), { onReview });
     changeSelect(container.querySelector<HTMLSelectElement>("select[aria-label='Publication channel']")!, "blue");
 
-    expect(text(container)).toContain("Baseline: blue · 1.4.0");
+    expect(text(container)).toContain("Compared with blue · 1.4.0");
   });
 
   it("falls back to the publication's version id in the baseline when no design version was fetched for the slot", () => {
@@ -108,7 +112,7 @@ describe("publication channel UX", () => {
     const container = render(review({ slots: [occupiedBlue()] }), { onReview });
     changeSelect(container.querySelector<HTMLSelectElement>("select[aria-label='Publication channel']")!, "blue");
 
-    expect(text(container)).toContain("Baseline: blue · version-blue");
+    expect(text(container)).toContain("Compared with blue · version-blue");
   });
 
   it("names the source of a channel occupied by another activation source instead of a publication", () => {
@@ -117,7 +121,7 @@ describe("publication channel UX", () => {
 
     changeSelect(container.querySelector<HTMLSelectElement>("select[aria-label='Publication channel']")!, "imported");
 
-    expect(text(container)).toContain("Replace the current activation in imported");
+    expect(text(container)).toContain("Publish your changes to imported.");
     expect(text(container)).toContain("imported · occupied by artifact-reconciliation (orders-bundle) · not a Studio design version");
     expect(text(container)).toContain("Not compared: imported is occupied by an activation from artifact-reconciliation (orders-bundle)");
     expect(text(container)).not.toContain("no previous publication");
@@ -127,16 +131,16 @@ describe("publication channel UX", () => {
       { mode: "automatic" });
   });
 
-  it("blocks on a foreign-owned target with an owner blocker, disabled Publish, and Not ready readiness", () => {
+  it("blocks on a foreign-owned target with an owner blocker, disabled Publish, and Review the highlighted issue before publishing. readiness", () => {
     const container = render(review({
       preflight: preflight({ canActivate: false, targetSlotOwner: foreignSlotOwner() })
     }));
 
-    expect(text(container)).toContain("Publication channel is owned by another activation source");
-    expect(text(container)).toContain("occupied by an activation from artifact-reconciliation (mounted-artifacts)");
-    expect(text(container)).toContain("operator action");
-    expect(text(container)).not.toContain("Publication channel conflicts");
-    expect(text(container)).toContain("Not ready");
+    expect(text(container)).toContain("This channel is managed elsewhere");
+    expect(text(container)).toContain("managed by artifact-reconciliation (mounted-artifacts)");
+    expect(text(container)).toContain("Choose another channel");
+    expect(text(container)).not.toContain("These triggers are already in use");
+    expect(text(container)).toContain("Review the highlighted issue before publishing.");
     expect(button(container, "Publish").disabled).toBe(true);
   });
 
@@ -148,10 +152,10 @@ describe("publication channel UX", () => {
       })
     }));
 
-    expect(text(container)).toContain("Publication channel conflicts");
+    expect(text(container)).toContain("These triggers are already in use");
     expect(text(container)).toContain("Conflict with default: http:orders");
     expect(text(container)).not.toContain("owned by another activation source");
-    expect(text(container)).toContain("Not ready");
+    expect(text(container)).toContain("Review the highlighted issue before publishing.");
     expect(button(container, "Publish").disabled).toBe(true);
   });
 
@@ -161,7 +165,19 @@ describe("publication channel UX", () => {
 
     expect(text(container)).toContain(publicationBlockedMessage(blockedPreflight));
     expect(text(container)).not.toContain("owned by another activation source");
-    expect(text(container)).not.toContain("Publication channel conflicts");
+    expect(text(container)).not.toContain("These triggers are already in use");
+    expect(button(container, "Publish").disabled).toBe(true);
+  });
+
+  it("shows validation blockers without opening changes or options", () => {
+    const container = render(review({
+      phase: "validationBlocked",
+      validationErrors: ["An HTTP endpoint needs a path."]
+    }));
+    const alert = container.querySelector("[role='alert']")!;
+    expect(alert.textContent).toContain("An HTTP endpoint needs a path.");
+    expect(alert.closest("details")).toBeNull();
+    expect(container.querySelector("details[open]")).toBeNull();
     expect(button(container, "Publish").disabled).toBe(true);
   });
 
@@ -174,8 +190,8 @@ describe("publication channel UX", () => {
       })
     }));
 
-    expect(text(container)).toContain("Publication channel is owned by another activation source");
-    expect(text(container)).toContain("Publication channel conflicts");
+    expect(text(container)).toContain("This channel is managed elsewhere");
+    expect(text(container)).toContain("These triggers are already in use");
     expect(text(container)).toContain("Conflict with default: http:orders");
     expect(button(container, "Publish").disabled).toBe(true);
   });
@@ -197,7 +213,7 @@ describe("publication channel UX", () => {
 
   it("shows exact-version editing only when the backend advertises it", () => {
     const unsupported = render(review());
-    expect(summary(unsupported, "Edit version")).toBeUndefined();
+    expect(unsupported.querySelector("fieldset")).toBeNull();
     unmount();
 
     const supported = render(review({
@@ -211,8 +227,8 @@ describe("publication channel UX", () => {
         issues: []
       }
     }));
-    expect(summary(supported, "Edit version")).toBeDefined();
-    expect(text(supported)).toContain("2.0.0 · assigned automatically by version policy");
+    expect(supported.querySelector("fieldset")).not.toBeNull();
+    expect(text(supported)).toContain("Next version: 2.0.0");
   });
 
   it("automatically requests authoritative review when the exact version changes", () => {
@@ -229,9 +245,9 @@ describe("publication channel UX", () => {
       }
     }), { onReview });
 
-    flushSync(() => summary(container, "Edit version")!.click());
+    flushSync(() => summary(container, "Publishing options")!.click());
     const exactRadio = [...container.querySelectorAll<HTMLInputElement>("input[type='radio']")]
-      .find(input => input.parentElement?.textContent?.includes("Exact semantic version"))!;
+      .find(input => input.parentElement?.textContent?.includes("Exact version"))!;
     flushSync(() => exactRadio.click());
     const input = container.querySelector<HTMLInputElement>("input[aria-label='Exact semantic version']")!;
     setInput(input, "2.1.0-rc.1");
@@ -241,9 +257,12 @@ describe("publication channel UX", () => {
       { action: "replace", slotName: "default" },
       { mode: "exact", requestedVersion: "2.1.0-rc.1" });
     expect(text(container)).toContain("2.1.0-rc.1");
-    expect(text(container)).not.toContain("2.0.0 · assigned automatically");
+    const selectedVersion = container.querySelector(".wf-publication-body > .wf-publication-selection")!;
+    expect(selectedVersion.textContent).toContain("2.1.0-rc.1");
+    expect(selectedVersion.closest("details")).toBeNull();
+    expect(text(container)).not.toContain("Next version: 2.0.0");
     expect(button(container, "Publish").disabled).toBe(true);
-    expect(text(container)).toContain("Not ready");
+    expect(text(container)).toContain("Review the highlighted issue before publishing.");
   });
 
   it("keeps a failed authoritative review stable until the author retries or changes the selection", () => {
@@ -288,12 +307,12 @@ describe("publication channel UX", () => {
       }
     }), { onOpenPublishedExecutable: onOpen });
 
-    expect(text(container)).toContain("Workflow is published");
+    expect(text(container)).toContain("Published");
     expect(text(container)).toContain("Version 2.1.0 is active");
     expect(button(container, "Close").classList.contains("wf-primary-action")).toBe(true);
-    expect(button(container, "Open published executable").classList.contains("wf-primary-action")).toBe(false);
+    expect(button(container, "View published workflow").classList.contains("wf-primary-action")).toBe(false);
     expect(document.activeElement).toBe(container.querySelector("#publication-success-title"));
-    flushSync(() => button(container, "Open published executable").click());
+    flushSync(() => button(container, "View published workflow").click());
     expect(onOpen).toHaveBeenCalledOnce();
   });
 
@@ -305,7 +324,7 @@ describe("publication channel UX", () => {
       failureMessage: "Activation timed out. The promoted version was retained."
     }));
 
-    expect(text(container)).toContain("version was retained, but the channel was not activated");
+    expect(text(container)).toContain("Version 2.1.0 was retained. default was not activated.");
     expect(button(container, "Retry publication")).toBeDefined();
     expect(button(container, "Close")).toBeDefined();
     expect(container.querySelector("select[aria-label='Publication channel']")).toBeNull();
