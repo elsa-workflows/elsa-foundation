@@ -6906,16 +6906,16 @@ button.wf-reference-select {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(max-content, 1fr) auto;
+  gap: 2px 8px;
 }
 
 .wf-validation-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
   padding: 2px 0;
 }
 
@@ -6931,6 +6931,7 @@ button.wf-reference-select {
 
 .wf-validation-repair {
   display: inline-flex;
+  justify-self: start;
   align-items: center;
   gap: 4px;
   flex: 0 0 auto;
@@ -6941,6 +6942,10 @@ button.wf-reference-select {
   color: inherit;
   cursor: pointer;
   font-size: 11px;
+}
+
+.wf-validation-node-action {
+  grid-column: 3;
 }
 
 .wf-validation-repair:hover {

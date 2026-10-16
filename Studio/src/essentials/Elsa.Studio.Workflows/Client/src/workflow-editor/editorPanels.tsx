@@ -75,11 +75,11 @@ export function ValidationPanel({
                 </button>
               ) : null}
               {repair?.path.nodeId ? (
-                <button type="button" className="wf-validation-repair" onClick={() => onRepair(repair.path.nodeId)}>
+                <button type="button" className="wf-validation-repair wf-validation-node-action" onClick={() => onRepair(repair.path.nodeId)}>
                   <Wrench size={12} /> Repair
                 </button>
               ) : nodeId && onSelectNode ? (
-                <button type="button" className="wf-validation-repair" onClick={() => onSelectNode(nodeId)}>
+                <button type="button" className="wf-validation-repair wf-validation-node-action" onClick={() => onSelectNode(nodeId)}>
                   <MapPin size={12} /> Go to
                 </button>
               ) : null}
