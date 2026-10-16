@@ -13,8 +13,6 @@ public sealed record SpecFacts(
 /// <summary>Reads the spec folders for the spec-status map.</summary>
 public static class SpecScanner
 {
-    private static readonly string[] NoteKeywords = ["superseded", "retained", "deferred", "out of scope", "construct-only"];
-
     /// <summary>Every spec folder, in ordinal id order.</summary>
     public static IReadOnlyList<SpecFacts> Read(RepoContext repo)
     {
@@ -53,8 +51,9 @@ public static class SpecScanner
             var statusLine = lines.FirstOrDefault(line => line.StartsWith("**Status**:", StringComparison.Ordinal));
             if (statusLine is not null) status = statusLine["**Status**: ".Length..].TrimEnd('\r');
 
-            var lower = text.ToLowerInvariant();
-            notes = string.Join(", ", NoteKeywords.Where(keyword => lower.Contains(keyword, StringComparison.Ordinal)));
+            const string notesMarker = "**Notes**:";
+            var notesLine = lines.FirstOrDefault(line => line.StartsWith(notesMarker, StringComparison.Ordinal));
+            if (notesLine is not null) notes = notesLine[notesMarker.Length..].Trim();
         }
 
         var verdict = "-";
