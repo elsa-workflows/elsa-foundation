@@ -311,7 +311,8 @@ the node or connection and say what to change. Nothing throws; nothing is droppe
   `done`); elsewhere `UNSUPPORTED-MODE`. This amends spec 236 D-3 for reusable workflows. `Complete` keeps spec 236's
   rules; in a plain workflow it still converts only in the root flowchart.
 - **FR-012**: A connection whose source or target is not a child of the same flowchart, or `connections` on a
-  non-flowchart container, MUST fail with `GRAPH-CONNECTION-INVALID`.
+  non-flowchart container, MUST fail with `GRAPH-CONNECTION-INVALID`. Two activities of one flowchart that share an id
+  MUST fail with `GRAPH-DUPLICATE-NODE-ID`, whether or not a connection names the id.
 - **FR-013**: The HttpEndpoint projection node of spec 236 D-12 MUST be placed in a flowchart by connection: endpoint
   `Done` → projection node, and the endpoint's outbound connections leave from the projection node.
 - **FR-013a**: A start-capable direct child of a flowchart that has an inbound connection and is not the start node
@@ -319,7 +320,7 @@ the node or connection and say what to change. Nothing throws; nothing is droppe
 - **FR-014**: New codes MUST be public constants in `Elsa3ActivityDiagnosticCodes`, never renamed or reused:
   errors `ELS3-ACTIVITY-GRAPH-CONNECTION-INVALID`, `ELS3-ACTIVITY-GRAPH-OUTCOME-UNMAPPED`,
   `ELS3-ACTIVITY-GRAPH-JOIN-UNSUPPORTED`, `ELS3-ACTIVITY-GRAPH-LOOP-UNSUPPORTED`,
-  `ELS3-ACTIVITY-GRAPH-START-AMBIGUOUS`, `ELS3-ACTIVITY-GRAPH-START-TRIGGER-MISPLACED`; warning `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`. Each diagnostic MUST carry
+  `ELS3-ACTIVITY-GRAPH-START-AMBIGUOUS`, `ELS3-ACTIVITY-GRAPH-START-TRIGGER-MISPLACED`, `ELS3-ACTIVITY-GRAPH-DUPLICATE-NODE-ID`; warning `ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED`. Each diagnostic MUST carry
   the definition, node id (the connection's source for a connection), JSON path and guidance, as spec 236's do.
 - **FR-015**: Conversion MUST stay deterministic (same input and catalog → byte-identical output), never throw for
   input or catalog content, and keep the nesting budget (a Flowchart adds 4 levels; connections add none).

@@ -151,6 +151,97 @@ public sealed class Elsa3FlowchartConversionTests
     }
 
     [Fact]
+    public async Task Duplicate_connections_merge_and_vertices_and_target_ports_are_dropped()
+    {
+        // US1.3 and US1.4, from Elsa 3 JSON: two connections a:Done->b (one with vertices and target port "In") are one.
+        const string json = """
+            {
+              "id": "d-v1", "definitionId": "d", "name": "d", "description": "", "version": 1, "toolVersion": "3.6.0",
+              "root": {
+                "id": "root", "nodeId": "root", "name": "root", "type": "Elsa.Flowchart", "version": 1,
+                "activities": [
+                  { "id": "a", "nodeId": "a", "name": "a", "type": "Elsa.WriteLine", "version": 1, "text": { "typeName": "String", "expression": { "type": "Literal", "value": "a" } } },
+                  { "id": "b", "nodeId": "b", "name": "b", "type": "Elsa.WriteLine", "version": 1, "text": { "typeName": "String", "expression": { "type": "Literal", "value": "b" } } }
+                ],
+                "connections": [
+                  { "source": { "activity": "a", "port": "Done" }, "target": { "activity": "b", "port": "In" }, "vertices": [ { "x": 10, "y": 20 } ] },
+                  { "source": { "activity": "a", "port": "Done" }, "target": { "activity": "b", "port": "In" }, "vertices": [] }
+                ]
+              }
+            }
+            """;
+        var definition = System.Text.Json.JsonSerializer.Deserialize<Elsa3WorkflowDefinition>(json, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var root = result.Value!.State.RootActivity!;
+        Assert.Equal(["a:Done->b"], Connections(root));
+        var connection = Assert.Single(root.Structure!.Payload.GetProperty("connections").EnumerateArray());
+        Assert.False(connection.TryGetProperty("vertices", out _));
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, connection.GetProperty("target").GetProperty("port").ValueKind);
+    }
+
+    [Fact]
+    public async Task Flowchart_variables_become_scoped_variables()
+    {
+        // US1.7.
+        var chart = Elsa3FlowchartDiagnosticsTests.Flowchart("root", Elsa3FlowchartDiagnosticsTests.Write("a"));
+        chart.AdditionalProperties["variables"] = System.Text.Json.JsonSerializer.SerializeToElement(new[] { new { id = "counter", name = "counter", typeName = "String" } });
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(chart));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var variable = Assert.Single(result.Value!.State.RootActivity!.Structure!.Payload.GetProperty("variables").EnumerateArray());
+        Assert.Equal("counter", variable.GetProperty("referenceKey").GetString());
+    }
+
+    [Fact]
+    public async Task Empty_and_unconnected_flowcharts_convert()
+    {
+        var empty = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(Elsa3FlowchartDiagnosticsTests.Flowchart("root")));
+        var unconnected = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(
+            Elsa3FlowchartDiagnosticsTests.Flowchart("root", Elsa3FlowchartDiagnosticsTests.Write("a"), Elsa3FlowchartDiagnosticsTests.Write("b"))));
+
+        Assert.True(empty.Succeeded, Describe(empty.Diagnostics));
+        Assert.Empty(Connections(empty.Value!.State.RootActivity!));
+        Assert.Null(StartNodeId(empty.Value.State.RootActivity!));
+        Assert.True(unconnected.Succeeded, Describe(unconnected.Diagnostics));
+        Assert.Empty(Connections(unconnected.Value!.State.RootActivity!));
+        Assert.Equal("a", StartNodeId(unconnected.Value.State.RootActivity!));
+    }
+
+    [Fact]
+    public async Task Break_inside_a_flowchart_converts_and_its_outbound_connection_is_removed()
+    {
+        // US4.5 and US4.6: Break ends the flowchart in both engines; a connection after it never fires.
+        var chart = Elsa3FlowchartDiagnosticsTests.Flowchart("root",
+            Elsa3FlowchartDiagnosticsTests.Write("a"), Activity("stop", "Elsa.Break"), Elsa3FlowchartDiagnosticsTests.Write("never"));
+        chart.Connections = [Elsa3FlowchartDiagnosticsTests.Connect("a", "Done", "stop"), Elsa3FlowchartDiagnosticsTests.Connect("stop", "Done", "never")];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(chart));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal(["a:Done->stop"], Connections(result.Value!.State.RootActivity!));
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.DeadConnectionRemoved, Assert.Single(result.Diagnostics).Code);
+    }
+
+    [Fact]
+    public async Task End_in_a_plain_root_flowchart_becomes_finish()
+    {
+        // US4.1 with End: it ends the root flowchart, which is the whole workflow, so it finishes with Done.
+        var chart = Elsa3FlowchartDiagnosticsTests.Flowchart("root", Elsa3FlowchartDiagnosticsTests.Write("a"), Activity("end", "Elsa.End"));
+        chart.Connections = [Elsa3FlowchartDiagnosticsTests.Connect("a", "Done", "end")];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(chart));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var end = Node(result.Value!.State, "end");
+        Assert.Equal(Elsa3.Mapping.Resolution.Elsa3IntrinsicContracts.Finish, end.ActivityVersionId);
+        Assert.Equal("Done", Text(Input(end, "outcome")));
+    }
+
+    [Fact]
     public async Task Converting_twice_gives_identical_output()
     {
         foreach (var fixture in Converting)

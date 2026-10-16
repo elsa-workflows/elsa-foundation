@@ -81,6 +81,7 @@ internal static class Elsa3FlowchartGraphBuilder
             var connections = flowchart.Node.Connections ?? [];
             var byId = new Dictionary<string, Elsa3Activity>(StringComparer.Ordinal);
             var ambiguous = new HashSet<string>(StringComparer.Ordinal);
+            var duplicates = new HashSet<Elsa3Activity>(ReferenceEqualityComparer.Instance);
             foreach (var child in _children)
             {
                 if (!string.IsNullOrWhiteSpace(child.Id))
@@ -93,28 +94,23 @@ internal static class Elsa3FlowchartGraphBuilder
                 var connection = connections[index];
                 var sourceId = connection?.Source?.Activity;
                 var targetId = connection?.Target?.Activity;
-                // An identifier two children share cannot name either one: refuse rather than pick the first.
-                var shared = new[] { sourceId, targetId }.FirstOrDefault(id => id is not null && ambiguous.Contains(id));
-                if (shared is not null)
-                {
-                    Error(GraphConnectionInvalid, ConnectionPath(index), flowchart.Node,
-                        $"Connection {index} of flowchart '{NodeId(flowchart.Node)}' names '{shared}', which more than one activity of this flowchart uses as its id.",
-                        "Give every activity of the flowchart a unique id before converting.");
+                // A shared id is already refused where the second child registered it; never guess which child it means.
+                if (new[] { sourceId, targetId }.Any(id => id is not null && ambiguous.Contains(id)))
                     continue;
-                }
 
                 var source = sourceId is null ? null : byId.GetValueOrDefault(sourceId);
                 var target = targetId is null ? null : byId.GetValueOrDefault(targetId);
+                var port = string.IsNullOrWhiteSpace(connection?.Source?.Port) ? Done : connection!.Source.Port;
                 if (source is null || target is null)
                 {
                     var missing = source is null ? $"source '{sourceId}'" : $"target '{targetId}'";
-                    Error(GraphConnectionInvalid, ConnectionPath(index), flowchart.Node,
+                    Report(Elsa3MigrationDiagnosticSeverity.Error, GraphConnectionInvalid, ConnectionPath(index), source ?? flowchart.Node,
                         $"Connection {index} of flowchart '{NodeId(flowchart.Node)}' names {missing}, which is not an activity of this flowchart.",
-                        "Remove the connection, or connect it to an activity of the same flowchart, before converting.");
+                        "Remove the connection, or connect it to an activity of the same flowchart, before converting.",
+                        ConnectionMetadata(target is null ? targetId : NodeId(target), port));
                     continue;
                 }
 
-                var port = string.IsNullOrWhiteSpace(connection!.Source.Port) ? Done : connection.Source.Port;
                 edges.Add(new Edge(index, source, port, target));
             }
 
@@ -122,8 +118,16 @@ internal static class Elsa3FlowchartGraphBuilder
 
             void Register(string id, Elsa3Activity child)
             {
-                if (!byId.TryAdd(id, child) && !ReferenceEquals(byId[id], child))
-                    ambiguous.Add(id);
+                if (byId.TryAdd(id, child) || ReferenceEquals(byId[id], child))
+                    return;
+
+                ambiguous.Add(id);
+                // Reported once per child, even when both its Id and its NodeId collide.
+                if (!duplicates.Add(child))
+                    return;
+                Error(GraphDuplicateNodeId, plan.Find(child)!.JsonPath, child,
+                    $"'{NodeId(child)}' ({child.Type}) uses id '{id}', which activity '{NodeId(byId[id])}' of flowchart '{NodeId(flowchart.Node)}' already uses. Connections and Elsa 4 node ids need one activity per id.",
+                    "Give every activity of the flowchart a unique id before converting.");
             }
         }
 
@@ -160,7 +164,7 @@ internal static class Elsa3FlowchartGraphBuilder
             {
                 if (TerminalTypes.Contains(edge.Source.Type ?? string.Empty))
                 {
-                    Warning(DeadConnectionRemoved, EdgePath(edge), edge.Source,
+                    EdgeWarning(DeadConnectionRemoved, edge,
                         $"Connection {edge.Index} leaves '{NodeId(edge.Source)}' ({edge.Source.Type}), which ends its flowchart or workflow, so Elsa 3 never follows it; it is removed.",
                         "Remove the connection from the Elsa 3 workflow.");
                     continue;
@@ -175,7 +179,7 @@ internal static class Elsa3FlowchartGraphBuilder
                             continue; // reported once per fork
                         if (!(branches.Count == 0 ? StringComparer.Ordinal.Equals(edge.Port, Done) : branches.Contains(edge.Port, StringComparer.Ordinal)))
                         {
-                            Warning(DeadConnectionRemoved, EdgePath(edge), edge.Source,
+                            EdgeWarning(DeadConnectionRemoved, edge,
                                 $"Connection {edge.Index} leaves fork '{NodeId(edge.Source)}' on '{edge.Port}', which is not one of its branches, so Elsa 3 never follows it; it is removed.",
                                 "Remove the connection, or add the branch to the fork, in the Elsa 3 workflow.");
                             continue;
@@ -187,7 +191,7 @@ internal static class Elsa3FlowchartGraphBuilder
                     case Elsa3GraphConstructKind.Start:
                         if (!StringComparer.Ordinal.Equals(edge.Port, Done))
                         {
-                            Error(GraphOutcomeUnmapped, EdgePath(edge), edge.Source,
+                            EdgeError(GraphOutcomeUnmapped, edge,
                                 $"Connection {edge.Index} leaves '{NodeId(edge.Source)}' ({edge.Source.Type}) on '{edge.Port}'; it only completes with 'Done'.",
                                 "Connect from 'Done' before converting.");
                             continue;
@@ -242,7 +246,7 @@ internal static class Elsa3FlowchartGraphBuilder
                 {
                     if (rule.Elsa4Outcomes.Count == 0)
                     {
-                        Error(NoCounterpart, EdgePath(edge), edge.Source,
+                        EdgeError(NoCounterpart, edge,
                             $"Connection {edge.Index} leaves '{NodeId(edge.Source)}' on '{edge.Port}', which has no Elsa 4 counterpart: {rule.UnsupportedReason}",
                             "Remove the connection, or redesign this part of the workflow, before converting.");
                         continue;
@@ -261,7 +265,7 @@ internal static class Elsa3FlowchartGraphBuilder
                     continue;
                 }
 
-                Error(GraphOutcomeUnmapped, EdgePath(edge), edge.Source,
+                EdgeError(GraphOutcomeUnmapped, edge,
                     $"Connection {edge.Index} leaves '{NodeId(edge.Source)}' on '{edge.Port}', which its Elsa 4 activity does not emit (it emits {Describe(EmittedOutcomes(sourcePlan))}).",
                     "Connect from an outcome the activity has. When its outcomes come from an input (status codes, possible outcomes), list them literally.");
             }
@@ -361,7 +365,7 @@ internal static class Elsa3FlowchartGraphBuilder
                 var inbound = edges.Count(candidate => ReferenceEquals(candidate.Target, edge.Target));
                 var supported = ReferenceEquals(edge.Target, start) && Construct(edge.Target) is null && inbound == 1;
                 if (!supported)
-                    Error(GraphLoopUnsupported, EdgePath(edge), edge.Source,
+                    EdgeError(GraphLoopUnsupported, edge,
                         $"Connection {edge.Index} from '{NodeId(edge.Source)}' loops back to '{NodeId(edge.Target)}'. An Elsa 4 flowchart loops only back to its start node, and only when nothing else leads into it.",
                         "Use a While, For or ForEach activity for the loop before converting.");
             }
@@ -668,22 +672,42 @@ internal static class Elsa3FlowchartGraphBuilder
         private static string Describe(IReadOnlyList<string>? outcomes) =>
             outcomes is null ? "outcomes set by an expression" : outcomes.Count == 0 ? "nothing" : string.Join(", ", outcomes.Select(outcome => $"'{outcome}'"));
 
-        private void Error(string code, string path, Elsa3Activity node, string message, string guidance)
-        {
-            _failed = true;
+        private void Error(string code, string path, Elsa3Activity node, string message, string guidance) =>
             Report(Elsa3MigrationDiagnosticSeverity.Error, code, path, node, message, guidance);
-        }
 
         private void Warning(string code, string path, Elsa3Activity node, string message, string guidance) =>
             Report(Elsa3MigrationDiagnosticSeverity.Warning, code, path, node, message, guidance);
 
-        private void Report(Elsa3MigrationDiagnosticSeverity severity, string code, string path, Elsa3Activity node, string message, string guidance) =>
-            plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(plan, severity, code, message, guidance, path,
-                new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["ActivityNodeId"] = NodeId(node),
-                    ["Elsa3Type"] = node.Type ?? string.Empty,
-                    ["FlowchartNodeId"] = NodeId(flowchart.Node)
-                }));
+        /// <summary>A diagnostic about one connection: the source node, the connection's path, its target and port (FR-014).</summary>
+        private void EdgeError(string code, Edge edge, string message, string guidance) =>
+            Report(Elsa3MigrationDiagnosticSeverity.Error, code, EdgePath(edge), edge.Source, message, guidance, ConnectionMetadata(NodeId(edge.Target), edge.Port));
+
+        private void EdgeWarning(string code, Edge edge, string message, string guidance) =>
+            Report(Elsa3MigrationDiagnosticSeverity.Warning, code, EdgePath(edge), edge.Source, message, guidance, ConnectionMetadata(NodeId(edge.Target), edge.Port));
+
+        private static Dictionary<string, string> ConnectionMetadata(string? targetNodeId, string port) =>
+            new(StringComparer.Ordinal) { ["TargetNodeId"] = targetNodeId ?? string.Empty, ["Port"] = port };
+
+        private void Report(
+            Elsa3MigrationDiagnosticSeverity severity,
+            string code,
+            string path,
+            Elsa3Activity node,
+            string message,
+            string guidance,
+            IReadOnlyDictionary<string, string>? extra = null)
+        {
+            if (severity == Elsa3MigrationDiagnosticSeverity.Error)
+                _failed = true;
+            var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["ActivityNodeId"] = NodeId(node),
+                ["Elsa3Type"] = node.Type ?? string.Empty,
+                ["FlowchartNodeId"] = NodeId(flowchart.Node)
+            };
+            foreach (var (key, value) in extra ?? new Dictionary<string, string>())
+                metadata[key] = value;
+            plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(plan, severity, code, message, guidance, path, metadata));
+        }
     }
 }

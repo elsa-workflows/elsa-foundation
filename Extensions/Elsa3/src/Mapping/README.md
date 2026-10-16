@@ -92,7 +92,8 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     join that cancels the other branches, nor one that skips when a branch did not run.
   - A loop converts only back to the start node when nothing else leads into it; otherwise
     `ELS3-ACTIVITY-GRAPH-LOOP-UNSUPPORTED` (use a While, For or ForEach).
-  - Other refusals: `ELS3-ACTIVITY-GRAPH-CONNECTION-INVALID` (unknown node, or connections on a non-flowchart),
+  - Other refusals: `ELS3-ACTIVITY-GRAPH-DUPLICATE-NODE-ID` (two activities of a flowchart share an id),
+    `ELS3-ACTIVITY-GRAPH-CONNECTION-INVALID` (unknown node, or connections on a non-flowchart),
     `ELS3-ACTIVITY-GRAPH-OUTCOME-UNMAPPED` (a port the Elsa 4 activity does not emit), `ELS3-ACTIVITY-GRAPH-START-AMBIGUOUS`
     (a `Start` or fork at the start that leads to several nodes).
   - A connection Elsa 3 never follows (leaving `Complete`, `End` or `Break`, or a fork port outside its branches) is

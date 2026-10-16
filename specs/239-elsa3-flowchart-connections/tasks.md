@@ -111,7 +111,7 @@ converts with 0 errors; every node keeps its id; connections carry Elsa 4 ports;
 - [X] T013 [US1] Verify `M/Conversion/Elsa3NativeStructureBuilder.cs` writes the Flowchart payload (slot
   `activities`, `variables`, then structure fields) with web JSON naming; adjust only if the payload does not
   deserialize as `FlowchartAuthoredStructure`.
-- [X] T014 [P] [US1] Fixtures in `FX/`: `decision-tree.json`, `if-switch-done.json` (Elsa 3 If and Switch with *(Done; `flowchart-variables` and `duplicate-connections` are covered inline by the conversion and diagnostics tests.)*
+- [X] T014 [P] [US1] Fixtures in `FX/`: `decision-tree.json`, `if-switch-done.json` (Elsa 3 If and Switch with *(Done; flowchart variables and duplicate connections are inline tests in `Elsa3FlowchartConversionTests`, added after Code Review round 1 found them unasserted.)*
   embedded branches connected on `Done`), `nested-single-child.json` (flowcharts inside an If branch, a For body and a
   Switch case, one child each, no connections), `flowchart-variables.json`, `duplicate-connections.json`. Shapes
   only; names and values invented (no JTest content).

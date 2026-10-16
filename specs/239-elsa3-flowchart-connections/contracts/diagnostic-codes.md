@@ -1,13 +1,15 @@
 # Contract: diagnostic codes (spec 239)
 
 New public constants in `Elsa3.Models.Elsa3ActivityDiagnosticCodes`, under spec 236's rules: a code is never renamed
-or reused, and spec 235 skips and reports by code. Every diagnostic carries the fields of spec 236's contract.
+or reused, and spec 235 skips and reports by code. Every diagnostic carries the fields of spec 236's contract. A connection diagnostic names the connection's source node
+(`ActivityNodeId`; the flowchart when the source is unknown) and carries `TargetNodeId`, `Port` and `FlowchartNodeId`.
 
 ## Errors: the item is unconvertible
 
 | Constant | Code | Raised when | Guidance (gist) | FR |
 |---|---|---|---|---|
-| `GraphConnectionInvalid` | `ELS3-ACTIVITY-GRAPH-CONNECTION-INVALID` | a connection names a node that is not a child of its flowchart, or an id two children share; `connections` on a container that is not a flowchart | Remove or reconnect the connection in Elsa 3 | FR-012 |
+| `GraphConnectionInvalid` | `ELS3-ACTIVITY-GRAPH-CONNECTION-INVALID` | a connection names a node that is not a child of its flowchart; `connections` on a container that is not a flowchart | Remove or reconnect the connection in Elsa 3 | FR-012 |
+| `GraphDuplicateNodeId` | `ELS3-ACTIVITY-GRAPH-DUPLICATE-NODE-ID` | two activities of one flowchart share an id (`id` or `nodeId`), whether or not a connection names it (Code Review round 1) | Give every activity of the flowchart a unique id | FR-012 |
 | `GraphOutcomeUnmapped` | `ELS3-ACTIVITY-GRAPH-OUTCOME-UNMAPPED` | a connection's port is not mapped and the Elsa 4 activity does not emit it (including dynamic outcomes bound by expression) | Connect from an outcome the activity has, or make the outcome list literal | FR-003 |
 | `GraphJoinUnsupported` | `ELS3-ACTIVITY-GRAPH-JOIN-UNSUPPORTED` | `WaitAny` join with concurrent inbound paths; `WaitAll` join with an inbound path that may not run; join mode by expression | Use `WaitAll`/`WaitAllActive`, remove the parallel branches, or make every branch unconditional | FR-006 |
 | `GraphLoopUnsupported` | `ELS3-ACTIVITY-GRAPH-LOOP-UNSUPPORTED` | a back connection to anything but a start node with no other inbound connection; any back connection into a FlowFork or FlowJoin | Use a While, For or ForEach activity for the loop | FR-009 |

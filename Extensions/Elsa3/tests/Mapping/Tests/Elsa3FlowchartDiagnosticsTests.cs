@@ -18,7 +18,7 @@ public sealed class Elsa3FlowchartDiagnosticsTests
         { "fork-into-wait-any", Elsa3ActivityDiagnosticCodes.GraphJoinUnsupported, "$.root.activities[5]", "join" },
         { "conditional-wait-all", Elsa3ActivityDiagnosticCodes.GraphJoinUnsupported, "$.root.activities[5]", "join" },
         { "join-mode-expression", Elsa3ActivityDiagnosticCodes.GraphJoinUnsupported, "$.root.activities[3]", "join" },
-        { "unknown-target", Elsa3ActivityDiagnosticCodes.GraphConnectionInvalid, "$.root.connections[0]", "root" },
+        { "unknown-target", Elsa3ActivityDiagnosticCodes.GraphConnectionInvalid, "$.root.connections[0]", "a" },
         { "unsupported-port", Elsa3ActivityDiagnosticCodes.NoCounterpart, "$.root.connections[0]", "endpoint" },
         { "unmapped-port", Elsa3ActivityDiagnosticCodes.GraphOutcomeUnmapped, "$.root.connections[0]", "a" },
         { "expression-status-codes", Elsa3ActivityDiagnosticCodes.GraphOutcomeUnmapped, "$.root.connections[0]", "call" },
@@ -27,7 +27,10 @@ public sealed class Elsa3FlowchartDiagnosticsTests
         { "start-into-two", Elsa3ActivityDiagnosticCodes.GraphStartAmbiguous, "$.root.activities[0]", "start" },
         { "connections-on-sequence", Elsa3ActivityDiagnosticCodes.GraphConnectionInvalid, "$.root.connections", "root" },
         { "start-trigger-with-inbound", Elsa3ActivityDiagnosticCodes.GraphStartTriggerMisplaced, "$.root.activities[2]", "second" },
-        { "ambiguous-child-id", Elsa3ActivityDiagnosticCodes.GraphConnectionInvalid, "$.root.connections[0]", "root" },
+        { "ambiguous-child-id", Elsa3ActivityDiagnosticCodes.GraphDuplicateNodeId, "$.root.activities[1]", "b" },
+        { "duplicate-id-unconnected", Elsa3ActivityDiagnosticCodes.GraphDuplicateNodeId, "$.root.activities[1]", "dup" },
+        { "fork-at-start", Elsa3ActivityDiagnosticCodes.GraphStartAmbiguous, "$.root.activities[0]", "fork" },
+        { "loop-into-fork", Elsa3ActivityDiagnosticCodes.GraphLoopUnsupported, "$.root.connections[2]", "x" },
     };
 
     [Theory]
@@ -42,6 +45,18 @@ public sealed class Elsa3FlowchartDiagnosticsTests
         Assert.Equal(path, error.Path);
         Assert.Equal(nodeId, error.Metadata["ActivityNodeId"]);
         Assert.False(string.IsNullOrWhiteSpace(error.Guidance));
+    }
+
+    [Fact]
+    public async Task A_connection_diagnostic_names_its_source_target_and_port()
+    {
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), Definition("unmapped-port"));
+
+        var error = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+        Assert.Equal("a", error.Metadata["ActivityNodeId"]);
+        Assert.Equal("b", error.Metadata["TargetNodeId"]);
+        Assert.Equal("Oops", error.Metadata["Port"]);
+        Assert.Equal("root", error.Metadata["FlowchartNodeId"]);
     }
 
     [Fact]
@@ -171,6 +186,18 @@ public sealed class Elsa3FlowchartDiagnosticsTests
                 chart.Connections = [Connect("a", "Done", "c")];
                 break;
             }
+            case "duplicate-id-unconnected":
+                // Two activities with one id and no connection naming it would still give two Elsa 4 nodes one id.
+                chart = Flowchart("root", Write("dup"), Write("dup"));
+                break;
+            case "fork-at-start":
+                chart = Flowchart("root", Activity("fork", "Elsa.FlowFork", ("branches", Expression("Object", "[\"l\",\"r\"]", "String[]"))), Write("left"), Write("right"));
+                chart.Connections = [Connect("fork", "l", "left"), Connect("fork", "r", "right")];
+                break;
+            case "loop-into-fork":
+                chart = Flowchart("root", Write("a"), Activity("fork", "Elsa.FlowFork", ("branches", Expression("Object", "[\"b\"]", "String[]"))), Write("x"));
+                chart.Connections = [Connect("a", "Done", "fork"), Connect("fork", "b", "x"), Connect("x", "Done", "fork")];
+                break;
             case "start-trigger-with-inbound":
                 // Spec 238 D8: a run started by 'second' cannot begin there, because 'a' leads into it.
                 chart = Flowchart("root", StartTrigger("first"), Write("a"), StartTrigger("second"));

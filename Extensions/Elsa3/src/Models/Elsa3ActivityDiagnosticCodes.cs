@@ -49,6 +49,9 @@ public static class Elsa3ActivityDiagnosticCodes
     /// </summary>
     public const string GraphConversionPending = "ELS3-ACTIVITY-GRAPH-CONVERSION-PENDING";
 
+    /// <summary>Two activities of one flowchart share an id, so connections and Elsa 4 node ids cannot tell them apart.</summary>
+    public const string GraphDuplicateNodeId = "ELS3-ACTIVITY-GRAPH-DUPLICATE-NODE-ID";
+
     /// <summary>A connection names a node that is not a child of its flowchart, or a container that is not a flowchart has connections.</summary>
     public const string GraphConnectionInvalid = "ELS3-ACTIVITY-GRAPH-CONNECTION-INVALID";
 
