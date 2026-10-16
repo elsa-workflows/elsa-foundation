@@ -6,6 +6,8 @@
 
 Keep `Async = 0` stable. Change the activity and publication defaults to Sync, but retain Async as the reader's legacy metadata fallback. Stamp the effective response mode in every new binding. Provide dropdown labels/options/default through existing activity input metadata. Add additive, non-sensitive accepted-response diagnostics through the HTTP transport.
 
+Declare HttpEndpoint activity version `1.1.0` because its input default changes the hashed catalog contract. Preserve older catalog rows and compiled artifacts. Recapture the External replay baseline through the normal publisher with the new default contract, retain the historical fixture/import proof, and keep the strict behavioral comparison intact.
+
 Studio renders the mode, explains the Async/response combination, and exposes an explicit corrective action. A catalog-driven starter uses existing Flowchart/HttpEndpoint/WriteHttpResponse contracts. A small request dialog uses the canonical backend client and displays the actual HTTP response; it never substitutes transient workflow test-run behavior for a live HTTP exchange.
 
 ## Constitution review

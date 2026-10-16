@@ -17,7 +17,7 @@ The accepted response retains its `started` and `resumed` execution identifiers 
 
 | Reason | Meaning |
 |---|---|
-| `background-accepted` | The endpoint explicitly accepts work in the background. |
+| `background-accepted` | The endpoint accepts work in the background, including legacy bindings without response-mode metadata. |
 | `workflow-response-not-produced` | Sync dispatch was accepted, but no workflow-authored response was produced during this exchange. The workflow may have suspended, reached no response activity, or dispatched elsewhere. Inspect the run to determine which occurred. |
 
 A 202 confirms acceptance, not completion. Use the returned execution identifiers to inspect the run and its activities. Sync requests may wait for execution; a per-endpoint request timeout bounds that wait when configured.
@@ -25,5 +25,7 @@ A 202 confirms acceptance, not completion. Use the returned execution identifier
 ## Existing workflows
 
 Already-published trigger bindings and waiting bookmarks without response-mode metadata continue to mean Async. The enum's numeric values are unchanged. Every new publication/bookmark writes its selected mode explicitly.
+
+HttpEndpoint declares activity version `1.1.0` for the Sync input-default contract. Catalog reconciliation adds this version rather than replacing the older version's hashed inputs. Existing compiled artifacts keep their pinned contracts.
 
 Republishing an older draft that never specified a mode adopts the new Sync default. To retain background acceptance after republishing, explicitly select **Accept and run in background** first. Callers that consume the 202 execution identifiers should make that choice explicit.

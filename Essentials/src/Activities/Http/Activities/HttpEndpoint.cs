@@ -21,6 +21,7 @@ namespace Elsa.Activities.Http.Activities;
 [RefusesSecretBinding(nameof(RequestSizeLimit), SecretBindingRefusalReason.FixedAtPublish)]
 [RefusesSecretBinding(nameof(ResponseMode), SecretBindingRefusalReason.FixedAtPublish)]
 [TriggerActivity]
+[Version("1.1.0")]
 public sealed class HttpEndpoint :
     StatefulTriggerActivity<HttpEndpointResult, HttpEndpointState, HttpRequestModel>
 {

@@ -1070,8 +1070,13 @@ public sealed class HttpEndpointMiddlewareTests
         // Persisted pre-change trigger metadata has no responseMode key. It remains Async for compatibility: no
         // ambient services on the dispatch and the sink is never populated even when one is registered on the scope.
         var (services, sink) = SyncServices();
-        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
-        var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST")); // Async default
+        var router = RecordingStimulusRouter.WithOutcomes(
+            starts: [StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-started-1")],
+            resumes: [new StimulusResumeOutcome("wf-resumed-1", BookmarkResumeDispatchStatus.Dispatched)]);
+        // Omitting the key models persisted legacy metadata.
+        var binding = Binding("artifact-1", "orders/webhook", "POST");
+        Assert.DoesNotContain(Elsa.Http.Core.HttpEndpointRouting.ResponseModeMetadataKey, binding.Metadata.Keys);
+        var store = await StoreWith(binding);
         var middleware = Middleware(router, store, "orders/webhook");
         var context = NewContext("/workflows/http/orders/webhook", "POST", body: "{}", services: services);
 
@@ -1082,11 +1087,9 @@ public sealed class HttpEndpointMiddlewareTests
         Assert.Null(sink.HttpContext);
         Assert.False(sink.ResponseWritten);
         Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
-        var payload = JsonDocument.Parse(await ReadResponse(context)).RootElement;
-        var response = payload.GetProperty("response");
-        Assert.Equal("async", response.GetProperty("mode").GetString());
-        Assert.Equal("background-accepted", response.GetProperty("reason").GetString());
-        Assert.Equal("The endpoint accepts work in the background and returns 202 before the workflow responds.", response.GetProperty("message").GetString());
+        Assert.Equal(
+            """{"started":["wf-started-1"],"resumed":["wf-resumed-1"],"response":{"mode":"async","reason":"background-accepted","message":"The endpoint accepts work in the background and returns 202 before the workflow responds."}}""",
+            await ReadResponse(context));
     }
 
     [Fact]

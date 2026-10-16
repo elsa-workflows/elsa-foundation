@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, LoaderCircle, Send, X } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getExecutable, getExecutableInputSources } from "../api/runtime";
-import type { WorkflowExecutableDetails } from "../workflowTypes";
 import {
   defaultHttpEndpointBasePath,
   describeHttpEndpointAcceptedResponse,

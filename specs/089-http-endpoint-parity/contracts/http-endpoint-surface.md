@@ -32,7 +32,7 @@ The externally observable HTTP contract of workflow endpoints, per sub-unit.
 | Authorize / Policy | inputs | C — live | non-identity binding metadata; literal-at-publish; fail-closed enforcement |
 | RequestTimeout / RequestSizeLimit | inputs | C — live | non-identity binding metadata; timeout bounds dispatch (408), size limit overrides the global cap (413) |
 | ParsedContent | output | C — live | content-type-parsed body as wire-safe JSON; null for empty/unknown/non-HTTP starts |
-| ResponseMode | input (literal, Sync/Async) | E — live | default **Async** (preserves the 202 baseline bit-for-bit); non-identity binding/bookmark metadata (`http:responseMode`, omit-when-Async), never enters the stimulus hash; literal-at-publish (member name or defined numeric), non-literal/undefined fails the publish |
+| ResponseMode | input (literal, Sync/Async) | E — live | default **Sync** for new publication ([spec 240](../../240-http-usability/spec.md)); every new binding/bookmark explicitly stores `http:responseMode`, which is non-identity metadata and never enters the stimulus hash. Missing persisted metadata retains the legacy **Async** meaning. Literal-at-publish (member name or defined numeric); non-literal/undefined fails the publish |
 | Result: HttpRequestModel | output | A — live | live request from stimulus input |
 | RouteData | output | B — live | extracted template parameters |
 
