@@ -14,6 +14,7 @@
   at the trigger that fired, and makes the design-time value-flow check treat every direct child with no inbound
   connection as an entry point.
 
+**Dependency boundary (halt points). Both cleared 2026-10-16:** spec 238 merged as #2856 (`6b3ad8c3d`); this branch is rebased onto it and the multi-trigger validation test passes.
 **Dependency boundary (halt points).** Spec, plan, tasks and the converter itself do not depend on spec 238: the
 converted output is the same with or without it. Exactly two things do, and work halts there until 238 is on `main`:
 - **H-1**: the value-flow validation proof of SC-004 for the multi-trigger fixtures (User Story 3). Without 238's
@@ -351,7 +352,7 @@ the node or connection and say what to change. Nothing throws; nothing is droppe
   expected location; 0 exceptions escape either conversion path.
 - **SC-004**: Converted fixtures pass Elsa 4's flowchart structure handling and design-time value-flow validation
   (start node set, no unknown endpoints, no duplicate connection hit, no rejected loop shape). The multi-trigger
-  fixtures' value-flow validation waits for spec 238 (H-1).
+  fixtures' value-flow validation needed spec 238 (H-1, cleared: it passes on main with #2856).
 - **SC-005**: Converting the same input twice yields byte-identical output.
 - **SC-006**: Run against the 36 JTest definitions (outside the repo, recorded in the PR), no definition reports
   `GRAPH-CONVERSION-PENDING`; every refusal is one of the documented codes. Expected graph refusals:
