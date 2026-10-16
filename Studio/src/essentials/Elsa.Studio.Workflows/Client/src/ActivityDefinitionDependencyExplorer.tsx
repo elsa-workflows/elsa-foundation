@@ -9,6 +9,7 @@ import type {
 } from "./activityDefinitionTypes";
 import { activityDesignKeys, useActivityDefinitionVersions } from "./api/activityDesign";
 import { getActivityDefinitionDependencyPage } from "./api/activityDefinitionDependencies";
+import { StudioLink } from "./StudioLink";
 import dependencyExplorerStylesUrl from "./activityDefinitionDependencyExplorer.css?url&no-inline";
 
 const dependencyPageSize = 100;
@@ -223,7 +224,7 @@ function DependencyRow({
     <td data-label="Occurrence"><strong>{item.occurrence.occurrenceId}</strong><span>{item.occurrence.nodeOrigin.length} exact origin segments</span></td>
     <td data-label="Dependency"><strong>{referenceLabel(item.dependency)}</strong><code>{referenceIdentity(item.dependency)}</code></td>
     <td data-label="Evidence"><strong>{item.isDirect ? "Direct" : `Transitive depth ${item.depth}`}</strong><span>{item.owner.kind}</span></td>
-    <td data-label="Path"><button type="button" aria-pressed={selected} onClick={onSelect}>Review exact path</button>{sourceHref ? <a href={sourceHref}>Open source context</a> : <span>Source navigation unavailable</span>}</td>
+    <td data-label="Path"><button type="button" aria-pressed={selected} onClick={onSelect}>Review exact path</button>{sourceHref ? <StudioLink href={sourceHref}>Open source context</StudioLink> : <span>Source navigation unavailable</span>}</td>
   </tr>;
 }
 
