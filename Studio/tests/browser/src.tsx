@@ -994,6 +994,7 @@ function FolderRestructureFixture() {
           ];
           const query = new URL(url, window.location.origin).searchParams;
           const folderId = query.get("folderId");
+          const searchTerm = (query.get("searchTerm") ?? "").trim().toLowerCase();
           const items = folderId === "folder-operations"
             ? [definition("definition-operations", "Operations workflow", folderId)]
             : folderId === "folder-platform"
@@ -1006,7 +1007,10 @@ function FolderRestructureFixture() {
                     { id: "folder-platform", name: "Platform" },
                     { id: "folder-operations", name: "Operations" }
                   ])];
-          return { items, nextContinuationToken: null };
+          const filtered = searchTerm
+            ? items.filter(item => item.name.toLowerCase().includes(searchTerm))
+            : items;
+          return { items: filtered, nextContinuationToken: null };
         }
         throw new Error(`Unexpected browser fixture request: ${url}`);
       },
