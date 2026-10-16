@@ -141,6 +141,115 @@ public sealed class ValueFlowValidatorTests
         Assert.Equal("parallel/structure/branches/same", error.Path);
     }
 
+    // Spec 238: a Flowchart run begins at the trigger that fired or at the start node, so every child without an
+    // inbound connection is an entry point alongside the start node.
+
+    [Fact]
+    public async Task Trigger_branch_consumer_reading_its_own_trigger_result_is_accepted()
+    {
+        var flowchart = Flowchart(
+            "flow",
+            [Activity("start"), Activity("start-next"), Activity("trigger"), Activity("consumer", ResultInput("value", "trigger", "flow"))],
+            [("start-path", "start", "start-next"), ("trigger-path", "trigger", "consumer")],
+            "start");
+
+        var errors = await Validate(Sequence("root", flowchart));
+
+        Assert.DoesNotContain(errors, item => item.Type.StartsWith("ValueFlow/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Trigger_branch_consumer_also_reached_from_the_start_node_is_rejected()
+    {
+        var flowchart = Flowchart(
+            "flow",
+            [Activity("start"), Activity("trigger"), Activity("consumer", ResultInput("value", "trigger", "flow"))],
+            [("start-path", "start", "consumer"), ("trigger-path", "trigger", "consumer")],
+            "start");
+
+        var errors = await Validate(Sequence("root", flowchart));
+
+        var error = Assert.Single(errors, item => item.Type == "ValueFlow/UnavailableProducer");
+        Assert.Equal("consumer/inputs/value", error.Path);
+    }
+
+    [Fact]
+    public async Task Writes_on_different_trigger_branches_are_not_concurrent()
+    {
+        var flowchart = Flowchart(
+            "flow",
+            [Activity("start"), Set("set-start", "counter", "$workflow"), Activity("trigger"), Set("set-trigger", "counter", "$workflow")],
+            [("start-path", "start", "set-start"), ("trigger-path", "trigger", "set-trigger")],
+            "start");
+
+        var errors = await Validate(Sequence("root", flowchart));
+
+        Assert.DoesNotContain(errors, item => item.Type == "ValueFlow/ConcurrentWrite");
+    }
+
+    [Fact]
+    public async Task Writes_on_a_fork_from_one_entry_are_still_concurrent()
+    {
+        var flowchart = Flowchart(
+            "flow",
+            [Activity("start"), Set("set-left", "counter", "$workflow"), Set("set-right", "counter", "$workflow")],
+            [("left", "start", "set-left"), ("right", "start", "set-right")],
+            "start");
+
+        var errors = await Validate(Sequence("root", flowchart));
+
+        var error = Assert.Single(errors, item => item.Type == "ValueFlow/ConcurrentWrite");
+        Assert.Equal("$workflow/variables/counter", error.Path);
+    }
+
+    [Fact]
+    public async Task Mid_flow_node_with_an_inbound_connection_is_not_an_entry_point()
+    {
+        var flowchart = Flowchart(
+            "flow",
+            [Activity("start"), Activity("producer"), Activity("mid-flow-trigger"), Activity("consumer", ResultInput("value", "producer", "flow"))],
+            [("produce", "start", "producer"), ("wait", "producer", "mid-flow-trigger"), ("resume", "mid-flow-trigger", "consumer")],
+            "start");
+
+        var errors = await Validate(Sequence("root", flowchart));
+
+        Assert.DoesNotContain(errors, item => item.Type.StartsWith("ValueFlow/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Cyclic_back_edge_lookup_on_a_trigger_branch_is_rejected()
+    {
+        var flowchart = Flowchart(
+            "flow",
+            [Activity("start"), Activity("trigger"), Activity("first", ResultInput("previous", "second", "flow")), Activity("second")],
+            [("enter", "trigger", "first"), ("forward", "first", "second"), ("back", "second", "first")],
+            "start");
+
+        var errors = await Validate(Sequence("root", flowchart));
+
+        var error = Assert.Single(errors, item => item.Type == "ValueFlow/CyclicBackEdge");
+        Assert.Equal("first/inputs/previous", error.Path);
+    }
+
+    // Single-entry regressions (FR-012). Rejected dominance and the single-entry cyclic back-edge are covered by
+    // Required_result_that_does_not_dominate_a_flowchart_consumer_is_rejected and
+    // Result_lookup_over_a_cyclic_back_edge_is_rejected; the single-entry fork by
+    // Writes_on_a_fork_from_one_entry_are_still_concurrent.
+
+    [Fact]
+    public async Task Required_result_that_dominates_a_flowchart_consumer_is_accepted()
+    {
+        var flowchart = Flowchart(
+            "flow",
+            [Activity("start"), Activity("producer"), Activity("consumer", ResultInput("value", "producer", "flow"))],
+            [("produce", "start", "producer"), ("consume", "producer", "consumer")],
+            "start");
+
+        var errors = await Validate(Sequence("root", flowchart));
+
+        Assert.DoesNotContain(errors, item => item.Type.StartsWith("ValueFlow/", StringComparison.Ordinal));
+    }
+
     private static async Task<IReadOnlyCollection<Elsa.Workflows.Design.Validations.Core.Models.ValidationError>> Validate(ActivityNode root)
     {
         var validator = new ValueFlowValidator(StructureService());

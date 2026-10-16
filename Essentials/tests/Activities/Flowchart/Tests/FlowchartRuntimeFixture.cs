@@ -78,6 +78,10 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
         await _harness.RunAsync(executable);
     }
 
+    /// <summary>Runs as a trigger-started run whose matched trigger is <paramref name="triggerNodeId"/>.</summary>
+    public Task<WorkflowExecutionRun> ExecuteAsync(WorkflowExecutable executable, string triggerNodeId) =>
+        _harness.RunAsync(executable, JsonSerializer.SerializeToElement(new { }), triggerNodeId);
+
     public async Task<FlowchartExecutionState> GetFlowchartStateAsync() =>
         JsonSerializer.Deserialize<FlowchartExecutionState>(await GetRawFlowchartStateAsync(), new JsonSerializerOptions(JsonSerializerDefaults.Web))
         ?? throw new InvalidOperationException("Flowchart execution state resolved to null.");

@@ -1,5 +1,5 @@
 import type { DraftValidationError, ValidationError, WorkflowDefinitionState, ActivityNode } from "./workflowTypes";
-import { findMisplacedStartTriggers, flowchartStructureKind } from "./flowchartStartNode";
+import { canStartWorkflow, findMisplacedStartTriggers, flowchartStructureKind } from "./flowchartStartNode";
 import {
   STRUCTURAL_DANGLING_TYPE,
   STRUCTURAL_NO_START_TYPE,
@@ -36,7 +36,8 @@ export function fromDraftValidationError(error: DraftValidationError): Validatio
 
 /**
  * Designer-side structural validation for flowcharts. Flags activities with no incoming or outgoing
- * connection (dangling), and, when a start node is set, activities unreachable from it. Sequences
+ * connection (dangling), and, when a start node is set, activities unreachable from it or from any start
+ * trigger that nothing connects into. Sequences
  * auto-append, so they carry no structural risk here. Returns an empty list for non-flowchart roots.
  *
  * This closes the gap where palette-clicked flowchart nodes land unconnected and no surface flagged it.
@@ -73,7 +74,7 @@ function flowchartStructuralErrors(owner: ActivityNode, labels: ValidationActivi
   for (const trigger of findMisplacedStartTriggers(owner)) {
     errors.push({
       type: STRUCTURAL_START_TRIGGER_TYPE,
-      message: `${name(trigger)} can start a workflow, but it is not the start node and nothing connects into it, so it never runs.`,
+      message: `${name(trigger)} can start a workflow, but something connects into it and it is not the start node, so publishing refuses it. Make it the start node, remove its incoming connection, or turn off "Can start workflow" to make it a mid-flow wait.`,
       path: trigger.nodeId
     });
   }
@@ -87,11 +88,16 @@ function flowchartStructuralErrors(owner: ActivityNode, labels: ValidationActivi
     }
   }
 
-  // Reachability from the start node: nodes that have connections but can't be reached from start.
+  // Reachability from every entry: nodes that have connections but can't be reached. A run begins at the
+  // start node, or at a start trigger that nothing connects into (spec 238), so each of those is a root.
   const startNodeId = typeof payload.startNodeId === "string" ? payload.startNodeId : null;
   if (startNodeId && activities.some(activity => activity.nodeId === startNodeId)) {
+    const targets = new Set([...outgoing.values()].flatMap(next => [...next]));
+    const triggerEntries = activities
+      .filter(activity => canStartWorkflow(activity) && !targets.has(activity.nodeId))
+      .map(activity => activity.nodeId);
     const reachable = new Set<string>();
-    const stack = [startNodeId];
+    const stack = [startNodeId, ...triggerEntries];
     while (stack.length) {
       const current = stack.pop()!;
       if (reachable.has(current)) continue;
@@ -102,7 +108,7 @@ function flowchartStructuralErrors(owner: ActivityNode, labels: ValidationActivi
       if (connected.has(activity.nodeId) && !reachable.has(activity.nodeId)) {
         errors.push({
           type: STRUCTURAL_NO_START_TYPE,
-          message: `${name(activity)} cannot be reached from the start node.`,
+          message: `${name(activity)} cannot be reached from the start node or any start trigger.`,
           path: activity.nodeId
         });
       }
