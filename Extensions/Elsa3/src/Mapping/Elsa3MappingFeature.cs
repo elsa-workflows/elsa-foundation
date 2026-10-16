@@ -28,7 +28,8 @@ public class Elsa3MappingFeature : IShellFeature
     {
         // IElsa3ActivityMap, IElsa3DefinitionConverter and IElsa3NodeConverter are replacement contracts (§2.6.2): the
         // defaults are registered with TryAdd, so a host's own registration wins, and composing more than one fails
-        // shell activation, as does a host replacing only one of the two converters.
+        // shell activation. So does a host replacing only one of the two converters, when the registrations show it; a
+        // definition-only converter registered through a factory fails when the node converter is resolved instead.
         Elsa3MappingCompositionCheck.Register(services);
 
         // The built-in map is a static table: one per application (§2.5.1). Resolution caches per conversion scope.

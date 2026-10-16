@@ -17,11 +17,15 @@ host replaces one by registering its own **before** the feature, or with `servic
 registration of any of them fails shell activation with `MultipleElsa3MappingRegistrationsException`, which names every
 registration. The default `IElsa3NodeConverter` is whichever `IElsa3DefinitionConverter` is composed, so the two follow
 one policy. A host that replaces only one of the two converters fails shell activation with
-`PartialElsa3ConverterReplacementException`:
+`PartialElsa3ConverterReplacementException` whenever the registrations show it, in two cases:
 
 - a host `IElsa3NodeConverter` beside the default `IElsa3DefinitionConverter`;
 - a host `IElsa3DefinitionConverter` whose type does not implement `IElsa3NodeConverter`, beside the default node
-  converter. A factory registration hides its type, so that case is reported when a node converter is first resolved.
+  converter.
+
+A host definition converter registered through a factory hides its type, so the check cannot tell whether it converts
+nodes. It passes activation, and if it does not implement `IElsa3NodeConverter`, resolving the default node converter
+throws `InvalidOperationException`.
 
 Replace both: implement both contracts on one class, or register a node converter alongside the definition converter.
 

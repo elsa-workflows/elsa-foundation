@@ -80,7 +80,9 @@ public abstract class Elsa3NodeConversionContext   // each node converter derive
 
 A host can replace the node converter: its `PrepareAsync` returns its own context, and a converter's
 `ConvertNodeAsync` accepts only the contexts it created (the default throws `ArgumentException` otherwise). Replacing
-only one of the two converters fails shell activation with `PartialElsa3ConverterReplacementException` (#2824).
+only one of the two converters fails shell activation with `PartialElsa3ConverterReplacementException` when the
+registrations show it (#2824). The exception: a definition converter registered through a factory hides its type, so a
+definition-only one passes activation and fails only when the default node converter is resolved.
 
 Both converters share one preparation step, so an Elsa 3 expression is lowered or refused the same way on both
 paths (plan D-18).
