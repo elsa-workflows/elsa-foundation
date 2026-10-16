@@ -5,13 +5,21 @@ const focusableSelector = [
   "input:not(:disabled)",
   "textarea:not(:disabled)",
   "select:not(:disabled)",
+  "summary",
   "[href]",
   "[tabindex]:not([tabindex='-1'])"
 ].join(",");
 
 function getFocusableElements(dialog: HTMLElement | null) {
   return [...(dialog?.querySelectorAll<HTMLElement>(focusableSelector) ?? [])]
-    .filter(element => !element.closest("[hidden], [aria-hidden='true']"));
+    .filter(element => {
+      if (element.closest("[hidden], [aria-hidden='true']")) return false;
+      for (let ancestor = element.parentElement; ancestor && ancestor !== dialog; ancestor = ancestor.parentElement) {
+        if (ancestor.tagName === "DETAILS" && !ancestor.hasAttribute("open")
+          && !ancestor.querySelector(":scope > summary")?.contains(element)) return false;
+      }
+      return true;
+    });
 }
 
 export function useDialogFocus(
