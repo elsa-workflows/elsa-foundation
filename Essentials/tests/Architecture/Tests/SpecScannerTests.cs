@@ -32,6 +32,28 @@ public sealed class SpecScannerTests : IDisposable
         Assert.Equal(expected, spec.Notes);
     }
 
+    [Theory]
+    [InlineData("# Feature Specification: Speckit title\n# 108 — Other title", "Speckit title")]
+    [InlineData("# Plain first heading\n# Feature Specification: Preferred title\r\n", "Preferred title")]
+    [InlineData("# Runtime API Agent Dispatch", "Runtime API Agent Dispatch")]
+    [InlineData("# 108 — BPMN Container Activity (Phase 1 slice)", "BPMN Container Activity (Phase 1 slice)")]
+    [InlineData("# 136 - BPMN collaboration import", "BPMN collaboration import")]
+    [InlineData("# 112\t—\t Child cancellation  \r\n", "Child cancellation")]
+    [InlineData("## Not a title\n# First title\n# Second title", "First title")]
+    [InlineData("# Spec 131: Coalesced read memo", "Spec 131: Coalesced read memo")]
+    [InlineData("# Phase 2 — Catch events", "Phase 2 — Catch events")]
+    [InlineData("# 2026-10-16 Roadmap", "2026-10-16 Roadmap")]
+    [InlineData("# 2026 roadmap", "2026 roadmap")]
+    [InlineData("## No H1 heading", "001-fixture")]
+    [InlineData("# \r\n", "001-fixture")]
+    [InlineData("# 001 — ", "001-fixture")]
+    public void Title_prefers_Speckit_then_plain_H1_then_folder_id(string text, string expected)
+    {
+        var spec = ReadSpec(text);
+
+        Assert.Equal(expected, spec.Title);
+    }
+
     [Fact]
     public void Explicit_notes_preserve_the_other_spec_facts()
     {

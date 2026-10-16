@@ -20,6 +20,11 @@ Maps are navigation and generated-fact surfaces. They should be cheap to refresh
 
 ## Spec status metadata
 
+The Title column prefers the `# Feature Specification: <title>` heading. Otherwise, it uses the
+first `# ` heading and removes a leading numeric prefix separated by a spaced em dash or hyphen
+(for example, `# 108 — BPMN Container Activity`). If no usable heading is present, it uses the
+spec folder id. Speckit titles retain their existing formatting.
+
 The spec-status map reads Notes only from an optional, single-line `**Notes**:` entry in `spec.md`,
 alongside metadata such as `**Status**:`. The first explicit Notes entry supplies its trimmed value;
 if it is absent or blank, the map displays `-`. Ordinary headings and prose, including an
