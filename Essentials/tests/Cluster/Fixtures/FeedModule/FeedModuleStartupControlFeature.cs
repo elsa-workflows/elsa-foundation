@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using CShells.AspNetCore.Features;
 using CShells.Features;
 using CShells.Lifecycle;
@@ -59,7 +60,7 @@ public sealed class FeedModuleStartupControlFeature : IWebShellFeature
             });
 
             control.MarkEntered(operationId, generation);
-            await control.WaitForReleaseAsync(operationId, context.RequestAborted).ConfigureAwait(false);
+            await control.WaitForReleaseAsync(operationId, generation, context.RequestAborted).ConfigureAwait(false);
             return Results.Ok(new { generation });
         });
     }
@@ -93,8 +94,12 @@ public sealed class FeedModuleStartupControl
         Console.WriteLine($"{GenerationMarker}|{operationId}|entered|{generation}");
     }
 
-    public Task WaitForReleaseAsync(string operationId, CancellationToken cancellationToken) =>
-        WaitForFileAsync(MarkerPath(operationId, "release"), GenerationHoldTimeout, cancellationToken);
+    public async Task WaitForReleaseAsync(string operationId, int generation, CancellationToken cancellationToken)
+    {
+        var startedAt = Stopwatch.GetTimestamp();
+        await WaitForFileAsync(MarkerPath(operationId, "release"), GenerationHoldTimeout, cancellationToken).ConfigureAwait(false);
+        Console.WriteLine($"{GenerationMarker}|{operationId}|release-observed|{generation}|elapsedMs={(long)Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds}");
+    }
 
     public void Start(IShellRegistry registry, IShell shell, string operationId)
         => Start(registry, shell, operationId, shell.Descriptor.Generation);
@@ -118,9 +123,11 @@ public sealed class FeedModuleStartupControl
         try
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            var drain = await registry.DrainAsync(shell, timeout.Token)
-                .WaitAsync(timeout.Token)
-                .ConfigureAwait(false);
+            Console.WriteLine($"{GenerationMarker}|{operationId}|drain-entry|{generation}");
+            var drainOperation = registry.DrainAsync(shell, timeout.Token);
+            Console.WriteLine($"{GenerationMarker}|{operationId}|drain-async-returned|{generation}");
+            var drain = await drainOperation.WaitAsync(timeout.Token).ConfigureAwait(false);
+            Console.WriteLine($"{GenerationMarker}|{operationId}|drain-operation-obtained|{generation}");
             await drain.WaitAsync(timeout.Token).ConfigureAwait(false);
             Console.WriteLine($"{Marker}|{operationId}|completed|{shell.State}");
             if (_generationHoldDirectory is not null)
@@ -142,22 +149,24 @@ public sealed class FeedModuleStartupControl
         if (File.Exists(path))
             return;
 
-        var directory = Path.GetDirectoryName(path)!;
-        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var watcher = new FileSystemWatcher(directory, Path.GetFileName(path))
+        var startedAt = Stopwatch.GetTimestamp();
+        var pollInterval = TimeSpan.FromMilliseconds(100);
+        while (true)
         {
-            NotifyFilter = NotifyFilters.FileName | NotifyFilters.CreationTime | NotifyFilters.LastWrite
-        };
-        FileSystemEventHandler signal = (_, _) => completion.TrySetResult();
-        RenamedEventHandler signalRename = (_, _) => completion.TrySetResult();
-        watcher.Created += signal;
-        watcher.Changed += signal;
-        watcher.Renamed += signalRename;
-        watcher.EnableRaisingEvents = true;
+            cancellationToken.ThrowIfCancellationRequested();
+            if (File.Exists(path))
+                return;
 
-        if (File.Exists(path))
-            return;
+            var remaining = timeout - Stopwatch.GetElapsedTime(startedAt);
+            if (remaining <= TimeSpan.Zero)
+            {
+                if (File.Exists(path))
+                    return;
 
-        await completion.Task.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+                throw new TimeoutException($"The release marker was not created before the {timeout} timeout expired: {path}");
+            }
+
+            await Task.Delay(remaining < pollInterval ? remaining : pollInterval, cancellationToken).ConfigureAwait(false);
+        }
     }
 }

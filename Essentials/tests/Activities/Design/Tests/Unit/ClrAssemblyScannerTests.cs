@@ -927,6 +927,20 @@ public sealed class ClrAssemblyScannerTests
     }
 
     [Fact]
+    public void OpenGenericActivities_AreNotCataloged_ButAClosedGenericSubclassIs()
+    {
+        // The runtime registry skips types with unbound generic parameters, so a cataloged open generic could
+        // never be activated (issue #385).
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
+
+        var keys = CreateScanner().Scan(folder.Path).Select(m => m.ActivityTypeKey).ToHashSet(StringComparer.Ordinal);
+
+        Assert.DoesNotContain(typeof(OpenGenericFixtureActivity<>).FullName!, keys);
+        Assert.DoesNotContain(typeof(GenericFixtureHost<>.NestedFixtureActivity).FullName!, keys);
+        Assert.Contains(typeof(ClosedGenericFixtureActivity).FullName!, keys);
+    }
+
+    [Fact]
     public void NonActivityAssembly_IsSilentlySkipped()
     {
         // Elsa.Primitives carries no IActivity implementations.

@@ -36,7 +36,10 @@ public interface IElsa3NodeConverter
     /// descendants. Fails with the node's diagnostics when the node or a descendant is graph-level, so a graph never
     /// loses a child silently; on success the diagnostics are the node's warnings.
     /// </summary>
-    /// <exception cref="ArgumentException">The node is not part of the definition <paramref name="context"/> was prepared from.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="context"/> was not created by this converter, or the node is not part of the definition it was
+    /// prepared from.
+    /// </exception>
     ValueTask<Elsa3MigrationResult<ActivityNode>> ConvertNodeAsync(
         Elsa3NodeConversionContext context,
         Elsa3Activity node,
@@ -44,18 +47,18 @@ public interface IElsa3NodeConverter
 }
 
 /// <summary>
-/// A definition prepared for node conversion by <see cref="IElsa3NodeConverter.PrepareAsync"/>: normalized and
-/// lowered definition-wide. Only a node converter creates one.
+/// A definition prepared for node conversion by <see cref="IElsa3NodeConverter.PrepareAsync"/>. Each node converter
+/// derives its own context to carry what its <see cref="IElsa3NodeConverter.PrepareAsync"/> computed, and accepts in
+/// <see cref="IElsa3NodeConverter.ConvertNodeAsync"/> only the contexts it created.
 /// </summary>
-public sealed class Elsa3NodeConversionContext
+public abstract class Elsa3NodeConversionContext
 {
-    internal Elsa3NodeConversionContext(
-        Elsa3ConversionRequest request,
-        Elsa3ConversionPlan plan,
-        IReadOnlyList<Elsa3MigrationDiagnostic> deferred)
+    /// <summary>Creates a context for <paramref name="request"/> with the graph-level nodes left to the caller.</summary>
+    protected Elsa3NodeConversionContext(Elsa3ConversionRequest request, IReadOnlyList<Elsa3MigrationDiagnostic> deferred)
     {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(deferred);
         Request = request;
-        Plan = plan;
         Deferred = deferred;
     }
 
@@ -67,6 +70,4 @@ public sealed class Elsa3NodeConversionContext
     /// the node id in its metadata.
     /// </summary>
     public IReadOnlyList<Elsa3MigrationDiagnostic> Deferred { get; }
-
-    internal Elsa3ConversionPlan Plan { get; }
 }
