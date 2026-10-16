@@ -2976,12 +2976,16 @@
 
 .wf-panel-tab-list {
   flex: 1;
-  flex-wrap: wrap;
+  height: 100%;
+  flex-wrap: nowrap;
   overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 .wf-panel-tab-list button {
   display: inline-flex;
+  flex-shrink: 0;
   min-width: min-content;
   height: auto;
   min-height: 28px;
@@ -3021,7 +3025,7 @@
 .wf-panel-tab-list button span:last-child {
   min-width: 0;
   overflow: visible;
-  white-space: normal;
+  white-space: nowrap;
   line-height: 1.2;
 }
 
