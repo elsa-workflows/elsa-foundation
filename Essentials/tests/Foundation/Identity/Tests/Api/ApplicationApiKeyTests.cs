@@ -183,6 +183,14 @@ public sealed class ApplicationApiKeyTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Unauthorized, (await _admin.SendAsync(request)).StatusCode);
     }
 
+    [Fact]
+    public async Task A_key_cannot_be_exchanged_for_a_bearer_token()
+    {
+        var (_, apiKey) = await CreateApplicationAsync(ReaderRole);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendWithKeyAsync(HttpMethod.Get, "/_elsa/identity/token", apiKey)).StatusCode);
+    }
+
     [Theory]
     [InlineData("""{ "displayName": " " }""")]
     [InlineData("""{ "displayName": "App", "roleIds": ["no-such-role"] }""")]
