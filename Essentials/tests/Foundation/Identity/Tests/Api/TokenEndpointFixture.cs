@@ -38,8 +38,7 @@ namespace Elsa.Foundation.Identity.Tests.Api;
 /// sign-in + <c>POST /_elsa/identity/login</c> (A), the OpenIddict issuance + bearer validation scheme (B),
 /// and the explicit Foundation Identity Minimal API mapping (C). A single self-contained <c>/protected</c>
 /// endpoint (default scheme = the OpenIddict selector) proves an issued bearer authenticates onward.
-/// Disposed via <see cref="IAsyncDisposable"/> so each test class tears the host down. With
-/// <c>includeApplications</c> the host also composes application management and API-key authentication.
+/// Disposed via <see cref="IAsyncDisposable"/> so each test class tears the host down.
 /// </summary>
 public sealed class TokenEndpointFixture : IAsyncDisposable
 {
@@ -52,7 +51,7 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
     /// Mapping the unrelated FastEndpoints canaries mutates process-global state, so the calling test class must join
     /// <see cref="FastEndpointsHostCollection"/>.
     /// </remarks>
-    public static async Task<TokenEndpointFixture> StartAsync(bool includeApplications = false)
+    public static async Task<TokenEndpointFixture> StartAsync()
     {
         var databaseSuffix = Guid.NewGuid().ToString("n");
 
@@ -103,8 +102,8 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
 
                     // Workstream C: the provider-agnostic Api surface (token endpoint lives here).
                     services.AddFoundationIdentityApi();
-                    if (includeApplications)
-                        new FoundationIdentityApplicationsFeature().ConfigureServices(services);
+                    // Application management and API-key authentication, as the Workbench shell composes them.
+                    new FoundationIdentityApplicationsFeature().ConfigureServices(services);
 
                     services.AddFastEndpoints();
                 });
@@ -122,8 +121,7 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
                         });
                         ((IWebShellFeature)new FoundationIdentityApiFeature()).MapEndpoints(endpoints, null);
                         ((IWebShellFeature)new AspNetCoreIdentityFeature()).MapEndpoints(endpoints, null);
-                        if (includeApplications)
-                            new FoundationIdentityApplicationsFeature().MapEndpoints(endpoints, null);
+                        new FoundationIdentityApplicationsFeature().MapEndpoints(endpoints, null);
                         endpoints.MapOpenApi();
                         endpoints
                             .MapGet("/protected", context =>

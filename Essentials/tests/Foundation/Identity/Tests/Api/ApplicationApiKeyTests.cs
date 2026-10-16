@@ -34,7 +34,7 @@ public sealed class ApplicationApiKeyTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        _fixture = await TokenEndpointFixture.StartAsync(includeApplications: true);
+        _fixture = await TokenEndpointFixture.StartAsync();
         _admin = _fixture.Client;
         await LoginTestHelper.LoginAsync(_admin);
         await using var scope = _fixture.Services.CreateAsyncScope();
