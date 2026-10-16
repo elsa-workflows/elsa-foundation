@@ -149,12 +149,46 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
         return new EfIdentityAuthorityWriteResult(result, conflict == EfIdentityAuthorityConflict.None ? MapConflict(result.FailedUnitId) : conflict);
     }
 
+    /// <summary>Deletes the user aggregate; a <c>null</c> <paramref name="expectedVersion"/> deletes whatever revision is current.</summary>
     public Task<EfIdentityWriteResult> DeleteUserAsync(
         string tenantId,
         string userId,
-        long expectedVersion,
+        long? expectedVersion,
         CancellationToken cancellationToken = default) =>
         DeleteUserCoreAsync(tenantId, userId, expectedVersion, cancellationToken);
+
+    /// <summary>Writes only the user's status, so no other field of a concurrently edited row is overwritten.</summary>
+    public async Task<EfIdentityWriteResult> SetUserStatusAsync(
+        string tenantId,
+        string userId,
+        UserStatus status,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateIdentity(tenantId, nameof(tenantId));
+        ValidateIdentity(userId, nameof(userId));
+        EfIdentityStoreSupport.EnsureTenant(accessContextAccessor, tenantId);
+        return await ExecuteAsync(
+            "set-user-status",
+            EfIdentityStoreSupport.Fingerprint(tenantId, userId, ((int)status).ToString(CultureInfo.InvariantCulture)),
+            async token =>
+            {
+                var id = EfIdentityStoreSupport.RecordId(tenantId, userId);
+                var user = await context.Users.SingleOrDefaultAsync(x => x.Id == id, token);
+                if (user is null)
+                    return NotFound(id);
+                if (EfSchemaVersion.NotReadable(IdentityIamEfModule.Chain, user.SchemaVersion))
+                    return Conflict(id);
+
+                EfIdentityStoreSupport.EnsureUserIdentity(user, tenantId, userId);
+                EfIdentityStoreSupport.Upgrade(user);
+                user.Status = (int)status;
+                user.Revision = checked(user.Revision + 1);
+                return Updated(id, user.Revision);
+            },
+            cancellationToken,
+            tenantId,
+            replayByFingerprint: false);
+    }
 
     public Task<EfIdentityWriteResult> DeleteRoleAsync(
         string tenantId,
@@ -163,21 +197,21 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
         CancellationToken cancellationToken = default) =>
         DeleteRoleCoreAsync(tenantId, roleId, expectedVersion, cancellationToken);
 
-    private async Task<EfIdentityWriteResult> DeleteUserCoreAsync(string tenantId, string userId, long expectedVersion, CancellationToken cancellationToken)
+    private async Task<EfIdentityWriteResult> DeleteUserCoreAsync(string tenantId, string userId, long? expectedVersion, CancellationToken cancellationToken)
     {
         ValidateIdentity(tenantId, nameof(tenantId));
         ValidateIdentity(userId, nameof(userId));
         EfIdentityStoreSupport.EnsureTenant(accessContextAccessor, tenantId);
         return await ExecuteAsync(
             "delete-user-authority-aggregate",
-            EfIdentityStoreSupport.Fingerprint(tenantId, userId, expectedVersion.ToString(CultureInfo.InvariantCulture)),
+            EfIdentityStoreSupport.Fingerprint(tenantId, userId, expectedVersion?.ToString(CultureInfo.InvariantCulture)),
             async token =>
             {
                 var id = EfIdentityStoreSupport.RecordId(tenantId, userId);
                 var user = await context.Users.SingleOrDefaultAsync(x => x.Id == id, token);
                 if (user is null)
                     return NotFound(id);
-                if (EfSchemaVersion.NotReadable(IdentityIamEfModule.Chain, user.SchemaVersion) || user.Revision != expectedVersion)
+                if (EfSchemaVersion.NotReadable(IdentityIamEfModule.Chain, user.SchemaVersion) || !CanWrite(user.Revision, expectedVersion))
                     return Conflict(id);
 
                 EfIdentityStoreSupport.EnsureUserIdentity(user, tenantId, userId);
@@ -273,10 +307,10 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                 }
 
                 context.Users.Remove(user);
-                return Deleted(id, expectedVersion);
+                return Deleted(id, user.Revision);
             }, cancellationToken,
             tenantId,
-            replayByFingerprint: true);
+            replayByFingerprint: expectedVersion is not null);
     }
 
     private async Task<EfIdentityWriteResult> DeleteRoleCoreAsync(string tenantId, string roleId, long expectedVersion, CancellationToken cancellationToken)

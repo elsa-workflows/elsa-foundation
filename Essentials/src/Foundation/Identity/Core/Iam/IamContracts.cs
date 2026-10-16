@@ -11,6 +11,27 @@ public interface IUserStore
     ValueTask<UserRecord?> FindByEmailAsync(string tenantId, string email, CancellationToken cancellationToken = default);
 
     ValueTask SaveAsync(UserRecord user, CancellationToken cancellationToken = default);
+
+    /// <summary>Sets the user's <see cref="UserRecord.Status"/>; returns <c>false</c> when the user does not exist.</summary>
+    ValueTask<bool> SetStatusAsync(string tenantId, string userId, UserStatus status, CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the user together with the records it owns; returns <c>false</c> when the user does not exist.</summary>
+    ValueTask<bool> DeleteAsync(string tenantId, string userId, CancellationToken cancellationToken = default);
+}
+
+/// <summary>Provider-neutral bounded paging contract for tenant-local user enumeration and search.</summary>
+[ReplacementContract]
+public interface IPagedUserStore
+{
+    /// <summary>
+    /// Pages the tenant's users in a stable order. A non-blank <paramref name="search"/> keeps only users whose
+    /// user name or email equals it, compared case-insensitively the way the store compares lookup keys.
+    /// </summary>
+    ValueTask<IamPage<UserRecord>> ListPageAsync(
+        string tenantId,
+        IamPageRequest request,
+        string? search = null,
+        CancellationToken cancellationToken = default);
 }
 
 [ReplacementContract]

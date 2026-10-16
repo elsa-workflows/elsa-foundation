@@ -129,7 +129,7 @@ public static class FoundationIdentityServiceCollectionExtensions
         TClaimMappingStore,
         TExternalIdentityStore,
         TTenantMembershipStore>(this IServiceCollection services)
-        where TUserStore : class, IUserStore, IRevisionAwareUserStore
+        where TUserStore : class, IUserStore, IRevisionAwareUserStore, IPagedUserStore
         where TRoleStore : class, IRoleStore, IRevisionAwareRoleStore, IPagedRoleStore
         where TClaimMappingStore : class, IClaimMappingStore, IRevisionAwareClaimMappingStore, IPagedClaimMappingStore
         where TExternalIdentityStore : class, IExternalIdentityStore, IRevisionAwareExternalIdentityStore, IPagedExternalIdentityStore
@@ -137,6 +137,7 @@ public static class FoundationIdentityServiceCollectionExtensions
     {
         services.EnsureReplacementContract<IUserStore, TUserStore>();
         services.EnsureReplacementContract<IRevisionAwareUserStore, TUserStore>();
+        services.EnsureReplacementContract<IPagedUserStore, TUserStore>();
         services.EnsureReplacementContract<IRoleStore, TRoleStore>();
         services.EnsureReplacementContract<IRevisionAwareRoleStore, TRoleStore>();
         services.EnsureReplacementContract<IPagedRoleStore, TRoleStore>();

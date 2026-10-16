@@ -7,13 +7,13 @@ using Elsa.Persistence.EntityFramework;
 
 namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 
-/// <summary>Provider-neutral tenant-local IAM user store backed by the authoritative EF root row.</summary>
+/// <summary>Provider-neutral tenant-local IAM user store backed by the authoritative EF root row, with deterministic bounded paging.</summary>
 public sealed class EfUserStore(
     IdentityIamDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
     EfIdentityAuthorityAggregateCoordinator? aggregateCoordinator = null,
     IIdentityEmailUniquenessPolicy? emailUniquenessPolicy = null)
-    : IUserStore, IRevisionAwareUserStore
+    : IUserStore, IRevisionAwareUserStore, IPagedUserStore
 {
     private readonly EfIdentityAuthorityAggregateCoordinator aggregates = aggregateCoordinator ?? new(context, accessContextAccessor);
     private readonly IIdentityEmailUniquenessPolicy emailPolicy = emailUniquenessPolicy ?? IdentityEmailUniquenessPolicy.NonUnique;
@@ -63,6 +63,31 @@ public sealed class EfUserStore(
         EfIdentityStoreSupport.EnsureSaved(result.WriteResult, "Unable to save the Identity user.");
     }
 
+    public async ValueTask<bool> SetStatusAsync(string tenantId, string userId, UserStatus status, CancellationToken cancellationToken = default) =>
+        Applied(await aggregates.SetUserStatusAsync(tenantId, userId, status, cancellationToken), "Unable to set the Identity user status.");
+
+    public async ValueTask<bool> DeleteAsync(string tenantId, string userId, CancellationToken cancellationToken = default) =>
+        Applied(await aggregates.DeleteUserAsync(tenantId, userId, expectedVersion: null, cancellationToken), "Unable to delete the Identity user.");
+
+    public async ValueTask<IamPage<UserRecord>> ListPageAsync(string tenantId, IamPageRequest request, string? search = null, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request); Validate(tenantId, nameof(tenantId)); Prepare(tenantId, cancellationToken);
+        var query = context.Users.AsNoTracking().Where(x => x.TenantLookupKey == EfIdentityStoreSupport.TenantLookup(tenantId));
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            // The name and email lookup keys are hashes of the invariant-lowercased value, so the database compares
+            // opaque keys and the match is the same case-insensitive one on every provider.
+            var key = EfIdentityStoreSupport.Lookup(tenantId, search);
+            query = query.Where(x => x.NormalizedUserNameKey == key || x.NormalizedEmailKey == key);
+        }
+
+        var (total, rows) = await EfIdentityStoreSupport.ReadAsync(
+            context,
+            "Unable to page Identity users.",
+            async () => (await query.LongCountAsync(cancellationToken), await query.OrderBy(x => x.UserIdOrderKey).ThenBy(x => x.Id).Skip(request.Skip).Take(request.Take).ToListAsync(cancellationToken)));
+        return new IamPage<UserRecord>(rows.Select(Map).ToArray(), total);
+    }
+
     public async ValueTask<IamRevisionedRecord<UserRecord>?> FindWithRevisionAsync(string tenantId, string userId, CancellationToken cancellationToken = default)
     {
         Validate(tenantId, nameof(tenantId)); Validate(userId, nameof(userId)); Prepare(tenantId, cancellationToken);
@@ -99,6 +124,14 @@ public sealed class EfUserStore(
         context.EnsureProviderBinding();
         EfIdentityStoreSupport.EnsureTenant(accessContextAccessor, tenantId);
         cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    private static bool Applied(EfIdentityWriteResult result, string failureMessage)
+    {
+        if (result.Status == EfIdentityWriteStatus.NotFound)
+            return false;
+        EfIdentityStoreSupport.EnsureSaved(result, failureMessage);
+        return true;
     }
 
     private static UserRecord Map(UserEntity entity)

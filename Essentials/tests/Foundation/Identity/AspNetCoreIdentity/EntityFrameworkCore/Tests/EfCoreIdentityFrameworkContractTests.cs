@@ -962,6 +962,7 @@ public sealed class EfCoreIdentityFrameworkContractTests
             typeof(IdentityIamDbContext),
             typeof(IUserStore),
             typeof(IRevisionAwareUserStore),
+            typeof(IPagedUserStore),
             typeof(IRoleStore),
             typeof(IRevisionAwareRoleStore),
             typeof(IPagedRoleStore),
