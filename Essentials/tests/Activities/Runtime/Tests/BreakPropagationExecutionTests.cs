@@ -135,6 +135,34 @@ public sealed class BreakPropagationExecutionTests
         run.AssertWorkflowCompleted();
     }
 
+    [Fact]
+    public async Task FlowchartTriggerStart_ForLoopFlowchartBody_RestartsAtTriggerEachPass()
+    {
+        // Spec 238 (D3): the trigger id is workflow-wide, so a Flowchart started again by each For pass begins at
+        // the trigger child on every pass, never at its start node.
+        await using var harness = NewHarness(Enumerable.Range(1, 12).Select(index => $"actexec-{index}").ToArray());
+
+        var body = NewFlowchartNode("node-flowchart",
+            children:
+            [
+                WorkflowExecutionHarness.NewProbeNode("node-start"),
+                WorkflowExecutionHarness.NewProbeNode("node-trigger"),
+                WorkflowExecutionHarness.NewProbeNode("node-after-trigger")
+            ],
+            connections: [NewConnection("node-trigger", "node-after-trigger")],
+            startNodeId: "node-start");
+
+        var run = await harness.RunAsync(
+            WorkflowExecutionHarness.NewExecutable(NewForNode("node-for", start: 0, end: 3, body: body)),
+            JsonSerializer.SerializeToElement(new { }),
+            triggerNodeId: "node-trigger");
+
+        Assert.Equal(3, run.States("node-after-trigger").Count);
+        run.AssertDidNotRun("node-start");
+        run.AssertOutcomes("node-for", ActivityOutcomes.Done);
+        run.AssertWorkflowCompleted();
+    }
+
     private static WorkflowExecutionHarness NewHarness(params string[] activityExecutionIds) =>
         BaseHarness().Build(activityExecutionIds);
 

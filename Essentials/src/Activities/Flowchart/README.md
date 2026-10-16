@@ -5,6 +5,7 @@ The Flowchart activity is a scoped composite activity. `FlowchartExecutionEngine
 ## Scoped execution model
 
 - A Flowchart run starts with a root execution scope and root execution path.
+- Where a run starts (spec 238): when the run's trigger node is a direct child, the Flowchart begins there, so a Flowchart with several start triggers runs only the branch whose trigger fired. Otherwise it begins at its start node: on a direct run, or when the trigger is not one of its own children. The trigger id is workflow-wide, so a nested Flowchart honours it only when the trigger is its own child, and a Flowchart that a loop starts again begins at the trigger on every pass. Loop-closing edges are classified from the start node first, then from the trigger children, so a loop that only a trigger branch reaches is classified from where the run enters it.
 - Scheduled child activities receive generic `flowchart.executionPathId` and `flowchart.executionScopeId` metadata.
 - The flowchart engine snapshot is one typed, versioned activity private-state envelope (`Elsa.Flowchart.ExecutionState`, schema version 1); structural activities cannot patch arbitrary runtime metadata.
 - Multi-inbound nodes use an implicit activation-aware join by default: the target waits only for inbound branches that are still active and can still arrive.

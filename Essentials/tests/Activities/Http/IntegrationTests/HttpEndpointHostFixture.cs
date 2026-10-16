@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Activities.Flowchart;
+using Elsa.Activities.Flowchart.Models;
 using Elsa.Activities.Http;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Models;
@@ -36,6 +38,7 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection
 using CShells.Lifecycle;
 
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
+using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
 
 namespace Elsa.Activities.Http.IntegrationTests;
 
@@ -225,6 +228,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     // feature only registers the structure handler; construction goes through the primitives'
                     // ClrActivityConstructor, so the primitives feature must precede it (already does).
                     new ActivitiesSequenceFeature().ConfigureServices(services);
+                    // The Flowchart composite (spec 238: a Flowchart with two start-trigger endpoints).
+                    new ActivitiesFlowchartFeature().ConfigureServices(services);
                     new ActivitiesHttpFeature().ConfigureServices(services);
 
                     // The real route-table stack. The REAL resolver, route-table startup task, and
@@ -511,6 +516,47 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
 
         // Index so the START endpoint's (template, method) trigger binding lands in the route table.
         await PublishAsync(executable);
+    }
+
+    /// <summary>
+    /// Publishes a Flowchart with two start-trigger <see cref="HttpEndpoint"/>s, each heading its own branch: the first
+    /// (<c>node-first-endpoint</c>, the Flowchart's start node) on <paramref name="firstPath"/> and the second
+    /// (<c>node-second-endpoint</c>) on <paramref name="secondPath"/>. Both are indexed. A request to either path starts
+    /// a run at that endpoint (spec 238); the other endpoint never runs.
+    /// </summary>
+    public async Task PublishTwoHttpEndpointFlowchartWorkflowAsync(string artifactId, string firstPath, string secondPath, string method)
+    {
+        var serializer = Services.GetRequiredService<IPayloadSerializer>();
+        var first = NewHttpEndpointNode($"{artifactId}-first", firstPath, $"{artifactId}-first-result", [method],
+            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: true, isTriggerNode: true,
+            nodeId: "node-first-endpoint");
+        var second = NewHttpEndpointNode($"{artifactId}-second", secondPath, $"{artifactId}-second-result", [method],
+            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: true, isTriggerNode: true,
+            nodeId: "node-second-endpoint");
+
+        var flowchartDescriptorPayload = ClrConstruction.Payload(serializer, typeof(FlowchartActivity));
+        var flowchartNode = new ExecutableNode(
+            executableNodeId: "node-flowchart",
+            authoredActivityId: "authored-flowchart",
+            activityType: typeof(FlowchartActivity).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptor: ClrRuntimeDescriptor(flowchartDescriptorPayload),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            metadata: new Dictionary<string, string>(),
+            childSlots: [new ExecutableChildSlot(FlowchartActivity.ActivitiesSlotName, [first, second])],
+            structure: new ExecutableActivityStructure(
+                FlowchartActivity.StructureKind,
+                FlowchartActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new FlowchartStructure([], first.ExecutableNodeId))),
+            activityContract: UnitActivityContract(typeof(FlowchartActivity), flowchartDescriptorPayload, [], [ActivityOutcomes.Done, ActivityOutcomes.Break]));
+
+        await PublishAsync(new WorkflowExecutable(
+            identity: NewIdentity(artifactId),
+            rootActivity: flowchartNode,
+            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            createdAt: DateTimeOffset.UtcNow,
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference));
     }
 
     // ---- Synchronous response publish helpers ----

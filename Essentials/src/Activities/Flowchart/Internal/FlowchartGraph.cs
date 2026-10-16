@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Elsa.Activities.Flowchart.Exceptions;
 using Elsa.Activities.Flowchart.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
 
@@ -108,6 +109,18 @@ public sealed class FlowchartGraph
 
         return Children.FirstOrDefault(child => !nodesWithInbound.Contains(child.ExecutableNodeId)) ?? Children[0];
     }
+
+    /// <summary>
+    /// Selects the node a run of this Flowchart begins at: the child named by the run's trigger node id when it is
+    /// a <em>direct</em> child, otherwise <see cref="SelectStartNode"/>. The trigger id is workflow-wide, so a
+    /// nested Flowchart honours it only when the trigger is its own child, and a Flowchart started again by a loop
+    /// begins at the trigger on every pass. This is per run; <see cref="SelectStartNode"/> stays the static
+    /// fallback that loop-edge classification uses.
+    /// </summary>
+    public ExecutableNode? SelectEntryNode(string? triggerNodeId) =>
+        triggerNodeId is not null && _nodesById.TryGetValue(triggerNodeId, out var triggerNode)
+            ? triggerNode
+            : SelectStartNode();
 
     public IReadOnlyCollection<ExecutableNode> SelectTargets(string completedChildExecutableNodeId, IReadOnlyCollection<string> outcomeNames)
     {
@@ -324,8 +337,13 @@ public sealed class FlowchartGraph
     /// and never a forward/cross edge of the cycle, unlike the naive "target can reach source" rule, which
     /// marks every edge of a cycle as backward (so a fork/join inside a loop body would split its branches
     /// into divergent iteration scopes that never reconverge). Roots are the start node first, then every
-    /// remaining node ordinal-sorted; each node's outbound connections are ordinal-sorted by connection id, so
-    /// the result is stable regardless of authoring order. Mirrors <c>BpmnGraph.ComputeBackwardFlowIds</c>.
+    /// trigger child ordinal-sorted, then every remaining node ordinal-sorted; each node's outbound connections
+    /// are ordinal-sorted by connection id, so the result is stable regardless of authoring order. Trigger
+    /// children come second because a run can enter the graph there (<see cref="SelectEntryNode"/>): a loop
+    /// reached only from a trigger is then classified from where the run enters it, not from an arbitrary node
+    /// inside it. A trigger child the start node reaches is already visited, so its classification is unchanged.
+    /// The roots must not depend on the run: the edges are cached with the graph. Mirrors
+    /// <c>BpmnGraph.ComputeBackwardFlowIds</c>.
     /// </summary>
     private IReadOnlySet<(string Source, string Target)> ComputeBackwardEdges()
     {
@@ -337,6 +355,7 @@ public sealed class FlowchartGraph
         var outboundBySource = _connections.ToLookup(connection => connection.Source.NodeId, StringComparer.Ordinal);
 
         var roots = (SelectStartNode() is { } startNode ? new[] { startNode.ExecutableNodeId } : [])
+            .Concat(Children.Where(IsTriggerNode).Select(child => child.ExecutableNodeId).OrderBy(id => id, StringComparer.Ordinal))
             .Concat(_nodesById.Keys.OrderBy(id => id, StringComparer.Ordinal))
             .Distinct(StringComparer.Ordinal);
 
@@ -388,6 +407,10 @@ public sealed class FlowchartGraph
             throw new FlowchartExecutionException($"Flowchart executable node '{executableNode.ExecutableNodeId}' structure is not a valid Flowchart structure payload.", exception);
         }
     }
+
+    private static bool IsTriggerNode(ExecutableNode node) =>
+        node.Metadata.TryGetValue(TriggerNodeMetadata.ExecutionTypeKey, out var executionType) &&
+        StringComparer.Ordinal.Equals(executionType, TriggerNodeMetadata.TriggerExecutionType);
 
     private static string? NormalizeStartNodeId(string? startNodeId)
     {

@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-16
 
-**Status**: Draft
+**Status**: Implemented — PR for #2850
 
 **Input**: GitHub issue [#2850](https://github.com/elsa-workflows/elsa-foundation/issues/2850), "Flowchart ignores the trigger node: a multi-trigger flowchart always starts at its start node", plus the scope Joey set on 2026-10-16 (recorded under [Decisions](#decisions)).
 

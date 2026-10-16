@@ -10837,6 +10837,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Activities.Flowchart",
+          "path": "Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Http",
           "path": "Essentials/src/Activities/Http/Elsa.Activities.Http.csproj"
         },
