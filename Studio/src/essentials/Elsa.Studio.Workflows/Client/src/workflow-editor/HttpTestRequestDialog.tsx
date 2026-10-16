@@ -3,9 +3,9 @@ import { AlertTriangle, LoaderCircle, Send, X } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { getExecutable, getExecutableInputSources } from "../api/runtime";
 import {
-  defaultHttpEndpointBasePath,
   describeHttpEndpointAcceptedResponse,
   findPublishedHttpEndpoint,
+  getWorkflowHttpBasePath,
   makeInitialHttpTestPath,
   publishedHttpEndpointInputsUnavailableMessage,
   readHttpEndpointResponseMetadata,
@@ -18,7 +18,8 @@ import "./HttpTestRequestDialog.css";
 const exampleJson = `{
   "name": "Ada Lovelace"
 }`;
-const requestTimeoutMs = 30_000;
+// Leave room for the default 30-second server deadline to return its HTTP 408 response.
+const requestTimeoutMs = 35_000;
 
 interface HttpTestResult {
   status: number;
@@ -47,6 +48,7 @@ export function HttpTestRequestDialog({
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [endpoint, setEndpoint] = useState<PublishedHttpEndpoint | null>(null);
+  const [workflowHttpBasePath, setWorkflowHttpBasePath] = useState<string | null>(null);
   const [path, setPath] = useState("");
   const [method, setMethod] = useState("");
   const [requestBody, setRequestBody] = useState(exampleJson);
@@ -72,6 +74,7 @@ export function HttpTestRequestDialog({
     }
     let active = true;
     setEndpoint(null);
+    setWorkflowHttpBasePath(null);
     setLoadError("");
     setRequestError("");
     setResult(null);
@@ -83,8 +86,12 @@ export function HttpTestRequestDialog({
     setLoading(true);
     void (async () => {
       try {
-        const executable = await getExecutable(context, artifactId);
+        const [executable, configuredBasePath] = await Promise.all([
+          getExecutable(context, artifactId),
+          getWorkflowHttpBasePath(context)
+        ]);
         if (!active) return;
+        setWorkflowHttpBasePath(configuredBasePath);
         const sourceReferenceId = executable.chosenReference?.sourceReferenceId;
         if (!sourceReferenceId) throw new Error(publishedHttpEndpointInputsUnavailableMessage);
 
@@ -98,7 +105,7 @@ export function HttpTestRequestDialog({
           return;
         }
         setEndpoint(selected);
-        setPath(makeInitialHttpTestPath(selected.routeTemplate));
+        setPath(makeInitialHttpTestPath(selected.routeTemplate, configuredBasePath));
         setMethod(selected.supportedMethods.includes("POST") ? "POST" : selected.supportedMethods[0]);
         setRequestBody(exampleJson);
         setContentType("application/json");
@@ -118,7 +125,7 @@ export function HttpTestRequestDialog({
   }, []);
 
   const sendRequest = async () => {
-    if (sending.current || !endpoint || !method) return;
+    if (sending.current || !endpoint || !workflowHttpBasePath || !method) return;
     const send = context.http.requestResponse;
     if (!send) {
       setRequestError("This Studio connection cannot send requests while preserving the backend response. Refresh Studio and try again.");
@@ -127,7 +134,7 @@ export function HttpTestRequestDialog({
 
     let requestPath: string;
     try {
-      requestPath = resolveHttpTestRequestPath(context.baseUrl, path);
+      requestPath = resolveHttpTestRequestPath(context.baseUrl, path, workflowHttpBasePath);
     } catch (error) {
       setRequestError(error instanceof Error ? error.message : "Enter a valid path on the configured backend.");
       return;
@@ -247,11 +254,11 @@ export function HttpTestRequestDialog({
                     autoCorrect="off"
                     spellCheck={false}
                     onChange={event => setPath(event.target.value)}
-                    placeholder={`${defaultHttpEndpointBasePath}/orders/1`}
+                    placeholder={`${workflowHttpBasePath ?? ""}/orders/1`}
                   />
                 </label>
               </div>
-              <p className="wf-http-test-hint">The path includes the HTTP base path. Adjust it if your server uses a different path. Route parameter examples can be edited here.</p>
+              <p className="wf-http-test-hint">The path must stay within the server's configured workflow HTTP mount ({workflowHttpBasePath}). You can edit the endpoint route within that mount.</p>
 
               <label className="wf-form-field wf-http-test-content-type">
                 <span>Request content type</span>

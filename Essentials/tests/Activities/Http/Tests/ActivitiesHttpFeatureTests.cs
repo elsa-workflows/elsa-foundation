@@ -28,14 +28,15 @@ namespace Elsa.Activities.Http.Tests;
 public sealed class ActivitiesHttpFeatureTests
 {
     [Fact]
-    public void ConfigureServices_AppliesTheFeatureBasePathToEndpointMiddlewareOptions()
+    public void ConfigureServices_AppliesTheFeatureRequestSettingsToEndpointMiddlewareOptions()
     {
         var services = new ServiceCollection();
 
-        new ActivitiesHttpFeature { BasePath = "/workflows" }.ConfigureServices(services);
+        new ActivitiesHttpFeature { BasePath = "/workflows", SyncRequestTimeout = TimeSpan.FromSeconds(5) }.ConfigureServices(services);
 
         using var provider = services.BuildServiceProvider();
         Assert.Equal("/workflows", provider.GetRequiredService<IOptions<HttpEndpointOptions>>().Value.BasePath);
+        Assert.Equal(TimeSpan.FromSeconds(5), provider.GetRequiredService<IOptions<HttpEndpointOptions>>().Value.SyncRequestTimeout);
         Assert.Equal("/workflows", provider.GetRequiredService<IOptions<HttpRoutePublicationOptions>>().Value.BasePath);
     }
 

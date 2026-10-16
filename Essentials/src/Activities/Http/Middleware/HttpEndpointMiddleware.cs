@@ -48,9 +48,11 @@ namespace Elsa.Activities.Http.Middleware;
 /// that authored no <see cref="WriteHttpResponse"/>, and a non-local (<see cref="BookmarkResumeDispatchStatus"/>
 /// deferred) dispatch whose ambient services never crossed the transport — with no locality inspection. The 404
 /// branch (zero starts AND zero dispatched resumes) still runs FIRST, before the sink is consulted. Sink resolution
-/// is null-safe: an absent registration degrades to async behaviour rather than throwing. The per-endpoint timeout
-/// (408) and fault mapping (400/500) already enclose the dispatch and now bound the synchronous wait. Async mode is
-/// bit-identical to the pre-E behaviour — no sink populate, no ambient services.
+/// is null-safe: an absent registration degrades to async behaviour rather than throwing. A finite host timeout
+/// bounds synchronous request work and response delivery; an endpoint may choose a shorter limit. Timeout expiry
+/// maps to 408 before response start and aborts an already-started response; client disconnects remain silent.
+/// Async mode keeps authored timeout behavior, with no sink
+/// population or ambient services.
 /// </para>
 /// <para>
 /// <b>Live input.</b> The full <see cref="HttpRequestModel"/> (path, method, headers, query, body) is serialized
@@ -173,6 +175,50 @@ public sealed class HttpEndpointMiddleware(
             ? ResolveEndpointOptions(claimants)
             : HttpEndpointStimulusOptions.MergeForResume(await ResolveWaitingBookmarkMetadataAsync(stimulusHash, context.RequestAborted));
 
+        var clientAborted = context.RequestAborted;
+        var requestTimeout = endpointOptions.RequestTimeout is { } authoredTimeout && authoredTimeout > TimeSpan.Zero
+            ? authoredTimeout
+            : (TimeSpan?)null;
+        if (endpointOptions.ResponseMode == ResponseMode.Sync)
+            requestTimeout = requestTimeout is { } shorter && shorter < _options.SyncRequestTimeout
+                ? shorter
+                : _options.SyncRequestTimeout;
+
+        using var timeoutSource = requestTimeout is not null
+            ? CancellationTokenSource.CreateLinkedTokenSource(clientAborted)
+            : null;
+        if (timeoutSource is not null && endpointOptions.ResponseMode == ResponseMode.Sync)
+        {
+            timeoutSource.CancelAfter(requestTimeout!.Value);
+            context.RequestAborted = timeoutSource.Token;
+        }
+
+        try
+        {
+            await HandleMatchedEndpointAsync(context, endpointPath, routeValues, stimulusHash, claimants, endpointOptions, timeoutSource);
+        }
+        catch (Exception exception) when (!clientAborted.IsCancellationRequested)
+        {
+            // Restore the client token before writing a timeout response. Expiry cancels request work, not the
+            // live connection, and must produce 408 rather than being mistaken for a disconnected caller.
+            context.RequestAborted = clientAborted;
+            await HandleDispatchFaultAsync(context, exception, timedOut: timeoutSource?.IsCancellationRequested == true);
+        }
+        finally
+        {
+            context.RequestAborted = clientAborted;
+        }
+    }
+
+    private async Task HandleMatchedEndpointAsync(
+        HttpContext context,
+        string endpointPath,
+        IReadOnlyDictionary<string, string> routeValues,
+        string stimulusHash,
+        IReadOnlyCollection<WorkflowTriggerBinding> claimants,
+        MergedHttpEndpointOptions endpointOptions,
+        CancellationTokenSource? timeoutSource)
+    {
         // Authorization runs before the body is read, before ambiguity/existence is disclosed, and before any
         // dispatch (#592 item 10 — auth before disclosure). Fail closed: an Authorize endpoint with no
         // handler composed (WorkflowsRuntimeHttp feature absent) denies. Every distinct merged policy must pass —
@@ -252,27 +298,11 @@ public sealed class HttpEndpointMiddleware(
                 schemaVersion: 1),
             providerId: HttpEndpoint.ActivityType);
 
-        // Per-endpoint RequestTimeout bounds dispatch (which drains inline on the in-process actor, so it can
-        // genuinely take time); faults map to statuses via the endpoint fault handler seam.
-        // Non-positive values are rejected at publish; the > Zero guard here is defense in depth
-        // against hand-seeded binding metadata — CancelAfter would throw on a negative TimeSpan.
-        StimulusRoutingResult result;
-        using var timeoutSource = endpointOptions.RequestTimeout is { } timeout && timeout > TimeSpan.Zero
-            ? CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted)
-            : null;
-        timeoutSource?.CancelAfter(endpointOptions.RequestTimeout!.Value);
-        try
-        {
-            result = await router.RouteAsync(dispatch, timeoutSource?.Token ?? context.RequestAborted);
-        }
-        catch (Exception exception) when (!context.RequestAborted.IsCancellationRequested)
-        {
-            // A genuine dispatch fault (not a client abort — that path is swallowed by the top-level guard in
-            // InvokeAsync): map it to a status. A per-endpoint timeout trip is an OperationCanceledException on
-            // the linked token while RequestAborted stays live, so it lands here (mapped to 408), not the guard.
-            await HandleDispatchFaultAsync(context, exception, timedOut: timeoutSource?.IsCancellationRequested == true);
-            return;
-        }
+        // Async keeps its existing authored dispatch timeout; only Sync has a host deadline covering body
+        // reading and response delivery as well. Do not start an Async endpoint's timer while reading its body.
+        if (!sync)
+            timeoutSource?.CancelAfter(endpointOptions.RequestTimeout!.Value);
+        var result = await router.RouteAsync(dispatch, timeoutSource?.Token ?? context.RequestAborted);
 
         // Admission shed every start and nothing was resumed (#2548): nothing was written, so this is backpressure, not
         // acceptance. 429 with Retry-After tells the caller to retry, as the Execute endpoint does for a shed start; a 202
@@ -414,16 +444,18 @@ public sealed class HttpEndpointMiddleware(
     /// <summary>Maps a dispatch fault to a response status via the endpoint fault handler seam; inline fallback (the shared <see cref="Elsa.Http.Core.HttpEndpointFaultMapping"/>) when the policy feature is absent.</summary>
     private static async Task HandleDispatchFaultAsync(HttpContext context, Exception exception, bool timedOut)
     {
-        // Sync mode can fault AFTER WriteHttpResponse already wrote the live response (e.g. endpoint -> write ->
-        // stalling activity tripping the request timeout). Once the response has started, a status code can no
-        // longer be written — attempting it throws and escapes as an unhandled pipeline exception on a connection
-        // that already carries the workflow-authored response. The caller got that response; the fault remains
-        // observable in durable state per normal runtime semantics, so the response is left untouched.
+        // Headers cannot be replaced once the response starts. A deadline can interrupt body delivery, so
+        // abort that connection rather than completing a truncated success response. Ordinary post-write faults
+        // keep the existing authored response intact.
         if (context.Response.HasStarted)
+        {
+            if (timedOut && exception is OperationCanceledException)
+                context.Abort();
             return;
+        }
 
         var faultException = timedOut && exception is OperationCanceledException
-            ? new TimeoutException("The endpoint's request timeout elapsed before dispatch completed.", exception)
+            ? new TimeoutException("The HTTP endpoint request timeout elapsed before the response completed.", exception)
             : exception;
 
         if (context.RequestServices?.GetService(typeof(IHttpEndpointFaultHandler)) is IHttpEndpointFaultHandler faultHandler)

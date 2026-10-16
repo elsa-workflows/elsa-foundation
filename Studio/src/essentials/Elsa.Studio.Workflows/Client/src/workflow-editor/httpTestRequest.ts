@@ -4,19 +4,37 @@ import type {
   WorkflowExecutableInputSources,
   WorkflowExecutableNode
 } from "../workflowTypes";
+import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { capabilityIds, resolveRelativeCapabilityUrl } from "../api/capabilities";
+import { assertSafePathSegments } from "../api/pathSegments";
 
-/** The default in ActivitiesHttpFeature; hosts can edit the full request path in the dialog. */
-export const defaultHttpEndpointBasePath = "/workflows/http";
 export const httpEndpointActivityType = "Elsa.Activities.Http.Activities.HttpEndpoint";
 const defaultMethods = ["GET"];
 export const publishedHttpEndpointInputsUnavailableMessage =
   "Studio could not read the published endpoint settings. Check your permission to inspect published workflow inputs, then try again.";
+export const workflowHttpBasePathCapabilityRelation = "workflow-http-base";
+export const workflowHttpBasePathUnavailableMessage =
+  "Studio could not determine the server's configured workflow HTTP base path. Check the server capability and try again.";
 
 export interface PublishedHttpEndpoint {
   authoredActivityId: string;
   routeTemplate: string;
   supportedMethods: string[];
   responseMode: "async" | "sync" | null;
+}
+
+/** Reads the authoritative HTTP mount advertised by the active shell, preserving any backend URL path prefix. */
+export async function getWorkflowHttpBasePath(context: StudioEndpointContext): Promise<string> {
+  try {
+    const url = await resolveRelativeCapabilityUrl(
+      context,
+      capabilityIds.workflowHttpEndpoints,
+      workflowHttpBasePathCapabilityRelation
+    );
+    return normalizePathPrefix(url.pathname, "Configured workflow HTTP base path");
+  } catch {
+    throw new Error(workflowHttpBasePathUnavailableMessage);
+  }
 }
 
 /** Finds one endpoint in the exact published executable tree and reads only its compiled literal inputs. */
@@ -66,7 +84,7 @@ export function isHttpEndpointType(activityType: string | null | undefined): boo
 }
 
 /** Produces a requestable example by replacing ASP.NET route parameters with editable sample values. */
-export function makeInitialHttpTestPath(routeTemplate: string, basePath = defaultHttpEndpointBasePath): string {
+export function makeInitialHttpTestPath(routeTemplate: string, basePath: string): string {
   const base = normalizePathPrefix(basePath, "HTTP base path");
   const exampleRoute = routeTemplate
     .trim()
@@ -84,24 +102,33 @@ export function makeInitialHttpTestPath(routeTemplate: string, basePath = defaul
 
 /**
  * Validates an editable full request path and returns a same-origin absolute path suitable for `context.http`.
- * Schemes, network-path references, backslashes, and fragments are rejected so the configured backend remains
- * the only request destination.
+ * The path must stay beneath the host's configured workflow HTTP base path. Path segments are checked before
+ * URL parsing because WHATWG URL parsing canonicalizes dot segments (including encoded dots) before callers
+ * can inspect them. Encoded separators are rejected at every decoding layer so proxies and the server cannot
+ * reinterpret an apparently contained path as a sibling or parent route.
  */
-export function resolveHttpTestRequestPath(baseUrl: string, editedPath: string): string {
+export function resolveHttpTestRequestPath(baseUrl: string, editedPath: string, workflowHttpBasePath: string): string {
   const backend = new URL(baseUrl);
   if (backend.protocol !== "https:" && backend.protocol !== "http:") {
     throw new Error("The configured backend URL must use HTTP or HTTPS.");
   }
 
+  const basePath = normalizePathPrefix(workflowHttpBasePath, "Configured workflow HTTP base path");
   const path = editedPath.trim();
   if (!path) throw new Error("Enter a request path.");
   if (path.startsWith("//") || path.includes("\\") || /^[a-z][a-z\d+.-]*:/i.test(path) || path.includes("#")) {
-    throw new Error("Enter a path on the configured backend, such as /workflows/http/orders/1.");
+    throw new Error("Enter a path under the configured workflow HTTP base path.");
   }
 
+  const rawPathname = path.split("?", 1)[0];
+  assertSafePathSegments(rawPathname);
   const resolved = new URL(path.startsWith("/") ? path : `/${path}`, backend.origin);
   if (resolved.origin !== backend.origin) {
     throw new Error("Requests can only be sent to the configured backend.");
+  }
+
+  if (!hasRouteWithinPrefix(resolved.pathname, basePath)) {
+    throw new Error(`Enter an endpoint route beneath the configured workflow HTTP base path (${basePath}).`);
   }
 
   return `${resolved.pathname}${resolved.search}`;
@@ -204,14 +231,22 @@ function isAllowedAccessState(value: string | null | undefined): boolean {
 
 function normalizePathPrefix(path: string, label: string): string {
   const value = path.trim();
-  if (!value || value.includes("\\") || value.includes("?") || value.includes("#") || /^[a-z][a-z\d+.-]*:/i.test(value)) {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\") || value.includes("?") || value.includes("#") || /^[a-z][a-z\d+.-]*:/i.test(value)) {
     throw new Error(`${label} must be a local path.`);
   }
   const normalized = `/${value.replace(/^\/+|\/+$/g, "")}`;
-  if (normalized === "/" || normalized.split("/").some(segment => segment === "." || segment === "..")) {
+  assertSafePathSegments(normalized);
+  if (normalized === "/") {
     throw new Error(`${label} must be a non-root path.`);
   }
   return normalized;
+}
+
+function hasRouteWithinPrefix(pathname: string, prefix: string): boolean {
+  const normalizedPathname = pathname.replace(/\/+$/, "") || "/";
+  const normalizedPrefix = prefix.replace(/\/+$/, "");
+  if (!normalizedPathname.toLowerCase().startsWith(`${normalizedPrefix.toLowerCase()}/`)) return false;
+  return normalizedPathname.slice(normalizedPrefix.length + 1).replace(/^\/+/, "").length > 0;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

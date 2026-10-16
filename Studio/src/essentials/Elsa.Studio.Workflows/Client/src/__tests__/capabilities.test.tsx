@@ -33,8 +33,21 @@ describe("API capability bootstrap", () => {
 
     expect(first).toEqual(document);
     expect(second).toBe(first);
-    expect(link).toBe("/design/workflows/definitions");
+    expect(link).toBe("/shell-a/design/workflows/definitions");
     expect(getJson).toHaveBeenCalledOnce();
+    expect(getJson).toHaveBeenCalledWith("/shell-a/capabilities");
+  });
+
+  it.each(["", "test://custom-transport"])("retains root capability paths for a custom transport with base %s", async baseUrl => {
+    const getJson = vi.fn().mockResolvedValue({ capabilities: [{
+      id: capabilityIds.workflowDesign,
+      contractVersion: "1",
+      links: [{ rel: "workflow-definitions", href: "design/workflows/definitions" }]
+    }] });
+    const value = { ...context(getJson), baseUrl };
+
+    await expect(resolveCapabilityLink(value, capabilityIds.workflowDesign, "workflow-definitions"))
+      .resolves.toBe("/design/workflows/definitions");
     expect(getJson).toHaveBeenCalledWith("/capabilities");
   });
 

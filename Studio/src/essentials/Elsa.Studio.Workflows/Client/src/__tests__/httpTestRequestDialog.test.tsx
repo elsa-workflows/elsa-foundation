@@ -3,17 +3,20 @@ import { flushSync } from "react-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRoot, type Root } from "react-dom/client";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { capabilityIds, clearApiCapabilityCache } from "../api/capabilities";
 import { getExecutable, getExecutableInputSources } from "../api/runtime";
 import type { WorkflowExecutableDetails, WorkflowExecutableInputSources } from "../workflowTypes";
 import { HttpTestRequestDialog } from "../workflow-editor/HttpTestRequestDialog";
+import { workflowHttpBasePathCapabilityRelation, workflowHttpBasePathUnavailableMessage } from "../workflow-editor/httpTestRequest";
 
 vi.mock("../api/runtime", () => ({ getExecutable: vi.fn(), getExecutableInputSources: vi.fn() }));
 
 let mounted: { root: Root; container: HTMLElement } | null = null;
 const requestResponse = vi.fn<NonNullable<StudioEndpointContext["http"]["requestResponse"]>>();
+const getJson = vi.fn();
 const context = {
   baseUrl: "https://backend.example/",
-  http: { requestResponse }
+  http: { requestResponse, getJson }
 } as unknown as StudioEndpointContext;
 
 afterEach(async () => {
@@ -25,10 +28,13 @@ afterEach(async () => {
   vi.mocked(getExecutable).mockReset();
   vi.mocked(getExecutableInputSources).mockReset();
   requestResponse.mockReset();
+  getJson.mockReset();
+  clearApiCapabilityCache();
 });
 
 describe("HTTP test request dialog", () => {
   it("sends only after an explicit click and displays the raw 202 status, content type, and body", async () => {
+    advertiseWorkflowHttpBasePath();
     vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
     vi.mocked(getExecutableInputSources).mockResolvedValue(publishedEndpointInputs());
     requestResponse.mockResolvedValue(new Response(JSON.stringify({
@@ -62,7 +68,7 @@ describe("HTTP test request dialog", () => {
       body: expect.stringContaining("Ada Lovelace"),
       cache: "no-store",
       retryOnUnauthorized: false,
-      timeoutMs: 31_000,
+      timeoutMs: 36_000,
       redirect: "manual"
     }));
     expect(new Headers(init?.headers).get("Content-Type")).toBe("application/json");
@@ -75,6 +81,7 @@ describe("HTTP test request dialog", () => {
   });
 
   it("preserves an error response body instead of turning non-2xx status into a client exception", async () => {
+    advertiseWorkflowHttpBasePath();
     vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
     vi.mocked(getExecutableInputSources).mockResolvedValue(publishedEndpointInputs());
     requestResponse.mockResolvedValue(new Response("route not found", {
@@ -94,6 +101,7 @@ describe("HTTP test request dialog", () => {
   });
 
   it("blocks duplicate sends and aborts the active request when the dialog closes", async () => {
+    advertiseWorkflowHttpBasePath();
     vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
     vi.mocked(getExecutableInputSources).mockResolvedValue(publishedEndpointInputs());
     let resolveResponse!: (response: Response) => void;
@@ -122,6 +130,7 @@ describe("HTTP test request dialog", () => {
   });
 
   it("explains when published input settings are unavailable and does not send", async () => {
+    advertiseWorkflowHttpBasePath();
     vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
     vi.mocked(getExecutableInputSources).mockRejectedValue(new Error("forbidden"));
 
@@ -131,7 +140,51 @@ describe("HTTP test request dialog", () => {
     expect(container.querySelector("button[type='submit']")).toBeNull();
     expect(requestResponse).not.toHaveBeenCalled();
   });
+
+  it("uses the advertised custom mount and blocks same-origin requests outside it", async () => {
+    advertiseWorkflowHttpBasePath("engine/team-a/workflows");
+    vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
+    vi.mocked(getExecutableInputSources).mockResolvedValue(publishedEndpointInputs());
+    requestResponse.mockResolvedValue(new Response("workflow response", { status: 200 }));
+
+    const container = await renderDialog();
+    await waitFor(() => expect(container.querySelector("textarea[aria-label='Request body']")).not.toBeNull());
+    const path = container.querySelector<HTMLInputElement>("input[aria-label='Request path']")!;
+    expect(path.value).toBe("/engine/team-a/workflows/orders/1");
+
+    await changeInput(path, "/api/admin/users");
+    await click(container.querySelector<HTMLButtonElement>("button[type='submit']")!);
+    await waitFor(() => expect(container.textContent).toContain("configured workflow HTTP base path"));
+    expect(requestResponse).not.toHaveBeenCalled();
+
+    await changeInput(path, "/engine/team-a/workflows/orders/1");
+    await click(container.querySelector<HTMLButtonElement>("button[type='submit']")!);
+    await waitFor(() => expect(requestResponse).toHaveBeenCalledOnce());
+    expect(requestResponse).toHaveBeenCalledWith(
+      "/engine/team-a/workflows/orders/1",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
+  it("does not render a sendable request when the server omits the workflow mount capability", async () => {
+    getJson.mockResolvedValue({ capabilities: [] });
+    vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
+
+    const container = await renderDialog();
+    await waitFor(() => expect(container.textContent).toContain(workflowHttpBasePathUnavailableMessage));
+
+    expect(container.querySelector("button[type='submit']")).toBeNull();
+    expect(requestResponse).not.toHaveBeenCalled();
+  });
 });
+
+function advertiseWorkflowHttpBasePath(basePath = "workflows/http") {
+  getJson.mockResolvedValue({ capabilities: [{
+    id: capabilityIds.workflowHttpEndpoints,
+    contractVersion: "1",
+    links: [{ rel: workflowHttpBasePathCapabilityRelation, href: basePath }]
+  }] });
+}
 
 async function renderDialog(onClose = () => undefined) {
   const container = document.createElement("div");
@@ -153,6 +206,14 @@ async function renderDialog(onClose = () => undefined) {
 async function click(element: HTMLElement) {
   flushSync(() => {
     element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
+async function changeInput(element: HTMLInputElement, value: string) {
+  flushSync(() => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    setter?.call(element, value);
+    element.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
 

@@ -917,13 +917,15 @@ public sealed class HttpEndpointMiddlewareTests
 
     // ---- #592 item 12: a client disconnect during dispatch is swallowed, not surfaced as a pipeline exception ----
 
-    [Fact]
-    public async Task ClientAbortDuringDispatch_IsSwallowed_NoResponseWritten_NoRethrow()
+    [Theory]
+    [InlineData(ResponseMode.Async)]
+    [InlineData(ResponseMode.Sync)]
+    public async Task ClientAbortDuringDispatch_IsSwallowed_NoResponseWritten_NoRethrow(ResponseMode mode)
     {
         // The request is aborted while dispatch is in flight: the OperationCanceledException the dispatch observes
         // must not escape the middleware (there is no live connection to write to). No throw, status untouched.
         var router = BehaviourStimulusRouter.Throwing(new OperationCanceledException());
-        var store = await StoreWith(Binding("artifact-1", "aborted", "POST"));
+        var store = await StoreWith(Binding("artifact-1", "aborted", "POST", responseMode: mode));
         var middleware = Middleware(router, store, "aborted");
         using var aborted = new CancellationTokenSource();
         await aborted.CancelAsync();
@@ -1215,6 +1217,29 @@ public sealed class HttpEndpointMiddlewareTests
     }
 
     [Fact]
+    public async Task Sync_DeadlineAfterResponseStarted_AbortsConnectionWithoutOverwritingStatus()
+    {
+        var context = NewContext("/workflows/http/slow", "POST", body: "{}");
+        var started = new StartedResponseFeature { StatusCode = StatusCodes.Status201Created };
+        var lifetime = new RecordingRequestLifetimeFeature();
+        context.Features.Set<Microsoft.AspNetCore.Http.Features.IHttpResponseFeature>(started);
+        context.Features.Set<Microsoft.AspNetCore.Http.Features.IHttpRequestLifetimeFeature>(lifetime);
+        var router = RecordingStimulusRouter.WithCallback(async _ =>
+        {
+            started.MarkStarted();
+            await Task.Delay(Timeout.InfiniteTimeSpan, context.RequestAborted);
+        });
+        var store = await StoreWith(Binding("artifact-1", "slow", "POST", responseMode: ResponseMode.Sync));
+        var middleware = Middleware(router, store, "slow", syncRequestTimeout: TimeSpan.FromSeconds(1));
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.True(context.Response.HasStarted);
+        Assert.Equal(StatusCodes.Status201Created, context.Response.StatusCode);
+        Assert.Equal(1, lifetime.AbortCount);
+    }
+
+    [Fact]
     public async Task Sync_DispatchTimeout_Replies408_FaultPathStillWraps()
     {
         // Sync mode does not bypass the timeout/fault wrapping: a dispatch that delays past the endpoint timeout
@@ -1231,6 +1256,101 @@ public sealed class HttpEndpointMiddlewareTests
         Assert.Equal(StatusCodes.Status408RequestTimeout, context.Response.StatusCode);
     }
 
+    [Theory]
+    [InlineData(0, 20)]
+    [InlineData(5000, 20)]
+    [InlineData(20, 5000)]
+    public async Task Sync_UsesTheShorterHostAndEndpointDeadline(int endpointMilliseconds, int hostMilliseconds)
+    {
+        var router = BehaviourStimulusRouter.Delaying(TimeSpan.FromSeconds(1));
+        var store = await StoreWith(Binding("artifact-1", "slow", "POST",
+            requestTimeout: endpointMilliseconds == 0 ? null : TimeSpan.FromMilliseconds(endpointMilliseconds),
+            responseMode: ResponseMode.Sync));
+        var middleware = Middleware(router, store, "slow", syncRequestTimeout: TimeSpan.FromMilliseconds(hostMilliseconds));
+        var context = NewContext("/workflows/http/slow", "POST", body: "{}");
+        var clientToken = context.RequestAborted;
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status408RequestTimeout, context.Response.StatusCode);
+        Assert.Equal(clientToken, context.RequestAborted);
+        Assert.False(context.RequestAborted.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task Sync_HostDeadlineAlsoCancelsBodyReadingBeforeDispatch()
+    {
+        var router = new RecordingStimulusRouter();
+        var store = await StoreWith(Binding("artifact-1", "slow-body", "POST", responseMode: ResponseMode.Sync));
+        var middleware = Middleware(router, store, "slow-body", syncRequestTimeout: TimeSpan.FromMilliseconds(20));
+        await using var body = new WaitingReadStream();
+        var context = NewContext("/workflows/http/slow-body", "POST", bodyStream: body);
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status408RequestTimeout, context.Response.StatusCode);
+        Assert.Empty(router.Requests);
+        Assert.False(context.RequestAborted.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task Sync_HostDeadlineAlsoCancelsResponseWritingAfterDispatch()
+    {
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
+        var store = await StoreWith(Binding("artifact-1", "slow-response", "POST", responseMode: ResponseMode.Sync));
+        var middleware = Middleware(router, store, "slow-response", syncRequestTimeout: TimeSpan.FromMilliseconds(20));
+        var context = NewContext("/workflows/http/slow-response", "POST", body: "{}");
+        await using var responseBody = new WaitingWriteStream();
+        context.Response.Body = responseBody;
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status408RequestTimeout, context.Response.StatusCode);
+        Assert.Single(router.Requests);
+        Assert.False(context.RequestAborted.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task Async_DoesNotInheritTheSynchronousHostDeadline()
+    {
+        var router = BehaviourStimulusRouter.Delaying(TimeSpan.FromMilliseconds(40));
+        var store = await StoreWith(Binding("artifact-1", "async", "POST", responseMode: ResponseMode.Async));
+        var middleware = Middleware(router, store, "async", syncRequestTimeout: TimeSpan.FromMilliseconds(1));
+        var context = NewContext("/workflows/http/async", "POST", body: "{}");
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+        Assert.Single(router.Requests);
+    }
+
+    [Fact]
+    public async Task Async_AuthoredDispatchTimeoutDoesNotIncludeBodyReading()
+    {
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
+        var store = await StoreWith(Binding("artifact-1", "async", "POST", requestTimeout: TimeSpan.FromMilliseconds(20)));
+        var middleware = Middleware(router, store, "async");
+        await using var body = new DelayedReadStream();
+        var context = NewContext("/workflows/http/async", "POST", bodyStream: body);
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
+        Assert.Single(router.Requests);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(4294967295)]
+    public void InvalidSynchronousHostDeadlineCannotDisableTheLimit(double milliseconds)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new HttpEndpointOptions
+        {
+            SyncRequestTimeout = TimeSpan.FromMilliseconds(milliseconds)
+        });
+    }
+
     private static HttpEndpointMiddleware Middleware(
         IStimulusRouter router,
         IWorkflowTriggerBindingStore store,
@@ -1243,8 +1363,9 @@ public sealed class HttpEndpointMiddlewareTests
         string template,
         string? basePath = null,
         long? maxBodyBytes = null,
-        IGlobalBookmarkStimulusLookup? bookmarkLookup = null) =>
-        new(router, new FakeRouteTable(template), new TestRouteMatcher(), store, bookmarkLookup ?? EmptyBookmarkLookup(), Options(basePath, maxBodyBytes));
+        IGlobalBookmarkStimulusLookup? bookmarkLookup = null,
+        TimeSpan? syncRequestTimeout = null) =>
+        new(router, new FakeRouteTable(template), new TestRouteMatcher(), store, bookmarkLookup ?? EmptyBookmarkLookup(), Options(basePath, maxBodyBytes, syncRequestTimeout));
 
     /// <summary>A lookup over an empty bookmark store — the common case where every match is trigger-claimant-backed.</summary>
     private static IGlobalBookmarkStimulusLookup EmptyBookmarkLookup() =>
@@ -1427,11 +1548,12 @@ public sealed class HttpEndpointMiddlewareTests
         return (collection.BuildServiceProvider(), sink);
     }
 
-    private static IOptions<HttpEndpointOptions> Options(string? basePath = null, long? maxBodyBytes = null) =>
+    private static IOptions<HttpEndpointOptions> Options(string? basePath = null, long? maxBodyBytes = null, TimeSpan? syncRequestTimeout = null) =>
         Microsoft.Extensions.Options.Options.Create(new HttpEndpointOptions
         {
             BasePath = basePath ?? new HttpEndpointOptions().BasePath,
-            MaxRequestBodyBytes = maxBodyBytes ?? new HttpEndpointOptions().MaxRequestBodyBytes
+            MaxRequestBodyBytes = maxBodyBytes ?? new HttpEndpointOptions().MaxRequestBodyBytes,
+            SyncRequestTimeout = syncRequestTimeout ?? new HttpEndpointOptions().SyncRequestTimeout
         });
 
     private static DefaultHttpContext NewContext(
@@ -1491,6 +1613,37 @@ public sealed class HttpEndpointMiddlewareTests
         {
             WasRead = true;
             return base.ReadAsync(buffer, cancellationToken);
+        }
+    }
+
+    private sealed class RecordingRequestLifetimeFeature : Microsoft.AspNetCore.Http.Features.IHttpRequestLifetimeFeature
+    {
+        public CancellationToken RequestAborted { get; set; }
+        public int AbortCount { get; private set; }
+        public void Abort() => AbortCount++;
+    }
+
+    private sealed class WaitingReadStream : MemoryStream
+    {
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return 0;
+        }
+    }
+
+    private sealed class WaitingWriteStream : MemoryStream
+    {
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) =>
+            new(Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken));
+    }
+
+    private sealed class DelayedReadStream : MemoryStream
+    {
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(40, cancellationToken);
+            return 0;
         }
     }
 

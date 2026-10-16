@@ -1869,6 +1869,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Api.Capabilities",
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Http.Core",
           "path": "Essentials/src/Http/Core/Elsa.Http.Core.csproj"
         },
@@ -1911,6 +1916,11 @@
           "type": "external",
           "id": "Microsoft.Extensions.Options",
           "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
         }
       ]
     },

@@ -1,13 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { getExecutable } from "../api/runtime";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { WorkflowExecutableDetails, WorkflowExecutableInputSources, WorkflowExecutableNode } from "../workflowTypes";
+import { capabilityIds, clearApiCapabilityCache } from "../api/capabilities";
 import {
   describeHttpEndpointAcceptedResponse,
   findPublishedHttpEndpoint,
+  getWorkflowHttpBasePath,
   makeInitialHttpTestPath,
   publishedHttpEndpointInputsUnavailableMessage,
   readHttpEndpointResponseMetadata,
-  resolveHttpTestRequestPath
+  resolveHttpTestRequestPath,
+  workflowHttpBasePathCapabilityRelation,
+  workflowHttpBasePathUnavailableMessage
 } from "../workflow-editor/httpTestRequest";
+
+afterEach(clearApiCapabilityCache);
 
 describe("published HTTP test request helpers", () => {
   it("explains when a newly added draft endpoint is absent from the published workflow", () => {
@@ -38,7 +46,8 @@ describe("published HTTP test request helpers", () => {
       supportedMethods: ["GET", "POST"],
       responseMode: "async"
     });
-    expect(makeInitialHttpTestPath(endpoint!.routeTemplate)).toBe("/workflows/http/orders/1");
+    expect(makeInitialHttpTestPath(endpoint!.routeTemplate, "/workflows/http")).toBe("/workflows/http/orders/1");
+    expect(makeInitialHttpTestPath(endpoint!.routeTemplate, "/tenant/api/workflows/")).toBe("/tenant/api/workflows/orders/1");
   });
 
   it("applies the engine's GET default only when no SupportedMethods input is authored", () => {
@@ -82,17 +91,109 @@ describe("published HTTP test request helpers", () => {
     })).toThrow(publishedHttpEndpointInputsUnavailableMessage);
   });
 
-  it("keeps edited paths on the configured backend and rejects absolute or network-path URLs", () => {
-    expect(resolveHttpTestRequestPath("https://backend.example/api/", "/workflows/http/orders/1?q=a"))
+  it("keeps edited paths on the configured backend and beneath its workflow HTTP base path", () => {
+    expect(resolveHttpTestRequestPath("https://backend.example/api/", "/workflows/http/orders/1?q=a", "/workflows/http"))
       .toBe("/workflows/http/orders/1?q=a");
-    expect(resolveHttpTestRequestPath("https://backend.example/", "workflows/http/orders/1"))
+    expect(resolveHttpTestRequestPath("https://backend.example/", "workflows/http/orders/1", "/workflows/http"))
       .toBe("/workflows/http/orders/1");
-    expect(() => resolveHttpTestRequestPath("https://backend.example/", "https://attacker.example/collect"))
-      .toThrow("configured backend");
-    expect(() => resolveHttpTestRequestPath("https://backend.example/", "//attacker.example/collect"))
-      .toThrow("configured backend");
-    expect(() => resolveHttpTestRequestPath("https://backend.example/", "\\\\attacker.example\\collect"))
-      .toThrow("configured backend");
+    expect(resolveHttpTestRequestPath("https://backend.example/", "/tenant/api/workflows/orders/1", "/tenant/api/workflows/"))
+      .toBe("/tenant/api/workflows/orders/1");
+    expect(() => resolveHttpTestRequestPath("https://backend.example/", "/api/admin/users", "/workflows/http"))
+      .toThrow("workflow HTTP base path");
+    expect(() => resolveHttpTestRequestPath("https://backend.example/", "/workflows/http", "/workflows/http"))
+      .toThrow("workflow HTTP base path");
+    expect(() => resolveHttpTestRequestPath("https://backend.example/", "/workflows/http/", "/workflows/http"))
+      .toThrow("workflow HTTP base path");
+    expect(() => resolveHttpTestRequestPath("https://backend.example/", "/workflows/http-admin/users", "/workflows/http"))
+      .toThrow("workflow HTTP base path");
+    expect(() => resolveHttpTestRequestPath("https://backend.example/", "https://attacker.example/collect", "/workflows/http"))
+      .toThrow("configured workflow HTTP base path");
+    expect(() => resolveHttpTestRequestPath("https://backend.example/", "//attacker.example/collect", "/workflows/http"))
+      .toThrow("configured workflow HTTP base path");
+    expect(() => resolveHttpTestRequestPath("https://backend.example/", "\\\\attacker.example\\collect", "/workflows/http"))
+      .toThrow("workflow HTTP base path");
+  });
+
+  it("rejects literal, encoded, and multiply encoded traversal or path separators before URL canonicalization", () => {
+    for (const path of [
+      "/workflows/http/../admin",
+      "/workflows/http/%2e%2e/admin",
+      "/workflows/http/.%2e/admin",
+      "/workflows/http/%252e%252e/admin",
+      "/workflows/http/orders%2f..%2fadmin",
+      "/workflows/http/orders%5c..%5cadmin",
+      "/workflows/http/orders%252fadmin"
+    ]) {
+      expect(() => resolveHttpTestRequestPath("https://backend.example/", path, "/workflows/http"), path)
+        .toThrow();
+    }
+  });
+
+  it("rejects invalid or unsafe configured workflow base paths", () => {
+    for (const basePath of ["", "/", "//other.example/workflows", "/api/%2e%2e/admin", "/api/%252fadmin", "/api\\admin"]) {
+      expect(() => resolveHttpTestRequestPath("https://backend.example/", "/workflows/http/orders/1", basePath), basePath)
+        .toThrow();
+    }
+  });
+
+  it("reads a custom advertised workflow mount relative to the backend shell path", async () => {
+    const getJson = vi.fn().mockResolvedValue({ capabilities: [{
+      id: capabilityIds.workflowHttpEndpoints,
+      contractVersion: "1",
+      links: [{ rel: workflowHttpBasePathCapabilityRelation, href: "tenant/custom-http" }]
+    }] });
+    const context = {
+      baseUrl: "https://backend.example/engine/shell-a",
+      http: { getJson }
+    } as unknown as StudioEndpointContext;
+
+    await expect(getWorkflowHttpBasePath(context)).resolves.toBe("/engine/shell-a/tenant/custom-http");
+    expect(getJson).toHaveBeenCalledWith("/engine/shell-a/capabilities");
+  });
+
+  it("loads the published executable from the same prefixed shell as the HTTP mount", async () => {
+    const getJson = vi.fn().mockImplementation(async path => {
+      if (path === "/engine/shell-a/capabilities") return { capabilities: [{
+        id: capabilityIds.runtime,
+        contractVersion: "1",
+        links: [{ rel: "workflow-executable", href: "runtime/workflow-executables/{artifactId}" }]
+      }, {
+        id: capabilityIds.workflowHttpEndpoints,
+        contractVersion: "1",
+        links: [{ rel: workflowHttpBasePathCapabilityRelation, href: "tenant/custom-http" }]
+      }] };
+      if (path === "/engine/shell-a/runtime/workflow-executables/artifact-1") return { artifactId: "artifact-1" };
+      throw new Error(`Unexpected path ${path}`);
+    });
+    const context = { baseUrl: "https://backend.example/engine/shell-a", http: { getJson } } as unknown as StudioEndpointContext;
+
+    await expect(getExecutable(context, "artifact-1")).resolves.toEqual({ artifactId: "artifact-1" });
+    await expect(getWorkflowHttpBasePath(context)).resolves.toBe("/engine/shell-a/tenant/custom-http");
+    expect(getJson).toHaveBeenCalledWith("/engine/shell-a/runtime/workflow-executables/artifact-1");
+  });
+
+  it("fails closed when the server does not advertise a supported, dedicated workflow mount", async () => {
+    const contextFor = (capability: unknown) => ({
+      baseUrl: "https://backend.example/",
+      http: { getJson: vi.fn().mockResolvedValue({ capabilities: capability ? [capability] : [] }) }
+    } as unknown as StudioEndpointContext);
+
+    await expect(getWorkflowHttpBasePath(contextFor(null))).rejects.toThrow(workflowHttpBasePathUnavailableMessage);
+    await expect(getWorkflowHttpBasePath(contextFor({
+      id: capabilityIds.workflowHttpEndpoints,
+      contractVersion: "2",
+      links: [{ rel: workflowHttpBasePathCapabilityRelation, href: "workflows/http" }]
+    }))).rejects.toThrow(workflowHttpBasePathUnavailableMessage);
+    await expect(getWorkflowHttpBasePath(contextFor({
+      id: capabilityIds.workflowHttpEndpoints,
+      contractVersion: "1",
+      links: [{ rel: workflowHttpBasePathCapabilityRelation, href: "" }]
+    }))).rejects.toThrow(workflowHttpBasePathUnavailableMessage);
+    await expect(getWorkflowHttpBasePath(contextFor({
+      id: capabilityIds.workflowHttpEndpoints,
+      contractVersion: "1",
+      links: [{ rel: workflowHttpBasePathCapabilityRelation, href: "workflows/http/../admin" }]
+    }))).rejects.toThrow(workflowHttpBasePathUnavailableMessage);
   });
 
   it("reads additive 202 response metadata and gives a cautious fallback when it is absent", () => {
