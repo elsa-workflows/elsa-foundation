@@ -21,6 +21,6 @@ Expected:
 Manual corpus check (SC-006), outside the repository:
 - Convert each of the 36 JTest definitions in `JTEST-nexxbiz/workflow-definitions` through the single-definition
   importer (or a scratch test harness pointed at that folder; do not commit the definitions).
-- Record per file: converted, or the list of codes. Expected graph refusals: `branching-fork-parallel` and
-  `branching-wait-any` (`GRAPH-JOIN-UNSUPPORTED`). Other refusals are spec 236 or #2717 causes.
+- Record per file: converted, or the list of codes. Expected graph refusals: `branching-fork-parallel`,
+  `branching-wait-any` and `branching-wait-all` (`GRAPH-JOIN-UNSUPPORTED`). Other refusals are spec 236 or #2717 causes.
 - Paste the table into the PR description.

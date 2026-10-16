@@ -72,6 +72,24 @@ public sealed class Elsa3FlowchartDiagnosticsTests
     }
 
     [Fact]
+    public async Task A_fork_straight_into_a_join_collapses_to_one_connection()
+    {
+        var fork = Activity("fork", "Elsa.FlowFork", ("branches", Expression("Object", "[\"b1\",\"b2\"]", "String[]")));
+        var join = Activity("join", "Elsa.FlowJoin", ("mode", Literal("WaitAllActive")));
+        var chart = Flowchart("root", Write("first"), fork, join, Write("after"));
+        chart.Connections =
+        [
+            Connect("first", "Done", "fork"), Connect("fork", "b1", "join"), Connect("fork", "b2", "join"), Connect("join", "Done", "after")
+        ];
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(chart));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal(["first", "after"], Children(result.Value!.State.RootActivity!));
+        Assert.Equal(["first:Done->after"], Connections(result.Value.State.RootActivity!));
+    }
+
+    [Fact]
     public async Task Several_causes_are_all_reported_in_path_order()
     {
         var chart = Flowchart("root", Write("a"), Write("b"));

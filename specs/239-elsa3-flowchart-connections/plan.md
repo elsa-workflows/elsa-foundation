@@ -1,6 +1,6 @@
 # Implementation Plan: Elsa 3 Flowchart connections
 
-**Branch**: `2705-elsa3-flowchart-connections` (stacked on `236-elsa3-activity-map`) | **Date**: 2026-10-16 |
+**Branch**: `2705-elsa3-flowchart-connections` (on `main` since #2805 merged) | **Date**: 2026-10-16 |
 **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `specs/239-elsa3-flowchart-connections/spec.md`; research in
@@ -72,7 +72,7 @@ resolver extension (outcomes), 2 rewrite changes (End placement, HttpEndpoint pr
 | §E2.9 (provisional) no generic child collection on `ActivityNode` | PASS | Children go into the Flowchart's native payload |
 | §E5 versioning | PASS | Additive members only (`Elsa3ResolvedActivity.Outcomes`, `Elsa3ActivityExactReplacement.OutcomeNames`, new code constants) |
 | §E6 naming R1–R8 | PASS | `Elsa3FlowchartGraphBuilder` (Builder), `Elsa3GraphConstructKind`, `Elsa3ActivityTarget.GraphConstruct` |
-| §2.5 / §2.5.1 features | PASS | The graph builder is an internal collaborator of the normalizer, registered scoped in `Elsa3MappingFeature` |
+| §2.5 / §2.5.1 features | PASS | The graph builder is a stateless internal static helper the normalizer calls; nothing is registered, so `Elsa3MappingFeature` is unchanged |
 | §2.6.2 replacement contracts | PASS | No new contract. `IElsa3NodeConverter` keeps its shape; its documentation changes (R-9) |
 | §2.17 duplication beats dependency | PASS | The outcome-set rule for reusable targets duplicates spec 236's D-5/D-6 scan in the materializer (a few lines) rather than calling the converter |
 | §2.22 / §2.22.1 docs and extension points | ACTION | Mapping `README.md`, `EXTENSION_POINTS.md` (`IElsa3NodeConverter` wording), 236's member-map rows pointing to spec 239, the 239 diagnostic contract |
@@ -124,7 +124,6 @@ Extensions/Elsa3/src/Mapping/
 │   └── IElsa3NodeConverter.cs                      # docs: flowcharts no longer deferred
 ├── Mappings/Elsa3ActivityToState.cs                # + OutcomeNames on Elsa3ActivityExactReplacement
 ├── Services/Elsa3ReusableActivityImportMaterializer.cs  # fills OutcomeNames (R-3)
-├── Elsa3MappingFeature.cs                          # registers the graph builder
 ├── README.md, EXTENSION_POINTS.md
 specs/236-elsa3-activity-map/member-map.md          # R8 rows point to spec 239's rules
 
@@ -158,10 +157,8 @@ Extensions/Elsa3/tests/Mapping/Tests/
 10. **Docs.** README, EXTENSION_POINTS, member-map pointers, diagnostic contract. Run the quickstart; run SC-006
     against the JTest checkout and record it for the PR.
 
-**Halt H-1**: after step 10, enable the skipped multi-trigger validation test only once spec 238 is on `main` and this
-branch has been rebased onto `main` (after #2805 is squash-merged:
-`git rebase --onto origin/main origin/236-elsa3-activity-map 2705-elsa3-flowchart-connections`; `main` is never merged
-in). **Halt H-2**: the PR stays draft until H-1 is cleared.
+**Halt H-1**: after step 10, enable the skipped multi-trigger validation test only once spec 238 (#2856) is on `main`
+and this branch is rebased onto it (`git rebase origin/main`; `main` is never merged in). **Halt H-2**: the PR stays draft until H-1 is cleared.
 
 ## Complexity Tracking
 

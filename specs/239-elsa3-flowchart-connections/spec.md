@@ -1,6 +1,6 @@
 # Feature Specification: Elsa 3 Flowchart connections — convert Elsa 3 flowcharts to Elsa 4 graphs
 
-**Feature Branch**: `2705-elsa3-flowchart-connections` (stacked on `236-elsa3-activity-map`, PR #2805)
+**Feature Branch**: `2705-elsa3-flowchart-connections` (on `main`; spec 236 merged as #2805, 2026-10-15)
 
 **Created**: 2026-10-16
 
@@ -21,7 +21,7 @@ converted output is the same with or without it. Exactly two things do, and work
   proven without 238.
 - **H-2**: marking the PR ready for review and merging. A converted multi-trigger flowchart runs correctly only with
   238's runtime change.
-Spec 236 (#2805) is a base, not a halt point: this branch stacks on it. Spec 236's own deferral to #2796 (publishing
+Spec 236 (#2805) is a base, not a halt point: it is merged, and this branch sits on `main`. Spec 236's own deferral to #2796 (publishing
 imported reusables) is unchanged and is not a halt point for this spec.
 
 **Tracking**: ADO 47607. Prerequisite of spec 235 (Elsa3JsonReconciliation, draft PR #2708, issue #2707), together
@@ -349,7 +349,8 @@ the node or connection and say what to change. Nothing throws; nothing is droppe
 - **SC-005**: Converting the same input twice yields byte-identical output.
 - **SC-006**: Run against the 36 JTest definitions (outside the repo, recorded in the PR), no definition reports
   `GRAPH-CONVERSION-PENDING`; every refusal is one of the documented codes. Expected graph refusals:
-  `branching-fork-parallel` and `branching-wait-any` (concurrent `WaitAny`).
+  `branching-fork-parallel` and `branching-wait-any` (concurrent `WaitAny`), and `branching-wait-all` (a `WaitAll`
+  join reached by mutually exclusive paths, which Elsa 3 always skips; found by the 2026-10-16 corpus run).
 
 ## Assumptions
 

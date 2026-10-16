@@ -26,7 +26,7 @@ skips and reports by code, so a code is never renamed or reused. Each diagnostic
 | `RemovedInputBound` | `ELS3-ACTIVITY-REMOVED-INPUT-BOUND` | R3 input absent in Elsa 4 but bound to a non-default value or an expression | FR-004 |
 | `RequiredInputUnbound` | `ELS3-ACTIVITY-REQUIRED-INPUT-UNBOUND` | a required Elsa 4 input would stay unbound | FR-004c |
 | `UnsupportedMode` | `ELS3-ACTIVITY-UNSUPPORTED-MODE` | Switch/FlowSwitch MatchAny or expression mode; End/Complete in a plain workflow outside the root flowchart; Complete with several outcomes or an expression outcome; `"done"` alongside `"Done"` in a reusable workflow | FR-004a, FR-004e |
-| `GraphConversionPending` | `ELS3-ACTIVITY-GRAPH-CONVERSION-PENDING` | Flowchart, FlowFork, FlowJoin, Start: graph conversion is #2705's | FR-001, FR-006 |
+| `GraphConversionPending` | `ELS3-ACTIVITY-GRAPH-CONVERSION-PENDING` | No longer raised: spec 239 converts Flowchart, FlowFork, FlowJoin and Start (its codes: [spec 239 contract](../../239-elsa3-flowchart-connections/contracts/diagnostic-codes.md)) | FR-001, FR-006 |
 | `NestingTooDeep` | `ELS3-ACTIVITY-NESTING-TOO-DEEP` | deeper than `MaxNestingDepth` (formerly `ArgumentException`) | FR-012 |
 | `DuplicateInputBinding` | `ELS3-ACTIVITY-DUPLICATE-INPUT-BINDING` | two properties bind one input, or one property matches two (formerly `ArgumentException`) | FR-012 |
 
