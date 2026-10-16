@@ -5,6 +5,7 @@ using Elsa.Api.Capabilities.Models;
 using Elsa.Activities.Http.Options;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Elsa.Activities.Http.Tests;
@@ -31,7 +32,24 @@ public sealed class HttpWorkflowEndpointsCapabilitySourceTests
     {
         var document = await GetDocumentAsync(featureBasePath: basePath);
 
-        Assert.Equal(expectedHref, Assert.Single(Assert.Single(document.Capabilities).Links).Href);
+        var href = Assert.Single(Assert.Single(document.Capabilities).Links).Href;
+        Assert.Equal(expectedHref, href);
+        Assert.Equal($"/{basePath.Trim('/')}", PathString.FromUriComponent($"/{href}").Value);
+    }
+
+    [Theory]
+    [InlineData("/tenant/workflow endpoints/", "tenant/workflow%20endpoints")]
+    [InlineData("/api:v1/workflows", "api%3Av1/workflows")]
+    [InlineData("/https:example.test/workflows", "https%3Aexample.test/workflows")]
+    public async Task ActivitiesHttpFeature_escapes_literal_segments_that_would_not_resolve_as_relative_links(
+        string basePath,
+        string expectedHref)
+    {
+        var document = await GetDocumentAsync(featureBasePath: basePath);
+
+        var href = Assert.Single(Assert.Single(document.Capabilities).Links).Href;
+        Assert.Equal(expectedHref, href);
+        Assert.Equal($"/{basePath.Trim('/')}", PathString.FromUriComponent($"/{href}").Value);
     }
 
     [Fact]
@@ -64,18 +82,43 @@ public sealed class HttpWorkflowEndpointsCapabilitySourceTests
     [Theory]
     [InlineData("https://example.test/workflows")]
     [InlineData("//example.test/workflows")]
-    [InlineData("/https:example.test/workflows")]
+    [InlineData("/workflows?x=1")]
+    [InlineData("/workflows#fragment")]
+    [InlineData("/workflows\\admin")]
+    [InlineData("/api//v2")]
     [InlineData("/workflows/../runtime")]
     [InlineData("/workflows/%2e%2e/runtime")]
     [InlineData("/workflows/%252e%252e/runtime")]
     [InlineData("/workflows/api%2fadmin")]
     [InlineData("/workflows/%ZZ")]
-    public async Task Invalid_origin_or_traversal_base_path_is_rejected(string basePath)
+    public async Task Invalid_origin_or_traversal_base_path_omits_the_capability(string basePath)
     {
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await GetDocumentAsync(hostBasePathOverride: basePath));
+        var document = await GetDocumentAsync(hostBasePathOverride: basePath);
 
-        Assert.Contains("HttpEndpointOptions.BasePath", exception.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(document.Capabilities, capability => capability.Id == "elsa.http.workflow-endpoints");
+    }
+
+    [Fact]
+    public async Task Invalid_base_path_is_omitted_with_a_warning_without_blocking_other_capabilities()
+    {
+        var logs = new CapturingLoggerProvider();
+        var services = new ServiceCollection();
+        services.AddApiCapabilities();
+        services.AddLogging(builder => builder.AddProvider(logs));
+        services.AddApiCapability(new ApiCapabilityDeclaration(
+            "elsa.test.other",
+            1,
+            [new ApiCapabilityLink("other", "other")],
+            "OtherFeature"));
+        new ActivitiesHttpFeature().ConfigureServices(services);
+        services.Configure<HttpEndpointOptions>(options => options.BasePath = "/workflows/../runtime");
+
+        await using var provider = services.BuildServiceProvider();
+        var document = await provider.GetRequiredService<IApiCapabilityCatalog>().GetAsync();
+
+        Assert.Contains(document.Capabilities, capability => capability.Id == "elsa.test.other");
+        Assert.DoesNotContain(document.Capabilities, capability => capability.Id == "elsa.http.workflow-endpoints");
+        Assert.Contains(logs.Warnings, message => message.Contains("HttpEndpointOptions.BasePath", StringComparison.Ordinal));
     }
 
     [Theory]
@@ -86,8 +129,9 @@ public sealed class HttpWorkflowEndpointsCapabilitySourceTests
         // ASP.NET decodes the request path before the middleware compares it with the configured mount.
         Assert.Equal(decodedPath, PathString.FromUriComponent(basePath).Value);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await GetDocumentAsync(hostBasePathOverride: basePath));
+        var document = await GetDocumentAsync(hostBasePathOverride: basePath);
+
+        Assert.DoesNotContain(document.Capabilities, capability => capability.Id == "elsa.http.workflow-endpoints");
     }
 
     private static async Task<ApiCapabilitiesDocument> GetDocumentAsync(
@@ -97,6 +141,7 @@ public sealed class HttpWorkflowEndpointsCapabilitySourceTests
     {
         var services = new ServiceCollection();
         services.AddApiCapabilities();
+        services.AddLogging();
         if (includeFeature)
             new ActivitiesHttpFeature { BasePath = featureBasePath }.ConfigureServices(services);
         if (hostBasePathOverride is not null)
@@ -104,5 +149,34 @@ public sealed class HttpWorkflowEndpointsCapabilitySourceTests
 
         await using var provider = services.BuildServiceProvider();
         return await provider.GetRequiredService<IApiCapabilityCatalog>().GetAsync();
+    }
+
+    private sealed class CapturingLoggerProvider : ILoggerProvider
+    {
+        public List<string> Warnings { get; } = [];
+
+        public ILogger CreateLogger(string categoryName) => new CapturingLogger(this);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class CapturingLogger(CapturingLoggerProvider owner) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => logLevel == LogLevel.Warning;
+
+            public void Log<TState>(
+                LogLevel logLevel,
+                EventId eventId,
+                TState state,
+                Exception? exception,
+                Func<TState, Exception?, string> formatter)
+            {
+                if (logLevel == LogLevel.Warning)
+                    owner.Warnings.Add(formatter(state, exception));
+            }
+        }
     }
 }

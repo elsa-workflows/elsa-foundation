@@ -1,6 +1,7 @@
 using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Models;
 using Elsa.Activities.Http.Options;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Elsa.Activities.Http.Capabilities;
@@ -11,13 +12,26 @@ internal sealed class HttpWorkflowEndpointsCapabilitySource : IApiCapabilitySour
     private const string CapabilityId = "elsa.http.workflow-endpoints";
     private const string SourceFeatureId = "ActivitiesHttp";
     private readonly IOptions<HttpEndpointOptions> _options;
+    private readonly ILogger<HttpWorkflowEndpointsCapabilitySource> _logger;
 
-    public HttpWorkflowEndpointsCapabilitySource(IOptions<HttpEndpointOptions> options) => _options = options;
+    public HttpWorkflowEndpointsCapabilitySource(
+        IOptions<HttpEndpointOptions> options,
+        ILogger<HttpWorkflowEndpointsCapabilitySource> logger)
+    {
+        _options = options;
+        _logger = logger;
+    }
 
     public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(
         CancellationToken cancellationToken = default)
     {
-        var href = GetRelativeBasePath(_options.Value.BasePath);
+        if (!TryGetRelativeBasePath(_options.Value.BasePath, out var href))
+        {
+            _logger.LogWarning(
+                "Omitting the workflow HTTP base-path capability because HttpEndpointOptions.BasePath is not a usable origin-form path.");
+            return ValueTask.FromResult<IReadOnlyCollection<ApiCapabilityDeclaration>>([]);
+        }
+
         IReadOnlyCollection<ApiCapabilityDeclaration> declarations = href is null
             ? []
             : [new(
@@ -29,18 +43,19 @@ internal sealed class HttpWorkflowEndpointsCapabilitySource : IApiCapabilitySour
         return ValueTask.FromResult(declarations);
     }
 
-    private static string? GetRelativeBasePath(string? basePath)
+    private static bool TryGetRelativeBasePath(string? basePath, out string? href)
     {
+        href = null;
         if (basePath is null)
-            throw InvalidBasePath();
+            return false;
 
         if (basePath.Length == 0)
-            return null;
+            return true;
 
         // The endpoint middleware treats an empty or slash-only base path as disabled.
-        var href = basePath.Trim('/');
-        if (href.Length == 0)
-            return null;
+        var path = basePath.Trim('/');
+        if (path.Length == 0)
+            return true;
 
         // The middleware consumes an origin-form path. Do not silently publish a plausible-looking default when
         // the effective option is malformed: a capability would then direct clients to a route the middleware
@@ -51,33 +66,23 @@ internal sealed class HttpWorkflowEndpointsCapabilitySource : IApiCapabilitySour
             || basePath.Contains('#')
             || basePath.Contains('%')
             || basePath.Contains('\\')
-            || basePath.Any(char.IsControl)
-            || basePath.Any(char.IsWhiteSpace))
-            throw InvalidBasePath();
+            || basePath.Any(char.IsControl))
+            return false;
 
         // ASP.NET decodes request paths before matching BasePath. URI escapes in this option could therefore
         // advertise an alias outside the middleware's literal mount. Hosts must configure the decoded path.
-        if (href.Split('/').Any(segment => segment.Length == 0 || segment is "." or ".."))
-            throw InvalidBasePath();
-
-        if (HasUriScheme(href))
-            throw InvalidBasePath();
-
-        // ApiCapabilityLink is the final guard against URI-shaped hrefs as well.
-        return href;
-    }
-
-    private static bool HasUriScheme(string path)
-    {
-        var colonIndex = path.IndexOf(':');
-        if (colonIndex <= 0)
+        var segments = path.Split('/');
+        if (segments.Any(segment => segment.Length == 0 || segment is "." or ".."))
             return false;
 
-        var slashIndex = path.IndexOf('/');
-        return (slashIndex < 0 || colonIndex < slashIndex)
-            && Uri.CheckSchemeName(path[..colonIndex]);
-    }
+        // Capability links are resolved as relative URLs. Escape whitespace and a colon in the first segment so
+        // a literal mount remains relative (for example, "api:v1" cannot be read as a URI scheme).
+        href = string.Join("/", segments.Select((segment, index) =>
+            segment.Any(char.IsWhiteSpace) || (index == 0 && segment.Contains(':'))
+                ? Uri.EscapeDataString(segment)
+                : segment));
 
-    private static InvalidOperationException InvalidBasePath() =>
-        new("HttpEndpointOptions.BasePath must be a valid origin-form path without URI escapes or traversal segments.");
+        // Do not let the capability link's absolute-URI guard turn an unusable option into a catalog failure.
+        return !Uri.TryCreate(href, UriKind.Absolute, out _);
+    }
 }

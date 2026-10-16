@@ -3,6 +3,7 @@ using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Middleware;
+using Elsa.Activities.Http.Models;
 using Elsa.Activities.Http.Options;
 using Elsa.Activities.Http.Services;
 using Elsa.Activities.Testing;
@@ -1216,6 +1217,57 @@ public sealed class HttpEndpointMiddlewareTests
         Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Sync_CanonicalDeliveryFault_PropagatesToTheHost(bool responseStarted)
+    {
+        var committed = await HttpResponseInstructionFixture.StoreWith(
+            new HttpResponseInstruction(StatusCodes.Status201Created, new Dictionary<string, string[]>(), "partial response", "text/plain"));
+        var delivery = new HttpResponseInstructionDelivery(committed, []);
+        var (services, _) = SyncServices(delivery);
+        var context = NewContext("/workflows/http/response-fault", "POST", body: "{}", services: services);
+        var started = new StartedResponseFeature();
+        context.Features.Set<Microsoft.AspNetCore.Http.Features.IHttpResponseFeature>(started);
+        var failure = new IOException("response stream failed");
+        await using var body = new FailingResponseStream(started, responseStarted, failure);
+        context.Response.Body = body;
+        var clientToken = context.RequestAborted;
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-1"));
+        var store = await StoreWith(Binding("artifact-1", "response-fault", "POST", responseMode: ResponseMode.Sync));
+        var middleware = Middleware(router, store, "response-fault");
+
+        // The host must see the fault so it can log it and abort a partially delivered response.
+        var exception = await Assert.ThrowsAsync<IOException>(() => middleware.InvokeAsync(context, _ => Task.CompletedTask));
+
+        Assert.Same(failure, exception);
+        Assert.Equal(responseStarted, context.Response.HasStarted);
+        Assert.Equal(StatusCodes.Status201Created, context.Response.StatusCode);
+        Assert.Equal(clientToken, context.RequestAborted);
+        Assert.Equal("par", Encoding.UTF8.GetString(body.ToArray()));
+    }
+
+    [Theory]
+    [InlineData(ResponseMode.Async)]
+    [InlineData(ResponseMode.Sync)]
+    public async Task UnexpectedAuthorizationFault_PropagatesToTheHost(ResponseMode mode)
+    {
+        var failure = new InvalidOperationException("authorization provider failed");
+        var services = ServicesWith<IHttpEndpointAuthorizationHandler>(FakeAuthorizationHandler.Throwing(failure));
+        var context = NewContext("/workflows/http/authorization-fault", "POST", body: "{}", services: services);
+        var clientToken = context.RequestAborted;
+        var router = new RecordingStimulusRouter();
+        var store = await StoreWith(Binding("artifact-1", "authorization-fault", "POST", authorize: true, responseMode: mode));
+        var middleware = Middleware(router, store, "authorization-fault");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => middleware.InvokeAsync(context, _ => Task.CompletedTask));
+
+        Assert.Same(failure, exception);
+        Assert.Equal(clientToken, context.RequestAborted);
+        Assert.Empty(router.Requests);
+        Assert.False(context.Response.HasStarted);
+    }
+
     [Fact]
     public async Task Sync_DeadlineAfterResponseStarted_AbortsConnectionWithoutOverwritingStatus()
     {
@@ -1621,6 +1673,17 @@ public sealed class HttpEndpointMiddlewareTests
         public CancellationToken RequestAborted { get; set; }
         public int AbortCount { get; private set; }
         public void Abort() => AbortCount++;
+    }
+
+    private sealed class FailingResponseStream(StartedResponseFeature response, bool markStarted, IOException failure) : MemoryStream
+    {
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            await base.WriteAsync(buffer[..3], cancellationToken);
+            if (markStarted)
+                response.MarkStarted();
+            throw failure;
+        }
     }
 
     private sealed class WaitingReadStream : MemoryStream

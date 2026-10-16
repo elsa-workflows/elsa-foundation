@@ -195,14 +195,14 @@ public sealed class HttpEndpointMiddleware(
 
         try
         {
-            await HandleMatchedEndpointAsync(context, endpointPath, routeValues, stimulusHash, claimants, endpointOptions, timeoutSource);
+            await HandleMatchedEndpointAsync(context, endpointPath, routeValues, stimulusHash, claimants, endpointOptions, timeoutSource, clientAborted);
         }
-        catch (Exception exception) when (!clientAborted.IsCancellationRequested)
+        catch (OperationCanceledException exception) when (!clientAborted.IsCancellationRequested && timeoutSource?.IsCancellationRequested == true)
         {
             // Restore the client token before writing a timeout response. Expiry cancels request work, not the
             // live connection, and must produce 408 rather than being mistaken for a disconnected caller.
             context.RequestAborted = clientAborted;
-            await HandleDispatchFaultAsync(context, exception, timedOut: timeoutSource?.IsCancellationRequested == true);
+            await HandleDispatchFaultAsync(context, exception, timedOut: true);
         }
         finally
         {
@@ -217,7 +217,8 @@ public sealed class HttpEndpointMiddleware(
         string stimulusHash,
         IReadOnlyCollection<WorkflowTriggerBinding> claimants,
         MergedHttpEndpointOptions endpointOptions,
-        CancellationTokenSource? timeoutSource)
+        CancellationTokenSource? timeoutSource,
+        CancellationToken clientAborted)
     {
         // Authorization runs before the body is read, before ambiguity/existence is disclosed, and before any
         // dispatch (#592 item 10 — auth before disclosure). Fail closed: an Authorize endpoint with no
@@ -302,7 +303,20 @@ public sealed class HttpEndpointMiddleware(
         // reading and response delivery as well. Do not start an Async endpoint's timer while reading its body.
         if (!sync)
             timeoutSource?.CancelAfter(endpointOptions.RequestTimeout!.Value);
-        var result = await router.RouteAsync(dispatch, timeoutSource?.Token ?? context.RequestAborted);
+        StimulusRoutingResult result;
+        try
+        {
+            result = await router.RouteAsync(dispatch, timeoutSource?.Token ?? context.RequestAborted);
+        }
+        catch (Exception exception) when (!clientAborted.IsCancellationRequested)
+        {
+            // Preserve the established dispatch fault policy, including an authored live response. Other
+            // request faults must reach the host for logging and connection abort; only deadline cancellation
+            // is translated by the outer request boundary.
+            context.RequestAborted = clientAborted;
+            await HandleDispatchFaultAsync(context, exception, timedOut: timeoutSource?.IsCancellationRequested == true);
+            return;
+        }
 
         // Admission shed every start and nothing was resumed (#2548): nothing was written, so this is backpressure, not
         // acceptance. 429 with Retry-After tells the caller to retry, as the Execute endpoint does for a shed start; a 202
@@ -445,8 +459,8 @@ public sealed class HttpEndpointMiddleware(
     private static async Task HandleDispatchFaultAsync(HttpContext context, Exception exception, bool timedOut)
     {
         // Headers cannot be replaced once the response starts. A deadline can interrupt body delivery, so
-        // abort that connection rather than completing a truncated success response. Ordinary post-write faults
-        // keep the existing authored response intact.
+        // abort that connection rather than completing a truncated success response. Ordinary dispatch-phase
+        // post-write faults keep the existing authored response intact. Other failures propagate to the host.
         if (context.Response.HasStarted)
         {
             if (timedOut && exception is OperationCanceledException)

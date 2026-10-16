@@ -24,4 +24,8 @@ Run affected whole HTTP test projects and Studio workflows frontend suites, with
 
 ## Delivery
 
-One PR for #1177. Retain source and test evidence on the PR. The user requested a PR only; no author merge or deployment.
+One PR for #1177. Retain source and test evidence on the PR. Independent Code Review and green required checks govern merge; no deployment is included.
+
+## Release note
+
+New HTTP workflow publications default to waiting for the authored response (Sync); already-published bindings with missing mode metadata retain Async behavior. Every Sync endpoint, including existing ones, now has a configurable host deadline of 30 seconds after its route/settings are selected. Cooperating operations return HTTP 408 when that deadline expires before headers start; an expiry after response start aborts the connection. Hosts that need longer inline workflows must raise `ActivitiesHttp.SyncRequestTimeout`; a shorter authored endpoint `RequestTimeout` still takes precedence. Studio's HTTP test request has its own 35-second client limit. See the [HTTP authoring guide](../../docs/reference/http-workflow-authoring.md) for configuration and migration details.

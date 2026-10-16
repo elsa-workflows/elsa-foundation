@@ -136,18 +136,24 @@ describe("published HTTP test request helpers", () => {
     }
   });
 
-  it("reads a custom advertised workflow mount relative to the backend shell path", async () => {
+  it.each([
+    ["tenant/custom-http", "/engine/shell-a/tenant/custom-http"],
+    ["api%3Av1/workflows", "/engine/shell-a/api%3Av1/workflows"],
+    ["tenant/workflow%20endpoints", "/engine/shell-a/tenant/workflow%20endpoints"]
+  ])("reads the advertised workflow mount %s relative to the backend shell path", async (href, expectedPath) => {
     const getJson = vi.fn().mockResolvedValue({ capabilities: [{
       id: capabilityIds.workflowHttpEndpoints,
       contractVersion: "1",
-      links: [{ rel: workflowHttpBasePathCapabilityRelation, href: "tenant/custom-http" }]
+      links: [{ rel: workflowHttpBasePathCapabilityRelation, href }]
     }] });
     const context = {
       baseUrl: "https://backend.example/engine/shell-a",
       http: { getJson }
     } as unknown as StudioEndpointContext;
 
-    await expect(getWorkflowHttpBasePath(context)).resolves.toBe("/engine/shell-a/tenant/custom-http");
+    await expect(getWorkflowHttpBasePath(context)).resolves.toBe(expectedPath);
+    const requestPath = makeInitialHttpTestPath("probe", expectedPath);
+    expect(resolveHttpTestRequestPath(context.baseUrl, requestPath, expectedPath)).toBe(`${expectedPath}/probe`);
     expect(getJson).toHaveBeenCalledWith("/engine/shell-a/capabilities");
   });
 

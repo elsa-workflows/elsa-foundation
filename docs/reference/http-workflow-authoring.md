@@ -4,7 +4,7 @@ Source behavior for the HTTP usability change (#1177); this guide does not asser
 
 In Studio, create a workflow and choose **HTTP request and response** as its starting point. It contains a `POST /hello` endpoint connected to a JSON response. Change the route or response body in the inspector if needed, then publish. **Test HTTP request** calls the published endpoint and shows its actual status, content type and body. It executes a real workflow, so use appropriate test data.
 
-The test dialog reads the workflow HTTP mount from the active server's API capability. It includes any shell or tenant path prefix and does not assume `/workflows/http`. Edit the endpoint route beneath that mount; the dialog does not let you change the server's base path. If the server does not advertise a usable workflow HTTP mount, Studio disables the request rather than guessing one. Hosts must configure `HttpEndpointOptions.BasePath` as a decoded path without percent escapes, so the advertised mount matches ASP.NET's decoded request path.
+The test dialog reads the workflow HTTP mount from the active server's API capability. It includes any shell or tenant path prefix and does not assume `/workflows/http`. Edit the endpoint route beneath that mount; the dialog does not let you change the server's base path. If the server does not advertise a usable workflow HTTP mount, Studio disables the request rather than guessing one. An unusable host mount is omitted with a server warning; other API capabilities remain available. Hosts must configure `HttpEndpointOptions.BasePath` as a decoded path without percent escapes, so the advertised mount matches ASP.NET's decoded request path.
 
 An endpoint's response choice is visible in its inspector and graph:
 
