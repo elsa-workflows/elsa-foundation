@@ -316,7 +316,8 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetService<IRuntimeCoalescingDrainScopeFactory>(),
                 serviceProvider.GetService<IRuntimeLiveDrainDeliveryAccessor>(),
                 serviceProvider.GetService<IRuntimePersistenceModeResolver>(),
-                serviceProvider.GetRequiredService<TimeProvider>()));
+                serviceProvider.GetRequiredService<TimeProvider>(),
+                serviceProvider.GetService<ILogger<WorkflowDrainOrchestrator>>()));
         services.TryAddScoped<WorkflowSchedulerCommandRouter>();
         services.TryAddSingleton<IWorkflowExecutionCommandExecutor, ScopedWorkflowExecutionCommandExecutor>();
         services.TryAddSingleton<InMemoryRuntimeDiagnosticsSettingsStore>();
