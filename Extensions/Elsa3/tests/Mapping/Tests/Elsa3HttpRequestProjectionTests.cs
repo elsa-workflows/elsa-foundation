@@ -151,6 +151,31 @@ public sealed class Elsa3HttpRequestProjectionTests
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.OutputNotRepresentable);
     }
 
+    [Fact]
+    public async Task In_a_flowchart_the_projections_are_connected_between_the_endpoint_and_its_successors()
+    {
+        // Spec 239 R-10, FR-013: the endpoint's Done leads through the projections; its former connections leave from the last.
+        var root = Elsa3FlowchartDiagnosticsTests.Flowchart("root",
+            Endpoint(("headers", Captured("hdrs")), ("queryStringData", Captured("qs"))),
+            Activity("direct", "Elsa.WriteLine", ("text", Captured("hdrs"))));
+        root.Connections = [Elsa3FlowchartDiagnosticsTests.Connect("endpoint", "Done", "direct")];
+
+        var result = await ConvertAsync(root,
+            new Elsa3Variable { Id = "hdrs", Name = "hdrs", TypeName = "Object" },
+            new Elsa3Variable { Id = "qs", Name = "qs", TypeName = "Object" });
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var chart = result.Value!.State.RootActivity!;
+        Assert.Equal(
+            [
+                "endpoint.elsa3-http-headers:Done->direct",
+                "endpoint:Done->endpoint.elsa3-http-query",
+                "endpoint.elsa3-http-query:Done->endpoint.elsa3-http-headers"
+            ],
+            Support.Elsa3FlowchartFixtures.Connections(chart));
+        Assert.Equal("endpoint", Support.Elsa3FlowchartFixtures.StartNodeId(chart));
+    }
+
     private static Elsa3Activity Endpoint(params (string Name, JsonElement Value)[] captures)
     {
         var endpoint = Activity("endpoint", "Elsa.HttpEndpoint", [("path", Literal("/orders")), .. captures]);

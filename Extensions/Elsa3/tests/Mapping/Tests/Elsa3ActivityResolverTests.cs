@@ -127,6 +127,66 @@ public sealed class Elsa3ActivityResolverTests
         Assert.Same(first, second);
     }
 
+    // Spec 239 R-3: a resolved activity carries the outcomes graph conversion routes connections by.
+
+    [Theory]
+    [InlineData("Elsa.If", new[] { "Break", "False", "True" })]
+    [InlineData("Elsa.WriteLine", new[] { "Done" })]
+    [InlineData("Elsa.HttpEndpoint", new[] { "Done" })]
+    [InlineData("Elsa.SetVariable", new[] { "Done" })]
+    public async Task A_resolved_activity_carries_its_static_outcomes(string type, string[] expected)
+    {
+        var resolver = new Elsa3ActivityResolver(new Elsa3BuiltInActivityMap(), RealActivityCatalog.Create());
+
+        var resolution = await resolver.ResolveAsync(Node(type), NoReplacements, default);
+
+        Assert.Equal(expected, resolution.Activity!.Outcomes.Ports.Order(StringComparer.Ordinal));
+        Assert.Null(resolution.Activity.Outcomes.Dynamic);
+    }
+
+    [Theory]
+    [InlineData("Elsa.FlowSendHttpRequest", "ExpectedStatusCodes", "Unmatched status code")]
+    [InlineData("Elsa.RunJavaScript", "possibleOutcomes", "Unmatched")]
+    public async Task Outcomes_named_by_an_input_carry_their_rule(string type, string sourceInput, string unmatched)
+    {
+        var resolver = new Elsa3ActivityResolver(new Elsa3BuiltInActivityMap(), RealActivityCatalog.Create());
+
+        var resolution = await resolver.ResolveAsync(Node(type), NoReplacements, default);
+
+        var dynamic = resolution.Activity!.Outcomes.Dynamic!;
+        Assert.Equal(sourceInput, dynamic.SourceInputKey);
+        Assert.Equal(unmatched, dynamic.UnmatchedOutcome);
+    }
+
+    [Fact]
+    public async Task A_replacement_carries_the_reusable_contract_outcomes()
+    {
+        var replacements = new Dictionary<string, Elsa3ActivityExactReplacement>(StringComparer.Ordinal)
+        {
+            ["node-1"] = new("reusable@1", [], new HashSet<string>(), new HashSet<string>(StringComparer.Ordinal) { "succeed", "Done" })
+        };
+        var resolver = new Elsa3ActivityResolver(TestMap.WriteLine, RealActivityCatalog.Create());
+
+        var resolution = await resolver.ResolveAsync(Node("Acme.Sub"), replacements, default);
+
+        Assert.Equal(["Done", "succeed"], resolution.Activity!.Outcomes.Ports);
+    }
+
+    [Theory]
+    [InlineData("Elsa.FlowFork", Elsa3GraphConstructKind.Fork)]
+    [InlineData("Elsa.FlowJoin", Elsa3GraphConstructKind.Join)]
+    [InlineData("Elsa.Start", Elsa3GraphConstructKind.Start)]
+    public async Task Flowchart_constructs_resolve_without_the_catalog(string type, Elsa3GraphConstructKind kind)
+    {
+        var resolver = new Elsa3ActivityResolver(new Elsa3BuiltInActivityMap(), RealActivityCatalog.Create());
+
+        var resolution = await resolver.ResolveAsync(Node(type), NoReplacements, default);
+
+        Assert.Equal(Elsa3ResolvedSource.GraphConstruct, resolution.Activity!.Source);
+        Assert.Equal(kind, Assert.IsType<Elsa3ActivityTarget.GraphConstruct>(resolution.Activity.Entry!.Target).Kind);
+        Assert.Empty(resolution.Activity.Outcomes.Ports);
+    }
+
     private static Elsa3Activity Node(string type, string nodeId = "node-1") =>
         new() { Id = nodeId, NodeId = nodeId, Name = nodeId, Type = type };
 

@@ -15,6 +15,7 @@ internal sealed class Elsa3TerminalPlacementRewrite : IElsa3NodeRewrite
 {
     internal const string Done = "Done";
     private const string RootFlowchartType = "Elsa.Flowchart";
+    private const string EndType = "Elsa.End";
 
     public Elsa3NodeRewriteKind Kind => Elsa3NodeRewriteKind.TerminalPlacement;
 
@@ -23,16 +24,27 @@ internal sealed class Elsa3TerminalPlacementRewrite : IElsa3NodeRewrite
         if (!TryReadOutcome(context, out var outcome, out var property))
             return;
 
+        var parent = context.Node.Parent;
+        var inRootFlowchart = parent is not null &&
+                              ReferenceEquals(parent, context.Plan.Definition.Root) &&
+                              StringComparer.Ordinal.Equals(parent.Type, RootFlowchartType);
+
+        // Elsa 3 End ends only its enclosing flowchart (a terminal node), so it converts only where that is the whole
+        // definition: its root flowchart. This narrows spec 236 D-3 for reusable workflows (spec 239 FR-011).
+        if (StringComparer.Ordinal.Equals(context.Activity.Type, EndType) && !inRootFlowchart)
+        {
+            context.Error(UnsupportedMode,
+                "Elsa 3 'End' ends only its enclosing flowchart, and outside a flowchart it does nothing; Elsa 4 has no activity that does either.",
+                "Remove the End, and let the flowchart end when its last activity completes, before converting.");
+            return;
+        }
+
         if (context.IsReusable)
         {
             await ApplyReusableAsync(context, outcome, cancellationToken);
             return;
         }
 
-        var parent = context.Node.Parent;
-        var inRootFlowchart = parent is not null &&
-                              ReferenceEquals(parent, context.Plan.Definition.Root) &&
-                              StringComparer.Ordinal.Equals(parent.Type, RootFlowchartType);
         if (!inRootFlowchart)
         {
             context.Error(UnsupportedMode,
@@ -76,14 +88,7 @@ internal sealed class Elsa3TerminalPlacementRewrite : IElsa3NodeRewrite
         if (!context.TryGetProperty("Outcomes", out property, out var value) || !Elsa3TypedValues.IsBound(value))
             return true;
 
-        string? text = null;
-        if (Elsa3TypedValues.TryGetLiteral(value, out var literal))
-            text = literal;
-        else if (Elsa3TypedValues.TryGetExpression(value, out var type, out var expression) &&
-                 string.Equals(type, "Object", StringComparison.OrdinalIgnoreCase))
-            text = expression.ValueKind == JsonValueKind.String ? expression.GetString() : expression.GetRawText();
-
-        if (text is null)
+        if (!TryReadNameList(value, out var text, out var outcomes))
         {
             context.Error(UnsupportedMode,
                 "The outcome is set by an expression; Elsa 4 needs one literal outcome.",
@@ -92,7 +97,6 @@ internal sealed class Elsa3TerminalPlacementRewrite : IElsa3NodeRewrite
             return false;
         }
 
-        var outcomes = ParseOutcomes(text);
         if (outcomes is null || outcomes.Count > 1)
         {
             context.Error(UnsupportedMode,
@@ -105,6 +109,29 @@ internal sealed class Elsa3TerminalPlacementRewrite : IElsa3NodeRewrite
         }
 
         outcome = outcomes.Count == 0 ? Done : outcomes[0];
+        return true;
+    }
+
+    /// <summary>
+    /// Reads a list of names (Complete outcomes, FlowFork branches) from a literal or an Object expression: one name, or a
+    /// JSON string or string array. False when the value is any other expression, which only Elsa 3 can evaluate;
+    /// <paramref name="names"/> is null when the value is literal but not a name list.
+    /// </summary>
+    internal static bool TryReadNameList(JsonElement value, out string text, out IReadOnlyList<string>? names)
+    {
+        text = string.Empty;
+        names = null;
+        string? read = null;
+        if (Elsa3TypedValues.TryGetLiteral(value, out var literal))
+            read = literal;
+        else if (Elsa3TypedValues.TryGetExpression(value, out var type, out var expression) &&
+                 string.Equals(type, "Object", StringComparison.OrdinalIgnoreCase))
+            read = expression.ValueKind == JsonValueKind.String ? expression.GetString() : expression.GetRawText();
+
+        if (read is null)
+            return false;
+        text = read;
+        names = ParseOutcomes(read);
         return true;
     }
 

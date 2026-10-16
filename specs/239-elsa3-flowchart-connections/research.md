@@ -46,8 +46,9 @@ the decisions the plan rests on.
     `ClrAssemblyScanner` and by `ActivityDefinitionPublisher`). No facet → the activity's only outcome is `Done`.
   - Intrinsic: `Done` (`WorkflowIntrinsicExecutor` completes every intrinsic with `Done`).
   - Reusable replacement: `Elsa3ActivityExactReplacement` gains `OutcomeNames` (additive). The materializer fills it
-    from the target's Elsa 3 definition by the rule of spec 236 D-5/D-6: `Done` plus the declared outcomes plus every
-    literal outcome a `Complete` names. Contract names are the Elsa 3 strings verbatim (D-4), and the graph activity
+    from the target's Elsa 3 definition by the rule of spec 236 D-5 to D-7: `Done` plus every single literal outcome a
+    `Complete` names (a declared outcome no `Complete` reaches is dropped from the contract, so a caller connection on
+    it is `GRAPH-OUTCOME-UNMAPPED`, next to the reusable's own `OUTCOME-UNREACHED` warning). Contract names are the Elsa 3 strings verbatim (D-4), and the graph activity
     completes with that name (`GraphActivity.cs` `_selectedOutcomeName`), so the caller's port matches verbatim.
   - Dynamic outcomes (`SendHttpRequest` status codes, `RunJavaScript` possible outcomes): a port is valid when it is
     one of the node's literal items for the facet's `source` input, or the `unmatched` name. An item list bound by
