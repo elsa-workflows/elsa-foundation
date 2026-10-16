@@ -33,4 +33,4 @@
 
 - Engine-internal spec: like other specs in this repo it names the runtime and validator seams it changes
   (`TriggerNodeId`, `ValueFlowValidator`, loop-edge classification). That is deliberate, not leakage.
-- D5–D7 accepted by Joey on 2026-10-16.
+- D5–D7 accepted by Joey on 2026-10-16. The placement revision (D8–D13) was added 2026-10-16; accepted by Joey 2026-10-16, including D12 and D13.

@@ -26,6 +26,22 @@ design-time value-flow check treat every possible entry node as a root.
 - Writes that only different entries reach are exclusive ([R5](research.md#r5-exclusive-writes-across-trigger-branches)).
 - With one entry, every result equals today's.
 
+**Placement (revision D8–D13)**:
+- `WorkflowTriggerBindingExtractor.Evaluate` checks the start-path rule for every trigger that produces start bindings
+  ([R8](research.md#r8-why-a-placement-rule-and-why-the-start-path-form), [R9](research.md#r9-where-the-check-runs)).
+  Each composite on the root-to-trigger path is asked, through a new Runtime.Core strategy
+  `IStructuralStartEntryProvider` keyed by structure kind, which child a run started by that trigger begins at
+  ([R10](research.md#r10-the-start-entry-seam)).
+  - The Flowchart answers: the trigger, when it has no inbound connection or is the start node; else its start node.
+  - The Sequence answers: child 0.
+  - An unknown kind refuses.
+- A refusal is a `WorkflowTriggerPreflightException` with facet `Placement`, translated to a 400 with guidance
+  ([R11](research.md#r11-reporting-a-refusal)). Publish fails before anything is saved; restore and import refuse
+  through their existing channels ([R12](research.md#r12-publications-made-before-the-rule-d12)).
+- The BPMN importer authors `CanStartWorkflow = false` on nested processes. Runtime unit tests whose Sequence roots
+  carry no structure are updated ([R13](research.md#r13-census-what-changes-for-existing-tests-and-fixtures)).
+- Studio's misplaced-trigger warning is flipped to match the rule ([R14](research.md#r14-studio)).
+
 ## Technical Context
 
 **Language/Version**: C# / .NET 10
@@ -57,10 +73,19 @@ project reference in production code.
 - In-flight runs are unaffected, because only initial-state creation changes.
 
 **Scale/Scope**:
-- Two production files in Flowchart (`FlowchartGraph`, `FlowchartExecutionEngine`) and one in Design Validations
-  (`ValueFlowValidator`).
-- Tests in five test projects.
-- The Flowchart README, and the validations README if it describes value flow.
+- Done: two production files in Flowchart (`FlowchartGraph`, `FlowchartExecutionEngine`) and one in Design
+  Validations (`ValueFlowValidator`); tests in five test projects; the Flowchart README.
+- Revision, production code:
+  - one new Runtime.Core contract;
+  - the extractor and its exception facet;
+  - two strategy implementations, in Flowchart and Sequence, with their feature registrations;
+  - the publishing exception translator;
+  - the BPMN importer;
+  - Studio's `flowchartStartNode.ts`.
+- Revision, tests in the Workflows.Runtime, Flowchart, Sequence, Publishing API, BPMN interchange, HTTP integration
+  and Studio test projects.
+- Revision, docs: `EXTENSION_POINTS.md` in Workflows.Runtime (contract and extractor usage), Flowchart and Sequence
+  (implementations), and the Flowchart and Sequence READMEs.
 
 ## Constitution Check
 
@@ -94,6 +119,38 @@ project reference in production code.
 - **§4.1, §4.2, SemVer**: Additive method plus a bug fix: a minor or patch class. No removed or renamed member.
 - **Review checklist**: no item is triggered beyond the above.
 - **Post-design re-check**: unchanged. Phase 1 added no contract, entity or dependency.
+
+### Constitution Check: placement revision
+
+- **§2.1, `.Core` contents**: PASS. `Elsa.Workflows.Runtime.Core` gains one interface (`IStructuralStartEntryProvider`)
+  and one facet constant. The implementations live in the Flowchart and Sequence modules.
+- **§2.24, sanctioned patterns**: PASS. This is the Strategy pattern, keyed by structure kind like
+  `IActivityStructureHandler`, and consulted by the extractor like `IActivityTriggerStimulusProvider`. It is not a
+  new pattern, so no §2.24.3 gate.
+- **§2.6.x, events and contributors**: N/A. No event or fan-in. The provider answers a query (`…Provider`, not
+  `…Contributor`).
+- **§2.5, §2.23.1, registration**: Flowchart and Sequence register one provider each, as plain multi-registrations.
+  The §2.23.1 composition test covers those. Duplicate-kind detection is logic, so it gets a behaviour test.
+- **§2.22.1, `EXTENSION_POINTS.md`**: Updated in the same change. Workflows.Runtime lists the new implementable
+  contract and the extractor's placement step. Flowchart and Sequence list their implementations as intra-domain
+  known implementations.
+- **§E2.2, Runtime takes no Design reference**: PASS. The contract and check are runtime-only. The extractor never
+  learns Flowchart or Sequence semantics (spec 070).
+- **§E2.6, executable always runs**: PASS.
+  - The rule is a publication gate: may this artifact be activated. Saved executables, in-flight runs, bookmarks and
+    already-active bindings are untouched (FR-025).
+  - Restoring a retired publication with a misplaced trigger is refused (D12, accepted). That is a domain gate on
+    activation, not a loss of executability.
+  - Startup reconciliation of mounted, already-active artifacts must not regress. It is verified with a pinning test
+    (R12); if no clean seam exists, it goes back to Joey.
+- **§2.21.1, existing tests**: The runtime tests whose `Elsa.Sequence` roots carry no structure are changed, each
+  with its reason in the PR. No other existing test is expected to change.
+- **§2.23.2, §2.23 (no text assertions)**: Placement tests assert the facet, node ids and status code, never the
+  message text.
+- **§4.1, §4.2, SemVer**: Additive. There is a new interface, a new facet constant and a new extractor constructor
+  overload. The existing constructor keeps its signature, so it is a minor change for Workflows.Runtime(.Core),
+  Flowchart and Sequence.
+- **Studio**: a client-only predicate change with unit tests. There is no backend contract change.
 
 ## Project Structure
 
@@ -129,6 +186,33 @@ Essentials/tests/
 ├── Activities/Runtime/Tests/               # FlowchartTriggerStartLoopTests: For loop body restarts at trigger
 ├── Activities/Http/IntegrationTests/       # MultiTriggerFlowchartEndToEndTests (+ Flowchart ref and feature)
 └── Workflows/Design/Tests/                 # ValueFlowValidatorTests: multi-entry cases + single-entry regressions
+```
+
+Placement revision:
+
+```text
+Essentials/src/Workflows/Runtime/Core/
+├── Contracts/IStructuralStartEntryProvider.cs      # new strategy contract
+└── Exceptions/WorkflowTriggerPreflightException.cs # Placement facet constant (+ composite id/kind)
+Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/
+├── Services/Triggers/WorkflowTriggerBindingExtractor.cs  # start-path walk for Registered triggers
+├── (feature registration of the provider set, if not resolved by IEnumerable injection)
+└── EXTENSION_POINTS.md
+Essentials/src/Activities/Flowchart/Internal/FlowchartStartEntryProvider.cs   (+ ActivitiesFlowchartFeature, EXTENSION_POINTS.md, README.md)
+Essentials/src/Activities/Sequence/Internal/SequenceStartEntryProvider.cs     (+ ActivitiesSequenceFeature, EXTENSION_POINTS.md, README.md)
+Essentials/src/Workflows/Publishing/Api/Endpoints/WorkflowPublishingExceptionTranslator.cs  # Placement → 400
+Essentials/src/Activities/Bpmn/Interchange/Services/BpmnDocumentImporter.cs   # nested process CanStartWorkflow=false
+Studio/src/essentials/Elsa.Studio.Workflows/Client/src/flowchartStartNode.ts  # misplaced = inbound and not start
+
+Essentials/tests/
+├── Workflows/Runtime/Tests/                 # extractor placement matrix (fake providers), duplicate kind, structure-less roots updated
+├── Workflows/Runtime/Scheduling/Tests/      # RecurringTriggerScheduleIndexerTests roots updated
+├── Activities/Flowchart/Tests/              # FlowchartStartEntryProviderTests
+├── Activities/Sequence/Tests/               # SequenceStartEntryProviderTests
+├── Workflows/Publishing/Api/Tests/          # publish endpoint 400 + nothing saved
+├── Activities/Bpmn/Interchange/Tests/       # nested process authored non-starting
+└── Activities/Http/IntegrationTests/        # real-host refusal (Sequence child 1) and acceptance (child 0)
+Studio tests next to flowchartStartNode.ts   # misplaced-trigger predicate
 ```
 
 **Structure Decision**: Changes stay inside the two modules that own the behaviour: the Flowchart activity module

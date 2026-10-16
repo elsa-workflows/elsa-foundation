@@ -3,6 +3,14 @@
 This unit adds no persisted entity, field, metadata key or schema version (FR-007). It reads values that already
 exist and changes two in-memory computations.
 
+The placement revision (D8–D13) also adds no persisted data. It adds three in-memory pieces:
+- the runtime contract `IStructuralStartEntryProvider` (research R10);
+- the `Placement` facet;
+- composite node id and structure kind properties on `WorkflowTriggerPreflightException`.
+
+A placement is computed from the published executable alone: the root-to-trigger path, each composite's structure
+kind, and its provider's answer.
+
 ## Values read
 
 | Value | Where it lives | Used for |
