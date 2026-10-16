@@ -245,4 +245,5 @@ Notes come only from explicit `**Notes**:` metadata; see [Spec status metadata](
 | [234-hop-chain-collapse](../../specs/234-hop-chain-collapse/spec.md) | Collapse the per-activity hop chain under per-hop persistence | Draft | - | 0 | 68 | - |
 | [236-elsa3-activity-map](../../specs/236-elsa3-activity-map/spec.md) | Elsa 3 activity map — convert Elsa 3 activity types, versions and members to Elsa 4 | Draft | - | 69 | 0 | - |
 | [237-graph-boundary-completion](../../specs/237-graph-boundary-completion/spec.md) | Graph Boundary Completion From Any Depth | Implemented — PR for #2750 (also fixes #2756) | - | 32 | 1 | - |
+| [238-flowchart-trigger-start](../../specs/238-flowchart-trigger-start/spec.md) | Flowchart Starts at the Trigger That Fired | Implemented — PR #2856 for #2850 | - | 59 | 0 | - |
 | [240-http-usability](../../specs/240-http-usability/spec.md) | HTTP Workflows That Work Out of the Box | Implemented; prepared for PR review | - | 5 | 0 | - |
