@@ -183,10 +183,12 @@ description, pinned mark and body stay visible (content first).
 ## Activity icons
 
 `exists`: one resolver, `resolveActivityIcon` in `activityIcons.ts`, used by the designer
-palette, canvas nodes, and the run-view timeline. Order: catalog `icon` kind token, then
-catalog `iconName` (any lucide export or kebab name, `asset:<package>/<path>`, or
-`ext:<name>`), then the activity type key, then the category icon, then
-`executionType === trigger`. An `icon` / `iconName` that is not a known kind, not a
+palette, canvas nodes, and the run-view timeline. Order: module-supplied catalog `iconName`
+(any lucide export or kebab name, `asset:<package>/<path>`, or `ext:<name>`), then the
+historical `icon` kind token, then the activity type key, then the category icon, then
+`executionType === trigger`, then a reusable/generic fallback. Definition IDs alone never
+override a more specific icon: recommended CLR activities also have definition IDs.
+An `icon` / `iconName` that is not a known kind, not a
 well-formed lucide / asset / extension name, or is unsafe is ignored so the later steps
 still run. `renderActivityIcon` (in `activityIconView.tsx`) lazy-loads the lucide table from
 `activityIconGlyphs.tsx` so the Workflows entry and landing paths stay inside the bundle

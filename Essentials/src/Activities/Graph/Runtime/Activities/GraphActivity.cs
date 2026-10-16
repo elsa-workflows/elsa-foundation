@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Activities.Graph.Runtime.Models;
 using Elsa.Activities.Graph.Runtime.Services;
 using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -14,6 +15,7 @@ namespace Elsa.Activities.Graph.Runtime.Activities;
 /// Ordinary composite activity that opens one activity-execution scope and schedules the placed graph entry node.
 /// It never starts a child workflow or executes a nested graph synchronously.
 /// </summary>
+[Activity(Icon = "Network")]
 public sealed class GraphActivity(
     GraphActivityDescriptor descriptor,
     GraphActivityScopeFactory scopeFactory,

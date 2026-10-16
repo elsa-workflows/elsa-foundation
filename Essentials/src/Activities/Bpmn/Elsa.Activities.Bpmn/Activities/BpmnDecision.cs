@@ -18,6 +18,7 @@ namespace Elsa.Activities.Bpmn.Activities;
 /// deterministically when none is declared), so a misconfigured decision never routes silently.
 /// </remarks>
 [RefusesSecretBinding(nameof(Outcome), SecretBindingRefusalReason.EchoedToOutput)]
+[Activity(Icon = "GitBranch")]
 public sealed class BpmnDecision : Activity<BpmnDecisionResult>
 {
     /// <summary>The outcome name to complete with; conditional sequence flows match against it.</summary>

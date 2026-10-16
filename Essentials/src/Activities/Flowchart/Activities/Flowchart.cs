@@ -24,6 +24,7 @@ namespace Elsa.Activities.Flowchart.Activities;
 /// (surfacing a composite incident), mirroring the <c>Parallel</c> composite's default-threshold behavior where
 /// a single faulted branch faults the join. The faulted leaf keeps its own blocking incident regardless.
 /// </remarks>
+[Activity(Icon = "Workflow")]
 [ActivityStructure("elsa.flowchart.structure", "1.0.0", Mode = "flowchart", SupportsScopedVariables = true)]
 [ActivityChildSlot("Flowchart.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]
 [ActivityOutcome(ActivityOutcomes.Done)]

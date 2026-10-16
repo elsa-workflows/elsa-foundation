@@ -20,6 +20,7 @@ namespace Elsa.Activities.Http.Activities;
 [RefusesSecretBinding(nameof(RequestTimeout), SecretBindingRefusalReason.FixedAtPublish)]
 [RefusesSecretBinding(nameof(RequestSizeLimit), SecretBindingRefusalReason.FixedAtPublish)]
 [RefusesSecretBinding(nameof(ResponseMode), SecretBindingRefusalReason.FixedAtPublish)]
+[Activity(Icon = "Webhook")]
 [TriggerActivity]
 public sealed class HttpEndpoint :
     StatefulTriggerActivity<HttpEndpointResult, HttpEndpointState, HttpRequestModel>
