@@ -2,6 +2,14 @@
 
 Program: [Modular Hosting Upstream Delivery](../program-goals/modular-hosting-upstream-delivery.md), [#2500](https://github.com/elsa-workflows/elsa-foundation/issues/2500). On 2026-10-08, Sipke authorized new Git releases after the upstream work lands, following the existing version pattern, and then updating downstream Elsa Foundation. This supersedes the earlier preview-only limit; it does not waive implementation, review, safety or validation gates.
 
+## Safe-pruning release checkpoint — 2026-10-16
+
+The established `0.0.N` pattern continues with [Nuplane `0.0.12`](https://github.com/valence-works/nuplane/releases/tag/0.0.12) and [CShells `0.0.31`](https://github.com/valence-works/cshells/releases/tag/0.0.31). Nuplane's merged source is `80f74d02bef70a0410f9dd21064692bc088bb87c`; CShells is `b7611aadb49789d3b282749df18ffe68d0eacec5`. Each merged source tree matches its qualified PR head. [Nuplane publisher38840892044](https://github.com/valence-works/nuplane/actions/runs/38840892044) and [CShells publisher38843394039](https://github.com/valence-works/cshells/actions/runs/38843394039) succeeded. All eighteen public NuGet.org/Feedz archives have exact release identities/commits, .NET 8/9/10 assets and coherent stable internal dependencies; public payloads match workflow artifacts except NuGet repository signatures.
+
+The optional `CShells.Nuplane` remains one of the ten packages released from the CShells repository. Foundation's adoption advances eight CShells pins to `0.0.31` and five Nuplane pins to `0.0.12`, with reached lock files and generated maps reviewed together. It retains ordinary composition and existing reload defaults. The fresh public-only consumer passed on actual .NET 8/9/10: five ordinary groups plus coordinated enrollment, live graph retention, generation replacement/drain, physical deletion and explicit AlreadyAbsent repeat. A corrected post-run auditor uses the emitted ownership rows; frozen runtime inputs and the original verifier failure are retained. Foundation [PR2838](https://github.com/elsa-workflows/elsa-foundation/pull/2838) has fresh ordinary and empty-cache locked restore proof, all296 tracked locks unchanged by locked restore, and initial hosted real-host plus Ubuntu/Windows backend acceptance. Final integrated-head tests/review and resulting-main acceptance are tracked on [#2507](https://github.com/elsa-workflows/elsa-foundation/issues/2507); upstream archive acceptance alone does not complete it.
+
+The following version inventory, ordering and extraction checkpoints describe the earlier `0.0.11` / `0.0.30` delivery. They remain historical evidence and do not override the current release identities above.
+
 ## Verified version baseline — 2026-10-08
 
 | Repository | Latest published GitHub/NuGet release | Current development base | Intended next release |
