@@ -209,7 +209,7 @@ The former `get-endpoints` and `write-endpoints` suites (GET / CRUD status-and-s
 | `bpmn/Test-BpmnCallActivity.ps1` | BPMN `callActivity` bound to a REAL waited `DispatchWorkflow` child (spec 133): child completes -> parent resumes via `Completed`; child faults -> the error boundary routes (no parent incident) |
 | `correlate/Test-Correlate.ps1` | `SetCorrelationId` intrinsic sets the instance correlation id; found by `?correlationId=` |
 | `events/Test-Event.ps1` | `Event` start-trigger fired by publishing a stimulus to `runtime/workflows/stimuli` |
-| `logging/Test-ValueCapture.ps1` | per-activity value snapshot: a WriteLine's `Text` input is captured (`DiagnosticSnapshot`) and its payload retrieved via the value-evidence endpoint |
+| `logging/Test-ValueCapture.ps1` | root and nested WriteLine `text` inputs are captured (`DiagnosticSnapshot`), with payloads retrieved via the value-evidence endpoint; SendHttpRequest input keys and output evidence are also checked |
 | `logging/Test-DiagnosticsSettings.ps1` | read-only `GET runtime/workflows/diagnostics/settings` — the capture policy that governs what value snapshots are captured |
 | `diagnostics/Test-OpenTelemetryApiMigration.ps1` | live Workbench smoke: eight query/SSE plus three OTLP routes in the real shell, authorized query/SSE, and accepted OTLP 204 |
 | `runtime-alterations/Test-AlterationPlans.ps1` | bulk `CancelWorkflow`, root `ModifyVariable`, Sequence `ScheduleActivity` with visible child completion, `RescheduleActivity` with visible supersession, retained-identity `Migrate` smoke path; plus paging, cooperative cancellation, and redacted reads |
@@ -341,8 +341,9 @@ model governed by a server-wide **diagnostics settings** policy:
   full-payload capture is disabled by host policy, `maxStringLength=256` etc.). Covered by
   `logging/Test-DiagnosticsSettings.ps1` (read-only — it does not PUT/mutate the server-global setting).
 
-Capture is **boundary-level**: a bare root activity captures no snapshot (`valueSnapshotCount=0`), while the
-same activity nested in a `Sequence` does (`=1`) — which is why the value-capture test nests the WriteLine.
+Input capture includes **root activities**. `logging/Test-ValueCapture.ps1` executes the same WriteLine both
+as a bare root and inside a `Sequence`, checks each instance's snapshot count and `text` input evidence, and
+resolves both payloads through the value-evidence endpoint. A Sequence wrapper is not required for capture.
 
 ### storage-drivers -> no equivalent (architectural gap)
 

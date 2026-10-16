@@ -2,9 +2,9 @@
 .SYNOPSIS
     Verify activity input keys and resolve captured SendHttpRequest outputs through the value-evidence API.
 .DESCRIPTION
-    Runs a Sequence containing SendHttpRequest(GET /) and WriteLine("<marker>"). Activity-execution
-    details expose metadata only; this script resolves selected evidence by id and inspects its bounded
-    diagnostic snapshot. It does not change runtime diagnostics settings.
+    Runs a bare WriteLine and a Sequence containing SendHttpRequest(GET /) and the same WriteLine.
+    Both root and nested activities must capture the text input. Activity-execution details expose metadata
+    only; this script resolves selected evidence by id and inspects its bounded diagnostic snapshot. It does not change runtime diagnostics settings.
     Requires the Workbench server running from source (see ../README.md).
 #>
 [CmdletBinding()]
@@ -63,6 +63,19 @@ function Get-ActivityEvidence {
     [pscustomobject]@{ Snapshot = $snapshot; Payload = $resolved.payload }
 }
 
+function Invoke-CaptureWorkflow {
+    param([Parameter(Mandatory)][string] $Label, [Parameter(Mandatory)] $RootActivity)
+    $def = Invoke-Step "$Label submit" { Submit-Workflow -Ctx $ctx -Name "ValueCapture-$Label-$([guid]::NewGuid().ToString('N'))" -Description "activity input and output capture" -RootActivity $RootActivity }
+    $pub = Invoke-Step "$Label publish" { Publish-WorkflowVersion -Ctx $ctx -VersionId $def.version.id }
+    $run = Invoke-Step "$Label execute" { Invoke-Artifact -Ctx $ctx -ArtifactId $pub.artifactId -SourceReferenceId $pub.sourceReferenceId }
+    $instance = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $run.workflowExecutionId -TimeoutSeconds 120
+    Show-WorkflowInstance -Instance $instance
+    if ($instance.instance.status -notin @('Completed', 'Finished') -or $instance.instance.incidentCount -ne 0) {
+        throw "$Label workflow did not complete without incidents (status '$($instance.instance.status)')"
+    }
+    return $instance
+}
+
 $marker = "captured-$(Get-Random -Max 999999)"
 $wl = Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Primitives.Activities.WriteLine'
 $send = Get-ActivityVersionId -Ctx $ctx -TypeKey 'Elsa.Activities.Http.Activities.SendHttpRequest'
@@ -79,31 +92,38 @@ $writer = New-ActivityNode -NodeId "writer" -VersionId $wl -Inputs @(
 )
 $root = New-ActivityNode -NodeId "root" -VersionId $seq -Structure (New-SequenceStructure -Activities @($http, $writer))
 
-$def = Invoke-Step "submit" { Submit-Workflow -Ctx $ctx -Name "ValueCapture-$(Get-Date -Format HHmmss)-$(Get-Random -Max 9999)" -Description "activity input and output capture" -RootActivity $root }
-$pub = Invoke-Step "publish" { Publish-WorkflowVersion -Ctx $ctx -VersionId $def.version.id }
-$run = Invoke-Step "execute" { Invoke-Artifact -Ctx $ctx -ArtifactId $pub.artifactId -SourceReferenceId $pub.sourceReferenceId }
-$inst = Wait-WorkflowInstance -Ctx $ctx -ExecutionId $run.workflowExecutionId
-Show-WorkflowInstance -Instance $inst
+$inst = Invoke-CaptureWorkflow -Label 'nested' -RootActivity $root
+$bareInstance = Invoke-CaptureWorkflow -Label 'root' -RootActivity $writer
+
+foreach ($case in @(@{ Label = 'nested WriteLine'; Instance = $inst }, @{ Label = 'root WriteLine'; Instance = $bareInstance })) {
+    $execution = @($case.Instance.activities | Where-Object { $_.executableNodeId -eq 'writer' })
+    if ($execution.Count -ne 1) {
+        throw "$($case.Label) expected exactly one activity execution, got $($execution.Count)"
+    }
+    $wfId = $case.Instance.instance.workflowExecutionId
+    $writerExecution = $execution[0]
+    if ($writerExecution.valueSnapshotCount -lt 1) {
+        [void]$script:failures.Add("$($case.Label) instance projection reports no captured values")
+    }
+    $writerDetail = Invoke-Step "$($case.Label) activity-execution detail" {
+        Invoke-RestMethod "$($ctx.BaseUrl)/runtime/workflows/instances/$wfId/activity-executions/$($writerExecution.activityExecutionId)" -WebSession $ctx.Session -UseBasicParsing
+    }
+    $textSnapshots = @($writerDetail.valueSnapshots | Where-Object { $_.subject -ieq 'ActivityInput' -and $_.inputKey -ceq 'text' })
+    if ($textSnapshots.Count -ne 1) {
+        [void]$script:failures.Add("$($case.Label) expected one text input snapshot, got $($textSnapshots.Count)")
+    }
+    $writerEvidence = Get-ActivityEvidence -Detail $writerDetail -WorkflowExecutionId $wfId `
+        -ActivityExecutionId $writerExecution.activityExecutionId -Label $case.Label -Subject 'ActivityInput' -InputKey 'text'
+    if ($writerEvidence -and $writerEvidence.Payload.preview -cne $marker) {
+        [void]$script:failures.Add("$($case.Label) resolved text preview did not match the authored marker")
+    }
+}
 
 $wfId = $inst.instance.workflowExecutionId
-$writerExecution = $inst.activities | Where-Object { $_.executableNodeId -eq 'writer' } | Select-Object -First 1
 $httpExecution = $inst.activities | Where-Object { $_.executableNodeId -eq 'http' } | Select-Object -First 1
-if (-not $writerExecution -or -not $httpExecution) {
-    Write-Host "FAIL - expected both WriteLine and SendHttpRequest executions on the workflow instance" -ForegroundColor Red
-    exit 1
-}
-
-$writerDetail = Invoke-Step "WriteLine activity-execution detail" {
-    Invoke-RestMethod "$($ctx.BaseUrl)/runtime/workflows/instances/$wfId/activity-executions/$($writerExecution.activityExecutionId)" -WebSession $ctx.Session -UseBasicParsing
-}
+if (-not $httpExecution) { throw 'Expected SendHttpRequest execution on the nested workflow instance' }
 $httpDetail = Invoke-Step "SendHttpRequest activity-execution detail" {
     Invoke-RestMethod "$($ctx.BaseUrl)/runtime/workflows/instances/$wfId/activity-executions/$($httpExecution.activityExecutionId)" -WebSession $ctx.Session -UseBasicParsing
-}
-
-$writerEvidence = Get-ActivityEvidence -Detail $writerDetail -WorkflowExecutionId $wfId `
-    -ActivityExecutionId $writerExecution.activityExecutionId -Label 'WriteLine' -Subject 'ActivityInput' -InputKey 'text'
-if ($writerEvidence -and $writerEvidence.Payload.preview -ne $marker) {
-    [void]$script:failures.Add('resolved WriteLine text preview did not match the authored marker')
 }
 
 $declaredHttpInputKeys = @('Url', 'Method', 'Content', 'ContentType', 'RequestHeaders', 'ExpectedStatusCodes', 'Timeout')
@@ -144,11 +164,8 @@ if ($bodyEvidence) {
     }
 }
 
-if ($inst.instance.status -notin @('Completed', 'Finished')) {
-    [void]$script:failures.Add("workflow status was '$($inst.instance.status)'")
-}
 if ($script:failures.Count -eq 0) {
-    Write-Host "SUCCESS - canonical input keys and resolved SendHttpRequest output snapshots were verified." -ForegroundColor Green
+    Write-Host "SUCCESS - root and nested WriteLine input capture, canonical input keys, and SendHttpRequest output snapshots were verified." -ForegroundColor Green
 } else {
     $script:failures | ForEach-Object { Write-Host "FAIL - $_" -ForegroundColor Red }
     exit 1
