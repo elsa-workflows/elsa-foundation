@@ -51,9 +51,9 @@ This spec contains no Elsa 3 code. Elsa 3 is referenced only as the behaviour to
 | D2 | Nested flowcharts | The trigger id is workflow-wide. A Flowchart acts on it only when the trigger is its own direct child. An outer Flowchart whose descendant (not child) is the trigger starts at its start node as today. Set by Joey; matches Elsa 3. |
 | D3 | Flowchart inside a loop | Each pass starts the Flowchart again, and each pass starts at the trigger. Set by Joey; matches Elsa 3. |
 | D4 | Redrive and resume | A redriven start begins at the same node, because the trigger id is persisted with the run. No new state is stored. |
-| D5 | Design-time entry points | The value-flow check treats as entry points the Flowchart's start node plus every **start-capable trigger** among its direct children (FR-008). Accepted by Joey 2026-10-16. |
+| D5 | Design-time entry points | The value-flow check treats as entry points the Flowchart's start node plus every direct child with **no inbound connection** (FR-008). Such a node can only ever run as the trigger, so treating it as an entry point is sound, and the check needs no catalog data. Revised by Joey 2026-10-16 after planning found that the catalog marks every CLR activity, triggers included, as `Action`. |
 | D6 | Concurrent writes across trigger branches | Two writes that only different entry points reach are mutually exclusive, not concurrent (FR-010). Accepted by Joey 2026-10-16. |
-| D7 | Loop-edge classification | Start-capable trigger children become walk roots right after the start node, so a loop reached only from a trigger is classified from where the run enters it (FR-005). Accepted by Joey 2026-10-16. |
+| D7 | Loop-edge classification | Direct children marked as trigger nodes in the executable become walk roots right after the start node, so a loop reached only from a trigger is classified from where the run enters it (FR-005). Accepted by Joey 2026-10-16. |
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -94,13 +94,13 @@ still rejects a read that some entry point can reach without passing the produce
 **Why this priority**: Without it, the workflows from User Story 1 cannot be published whenever a branch uses its
 trigger's result, which is the normal case.
 
-**Independent Test**: Validate a draft Flowchart whose start node is trigger A and whose second start-capable trigger
-B feeds an activity that reads B's result. No value-flow error is reported. Add an inbound connection from A's
+**Independent Test**: Validate a draft Flowchart whose start node is trigger A and whose second trigger B has no inbound
+connection and feeds an activity that reads B's result. No value-flow error is reported. Add an inbound connection from A's
 branch into that consumer: `ValueFlow/UnavailableProducer` is reported.
 
 **Acceptance Scenarios**:
 
-1. **Given** a draft Flowchart where start-capable trigger B leads to consumer C, and C reads B's result, **When**
+1. **Given** a draft Flowchart where trigger B, with no inbound connection, leads to consumer C, and C reads B's result, **When**
    the draft is validated, **Then** no `ValueFlow/UnavailableProducer` error is reported for C.
 2. **Given** the same draft plus a connection from the start node's branch into C, **When** the draft is validated,
    **Then** `ValueFlow/UnavailableProducer` is reported for C, because the start node reaches C without passing B.
@@ -108,9 +108,9 @@ branch into that consumer: `ValueFlow/UnavailableProducer` is reported.
    **When** the draft is validated, **Then** no `ValueFlow/ConcurrentWrite` error is reported.
 4. **Given** a draft where one entry point forks into two branches that both set the same variable, **When** the
    draft is validated, **Then** `ValueFlow/ConcurrentWrite` is still reported.
-5. **Given** a draft where a trigger that cannot start the workflow (an HTTP endpoint with `CanStartWorkflow` off)
-   sits mid-flow after producer P, and a later activity reads P's result, **When** the draft is validated, **Then**
-   no error is reported, because that trigger is not an entry point.
+5. **Given** a draft where a mid-flow trigger (an HTTP endpoint with an inbound connection) sits after producer P,
+   and a later activity reads P's result, **When** the draft is validated, **Then** no error is reported, because a
+   node with an inbound connection is not an entry point.
 
 ---
 
@@ -141,7 +141,10 @@ run directly without a trigger, starts, routes, validates or publishes.
   flow reaches the nested Flowchart, the nested one starts at the trigger.
 - **Redrive (D4)**: a redriven or crash-recovered start reads the persisted trigger id and starts at the same node.
 - **Trigger with inbound connections**: the run starts at it as the root path. Later arrivals over its inbound
-  connections route as for any node.
+  connections route as for any node. The value-flow check does not treat it as an entry point (D5), so a consumer
+  of its result that the start node can also reach is still rejected. Such workflows are rare.
+- **Disconnected non-trigger node**: the value-flow check treats it as an entry point. It never runs, so this can
+  only add a rejection when it feeds a consumer that reads a result from elsewhere.
 - **Trigger that is the start node**: no change.
 - **Trigger id that names no direct child** (for example a trigger in a sibling composite, or a stale id): the
   Flowchart starts at its start node.
@@ -175,9 +178,7 @@ run directly without a trigger, starts, routes, validates or publishes.
 #### Design-time value flow
 
 - **FR-008**: For each Flowchart that has a `startNodeId`, the value-flow check MUST treat these as entry points: the
-  start node, and every direct child whose activity version is a trigger and which can start the workflow. A trigger
-  can start the workflow unless its activity declares a `CanStartWorkflow` input whose effective value is not a
-  literal `true`. The effective value is the authored literal, else the declared default, else false.
+  start node, and every direct child that is the target of no connection in that Flowchart.
 - **FR-009**: A producer MUST count as available to a consumer in the same Flowchart only when every path from every
   entry point to the consumer passes the producer.
 - **FR-010**: Two writes to the same variable in one Flowchart MUST count as potentially concurrent only when neither
@@ -185,8 +186,8 @@ run directly without a trigger, starts, routes, validates or publishes.
   non-empty and the two sets do not overlap.
 - **FR-011**: The cyclic back-edge check MUST use the same multi-entry dominance as FR-009.
 - **FR-012**: For a Flowchart with exactly one entry point, every value-flow result MUST equal today's.
-- **FR-013**: Design-time code MUST NOT take a dependency on runtime projects. The start-capable rule is read from
-  catalog activity versions only.
+- **FR-013**: Design-time code MUST NOT take a dependency on runtime projects, and the entry-point rule MUST be
+  computed from the draft alone, with no catalog lookup.
 
 #### Tests
 
@@ -202,10 +203,8 @@ run directly without a trigger, starts, routes, validates or publishes.
 
 - **Trigger node id**: the id of the node whose trigger binding started the run. It is workflow-wide, persisted with
   the run's seed state, and already present on every activity invocation.
-- **Entry point (design time)**: a node inside a Flowchart where a run can begin: the start node, or a start-capable
-  trigger child.
-- **Start-capable trigger**: a direct child whose activity is a trigger and whose `CanStartWorkflow` setting, when the
-  activity has one, is on.
+- **Entry point (design time)**: a node inside a Flowchart where a run can begin: the start node, or a direct child
+  with no inbound connection.
 
 ## Success Criteria *(mandatory)*
 
@@ -223,8 +222,8 @@ run directly without a trigger, starts, routes, validates or publishes.
 ## Assumptions
 
 - One run is started by exactly one trigger, so trigger branches in one Flowchart are mutually exclusive within a run.
-- Every trigger activity that can be authored mid-flow without starting the workflow exposes that choice through a
-  `CanStartWorkflow` input. Today that holds for HTTP endpoint and Event; Timer and Cron are always start triggers.
+- A start trigger in a multi-trigger Flowchart heads its own branch and has no inbound connection. That is how
+  Elsa 3 multi-trigger flowcharts are drawn.
 - The runtime graph already marks trigger nodes through the node's execution-type metadata, which FR-005 can read.
 - Studio needs no change. It already lets authors place several triggers in one Flowchart.
 
