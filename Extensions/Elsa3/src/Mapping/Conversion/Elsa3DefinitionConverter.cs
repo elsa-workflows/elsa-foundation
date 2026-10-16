@@ -67,7 +67,7 @@ internal sealed class Elsa3DefinitionConverter(
 
             var deferred = Ordered(plan.Diagnostics.Where(IsDeferred));
             return Elsa3MigrationResult<Elsa3NodeConversionContext>.Success(
-                new Elsa3NodeConversionContext(request, plan, deferred),
+                new Elsa3PreparedNodeConversionContext(request, plan, deferred),
                 Ordered(plan.Diagnostics.Where(diagnostic => !diagnostic.IsError)));
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -84,7 +84,12 @@ internal sealed class Elsa3DefinitionConverter(
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(node);
         cancellationToken.ThrowIfCancellationRequested();
-        var plan = context.Plan;
+        if (context is not Elsa3PreparedNodeConversionContext preparedContext)
+            throw new ArgumentException(
+                $"The context was created by another node converter ('{context.GetType().FullName}'); prepare it with this converter's {nameof(PrepareAsync)}.",
+                nameof(context));
+
+        var plan = preparedContext.Plan;
         var nodeId = Elsa3ConversionDiagnostics.NodeId(node);
         var matches = plan.Nodes.Where(item => StringComparer.Ordinal.Equals(Elsa3ConversionDiagnostics.NodeId(item.Key), nodeId)).ToArray();
         if (matches.Length != 1)

@@ -13,7 +13,8 @@ internal sealed record Elsa3MappingComposition(IServiceCollection Services);
 /// Fails shell activation with <see cref="MultipleElsa3MappingRegistrationsException"/> when the host composes more
 /// than one registration of a mapping replacement contract (<see cref="IElsa3DefinitionConverter"/>,
 /// <see cref="IElsa3NodeConverter"/>, <see cref="IElsa3ActivityMap"/>), naming every registration, whatever order they
-/// were registered in.
+/// were registered in. Fails it with <see cref="PartialElsa3ConverterReplacementException"/> when a host replaces one
+/// of the two converters but leaves the other on a default that does not follow it.
 /// </summary>
 /// <remarks>
 /// A replacement-contract conflict must be prevented at registration time or detected at startup (framework §2.6.2).
@@ -21,6 +22,12 @@ internal sealed record Elsa3MappingComposition(IServiceCollection Services);
 /// with <c>services.Replace(...)</c>, composes one. A registration sees only what was registered before it, so this
 /// check reads the composed service collection once every feature has registered. It counts registrations rather than
 /// resolving them.
+/// <para>
+/// The two converters follow one policy: the default node converter forwards to the composed definition converter. A
+/// host node converter beside the default definition converter, or a host definition converter of a known type that
+/// does not implement <see cref="IElsa3NodeConverter"/> beside the default node converter, is a partial replacement.
+/// A host factory registration hides its type, so the second case is then reported when a node converter is resolved.
+/// </para>
 /// </remarks>
 internal sealed class Elsa3MappingCompositionCheck(Elsa3MappingComposition composition) : IShellInitializer
 {
@@ -31,15 +38,39 @@ internal sealed class Elsa3MappingCompositionCheck(Elsa3MappingComposition compo
     {
         foreach (var contract in ReplacementContracts)
         {
-            var registrations = composition.Services
-                .Where(descriptor => descriptor.ServiceType == contract && !descriptor.IsKeyedService)
-                .ToArray();
+            var registrations = Registrations(contract);
             if (registrations.Length > 1)
                 throw new MultipleElsa3MappingRegistrationsException(contract, registrations.Select(Describe).ToArray());
         }
 
+        CheckConverterSet();
         return Task.CompletedTask;
     }
+
+    private void CheckConverterSet()
+    {
+        if (Registrations(typeof(IElsa3DefinitionConverter)).SingleOrDefault() is not { } definition ||
+            Registrations(typeof(IElsa3NodeConverter)).SingleOrDefault() is not { } node)
+            return;
+
+        var definitionIsDefault = Equals(definition.ImplementationFactory, Elsa3DefaultConverters.DefinitionConverter);
+        var nodeIsDefault = Equals(node.ImplementationFactory, Elsa3DefaultConverters.NodeConverter);
+        if (definitionIsDefault && !nodeIsDefault)
+            throw new PartialElsa3ConverterReplacementException(typeof(IElsa3NodeConverter), Describe(node), typeof(IElsa3DefinitionConverter));
+
+        if (nodeIsDefault && !definitionIsDefault &&
+            ImplementationType(definition) is { } definitionType &&
+            !typeof(IElsa3NodeConverter).IsAssignableFrom(definitionType))
+            throw new PartialElsa3ConverterReplacementException(typeof(IElsa3DefinitionConverter), Describe(definition), typeof(IElsa3NodeConverter));
+    }
+
+    private ServiceDescriptor[] Registrations(Type contract) =>
+        composition.Services
+            .Where(descriptor => descriptor.ServiceType == contract && !descriptor.IsKeyedService)
+            .ToArray();
+
+    private static Type? ImplementationType(ServiceDescriptor descriptor) =>
+        descriptor.ImplementationType ?? descriptor.ImplementationInstance?.GetType();
 
     /// <summary>Registers the check once per service collection, in the Prepare phase, before any startup work.</summary>
     internal static void Register(IServiceCollection services)
