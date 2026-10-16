@@ -72,6 +72,11 @@ public sealed class ActivitiesHttpFeatureTests
         services.AddSingleton<IRouteTable>(new FakeRouteTable("orders/webhook"));
         services.AddSingleton<IRouteMatcher, TestRouteMatcher>();
         services.AddSingleton<IWorkflowTriggerBindingStore, Elsa.Workflows.Runtime.Services.Triggers.InMemoryWorkflowTriggerBindingStore>();
+        services.AddSingleton<ITestRunTargetStore, UnusedTestRunTargetStore>();
+        services.AddSingleton<IWorkflowTestScopeStore, UnusedTestScopeStore>();
+        services.AddSingleton<ITestRunTargetDispatcher, UnusedTestRunTargetDispatcher>();
+        services.AddSingleton<IWorkflowExecutionPartitionAccessor>(new TestPartitionAccessor());
+        services.AddSingleton(TimeProvider.System);
         // The middleware also resolves waiting-bookmark options for resume-only matches via the
         // cross-execution lookup — contributed in production by WorkflowsRuntimeTriggers (in ActivitiesHttp's
         // DependsOn closure); the bare container stands in for that guarantee with an empty bookmark store.
@@ -123,5 +128,34 @@ public sealed class ActivitiesHttpFeatureTests
                 .Cast<ShellFeatureAttribute>());
 
         Assert.Contains("WorkflowsRuntimeHttp", attribute.DependsOn.Cast<object>().Select(d => d.ToString()));
+    }
+
+    private sealed class UnusedTestRunTargetStore : ITestRunTargetStore
+    {
+        public ValueTask<TestRunTarget> SaveAsync(TestRunTarget target, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<TestRunTarget?> FindAsync(string testRunId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<TestRunTargetAdmission> BeginDispatchAsync(string testRunId, string stimulusDigest, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<TestRunTarget?> CompleteDispatchAsync(string testRunId, TestRunTargetDispatchResult result, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<TestRunTarget?> MarkStoppedAsync(string testRunId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<TestRunTarget?> RemoveAsync(string testRunId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class UnusedTestScopeStore : IWorkflowTestScopeStore
+    {
+        public ValueTask<WorkflowTestScopeRecord> CreateAsync(WorkflowTestScope scope, DateTimeOffset createdAt, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowTestScopeRecord?> FindAsync(string scopeId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowTestScopeCloseResult> CloseAsync(WorkflowTestScopeCloseRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowTestScopeRecord> CompleteAsync(string scopeId, DateTimeOffset completedAt, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<WorkflowTestScopePage> QueryAsync(WorkflowTestScopePageQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class UnusedTestRunTargetDispatcher : ITestRunTargetDispatcher
+    {
+        public ValueTask<TestRunTargetDispatchResult> DispatchAsync(string testRunId, System.Text.Json.JsonElement? stimulusInput, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class TestPartitionAccessor : IWorkflowExecutionPartitionAccessor
+    {
+        public WorkflowExecutionPartition Current { get; } = new("test-partition");
     }
 }

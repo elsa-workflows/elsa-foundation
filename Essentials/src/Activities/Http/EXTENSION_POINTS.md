@@ -23,6 +23,7 @@ Outbound logging (not an extension point): `ActivitiesHttpFeature` calls `Remove
 
 ## Cross-references
 
+- Test Run trigger and wait drivers (`ITestRunTriggerDriver`, `ITestRunWaitDriver`), including the authenticated Studio action contract: [`Elsa.Workflows.Runtime` extension points](../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md#workflow-test-run-trigger-and-wait-drivers).
 - HTTP endpoint behaviour contracts (route resolution, authorization, fault mapping) + the route-table freshness seams: [`Elsa.Workflows.Runtime.Http/EXTENSION_POINTS.md`](../../Workflows/Runtime/Http/EXTENSION_POINTS.md).
 - Dispatch-options passthrough (`IWorkflowStartDispatcher`/`IBookmarkResumeDispatcher`/`IStimulusRouter`): [`Elsa.Workflows.Runtime/EXTENSION_POINTS.md`](../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md).
 - HTTP content factories / downloadable content: [`Elsa.Http/EXTENSION_POINTS.md`](../../Http/Elsa.Http/EXTENSION_POINTS.md).

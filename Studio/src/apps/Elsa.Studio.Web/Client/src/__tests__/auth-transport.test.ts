@@ -51,6 +51,28 @@ describe("authenticated HTTP transport", () => {
     expect(new Headers(init.headers).get("Accept")).toBe("application/json");
   });
 
+  it("returns the untouched authenticated response for module-owned protocol actions", async () => {
+    const fetchMock = vi.fn(async () => new Response("accepted by HTTP driver", {
+      status: 202,
+      headers: { "content-type": "text/plain", "x-driver-result": "deferred" }
+    }));
+    const auth = stubAuth("token-1");
+    const client = createAuthenticatedHttpClient("https://foundation.example/", auth, { fetch: fetchMock });
+
+    const response = await client.request!("/test-runs/run-1/http", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}"
+    });
+
+    expect(response.status).toBe(202);
+    expect(response.headers.get("x-driver-result")).toBe("deferred");
+    await expect(response.text()).resolves.toBe("accepted by HTTP driver");
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe("https://foundation.example/test-runs/run-1/http");
+    expect(new Headers((init as RequestInit).headers).get("Authorization")).toBe("Bearer token-1");
+  });
+
   it("maps a failed getJsonWithHeaders response onto the same error as the JSON verbs", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ status: 409, detail: "Never published." }), {
       status: 409,

@@ -64,6 +64,9 @@
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.foundation.identity.core": {
+        "type": "Project"
+      },
       "elsa.http.core": {
         "type": "Project"
       },

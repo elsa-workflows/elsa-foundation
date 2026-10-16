@@ -130,6 +130,7 @@ export function testApi(): ElsaStudioModuleApi {
     propertyEditors: registry(),
     expressionEditors: registry(),
     workflowRunInputEditors: registry(),
+    workflowTestStimulusEditors: registry(),
     workflowDesigner: {
       panels: registry()
     },

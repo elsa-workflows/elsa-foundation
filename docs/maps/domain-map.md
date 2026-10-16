@@ -9,7 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 141
 - Test projects: 146
 - Domains: 32
-- Direct cross-domain references: 1015
+- Direct cross-domain references: 1016
 
 ## Domains
 
@@ -69,7 +69,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Activities.Flowchart](../../Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj) | source | Elsa.Activities | Flowchart | feature/implementation | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Graph.Design](../../Essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj) | source | Elsa.Activities | Graph.Design | feature/implementation | Elsa.Activities.Design.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Validations.Core<br>Elsa.Workflows.Publishing.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Graph.Runtime](../../Essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj) | source | Elsa.Activities | Graph.Runtime | feature/implementation | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core |
-| [Elsa.Activities.Http](../../Essentials/src/Activities/Http/Elsa.Activities.Http.csproj) | source | Elsa.Activities | Http | feature/implementation | Elsa.Activities.Runtime.Core<br>Elsa.Http.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Activities.Http](../../Essentials/src/Activities/Http/Elsa.Activities.Http.csproj) | source | Elsa.Activities | Http | feature/implementation | Elsa.Activities.Runtime.Core<br>Elsa.Foundation.Identity.Core<br>Elsa.Http.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Primitives](../../Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj) | source | Elsa.Activities | Primitives | feature/implementation | Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Runtime.Core](../../Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj) | source | Elsa.Activities | Runtime.Core | contract | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Primitives |
 | [Elsa.Activities.Runtime](../../Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj) | source | Elsa.Activities | Runtime | feature/implementation | Elsa.Activities.Runtime.Core<br>Elsa.Events.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
@@ -446,6 +446,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Activities.Graph.Tests](../../Essentials/tests/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj) | Elsa.Activities | [Elsa.Workflows.Publishing.Core](../../Essentials/src/Workflows/Publishing/Core/Elsa.Workflows.Publishing.Core.csproj) | Elsa.Workflows |
 | [Elsa.Activities.Graph.Tests](../../Essentials/tests/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj) | Elsa.Activities | [Elsa.Workflows.Runtime](../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj) | Elsa.Workflows |
 | [Elsa.Activities.Graph.Tests](../../Essentials/tests/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj) | Elsa.Activities | [Elsa.Workflows.Runtime.Api](../../Essentials/src/Workflows/Runtime/Api/Elsa.Workflows.Runtime.Api.csproj) | Elsa.Workflows |
+| [Elsa.Activities.Http](../../Essentials/src/Activities/Http/Elsa.Activities.Http.csproj) | Elsa.Activities | [Elsa.Foundation.Identity.Core](../../Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj) | Elsa.Foundation |
 | [Elsa.Activities.Http](../../Essentials/src/Activities/Http/Elsa.Activities.Http.csproj) | Elsa.Activities | [Elsa.Http.Core](../../Essentials/src/Http/Core/Elsa.Http.Core.csproj) | Elsa.Http |
 | [Elsa.Activities.Http](../../Essentials/src/Activities/Http/Elsa.Activities.Http.csproj) | Elsa.Activities | [Elsa.Primitives](../../Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Activities.Http](../../Essentials/src/Activities/Http/Elsa.Activities.Http.csproj) | Elsa.Activities | [Elsa.Serialization.Core](../../Essentials/src/Serialization/Core/Elsa.Serialization.Core.csproj) | Elsa.Serialization |

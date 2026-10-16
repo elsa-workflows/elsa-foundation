@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Models;
@@ -186,7 +185,7 @@ public sealed class HttpEndpointMiddleware(
             {
                 var authorizationHandler = context.RequestServices?.GetService(typeof(IHttpEndpointAuthorizationHandler)) as IHttpEndpointAuthorizationHandler;
                 authorized = authorizationHandler is not null
-                    && await AuthorizeAllPoliciesAsync(authorizationHandler, context, endpointOptions.Policies);
+                    && await HttpEndpointRequestAuthorization.AuthorizeAsync(authorizationHandler, context, endpointOptions.Policies);
             }
             catch (HttpEndpointAuthorizationConfigurationException)
             {
@@ -218,7 +217,7 @@ public sealed class HttpEndpointMiddleware(
         }
 
         var maxBodyBytes = endpointOptions.RequestSizeLimit ?? _options.MaxRequestBodyBytes;
-        var requestModel = await BuildRequestModelAsync(context, endpointPath, routeValues, maxBodyBytes);
+        var requestModel = await HttpEndpointRequestModelReader.ReadAsync(context, endpointPath, routeValues, maxBodyBytes);
         if (requestModel is null)
         {
             context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
@@ -355,30 +354,6 @@ public sealed class HttpEndpointMiddleware(
     }
 
     /// <summary>
-    /// Runs the authorization handler once per distinct <paramref name="policies"/> and requires ALL to pass
-    /// (fail closed): a resume-only match can span waiting bookmarks with divergent policies, so an
-    /// endpoint is authorized only when every declared policy is satisfied. When the set is empty the endpoint is
-    /// protected by an authorize-only check (a single call with a null policy), preserving the single-policy
-    /// (claimant) behavior. Short-circuits on the first denial.
-    /// </summary>
-    private static async ValueTask<bool> AuthorizeAllPoliciesAsync(
-        IHttpEndpointAuthorizationHandler handler,
-        HttpContext context,
-        IReadOnlyCollection<string> policies)
-    {
-        if (policies.Count == 0)
-            return await handler.AuthorizeAsync(new AuthorizeHttpEndpointContext(context, Policy: null));
-
-        foreach (var policy in policies)
-        {
-            if (!await handler.AuthorizeAsync(new AuthorizeHttpEndpointContext(context, policy)))
-                return false;
-        }
-
-        return true;
-    }
-
-    /// <summary>
     /// Resolves the endpoint options metadata for a resume-only match (no trigger claimant) from EVERY waiting
     /// bookmark matching this stimulus hash. Uses the expiry-aware lookup and filters to the
     /// matched stimulus hash, so an expired or differently-hashed bookmark never supplies options. The caller merges
@@ -425,56 +400,4 @@ public sealed class HttpEndpointMiddleware(
     private static readonly IReadOnlyDictionary<string, string> EmptyRouteValues =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Builds the request model; null when the body exceeds <paramref name="maxBodyBytes"/>.</summary>
-    private static async Task<HttpRequestModel?> BuildRequestModelAsync(
-        HttpContext context,
-        string endpointPath,
-        IReadOnlyDictionary<string, string> routeValues,
-        long maxBodyBytes)
-    {
-        if (context.Request.ContentLength is { } declaredLength && declaredLength > maxBodyBytes)
-            return null;
-
-        string? body = null;
-        if (context.Request.Body.CanRead)
-        {
-            body = await ReadBodyBoundedAsync(context.Request.Body, maxBodyBytes, context.RequestAborted);
-            if (body is null)
-                return null; // Exceeded the cap during streaming (Content-Length absent or lied).
-            if (body.Length == 0)
-                body = null;
-        }
-
-        var headers = context.Request.Headers
-            .ToDictionary(header => header.Key, header => header.Value.Select(v => v ?? string.Empty).ToArray(), StringComparer.OrdinalIgnoreCase);
-        var query = context.Request.Query
-            .ToDictionary(item => item.Key, item => item.Value.Select(v => v ?? string.Empty).ToArray(), StringComparer.OrdinalIgnoreCase);
-
-        // Parsed content is NOT persisted here: the HttpEndpoint activity derives it from
-        // Body + the Content-Type header via the deterministic IHttpRequestBodyParser seam, so the stimulus payload
-        // carries the raw body exactly once instead of the body plus a re-encoded copy of it.
-        return new HttpRequestModel(
-            Path: HttpEndpointStimulus.NormalizeTemplate(endpointPath),
-            Method: context.Request.Method.ToUpperInvariant(),
-            Headers: headers,
-            Query: query,
-            Body: body,
-            RouteData: new Dictionary<string, string>(routeValues, StringComparer.OrdinalIgnoreCase));
-    }
-
-    /// <summary>Reads the body up to the byte cap (enforced during streaming, not only via Content-Length); null when exceeded.</summary>
-    private static async Task<string?> ReadBodyBoundedAsync(Stream body, long maxBodyBytes, CancellationToken cancellationToken)
-    {
-        using var buffer = new MemoryStream();
-        var chunk = new byte[8192];
-        int read;
-        while ((read = await body.ReadAsync(chunk, cancellationToken)) > 0)
-        {
-            if (buffer.Length + read > maxBodyBytes)
-                return null;
-            buffer.Write(chunk, 0, read);
-        }
-
-        return Encoding.UTF8.GetString(buffer.GetBuffer(), 0, (int)buffer.Length);
-    }
 }

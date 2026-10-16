@@ -1,5 +1,6 @@
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models;
+using System.Text.Json;
 
 namespace Elsa.Workflows.Publishing.Api.Models;
 
@@ -13,7 +14,9 @@ public sealed record WorkflowTestRunView(
     string? CommandDispatchStatus,
     string? Reason,
     DateTimeOffset? ExpiresAt,
-    IReadOnlyDictionary<string, string> Metadata)
+    IReadOnlyDictionary<string, string> Metadata,
+    TestRunDriverAction? DriverAction = null,
+    JsonElement? DriverDetails = null)
 {
     public WorkflowTestRunView(
         string TestRunId,
@@ -35,7 +38,9 @@ public sealed record WorkflowTestRunView(
             CommandDispatchStatus,
             Reason,
             ExpiresAt,
-            new Dictionary<string, string>())
+            new Dictionary<string, string>(),
+            null,
+            null)
     {
     }
 
@@ -52,5 +57,7 @@ public sealed record WorkflowTestRunView(
             commandDispatchStatus?.ToString(),
             testRun.Reason,
             testRun.ExpiresAt,
-            testRun.Metadata);
+            testRun.Metadata,
+            testRun.DriverAction,
+            testRun.DriverDetails?.Clone());
 }

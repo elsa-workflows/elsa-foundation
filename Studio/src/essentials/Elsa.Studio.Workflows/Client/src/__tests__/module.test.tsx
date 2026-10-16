@@ -192,6 +192,32 @@ describe("workflows module", () => {
     }
   });
 
+  it("passes registered Test Run stimulus editors into the designer route", () => {
+    const api = testApi();
+    register(api);
+    const customEditor = {
+      id: "contoso.test-drive.custom-start",
+      supports: ({ option }: { option: { driverId?: string | null } }) => option.driverId === "Contoso.CustomStart",
+      component: () => null,
+      validate: () => undefined,
+      serialize: ({ draft }: { draft: string }) => JSON.parse(draft)
+    };
+    api.workflowTestStimulusEditors?.add(customEditor);
+
+    const route = api.routes.list().find(candidate => candidate.id === "workflows-definitions")!;
+    const renderRoute = route.component as (props: { navigate(path: string): void }) => React.ReactElement<{ children: React.ReactNode }>;
+    const boundary = renderRoute({ navigate: vi.fn() });
+    const surface = React.Children.only(boundary.props.children) as React.ReactElement<{ testStimulusEditors: unknown[] }>;
+
+    expect(surface.props.testStimulusEditors).toContain(customEditor);
+    expect((surface.props.testStimulusEditors as { id: string }[]).map(editor => editor.id)).toEqual(expect.arrayContaining([
+      "elsa.workflows.test-stimulus.http-request",
+      "elsa.workflows.test-stimulus.event",
+      "elsa.workflows.test-stimulus.schedule-fire-now",
+      customEditor.id
+    ]));
+  });
+
   it("keeps the JSON fallback when hosted by a pre-slot SDK registry", () => {
     const { workflowRunInputEditors: _unsupportedSlot, ...api } = testApi();
 
@@ -2614,9 +2640,10 @@ describe("workflows module", () => {
     await click(Array.from(container.querySelectorAll<HTMLButtonElement>(".wf-palette-activity"))
       .find(button => button.textContent?.includes("Write Line")) ?? null);
     await click(buttonByText(container, "Run"));
-    await waitForText(container, "Provide the workflow inputs for this run.");
+    await waitForText(container, "Workflow inputs");
     expect(fetchMock.mock.calls.some(([url, init]) => init?.method === "POST" && urlPath(String(url)) === "/publishing/workflows/drafts/test-runs")).toBe(false);
     await fill(inputByLabel(container, "Greeting"), "Hello from test run");
+    await waitForEnabledButton(container, "Run workflow");
     await click(buttonByText(container, "Run workflow"));
     await waitForText(container, "Test run dispatched");
 
@@ -2694,6 +2721,8 @@ describe("workflows module", () => {
 
     await waitForText(container, "Run");
     await click(buttonByText(container, "Run"));
+    await waitForEnabledButton(container, "Run workflow");
+    await click(buttonByText(container, "Run workflow"));
     await waitForText(container, "Expression validation is unavailable");
     expect(testRunAttempts).toBe(1);
     await click(buttonByText(container, "Proceed with Test Run"));
@@ -2756,6 +2785,8 @@ describe("workflows module", () => {
 
     await waitForText(container, "Run");
     await click(buttonByText(container, "Run"));
+    await waitForEnabledButton(container, "Run workflow");
+    await click(buttonByText(container, "Run workflow"));
     await waitForText(container, "Test run dispatched");
     expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
     await waitForText(container, "test-run-1");
@@ -2767,9 +2798,11 @@ describe("workflows module", () => {
     await waitForText(container, "Text");
     await fill(container.querySelector<HTMLInputElement>(".wf-property-row input[type='text']"), "Stale capsule clearing");
 
-    await waitForTextToDisappear(container, "test-run-1");
-    expect(container.textContent).not.toContain("artifact-transient-1");
-    expect(container.textContent).not.toContain("wfexec-1");
+    await click(buttonByText(container, "Runtime"));
+    await waitForText(container, "Earlier draft");
+    expect(container.textContent).toContain("test-run-1");
+    expect(container.textContent).toContain("artifact-transient-1");
+    expect(container.textContent).toContain("wfexec-1");
 
     await unmount();
   });
@@ -2807,6 +2840,8 @@ describe("workflows module", () => {
 
     await waitForText(container, "Run");
     await click(buttonByText(container, "Run"));
+    await waitForEnabledButton(container, "Run workflow");
+    await click(buttonByText(container, "Run workflow"));
     await waitForText(container, "Test run rejected");
     expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
     await waitForText(container, "Workflow version has no root activity to publish.");
@@ -5457,6 +5492,13 @@ function dialog(container: HTMLElement) {
 async function waitForDialog(container: HTMLElement) {
   await vi.waitFor(() => expect(container.querySelector(".wf-dialog")).not.toBeNull());
   return dialog(container);
+}
+
+async function waitForEnabledButton(container: HTMLElement, text: string) {
+  await vi.waitFor(() => {
+    const button = buttonByText(container, text);
+    expect(button instanceof HTMLButtonElement && !button.disabled).toBe(true);
+  });
 }
 
 function optionByText(container: HTMLElement, text: string) {

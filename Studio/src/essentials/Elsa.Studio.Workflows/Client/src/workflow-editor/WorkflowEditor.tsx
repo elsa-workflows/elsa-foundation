@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Boxes, Code2, Download, ListTree, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
-import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, type StudioActivityPropertyEditorContribution, type StudioAiContributionApi, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, type StudioActivityPropertyEditorContribution, type StudioAiContributionApi, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
   collectActivityNodeIds,
@@ -30,7 +30,7 @@ import { loadActivityIconRegistry } from "../activityIconView";
 import { weaverUnavailableTitle } from "./constants";
 
 void loadActivityIconRegistry().catch(() => undefined);
-import type { CanvasView, WorkflowDesignerPanelContext, WorkflowEditorError, WorkflowEditorOperation, WorkflowEditorPanelTab, WorkflowErrorInput } from "./editorTypes";
+import type { CanvasView, WorkflowDesignerPanelContext, WorkflowEditorError, WorkflowEditorOperation, WorkflowEditorPanelTab, WorkflowErrorInput, WorkflowTestDriveSetupState } from "./editorTypes";
 import type { WorkflowSlotNavigation } from "./contexts";
 import {
   createNodeId,
@@ -59,7 +59,7 @@ import { useExecutableArtifactExport } from "./useExecutableArtifactExport";
 import { combineValidationErrors, detectStructuralValidationErrors } from "../draftValidation";
 import { createValidationActivityLabels, humanizeValidationErrors } from "../validationActivityLabels";
 import { WorkflowArtifactsPanel } from "./WorkflowExecutables";
-import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
+import { WorkflowTestDrivePanel } from "./WorkflowTestDrivePanel";
 import { useSidePanelLayout } from "./useSidePanelLayout";
 import { useDraftHistory } from "./useDraftHistory";
 import { forgetRemovedNodes, useWorkflowDocument } from "./workflowDocument";
@@ -115,6 +115,7 @@ export function WorkflowEditor({
   expressionTooling,
   expressionToolingIdentity,
   runInputEditors,
+  testStimulusEditors,
   workflowDesignerPanels,
   autosaveEnabledByDefault,
   onBack
@@ -127,6 +128,7 @@ export function WorkflowEditor({
   expressionTooling?: StudioExpressionToolingClient;
   expressionToolingIdentity?: ExpressionToolingCacheIdentity;
   runInputEditors: StudioWorkflowRunInputEditorContribution[];
+  testStimulusEditors: StudioTestStimulusEditorContribution[];
   workflowDesignerPanels: StudioWorkflowDesignerPanelContribution[];
   autosaveEnabledByDefault?: boolean;
   onBack(): void;
@@ -170,7 +172,6 @@ export function WorkflowEditor({
     navigateToScope,
     resetToRoot,
     startTestRun,
-    clearTestRun,
     setPublishedArtifact
   } = editorDoc;
   const [error, setErrorState] = useState<WorkflowEditorError | null>(null);
@@ -182,6 +183,7 @@ export function WorkflowEditor({
   const [activeLeftPanelId, setActiveLeftPanelId] = useState("activities");
   const themeLayout = useStudioThemeLayout();
   const [activeRightPanelId, setActiveRightPanelId] = useState("inspector");
+  const [testDriveSetup, setTestDriveSetup] = useState<WorkflowTestDriveSetupState | null>(null);
   const [activeInspectorTabId, setActiveInspectorTabId] = useState<ActivityInspectorTabId>("inputs");
   const [canvasView, setCanvasView] = useState<CanvasView>("designer");
   const [versionChange, setVersionChange] = useState<{
@@ -509,13 +511,12 @@ export function WorkflowEditor({
     confirmPublication,
     cancelPublication,
     openPublishedExecutable,
-    runInputPrompt,
-    confirmRunInputs,
-    cancelRunInputs,
     expressionValidationWarning,
     confirmUnavailableExpressionValidation,
     cancelUnavailableExpressionValidation,
-    run
+    run,
+    runTestDrive,
+    updateTestDriveResult
   } = useWorkflowOperations({
     context,
     draft,
@@ -527,7 +528,6 @@ export function WorkflowEditor({
     flushPendingSave,
     reload,
     startTestRun,
-    clearTestRun,
     setPublishedArtifact,
     setOperation,
     setStatus,
@@ -849,13 +849,12 @@ export function WorkflowEditor({
     });
   };
 
-  const renderedTestRun = draft && testRun?.draftSignature === getDraftSignature(draft)
-    ? testRun.view
-    : null;
+  const currentTestRun = draft && testRun?.draftSignature === getDraftSignature(draft) ? testRun.view : null;
+  const renderedTestRun = testRun?.view ?? null;
   // ADR 0040's equivalence signal: a test run resolving to a published artifact id proves the current
   // draft is behaviorally identical to that published version. Above the loading return — hooks must
   // run on every render.
-  const publishedEquivalent = useDraftEquivalence(context, definitionId, renderedTestRun);
+  const publishedEquivalent = useDraftEquivalence(context, definitionId, currentTestRun);
 
   if (!details || !draft) {
     return <div className="wf-empty">{error?.message || "Loading workflow editor..."}</div>;
@@ -1006,7 +1005,26 @@ export function WorkflowEditor({
       title: "Runtime",
       order: 5,
       icon: <Play size={15} />,
-      render: () => <WorkflowRuntimePanel testRun={renderedTestRun} publishedEquivalent={publishedEquivalent} onOpenRun={openWorkflowRun} activityLabels={activityLabels} />
+      render: () => <WorkflowRuntimePanel testRun={testRun} context={context} currentDraftSignature={draft ? getDraftSignature(draft) : ""} stimulusEditors={testStimulusEditors} publishedEquivalent={publishedEquivalent} onOpenRun={openWorkflowRun} activityLabels={activityLabels} onRunViewUpdated={editorDoc.updateTestRunView} onWaitDraftUpdated={editorDoc.updateTestRunWaitDraft} />
+    },
+    {
+      id: "test-drive",
+      title: "Test Run",
+      order: 6,
+      icon: <Play size={15} />,
+      render: () => (
+        <WorkflowTestDrivePanel
+          context={context}
+          draft={draft}
+          runInputEditors={runInputEditors}
+          stimulusEditors={testStimulusEditors}
+          setupState={testDriveSetup}
+          onSetupStateChange={setTestDriveSetup}
+          busy={busy}
+          onStart={runTestDrive}
+          onUpdateRun={updateTestDriveResult}
+        />
+      )
     },
     {
       id: "artifacts",
@@ -1057,6 +1075,7 @@ export function WorkflowEditor({
         runStatus={renderedTestRun ? (
           <TestRunStatus
             testRun={renderedTestRun}
+            stale={Boolean(testRun && draft && testRun.draftSignature !== getDraftSignature(draft))}
             onOpenDetails={() => {
               setActiveRightPanelId("runtime");
               setInspectorCollapsed(false);
@@ -1161,15 +1180,6 @@ export function WorkflowEditor({
           onPublish={confirmPublication}
           onCancel={cancelPublication}
           onOpenPublishedExecutable={openPublishedExecutable}
-        />
-      ) : null}
-
-      {runInputPrompt ? (
-        <WorkflowRunInputDialog
-          inputs={runInputPrompt.inputs}
-          editors={runInputEditors}
-          onSubmit={values => { void confirmRunInputs(values); }}
-          onCancel={cancelRunInputs}
         />
       ) : null}
 
