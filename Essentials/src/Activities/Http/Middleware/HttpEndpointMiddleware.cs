@@ -34,7 +34,7 @@ namespace Elsa.Activities.Http.Middleware;
 /// <b>Async/202.</b> The router's start and resume paths are asynchronous (they enqueue work through the actor
 /// mailbox); the middleware does not wait for the workflow to run. When at least one instance was started OR
 /// resumed it replies <c>202 Accepted</c> with <c>{ started: [...], resumed: [...] }</c> (started/resumed
-/// execution ids); when neither happened it replies <c>404 Not Found</c>.
+/// execution ids) plus response-mode diagnostics; when neither happened it replies <c>404 Not Found</c>.
 /// </para>
 /// <para>
 /// <b>Sync.</b> When the resolved <see cref="MergedHttpEndpointOptions.ResponseMode"/>
@@ -323,10 +323,24 @@ public sealed class HttpEndpointMiddleware(
             }
         }
 
+        var response = sync
+            ? new
+            {
+                mode = "sync",
+                reason = "workflow-response-not-produced",
+                message = "The workflow may have suspended, reached no response activity, or continued on another worker. Inspect the run."
+            }
+            : new
+            {
+                mode = "async",
+                reason = "background-accepted",
+                message = "The endpoint accepts work in the background and returns 202 before the workflow responds."
+            };
+
         context.Response.StatusCode = StatusCodes.Status202Accepted;
         context.Response.ContentType = "application/json";
         await context.Response.WriteAsync(
-            JsonSerializer.Serialize(new { started = startedIds, resumed = resumedIds }),
+            JsonSerializer.Serialize(new { started = startedIds, resumed = resumedIds, response }),
             context.RequestAborted);
     }
 

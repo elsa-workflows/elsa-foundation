@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Http.Options;
@@ -9,6 +10,7 @@ using Elsa.Http.Core;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Exceptions;
 using Elsa.Http.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
@@ -938,19 +940,19 @@ public sealed class HttpEndpointMiddlewareTests
     // ---- Synchronous same-exchange responses + 202 degrade ----
 
     [Fact]
-    public async Task Sync_WorkflowAuthorsResponse_MiddlewareReturnsWithoutWriting_No202Stomp()
+    public async Task Sync_DefaultStatus200_WhenWorkflowAuthorsResponse_No202Stomp()
     {
         // A sync-mode claimant (http:responseMode=Sync). The router callback simulates the inline drain: it writes
         // the workflow-authored status + body to the live response and marks the sink. After RouteAsync the
         // middleware sees ResponseWritten and returns WITHOUT stomping a 202 — the response is whatever the workflow
-        // authored (here 201 + a JSON body), never the {started,resumed} degrade envelope.
+        // authored (here the default 200 + a JSON body), never the {started,resumed} degrade envelope.
         var (services, sink) = SyncServices();
         var router = RecordingStimulusRouter.WithCallback(
             async _ =>
             {
-                sink.HttpContext!.Response.StatusCode = StatusCodes.Status201Created;
-                sink.HttpContext.Response.ContentType = "application/json";
-                await sink.HttpContext.Response.WriteAsync("""{"ok":true}""");
+                var response = sink.HttpContext!.Response;
+                response.ContentType = "application/json";
+                await response.WriteAsync("""{"ok":true}""");
                 sink.MarkResponseWritten();
             },
             starts: new[] { StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1") });
@@ -962,9 +964,36 @@ public sealed class HttpEndpointMiddlewareTests
 
         Assert.True(sink.ResponseWritten);
         Assert.Same(context, sink.HttpContext);
-        Assert.Equal(StatusCodes.Status201Created, context.Response.StatusCode);
+        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
         var body = await ReadResponse(context);
         Assert.Equal("""{"ok":true}""", body);
+        Assert.DoesNotContain("started", body);
+    }
+
+    [Fact]
+    public async Task NewlyPublishedEndpointWithUnauthoredResponseMode_UsesSyncAndReturnsWorkflowResponse()
+    {
+        // Exercise publication through request handling: no ResponseMode input is authored, so the real stimulus
+        // provider applies Sync and stamps it into the trigger binding metadata consumed by the middleware. This
+        // would return 202 if the provider fallback or metadata hand-off regressed to Async.
+        var (services, sink) = SyncServices();
+        var router = RecordingStimulusRouter.WithCallback(
+            async _ =>
+            {
+                await sink.HttpContext!.Response.WriteAsync("workflow-response");
+                sink.MarkResponseWritten();
+            },
+            starts: [StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1")]);
+        var store = await StoreWith(BindingFromUnauthoredEndpoint());
+        var middleware = Middleware(router, store, "orders/webhook");
+        var context = NewContext("/workflows/http/orders/webhook", "POST", body: "{}", services: services);
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.True(sink.ResponseWritten);
+        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+        var body = await ReadResponse(context);
+        Assert.Equal("workflow-response", body);
         Assert.DoesNotContain("started", body);
     }
 
@@ -987,6 +1016,32 @@ public sealed class HttpEndpointMiddlewareTests
         var payload = JsonDocument.Parse(await ReadResponse(context)).RootElement;
         Assert.Equal("wf-exec-1", payload.GetProperty("started")[0].GetString());
         Assert.Empty(payload.GetProperty("resumed").EnumerateArray());
+        var response = payload.GetProperty("response");
+        Assert.Equal("sync", response.GetProperty("mode").GetString());
+        Assert.Equal("workflow-response-not-produced", response.GetProperty("reason").GetString());
+        Assert.Equal(
+            "The workflow may have suspended, reached no response activity, or continued on another worker. Inspect the run.",
+            response.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task Sync_DeferredDispatch_UsesGenericResponseUnavailableDiagnostic()
+    {
+        // A deferred resume does not reveal why no response was produced. Keep the same truthful generic reason as
+        // the suspend/no-write path rather than claiming that the workflow suspended or completed.
+        var router = RecordingStimulusRouter.WithOutcomes(
+            starts: [StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1")],
+            resumes: [new StimulusResumeOutcome("wf-deferred", BookmarkResumeDispatchStatus.Deferred, "not-local")]);
+        var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST", responseMode: ResponseMode.Sync));
+        var middleware = Middleware(router, store, "orders/webhook");
+        var context = NewContext("/workflows/http/orders/webhook", "POST", body: "{}");
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
+        var payload = JsonDocument.Parse(await ReadResponse(context)).RootElement;
+        Assert.Equal("workflow-response-not-produced", payload.GetProperty("response").GetProperty("reason").GetString());
+        Assert.DoesNotContain("deferred", payload.GetProperty("response").GetProperty("message").GetString());
     }
 
     [Fact]
@@ -1010,10 +1065,10 @@ public sealed class HttpEndpointMiddlewareTests
     }
 
     [Fact]
-    public async Task Async_NoMetadata_DispatchOptionsNull_AndSinkUntouched()
+    public async Task LegacyMissingResponseModeMetadata_RemainsAsync_DispatchOptionsNull_AndSinkUntouched()
     {
-        // Async mode (no responseMode metadata) is bit-identical to the pre-E baseline: no ambient services on the
-        // dispatch and the sink is never populated even when one is registered on the request scope.
+        // Persisted pre-change trigger metadata has no responseMode key. It remains Async for compatibility: no
+        // ambient services on the dispatch and the sink is never populated even when one is registered on the scope.
         var (services, sink) = SyncServices();
         var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
         var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST")); // Async default
@@ -1027,6 +1082,31 @@ public sealed class HttpEndpointMiddlewareTests
         Assert.Null(sink.HttpContext);
         Assert.False(sink.ResponseWritten);
         Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
+        var payload = JsonDocument.Parse(await ReadResponse(context)).RootElement;
+        var response = payload.GetProperty("response");
+        Assert.Equal("async", response.GetProperty("mode").GetString());
+        Assert.Equal("background-accepted", response.GetProperty("reason").GetString());
+        Assert.Equal("The endpoint accepts work in the background and returns 202 before the workflow responds.", response.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task Async_ExplicitModeMetadata_Replies202WithBackgroundDiagnostics()
+    {
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
+        var store = await StoreWith(Binding(
+            "artifact-1", "orders/webhook", "POST",
+            responseMode: ResponseMode.Async,
+            includeResponseMode: true));
+        var middleware = Middleware(router, store, "orders/webhook");
+        var context = NewContext("/workflows/http/orders/webhook", "POST", body: "{}");
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
+        var payload = JsonDocument.Parse(await ReadResponse(context)).RootElement;
+        Assert.Equal("wf-exec-1", payload.GetProperty("started")[0].GetString());
+        Assert.Equal("async", payload.GetProperty("response").GetProperty("mode").GetString());
+        Assert.Equal("background-accepted", payload.GetProperty("response").GetProperty("reason").GetString());
     }
 
     [Fact]
@@ -1224,6 +1304,59 @@ public sealed class HttpEndpointMiddlewareTests
         return store;
     }
 
+    private static WorkflowTriggerBinding BindingFromUnauthoredEndpoint()
+    {
+        var inputBindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/webhook"),
+            [nameof(HttpEndpoint.SupportedMethods)] = LiteralCollectionBinding(nameof(HttpEndpoint.SupportedMethods), ["POST"]),
+            [nameof(HttpEndpoint.CanStartWorkflow)] = LiteralJsonBinding(nameof(HttpEndpoint.CanStartWorkflow), "true")
+        };
+        using var descriptorJson = JsonDocument.Parse("""{"type":"test"}""");
+        var node = new ExecutableNode(
+            executableNodeId: "node-http-endpoint",
+            authoredActivityId: "authored-node-http-endpoint",
+            activityType: HttpEndpoint.ActivityType,
+            activityTypeVersion: "1.0.0",
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, descriptorJson.RootElement.Clone()),
+            inputBindings: inputBindings,
+            metadata: new Dictionary<string, string>());
+        var descriptor = Assert.Single(new HttpEndpointTriggerStimulusProvider().Describe(node).Descriptors);
+        const string artifactId = "artifact-published-unauthored-response-mode";
+        const string nodeId = "node-http-endpoint";
+
+        return new WorkflowTriggerBinding(
+            TriggerBindingId: WorkflowTriggerBinding.BuildId(artifactId, nodeId, descriptor.StimulusHash),
+            ArtifactId: artifactId,
+            DefinitionId: DefinitionId,
+            ArtifactVersion: "1.0.0",
+            ArtifactHash: "sha256:artifact-published-unauthored-response-mode",
+            ExecutableNodeId: nodeId,
+            StimulusType: descriptor.StimulusType,
+            StimulusHash: descriptor.StimulusHash,
+            CorrelationScope: null,
+            Metadata: descriptor.Metadata,
+            CreatedAt: DateTimeOffset.UnixEpoch);
+    }
+
+    private static RuntimeInputBinding LiteralBinding(string name, string value) =>
+        LiteralJsonBinding(name, JsonSerializer.Serialize(value));
+
+    private static RuntimeInputBinding LiteralCollectionBinding(string name, IReadOnlyCollection<string> values) =>
+        LiteralJsonBinding(name, JsonSerializer.Serialize(values));
+
+    private static RuntimeInputBinding LiteralJsonBinding(string name, string rawJson)
+    {
+        using var document = JsonDocument.Parse(rawJson);
+        var type = new ValueTypeDescriptor("Elsa.Any");
+        return new RuntimeInputBinding(
+            name,
+            type,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, document.RootElement, ValueProtectionPolicy.InstanceInline));
+    }
+
     private static WorkflowTriggerBinding Binding(
         string artifactId,
         string template,
@@ -1234,7 +1367,8 @@ public sealed class HttpEndpointMiddlewareTests
         string? policy = null,
         TimeSpan? requestTimeout = null,
         long? requestSizeLimit = null,
-        ResponseMode responseMode = ResponseMode.Async)
+        ResponseMode responseMode = ResponseMode.Async,
+        bool includeResponseMode = false)
     {
         var hash = HttpEndpointStimulus.Hash(template, method);
 
@@ -1255,7 +1389,7 @@ public sealed class HttpEndpointMiddlewareTests
         if (requestSizeLimit is { } sizeLimit)
             metadata[Elsa.Http.Core.HttpEndpointRouting.RequestSizeLimitMetadataKey] =
                 sizeLimit.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        if (responseMode != ResponseMode.Async)
+        if (includeResponseMode || responseMode != ResponseMode.Async)
             metadata[Elsa.Http.Core.HttpEndpointRouting.ResponseModeMetadataKey] = responseMode.ToString();
 
         return new WorkflowTriggerBinding(

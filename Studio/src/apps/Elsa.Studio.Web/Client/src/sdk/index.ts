@@ -130,6 +130,8 @@ export const studioBackendManagementRegistryPath = "/_elsa/studio/backend-manage
  */
 export interface StudioRequestInit extends RequestInit {
   timeoutMs?: number;
+  /** Disables the authenticated transport's automatic 401 refresh retry for endpoint-defined responses. */
+  retryOnUnauthorized?: boolean;
 }
 
 /**
@@ -144,6 +146,12 @@ export interface StudioJsonResponse<T> {
 }
 
 export interface StudioHttpClient {
+  /**
+   * Sends a request through the configured backend transport and returns the untouched response. Optional so
+   * existing module-owned and test clients remain compatible; callers that need status, headers, or a non-JSON
+   * body should check for its presence rather than falling back to global fetch.
+   */
+  requestResponse?(url: string, init?: StudioRequestInit): Promise<Response>;
   requestJson<T>(url: string, init?: StudioRequestInit): Promise<T>;
   getJson<T>(url: string, init?: StudioRequestInit): Promise<T>;
   postJson<T>(url: string, body: unknown, init?: StudioRequestInit): Promise<T>;
@@ -2091,6 +2099,10 @@ export function createHttpClient(baseUrl: string, defaultHeadersOrOptions?: Head
   const send = <T>(url: string, init?: StudioRequestInit) => requestJson<T>(baseUrl, url, init, options);
 
   return {
+    async requestResponse(url: string, init?: StudioRequestInit) {
+      const { response } = await sendRequest(baseUrl, url, withDefaultHeaders(defaultHeaders, init), options);
+      return response;
+    },
     requestJson<T>(url: string, init?: StudioRequestInit) {
       return send<T>(url, withDefaultHeaders(defaultHeaders, withJsonAccept(init)));
     },

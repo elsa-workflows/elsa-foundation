@@ -1,4 +1,5 @@
 import type { Node } from "@xyflow/react";
+import { createHttpStarterState } from "./httpWorkflowStarter";
 import type { StudioActivityDescriptor, StudioAiContributionApi, StudioAiPromptActionContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityPresentationRecord, WorkflowDefinitionSummary, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableReference, WorkflowExecutableRunResponse, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
 import type { ChildSlot } from "../workflowAdapter";
@@ -155,6 +156,7 @@ function unquote(value: string) {
 }
 
 export function getCreateInitialState(draft: CreateWorkflowDraft, activities: ActivityCatalogItem[]) {
+  if (draft.starter === "http") return createHttpStarterState(activities);
   const activity = activities.find(candidate => candidate.activityVersionId === draft.rootActivityVersionId)
     ?? findCompositionActivity(activities, "flowchart")
     ?? findCompositionActivity(activities, "sequence");

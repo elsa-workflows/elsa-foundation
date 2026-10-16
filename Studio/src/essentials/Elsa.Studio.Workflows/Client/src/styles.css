@@ -3799,6 +3799,20 @@ html[data-theme-appearance="high-contrast"] .wf-node[data-trigger-enabled="true"
   gap: 2px;
 }
 
+.wf-node-http-response-badge {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border: 1px solid var(--studio-border);
+  border-radius: 999px;
+  background: var(--studio-surface-muted);
+  color: var(--studio-text-muted);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.2;
+  padding: 2px 6px;
+}
+
 .wf-node strong {
   display: block;
   overflow: hidden;
@@ -6549,6 +6563,33 @@ button.wf-reference-select {
   border-radius: var(--wf-radius);
   color: var(--wf-warning-text);
   font-size: 12px;
+}
+
+.wf-http-response-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--studio-warning) 46%, var(--studio-border));
+  border-radius: var(--studio-radius);
+  background: color-mix(in srgb, var(--studio-warning) 9%, var(--studio-surface));
+  color: var(--studio-warning-fg);
+  font-size: 12px;
+}
+
+.wf-http-response-warning > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.wf-http-response-warning p {
+  margin: 0 0 5px;
+}
+
+.wf-http-response-warning .wf-link-button {
+  color: inherit;
+  font-size: inherit;
 }
 
 /* Scoped variables (ADR-0027): container declarations, picker, shadowing advisories, repair surface. */

@@ -48,13 +48,6 @@
                     "value": "true",
                     "expressionType": "Literal"
                   }
-                },
-                {
-                  "referenceKey": "ResponseMode",
-                  "value": {
-                    "value": "Sync",
-                    "expressionType": "Literal"
-                  }
                 }
               ],
               "outputs": [
