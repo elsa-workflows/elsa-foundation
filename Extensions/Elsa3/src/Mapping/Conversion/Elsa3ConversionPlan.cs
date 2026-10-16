@@ -1,6 +1,8 @@
+using System.Text.Json;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa3.Mapping.ActivityMap;
 using Elsa3.Mapping.Resolution;
 using Elsa3.Models;
 
@@ -83,6 +85,21 @@ internal sealed class Elsa3NodePlan(Elsa3Activity node, string jsonPath, Elsa3Ac
 
     /// <summary>Whether normalization reported an error on this node.</summary>
     public bool Failed { get; set; }
+
+    /// <summary>The flowchart construct this node is (FlowFork, FlowJoin, Start), which graph conversion consumes.</summary>
+    public Elsa3GraphConstructKind? GraphConstruct { get; set; }
+
+    /// <summary>
+    /// A construct's setting, captured before normalization removes structure members: FlowFork <c>Branches</c> or
+    /// FlowJoin <c>Mode</c>, as the Elsa 3 typed value. Null when unset.
+    /// </summary>
+    public JsonElement? GraphConstructSetting { get; set; }
+
+    /// <summary>
+    /// Synthesized nodes that run right after this one, in order (HttpEndpoint projections, plan D-12). In a flowchart,
+    /// graph conversion chains them by connection; in a list slot their position already does.
+    /// </summary>
+    public List<Elsa3Activity> FollowedBy { get; } = [];
 }
 
 /// <summary>One child placed in a slot. <see cref="Label"/> is the collection item's label (branch name, case match).</summary>

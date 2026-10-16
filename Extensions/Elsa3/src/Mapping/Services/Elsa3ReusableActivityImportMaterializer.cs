@@ -7,6 +7,7 @@ using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Persistence.Core.Entities;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
+using Elsa3.Mapping.ActivityMap.Rewrites;
 using Elsa3.Mapping.Conversion;
 using Elsa3.Mapping.Mappings;
 using Elsa3.Models;
@@ -127,10 +128,52 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             if (!replacements.TryAdd(rewrite.NodeId, new(
                     rewrite.TargetActivityDefinitionVersionId,
                     targetSource.Inputs.Select(argumentMapper.MapInput).ToArray(),
-                    targetSource.Outputs.Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase))))
+                    targetSource.Outputs.Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase),
+                    CompletionOutcomes(targetSource))))
                 throw new InvalidOperationException($"Import plan contains multiple rewrites for node '{rewrite.NodeId}' in source '{owner.SourceVersionId}'.");
         }
         return replacements;
+    }
+
+    /// <summary>
+    /// The outcomes a reusable workflow's converted activity completes with, which a caller's connections route by
+    /// (spec 239 R-3): <c>Done</c> plus every single literal outcome a <c>Complete</c> names at any depth, matching the
+    /// contract the converter declares for it (spec 236 D-5 to D-7). A Complete the converter refuses adds nothing; its
+    /// own conversion reports it.
+    /// </summary>
+    private static IReadOnlySet<string> CompletionOutcomes(Elsa3WorkflowDefinition target)
+    {
+        var outcomes = new HashSet<string>(StringComparer.Ordinal) { Elsa3OutcomeKey.Done };
+        var pending = new Stack<JsonElement>();
+        if (target.Root is not null)
+            pending.Push(JsonSerializer.SerializeToElement(target.Root, JsonOptions));
+        while (pending.TryPop(out var element))
+        {
+            if (element.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in element.EnumerateArray())
+                    pending.Push(item);
+                continue;
+            }
+
+            if (element.ValueKind != JsonValueKind.Object)
+                continue;
+
+            if (element.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String &&
+                StringComparer.Ordinal.Equals(type.GetString(), "Elsa.Complete") &&
+                element.TryGetProperty("outcomes", out var value) &&
+                Elsa3TerminalPlacementRewrite.TryReadNameList(value, out _, out var names) &&
+                names is { Count: 1 })
+                outcomes.Add(names[0]);
+
+            foreach (var property in element.EnumerateObject())
+            {
+                if (property.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
+                    pending.Push(property.Value);
+            }
+        }
+
+        return outcomes;
     }
 
     private ImportedReusableActivity BuildActivity(

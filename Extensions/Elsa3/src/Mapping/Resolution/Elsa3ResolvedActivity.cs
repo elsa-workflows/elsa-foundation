@@ -20,7 +20,10 @@ internal enum Elsa3ResolvedSource
     Verbatim,
 
     /// <summary>An engine intrinsic from the built-in map.</summary>
-    Intrinsic
+    Intrinsic,
+
+    /// <summary>A flowchart construct (FlowFork, FlowJoin, Start) that graph conversion consumes; it has no Elsa 4 node.</summary>
+    GraphConstruct
 }
 
 /// <summary>The Elsa 4 activity one Elsa 3 node resolves to, with the contract conversion needs.</summary>
@@ -42,6 +45,9 @@ internal sealed record Elsa3ResolvedActivity(
     Elsa3StructureContract? Structure,
     AuthoredWorkflowIntrinsicKind? IntrinsicKind = null)
 {
+    /// <summary>The outcomes the Elsa 4 activity emits, which graph conversion routes connections by (spec 239 R-3).</summary>
+    public Elsa3ActivityOutcomes Outcomes { get; init; } = Elsa3ActivityOutcomes.DoneOnly;
+
     /// <summary>The input whose reference key is <paramref name="key"/> (ordinal), else whose name matches ignoring case.</summary>
     public InputDefinition? FindInput(string key) =>
         Inputs.FirstOrDefault(input => StringComparer.Ordinal.Equals(input.ReferenceKey, key))
@@ -54,6 +60,28 @@ internal sealed record Elsa3ResolvedActivity(
         ?? Outputs.FirstOrDefault(output => StringComparer.OrdinalIgnoreCase.Equals(output.Name, key))
         ?? Outputs.FirstOrDefault(output => StringComparer.OrdinalIgnoreCase.Equals(output.ReferenceKey, key));
 }
+
+/// <summary>
+/// The outcomes an Elsa 4 activity emits: its static ports, plus a rule for outcomes named by the node's own input
+/// (one per authored item, for example SendHttpRequest status codes). Read from the catalog's <c>elsa.outcomes</c> facet;
+/// an activity without the facet emits <c>Done</c>.
+/// </summary>
+internal sealed record Elsa3ActivityOutcomes(IReadOnlyList<string> Ports, Elsa3DynamicOutcomes? Dynamic = null)
+{
+    public const string Done = "Done";
+
+    /// <summary>An activity that declares no outcomes, and every intrinsic: it completes with <c>Done</c>.</summary>
+    public static Elsa3ActivityOutcomes DoneOnly { get; } = new([Done]);
+
+    /// <summary>A graph construct: it has no node, so it emits nothing of its own.</summary>
+    public static Elsa3ActivityOutcomes None { get; } = new([]);
+
+    /// <summary>Whether <paramref name="port"/> is a static port (ordinal).</summary>
+    public bool HasPort(string port) => Ports.Contains(port, StringComparer.Ordinal);
+}
+
+/// <summary>Outcomes named by the items of the node's <paramref name="SourceInputKey"/> input, plus an unmatched outcome.</summary>
+internal sealed record Elsa3DynamicOutcomes(string SourceInputKey, string? UnmatchedOutcome);
 
 /// <summary>A native structure a catalog activity version declares through its structure design facet.</summary>
 internal sealed record Elsa3StructureContract(
