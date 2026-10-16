@@ -10,7 +10,7 @@ import {
   makeInitialHttpTestPath,
   publishedHttpEndpointInputsUnavailableMessage,
   readHttpEndpointResponseMetadata,
-  resolveHttpTestRequestPath,
+  resolveHttpTestEndpointPath,
   type PublishedHttpEndpoint
 } from "./httpTestRequest";
 import { useDialogFocus } from "./useDialogFocus";
@@ -106,7 +106,7 @@ export function HttpTestRequestDialog({
           return;
         }
         setEndpoint(selected);
-        setPath(makeInitialHttpTestPath(selected.routeTemplate, configuredBasePath));
+        setPath(makeInitialHttpTestPath(selected.routeTemplate, configuredBasePath).slice(configuredBasePath.length));
         setMethod(selected.supportedMethods.includes("POST") ? "POST" : selected.supportedMethods[0]);
         setRequestBody(exampleJson);
         setContentType("application/json");
@@ -135,7 +135,7 @@ export function HttpTestRequestDialog({
 
     let requestPath: string;
     try {
-      requestPath = resolveHttpTestRequestPath(context.baseUrl, path, workflowHttpBasePath);
+      requestPath = resolveHttpTestEndpointPath(context.baseUrl, path, workflowHttpBasePath);
     } catch (error) {
       setRequestError(error instanceof Error ? error.message : "Enter a valid path on the configured backend.");
       return;
@@ -245,21 +245,32 @@ export function HttpTestRequestDialog({
                     {endpoint.supportedMethods.map(supportedMethod => <option key={supportedMethod} value={supportedMethod}>{supportedMethod}</option>)}
                   </select>
                 </label>
-                <label className="wf-form-field wf-http-test-path">
+                <div className="wf-form-field wf-http-test-path">
                   <span>Request path</span>
-                  <input
-                    aria-label="Request path"
-                    value={path}
-                    disabled={isSending}
-                    autoCapitalize="off"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    onChange={event => setPath(event.target.value)}
-                    placeholder={`${workflowHttpBasePath ?? ""}/orders/1`}
-                  />
-                </label>
+                  <div className="wf-http-test-path-input">
+                    <input
+                      className="wf-http-test-mount"
+                      aria-label="Workflow HTTP mount"
+                      value={workflowHttpBasePath ?? ""}
+                      size={(workflowHttpBasePath?.length ?? 0) + 1}
+                      readOnly
+                      spellCheck={false}
+                    />
+                    <input
+                      aria-label="Endpoint path"
+                      aria-describedby="http-test-path-hint"
+                      value={path}
+                      disabled={isSending}
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      onChange={event => setPath(event.target.value)}
+                      placeholder="/orders/1"
+                    />
+                  </div>
+                </div>
               </div>
-              <p className="wf-http-test-hint">The path must stay within the server's configured workflow HTTP mount ({workflowHttpBasePath}). You can edit the endpoint route within that mount.</p>
+              <p id="http-test-path-hint" className="wf-http-test-hint">Edit the endpoint path. The HTTP mount is fixed by the server.</p>
 
               <label className="wf-form-field wf-http-test-content-type">
                 <span>Request content type</span>

@@ -51,8 +51,13 @@ describe("HTTP test request dialog", () => {
     await waitFor(() => expect(container.querySelector("textarea[aria-label='Request body']")).not.toBeNull());
     expect(requestResponse).not.toHaveBeenCalled();
 
-    const path = container.querySelector<HTMLInputElement>("input[aria-label='Request path']")!;
-    expect(path.value).toBe("/workflows/http/orders/1");
+    const mount = container.querySelector<HTMLInputElement>("input[aria-label='Workflow HTTP mount']");
+    expect(mount).not.toBeNull();
+    expect(mount!.value).toBe("/workflows/http");
+    expect(mount!.readOnly).toBe(true);
+    expect(mount!.disabled).toBe(false);
+    const path = container.querySelector<HTMLInputElement>("input[aria-label='Endpoint path']")!;
+    expect(path.value).toBe("/orders/1");
     const body = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Request body']")!;
     expect(body.value).toContain("Ada Lovelace");
     expect(body.disabled).toBe(false);
@@ -141,7 +146,7 @@ describe("HTTP test request dialog", () => {
     expect(requestResponse).not.toHaveBeenCalled();
   });
 
-  it("uses the advertised custom mount and blocks same-origin requests outside it", async () => {
+  it("keeps the advertised custom mount read-only while editing and validating the endpoint route", async () => {
     advertiseWorkflowHttpBasePath("engine/team-a/workflows");
     vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
     vi.mocked(getExecutableInputSources).mockResolvedValue(publishedEndpointInputs());
@@ -149,19 +154,22 @@ describe("HTTP test request dialog", () => {
 
     const container = await renderDialog();
     await waitFor(() => expect(container.querySelector("textarea[aria-label='Request body']")).not.toBeNull());
-    const path = container.querySelector<HTMLInputElement>("input[aria-label='Request path']")!;
-    expect(path.value).toBe("/engine/team-a/workflows/orders/1");
+    const mount = container.querySelector<HTMLInputElement>("input[aria-label='Workflow HTTP mount']")!;
+    expect(mount.value).toBe("/engine/team-a/workflows");
+    expect(mount.readOnly).toBe(true);
+    const path = container.querySelector<HTMLInputElement>("input[aria-label='Endpoint path']")!;
+    expect(path.value).toBe("/orders/1");
 
-    await changeInput(path, "/api/admin/users");
+    await changeInput(path, "../api/admin/users");
     await click(container.querySelector<HTMLButtonElement>("button[type='submit']")!);
-    await waitFor(() => expect(container.textContent).toContain("configured workflow HTTP base path"));
+    await waitFor(() => expect(container.textContent).toContain("Dot segments are not allowed"));
     expect(requestResponse).not.toHaveBeenCalled();
 
-    await changeInput(path, "/engine/team-a/workflows/orders/1");
+    await changeInput(path, "/orders/2?customer=Ada");
     await click(container.querySelector<HTMLButtonElement>("button[type='submit']")!);
     await waitFor(() => expect(requestResponse).toHaveBeenCalledOnce());
     expect(requestResponse).toHaveBeenCalledWith(
-      "/engine/team-a/workflows/orders/1",
+      "/engine/team-a/workflows/orders/2?customer=Ada",
       expect.objectContaining({ method: "POST" })
     );
   });

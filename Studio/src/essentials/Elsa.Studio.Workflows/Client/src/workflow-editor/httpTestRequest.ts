@@ -114,14 +114,7 @@ export function resolveHttpTestRequestPath(baseUrl: string, editedPath: string, 
   }
 
   const basePath = normalizePathPrefix(workflowHttpBasePath, "Configured workflow HTTP base path");
-  const path = editedPath.trim();
-  if (!path) throw new Error("Enter a request path.");
-  if (path.startsWith("//") || path.includes("\\") || /^[a-z][a-z\d+.-]*:/i.test(path) || path.includes("#")) {
-    throw new Error("Enter a path under the configured workflow HTTP base path.");
-  }
-
-  const rawPathname = path.split("?", 1)[0];
-  assertSafePathSegments(rawPathname);
+  const path = readLocalHttpTestPath(editedPath);
   const resolved = new URL(path.startsWith("/") ? path : `/${path}`, backend.origin);
   if (resolved.origin !== backend.origin) {
     throw new Error("Requests can only be sent to the configured backend.");
@@ -132,6 +125,23 @@ export function resolveHttpTestRequestPath(baseUrl: string, editedPath: string, 
   }
 
   return `${resolved.pathname}${resolved.search}`;
+}
+
+/** Joins an editable endpoint route to the authoritative, non-editable server mount. */
+export function resolveHttpTestEndpointPath(baseUrl: string, endpointPath: string, workflowHttpBasePath: string): string {
+  const route = readLocalHttpTestPath(endpointPath);
+  const mount = normalizePathPrefix(workflowHttpBasePath, "Configured workflow HTTP base path");
+  return resolveHttpTestRequestPath(baseUrl, `${mount}/${route.replace(/^\//, "")}`, mount);
+}
+
+function readLocalHttpTestPath(value: string): string {
+  const path = value.trim();
+  if (!path) throw new Error("Enter a request path.");
+  if (path.startsWith("//") || path.includes("\\") || /^[a-z][a-z\d+.-]*:/i.test(path) || path.includes("#")) {
+    throw new Error("Enter a path under the configured workflow HTTP base path.");
+  }
+  assertSafePathSegments(path.split("?", 1)[0]);
+  return path;
 }
 
 export interface HttpEndpointResponseMetadata {

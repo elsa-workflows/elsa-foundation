@@ -10,6 +10,7 @@ import {
   makeInitialHttpTestPath,
   publishedHttpEndpointInputsUnavailableMessage,
   readHttpEndpointResponseMetadata,
+  resolveHttpTestEndpointPath,
   resolveHttpTestRequestPath,
   workflowHttpBasePathCapabilityRelation,
   workflowHttpBasePathUnavailableMessage
@@ -112,6 +113,21 @@ describe("published HTTP test request helpers", () => {
       .toThrow("configured workflow HTTP base path");
     expect(() => resolveHttpTestRequestPath("https://backend.example/", "\\\\attacker.example\\collect", "/workflows/http"))
       .toThrow("workflow HTTP base path");
+  });
+
+  it.each(["orders/2?name=Ada%20Lovelace", "/orders/2?name=Ada%20Lovelace"])(
+    "joins endpoint path %s to a shell-prefixed configured mount exactly once",
+    route => {
+      expect(resolveHttpTestEndpointPath("https://backend.example/engine/team-a/", route, "/engine/team-a/custom-http/"))
+        .toBe("/engine/team-a/custom-http/orders/2?name=Ada%20Lovelace");
+    }
+  );
+
+  it.each([
+    "", "/", "?q=one", "https://other.example/orders", "//other.example/orders", "orders#fragment",
+    "../admin", "/%2e%2e/admin", "/%252e%252e/admin", "orders%2fadmin", "orders%255cadmin", "orders\\admin"
+  ])("rejects unsafe or empty endpoint path %j before joining the mount", route => {
+    expect(() => resolveHttpTestEndpointPath("https://backend.example/", route, "/workflows/http")).toThrow();
   });
 
   it("rejects literal, encoded, and multiply encoded traversal or path separators before URL canonicalization", () => {

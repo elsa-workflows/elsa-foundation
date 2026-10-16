@@ -122,6 +122,30 @@
   cursor: not-allowed;
 }
 
+.wf-http-test-path-input {
+  display: flex;
+  min-width: 0;
+}
+
+.wf-http-test-dialog .wf-http-test-path-input > input {
+  flex: 1 1 0;
+  width: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.wf-http-test-dialog .wf-http-test-path-input > .wf-http-test-mount {
+  flex: 0 1 auto;
+  width: auto;
+  max-width: 50%;
+  border-right: 0;
+  border-radius: var(--studio-radius-sm) 0 0 var(--studio-radius-sm);
+  background: var(--studio-surface);
+  color: var(--studio-text-muted);
+  font-weight: 400;
+  text-transform: none;
+}
+
 .wf-http-test-hint,
 .wf-http-test-dialog .wf-form-field small {
   margin: -6px 0 0;
