@@ -32,14 +32,11 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         typeof(ActivityContractProposalView),
         typeof(ActivityContractTypeCapabilityView),
         typeof(ActivityContractView),
-        typeof(ActivityDefinitionDetailsView),
         typeof(ActivityDefinitionIdentityView),
         typeof(ActivityDefinitionLifecycleSummaryView),
         typeof(ActivityDefinitionRecommendationView),
         typeof(ActivityDefinitionReferenceView),
-        typeof(ActivityDefinitionVersionDetailsView),
         typeof(ActivityDefinitionVersionReferenceView),
-        typeof(ActivityDefinitionView),
         typeof(ActivityDependencyConsistencyView),
         typeof(ActivityDependencyItemView),
         typeof(ActivityDependencyOccurrenceView),
@@ -84,8 +81,6 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         typeof(ActivityVersionDiffSummaryView),
         typeof(ActivityVersionDiffView),
         typeof(ActivityVersionProviderDiffView),
-        typeof(AddDefinition),
-        typeof(AddVersion),
         typeof(ApplyActivityUpgradePlan),
         typeof(ApplyReusableActivityContractProposal),
         typeof(ApplyReusableActivityFork),
@@ -100,16 +95,12 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         typeof(GetActivityDependencies),
         typeof(GetActivityUpgradeApplyReceipt),
         typeof(GetActivityUpgradePlan),
-        typeof(GetDefinition),
         typeof(GetReusableActivityDefinition),
         typeof(GetReusableActivityDraft),
         typeof(GetReusableActivityForkStatus),
         typeof(GetReusableActivityVersion),
-        typeof(GetVersion),
         typeof(ListActivityAuthoringCatalog),
         typeof(ListActivityAvailabilityDiagnostics),
-        typeof(ListDefinitionVersions),
-        typeof(ListDefinitions),
         typeof(ListRecommendedActivityDefinitions),
         typeof(ListReusableActivityDefinitions),
         typeof(ListReusableActivityDrafts),
@@ -162,7 +153,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
     [Fact]
     public void Every_contract_type_is_publicly_exported_by_the_api_assembly()
     {
-        Assert.Equal(120, ContractTypes.Length);
+        Assert.Equal(111, ContractTypes.Length);
 
         var apiAssembly = typeof(ActivitiesDesignApiFeature).Assembly;
 
@@ -203,7 +194,10 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // from the presentation-only elsa.activity-icon facet (ActivityIconName).
         // It moved again when ActivityInputDescriptorView gained Tier, the presentation-only disclosure
         // group (essential / optional / setting) projected from InputDefinition.Tier.
-        Assert.Equal("5ef979cf4c3a0ec39c773bde4cb7b11e1ec1cecdf1031a222b04af4c749a1164", PublicShapeHash(ContractTypes));
+        // It moved again when the six legacy mediator requests and commands with no endpoint (GetDefinition,
+        // GetVersion, ListDefinitions, ListDefinitionVersions, AddDefinition, AddVersion) and the three views
+        // only they returned were deleted (#2785).
+        Assert.Equal("191bb57c22e5124ba258f08b5a03c1976ee17011b82c09639e6f51fce1959b16", PublicShapeHash(ContractTypes));
     }
 
     [Fact]
