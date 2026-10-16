@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "16829f507a41b60550cb32ed3a74a12435cb0e1f",
+  "last_publish_commit": "337a5265188b774240c9c5f9ab1eaa64106b5b6b",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -44,8 +44,8 @@
     },
     {
       "package_id": "Elsa.Activities.Design.Reconciliation.Clr",
-      "version": "4.0.10-preview",
-      "commit": "4b902aaa2980ab49c4d47bd7f5589ff507fe01bb"
+      "version": "4.0.11-preview",
+      "commit": "337a5265188b774240c9c5f9ab1eaa64106b5b6b"
     },
     {
       "package_id": "Elsa.Activities.Design.Reconciliation.Json",
