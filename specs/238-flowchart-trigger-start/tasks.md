@@ -257,6 +257,48 @@ point (FR-008 to FR-013).
       swapped expectations under D13, and multi-trigger and mid-flow cases were added.
     - `draftValidationSurface.test.tsx` "start-trigger detection": the same flip, plus a multi-trigger case that
       asserts neither warning.
+- **T051 results** (whole projects, at `bfde21cec`):
+
+| Suite | Result | Versus baseline |
+|---|---|---|
+| `Elsa.Workflows.Runtime.Tests` | 2324/2324 | +11 placement tests |
+| `Elsa.Workflows.Runtime.Scheduling.Tests` | 87/87 | unchanged |
+| `Elsa.Workflows.Runtime.Reconciliation.Tests` | 32/32 | +2 import placement tests |
+| `Elsa.Activities.Flowchart.Tests` | 119/119 | +5 provider tests |
+| `Elsa.Activities.Sequence.Tests` | 22/22 | +4 provider tests |
+| `Elsa.Workflows.Publishing.Api.Tests` | 752/752 | +2 endpoint tests |
+| `Elsa.Workflows.Publishing.Tests` | 48/48 | — |
+| `Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests` | 157/157 | — |
+| `Elsa.Workflows.Runtime.Http.Tests` | 92/92 | — |
+| `Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests` | 943 passed, 3 skipped | — |
+| `Elsa.Activities.Bpmn.Tests` | 251/251 | unchanged |
+| `Elsa.Activities.Bpmn.Interchange.Tests` | 107/107 | +1 importer test |
+| `Elsa.Activities.Scheduling.Tests` | 23/23 | — |
+| `Elsa.Activities.Http.IntegrationTests` | 79/80 | +5 placement tests |
+| `Elsa.Activities.Behavioral.Tests` | 185/185 | — |
+| `Elsa.Activities.Runtime.Tests` | 456/456 | — |
+| `Elsa.Architecture.Tests` | 542/548 | — |
+
+  The failures are the same Windows file locks seen before this unit:
+  - HTTP integration: one `HttpEndpointRouteTableConvergenceEndToEndTests` case failed on a `runtime.db` lock in
+    `DisposeAsync`, as in the T003 baseline.
+  - Architecture: 6 `PackageVersioningPackTests` failed on temp-directory `UnauthorizedAccessException`.
+- **T052**: the Workbench was built and run from this branch on `http://localhost:5395`.
+  - `e2e-tests/http/Test-HttpEcho.ps1` (4/4), `events/Test-Event.ps1` and `scheduling/Test-Cron.ps1` all passed,
+    each with a start trigger at Sequence child 0.
+  - A scratch script publishing a start-capable Event at Sequence child 1 got 400, with the placement guidance in
+    `detail`.
+- **T058 bite-proof**: the extractor's placement call and the translator's 400 mapping were disabled, then restored
+  from HEAD.
+
+| Tests | Fix disabled | Fix restored |
+|---|---|---|
+| `WorkflowTriggerPlacementTests` | 7/11 failed | 11/11 |
+| `PublishMisplacedStartTriggerEndpointTests` | 1/2 failed | 2/2 |
+| `MisplacedStartTriggerEndToEndTests` | 3/5 failed | 5/5 |
+| `ImportGateStartTriggerPlacementTests` | 2/2 failed | 2/2 |
+
+  The cases that pass with the fix disabled are the accepted placements.
 
 ---
 
@@ -330,7 +372,7 @@ nothing is saved. Child 0 publishes.
   - a retired publication whose executable has a misplaced trigger fails to restore with an activation failure;
   - its saved executable is unchanged.
 - [X] T050 [US4] Add an import test (US4-7) in the reconciliation test project: an artifact closure with a misplaced start trigger and carried bindings is refused with the "cannot materialize" diagnostic.
-- [ ] T051 [US4] Run, as whole projects, and compare with the T033 baseline plus the new tests:
+- [X] T051 [US4] Run, as whole projects, and compare with the T033 baseline plus the new tests:
   - `Elsa.Workflows.Runtime.Tests`
   - `Elsa.Workflows.Runtime.Scheduling.Tests`
   - `Elsa.Activities.Flowchart.Tests`
@@ -340,7 +382,7 @@ nothing is saved. Child 0 publishes.
   - `Elsa.Activities.Bpmn.Interchange.Tests`
   - `Elsa.Activities.Http.IntegrationTests`
   - the reconciliation tests
-- [ ] T052 [US4] Run the e2e trigger scripts that publish through a live server (`e2e-tests/http/Test-HttpEcho.ps1`, `events/Test-Event.ps1`, `scheduling/Test-Cron.ps1`), as `e2e-tests/README.md` describes, to confirm Sequence child-0 triggers still publish. If the live server can't be run on this machine, say so in the PR evidence instead.
+- [X] T052 [US4] Run the e2e trigger scripts that publish through a live server (`e2e-tests/http/Test-HttpEcho.ps1`, `events/Test-Event.ps1`, `scheduling/Test-Cron.ps1`), as `e2e-tests/README.md` describes, to confirm Sequence child-0 triggers still publish. If the live server can't be run on this machine, say so in the PR evidence instead.
 
 **Checkpoint**: Misplaced start triggers are refused everywhere bindings are computed. Valid placements are
 unchanged.
@@ -361,13 +403,13 @@ unchanged.
   - `src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md` (or the Runtime.Core catalog that owns contracts): the new implementable contract, with signature, registration and Known implementations (Flowchart, Sequence, intra-domain); and the extractor usage text, which gains the placement step.
   - `src/Activities/Flowchart/EXTENSION_POINTS.md` and `src/Activities/Sequence/EXTENSION_POINTS.md`: their implementations.
 - [X] T057 [P] Update the "Where a run starts" bullet in `src/Activities/Flowchart/README.md` and add one line to `src/Activities/Sequence/README.md`. Both say where a start trigger may sit, and that other placements are refused at publish.
-- [ ] T058 Gate evidence, then post it as a PR comment on #2856:
+- [X] T058 Gate evidence, then post it as a PR comment on #2856:
   - all touched test projects as whole projects, with `--list-tests` counts;
   - `bash tools/architecture/restore-ci-project-graph.sh` and the full architecture project;
   - `dotnet restore Elsa.Server.slnx --locked-mode`;
   - maps `-- all` and the diff;
   - a bite-proof: revert the extractor placement step and show T042, T047 and T048 red, then green.
-- [ ] T059 Set the spec status back to "Implemented — PR for #2850" and tick T031–T059. Then commit, push to `238-flowchart-trigger-start`, update the PR body (US4, US5, D8–D13), and comment on #2850.
+- [X] T059 Set the spec status back to "Implemented — PR for #2850" and tick T031–T059. Then commit, push to `238-flowchart-trigger-start`, update the PR body (US4, US5, D8–D13), and comment on #2850.
 
 ---
 

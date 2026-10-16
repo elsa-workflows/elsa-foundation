@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-16
 
-**Status**: In revision: placement rule added for review (draft PR #2856, issue #2850)
+**Status**: Implemented — PR #2856 for #2850
 
 **Input**: GitHub issue [#2850](https://github.com/elsa-workflows/elsa-foundation/issues/2850), "Flowchart ignores the trigger node: a multi-trigger flowchart always starts at its start node", plus the scope Joey set on 2026-10-16 (recorded under [Decisions](#decisions)).
 
