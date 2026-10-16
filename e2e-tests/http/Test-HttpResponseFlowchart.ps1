@@ -18,7 +18,7 @@ param(
 . "$PSScriptRoot/../_ElsaCommon.ps1"
 . "$PSScriptRoot/../_ServerLifecycle.ps1"
 
-$workflow = Get-Content -LiteralPath $WorkflowPath -Raw | ConvertFrom-Json -AsHashtable
+$workflow = Get-Content -LiteralPath $WorkflowPath -Raw | ConvertFrom-Json
 $contentRoot = New-ElsaContentRoot -Prefix 'elsa-http-response-flowchart'
 $baseUrl = Resolve-ElsaServerBaseUrl
 $success = $false
