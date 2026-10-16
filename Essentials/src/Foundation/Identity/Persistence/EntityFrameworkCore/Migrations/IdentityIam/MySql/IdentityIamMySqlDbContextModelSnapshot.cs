@@ -38,6 +38,11 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
+                    b.Property<byte[]>("ApplicationIdOrderKey")
+                        .IsRequired()
+                        .HasMaxLength(802)
+                        .HasColumnType("varbinary(802)");
+
                     b.Property<string>("ClientId")
                         .IsRequired()
                         .HasColumnType("longtext")
@@ -55,6 +60,10 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .IsConcurrencyToken()
                         .HasColumnType("bigint");
 
+                    b.Property<string>("RoleIdsJson")
+                        .IsRequired()
+                        .HasColumnType("longtext");
+
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -64,9 +73,20 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .IsRequired()
                         .HasColumnType("longtext");
 
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
                     b.Property<string>("TenantId")
                         .IsRequired()
                         .HasColumnType("longtext")
+                        .UseCollation("utf8mb4_0900_bin")
+                        .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
+
+                    b.Property<string>("TenantLookupKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(64)")
                         .UseCollation("utf8mb4_0900_bin")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
@@ -76,6 +96,9 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                     b.HasKey("Id");
 
                     b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("TenantLookupKey", "ApplicationIdOrderKey", "Id")
+                        .HasDatabaseName("ix_identity_applications_page");
 
                     b.ToTable("identity_applications", (string)null);
                 });

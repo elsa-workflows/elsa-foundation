@@ -102,6 +102,8 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
 
                     // Workstream C: the provider-agnostic Api surface (token endpoint lives here).
                     services.AddFoundationIdentityApi();
+                    // Application management and API-key authentication, as the Workbench shell composes them.
+                    new FoundationIdentityApplicationsFeature().ConfigureServices(services);
 
                     services.AddFastEndpoints();
                 });
@@ -119,6 +121,7 @@ public sealed class TokenEndpointFixture : IAsyncDisposable
                         });
                         ((IWebShellFeature)new FoundationIdentityApiFeature()).MapEndpoints(endpoints, null);
                         ((IWebShellFeature)new AspNetCoreIdentityFeature()).MapEndpoints(endpoints, null);
+                        new FoundationIdentityApplicationsFeature().MapEndpoints(endpoints, null);
                         endpoints.MapOpenApi();
                         endpoints
                             .MapGet("/protected", context =>

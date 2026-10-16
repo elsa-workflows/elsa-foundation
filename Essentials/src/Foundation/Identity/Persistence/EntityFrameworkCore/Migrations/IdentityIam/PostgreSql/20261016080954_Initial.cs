@@ -49,13 +49,17 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 {
                     Id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
                     TenantId = table.Column<string>(type: "text", nullable: false, collation: "C"),
+                    TenantLookupKey = table.Column<string>(type: "character varying(64)", unicode: false, maxLength: 64, nullable: false, collation: "C"),
                     ApplicationId = table.Column<string>(type: "text", nullable: false, collation: "C"),
+                    ApplicationIdOrderKey = table.Column<byte[]>(type: "bytea", maxLength: 802, nullable: false),
                     ClientId = table.Column<string>(type: "text", nullable: false, collation: "C"),
                     DisplayName = table.Column<string>(type: "text", nullable: false),
                     Type = table.Column<int>(type: "integer", nullable: false),
                     Ownership = table.Column<int>(type: "integer", nullable: false),
+                    Status = table.Column<int>(type: "integer", nullable: false),
                     AllowedGrantTypesJson = table.Column<string>(type: "text", nullable: false),
                     ScopesJson = table.Column<string>(type: "text", nullable: false),
+                    RoleIdsJson = table.Column<string>(type: "text", nullable: false),
                     Revision = table.Column<long>(type: "bigint", nullable: false),
                     SchemaVersion = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false)
                 },
@@ -395,6 +399,11 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                 name: "IX___ElsaSchemaFinalization_ElsaIdentityIam_SchemaVersion",
                 table: "__ElsaSchemaFinalization_ElsaIdentityIam",
                 column: "SchemaVersion");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_identity_applications_page",
+                table: "identity_applications",
+                columns: new[] { "TenantLookupKey", "ApplicationIdOrderKey", "Id" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_identity_applications_SchemaVersion",

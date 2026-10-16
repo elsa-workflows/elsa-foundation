@@ -49,7 +49,7 @@ public sealed class IdentitySchemaVersionSkewTests : IAsyncLifetime
         await new EfUserStore(Context, Get<IPersistenceAccessContextAccessor>(), emailUniquenessPolicy: IdentityEmailUniquenessPolicy.Unique).SaveAsync(new UserRecord(UserId, Tenant, "Ada", "ada@example.test", "Ada", UserStatus.Active, ResourceOwnership.Foundation, Set(), Set("identity/users:read")));
         await Get<IRoleStore>().SaveAsync(new RoleRecord(RoleId, Tenant, "Operators", "Operators", Set("identity/users:read"), System: false));
         await Get<IClaimMappingStore>().SaveAsync(new ClaimMappingRule("rule-a", Tenant, "google", "groups", "admins", Set(RoleId), Set(), 10, StopOnMatch: true));
-        await Get<IApplicationStore>().SaveAsync(new ApplicationRecord("app-a", Tenant, "client-a", "App", ApplicationType.Confidential, ResourceOwnership.Foundation, Set("client_credentials"), Set("openid")));
+        await Get<IApplicationStore>().SaveAsync(new ApplicationRecord("app-a", Tenant, "client-a", "App", ApplicationType.Confidential, ResourceOwnership.Foundation, Set("client_credentials"), Set("openid"), Set(RoleId), ApplicationStatus.Active));
         await Get<ICredentialStore>().SaveAsync(new CredentialRecord("credential-a", Tenant, CredentialSubjectType.Application, "app-a", CredentialKind.ClientSecret, "hash", "Argon2id", CredentialStatus.Active, null));
         await Get<IExternalIdentityStore>().SaveAsync(new ExternalIdentityRecord(Tenant, "google", "subject-a", UserId, DateTimeOffset.UnixEpoch, null, ExternalIdentityLinkPolicy.Auto));
         await Get<ITenantMembershipStore>().SaveAsync(new TenantMembershipRecord(Tenant, UserId, TenantMembershipStatus.Active, Set(RoleId), Set()));
@@ -119,14 +119,17 @@ public sealed class IdentitySchemaVersionSkewTests : IAsyncLifetime
                 [
                     () => Get<IApplicationStore>().FindAsync(Tenant, "app-a").AsTask(),
                     () => Get<IRevisionAwareApplicationStore>().FindWithRevisionAsync(Tenant, "app-a").AsTask(),
-                    () => Get<IApplicationStore>().SaveAsync(new ApplicationRecord("app-a", Tenant, "client-b", "App", ApplicationType.Public, ResourceOwnership.Foundation, Set(), Set())).AsTask()
+                    () => Get<IApplicationStore>().SaveAsync(new ApplicationRecord("app-a", Tenant, "client-b", "App", ApplicationType.Public, ResourceOwnership.Foundation, Set(), Set(), Set(), ApplicationStatus.Active)).AsTask(),
+                    () => Get<IApplicationStore>().ListPageAsync(Tenant, new IamPageRequest()).AsTask(),
+                    () => Get<IApplicationStore>().DeleteAsync(Tenant, "app-a").AsTask()
                 ]),
             "credential" => (
                 // A damaged lookup key made this read quietly return nothing; skew is now reported first.
                 () => SkewAsync<CredentialEntity>(row => row.CredentialLookupKey = "corrupt"),
                 [
                     () => Get<ICredentialStore>().FindAsync(Tenant, "credential-a").AsTask(),
-                    () => Get<ICredentialStore>().SaveAsync(new CredentialRecord("credential-a", Tenant, CredentialSubjectType.Application, "app-a", CredentialKind.ClientSecret, "hash-b", "Argon2id", CredentialStatus.Active, null)).AsTask()
+                    () => Get<ICredentialStore>().SaveAsync(new CredentialRecord("credential-a", Tenant, CredentialSubjectType.Application, "app-a", CredentialKind.ClientSecret, "hash-b", "Argon2id", CredentialStatus.Active, null)).AsTask(),
+                    () => Get<ICredentialStore>().DeleteAsync(Tenant, "credential-a").AsTask()
                 ]),
             "user" => (
                 () => SkewAsync<UserEntity>(row => row.RoleIdsJson = EfSchemaVersionSkewTestSupport.CorruptContentJson),

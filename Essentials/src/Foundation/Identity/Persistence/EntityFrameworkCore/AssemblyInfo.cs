@@ -51,6 +51,6 @@ using Elsa.Specifications.PackageManifest.Generator.Hints;
 [assembly: EfSchemaContent(IdentityIamEfModule.SchemaFamily, typeof(ClaimMappingEntity),
     nameof(ClaimMappingEntity.GrantRolesJson), nameof(ClaimMappingEntity.GrantPermissionsJson))]
 [assembly: EfSchemaContent(IdentityIamEfModule.SchemaFamily, typeof(ApplicationEntity),
-    nameof(ApplicationEntity.ScopesJson), nameof(ApplicationEntity.AllowedGrantTypesJson))]
+    nameof(ApplicationEntity.ScopesJson), nameof(ApplicationEntity.AllowedGrantTypesJson), nameof(ApplicationEntity.RoleIdsJson))]
 [assembly: EfSchemaContent(IdentityProviderConfigurationEfModule.SchemaFamily, typeof(TenantProviderConfigurationEntity), nameof(TenantProviderConfigurationEntity.SettingsJson))]
 [assembly: EfSchemaContent(IdentityProviderConfigurationEfModule.SchemaFamily, typeof(GlobalProviderConfigurationEntity), nameof(GlobalProviderConfigurationEntity.SettingsJson))]

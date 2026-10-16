@@ -7,7 +7,7 @@ namespace Elsa.Foundation.Identity.Tests.Api;
 public sealed class IdentityOpenApiContractTests
 {
     [Fact]
-    public async Task Minimal_api_publishes_the_nine_identity_operations_with_stable_ids_and_tags()
+    public async Task Minimal_api_publishes_the_sixteen_identity_operations_with_stable_ids_and_tags()
     {
         await using var fixture = await TokenEndpointFixture.StartAsync();
         using var client = fixture.Client;
@@ -16,7 +16,7 @@ public sealed class IdentityOpenApiContractTests
             .Where(operation => operation.Endpoint.Route.Value.Contains("/_elsa/identity/", StringComparison.Ordinal))
             .ToArray();
 
-        Assert.Equal(9, identityOperations.Length);
+        Assert.Equal(16, identityOperations.Length);
         AssertIdentityOpenApiMetadata(document);
     }
 
@@ -34,7 +34,14 @@ public sealed class IdentityOpenApiContractTests
             [("/_elsa/identity/logout/{provider}", "post")] = "FoundationIdentityLogout",
             [("/_elsa/identity/refresh", "post")] = "FoundationIdentityRefresh",
             [("/_elsa/identity/login", "get")] = "AspNetCoreIdentityLoginPage",
-            [("/_elsa/identity/login", "post")] = "AspNetCoreIdentityLogin"
+            [("/_elsa/identity/login", "post")] = "AspNetCoreIdentityLogin",
+            [("/_elsa/identity/applications", "get")] = "ElsaFoundationIdentityApiEndpointsApplicationsList",
+            [("/_elsa/identity/applications", "post")] = "ElsaFoundationIdentityApiEndpointsApplicationsCreate",
+            [("/_elsa/identity/applications/{applicationId}", "get")] = "ElsaFoundationIdentityApiEndpointsApplicationsGet",
+            [("/_elsa/identity/applications/{applicationId}", "put")] = "ElsaFoundationIdentityApiEndpointsApplicationsUpdate",
+            [("/_elsa/identity/applications/{applicationId}", "delete")] = "ElsaFoundationIdentityApiEndpointsApplicationsDelete",
+            [("/_elsa/identity/applications/{applicationId}/api-key/rotate", "post")] = "ElsaFoundationIdentityApiEndpointsApplicationsApiKeyRotate",
+            [("/_elsa/identity/applications/{applicationId}/api-key/revoke", "post")] = "ElsaFoundationIdentityApiEndpointsApplicationsApiKeyRevoke"
         };
 
         foreach (var ((path, method), operationId) in expected)

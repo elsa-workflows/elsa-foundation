@@ -557,6 +557,12 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
         ValueTask IApplicationStore.SaveAsync(ApplicationRecord application, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
+        ValueTask<IamPage<ApplicationRecord>> IApplicationStore.ListPageAsync(string tenantId, IamPageRequest request, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        ValueTask<bool> IApplicationStore.DeleteAsync(string tenantId, string applicationId, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
         ValueTask<IamRevisionedRecord<ApplicationRecord>?> IRevisionAwareApplicationStore.FindWithRevisionAsync(string tenantId, string applicationId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
@@ -567,6 +573,9 @@ public sealed class IdentityIamEntityFrameworkCoreRegistrationTests
             throw new NotSupportedException();
 
         ValueTask ICredentialStore.SaveAsync(CredentialRecord credential, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        ValueTask<bool> ICredentialStore.DeleteAsync(string tenantId, string credentialId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
         ValueTask<IamRevisionedRecord<CredentialRecord>?> IRevisionAwareCredentialStore.FindWithRevisionAsync(string tenantId, string credentialId, CancellationToken cancellationToken) =>

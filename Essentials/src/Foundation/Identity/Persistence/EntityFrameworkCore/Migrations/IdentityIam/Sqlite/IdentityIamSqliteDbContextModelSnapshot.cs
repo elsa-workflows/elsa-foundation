@@ -30,6 +30,11 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<byte[]>("ApplicationIdOrderKey")
+                        .IsRequired()
+                        .HasMaxLength(802)
+                        .HasColumnType("BLOB");
+
                     b.Property<string>("ClientId")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -45,6 +50,10 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .IsConcurrencyToken()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("RoleIdsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("SchemaVersion")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -54,8 +63,17 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("TenantId")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TenantLookupKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .IsUnicode(false)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("Type")
@@ -64,6 +82,9 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Migrations.Id
                     b.HasKey("Id");
 
                     b.HasIndex("SchemaVersion");
+
+                    b.HasIndex("TenantLookupKey", "ApplicationIdOrderKey", "Id")
+                        .HasDatabaseName("ix_identity_applications_page");
 
                     b.ToTable("identity_applications", (string)null);
                 });

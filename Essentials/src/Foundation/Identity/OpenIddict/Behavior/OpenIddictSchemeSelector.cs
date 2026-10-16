@@ -11,6 +11,8 @@ namespace Elsa.Foundation.Identity.OpenIddict;
 /// Picks the concrete authentication scheme for a request behind the
 /// <see cref="OpenIddictIdentityDefaults.SelectorScheme"/> policy scheme:
 /// <list type="bullet">
+/// <item><c>Authorization: ApiKey</c> → <see cref="OpenIddictIdentityOptions.ApiKeyScheme"/> (the application API-key
+/// scheme), when that scheme is registered.</item>
 /// <item><c>Authorization: Bearer</c> with a first-party token (issuer matches
 /// <see cref="OpenIddictIdentityOptions.Issuer"/>, or unparseable) → the OpenIddict validation handler.</item>
 /// <item><c>Authorization: Bearer</c> with a foreign issuer → <see cref="OpenIddictIdentityOptions.ExternalBearerScheme"/>
@@ -25,12 +27,16 @@ namespace Elsa.Foundation.Identity.OpenIddict;
 public static class OpenIddictSchemeSelector
 {
     private const string BearerPrefix = "Bearer ";
+    private const string ApiKeyPrefix = "ApiKey ";
 
     public static string SelectScheme(HttpContext context)
     {
         var options = context.RequestServices.GetRequiredService<IOptions<OpenIddictIdentityOptions>>().Value;
 
         var authorization = context.Request.Headers.Authorization.ToString();
+        if (authorization.StartsWith(ApiKeyPrefix, StringComparison.OrdinalIgnoreCase) && IsRegistered(context, options.ApiKeyScheme))
+            return options.ApiKeyScheme;
+
         if (authorization.StartsWith(BearerPrefix, StringComparison.OrdinalIgnoreCase))
         {
             var token = authorization[BearerPrefix.Length..].Trim();

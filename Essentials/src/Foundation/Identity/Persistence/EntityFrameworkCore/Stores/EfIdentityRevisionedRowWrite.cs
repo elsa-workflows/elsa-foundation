@@ -187,6 +187,55 @@ internal static class EfIdentityRevisionedRowWrite
             $"Unable to update the {row.Subject} after bounded transient retries.",
             new InvalidOperationException($"The {row.Subject} could not be updated.")), cancellationToken);
 
+    /// <summary>
+    /// Deletes the record's row whatever its revision, and reports whether a row was deleted. Like an unconditional save it
+    /// retries every lost race: a row the winner deleted settles as not found, and a row the winner updated is read again
+    /// and deleted.
+    /// </summary>
+    /// <param name="subject">What the failure messages call the record, for example "Identity application".</param>
+    /// <param name="findForWriteAsync">Reads the record's row tracked, or returns <c>null</c> when no row matches the record.</param>
+    public static ValueTask<bool> DeleteAsync<TEntity>(
+        DbContext context,
+        string subject,
+        Func<CancellationToken, Task<TEntity?>> findForWriteAsync,
+        CancellationToken cancellationToken)
+        where TEntity : class, IRevisionedIdentityEntity =>
+        EfIdentityStoreSupport.UnconditionalWrites.RunAsync(context, async () =>
+        {
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var entity = await findForWriteAsync(cancellationToken);
+                if (entity is null)
+                {
+                    context.ChangeTracker.Clear();
+                    return false;
+                }
+
+                context.Remove(entity);
+                await context.SaveChangesAsync(cancellationToken);
+                context.ChangeTracker.Clear();
+                return true;
+            }
+            catch (Exception exception) when (EfIdentityStoreSupport.UnconditionalWrites.ShouldRetry(context, exception))
+            {
+                context.ChangeTracker.Clear();
+                throw;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                context.ChangeTracker.Clear();
+                throw;
+            }
+            catch (Exception exception) when (exception is not IdentityEntityFrameworkPersistenceException)
+            {
+                context.ChangeTracker.Clear();
+                throw EfIdentityStoreSupport.Failure($"Unable to delete the {subject}.", exception);
+            }
+        }, _ => throw EfIdentityStoreSupport.Failure(
+            $"Unable to delete the {subject} after bounded concurrency retries.",
+            new InvalidOperationException($"The {subject} was concurrently modified.")), cancellationToken);
+
     private static TEntity NewEntity<TEntity>(EfIdentityRevisionedRow<TEntity> row)
         where TEntity : class, IRevisionedIdentityEntity
     {

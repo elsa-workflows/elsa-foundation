@@ -17,6 +17,7 @@ For the design rationale see [`docs/plans/studio-bearer-token-issuance.md`](../p
 | `FoundationIdentityAspNetCoreIdentity` | The provider-neutral ASP.NET Core Identity substrate (managers, principal factory, sign-in service, provider module, antiforgery). |
 | `FoundationIdentityAspNetCoreIdentityEntityFrameworkCore` | EF Core-backed durable user/role stores, `SignInManager` cookie sign-in, the login page/endpoints, and configured admin seeding. |
 | `FoundationIdentityOpenIddict` | OpenIddict-backed JWT access-token issuance + local bearer validation for the API surface. |
+| `FoundationIdentityApplications` | Applications and their API keys under `/_elsa/identity/applications`, and the scheme that authenticates `Authorization: ApiKey` requests as an application. |
 
 The composite scheme selector these register becomes the default authenticate/challenge scheme, so an
 unauthenticated API call is rejected with `401`. A host-chosen `DefaultScheme` always wins.
@@ -159,6 +160,33 @@ server options are built. The feature builds them at startup, so the error fails
 `/health/ready` reports `503 shell_activation_failed`) rather than the first request that authenticates. An
 `Issuer` that `System.Uri` cannot parse as absolute fails activation the same way, in any mode, with a
 `UriFormatException`.
+
+### `FoundationIdentityApplications`
+
+An application is a non-interactive client: a CI pipeline, a script, or an Elsa 3 integration that calls the API with an
+API key instead of a signed-in user. The feature takes no settings. It needs an application, credential and role store,
+which `IdentityIamEntityFrameworkCore` provides, and it relies on the `FoundationIdentityOpenIddict` scheme selector to
+route `Authorization: ApiKey` requests to its scheme. A host without the selector routes them itself.
+
+- **Sending a key.** `Authorization: ApiKey {key}`, the header Elsa 3's API client sends. The request authenticates as
+  the application, with the permissions of its roles, the same way a user's roles grant permissions. A key never falls
+  back to the caller's session cookie: a request with a bad key gets `401` even if it also carries a valid cookie.
+- **Issuing a key.** `POST /_elsa/identity/applications` with `displayName` and `roleIds` creates the application and
+  returns its key once, in a `201` response with `Cache-Control: no-store`. Every role must exist. No read returns the
+  key again; `GET` shows only `apiKeyStatus` (`active`, `revoked` or `none`).
+- **Format and storage.** A key reads `elsa_ak.{application id}.{secret}`, both parts base64url-encoded; the secret is 256
+  random bits. Only a SHA-256 hash of the whole key is stored, which is enough for a random secret of that size. Keys
+  that Elsa 3 issued do not authenticate here.
+- **Rotating and revoking.** `POST /_elsa/identity/applications/{applicationId}/api-key/rotate` returns a new key, and
+  the previous key stops working at once. There is no grace period: calls with the old key fail from that moment until
+  the integration has the new one. `POST /_elsa/identity/applications/{applicationId}/api-key/revoke` stops the key at
+  once, until the next rotation. Disabling the application (`PUT` with `enabled: false`) or deleting it
+  stops its key as well. Every refusal is the same `401`, whatever the reason.
+- **Tenant.** Identity is host-wide in this version, so the scheme looks keys up in one tenant,
+  `ApiKeyAuthenticationOptions.TenantId` (default `default`), which must match the persistence scope. Applications are
+  created in the tenant of the admin who creates them.
+
+Reads need `identity/applications:read`; every change, rotation and revocation needs `identity/applications:manage`.
 
 ### `FoundationIdentityOidc`
 
