@@ -327,7 +327,7 @@ public sealed class WorkflowTriggerBindingExtractorTests
     public void Extract_WalksChildSlots()
     {
         // Spec 238: a start trigger below a composite must lie on the start path, so the root carries a structure
-        // whose start-entry strategy makes every child an entry. What this test asserts is unchanged.
+        // whose first-child strategy makes child 0 the entry, which is where the trigger sits. What this test asserts is unchanged.
         var extractor = new WorkflowTriggerBindingExtractor([new FakeProvider("Elsa.Event", "Event", "sha256:event:hello")], [StartEntryTestSupport.FirstChild]);
         var root = StartEntryTestSupport.WithStructure(ActionNode("root", "Elsa.Sequence", TriggerNode("child-event", "Elsa.Event")), StartEntryTestSupport.FirstChildKind);
         var executable = Executable(root);

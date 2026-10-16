@@ -163,7 +163,6 @@ specs/238-flowchart-trigger-start/
 ├── research.md          # Phase 0
 ├── data-model.md        # Phase 1
 ├── quickstart.md        # Phase 1
-├── checklists/requirements.md
 └── tasks.md             # Phase 2 (/speckit-tasks)
 ```
 

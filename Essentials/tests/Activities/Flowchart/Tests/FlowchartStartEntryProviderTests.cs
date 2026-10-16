@@ -1,5 +1,8 @@
 using Elsa.Activities.Flowchart.Internal;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
 
 namespace Elsa.Activities.Flowchart.Tests;
 
@@ -57,6 +60,16 @@ public sealed class FlowchartStartEntryProviderTests
             startNodeId: "node-a").RootActivity;
 
         Assert.Equal("node-a", _provider.SelectStartChild(flowchart, "node-nested")?.ExecutableNodeId);
+    }
+
+    [Fact]
+    public void Feature_RegistersTheProviderForTheFlowchartStructureKind()
+    {
+        var services = new ServiceCollection();
+        new ActivitiesFlowchartFeature().ConfigureServices(services);
+
+        var provider = Assert.Single(services.BuildServiceProvider().GetServices<IStructuralStartEntryProvider>());
+        Assert.Equal(FlowchartActivity.StructureKind, provider.StructureKind);
     }
 
     [Fact]

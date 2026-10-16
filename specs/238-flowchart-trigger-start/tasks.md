@@ -299,6 +299,27 @@ point (FR-008 to FR-013).
 | `ImportGateStartTriggerPlacementTests` | 2/2 failed | 2/2 |
 
   The cases that pass with the fix disabled are the accepted placements.
+- **Code Review round 1** (2026-10-16, at `39bc922`):
+  - **Blocking build break:** `Elsa.Activities.Http.CommandCost.Tests` links `HttpEndpointHostFixture.cs`
+    without a Flowchart reference. The Flowchart builders and the Flowchart feature registration moved into
+    `HttpEndpointHostFixture.Flowchart.cs`, which only the integration tests compile, behind a
+    `static partial void ConfigureOptionalCompositeFeatures` hook. The full `Elsa.Server.slnx` build is now run
+    before pushing.
+  - **Import:** `WorkflowArtifactReconciler.TryFindTriggerSurfaceFault` now runs the trigger preflight for every
+    member, carried bindings or not, so a misplaced trigger is refused before persistence. Every member is
+    activated, and activation runs the same preflight. The binding comparison is still skipped for unasserted
+    envelopes. The test is renamed to
+    `A_misplaced_start_trigger_without_carried_bindings_is_rejected_before_persistence`.
+  - **Publish:** `PublishMisplacedStartTriggerRealExtractorEndpointTests` puts the real extractor behind the
+    endpoint.
+  - **Restore:** `RestoreMisplacedStartTriggerEndpointTests` (US4.6) runs the real publish, unpublish and restore
+    handlers. It goes red when the start-entry strategy keeps accepting the placement.
+  - **Registration:** `FlowchartStartEntryProviderTests.Feature_RegistersTheProviderForTheFlowchartStructureKind`.
+  - **Studio Timer/Cron warning (medium):** not fixed here. Designer-side trigger detection needs a catalog-level
+    trigger signal, because the catalog marks CLR triggers as `Action`, and node-anchored publish errors need a
+    structured 400. Both are proposed as a follow-up issue.
+  - **CodeRabbit:** the spec checklist folder is removed (terminal-spec convention), and a test comment now names
+    the first-child strategy.
 
 ---
 

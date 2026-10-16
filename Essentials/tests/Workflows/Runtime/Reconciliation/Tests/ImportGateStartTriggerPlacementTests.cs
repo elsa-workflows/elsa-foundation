@@ -44,15 +44,18 @@ public sealed class ImportGateStartTriggerPlacementTests : IDisposable
     }
 
     [Fact]
-    public async Task A_misplaced_start_trigger_without_carried_bindings_is_never_activated()
+    public async Task A_misplaced_start_trigger_without_carried_bindings_is_rejected_before_persistence()
     {
+        // The envelope asserts no trigger surface, but the member is still activated on import, so the trigger
+        // preflight runs before anything is saved rather than failing activation after the executable is stored.
         await using var harness = ArtifactImportHarness.Build(_mount);
         var executable = ArtifactClosureFixture.Executable(MisplacedTriggerRoot(), "definition-misplaced-unasserted");
         ArtifactClosureFixture.Mount(harness.Services, _mount, "misplaced.json", ArtifactClosureFixture.Closure(executable));
 
         var entry = Assert.Single((await ArtifactImportHarness.ReconcileAsync(harness)).Entries);
 
-        Assert.NotEqual(WorkflowArtifactImportOutcome.Imported, entry.Outcome);
+        Assert.Equal(WorkflowArtifactRejectionKind.TriggerSurfaceMismatch, entry.RejectionKind);
+        Assert.False(await ArtifactImportHarness.IsInStoreAsync(harness, executable.Identity.ArtifactId));
         Assert.Null(await ArtifactImportHarness.FindSlotAsync(harness, "definition-misplaced-unasserted"));
         Assert.Empty(await ArtifactImportHarness.ListServingBindingsAsync(harness, ArtifactClosureFixture.TriggerStimulusHash("node-trigger")));
     }
