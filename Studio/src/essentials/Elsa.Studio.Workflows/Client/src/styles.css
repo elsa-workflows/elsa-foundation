@@ -2677,6 +2677,12 @@
   letter-spacing: var(--wf-label-tracking, 0);
 }
 
+.wf-form-field small {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 .wf-form-field input,
 .wf-form-field select,
 .wf-form-field textarea {
