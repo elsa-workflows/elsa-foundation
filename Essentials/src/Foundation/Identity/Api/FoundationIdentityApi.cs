@@ -213,25 +213,32 @@ public static class FoundationIdentityApi
         var resolver = services.GetRequiredService<IAuthenticationProviderResolver>();
         var descriptor = await resolver.FindAsync(provider, allowGlobalFallback: true, cancellationToken: context.RequestAborted);
         var schemeName = descriptor?.Challenge?.Scheme ?? provider;
+        var schemeRegistered = !string.IsNullOrEmpty(schemeName) &&
+            await services.GetRequiredService<IAuthenticationSchemeProvider>().GetSchemeAsync(schemeName) is not null;
+
+        // The provider session being ended is the principal of the provider's own scheme, never the request's
+        // selected principal: the selector prefers a bearer, which may name another subject than the session.
+        // Revocation, invalidation and sign-out all act on that session, so a bearer never decides whose
+        // tokens are revoked. Without a provider session (bearer-only) there is nothing to end: 204, no-op.
+        var session = descriptor is not null && schemeRegistered ? await AuthenticateSessionAsync(context, schemeName) : null;
 
         // Revoke before invalidating: a revocation fault then leaves the session (cookie and security stamp)
         // intact, so a retry still authenticates as the subject and can revoke. The fault answers a bare 503,
         // which Studio reports as a failed sign-out, never a 204 that would leave live tokens behind.
-        if (descriptor is not null && !await TryRevokeSubjectTokensAsync(context))
+        if (session is not null && !await TryRevokeSubjectTokensAsync(context, session))
         {
             await Results.StatusCode(StatusCodes.Status503ServiceUnavailable).ExecuteAsync(context);
             return;
         }
 
-        var invalidator = descriptor is null
+        var invalidator = session is null
             ? null
             : services.GetServices<IAuthenticationSessionInvalidator>().SingleOrDefault(candidate =>
-                string.Equals(candidate.ProviderId, descriptor.Id, StringComparison.OrdinalIgnoreCase));
+                string.Equals(candidate.ProviderId, descriptor!.Id, StringComparison.OrdinalIgnoreCase));
         if (invalidator is not null)
-            await invalidator.InvalidateAsync(new AuthenticationSessionInvalidationContext(context.User), context.RequestAborted);
+            await invalidator.InvalidateAsync(new AuthenticationSessionInvalidationContext(session!), context.RequestAborted);
 
-        if (!string.IsNullOrEmpty(schemeName) &&
-            await services.GetRequiredService<IAuthenticationSchemeProvider>().GetSchemeAsync(schemeName) is not null)
+        if (schemeRegistered)
         {
             var handler = await services.GetRequiredService<IAuthenticationHandlerProvider>()
                 .GetHandlerAsync(context, schemeName);
@@ -244,11 +251,11 @@ public static class FoundationIdentityApi
 
     // Revokes under the normalized subject, the one the token exchange issues under, so a stale tab can neither
     // refresh nor keep its bearer. An un-normalized principal revokes nothing. False when revocation faulted.
-    private static async Task<bool> TryRevokeSubjectTokensAsync(HttpContext context)
+    private static async Task<bool> TryRevokeSubjectTokensAsync(HttpContext context, ClaimsPrincipal session)
     {
         var tokens = context.RequestServices.GetService<ITokenService>();
         if (tokens is null ||
-            !context.RequestServices.GetRequiredService<NormalizedPrincipalValidator>().TryGetNormalizedPrincipal(context.User, out var principal))
+            !context.RequestServices.GetRequiredService<NormalizedPrincipalValidator>().TryGetNormalizedPrincipal(session, out var principal))
             return true;
 
         var subject = Subject(principal);
@@ -266,6 +273,12 @@ public static class FoundationIdentityApi
                 .LogError(exception, "Sign-out could not revoke the subject's tokens; the session was left intact so the sign-out can be retried.");
             return false;
         }
+    }
+
+    private static async Task<ClaimsPrincipal?> AuthenticateSessionAsync(HttpContext context, string schemeName)
+    {
+        var result = await context.AuthenticateAsync(schemeName);
+        return result.Succeeded ? result.Principal : null;
     }
 
     private static async Task HandleRefreshAsync(HttpContext context)

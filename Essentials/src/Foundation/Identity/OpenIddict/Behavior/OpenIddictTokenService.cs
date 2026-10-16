@@ -118,14 +118,22 @@ public sealed class OpenIddictTokenService(
         // Live entries only: an expired or no-longer-valid entry is already dead, so it is left unwritten. Filtered
         // here: the untyped token manager has no store-agnostic subject + expiry query (its ListAsync is over object).
         var now = DateTimeOffset.UtcNow;
+        var unrevoked = 0;
         foreach (var entry in entries)
         {
             if (await tokenManager.GetExpirationDateAsync(entry, cancellationToken) is { } expiresAt && expiresAt <= now)
                 continue;
 
-            if (await tokenManager.HasStatusAsync(entry, OpenIddictConstants.Statuses.Valid, cancellationToken))
-                await tokenManager.TryRevokeAsync(entry, cancellationToken);
+            // TryRevokeAsync answers false on a non-fatal update failure (a concurrency conflict, for one), leaving
+            // the entry valid. Not retried here: the rest are still revoked, then the throw fails the sign-out so
+            // the caller can retry the whole revocation with the session intact.
+            if (await tokenManager.HasStatusAsync(entry, OpenIddictConstants.Statuses.Valid, cancellationToken) &&
+                !await tokenManager.TryRevokeAsync(entry, cancellationToken))
+                unrevoked++;
         }
+
+        if (unrevoked > 0)
+            throw new InvalidOperationException($"{unrevoked} of the subject's live tokens could not be revoked.");
     }
 
     private string CreateAccessTokenJwt(TokenIssueRequest request, string entryId, DateTimeOffset now, DateTimeOffset expiresAt)
