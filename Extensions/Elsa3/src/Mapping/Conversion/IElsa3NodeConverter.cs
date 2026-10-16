@@ -4,8 +4,9 @@ using Elsa3.Models;
 namespace Elsa3.Mapping.Conversion;
 
 /// <summary>
-/// Converts Elsa 3 nodes one at a time, for graph conversion (#2705) to call per Flowchart child; graph-level members
-/// (connections, start, join and fork) are left to the caller. Single implementation per application.
+/// Converts Elsa 3 nodes one at a time from a definition prepared as a whole. A flowchart arrives with its connections
+/// and start node (spec 239); a FlowFork, FlowJoin or Start has no node of its own and is refused. Single implementation
+/// per application.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -16,9 +17,10 @@ namespace Elsa3.Mapping.Conversion;
 /// sibling nodes resolves.
 /// </para>
 /// <para>
-/// A graph-level node (a Flowchart, or a member only graph conversion can place) does not stop the rest of the
-/// definition from being prepared: it is deferred, reported in <see cref="Elsa3NodeConversionContext.Deferred"/>, and
-/// its children are prepared like any other node. Never throws for input or catalog content.
+/// A graph-level node a later conversion stage owns would not stop the rest of the definition from being prepared: it
+/// is deferred, reported in <see cref="Elsa3NodeConversionContext.Deferred"/>, and its children are prepared like any
+/// other node. No built-in shape is deferred since graph conversion runs during preparation (spec 239). Never throws
+/// for input or catalog content.
 /// </para>
 /// </remarks>
 public interface IElsa3NodeConverter
@@ -32,9 +34,10 @@ public interface IElsa3NodeConverter
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Converts <paramref name="node"/> (matched by node id within the prepared definition) and its non-graph
-    /// descendants. Fails with the node's diagnostics when the node or a descendant is graph-level, so a graph never
-    /// loses a child silently; on success the diagnostics are the node's warnings.
+    /// Converts <paramref name="node"/> (matched by node id within the prepared definition) and its descendants. Fails
+    /// with the node's diagnostics when the node or a descendant is unconvertible, so a graph never loses a child
+    /// silently, and fails for a FlowFork, FlowJoin or Start, which has no node of its own; on success the diagnostics
+    /// are the node's warnings.
     /// </summary>
     /// <exception cref="ArgumentException">
     /// <paramref name="context"/> was not created by this converter, or the node is not part of the definition it was
@@ -67,7 +70,7 @@ public abstract class Elsa3NodeConversionContext
 
     /// <summary>
     /// The graph-level nodes left to the caller, one <c>ELS3-ACTIVITY-GRAPH-CONVERSION-PENDING</c> diagnostic each, with
-    /// the node id in its metadata.
+    /// the node id in its metadata. Empty for every built-in shape since flowchart graph conversion (spec 239).
     /// </summary>
     public IReadOnlyList<Elsa3MigrationDiagnostic> Deferred { get; }
 }

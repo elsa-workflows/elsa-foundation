@@ -16,6 +16,7 @@ internal sealed partial class Elsa3BuiltInActivityMap
     private const string While = "Elsa.Activities.While.Activities.While";
     private const string Parallel = "Elsa.Activities.Parallel.Activities.Parallel";
     private const string Sequence = "Elsa.Activities.Sequence.Activities.Sequence";
+    private const string Flowchart = "Elsa.Activities.Flowchart.Activities.Flowchart";
     private const string Primitives = "Elsa.Activities.Primitives.Activities.";
     private const string Scheduling = "Elsa.Activities.Scheduling.Activities.";
     private const string Http = "Elsa.Activities.Http.Activities.";
@@ -65,11 +66,9 @@ internal sealed partial class Elsa3BuiltInActivityMap
             [Structure("Cases"), Slot("Default", "Switch.Default"), Structure("Mode", Elsa3MemberKind.Input), Lost("Output")],
             [Outcome("Done", "{match}", "Default")],
             Elsa3NodeRewriteKind.SwitchValueSynthesis),
-        GraphLevel("Flowchart", "a native Elsa 4 Flowchart needs its connections and start node.",
-            Slot("Activities", "Flowchart.Activities"),
-            Structure("Variables"),
-            Graph("Connections"),
-            Graph("Start", Elsa3MemberKind.Port)),
+        // Connections and the start node are converted by the graph pass (spec 239), not by member rules.
+        Catalog("Flowchart", Flowchart,
+            [Slot("Activities", "Flowchart.Activities"), Structure("Variables"), Graph("Connections"), Graph("Start", Elsa3MemberKind.Port)]),
         Catalog("Break", Primitives + "Break", [], [], null, BreakStopsAtParallel),
     ];
 
@@ -82,9 +81,10 @@ internal sealed partial class Elsa3BuiltInActivityMap
             [Structure("Cases"), Structure("Mode", Elsa3MemberKind.Input)],
             [Outcome("Default", "Default")],
             Elsa3NodeRewriteKind.SwitchValueSynthesis),
-        GraphLevel("FlowFork", "a fork is a Flowchart graph construct.", Graph("Branches", Elsa3MemberKind.Input)),
-        GraphLevel("FlowJoin", "a join is a per-node Flowchart join policy.", Graph("Mode", Elsa3MemberKind.Input)),
-        GraphLevel("Start", "the start node becomes the Flowchart's start node id."),
+        // Elsa 4 needs no node for these (spec 239 G-2): fan-out connections, an implicit join, the start node id.
+        GraphConstruct("FlowFork", Elsa3GraphConstructKind.Fork, Structure("Branches", Elsa3MemberKind.Input)),
+        GraphConstruct("FlowJoin", Elsa3GraphConstructKind.Join, Structure("Mode", Elsa3MemberKind.Input)),
+        GraphConstruct("Start", Elsa3GraphConstructKind.Start),
     ];
 
     private static IEnumerable<Elsa3ActivityMapEntry> PrimitivesAndIntrinsics() =>
@@ -280,6 +280,9 @@ internal sealed partial class Elsa3BuiltInActivityMap
                 Narrow("Script", "script", Elsa3ValueContract.ScriptBody),
                 Carry("PossibleOutcomes", "possibleOutcomes", ScriptOutcomeRouting),
                 CarryOutput("Result", "result")
-            ]),
+            ],
+            // Elsa 3 completes with Done unless the script calls setOutcome (refused, #2717); Elsa 4 completes with
+            // Unmatched when the return value names no possible outcome (spec 239 R-3).
+            [Outcome("Done", "Unmatched")]),
     ];
 }

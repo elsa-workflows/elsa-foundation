@@ -131,8 +131,14 @@ public sealed class Elsa3ActivityMapCoverageTests
             .SelectMany(entry => entry.BehaviourWarnings.Concat(entry.Members.Select(rule => rule.BehaviourWarning)))
             .OfType<string>()
             .ToHashSet(StringComparer.Ordinal);
-        // The terminal-placement rewrite raises these two for reusable workflows (plan D-6, D-7).
-        string[] raisedByRewrites = [Elsa3ActivityDiagnosticCodes.OutcomeUndeclared, Elsa3ActivityDiagnosticCodes.OutcomeUnreached];
+        // The terminal-placement rewrite raises the first two for reusable workflows (plan D-6, D-7); graph conversion
+        // raises the third for connections Elsa 3 never follows (spec 239 G-7).
+        string[] raisedByRewrites =
+        [
+            Elsa3ActivityDiagnosticCodes.OutcomeUndeclared,
+            Elsa3ActivityDiagnosticCodes.OutcomeUnreached,
+            Elsa3ActivityDiagnosticCodes.DeadConnectionRemoved
+        ];
 
         Assert.All(declared, code => Assert.Contains(code, codes));
         Assert.All(codes, code => Assert.True(declared.Contains(code) || raisedByRewrites.Contains(code), $"Behaviour code '{code}' is used by no map entry."));

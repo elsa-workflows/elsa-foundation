@@ -21,7 +21,7 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 | **R5 Narrowed contract** | Elsa 4 accepts a narrower value (literal only, string only, JSON only, int instead of enum, secret reference only) | Converted when the bound value provably fits, judged by its literal value or its declared Elsa 3 `typeName`; otherwise **unconvertible** |
 | **R6 No counterpart** | Activity, or a use of it, that Elsa 4 cannot express | **Unconvertible** |
 | **R7 Structure** | Structure Elsa 4 needs but Elsa 3 does not carry | Converted; generated deterministically |
-| **R8 Graph-level** | Outcomes, connections, joins, forks, start node | The map carries the data; #2705 applies it. Until then every Flowchart (with or without connections), FlowFork, FlowJoin and Start reports "graph conversion pending"; children are still converted per node |
+| **R8 Graph-level** | Outcomes, connections, joins, forks, start node | The map carries the data; graph conversion applies it ([spec 239](../239-elsa3-flowchart-connections/spec.md), #2705). Flowcharts convert with their connections; FlowFork, FlowJoin and Start become fan-out connections, implicit joins and the start node |
 | **R9 Display only** | Member with no behaviour | Removed without a diagnostic. Only the members listed under R9 below |
 | **W Runtime difference** | Converted faithfully by contract, but Elsa 4 behaves differently at run time in a way the JSON cannot reveal | Converted with a **Warning** diagnostic naming the difference (one per node per difference) |
 
@@ -75,8 +75,8 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 | Switch outcome `Done` | outcome | `<match>`, `Default` | R8 | — |
 | Flowchart.Activities | port | slot `Flowchart.Activities` | R1 | 49 |
 | Flowchart.Variables | prop | structure `variables` | R7 (as Sequence) | 49 |
-| Flowchart.Connections | prop | `connections[{id, source, target}]` | R8 (#2705); `vertices` R9 | 34 files |
-| Flowchart.Start / start resolution | port | `startNodeId` | R8 (#2705) | — |
+| Flowchart.Connections | prop | `connections[{source, target}]` | R8 (spec 239); `vertices` and target ports R9 | 34 files |
+| Flowchart.Start / start resolution | port | `startNodeId` | R8 (spec 239: Start target, first start-capable child, first child with no inbound connection, first child) | — |
 | Flowchart execution mode (`Flowchart:ExecutionMode`) | custom prop | — (global join policy) | R3 (default absent) | — |
 | Break | activity | `Break` (outcome) | R1 + **W** (does not cross Parallel) | 0 |
 
@@ -91,8 +91,8 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 | FlowSwitch.Cases `[{label, condition}]` | `cases[{match}]` + synthesized `Value` | R7 (as Switch) | 1 |
 | FlowSwitch.Mode | — | R3 (as Switch.Mode) | 1 (MatchFirst) |
 | FlowSwitch outcomes labels, `Default` | match values, `Default` | R1 | 3 connections |
-| FlowFork | graph level | R8 (#2705); until then "graph conversion pending" | 4 |
-| FlowJoin.Mode (WaitAny default, WaitAll, WaitAllActive) | per-node join policy | R8 (#2705); until then "graph conversion pending" | 7 |
+| FlowFork | fan-out connections | R8 (spec 239); branches by expression → R6 (`UNSUPPORTED-MODE`) | 4 |
+| FlowJoin.Mode (WaitAny default, WaitAll, WaitAllActive) | implicit join of what follows | R8 (spec 239): WaitAllActive converts; WaitAny only with mutually exclusive branches; WaitAll only when every branch provably runs; else `GRAPH-JOIN-UNSUPPORTED` | 7 |
 
 ## Primitives, terminals and intrinsics
 
@@ -113,9 +113,9 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 | Complete.Outcomes in a plain workflow | finish `outcome` | Only when the node is in the workflow's root flowchart and `Outcomes` is absent or one literal string; otherwise R6 | 1 |
 | Complete.Outcomes in a reusable workflow | `Elsa.Activities.Graph.Runtime.Activities.Complete` `outcome` (spec 237); manifest schema 2 | Never finish (that would end the calling workflow). At any depth, absent/empty or one literal string → one `Complete` node with that outcome's reference key (`Done` → `done`, otherwise verbatim); the outcome is declared as an emitted contract outcome. Several outcomes or an expression → R6 (`UNSUPPORTED-MODE`). An outcome the definition does not declare → **W** (`OUTCOME-UNDECLARED`). See "Complete and End in reusable workflows" | 1 (`fail`/`succeed`) |
 | End in a plain workflow | finish | Only when the node is in the workflow's root flowchart; otherwise R6 | 0 |
-| End in a reusable workflow | `Complete` with `outcome = "done"` | At any depth | 0 |
+| End in a reusable workflow | `Complete` with `outcome = "done"` | Only in the workflow's root flowchart; otherwise R6 (amended by spec 239 FR-011: Elsa 3 End ends only its enclosing flowchart) | 0 |
 | Reusable workflow's declared `Outcomes` | contract outcomes | `Done` is always declared (natural completion). A declared outcome that no `Complete` reaches is dropped → **W** (`OUTCOME-UNREACHED`) | — |
-| Start | Flowchart `startNodeId` | R8 (#2705) | 0 |
+| Start | Flowchart `startNodeId` | R8 (spec 239); a Start leading to several nodes → `GRAPH-START-AMBIGUOUS` | 0 |
 | Inline, DynamicActivity, NotFoundActivity, StateMachine | — | R6 | 0 |
 | Workflow, CompositeWithResult as a node | — | R6 (a workflow-as-activity reference is a reusable reference, handled by the collection plan) | 0 |
 
@@ -127,7 +127,7 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 | HttpEndpoint.SupportedMethods, Authorize, Policy, RequestTimeout, RequestSizeLimit | same | R1 (+ **W** RequestSizeLimit has no outcome) | 30 |
 | HttpEndpoint.FileSizeLimit, AllowedFileExtensions, BlockedFileExtensions, AllowedMimeTypes | — | R3 (default null/empty) | 30 |
 | HttpEndpoint.Expose…Outcome (4) | — | R3 (default false) | 30 |
-| HttpEndpoint outcomes Request too large, File too large, Invalid file extension, Invalid file MIME type | — | R6 if a connection uses one (#2705) | 0 |
+| HttpEndpoint outcomes Request too large, File too large, Invalid file extension, Invalid file MIME type | — | R6 if a connection uses one (spec 239) | 0 |
 | HttpEndpoint.Result | `Request` (`HttpRequestModel`) | R4 → projection `Request` only when its consumers read members `HttpRequestModel` has; otherwise unconvertible | 30 |
 | HttpEndpoint.ParsedContent | `ParsedContent` (`JsonElement?`) | R1 + **W** (form posts not parsed; text becomes a string) | 30 (22 captured) |
 | HttpEndpoint.RouteData | `RouteData` | R1 | 30 (1 captured) |
@@ -186,6 +186,7 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 |---|---|---|---|
 | RunJavaScript.Script | `script` (sandbox sees `args` only) + `arguments` | R1 + R7 (plan D-16): the literal body is rewritten in script mode. `getVariable`/`getInput`/`variables.x` become `arguments` entries read as `args.<name>`, and an Elsa 3 completion value becomes `return`. `setOutcome(s)` and other host calls → VF-IMP-005 (follow-up #2717) | 17 |
 | RunJavaScript.PossibleOutcomes | `possibleOutcomes` | R1 + **W** (routing by return value; `setOutcomes` with several outcomes is refused by the rewriter) | 17 |
+| RunJavaScript outcome `Done` | `Unmatched` | R8 (spec 239): Elsa 3 completes with `Done` unless the script calls `setOutcome` (refused); Elsa 4 completes with `Unmatched` when the return value names no possible outcome | 16 connections |
 | RunJavaScript.Result | `result` | R1 | 17 (9 captured) |
 
 ## Elsa 4 required members with no Elsa 3 source
@@ -233,8 +234,8 @@ the body. It takes exactly one literal outcome, named by the boundary outcome's 
 
 The conversion, for a reusable workflow (plan D-1 to D-7; data-model §7a):
 
-1. Each `Complete` with no outcome, or one literal outcome, and each `End`, becomes one `Complete` node. The node's
-   `outcome` is the key from the outcome key rule: `Done` → `done`, anything else verbatim.
+1. Each `Complete` with no outcome, or one literal outcome, and each `End` in the root flowchart (spec 239 FR-011),
+   becomes one `Complete` node. The node's `outcome` is the key from the outcome key rule: `Done` → `done`, anything else verbatim.
 2. The manifest is schema 2. Its `outcomeMappings` hold exactly `done → done`, so a body that ends without reaching a
    `Complete` still completes with `Done`, as in Elsa 3.
 3. The contract outcomes are `Done` plus every outcome a `Complete` names. Contract names are the Elsa 3 strings

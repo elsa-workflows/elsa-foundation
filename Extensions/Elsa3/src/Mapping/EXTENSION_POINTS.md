@@ -38,20 +38,21 @@ Replace both: implement both contracts on one class, or register a node converte
 - **Default implementation:** `Elsa3DefinitionConverter` (scoped). It also implements `IElsa3NodeConverter`.
 - **When to override:** a host that needs a different conversion policy as a whole. Map changes belong in
   `IElsa3ActivityMap`.
-- **Depends on it:** `Elsa3WorkflowDefinitionImporter`, `Elsa3ReusableActivityImportMaterializer`, graph conversion
-  (#2705) and start-time reconciliation (spec 235).
+- **Depends on it:** `Elsa3WorkflowDefinitionImporter`, `Elsa3ReusableActivityImportMaterializer` and start-time
+  reconciliation (spec 235). Flowchart graph conversion (spec 239) runs inside it.
 
 ### `IElsa3NodeConverter` *(Replacement contract — `Elsa3.Mapping`)*
 
 - **Signature:**
   - `ValueTask<Elsa3MigrationResult<Elsa3NodeConversionContext>> PrepareAsync(Elsa3ConversionRequest, CancellationToken)`;
   - `ValueTask<Elsa3MigrationResult<ActivityNode>> ConvertNodeAsync(Elsa3NodeConversionContext, Elsa3Activity, CancellationToken)`.
-- **Purpose:** Converts nodes one at a time, for graph conversion (#2705) to call per Flowchart child.
+- **Purpose:** Converts nodes one at a time, from a definition prepared as a whole.
   - `PrepareAsync` normalizes and lowers the whole definition, exactly as `IElsa3DefinitionConverter.ConvertAsync`
-    does. A graph-level node (Flowchart) is deferred rather than stopping the rest: it is listed in the context's
-    `Deferred`, and its children are lowered too, including value flow between siblings.
-  - `ConvertNodeAsync` maps one node and its non-graph descendants from that lowered result. It fails when the node or
-    a descendant is graph-level, so a graph never loses a child silently.
+    does, including flowchart graph conversion (spec 239). A graph-level node a later stage owns would be deferred
+    rather than stopping the rest, listed in the context's `Deferred`; no built-in shape is deferred since spec 239.
+  - `ConvertNodeAsync` maps one node and its descendants from that lowered result; a flowchart arrives with its
+    connections and start node. It refuses a `FlowFork`, `FlowJoin` or `Start` node (`ELS3-ACTIVITY-UNSUPPORTED-MODE`):
+    those became connections or the start node of their flowchart and have no node of their own.
   - One rule for both paths: an Elsa 3 expression is lowered or refused the same way whichever converter reaches it.
   - `Elsa3NodeConversionContext` is abstract, with a protected `(Request, Deferred)` constructor: each node converter
     derives its own context to carry what its `PrepareAsync` computed, and its `ConvertNodeAsync` accepts only the
