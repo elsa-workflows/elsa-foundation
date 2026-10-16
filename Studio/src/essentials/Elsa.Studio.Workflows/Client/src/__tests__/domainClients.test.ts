@@ -114,7 +114,35 @@ describe("canonical domain clients", () => {
 
     expect(result.definitions.map(item => item.id)).toEqual(["definition-6", "definition-7", "definition-8", "definition-9", "definition-10"]);
     expect(result).toMatchObject({ page: 2, pageSize: 5, totalCount: 12 });
-    expect(getJson).toHaveBeenLastCalledWith("/design/workflows/definitions?state=all&search=Definition");
+    expect(getJson).toHaveBeenLastCalledWith("/design/workflows/definitions?state=all&searchTerm=Definition");
+  });
+
+  it("sends searchTerm so the Design list binder can filter, not the client-only search alias", async () => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : { items: [] });
+
+    await listDefinitions(createContext({ getJson }), {
+      search: "golden",
+      state: "active",
+      page: 1,
+      pageSize: 10
+    });
+
+    const requested = new URL(String(getJson.mock.lastCall?.[0]), "https://server.example");
+    expect(requested.searchParams.get("searchTerm")).toBe("golden");
+    expect(requested.searchParams.has("search")).toBe(false);
+
+    const paged = vi.fn(async (url: string) => url === "/capabilities"
+      ? pagedDefinitionCapabilities
+      : { items: [], nextContinuationToken: null });
+    await listDefinitions(createContext({ getJson: paged }), {
+      search: "golden",
+      state: "active",
+      page: 1,
+      pageSize: 10
+    });
+    const pagedRequest = new URL(String(paged.mock.lastCall?.[0]), "https://server.example");
+    expect(pagedRequest.searchParams.get("searchTerm")).toBe("golden");
+    expect(pagedRequest.searchParams.has("search")).toBe(false);
   });
 
   it("uses the advertised bounded definition page without downloading the legacy collection", async () => {
@@ -146,7 +174,7 @@ describe("canonical domain clients", () => {
       isPaged: true
     });
     expect(getJson).toHaveBeenLastCalledWith(
-      "/design/workflows/definition-pages?state=all&search=Definition&pageSize=5&continuationToken=opaque-current-page"
+      "/design/workflows/definition-pages?state=all&searchTerm=Definition&pageSize=5&continuationToken=opaque-current-page"
     );
     expect(getJson).not.toHaveBeenCalledWith(expect.stringContaining("/design/workflows/definitions?"));
   });

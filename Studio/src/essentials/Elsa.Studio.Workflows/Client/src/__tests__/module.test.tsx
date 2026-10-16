@@ -484,7 +484,7 @@ describe("workflows module", () => {
     expect(new URLSearchParams(window.location.search).get("state")).toBe("all");
     expect(new URLSearchParams(window.location.search).get("search")).toBe("approval");
     expect(fetchMock.mock.calls.map(([url]) => String(url)).at(-1)).toBe(
-      "https://server.example/design/workflows/definition-pages?state=all&search=approval&pageSize=10"
+      "https://server.example/design/workflows/definition-pages?state=all&searchTerm=approval&pageSize=10"
     );
     await unmount();
   });
@@ -504,7 +504,7 @@ describe("workflows module", () => {
     await waitForText(container, "1 selected");
 
     await fill(container.querySelector<HTMLInputElement>('input[placeholder="Search definitions"]'), "Hello");
-    await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("search=Hello"))).toBe(true));
+    await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("searchTerm=Hello"))).toBe(true));
     expect(container.textContent).toContain("1 selected");
     expect(checkboxByLabel(container, "Select workflow definition Hello World")?.checked).toBe(true);
 
@@ -517,6 +517,36 @@ describe("workflows module", () => {
     await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("state=deleted"))).toBe(true));
     expect(container.textContent).not.toContain("1 selected");
     expect(checkboxByLabel(container, "Select workflow definition Hello World")?.checked).toBe(false);
+
+    await unmount();
+  });
+
+  it("filters the definitions table through the server-bound searchTerm query", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const query = new URL(url, "https://server.example").searchParams;
+      if (query.get("searchTerm") === "zzzz-nothing-matches") {
+        return response({ items: [] });
+      }
+      return response({
+        items: [
+          definition({ name: "UX QA golden path" }),
+          definition({ id: "definition-2", name: "Another workflow" })
+        ]
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute();
+
+    await waitForText(container, "UX QA golden path");
+    await waitForText(container, "Another workflow");
+    await fill(container.querySelector<HTMLInputElement>('input[placeholder="Search definitions"]'), "zzzz-nothing-matches");
+    await waitForText(container, "No workflows match “zzzz-nothing-matches”");
+
+    const requested = fetchMock.mock.calls
+      .map(([url]) => new URL(String(url), "https://server.example"))
+      .find(url => url.searchParams.get("searchTerm") === "zzzz-nothing-matches");
+    expect(requested?.searchParams.has("search")).toBe(false);
 
     await unmount();
   });
@@ -3385,7 +3415,7 @@ describe("workflows module", () => {
     );
     expect(new URLSearchParams(window.location.search).get("folderId")).toBe("opaque-folder");
     expect(definitionRequests).toEqual([
-      "https://server.example/design/workflows/definition-pages?state=active&search=approval&pageSize=10"
+      "https://server.example/design/workflows/definition-pages?state=active&searchTerm=approval&pageSize=10"
     ]);
     expect(fetchMock.mock.calls.map(([url]) => String(url)).some(url => url.includes("/folders"))).toBe(false);
     await unmount();
@@ -3424,8 +3454,8 @@ describe("workflows module", () => {
     await waitForText(container, "Recovered workflow");
 
     expect(definitionRequests).toEqual([
-      "https://server.example/design/workflows/definition-pages?state=deleted&search=approval&pageSize=10&folderId=folder-retry",
-      "https://server.example/design/workflows/definition-pages?state=deleted&search=approval&pageSize=10&folderId=folder-retry"
+      "https://server.example/design/workflows/definition-pages?state=deleted&searchTerm=approval&pageSize=10&folderId=folder-retry",
+      "https://server.example/design/workflows/definition-pages?state=deleted&searchTerm=approval&pageSize=10&folderId=folder-retry"
     ]);
     expect(container.querySelector(".wf-folder-breadcrumb")?.textContent).toContain("Retry folder");
     expect(window.location.search).toBe("?folderId=folder-retry&state=deleted&search=approval");
@@ -3461,7 +3491,7 @@ describe("workflows module", () => {
 
     await waitForText(container, "Restored workflow");
     expect(definitionPageRequests).toEqual([
-      "https://server.example/design/workflows/definition-pages?state=all&search=invoice+approval&pageSize=10&folderId=folder%2Fopaque"
+      "https://server.example/design/workflows/definition-pages?state=all&searchTerm=invoice+approval&pageSize=10&folderId=folder%2Fopaque"
     ]);
     expect(container.querySelector<HTMLInputElement>(".wf-search input")?.value).toBe("invoice approval");
     expect(buttonByText(container, "All states")?.getAttribute("aria-selected")).toBe("true");

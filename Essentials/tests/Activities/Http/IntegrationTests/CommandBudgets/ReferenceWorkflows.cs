@@ -42,14 +42,10 @@ internal static class ReferenceWorkflows
     public static WorkflowExecutable HttpTriggeredWriteLineSequence(string artifactId, string path, int lines)
     {
         var endpoint = SyncPostEndpoint("http-in", path);
-        var response = Clr(
-            "write-response",
-            typeof(WriteHttpResponse),
-            [(nameof(WriteHttpResponse.StatusCode), 200), (nameof(WriteHttpResponse.ContentType), "text/plain"), (nameof(WriteHttpResponse.Body), "done")]);
 
         return Executable(
             artifactId,
-            Sequence("root", [endpoint, .. WriteLines(lines), response]),
+            Sequence("root", [endpoint, .. WriteLines(lines), DoneResponse()]),
             [],
             ResumeTarget(endpoint.ExecutableNodeId, HttpEndpoint.ResumeTargetId));
     }
@@ -83,15 +79,31 @@ internal static class ReferenceWorkflows
     }
 
     /// <summary>A Parallel fork/join whose second branch suspends on an Event bookmark until it is resumed.</summary>
-    public static WorkflowExecutable ForkJoinResume()
-    {
-        (string Name, ExecutableNode Activity)[] branches =
-        [
-            ("write", Clr("write-in-branch", typeof(WriteLine), [("text", "forked")])),
-            ("wait", Clr(EventNodeId, typeof(Event), [(nameof(Event.EventName), EventName), (nameof(Event.CanStartWorkflow), false)]))
-        ];
-        var parallel = Clr(
-            "fork-join",
+    public static WorkflowExecutable ForkJoinResume() =>
+        Executable(
+            "fork-join-resume",
+            Parallel("fork-join", ("write", Clr("write-in-branch", typeof(WriteLine), [("text", "forked")])), ("wait", EventWait())),
+            [],
+            EventResumeTarget());
+
+    /// <summary>An Event activity at <see cref="EventNodeId"/> that suspends on a <see cref="EventName"/> bookmark.</summary>
+    internal static ExecutableNode EventWait() =>
+        Clr(EventNodeId, typeof(Event), [(nameof(Event.EventName), EventName), (nameof(Event.CanStartWorkflow), false)]);
+
+    /// <summary>The resume target of <see cref="EventWait"/>.</summary>
+    internal static (string Id, WorkflowExecutableResumeTarget Target) EventResumeTarget() => ResumeTarget(EventNodeId, Event.ResumeTargetId);
+
+    /// <summary>A WriteHttpResponse that answers 200 with the plain-text body <c>done</c>.</summary>
+    internal static ExecutableNode DoneResponse() =>
+        Clr(
+            "write-response",
+            typeof(WriteHttpResponse),
+            [(nameof(WriteHttpResponse.StatusCode), 200), (nameof(WriteHttpResponse.ContentType), "text/plain"), (nameof(WriteHttpResponse.Body), "done")]);
+
+    /// <summary>Builds a Parallel node with one named branch per supplied activity.</summary>
+    internal static ExecutableNode Parallel(string nodeId, params (string Name, ExecutableNode Activity)[] branches) =>
+        Clr(
+            nodeId,
             typeof(ParallelActivity),
             [],
             childSlots: branches.Select(branch => new ExecutableChildSlot(ParallelActivity.BranchSlotName(branch.Name), [branch.Activity])).ToArray(),
@@ -102,9 +114,6 @@ internal static class ReferenceWorkflows
                 {
                     branches = branches.Select(branch => new { name = branch.Name, activity = branch.Activity.ExecutableNodeId }).ToArray()
                 })));
-
-        return Executable("fork-join-resume", parallel, [], ResumeTarget(EventNodeId, Event.ResumeTargetId));
-    }
 
     /// <summary>Builds a test executable with the supplied root, variables, and resume targets using the fault incident strategy.</summary>
     internal static WorkflowExecutable Executable(
@@ -125,13 +134,14 @@ internal static class ReferenceWorkflows
             IncidentStrategyBuiltIns.FaultReference,
             workflowVariables: variables);
 
-    private static ExecutableNode[] WriteLines(int lines) =>
+    /// <summary><paramref name="lines"/> WriteLine activities, <c>write-1</c> to <c>write-{lines}</c>.</summary>
+    internal static ExecutableNode[] WriteLines(int lines) =>
         Enumerable.Range(1, lines)
             .Select(line => Clr($"write-{line}", typeof(WriteLine), [("text", $"line {line}")]))
             .ToArray();
 
     /// <summary>A synchronous POST HttpEndpoint that can start its workflow, open to anonymous requests.</summary>
-    private static ExecutableNode SyncPostEndpoint(string nodeId, string path, RuntimeOutputCapture[]? outputCaptures = null) =>
+    internal static ExecutableNode SyncPostEndpoint(string nodeId, string path, RuntimeOutputCapture[]? outputCaptures = null) =>
         Clr(
             nodeId,
             typeof(HttpEndpoint),
@@ -249,7 +259,7 @@ internal static class ReferenceWorkflows
                 [RuntimeMetadataKeys.StorageDriverKey] = WellKnownRuntimeDurableValueStorageDrivers.Json
             });
 
-    private static (string, WorkflowExecutableResumeTarget) ResumeTarget(string nodeId, string localResumeTargetId)
+    internal static (string Id, WorkflowExecutableResumeTarget Target) ResumeTarget(string nodeId, string localResumeTargetId)
     {
         var id = WorkflowExecutableResumeTarget.ComposeScopedId(nodeId, localResumeTargetId);
         return (id, new WorkflowExecutableResumeTarget(id, nodeId, "ResumeAsync", new Dictionary<string, string>(), localResumeTargetId));

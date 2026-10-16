@@ -6,11 +6,10 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Elsa.Activities.Http.IntegrationTests;
 
 /// <summary>
-/// A Durable run drains in a session that serves the next activity itself instead of delivering it through the outbox,
-/// so a long sequence completes under the default drain-cycle bound, which caps the cycles of one drain. A drain that
-/// delivered each next activity through the outbox would spend at least one cycle per activity, and these sequences are
-/// several times longer than the bound. The bound applies to every drain whatever started the run, so a run started by
-/// a trigger is held to it as a directly started one is.
+/// A long Durable sequence completes under the default drain cycle limits, whatever started the run. The run drains in a
+/// session that serves the next activity itself instead of delivering it through the outbox, so the drain takes few
+/// cycles. Since #2661 the limit counts only cycles without progress, so a drain that spends a cycle per activity
+/// completes too; <see cref="DrainCyclesWithoutProgressTests"/> covers those drains in every mode.
 /// </summary>
 public sealed class DurableDrainCycleTests
 {
@@ -46,8 +45,8 @@ public sealed class DurableDrainCycleTests
     {
         var fixture = await HttpEndpointHostFixture.StartDurableSqliteAsync(PersistenceMode.Durable, maxActivitiesPerCommit: 50);
         Assert.Equal(
-            WorkflowDrainOrchestratorOptions.DefaultMaxDrainCycles,
-            fixture.Services.GetRequiredService<WorkflowDrainOrchestratorOptions>().MaxDrainCycles);
+            WorkflowDrainOrchestratorOptions.DefaultMaxCyclesWithoutProgress,
+            fixture.Services.GetRequiredService<WorkflowDrainOrchestratorOptions>().MaxCyclesWithoutProgress);
         return fixture;
     }
 
