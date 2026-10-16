@@ -17,6 +17,7 @@ public sealed class RuntimeFeatureCatalogContributor(IRuntimeFeatureCatalog runt
                 continue;
 
             var builder = context.GetOrAdd(featureName);
+            builder.RuntimeAvailable = true;
             if (builder.SourceKind is not FeatureSourceKinds.Manifest)
                 builder.SourceKind = builder.SourceKind is FeatureSourceKinds.Shell ? FeatureSourceKinds.Runtime : builder.SourceKind;
 
