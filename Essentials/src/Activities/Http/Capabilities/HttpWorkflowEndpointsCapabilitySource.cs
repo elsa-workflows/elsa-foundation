@@ -49,70 +49,23 @@ internal sealed class HttpWorkflowEndpointsCapabilitySource : IApiCapabilitySour
             || basePath.StartsWith("//", StringComparison.Ordinal)
             || basePath.Contains('?')
             || basePath.Contains('#')
+            || basePath.Contains('%')
             || basePath.Contains('\\')
             || basePath.Any(char.IsControl)
             || basePath.Any(char.IsWhiteSpace))
             throw InvalidBasePath();
 
-        if (href.Split('/').Any(segment => segment.Length == 0))
+        // ASP.NET decodes request paths before matching BasePath. URI escapes in this option could therefore
+        // advertise an alias outside the middleware's literal mount. Hosts must configure the decoded path.
+        if (href.Split('/').Any(segment => segment.Length == 0 || segment is "." or ".."))
             throw InvalidBasePath();
 
         if (HasUriScheme(href))
             throw InvalidBasePath();
 
-        for (var index = 0; index < href.Length; index++)
-        {
-            if (href[index] != '%')
-                continue;
-
-            if (index + 2 >= href.Length || !Uri.IsHexDigit(href[index + 1]) || !Uri.IsHexDigit(href[index + 2]))
-                throw InvalidBasePath();
-
-            index += 2;
-        }
-
-        var decodedPath = href;
-        for (var pass = 0; pass < 8; pass++)
-        {
-            if (ContainsTraversalSegment(decodedPath) || decodedPath.Contains('\\'))
-                throw InvalidBasePath();
-
-            string next;
-            try
-            {
-                next = Uri.UnescapeDataString(decodedPath);
-            }
-            catch (UriFormatException)
-            {
-                throw InvalidBasePath();
-            }
-
-            if (next == decodedPath)
-                break;
-
-            if (next.Count(character => character == '/') > decodedPath.Count(character => character == '/')
-                || next.Contains('\\'))
-                throw InvalidBasePath();
-
-            decodedPath = next;
-            if (pass == 7)
-                throw InvalidBasePath();
-        }
-
-        if (ContainsTraversalSegment(decodedPath)
-            || decodedPath.StartsWith("//", StringComparison.Ordinal)
-            || decodedPath.Contains('\\')
-            || HasUriScheme(decodedPath)
-            || Uri.TryCreate(decodedPath, UriKind.Absolute, out _))
-            throw InvalidBasePath();
-
         // ApiCapabilityLink is the final guard against URI-shaped hrefs as well.
         return href;
     }
-
-    private static bool ContainsTraversalSegment(string path) =>
-        path.Split(['/', '\\'], StringSplitOptions.None)
-            .Any(segment => segment is "." or "..");
 
     private static bool HasUriScheme(string path)
     {
@@ -126,5 +79,5 @@ internal sealed class HttpWorkflowEndpointsCapabilitySource : IApiCapabilitySour
     }
 
     private static InvalidOperationException InvalidBasePath() =>
-        new("HttpEndpointOptions.BasePath must be a valid origin-form path without traversal segments.");
+        new("HttpEndpointOptions.BasePath must be a valid origin-form path without URI escapes or traversal segments.");
 }

@@ -3,6 +3,7 @@ using Elsa.Api.Capabilities.Contracts;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Api.Capabilities.Models;
 using Elsa.Activities.Http.Options;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -23,12 +24,14 @@ public sealed class HttpWorkflowEndpointsCapabilitySourceTests
         Assert.Equal("workflows/http", link.Href);
     }
 
-    [Fact]
-    public async Task ActivitiesHttpFeature_advertises_a_custom_base_path_without_outer_slashes()
+    [Theory]
+    [InlineData("/tenant/workflows/", "tenant/workflows")]
+    [InlineData("/werkstromen/één/", "werkstromen/één")]
+    public async Task ActivitiesHttpFeature_advertises_a_custom_base_path_without_outer_slashes(string basePath, string expectedHref)
     {
-        var document = await GetDocumentAsync(featureBasePath: "/tenant/workflows/");
+        var document = await GetDocumentAsync(featureBasePath: basePath);
 
-        Assert.Equal("tenant/workflows", Assert.Single(Assert.Single(document.Capabilities).Links).Href);
+        Assert.Equal(expectedHref, Assert.Single(Assert.Single(document.Capabilities).Links).Href);
     }
 
     [Fact]
@@ -73,6 +76,18 @@ public sealed class HttpWorkflowEndpointsCapabilitySourceTests
             await GetDocumentAsync(hostBasePathOverride: basePath));
 
         Assert.Contains("HttpEndpointOptions.BasePath", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("/%61pi", "/api")]
+    [InlineData("/workflow%73/http", "/workflows/http")]
+    public async Task Encoded_mount_cannot_advertise_an_alias_of_a_different_pipeline_path(string basePath, string decodedPath)
+    {
+        // ASP.NET decodes the request path before the middleware compares it with the configured mount.
+        Assert.Equal(decodedPath, PathString.FromUriComponent(basePath).Value);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await GetDocumentAsync(hostBasePathOverride: basePath));
     }
 
     private static async Task<ApiCapabilitiesDocument> GetDocumentAsync(

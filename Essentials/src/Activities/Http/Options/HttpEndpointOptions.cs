@@ -13,7 +13,8 @@ public record HttpEndpointOptions
     /// key); other requests — including sibling paths that merely share the prefix text — pass through
     /// untouched. Defaults to <c>/workflows/http</c>. An empty or root (<c>/</c>) value disables the middleware
     /// entirely (everything passes through): workflow endpoints require a dedicated base path so they can never
-    /// shadow the rest of the host.
+    /// shadow the rest of the host. Configure a decoded path, without percent escapes; capability discovery
+    /// rejects escaped mounts because ASP.NET decodes incoming paths before matching this option.
     /// </summary>
     public string BasePath { get; set; } = "/workflows/http";
 

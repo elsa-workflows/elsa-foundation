@@ -1,5 +1,6 @@
 using System.Net;
 using Elsa.Activities.Http.Activities;
+using Elsa.Activities.Http.Options;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -116,6 +117,9 @@ public sealed class DrainCyclesWithoutProgressTests(ITestOutputHelper output)
         {
             ReferenceWorkflowRuns.ComposeHost(services);
             services.Replace(ServiceDescriptor.Singleton<IWorkflowEngineTracer>(_cycles));
+            // These deliberately long drains test progress, not the HTTP deadline. Keep the client's
+            // existing 100-second bound and opt into a longer server limit for these workflow shapes.
+            services.Configure<HttpEndpointOptions>(options => options.SyncRequestTimeout = TimeSpan.FromSeconds(90));
         });
 
     private ExecutableNode WriteLines(params ExecutableNode[] after) => ReferenceWorkflows.Sequence("lines", [.. _lines, .. after]);
