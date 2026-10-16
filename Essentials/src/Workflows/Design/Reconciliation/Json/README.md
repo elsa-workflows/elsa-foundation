@@ -17,7 +17,8 @@ of definition files, enable the feature in `shells.json`, start the server — z
 
 ## Options
 
-Bound under the feature name (`"JsonWorkflowReconciliation": { "Options": { … } }`).
+Configure the primary source under `"JsonWorkflowReconciliation": { "Options": { … } }`.
+Optional `AdditionalSources` entries follow the same rules, each with its own source identity and options.
 
 | Option | Required | Semantics |
 |---|---|---|
@@ -27,8 +28,8 @@ Bound under the feature name (`"JsonWorkflowReconciliation": { "Options": { … 
 | `FolderPath` | exactly one of the three | Directory scanned for `*.json`: **top level only** (non-recursive — mount layouts like Kubernetes ConfigMap `..data` symlink trees would double-read under recursion), deterministic **ordinal file-name order**. Missing folder fails startup naming the path; an empty scan is logged and contributes nothing. |
 | `PublishOnReconcile` | no (default `false`) | After a successful pass, the latest reconciled version of each definition this source owns is published in-process (`PublishWorkflow`) — executable at readiness. Requires the `WorkflowsPublishing` feature in the same shell. Idempotent across restarts: a version whose publication slot already holds an active publication of it is skipped. Publish failures are logged per definition and never fail startup. |
 
-Misconfiguration (no `SourceId`, or not exactly one path option) fails shell activation at registration
-with an error naming the rule.
+Misconfiguration (no `SourceId`, duplicate JSON source identities, or not exactly one path option per source)
+fails shell activation at registration with an error naming the rule.
 
 ## shells.json example (mounted-folder deployment)
 
@@ -48,6 +49,33 @@ docker run -v ./defs:/app/workflow-definitions:ro -v ./my-shells.json:/app/shell
 
 Wait on **`GET /health/ready`** (200 only after shell activation, which includes reconcile + publish).
 `GET /` returns 200 unconditionally and is **not** a deployment gate.
+
+## Independent JSON sources and Git composition
+
+Use `Files` or `FolderPath` for several files belonging to one source. Use `AdditionalSources` when catalogs
+need separate ownership identities or publication flags:
+
+```json
+"JsonWorkflowReconciliation": {
+  "Options": {
+    "SourceId": "orders",
+    "FilePath": "/app/orders.json"
+  },
+  "AdditionalSources": [
+    {
+      "SourceId": "billing",
+      "FolderPath": "/app/billing",
+      "PublishOnReconcile": true
+    }
+  ]
+}
+```
+
+Source identities are case-sensitive and must be distinct within this feature. Each source keeps its own
+paths and publication flag. Enabling `WorkflowsDesignGitReconciliation` alongside JSON contributes the Git
+source to the same reconcile pass; the shared reconciler and import startup task are registered once.
+`ReconcilerOptions` is a shared policy supplied by the first registration. Configure the same policy on
+both source features when their registration order should not affect it.
 
 ## Authoring definition files
 

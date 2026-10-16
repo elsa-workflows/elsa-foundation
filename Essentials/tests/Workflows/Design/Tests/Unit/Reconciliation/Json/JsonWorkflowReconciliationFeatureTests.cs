@@ -1,4 +1,8 @@
+using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Reconciliation.Contracts;
+using Elsa.Workflows.Design.Reconciliation.Json.Contracts;
+using Elsa.Workflows.Design.Reconciliation.Models;
+using Microsoft.Extensions.Configuration;
 using Elsa.Workflows.Design.Reconciliation.Json;
 using Elsa.Workflows.Design.Reconciliation.Json.Options;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,6 +18,60 @@ namespace Elsa.Workflows.Design.Tests.Unit.Reconciliation.Json;
 /// </summary>
 public sealed class JsonWorkflowReconciliationFeatureTests
 {
+    [Fact]
+    public async Task Configured_json_sources_keep_their_own_identity_and_options()
+    {
+        var feature = BindAdditionalSource("secondary", "secondary.json", null, publishOnReconcile: true);
+        var services = new ServiceCollection();
+        services.AddLogging();
+        feature.ConfigureServices(services);
+        services.AddSingleton<IJsonWorkflowCatalogReader>(new CatalogReader());
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var sources = scope.ServiceProvider.GetServices<IWorkflowReconciliationSource>().ToArray();
+
+        Assert.Equal(new[] { "primary", "secondary" }, sources.Select(x => x.SourceId));
+        Assert.False(sources[0].RequestsPublication);
+        Assert.True(sources[1].RequestsPublication);
+        var models = new List<WorkflowVersionReconciliationModel>();
+        foreach (var source in sources)
+            models.AddRange(await source.Read(CancellationToken.None));
+        Assert.Equal(new[] { "primary.json", "secondary.json" }, models.Select(x => x.DefinitionId));
+    }
+
+    [Theory]
+    [InlineData("", "secondary.json", null)]
+    [InlineData("primary", "secondary.json", null)]
+    [InlineData("secondary", null, null)]
+    [InlineData("secondary", "secondary.json", "/defs")]
+    public void Invalid_additional_source_configuration_fails_registration(string sourceId, string? filePath, string? folderPath)
+    {
+        var feature = BindAdditionalSource(sourceId, filePath, folderPath);
+
+        Assert.Throws<InvalidOperationException>(() => feature.ConfigureServices(new ServiceCollection()));
+    }
+
+    private static JsonWorkflowReconciliationFeature BindAdditionalSource(
+        string sourceId, string? filePath, string? folderPath, bool publishOnReconcile = false)
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Options:SourceId"] = "primary",
+            ["Options:FilePath"] = "primary.json",
+            ["AdditionalSources:0:SourceId"] = sourceId,
+            ["AdditionalSources:0:FilePath"] = filePath,
+            ["AdditionalSources:0:FolderPath"] = folderPath,
+            ["AdditionalSources:0:PublishOnReconcile"] = publishOnReconcile.ToString()
+        }).Build();
+        return configuration.Get<JsonWorkflowReconciliationFeature>()!;
+    }
+
+    private sealed class CatalogReader : IJsonWorkflowCatalogReader
+    {
+        public IReadOnlyList<WorkflowVersionReconciliationModel> Read(string filePath, CancellationToken cancellationToken) =>
+            [new(filePath, filePath, null, "1.0.0", WorkflowDefinitionState.Empty)];
+    }
+
     [Fact]
     public void ConfigureServices_WithoutSourceId_Throws()
     {
