@@ -15,9 +15,14 @@ namespace Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 public sealed class EfIdentityAuthorityAggregateCoordinator(
     IdentityIamDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor,
-    EfIdentityAtomicWrite? atomicWrite = null)
+    EfIdentityAtomicWrite? atomicWrite = null,
+    IIdentityUserLookupNormalizer? lookupNormalizer = null)
 {
     private readonly EfIdentityAtomicWrite atomicWrite = atomicWrite ?? new EfIdentityAtomicWrite(context, accessContextAccessor: accessContextAccessor);
+
+    /// <summary>The normalizer user saves key their name and email on; lookups must derive their keys through it too.</summary>
+    internal IIdentityUserLookupNormalizer LookupNormalizer { get; } = lookupNormalizer ?? IdentityUserLookupNormalizer.Invariant;
+
     public async Task<EfIdentityAuthorityWriteResult> SaveUserAsync(
         UserRecord user,
         long? expectedVersion,
@@ -157,7 +162,12 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
         CancellationToken cancellationToken = default) =>
         DeleteUserCoreAsync(tenantId, userId, expectedVersion, cancellationToken);
 
-    /// <summary>Writes only the user's status, so no other field of a concurrently edited row is overwritten.</summary>
+    /// <summary>
+    /// Writes only the user's status, so no other field of a concurrently edited row is overwritten. Setting the
+    /// status the row already has changes nothing, so its revision stays put. The write is conditional on the
+    /// revision it read: a write that commits in between surfaces as <see cref="EfIdentityWriteStatus.Conflict"/>
+    /// (or, where the provider reports it as transient, the atomic write retries on the new row).
+    /// </summary>
     public async Task<EfIdentityWriteResult> SetUserStatusAsync(
         string tenantId,
         string userId,
@@ -180,6 +190,8 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
                     return Conflict(id);
 
                 EfIdentityStoreSupport.EnsureUserIdentity(user, tenantId, userId);
+                if (user.Status == (int)status)
+                    return Updated(id, user.Revision);
                 EfIdentityStoreSupport.Upgrade(user);
                 user.Status = (int)status;
                 user.Revision = checked(user.Revision + 1);
@@ -537,12 +549,8 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
 
     private static void CanonicalizeLookupKeys(UserEntity entity)
     {
-        entity.NormalizedUserNameKey = string.IsNullOrWhiteSpace(entity.NormalizedUserName)
-            ? null
-            : EfIdentityStoreSupport.Lookup(entity.TenantId, entity.NormalizedUserName);
-        entity.NormalizedEmailKey = string.IsNullOrWhiteSpace(entity.NormalizedEmail)
-            ? null
-            : EfIdentityStoreSupport.Lookup(entity.TenantId, entity.NormalizedEmail);
+        entity.NormalizedUserNameKey = EfIdentityStoreSupport.LookupKey(entity.TenantId, entity.NormalizedUserName);
+        entity.NormalizedEmailKey = EfIdentityStoreSupport.LookupKey(entity.TenantId, entity.NormalizedEmail);
     }
 
     private static void CanonicalizeLookupKeys(RoleEntity entity) =>
@@ -550,7 +558,7 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
             ? null
             : EfIdentityStoreSupport.Lookup(entity.TenantId, entity.NormalizedName);
 
-    private static void Apply(UserEntity entity, UserRecord user)
+    private void Apply(UserEntity entity, UserRecord user)
     {
         // A fresh row (no prior SchemaVersion) carries only current-format registries already; an existing row's own
         // are upcast from its own prior stamp, so this write restamps the row completely on its own rather than
@@ -561,11 +569,11 @@ public sealed class EfIdentityAuthorityAggregateCoordinator(
         entity.UserId = user.Id;
         entity.UserIdOrderKey = EfIdentityStoreSupport.SortableOrderKey(user.Id, nameof(user.Id));
         entity.UserName = user.UserName;
-        entity.NormalizedUserName = string.IsNullOrWhiteSpace(user.UserName) ? null : EfIdentityStoreSupport.Normalize(user.UserName);
-        entity.NormalizedUserNameKey = string.IsNullOrWhiteSpace(entity.NormalizedUserName) ? null : EfIdentityStoreSupport.Lookup(user.TenantId, entity.NormalizedUserName);
+        entity.NormalizedUserName = EfIdentityStoreSupport.NormalizedUserName(LookupNormalizer, user.UserName);
+        entity.NormalizedUserNameKey = EfIdentityStoreSupport.LookupKey(user.TenantId, entity.NormalizedUserName);
         entity.Email = user.Email;
-        entity.NormalizedEmail = string.IsNullOrWhiteSpace(user.Email) ? null : EfIdentityStoreSupport.Normalize(user.Email);
-        entity.NormalizedEmailKey = string.IsNullOrWhiteSpace(entity.NormalizedEmail) ? null : EfIdentityStoreSupport.Lookup(user.TenantId, entity.NormalizedEmail);
+        entity.NormalizedEmail = EfIdentityStoreSupport.NormalizedEmail(LookupNormalizer, user.Email);
+        entity.NormalizedEmailKey = EfIdentityStoreSupport.LookupKey(user.TenantId, entity.NormalizedEmail);
         entity.DisplayName = user.DisplayName;
         entity.Status = (int)user.Status;
         entity.Ownership = (int)user.Ownership;

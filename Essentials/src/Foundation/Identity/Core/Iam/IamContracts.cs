@@ -12,7 +12,13 @@ public interface IUserStore
 
     ValueTask SaveAsync(UserRecord user, CancellationToken cancellationToken = default);
 
-    /// <summary>Sets the user's <see cref="UserRecord.Status"/>; returns <c>false</c> when the user does not exist.</summary>
+    /// <summary>
+    /// Sets the user's <see cref="UserRecord.Status"/> and nothing else; returns <c>false</c> only when the user
+    /// does not exist. Setting the status the user already has is a no-op that leaves the record and its revision
+    /// unchanged. If another write to the same user commits while the status is being set, the store never
+    /// overwrites it: it either applies the status on top of that write or throws without changing anything, and
+    /// the caller may retry. That case is never reported as <c>false</c>.
+    /// </summary>
     ValueTask<bool> SetStatusAsync(string tenantId, string userId, UserStatus status, CancellationToken cancellationToken = default);
 
     /// <summary>Deletes the user together with the records it owns; returns <c>false</c> when the user does not exist.</summary>
@@ -25,7 +31,8 @@ public interface IPagedUserStore
 {
     /// <summary>
     /// Pages the tenant's users in a stable order. A non-blank <paramref name="search"/> keeps only users whose
-    /// user name or email equals it, compared case-insensitively the way the store compares lookup keys.
+    /// user name or email equals it once both are normalized the way the store normalizes that field when it
+    /// saves a user, so a user is found by the value it was saved with, whichever write path saved it.
     /// </summary>
     ValueTask<IamPage<UserRecord>> ListPageAsync(
         string tenantId,

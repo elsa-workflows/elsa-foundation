@@ -16,7 +16,7 @@ namespace Elsa.Foundation.Identity.Tests.AspNetCoreIdentity;
 /// Password sign-in and seeding behaviour over the EF Core-backed substrate. Shared fixture builds the container;
 /// <see cref="CreateUserAsync"/> removes repeated user-creation arrange blocks.
 /// </summary>
-public sealed class AspNetCoreIdentitySignInTests : IAsyncDisposable
+public sealed class AspNetCoreIdentitySignInTests : IAsyncLifetime
 {
     private readonly AspNetCoreIdentityFixture _fixture = new();
 
@@ -151,5 +151,8 @@ public sealed class AspNetCoreIdentitySignInTests : IAsyncDisposable
         return user;
     }
 
-    public async ValueTask DisposeAsync() => await _fixture.DisposeAsync();
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    // xUnit v2 calls IAsyncLifetime.DisposeAsync on a test class; it never calls IAsyncDisposable.DisposeAsync.
+    public async Task DisposeAsync() => await _fixture.DisposeAsync();
 }

@@ -40,7 +40,11 @@ public sealed class EfUserStore(
         Prepare(tenantId, cancellationToken);
         try
         {
-            var key = EfIdentityStoreSupport.Lookup(tenantId, email);
+            // The key is derived the way a save derives it, so a user written by any path is found by its email.
+            var normalized = EfIdentityStoreSupport.NormalizedEmail(aggregates.LookupNormalizer, email);
+            var key = EfIdentityStoreSupport.LookupKey(tenantId, normalized);
+            if (key is null)
+                return null;
             var rows = await EfIdentityStoreSupport.ReadAsync(
                 context,
                 "Unable to find the Identity user by email.",
@@ -48,7 +52,7 @@ public sealed class EfUserStore(
             if (rows.Count != 1)
                 return null;
             return EfSchemaVersion.Readable(IdentityIamEfModule.Chain, rows[0].SchemaVersion) &&
-                   string.Equals(EfIdentityStoreSupport.Normalize(rows[0].Email), EfIdentityStoreSupport.Normalize(email), StringComparison.Ordinal)
+                   string.Equals(EfIdentityStoreSupport.Normalize(rows[0].NormalizedEmail), EfIdentityStoreSupport.Normalize(normalized), StringComparison.Ordinal)
                 ? Map(rows[0])
                 : null;
         }
@@ -75,10 +79,11 @@ public sealed class EfUserStore(
         var query = context.Users.AsNoTracking().Where(x => x.TenantLookupKey == EfIdentityStoreSupport.TenantLookup(tenantId));
         if (!string.IsNullOrWhiteSpace(search))
         {
-            // The name and email lookup keys are hashes of the invariant-lowercased value, so the database compares
-            // opaque keys and the match is the same case-insensitive one on every provider.
-            var key = EfIdentityStoreSupport.Lookup(tenantId, search);
-            query = query.Where(x => x.NormalizedUserNameKey == key || x.NormalizedEmailKey == key);
+            // Each key is derived exactly the way a save derives it for that field, so the database compares opaque
+            // keys and the match is the store's own normalization on every provider, whichever path wrote the user.
+            var nameKey = EfIdentityStoreSupport.LookupKey(tenantId, EfIdentityStoreSupport.NormalizedUserName(aggregates.LookupNormalizer, search));
+            var emailKey = EfIdentityStoreSupport.LookupKey(tenantId, EfIdentityStoreSupport.NormalizedEmail(aggregates.LookupNormalizer, search));
+            query = query.Where(x => (nameKey != null && x.NormalizedUserNameKey == nameKey) || (emailKey != null && x.NormalizedEmailKey == emailKey));
         }
 
         var (total, rows) = await EfIdentityStoreSupport.ReadAsync(

@@ -1,7 +1,13 @@
 using Elsa.Foundation.Identity.Core.Iam;
 using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.DependencyInjection;
+using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Exceptions;
+using Elsa.Foundation.Identity.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Persistence.EntityFramework.Tests;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -120,6 +126,38 @@ public sealed class IdentityUserAdministrationEntityFrameworkCoreTests : IAsyncL
     }
 
     [Fact]
+    public async Task Setting_the_status_a_user_already_has_leaves_its_revision_unchanged()
+    {
+        var user = User(Tenant, "user-a", "Ada", "ada@example.test");
+        await Users.SaveAsync(user);
+        var revisions = services.GetRequiredService<IRevisionAwareUserStore>();
+        var before = (await revisions.FindWithRevisionAsync(Tenant, user.Id))!.Revision;
+
+        Assert.True(await Users.SetStatusAsync(Tenant, user.Id, UserStatus.Active));
+
+        Assert.Equal(before, (await revisions.FindWithRevisionAsync(Tenant, user.Id))!.Revision);
+    }
+
+    [Fact]
+    public async Task A_write_landing_between_the_status_read_and_write_makes_the_status_change_throw_without_applying()
+    {
+        var user = User(Tenant, "user-a", "Ada", "ada@example.test");
+        await Users.SaveAsync(user);
+        var concurrentWrite = new ConcurrentUserWriteInterceptor();
+        var context = new IdentityIamSqliteDbContext(new DbContextOptionsBuilder<IdentityIamSqliteDbContext>()
+            .UseSqlite(database.ConnectionString)
+            .AddInterceptors(concurrentWrite)
+            .Options);
+        disposables.Add(context);
+        var racingUsers = new EfUserStore(context, services.GetRequiredService<IPersistenceAccessContextAccessor>());
+
+        await Assert.ThrowsAsync<IdentityEntityFrameworkPersistenceException>(() => racingUsers.SetStatusAsync(Tenant, user.Id, UserStatus.Disabled).AsTask());
+
+        Assert.True(concurrentWrite.Fired);
+        Assert.Equal(UserStatus.Active, (await FindAsync(user.Id)).Status);
+    }
+
+    [Fact]
     public async Task Status_change_and_delete_report_a_missing_user()
     {
         Assert.False(await Users.SetStatusAsync(Tenant, "missing", UserStatus.Disabled));
@@ -175,6 +213,32 @@ public sealed class IdentityUserAdministrationEntityFrameworkCoreTests : IAsyncL
         id, tenantId, name, email, $"{name} Example", UserStatus.Active, ResourceOwnership.Foundation, Set("role-1"), Set("identity/users:read"));
 
     private static HashSet<string> Set(params string[] values) => new(values, StringComparer.Ordinal);
+
+    /// <summary>
+    /// Moves the user row's revision inside the status write's own transaction, after the write has read the row and
+    /// before its update runs: the state a competing writer leaves when it commits in that window.
+    /// </summary>
+    private sealed class ConcurrentUserWriteInterceptor : SaveChangesInterceptor
+    {
+        private const string BumpRevisions = "UPDATE \"" + IdentityIamEfModule.UserTableName + "\" SET \"Revision\" = \"Revision\" + 1";
+
+        public bool Fired { get; private set; }
+
+        public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
+            DbContextEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            var context = eventData.Context!;
+            if (!Fired && context.ChangeTracker.Entries<UserEntity>().Any(entry => entry.State == EntityState.Modified))
+            {
+                Fired = true;
+                await context.Database.ExecuteSqlRawAsync(BumpRevisions, cancellationToken);
+            }
+
+            return result;
+        }
+    }
 
     /// <summary>Compares records by value, including the contents of their role and permission sets.</summary>
     private sealed class UserRecordComparer : IEqualityComparer<UserRecord>
