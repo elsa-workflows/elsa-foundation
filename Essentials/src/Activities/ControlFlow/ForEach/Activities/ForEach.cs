@@ -37,6 +37,7 @@ namespace Elsa.Activities.ForEach.Activities;
 /// design-side structure handler references <c>Elsa.Workflows.Design.Core</c>.
 /// </remarks>
 [RefusesSecretBinding(nameof(Collection), SecretBindingRefusalReason.PersistedByActivity)]
+[Activity(Icon = "ListRestart")]
 [ActivityStructure("elsa.foreach.structure", "1.0.0")]
 [ActivityChildSlot("ForEach.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]

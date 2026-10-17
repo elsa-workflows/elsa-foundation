@@ -24,6 +24,7 @@ namespace Elsa.Activities.Graph.Runtime.Activities;
 /// See <c>specs/237-graph-boundary-completion/contracts/complete-activity.md</c> for the emitter contract.
 /// </para>
 /// </remarks>
+[Activity(Icon = "CircleCheck")]
 public sealed class Complete : StructuralActivity, IRuntimeStructuralActivity
 {
     /// <summary>The fault code when <see cref="Outcome"/> is blank at run time.</summary>

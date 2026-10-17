@@ -56,6 +56,7 @@ namespace Elsa.Activities.Do.Activities;
 /// completes, because the post-completion re-evaluation reads <c>false</c>.
 /// </para>
 /// </remarks>
+[Activity(Icon = "RotateCcw")]
 [ActivityStructure("elsa.do.structure", "1.0.0")]
 [ActivityChildSlot("Do.Body", "body", "Body", ActivityChildSlotCardinalities.Single)]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]

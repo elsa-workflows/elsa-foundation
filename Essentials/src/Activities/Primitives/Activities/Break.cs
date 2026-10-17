@@ -37,6 +37,7 @@ namespace Elsa.Activities.Primitives.Activities;
 // re-running it on segment replay is indistinguishable from running it once. It was the first shipped leaf marked
 // (docs/reports/execution-model-comparison-2026-08.md); #2581 marked the other replay-safe primitives.
 [ActivityOutcome(ActivityOutcomes.Break)]
+[Activity(Icon = "LogOut")]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class Break : Activity<ActivityUnit>
 {
