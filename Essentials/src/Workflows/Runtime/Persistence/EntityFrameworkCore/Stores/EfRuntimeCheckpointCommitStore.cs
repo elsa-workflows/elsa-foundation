@@ -180,6 +180,12 @@ public sealed class EfRuntimeCheckpointCommitStore(
                     touchedTestScopes,
                     writeCancellationToken);
 
+                await EfRuntimeCheckpointBackgroundActivityParticipantStaging.StageAsync(
+                    context,
+                    commit,
+                    scope,
+                    writeCancellationToken);
+
                 await EfRuntimeCheckpointOutboxParticipantStaging.StageAsync(
                     context,
                     commit,

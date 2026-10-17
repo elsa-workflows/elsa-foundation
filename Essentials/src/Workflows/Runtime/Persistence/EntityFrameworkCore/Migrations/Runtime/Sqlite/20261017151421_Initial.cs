@@ -127,6 +127,33 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 });
 
             migrationBuilder.CreateTable(
+                name: "elsa_runtime_background_activity_work",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
+                    ScopeKey = table.Column<string>(type: "TEXT", maxLength: 684, nullable: false),
+                    ScopeKeyHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
+                    WorkflowExecutionId = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
+                    WorkflowExecutionIdHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
+                    ActivityExecutionId = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
+                    ActivityExecutionIdHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
+                    WorkId = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
+                    WorkIdHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
+                    Status = table.Column<int>(type: "INTEGER", nullable: false),
+                    RecordedAtUtcTicks = table.Column<long>(type: "INTEGER", nullable: false),
+                    UpdatedAtUtcTicks = table.Column<long>(type: "INTEGER", nullable: false),
+                    ClaimableAtUtcTicks = table.Column<long>(type: "INTEGER", nullable: false),
+                    ClaimableIsEligible = table.Column<bool>(type: "INTEGER", nullable: false),
+                    ContentJson = table.Column<string>(type: "TEXT", nullable: false),
+                    SchemaVersion = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
+                    Revision = table.Column<long>(type: "INTEGER", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_elsa_runtime_background_activity_work", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "elsa_runtime_bookmark_state",
                 columns: table => new
                 {
@@ -425,6 +452,13 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     ActivationIdOrderKey = table.Column<string>(type: "TEXT", maxLength: 516, nullable: true),
                     SlotId = table.Column<string>(type: "TEXT", nullable: true),
                     IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
+                    ClaimOwnerId = table.Column<string>(type: "TEXT", maxLength: 344, nullable: true),
+                    ClaimToken = table.Column<long>(type: "INTEGER", nullable: false),
+                    ClaimedAtUtcTicks = table.Column<long>(type: "INTEGER", nullable: true),
+                    ClaimedAtOffsetMinutes = table.Column<int>(type: "INTEGER", nullable: true),
+                    VisibleAfterUtcTicks = table.Column<long>(type: "INTEGER", nullable: true),
+                    VisibleAfterOffsetMinutes = table.Column<int>(type: "INTEGER", nullable: true),
+                    FailureCount = table.Column<int>(type: "INTEGER", nullable: false),
                     ContentJson = table.Column<string>(type: "TEXT", nullable: false),
                     SchemaVersion = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
                     Revision = table.Column<long>(type: "INTEGER", nullable: false)
@@ -441,7 +475,7 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                     Id = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                     ScopeKey = table.Column<string>(type: "TEXT", maxLength: 684, nullable: false),
                     ScopeKeyHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    WorkflowExecutionId = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
+                    WorkflowExecutionId = table.Column<string>(type: "TEXT", maxLength: 344, nullable: false),
                     WorkflowExecutionIdHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                     WorkflowExecutionIdOrderKey = table.Column<string>(type: "TEXT", maxLength: 516, nullable: false),
                     WorkItemId = table.Column<string>(type: "TEXT", maxLength: 1200, nullable: false),
@@ -704,6 +738,27 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 });
 
             migrationBuilder.CreateTable(
+                name: "elsa_runtime_workflow_executable_root_write_lease",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
+                    ScopeKey = table.Column<string>(type: "TEXT", nullable: false),
+                    ScopeKeyHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
+                    ArtifactId = table.Column<string>(type: "TEXT", maxLength: 512, nullable: false),
+                    ArtifactIdHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
+                    LeaseId = table.Column<string>(type: "TEXT", nullable: false),
+                    Token = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
+                    ExpiresAtUtcTicks = table.Column<long>(type: "INTEGER", nullable: false),
+                    IncarnationId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
+                    Revision = table.Column<long>(type: "INTEGER", nullable: false),
+                    SchemaVersion = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_elsa_runtime_workflow_executable_root_write_lease", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "elsa_runtime_workflow_executable_source_reference",
                 columns: table => new
                 {
@@ -929,6 +984,37 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 name: "IX_elsa_runtime_activity_execution_state_ScopeKeyHash_WorkflowExecutionIdHash_ParentActivityExecutionIdHash",
                 table: "elsa_runtime_activity_execution_state",
                 columns: new[] { "ScopeKeyHash", "WorkflowExecutionIdHash", "ParentActivityExecutionIdHash" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_elsa_runtime_background_activity_work_SchemaVersion",
+                table: "elsa_runtime_background_activity_work",
+                column: "SchemaVersion");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_elsa_runtime_background_activity_work_ScopeKeyHash_ClaimableIsEligible_ClaimableAtUtcTicks_RecordedAtUtcTicks",
+                table: "elsa_runtime_background_activity_work",
+                columns: new[] { "ScopeKeyHash", "ClaimableIsEligible", "ClaimableAtUtcTicks", "RecordedAtUtcTicks" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_elsa_runtime_background_activity_work_ScopeKeyHash_Status_UpdatedAtUtcTicks",
+                table: "elsa_runtime_background_activity_work",
+                columns: new[] { "ScopeKeyHash", "Status", "UpdatedAtUtcTicks" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_elsa_runtime_background_activity_work_ScopeKeyHash_WorkflowExecutionIdHash_Status_UpdatedAtUtcTicks",
+                table: "elsa_runtime_background_activity_work",
+                columns: new[] { "ScopeKeyHash", "WorkflowExecutionIdHash", "Status", "UpdatedAtUtcTicks" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_elsa_runtime_background_activity_work_ScopeKeyHash_WorkflowExecutionIdHash_WorkIdHash",
+                table: "elsa_runtime_background_activity_work",
+                columns: new[] { "ScopeKeyHash", "WorkflowExecutionIdHash", "WorkIdHash" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_elsa_runtime_bookmark_state_route_convergence",
+                table: "elsa_runtime_bookmark_state",
+                columns: new[] { "ScopeKeyHash", "StimulusTypeLookupKey", "ExpiresAtUtcTicks", "StimulusLookupKey", "StimulusHash" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_elsa_runtime_bookmark_state_SchemaVersion",
@@ -1357,6 +1443,16 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_elsa_runtime_workflow_executable_root_write_lease_SchemaVersion",
+                table: "elsa_runtime_workflow_executable_root_write_lease",
+                column: "SchemaVersion");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_elsa_runtime_workflow_executable_root_write_lease_ScopeKeyHash_ArtifactIdHash_ArtifactId_ExpiresAtUtcTicks",
+                table: "elsa_runtime_workflow_executable_root_write_lease",
+                columns: new[] { "ScopeKeyHash", "ArtifactIdHash", "ArtifactId", "ExpiresAtUtcTicks" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_elsa_runtime_workflow_executable_source_reference_SchemaVersion",
                 table: "elsa_runtime_workflow_executable_source_reference",
                 column: "SchemaVersion");
@@ -1487,6 +1583,11 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
                 column: "SchemaVersion");
 
             migrationBuilder.CreateIndex(
+                name: "IX_elsa_runtime_trigger_binding_route_convergence",
+                table: "elsa_runtime_workflow_trigger_binding",
+                columns: new[] { "ScopeKeyHash", "StimulusTypeLookupKey", "IsActive", "StimulusLookupKey", "StimulusHash" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_elsa_runtime_workflow_trigger_binding_SchemaVersion",
                 table: "elsa_runtime_workflow_trigger_binding",
                 column: "SchemaVersion");
@@ -1535,6 +1636,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
             migrationBuilder.DropTable(
                 name: "elsa_runtime_activity_execution_state");
+
+            migrationBuilder.DropTable(
+                name: "elsa_runtime_background_activity_work");
 
             migrationBuilder.DropTable(
                 name: "elsa_runtime_bookmark_state");
@@ -1598,6 +1702,9 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Migrations.Runt
 
             migrationBuilder.DropTable(
                 name: "elsa_runtime_workflow_executable_coordination");
+
+            migrationBuilder.DropTable(
+                name: "elsa_runtime_workflow_executable_root_write_lease");
 
             migrationBuilder.DropTable(
                 name: "elsa_runtime_workflow_executable_source_reference");
