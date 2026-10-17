@@ -72,8 +72,14 @@ public sealed class ActivityProviderRegistry : IActivityProviderRegistry
         if (schemas.Any(string.IsNullOrWhiteSpace) || schemas.Distinct(StringComparer.Ordinal).Count() != schemas.Length ||
             !provider.SupportedManifestSchemas.SetEquals(schemas))
             throw new ArgumentException("Authoring manifest schemas must exactly match the provider's supported manifest schemas.", nameof(provider));
-        if (capabilities.ManifestSchemas.Any(x => x.MigratableFromSchemaVersions.Any(schema => !provider.SupportedManifestSchemas.Contains(schema))))
-            throw new ArgumentException("Authoring migration sources must reference a supported manifest schema.", nameof(provider));
+        if (capabilities.ManifestSchemas.Any(x =>
+                x.MigratableFromSchemaVersions.Any(schema => !provider.SupportedManifestSchemas.Contains(schema)) ||
+                x.MigratableFrom?.Any(source =>
+                    string.IsNullOrWhiteSpace(source.ProviderKey) ||
+                    string.IsNullOrWhiteSpace(source.SchemaVersion) ||
+                    (StringComparer.Ordinal.Equals(source.ProviderKey, provider.ProviderKey) &&
+                     !provider.SupportedManifestSchemas.Contains(source.SchemaVersion))) == true))
+            throw new ArgumentException("Authoring migration sources must be non-empty, and same-provider sources must reference a supported manifest schema.", nameof(provider));
         var outcomes = capabilities.ContractConstraints.RequiredOutcomes;
         if (outcomes.Any(x => string.IsNullOrWhiteSpace(x.ReferenceKey) || string.IsNullOrWhiteSpace(x.Name)) ||
             outcomes.Select(x => x.ReferenceKey).Distinct(StringComparer.Ordinal).Count() != outcomes.Count)
