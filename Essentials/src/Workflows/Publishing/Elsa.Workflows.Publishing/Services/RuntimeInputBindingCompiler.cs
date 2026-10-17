@@ -140,6 +140,26 @@ public sealed class RuntimeInputBindingCompiler(
         return CompileAuthored(nodeId, inputDefinition, state, DeclaredPolicy(inputDefinition));
     }
 
+    /// <summary>
+    /// Compiles an authored input on a published activity boundary. The boundary contract's storage-driver key
+    /// selects its value codec; it is not an external payload-storage profile. Authored per-binding storage policy
+    /// still flows through <see cref="CompileAuthored"/> and can strengthen the inline default.
+    /// </summary>
+    internal RuntimeInputBinding CompilePublishedBoundaryInput(
+        string nodeId,
+        ActivityInputContract contract,
+        ArgumentState state)
+    {
+        ArgumentNullException.ThrowIfNull(contract);
+        ArgumentNullException.ThrowIfNull(state);
+
+        return CompileAuthored(
+            nodeId,
+            ToInputDefinition(contract),
+            state,
+            ActivityValuePolicy.Default);
+    }
+
     public RuntimeInputBinding Compile(string nodeId, InputDefinition inputDefinition, ArgumentValue value) =>
         CompileBound(nodeId, inputDefinition, value, DeclaredPolicy(inputDefinition), conversion: null);
 
@@ -292,6 +312,22 @@ public sealed class RuntimeInputBindingCompiler(
         IsRequired: contract.IsRequired,
         DefaultValue: contract.DefaultValue,
         DefaultSyntax: contract.HasDefault ? LiteralExpressionType : null);
+
+    private static InputDefinition ToInputDefinition(ActivityInputContract contract) => new(
+        contract.ReferenceKey,
+        contract.Name,
+        contract.Type,
+        contract.StorageDriverKey,
+        contract.DisplayName ?? contract.Name,
+        contract.Category,
+        contract.IsNullable,
+        Description: contract.Description,
+        Order: contract.Order,
+        UiHint: contract.UiHint,
+        UISpecifications: contract.UiSpecifications,
+        IsRequired: contract.IsRequired,
+        DefaultValue: contract.Default?.Value,
+        DefaultSyntax: contract.Default?.Syntax);
 
     private static void AddBinding(
         IDictionary<string, RuntimeInputBinding> bindings,

@@ -481,6 +481,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
   const [incidentAssociationMessage, setIncidentAssociationMessage] = useState<string | null>(null);
   const [frames, setFrames] = useState<ScopeFrame[]>([]);
   const appliedInitialInspectorTab = useRef<InstanceInspectorTab | null>(null);
+  const appliedInitialActivityExecutionId = useRef<string | null>(null);
   const incidentNavigationRequest = useRef(0);
   const loadGeneration = useRef(0);
   const incidentActivityLookupSequence = useRef(0);
@@ -512,7 +513,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
     appliedInitialInspectorTab.current = initialInspectorTab;
     incidentNavigationRequest.current += 1;
     setActiveInspectorTab(initialInspectorTab);
-    if (initialInspectorTab === "issues") openInspector();
+    if (initialInspectorTab === "issues" || initialInspectorTab === "activity") openInspector();
   }, [initialInspectorTab, openInspector]);
   const instanceAction = findAiAction(ai, "weaver.workflows.explain-instance");
 
@@ -545,12 +546,33 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
               error => ({ sources: null, access: sourceAccessFromError(error) }))
           : Promise.resolve({ sources: null, access: "unavailable" }),
         supportsActivityExecutionInspection(context).then(
-          async supported => ({
-            supported,
-            ...await loadActiveIncidentActivitySummaries(
-              details,
-              supported ? activityExecutionId => getActivityExecutionInspection(context, workflowExecutionId, activityExecutionId) : null)
-          }),
+          async supported => {
+            const fetchInspection = supported
+              ? (activityExecutionId: string) => getActivityExecutionInspection(context, workflowExecutionId, activityExecutionId)
+              : null;
+            const summaries = await loadActiveIncidentActivitySummaries(details, fetchInspection);
+            const requestedActivityId = initialActivityExecutionId?.trim();
+            const alreadyLoaded = requestedActivityId && (
+              details.activities.some(activity => activity.activityExecutionId === requestedActivityId) ||
+              summaries.activities.some(activity => activity.activityExecutionId === requestedActivityId));
+            const incidentLookupAlreadyCoversRequest = requestedActivityId && (details.incidents ?? []).some(incident =>
+              isActiveIncident(incident) && readIncidentActivityExecutionId(incident) === requestedActivityId);
+            if (!fetchInspection || !requestedActivityId || alreadyLoaded || incidentLookupAlreadyCoversRequest) {
+              return { supported, ...summaries };
+            }
+
+            const requestedActivity = await loadExactIncidentActivitySummary(
+              workflowExecutionId,
+              requestedActivityId,
+              fetchInspection);
+            return {
+              supported,
+              ...summaries,
+              activities: requestedActivity.status === "found"
+                ? [...summaries.activities, requestedActivity.summary]
+                : summaries.activities
+            };
+          },
           async () => ({ supported: false, ...await loadActiveIncidentActivitySummaries(details, null) }))
       ]);
       if (generation !== loadGeneration.current) return;
@@ -629,7 +651,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
     setFrames(nextFrames);
   };
 
-  const focusNodePath = (nodeId: string | null) => {
+  const focusNodePath = useCallback((nodeId: string | null) => {
     if (!nodeId || !data?.definitionVersion?.state.rootActivity) return;
     const path = findNodeScopePath(
       data.definitionVersion.state.rootActivity,
@@ -641,7 +663,20 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
       data.activityCatalog
     );
     if (path) setFrames(path);
-  };
+  }, [data]);
+
+  useEffect(() => {
+    const requestedActivityExecutionId = initialActivityExecutionId?.trim();
+    if (!data || !requestedActivityExecutionId || appliedInitialActivityExecutionId.current === requestedActivityExecutionId) return;
+
+    const activity = associationActivities.find(item => item.activityExecutionId === requestedActivityExecutionId);
+    if (!activity) return;
+    appliedInitialActivityExecutionId.current = requestedActivityExecutionId;
+
+    const nodeId = findExecutableGraphNodeId(data.executableGraph, activity) ?? activity.authoredActivityId ?? activity.executableNodeId;
+    requestCanvasFocus(nodeId);
+    focusNodePath(nodeId);
+  }, [associationActivities, data, focusNodePath, initialActivityExecutionId]);
 
   const ensureIncidentActivityAssociation = useCallback(async (incident: IncidentStateSummary, isCurrent: () => boolean = () => true) => {
     const generation = loadGeneration.current;
@@ -2009,6 +2044,7 @@ export function WorkflowActivityExecutionDetails({
           expressionEditors={expressionEditors}
           focusInputKey={focusInputKey}
         />
+        <WorkflowActivityOutcomeEvidence state={currentInspectionState} />
         <WorkflowActivityValueEvidence
           state={currentInspectionState}
           subject="ActivityOutput"
@@ -2033,6 +2069,60 @@ export function WorkflowActivityExecutionDetails({
         </details>
       </section>
     </>
+  );
+}
+
+function WorkflowActivityOutcomeEvidence({ state }: { state: ActivityExecutionInspectionState }) {
+  if (state.status === "idle") return null;
+
+  if (state.status === "loading") {
+    return (
+      <section className="wf-instance-section">
+        <h4>Outcomes</h4>
+        <p>Loading runtime outcomes...</p>
+      </section>
+    );
+  }
+
+  if (state.status === "failed") {
+    return (
+      <section className="wf-instance-section">
+        <h4>Outcomes</h4>
+        <p>Runtime outcomes are unavailable.</p>
+        {state.error ? <p className="wf-instance-note">{state.error}</p> : null}
+      </section>
+    );
+  }
+
+  const outcomeNames = state.inspection?.outcomeNames ?? [];
+  if (outcomeNames.length === 0) {
+    return (
+      <section className="wf-instance-section">
+        <h4>Outcomes</h4>
+        <p>No runtime outcomes were recorded for this execution.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="wf-instance-section">
+      <header className="wf-runtime-evidence-heading">
+        <h4>
+          Outcomes
+          <span className="wf-runtime-evidence-count" aria-label={`${outcomeNames.length} outcomes`}>
+            {outcomeNames.length}
+          </span>
+        </h4>
+      </header>
+      <div className="wf-runtime-input-list" role="list">
+        {outcomeNames.map((outcomeName, index) => (
+          <div className="wf-runtime-input" role="listitem" key={`${outcomeName}:${index}`}>
+            <header><span><strong>{outcomeName}</strong></span></header>
+            <span className="wf-runtime-capture-mode">Outcome</span>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

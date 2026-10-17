@@ -16,14 +16,16 @@ import {
   RotateCcw
 } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { getActivityDefinitionVersion } from "../api/activityDesign";
 import {
   getActivityExecutionDescendants,
   getActivityExecutionInspection,
   getActivityExecutionLayout
 } from "../api/runtime";
+import { StudioLink } from "../StudioLink";
 import { observeReusableActivity } from "../reusableActivityObservability";
 import { runtimeValueTypeLabel } from "../runtimeValueFormatting";
-import { RuntimeValueEvidenceContent, RuntimeValueEvidenceResolutionProvider } from "./RuntimeValueEvidence";
+import { RuntimeValueEvidenceContent, RuntimeValueEvidenceResolutionProvider, runtimeValueContextId } from "./RuntimeValueEvidence";
 import {
   classifyBoundaryCursorProblem,
   emptyBoundaryEvidenceSnapshot,
@@ -380,7 +382,7 @@ export function ReusableBoundaryInspector({
       </nav>
 
       <div className="wf-boundary-summary" style={boundaryStyles.responsiveGrid}>
-        <BoundaryLifecycle inspection={activeFrame.inspection} />
+        <BoundaryLifecycle context={context} inspection={activeFrame.inspection} />
         <DescendantAggregate inspection={activeFrame.inspection} />
       </div>
 
@@ -463,7 +465,7 @@ export function ReusableBoundaryInspector({
   );
 }
 
-function BoundaryLifecycle({ inspection }: { inspection: ActivityExecutionInspection }) {
+function BoundaryLifecycle({ context, inspection }: { context: StudioEndpointContext; inspection: ActivityExecutionInspection }) {
   const boundary = inspection.boundary!;
   return (
     <section className="wf-boundary-layout wf-boundary-summary-card" aria-label="Boundary lifecycle">
@@ -475,6 +477,14 @@ function BoundaryLifecycle({ inspection }: { inspection: ActivityExecutionInspec
         <dd>{boundary.definitionId}</dd>
         <dt>Exact version</dt>
         <dd>{boundary.version} <small>{boundary.definitionVersionId}</small></dd>
+        <dt>Source</dt>
+        <dd>
+          <AuthorizedBoundaryDefinitionLink
+            context={context}
+            definitionId={boundary.definitionId}
+            versionId={boundary.definitionVersionId}
+          />
+        </dd>
         <dt>Execution scope</dt>
         <dd>{boundary.executionScopeId}</dd>
         <dt>Attempt</dt>
@@ -482,6 +492,51 @@ function BoundaryLifecycle({ inspection }: { inspection: ActivityExecutionInspec
       </dl>
     </section>
   );
+}
+
+function AuthorizedBoundaryDefinitionLink({
+  context,
+  definitionId,
+  versionId
+}: {
+  context: StudioEndpointContext;
+  definitionId: string;
+  versionId: string;
+}) {
+  const contextIdentity = runtimeValueContextId(context);
+  const [resolved, setResolved] = useState<{ contextIdentity: number | string; definitionId: string; versionId: string } | null>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "unavailable">("loading");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setResolved(null);
+    setStatus("loading");
+
+    void Promise.resolve()
+      .then(() => getActivityDefinitionVersion(context, versionId, controller.signal))
+      .then(version => {
+        if (controller.signal.aborted) return;
+        if (version.versionId !== versionId || version.definition.definitionId !== definitionId) {
+          setStatus("unavailable");
+          return;
+        }
+        setResolved({ contextIdentity, definitionId: version.definition.definitionId, versionId: version.versionId });
+        setStatus("ready");
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setStatus("unavailable");
+      });
+
+    return () => controller.abort();
+  }, [context, contextIdentity, definitionId, versionId]);
+
+  if (status === "unavailable") return <span>Exact source link unavailable.</span>;
+  if (status === "loading" || !resolved || resolved.contextIdentity !== contextIdentity || resolved.definitionId !== definitionId || resolved.versionId !== versionId) {
+    return <span role="status">Resolving exact source…</span>;
+  }
+
+  const href = `/workflows/activity-definitions?definition=${encodeURIComponent(resolved.definitionId)}&section=versions&version=${encodeURIComponent(resolved.versionId)}`;
+  return <StudioLink href={href}>Open exact Activity Definition</StudioLink>;
 }
 
 function DescendantAggregate({ inspection }: { inspection: ActivityExecutionInspection }) {

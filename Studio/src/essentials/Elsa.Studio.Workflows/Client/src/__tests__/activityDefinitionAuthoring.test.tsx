@@ -743,6 +743,49 @@ describe("Activity Definition authoring", () => {
     await recovered.unmount();
   }, 12_000);
 
+  it("reopens a published draft read-only and clears recovery for its immutable revision", async () => {
+    const runtime: StudioRuntimeSettings = {
+      identity: { tenantId: "tenant-1", subject: "author-1" },
+      activityDefinitions: { localRecovery: { enabled: true, ttlMinutes: 30 } }
+    };
+    createActivityDefinitionRecoveryStore(runtime.activityDefinitions?.localRecovery, runtime.identity)!
+      .write(fullDraft({ revision: 3, payload: { edit: 9 } }));
+    const putJson = vi.fn();
+    const postJson = vi.fn();
+    const rendered = renderPage({
+      runtime,
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      contributions: [editingContribution()],
+      putJson,
+      postJson,
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3, status: "Published", payload: { edit: 0 } });
+        if (url === "/design/activities/definitions/activity-def-1") return managementDefinition();
+        if (url.startsWith("/design/activities/definitions/activity-def-1/drafts?")) return page([]);
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Published revision 3 is read-only.");
+    await waitFor(() => expect(window.localStorage.length).toBe(0));
+    expect(rendered.container.textContent).not.toContain("Unsaved local recovery available");
+    expect((buttonByText(rendered.container, "Activity Definition") as HTMLButtonElement).disabled).toBe(false);
+    expect((buttonByText(rendered.container, "Edit implementation 0") as HTMLButtonElement).disabled).toBe(true);
+    expect((buttonByText(rendered.container, "Migrate provider") as HTMLButtonElement).disabled).toBe(true);
+    expect((buttonByText(rendered.container, "Test Run") as HTMLButtonElement).disabled).toBe(true);
+    expect((buttonByText(rendered.container, "Validate saved revision") as HTMLButtonElement).disabled).toBe(true);
+    expect((buttonByText(rendered.container, "Save now") as HTMLButtonElement).disabled).toBe(true);
+    expect((buttonByText(rendered.container, "Prepare publication") as HTMLButtonElement).disabled).toBe(true);
+    expect(rendered.container.querySelector<HTMLInputElement>(".ad-draft-label input")?.disabled).toBe(true);
+
+    click(buttonByText(rendered.container, "Code"));
+    expect(rendered.container.querySelector<HTMLElement>(".studio-code-editor")?.dataset.readonly).toBe("true");
+    expect(putJson).not.toHaveBeenCalled();
+    expect(postJson).not.toHaveBeenCalled();
+    await rendered.unmount();
+  });
+
   it("creates a parallel draft when local recovery is based on an older server revision", async () => {
     const runtime: StudioRuntimeSettings = {
       identity: { tenantId: "tenant-1", subject: "author-1" },
@@ -1458,6 +1501,7 @@ describe("Activity Definition publication", () => {
     change(controlByLabel<HTMLInputElement>(rendered.container, "Publication version"), "3.2.1");
     click(buttonByText(rendered.container, "Publish 3.2.1"));
     await waitForText(rendered.container, "Published immutable version 3.2.1");
+    await waitForText(rendered.container, "Published revision 4 is read-only.");
     expect(rendered.container.textContent).toContain("existing recommended version was not moved");
     expect(postJson.mock.calls.filter(([url]) => String(url).endsWith("/publish"))).toHaveLength(1);
     expect(postJson).toHaveBeenCalledWith("/design/activities/drafts/activity-draft-1/publish", expect.objectContaining({
@@ -1466,6 +1510,11 @@ describe("Activity Definition publication", () => {
       version: "3.2.1",
       reviewToken: "sha256:review"
     }));
+    expect((buttonByText(rendered.container, "Activity Definition") as HTMLButtonElement).disabled).toBe(false);
+    expect((buttonByText(rendered.container, "Edit implementation 1") as HTMLButtonElement).disabled).toBe(true);
+    expect((buttonByText(rendered.container, "Test Run") as HTMLButtonElement).disabled).toBe(true);
+    expect((buttonByText(rendered.container, "Validate saved revision") as HTMLButtonElement).disabled).toBe(true);
+    expect((buttonByText(rendered.container, "Save now") as HTMLButtonElement).disabled).toBe(true);
     await rendered.unmount();
   });
 
@@ -1510,6 +1559,94 @@ describe("Activity Definition publication", () => {
     expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent === "Publish 1.0.0")).toBe(false);
     // The definition management view is re-fetched so downstream panels reflect the new version.
     await waitFor(() => expect(postJson.mock.calls.filter(([url]) => String(url).endsWith("/publish"))).toHaveLength(1));
+    await rendered.unmount();
+  });
+
+  it("locks the reviewed draft through ambiguous publication and keeps it locked until receipt reconciliation", async () => {
+    let resolvePublish: ((value: unknown) => void) | null = null;
+    let publishRequest: { version: string; idempotencyKey: string; expectedDraftRevision: number; expectedDefinitionHeadVersionId?: string | null; reviewToken: string } | null = null;
+    let receiptCalls = 0;
+    const updateCapture: { current: StudioActivityDefinitionImplementationEditorProps["onChange"] | null } = { current: null };
+    const putJson = vi.fn(async (_url: string, body: unknown) => fullDraft({
+      revision: 4,
+      payload: (body as { provider: { payload: unknown } }).provider.payload
+    }));
+    const postJson = vi.fn(async (url: string, body: unknown) => {
+      if (url.endsWith("/publication-preflight")) {
+        return publicationPreflight({ draftRevision: (body as { expectedDraftRevision: number }).expectedDraftRevision });
+      }
+      if (url.endsWith("/publish")) {
+        publishRequest = body as typeof publishRequest;
+        return await new Promise(resolve => { resolvePublish = resolve; });
+      }
+      throw new Error(`Unexpected POST ${url}`);
+    });
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      contributions: [editingContribution(updateCapture)],
+      putJson,
+      postJson,
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return fullDraft({ revision: 3, payload: { edit: 0 } });
+        if (url === "/design/activities/definitions/activity-def-1") return managementDefinition();
+        if (url.startsWith("/design/activities/publications/")) {
+          receiptCalls += 1;
+          return publicationReceipt({
+            idempotencyKey: publishRequest!.idempotencyKey,
+            expectedDraftRevision: publishRequest!.expectedDraftRevision,
+            expectedDefinitionHeadVersionId: publishRequest!.expectedDefinitionHeadVersionId ?? null,
+            reviewToken: publishRequest!.reviewToken,
+            requestedVersion: publishRequest!.version
+          });
+        }
+        throw new Error(`Unexpected GET ${url}`);
+      }
+    });
+
+    await waitForText(rendered.container, "Saved revision 3");
+    click(buttonByText(rendered.container, "Edit implementation 0"));
+    click(buttonByText(rendered.container, "Prepare publication"));
+    await waitFor(() => expect(postJson).toHaveBeenCalledWith(
+      "/design/activities/drafts/activity-draft-1/publication-preflight",
+      { expectedDraftRevision: 4, expectedDefinitionHeadVersionId: null }
+    ));
+    await waitForText(rendered.container, "Minimum valid version: 1.0.0");
+    click(buttonByText(rendered.container, "Publish 1.0.0"));
+    await waitForText(rendered.container, "Publishing atomically…");
+    await waitFor(() => expect(publishRequest).not.toBeNull());
+
+    const publishBody = putJson.mock.calls[0][1] as { provider: { payload: { edit: number } } };
+    expect(publishBody.provider.payload.edit).toBe(1);
+    expect((buttonByText(rendered.container, "Edit implementation 1") as HTMLButtonElement).disabled).toBe(true);
+    expect((buttonByText(rendered.container, "Migrate provider") as HTMLButtonElement).disabled).toBe(true);
+    expect((buttonByText(rendered.container, "Test Run") as HTMLButtonElement).disabled).toBe(true);
+    expect((buttonByText(rendered.container, "Validate saved revision") as HTMLButtonElement).disabled).toBe(true);
+    expect((buttonByText(rendered.container, "Save now") as HTMLButtonElement).disabled).toBe(true);
+
+    flushSync(() => updateCapture.current?.({ payload: { edit: 2 }, layout: [] }));
+    expect(buttonByText(rendered.container, "Edit implementation 1")).toBeTruthy();
+    expect(putJson).toHaveBeenCalledTimes(1);
+
+    resolvePublish!(publicationReceipt({
+      idempotencyKey: publishRequest!.idempotencyKey,
+      expectedDraftRevision: publishRequest!.expectedDraftRevision,
+      expectedDefinitionHeadVersionId: publishRequest!.expectedDefinitionHeadVersionId ?? null,
+      reviewToken: publishRequest!.reviewToken,
+      requestedVersion: publishRequest!.version,
+      status: "OutcomeUnknown"
+    }));
+    await waitForText(rendered.container, "not yet authoritative");
+    expect((buttonByText(rendered.container, "Edit implementation 1") as HTMLButtonElement).disabled).toBe(true);
+    expect((buttonByText(rendered.container, "Test Run") as HTMLButtonElement).disabled).toBe(true);
+    expect(controlByLabel<HTMLInputElement>(rendered.container, "Publication version").disabled).toBe(true);
+    click(buttonByText(rendered.container, "Reconcile authoritative status"));
+    await waitForText(rendered.container, "Published immutable version 1.0.0");
+    expect(receiptCalls).toBe(1);
+    expect(putJson).toHaveBeenCalledTimes(1);
+    expect(buttonByText(rendered.container, "Edit implementation 1")).toBeTruthy();
+    expect((buttonByText(rendered.container, "Edit implementation 1") as HTMLButtonElement).disabled).toBe(true);
+    expect(rendered.container.textContent).toContain("Published revision 4 is read-only.");
     await rendered.unmount();
   });
 
@@ -1813,12 +1950,13 @@ function graphContribution(providerSchemaVersion = "1"): StudioActivityDefinitio
   };
 }
 
-function editingContribution(): StudioActivityDefinitionImplementationEditorContribution {
+function editingContribution(onChangeCapture?: { current: StudioActivityDefinitionImplementationEditorProps["onChange"] | null }): StudioActivityDefinitionImplementationEditorContribution {
   return {
     ...graphContribution(),
-    component: ({ value, onChange }: StudioActivityDefinitionImplementationEditorProps) => {
+    component: ({ value, onChange, readOnly }: StudioActivityDefinitionImplementationEditorProps) => {
+      if (onChangeCapture) onChangeCapture.current = onChange;
       const payload = value.payload as { edit?: number };
-      return <button type="button" onClick={() => onChange({ ...value, payload: { edit: (payload.edit ?? 0) + 1 } })}>Edit implementation {payload.edit ?? 0}</button>;
+      return <button type="button" disabled={readOnly} onClick={() => onChange({ ...value, payload: { edit: (payload.edit ?? 0) + 1 } })}>Edit implementation {payload.edit ?? 0}</button>;
     }
   };
 }
@@ -1995,14 +2133,14 @@ function draftSummary({ providerSchemaVersion = "1" }: { providerSchemaVersion?:
   };
 }
 
-function fullDraft(overrides: Partial<{ draftId: string; revision: number; payload: unknown; providerSchemaVersion: string }> = {}): ActivityDefinitionDraftView {
+function fullDraft(overrides: Partial<{ draftId: string; revision: number; status: string; payload: unknown; providerSchemaVersion: string }> = {}): ActivityDefinitionDraftView {
   return {
     draftId: overrides.draftId ?? "activity-draft-1",
     definitionId: "activity-def-1",
     tenantId: "tenant-1",
     revision: overrides.revision ?? 1,
     sourceVersionId: null,
-    status: "active",
+    status: overrides.status ?? "active",
     contract: { contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [{ referenceKey: "done", name: "Done", isEmitted: true, description: null }] },
     provider: {
       providerKey: "elsa.activity-graph",

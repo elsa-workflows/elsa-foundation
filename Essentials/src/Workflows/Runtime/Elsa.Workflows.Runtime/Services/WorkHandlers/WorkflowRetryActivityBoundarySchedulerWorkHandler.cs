@@ -85,6 +85,7 @@ public sealed class WorkflowRetryActivityBoundarySchedulerWorkHandler(
         var provenanceMetadata = prior.Provenance.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
         provenanceMetadata[RuntimeMetadataKeys.RetrySourceActivityExecutionId] = prior.Execution.ActivityExecutionId;
         provenanceMetadata[RuntimeMetadataKeys.RetryReason] = command.Reason;
+        var enclosingExecutionScopeId = prior.EnclosingExecutionScopeId ?? newActivityExecutionId;
         var provenance = ActivitySchedulingProvenance.From(
             workItem.WorkflowExecutionId,
             prior.ParentActivityExecutionId,
@@ -92,7 +93,7 @@ public sealed class WorkflowRetryActivityBoundarySchedulerWorkHandler(
             prior.BranchId,
             prior.IterationId,
             prior.Provenance.ExecutionPathId,
-            newActivityExecutionId,
+            enclosingExecutionScopeId,
             "activity-boundary-retry",
             provenanceMetadata,
             attempt);
@@ -117,7 +118,7 @@ public sealed class WorkflowRetryActivityBoundarySchedulerWorkHandler(
             JsonSerializer.SerializeToElement(schedulePayload),
             provenanceMetadata,
             workItem.EnvelopeMetadata,
-            newActivityExecutionId,
+            enclosingExecutionScopeId,
             attempt);
         var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
         {

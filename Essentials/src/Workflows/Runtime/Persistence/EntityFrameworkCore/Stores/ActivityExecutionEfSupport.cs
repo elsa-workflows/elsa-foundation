@@ -62,6 +62,7 @@ internal static class ActivityExecutionEfSupport
         ValidateIdentityLength(state.Execution.WorkflowExecutionId, nameof(state.Execution.WorkflowExecutionId));
         ValidateIdentityLength(state.Execution.ActivityExecutionId, nameof(state.Execution.ActivityExecutionId));
         ValidateIdentityLength(state.ExecutionScopeId, nameof(state.ExecutionScopeId));
+        ValidateIdentityLength(state.EnclosingExecutionScopeId, nameof(state.EnclosingExecutionScopeId));
         ValidateIdentityLength(state.Provenance.ExecutionScopeId, nameof(state.Provenance.ExecutionScopeId));
     }
 
@@ -93,6 +94,7 @@ internal static class ActivityExecutionEfSupport
         ValidateIdentityLength(projection.WorkflowExecutionId, nameof(projection.WorkflowExecutionId));
         ValidateIdentityLength(projection.ActivityExecutionId, nameof(projection.ActivityExecutionId));
         ValidateIdentityLength(projection.ExecutionScopeId, nameof(projection.ExecutionScopeId));
+        ValidateIdentityLength(projection.EnclosingExecutionScopeId, nameof(projection.EnclosingExecutionScopeId));
         ValidateIdentityLength(projection.Provenance.ExecutionScopeId, nameof(projection.Provenance.ExecutionScopeId));
     }
 

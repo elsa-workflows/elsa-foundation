@@ -174,6 +174,11 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         var executionScopeId = opensExecutionScope
             ? schedulePayload.ActivityExecutionId
             : provenance.ExecutionScopeId;
+        var enclosingExecutionScopeId = opensExecutionScope &&
+                                        provenance.ExecutionScopeId is { } enclosingScopeId &&
+                                        !StringComparer.Ordinal.Equals(enclosingScopeId, schedulePayload.ActivityExecutionId)
+            ? enclosingScopeId
+            : null;
         if (opensExecutionScope)
             provenance = provenance with { ExecutionScopeId = executionScopeId };
         var execution = new ActivityExecution(
@@ -231,6 +236,7 @@ public sealed class WorkflowScheduleActivitySchedulerWorkHandler : IWorkflowSche
         {
             IterationFrameRequest = schedulePayload.IterationFrame,
             ExecutionScopeId = executionScopeId,
+            EnclosingExecutionScopeId = enclosingExecutionScopeId,
             Attempt = provenance.Attempt
         };
     }

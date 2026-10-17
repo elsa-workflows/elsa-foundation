@@ -373,10 +373,11 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
             return;
         }
 
+        var completedValueSnapshots = valueSnapshots.Concat(containerVariableSnapshots).ToArray();
         await StructuralParentEvaluationSupport.CommitCompletedParentActivityAsync(
             checkpointCommitter, inspectionAccumulator, TimeProvider, NewCommitSource(workItem, payload, payload.Reason), completedParentState,
             SchedulerWorkHandlerHelpers.ReadCompletionOutcomeNames(completedParentState, skippedSubStatus: null), subtreeCancellationPlans, parentNotificationWorkItems,
-            containerVariableSnapshots, completionDurableValueChanges, completionWorkflowVariableWriteBack, cancellationToken);
+            completedValueSnapshots, completionDurableValueChanges, completionWorkflowVariableWriteBack, cancellationToken);
     }
 
     private async ValueTask RecordParentFaultAsync(
