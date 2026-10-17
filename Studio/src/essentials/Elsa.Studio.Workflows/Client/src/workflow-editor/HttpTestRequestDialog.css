@@ -319,3 +319,24 @@
     flex-basis: auto;
   }
 }
+
+.wf-http-test-body-editor .studio-code-editor {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.wf-http-test-body-editor .studio-code-editor-header code {
+  display: none;
+}
+
+.wf-http-test-body-editor .cm-scroller {
+  max-height: 280px;
+  overflow: auto;
+}
+
+.wf-http-test-body-editor .cm-content {
+  min-height: 180px;
+}

@@ -124,6 +124,57 @@ describe("HTTP test request dialog", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it("changes rich syntax without replacing the authored request body", async () => {
+    advertiseWorkflowHttpBasePath();
+    vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
+    vi.mocked(getExecutableInputSources).mockResolvedValue(publishedEndpointInputs());
+    const container = await renderDialog();
+    await waitFor(() => expect(container.querySelector(".cm-content")).not.toBeNull());
+    const editor = () => container.querySelector<HTMLElement>("[data-studio-code-editor]")!;
+    const body = container.querySelector(".cm-content")!.textContent;
+    expect(editor().dataset.language).toBe("json");
+    expect(body).toContain("Ada Lovelace");
+    const contentType = container.querySelector<HTMLInputElement>("input[role='combobox']")!;
+    for (const [type, language] of [["application/vnd.acme+json; charset=utf-8", "json"], ["text/html", "html"], ["application/soap+xml", "xml"], ["application/unknown", "plaintext"]]) {
+      await changeInput(contentType, type);
+      await waitFor(() => expect(editor().dataset.language).toBe(language));
+      expect(container.querySelector(".cm-content")!.textContent).toBe(body);
+    }
+    expect(requestResponse).not.toHaveBeenCalled();
+  });
+
+  it("lets the rich editor handle Escape without closing the request dialog", async () => {
+    advertiseWorkflowHttpBasePath();
+    vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
+    vi.mocked(getExecutableInputSources).mockResolvedValue(publishedEndpointInputs());
+    const onClose = vi.fn();
+    const container = await renderDialog(onClose);
+    await waitFor(() => expect(container.querySelector(".cm-content")).not.toBeNull());
+    const content = container.querySelector<HTMLElement>(".cm-content")!;
+    const escape = new KeyboardEvent("keydown", { key: "Escape", keyCode: 27, bubbles: true, cancelable: true });
+    flushSync(() => content.dispatchEvent(escape));
+    expect(escape.defaultPrevented).toBe(true);
+    expect(onClose).not.toHaveBeenCalled();
+    await click(container.querySelector<HTMLButtonElement>("button[aria-label='Close test request']")!);
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it.each(["GET", "HEAD"])("keeps the request body read-only and omits it for %s", async method => {
+    advertiseWorkflowHttpBasePath();
+    vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
+    vi.mocked(getExecutableInputSources).mockResolvedValue(publishedEndpointInputs(method));
+    requestResponse.mockResolvedValue(new Response("ok", { status: 200 }));
+    const container = await renderDialog();
+    await waitFor(() => expect(container.querySelector(".cm-content")).not.toBeNull());
+    expect(container.querySelector("[data-studio-code-editor]")?.getAttribute("data-readonly")).toBe("true");
+    expect(container.querySelector(".cm-content")?.getAttribute("contenteditable")).toBe("false");
+    expect(container.querySelector<HTMLInputElement>("input[role='combobox']")!.disabled).toBe(true);
+    await click(container.querySelector<HTMLButtonElement>("button[type='submit']")!);
+    await waitFor(() => expect(requestResponse).toHaveBeenCalledOnce());
+    expect(requestResponse.mock.calls[0][1]?.body).toBeUndefined();
+    expect(new Headers(requestResponse.mock.calls[0][1]?.headers).has("Content-Type")).toBe(false);
+  });
+
   it("preserves an error response body instead of turning non-2xx status into a client exception", async () => {
     advertiseWorkflowHttpBasePath();
     vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
@@ -316,7 +367,7 @@ function publishedExecutable(): WorkflowExecutableDetails {
   };
 }
 
-function publishedEndpointInputs(): WorkflowExecutableInputSources {
+function publishedEndpointInputs(method = "POST"): WorkflowExecutableInputSources {
   return {
     artifactId: "artifact-1",
     sourceReferenceId: "reference-1",
@@ -324,7 +375,7 @@ function publishedEndpointInputs(): WorkflowExecutableInputSources {
     authoredInputs: [],
     compiledInputs: [
       { executableNodeId: "endpoint-exec", accessState: "allowed", binding: { inputName: "Path", inputKey: "Path", source: "Literal", literalValue: "orders/{id:int}" } },
-      { executableNodeId: "endpoint-exec", accessState: "allowed", binding: { inputName: "SupportedMethods", inputKey: "SupportedMethods", source: "Literal", literalValue: ["POST"] } },
+      { executableNodeId: "endpoint-exec", accessState: "allowed", binding: { inputName: "SupportedMethods", inputKey: "SupportedMethods", source: "Literal", literalValue: [method] } },
       { executableNodeId: "endpoint-exec", accessState: "allowed", binding: { inputName: "ResponseMode", inputKey: "ResponseMode", source: "Literal", literalValue: 0 } }
     ]
   };

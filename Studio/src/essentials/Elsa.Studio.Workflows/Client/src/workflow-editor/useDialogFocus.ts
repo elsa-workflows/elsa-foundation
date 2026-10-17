@@ -33,6 +33,7 @@ export function useDialogFocus(
       else dialog?.focus();
     }) : null;
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (event.key === "Escape" && onEscapeRef.current) {
         event.preventDefault();
         onEscapeRef.current();

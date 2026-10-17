@@ -1,4 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  StudioCodeEditor,
+  createStudioCodeEditorSession,
+  clearStudioCodeEditorSession,
+  jsonLanguageAdapter,
+  xmlLanguageAdapter,
+  htmlLanguageAdapter,
+  plainTextLanguageAdapter,
+  javaScriptLanguageAdapter
+} from "@elsa-workflows/studio-code-editor";
+import { getHttpContentTypeLanguage } from "./httpContentTypeLanguage";
 import { AlertTriangle, LoaderCircle, Send, X } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { EditableCombobox } from "../EditableCombobox";
@@ -53,6 +64,11 @@ export function HttpTestRequestDialog({
   authoredActivityId: string;
   onClose(): void;
 }) {
+  const [bodyEditorSession] = useState(createStudioCodeEditorSession);
+  useEffect(() => () => {
+    // The child editor saves its state during cleanup; release it after that cleanup finishes.
+    queueMicrotask(() => clearStudioCodeEditorSession(bodyEditorSession));
+  }, [bodyEditorSession]);
   const dialogRef = useRef<HTMLElement>(null);
   const activeRequest = useRef<AbortController | null>(null);
   const sending = useRef(false);
@@ -64,6 +80,14 @@ export function HttpTestRequestDialog({
   const [method, setMethod] = useState("");
   const [requestBody, setRequestBody] = useState(exampleJson);
   const [contentType, setContentType] = useState("application/json");
+  const bodyLanguage = getHttpContentTypeLanguage(contentType);
+  const bodyLanguageAdapter = {
+    json: jsonLanguageAdapter,
+    xml: xmlLanguageAdapter,
+    html: htmlLanguageAdapter,
+    javascript: javaScriptLanguageAdapter,
+    plaintext: plainTextLanguageAdapter
+  }[bodyLanguage];
   const [requestError, setRequestError] = useState("");
   const [result, setResult] = useState<HttpTestResult | null>(null);
   const [isSending, setIsSending] = useState(false);
@@ -291,18 +315,19 @@ export function HttpTestRequestDialog({
                   onChange={setContentType}
                   spellCheck={false}
                 />
-              <label className="wf-form-field wf-http-test-json">
+              <div className="wf-form-field wf-http-test-body-editor">
                 <span>Request body</span>
-                <textarea
-                  aria-label="Request body"
-                  value={requestBody}
-                  rows={8}
-                  disabled={bodyDisabled || isSending}
-                  spellCheck={false}
-                  onChange={event => setRequestBody(event.target.value)}
+                <StudioCodeEditor
+                  ariaLabel="Request body"
+                  document={{ uri: "elsa://http-test/request-body", language: bodyLanguage, value: requestBody }}
+                  session={bodyEditorSession}
+                  languageAdapter={bodyLanguageAdapter}
+                  minHeight="180px"
+                  readOnly={bodyDisabled || isSending}
+                  onChange={next => setRequestBody(next.value)}
                 />
                 {bodyDisabled ? <small>GET and HEAD requests do not send a body.</small> : <small>You can edit this example to test your own request.</small>}
-              </label>
+              </div>
 
               <div className="wf-http-test-actions">
                 <button type="button" onClick={close} disabled={isSending}>Close</button>
