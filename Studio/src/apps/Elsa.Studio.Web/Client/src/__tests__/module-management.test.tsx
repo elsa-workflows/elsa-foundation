@@ -524,6 +524,95 @@ describe("module management page", () => {
     await unmount();
   });
 
+  it("adapts the Workbench registry shape into built-in and Nuplane Server rows", async () => {
+    const backendGetJson = vi.fn(async () => workbenchRegistry(true));
+    const { container, unmount } = await renderModuleManagementPage(stubApi({ backendGetJson }));
+
+    const serverTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Server");
+    expect(serverTab).toBeTruthy();
+    flushSync(() => serverTab!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    await flushPromises();
+
+    expect(activeGridPanel(container)?.textContent).toContain("Elsa.Workbench");
+    expect(Array.from(sourceNavigator(container)?.querySelectorAll(".modules-source-button em") ?? []).map(count => count.textContent)).toEqual(["1", "1"]);
+
+    await clickRowContaining(activeGridPanel(container), "Elsa.Workbench");
+    await clickInspectorTab(container, "Contributions");
+    expect(container.querySelector(".modules-inspector")?.textContent).toContain("Workflow Runtime");
+    expect(container.querySelector(".modules-inspector")?.textContent).toContain("feature");
+
+    await clickSourceButton(container, "Nuplane");
+    expect(activeGridPanel(container)?.textContent).toContain("Elsa.Samples.Nuplane.Activities");
+    expect(activeGridPanel(container)?.textContent).toContain("local-packages");
+    expect(activeGridPanel(container)?.textContent).not.toContain("Upload Packages");
+    expect(activeGridPanel(container)?.textContent).toContain("read-only in Studio");
+
+    await clickRowContaining(activeGridPanel(container), "Elsa.Samples.Nuplane.Activities");
+    await clickInspectorTab(container, "Package");
+    const inspector = container.querySelector(".modules-inspector")?.textContent ?? "";
+    expect(inspector).toContain("1.2.3");
+    expect(inspector).toContain("local-packages");
+    expect(inspector).toContain("/server/packages/Elsa.Samples.Nuplane.Activities/1.2.3");
+    expect(inspector).toContain("Elsa.Activities.Design.Core");
+    expect(container.textContent).not.toContain("Upload Packages");
+
+    await unmount();
+  });
+
+  it("adapts a built-in-only Workbench registry without classifying the host as a Nuplane package", async () => {
+    const backendGetJson = vi.fn(async () => workbenchRegistry(false));
+    const { container, unmount } = await renderModuleManagementPage(stubApi({ backendGetJson }));
+
+    const serverTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Server");
+    expect(serverTab).toBeTruthy();
+    flushSync(() => serverTab!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    await flushPromises();
+
+    expect(activeGridPanel(container)?.textContent).toContain("Elsa.Workbench");
+    expect(activeGridPanel(container)?.textContent).toContain("Server");
+    expect(Array.from(sourceNavigator(container)?.querySelectorAll(".modules-source-button em") ?? []).map(count => count.textContent)).toEqual(["1", "0"]);
+    expect(activeGridPanel(container)?.textContent).not.toContain("local-packages");
+
+    await clickRowContaining(activeGridPanel(container), "Elsa.Workbench");
+    await clickInspectorTab(container, "Overview");
+    const inspector = container.querySelector(".modules-inspector")?.textContent ?? "";
+    expect(inspector).toContain("OriginBuilt-in");
+    expect(inspector).toContain("Packagen/a");
+
+    await unmount();
+  });
+
+  it("fills duplicate package metadata from the Workbench module and deduplicates feature diagnostics", async () => {
+    const backendGetJson = vi.fn(async () => workbenchRegistry(true, true));
+    const { container, unmount } = await renderModuleManagementPage(stubApi({ backendGetJson }));
+
+    const serverTab = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Server");
+    expect(serverTab).toBeTruthy();
+    flushSync(() => serverTab!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    await flushPromises();
+    await clickSourceButton(container, "Nuplane");
+
+    expect(activeGridPanel(container)?.querySelectorAll(".studio-data-grid-row")).toHaveLength(1);
+    await clickRowContaining(activeGridPanel(container), "Elsa.Samples.Nuplane.Activities");
+    await clickInspectorTab(container, "Package");
+    const inspector = container.querySelector(".modules-inspector")?.textContent ?? "";
+    expect(inspector).toContain("1.2.3");
+    expect(inspector).toContain("local-packages");
+    expect(inspector).toContain("/server/packages/Elsa.Samples.Nuplane.Activities/1.2.3");
+    expect(inspector).toContain("Elsa.Activities.Design.Core");
+
+    await clickInspectorTab(container, "Manifest");
+    expect(container.querySelector(".modules-inspector")?.textContent).toContain("elsa-package");
+    expect(container.querySelector(".modules-inspector")?.textContent).toContain('"version": "1.2.3"');
+    await clickInspectorTab(container, "Diagnostics");
+    const diagnostics = Array.from(container.querySelectorAll(".modules-diagnostic-row"));
+    expect(diagnostics).toHaveLength(2);
+    expect(diagnostics.map(row => row.textContent).join(" ")).toContain("Feature load failed");
+    expect(diagnostics.map(row => row.textContent).join(" ")).toContain("Experimental feature warning");
+
+    await unmount();
+  });
+
   it("renders an explicit unavailable state on the Server tab when the bridge reports the backend is unreachable", async () => {
     // The bridge answers with an explicit unavailable status; the Server tab names the state instead of blanking.
     const bridgeRegistryGetJson = vi.fn(async () => bridgeRegistryEnvelope(null, "unreachable"));
@@ -787,6 +876,20 @@ async function clickRowContaining(section: Element | null, text: string) {
   await flushPromises();
 }
 
+async function clickInspectorTab(container: Element, text: string) {
+  const button = Array.from(container.querySelectorAll(".modules-inspector [role='tab'], .modules-inspector button"))
+    .find(candidate => candidate.textContent?.trim() === text);
+
+  if (!button) {
+    throw new Error(`Could not find inspector tab '${text}'.`);
+  }
+
+  flushSync(() => {
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  await flushPromises();
+}
+
 function studioRegistry() {
   return {
     host: { id: "studio", displayName: "Studio", runtime: "Elsa.Studio.Web", contentRootPath: "/studio" },
@@ -905,6 +1008,101 @@ function serverRegistry() {
     capabilities: { canUploadPackages: true, canManageFeeds: true, canReconcile: true, canPrunePackages: true, feedChangesRequireRestart: true },
     diagnostics: []
   };
+}
+
+function workbenchRegistry(includeNuplanePackage: boolean, includeDuplicatePackageMetadata = false) {
+  const builtIn = {
+    id: "Elsa.Workbench",
+    displayName: "Elsa.Workbench",
+    packageId: "Elsa.Workbench",
+    version: "",
+    sourceKind: "server",
+    feedName: "",
+    sourceName: "",
+    installPath: "",
+    status: "loaded",
+    compatibility: "compatible",
+    manifest: null,
+    dependencies: [],
+    features: [{
+      id: "WorkflowsRuntimeApi",
+      displayName: "Workflow Runtime",
+      enabled: true,
+      sourceKind: "cshells-feature",
+      diagnostics: []
+    }],
+    diagnostics: []
+  };
+  const nuplanePackage = {
+    id: "Elsa.Samples.Nuplane.Activities@1.2.3",
+    displayName: "Elsa.Samples.Nuplane.Activities",
+    packageId: "Elsa.Samples.Nuplane.Activities",
+    version: "1.2.3",
+    sourceKind: "package",
+    feedName: "local-packages",
+    sourceName: "local-packages",
+    installPath: "/server/packages/Elsa.Samples.Nuplane.Activities/1.2.3",
+    status: "loaded",
+    compatibility: "compatible",
+    manifest: {
+      kind: "elsa-package",
+      path: "/server/packages/Elsa.Samples.Nuplane.Activities/1.2.3/elsa-package.json",
+      content: { package: { id: "Elsa.Samples.Nuplane.Activities", version: "1.2.3" } },
+      text: null
+    },
+    dependencies: [{ id: "Elsa.Activities.Design.Core", versionRange: "[1.0.0, )", group: "net10.0", source: "nuspec" }],
+    features: [{
+      id: "NuplaneActivities",
+      displayName: "Nuplane Activities",
+      enabled: true,
+      sourceKind: "nuplane-feature",
+      diagnostics: includeDuplicatePackageMetadata
+        ? [
+            { source: "", status: "failed", reason: "Feature load failed" },
+            { source: "NuplaneActivities", status: "warning", reason: "Experimental feature warning" }
+          ]
+        : []
+    }],
+    diagnostics: includeDuplicatePackageMetadata
+      ? [{ source: "NuplaneActivities", status: "failed", reason: "Feature load failed" }]
+      : []
+  };
+
+  const registry = {
+    host: { id: "server", displayName: "Server", runtime: "Elsa.Workbench", contentRootPath: "/server" },
+    generatedAt: new Date().toISOString(),
+    modules: includeNuplanePackage ? [builtIn, nuplanePackage] : [builtIn],
+    dropFolderPackages: [],
+    feeds: [{
+      name: "local-packages",
+      directoryPath: "packages",
+      serviceIndex: null,
+      credentials: null,
+      includeAll: true,
+      includePatterns: ["*"],
+      directory: { watch: true, debounceWindow: "00:00:01" }
+    }],
+    retentionPolicy: { retainLastNVersions: 3, retainYoungerThanDays: 30, mode: "Automatic", protectLastKnownGood: true },
+    capabilities: { canUploadPackages: true, canManageFeeds: true, canReconcile: true, canPrunePackages: true, feedChangesRequireRestart: true },
+    diagnostics: []
+  };
+
+  if (includeDuplicatePackageMetadata) {
+    return {
+      ...registry,
+      packages: [{
+        id: "Elsa.Samples.Nuplane.Activities",
+        version: "1.2.3",
+        feedName: "",
+        sourceName: "",
+        installPath: "",
+        manifest: { kind: "elsa-package", path: "", content: null, text: null },
+        dependencies: []
+      }]
+    };
+  }
+
+  return registry;
 }
 
 async function renderModuleManagementPage(api: ElsaStudioModuleApi) {
