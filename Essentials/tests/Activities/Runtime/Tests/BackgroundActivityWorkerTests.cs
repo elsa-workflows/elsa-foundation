@@ -9,6 +9,7 @@ using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Serialization.SystemText;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Extensions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
@@ -138,10 +139,55 @@ public sealed class BackgroundActivityWorkerTests
         Assert.Null(await harness.Queue.DequeueAsync(harness.Request.WorkflowExecutionId));
     }
 
+    [Fact]
+    public async Task Marked_but_wrong_activated_type_is_disposed_without_running()
+    {
+        var alternateProbe = new Probe(_ => ActivityTransition.Complete(2));
+        await using var harness = await Harness.CreateAsync<int>(
+            new Probe(_ => ActivityTransition.Complete(1)), "1",
+            activationOverride: () => new AlternateProbeActivity<int>(alternateProbe));
+
+        await harness.RunAsync();
+
+        Assert.Equal(0, alternateProbe.Executions);
+        Assert.Equal(1, alternateProbe.Disposals);
+        Assert.Equal(BackgroundActivityWorkResultKind.Fault, harness.Store.Item!.Result!.Kind);
+        Assert.Contains("different type", harness.Store.Item.Result.Fault!.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Mismatched_pinned_executable_hash_is_rejected_before_activation()
+    {
+        var probe = new Probe(_ => ActivityTransition.Complete(1));
+        var identity = new WorkflowExecutableIdentity("artifact-1", "definition-1", "version-1", "1.0.0", "sha256:stale");
+        await using var harness = await Harness.CreateAsync<int>(probe, "1", requestIdentityOverride: identity);
+
+        await harness.RunAsync();
+
+        Assert.Equal(0, probe.Executions);
+        Assert.Equal(0, probe.Disposals);
+        Assert.Equal(BackgroundActivityWorkResultKind.Fault, harness.Store.Item!.Result!.Kind);
+        Assert.Contains("pinned executable artifact", harness.Store.Item.Result.Fault!.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Work_item_from_another_persistence_scope_is_not_visible_to_the_worker()
+    {
+        var probe = new Probe(_ => ActivityTransition.Complete(1));
+        await using var harness = await Harness.CreateAsync<int>(probe, "1");
+
+        await harness.Worker.ExecuteClaimAsync(new PersistenceScope("another-scope"), harness.Claim);
+
+        Assert.Equal(0, probe.Executions);
+        Assert.Equal(0, probe.Disposals);
+        Assert.Equal(BackgroundActivityWorkStatus.Claimed, harness.Store.Item!.Status);
+        Assert.Null(harness.Store.Item.Result);
+        Assert.Null(await harness.Queue.DequeueAsync(harness.Request.WorkflowExecutionId));
+    }
+
     private sealed record WorkerDto(string Name, int Count);
 
-    [BackgroundExecutionSafe]
-    private sealed class ProbeActivity<TResult>(Probe probe) : Activity<TResult>, IDisposable
+    private abstract class ProbeActivityCore<TResult>(Probe probe) : Activity<TResult>, IDisposable
     {
         protected override ValueTask<ActivityTransition<TResult>> ExecuteAsync(ActivityExecutionContext context)
         {
@@ -157,6 +203,12 @@ public sealed class BackgroundActivityWorkerTests
         }
     }
 
+    [BackgroundExecutionSafe]
+    private sealed class ProbeActivity<TResult>(Probe probe) : ProbeActivityCore<TResult>(probe);
+
+    [BackgroundExecutionSafe]
+    private sealed class AlternateProbeActivity<TResult>(Probe probe) : ProbeActivityCore<TResult>(probe);
+
     private sealed class Probe(Func<ActivityExecutionContext, ActivityTransition> execute)
     {
         public int Executions { get; set; }
@@ -171,7 +223,7 @@ public sealed class BackgroundActivityWorkerTests
         private Harness(
             ServiceProvider services,
             string expectedJson,
-            TestBackgroundActivityWorkStore store,
+            TestBackgroundActivityWorkStoreState store,
             InMemoryWorkflowSchedulerWorkQueue queue,
             BackgroundActivityWorkRequest request,
             BackgroundActivityWorkClaim claim)
@@ -187,21 +239,25 @@ public sealed class BackgroundActivityWorkerTests
         }
 
         public string ExpectedJson { get; }
-        public TestBackgroundActivityWorkStore Store { get; }
+        public TestBackgroundActivityWorkStoreState Store { get; }
         public InMemoryWorkflowSchedulerWorkQueue Queue { get; }
         public BackgroundActivityWorkRequest Request { get; }
         public BackgroundActivityWorkClaim Claim { get; }
         public PersistenceScope Scope { get; }
         public BackgroundActivityWorker Worker { get; }
 
-        public static async Task<Harness> CreateAsync<TResult>(Probe probe, string expectedJson)
+        public static async Task<Harness> CreateAsync<TResult>(
+            Probe probe,
+            string expectedJson,
+            Func<IActivity>? activationOverride = null,
+            WorkflowExecutableIdentity? requestIdentityOverride = null)
         {
             var activityType = typeof(ProbeActivity<TResult>);
             var activityAlias = TypeAliasConvention.CanonicalAlias(activityType);
             var resultType = typeof(TResult);
             var resultAlias = resultType == typeof(ActivityUnit) ? "Elsa.Unit" : TypeAliasConvention.CanonicalAlias(resultType);
             var executableStore = new InMemoryWorkflowExecutableStore();
-            var store = new TestBackgroundActivityWorkStore();
+            var store = new TestBackgroundActivityWorkStoreState();
             var services = new ServiceCollection();
             services.AddLogging();
             services.AddWorkflowRuntime();
@@ -214,8 +270,10 @@ public sealed class BackgroundActivityWorkerTests
                 RenewalIntervalSeconds = 3600
             }.ConfigureServices(services);
             services.Replace(ServiceDescriptor.Singleton<IWorkflowExecutableStore>(executableStore));
-            services.Replace(ServiceDescriptor.Singleton<IBackgroundActivityWorkStore>(store));
-            services.Replace(ServiceDescriptor.Singleton<IActivityActivator>(new ProbeActivator(() => new ProbeActivity<TResult>(probe))));
+            services.Replace(ServiceDescriptor.Scoped<IBackgroundActivityWorkStore>(serviceProvider =>
+                new TestBackgroundActivityWorkStore(serviceProvider.GetRequiredService<IPersistenceAccessContextAccessor>(), store)));
+            services.Replace(ServiceDescriptor.Singleton<IActivityActivator>(new ProbeActivator(
+                activationOverride ?? (() => new ProbeActivity<TResult>(probe)))));
             services.Configure<BackgroundActivityWorkerOptions>(options => options.MaximumResultBytes = 4096);
             var provider = services.BuildServiceProvider();
 
@@ -248,15 +306,16 @@ public sealed class BackgroundActivityWorkerTests
             var now = DateTimeOffset.UtcNow;
             var attempt = new ActivityAttempt("attempt-1", "invocation-1", 1, ActivityAttemptReason.Initial, now);
             var snapshot = new ActivityInputSnapshot("invocation-1", contract.SchemaFingerprint, "bindings-1", new Dictionary<string, ValueEnvelope>(), now);
+            var requestIdentity = requestIdentityOverride ?? identity;
             var coordinatorPayload = JsonSerializer.SerializeToElement(new RuntimeInvokeActivityCommandPayload(
-                identity, "node-1", "activity-execution-1", "BackgroundActivityResult"));
+                requestIdentity, "node-1", "activity-execution-1", "BackgroundActivityResult"));
             var coordinatorWork = new RuntimeSchedulerWorkItem(
                 "coordinator-work-1", "workflow-1", "coordinator-command-1", WorkflowExecutionCommandKind.InvokeActivity,
                 "envelope-1", "idempotency-1", now, now, payload: coordinatorPayload);
             var request = new BackgroundActivityWorkRequest(
-                "background-work-1", "workflow-1", "activity-execution-1", attempt, identity, "node-1",
+                "background-work-1", "workflow-1", "activity-execution-1", attempt, requestIdentity, "node-1",
                 contract.SchemaFingerprint, snapshot, coordinatorWork);
-            var claim = store.InitializeClaim(request, "worker-1", now);
+            var claim = store.InitializeClaim(request, "worker-1", now, "worker-test");
             return new Harness(provider, expectedJson, store,
                 (InMemoryWorkflowSchedulerWorkQueue)provider.GetRequiredService<IWorkflowSchedulerWorkQueue>(), request, claim);
         }
@@ -272,36 +331,51 @@ public sealed class BackgroundActivityWorkerTests
             ValueTask.FromResult(new ActivityActivationLease(create()));
     }
 
-    private sealed class TestBackgroundActivityWorkStore : IBackgroundActivityWorkStore
+    private sealed class TestBackgroundActivityWorkStoreState
     {
-        public BackgroundActivityWorkItem? Item { get; private set; }
+        public BackgroundActivityWorkItem? Item { get; set; }
+        public string? Scope { get; private set; }
 
-        public BackgroundActivityWorkClaim InitializeClaim(BackgroundActivityWorkRequest request, string owner, DateTimeOffset now)
+        public BackgroundActivityWorkClaim InitializeClaim(BackgroundActivityWorkRequest request, string owner, DateTimeOffset now, string scope)
         {
             var pending = BackgroundActivityWorkLifecycle.CreatePending(request, now);
             Item = BackgroundActivityWorkLifecycle.TryClaim(pending, owner, now, TimeSpan.FromHours(2), out var claim)!;
+            Scope = scope;
             return claim!;
         }
+    }
+
+    private sealed class TestBackgroundActivityWorkStore(
+        IPersistenceAccessContextAccessor accessContextAccessor,
+        TestBackgroundActivityWorkStoreState state) : IBackgroundActivityWorkStore
+    {
+        private bool IsVisible => StringComparer.Ordinal.Equals(accessContextAccessor.Current.RequireScope().Value, state.Scope);
 
         public ValueTask<BackgroundActivityWorkItem?> FindAsync(string workflowExecutionId, string workId, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult(Item is not null && Item.Request.WorkflowExecutionId == workflowExecutionId && Item.Request.WorkId == workId ? Item : null);
+            ValueTask.FromResult(IsVisible && state.Item is not null && state.Item.Request.WorkflowExecutionId == workflowExecutionId && state.Item.Request.WorkId == workId ? state.Item : null);
 
         public ValueTask<BackgroundActivityWorkClaim?> ClaimNextAsync(string ownerId, DateTimeOffset now, TimeSpan visibilityTimeout, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
         public ValueTask<BackgroundActivityWorkClaim?> RenewClaimAsync(BackgroundActivityWorkClaim claim, DateTimeOffset now, TimeSpan visibilityTimeout, CancellationToken cancellationToken = default)
         {
-            Item = BackgroundActivityWorkLifecycle.TryRenewClaim(Item!, claim, now, visibilityTimeout, out var renewed);
+            if (!IsVisible)
+                return ValueTask.FromResult<BackgroundActivityWorkClaim?>(null);
+            var updated = BackgroundActivityWorkLifecycle.TryRenewClaim(state.Item!, claim, now, visibilityTimeout, out var renewed);
+            state.Item = updated;
             return ValueTask.FromResult(renewed);
         }
 
         public ValueTask<BackgroundActivityWorkItem> RecordResultAsync(BackgroundActivityWorkClaim claim, BackgroundActivityWorkTerminalResult result, DateTimeOffset now, CancellationToken cancellationToken = default)
         {
-            Item = BackgroundActivityWorkLifecycle.RecordResult(Item!, claim, result, now);
-            return ValueTask.FromResult(Item);
+            if (!IsVisible)
+                throw new BackgroundActivityWorkConflictException(claim.WorkflowExecutionId, claim.WorkId, "work is outside the active persistence scope");
+            var updated = BackgroundActivityWorkLifecycle.RecordResult(state.Item!, claim, result, now);
+            state.Item = updated;
+            return ValueTask.FromResult(updated);
         }
 
         public ValueTask<IReadOnlyCollection<BackgroundActivityWorkItem>> ListResultReadyAsync(int limit, string? workflowExecutionId = null, CancellationToken cancellationToken = default) =>
-            ValueTask.FromResult<IReadOnlyCollection<BackgroundActivityWorkItem>>(Item?.Status == BackgroundActivityWorkStatus.ResultReady ? [Item] : []);
+            ValueTask.FromResult<IReadOnlyCollection<BackgroundActivityWorkItem>>(IsVisible && state.Item?.Status == BackgroundActivityWorkStatus.ResultReady ? [state.Item] : []);
     }
 }
