@@ -81,9 +81,11 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
         <button type="button" className="wf-link-button" onClick={props.onBack}>Definitions</button>
         <ChevronRight size={14} aria-hidden="true" />
         <div className="wf-editor-heading">
-          <strong title={props.name}>{props.name}</strong>
-          <div className="wf-editor-metadata">
+          <div className="wf-editor-title">
+            <strong title={props.name}>{props.name}</strong>
             <span className="wf-chip">Draft</span>
+          </div>
+          <div className="wf-editor-metadata">
             <span className="wf-editor-save-status" role="status" aria-live="polite" aria-atomic="true" title={props.status || undefined} data-pending={pending || undefined}>
               {props.status ? <>
                 {pending ? <LoaderCircle size={12} aria-hidden="true" /> : <Check size={12} aria-hidden="true" />}

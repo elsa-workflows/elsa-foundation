@@ -10,6 +10,14 @@ for (const width of [320, 768, 1024, 1440]) {
     const buttons = toolbar.getByRole("button");
     const initial = await readButtonPositions(buttons);
     const initialStatus = await toolbar.getByRole("status").boundingBox();
+    const title = toolbar.locator("strong[title]");
+    const badge = toolbar.getByText("Draft", { exact: true });
+    const initialTitle = await title.boundingBox();
+    const initialBadge = await badge.boundingBox();
+    expect(initialBadge!.x).toBeGreaterThanOrEqual(initialTitle!.x + initialTitle!.width);
+    expect(Math.abs(initialBadge!.y + initialBadge!.height / 2 - initialTitle!.y - initialTitle!.height / 2)).toBeLessThan(1);
+    expect(initialBadge!.x + initialBadge!.width).toBeLessThanOrEqual(width);
+    await expect(title).toHaveAttribute("title", "A long workflow definition name that must not crowd the actions");
     expect(initial.every(box => box.x >= 0 && box.x + box.width <= width)).toBe(true);
 
     for (const value of statusValues) {
@@ -17,6 +25,8 @@ for (const width of [320, 768, 1024, 1440]) {
       await expect(toolbar.getByRole("status")).toHaveText(value);
       expect(await toolbar.getByRole("status").boundingBox()).toEqual(initialStatus);
       expect(await readButtonPositions(buttons)).toEqual(initial);
+      expect(await title.boundingBox()).toEqual(initialTitle);
+      expect(await badge.boundingBox()).toEqual(initialBadge);
     }
     await expect(toolbar.getByRole("button", { name: "Review & publish" })).toBeVisible();
   });
