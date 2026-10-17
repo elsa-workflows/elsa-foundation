@@ -41,8 +41,10 @@ public sealed class InMemoryBackgroundActivityWorkStore(
                              .Where(pair => StringComparer.Ordinal.Equals(pair.Key.Scope, scope) &&
                                             (pair.Value.Status == BackgroundActivityWorkStatus.Pending ||
                                              pair.Value.Status == BackgroundActivityWorkStatus.Claimed && pair.Value.VisibleUntil <= now))
-                             .OrderBy(pair => pair.Value.Request.WorkflowExecutionId, StringComparer.Ordinal)
+                             .OrderBy(pair => pair.Value.Status == BackgroundActivityWorkStatus.Pending
+                                 ? pair.Value.RecordedAt : pair.Value.VisibleUntil)
                              .ThenBy(pair => pair.Value.RecordedAt)
+                             .ThenBy(pair => pair.Value.Request.WorkflowExecutionId, StringComparer.Ordinal)
                              .ThenBy(pair => pair.Key.WorkId, StringComparer.Ordinal))
                 {
                     var updated = BackgroundActivityWorkLifecycle.TryClaim(pair.Value, ownerId, now, visibilityTimeout, out var claim);
@@ -121,7 +123,7 @@ public sealed class InMemoryBackgroundActivityWorkStore(
         string? workflowExecutionId = null,
         CancellationToken cancellationToken = default)
     {
-        if (limit <= 0)
+        if (limit is <= 0 or > 500)
             throw new ArgumentOutOfRangeException(nameof(limit));
         if (workflowExecutionId is not null)
             ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);

@@ -24,6 +24,8 @@ public sealed class WorkbenchProcess : IAsyncDisposable
 
     private readonly Process _process;
     private readonly string _directory;
+    private readonly string _managementKey;
+    private bool _ownsDirectory = true;
     private readonly StringBuilder _output = new();
     private readonly TaskCompletionSource<Uri> _listeningAddress = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -31,6 +33,7 @@ public sealed class WorkbenchProcess : IAsyncDisposable
     {
         _process = process;
         _directory = directory;
+        _managementKey = managementKey;
         Client = new HttpClient();
         ManagementClient = new HttpClient();
         ManagementClient.DefaultRequestHeaders.Add(ManagementKeyHeader, managementKey);
@@ -151,6 +154,26 @@ public sealed class WorkbenchProcess : IAsyncDisposable
 
     public int ExitCode => _process.ExitCode;
 
+    /// <summary>Kills this owned host without graceful cleanup, then boots a fresh process over its existing databases.</summary>
+    public async Task<WorkbenchProcess> CrashAndRestartAsync(Action<string>? prepareRestart = null)
+    {
+        _process.Kill(entireProcessTree: true);
+        await _process.WaitForExitAsync();
+        prepareRestart?.Invoke(_directory);
+        var replacement = new WorkbenchProcess(new Process { StartInfo = _process.StartInfo }, _directory, _managementKey);
+        _ownsDirectory = false;
+        try
+        {
+            await replacement.StartAndWaitUntilReadyAsync(waitForReady: true);
+            return replacement;
+        }
+        catch
+        {
+            await replacement.DisposeAsync();
+            throw;
+        }
+    }
+
     /// <summary>The host's console output so far, for assertion messages.</summary>
     public string Output
     {
@@ -174,7 +197,8 @@ public sealed class WorkbenchProcess : IAsyncDisposable
         _process.Dispose();
         try
         {
-            Directory.Delete(_directory, recursive: true);
+            if (_ownsDirectory)
+                Directory.Delete(_directory, recursive: true);
         }
         catch (IOException)
         {

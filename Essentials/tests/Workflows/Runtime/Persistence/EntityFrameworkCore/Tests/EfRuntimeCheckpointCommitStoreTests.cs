@@ -1250,8 +1250,10 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         var request = BackgroundRequest("work-expired-claim");
         await using (var context = database.Open("tenant-a"))
         {
-            var checkpoints = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"));
-            var admission = Commit("commit-bg-expired-admission");
+            var accessor = new FixedAccessor("tenant-a");
+            var owner = await BackgroundActivityWorkTestSupport.SeedLiveExecutionAsync(context, accessor, "workflow-a", "tenant-a");
+            var checkpoints = new EfRuntimeCheckpointCommitStore(context, accessor);
+            var admission = Commit("commit-bg-expired-admission") with { ExpectedFence = owner.ToFence() };
             await checkpoints.CommitAsync(admission with
             {
                 StateChanges = admission.StateChanges.WithBackgroundActivityWork(

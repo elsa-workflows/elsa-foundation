@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <AssemblyName>Elsa.Workbench.Tests.BackgroundActivities</AssemblyName>
+    <PackageId>Elsa.Workbench.Tests.BackgroundActivities</PackageId>
+    <Description>Test-only background activities for the owned Workbench crash recovery witness.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <ProjectReference Include="../../../../src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj" />
+    <ProjectReference Include="../../../../src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj" PrivateAssets="all" />
+    <ProjectReference Include="../../../../src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

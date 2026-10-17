@@ -42,6 +42,8 @@ Bodies are physically at least once. A crash after an external effect but before
 
 Explicit native cancellation writes a tombstone in the same checkpoint as the affected activity/workflow state. Unaccepted pending, claimed or ready work is cancelled. Accepted work remains immutable. A worker observes cancellation through failed renewal and signals its body token; a body that ignores cancellation may continue external work, but its late receipt is rejected. Host shutdown only stops the worker and renewal: it does not write a business cancellation. Expiry makes unfinished work reclaimable by another host.
 
+Deleting an execution through the EF state store atomically cancels its outstanding background work and revokes coordinator ownership in that persistence scope. Admission requires a current workflow fence and an already persisted execution; an upsert inside the admission checkpoint cannot resurrect a deleted execution. Accepted receipts remain history. The development in-memory workflow store retains its existing process-global execution-ID semantics: deleting an ID cancels that ID's work across its in-memory scopes. Use EF for tenant-isolated deletion and process recovery.
+
 The initial recorded receipt may be retried with the exact recording claim and identical canonical content after its lease has expired. An expired first receipt, a stale claim, or conflicting content is rejected. Worker fences and workflow-coordinator ownership fences are independent.
 
 ## Inspect, pause and roll back

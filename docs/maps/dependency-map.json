@@ -18444,6 +18444,40 @@
       ]
     },
     {
+      "path": "Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj",
+      "name": "BackgroundActivities",
+      "kind": "test",
+      "domain": "Other",
+      "sub_domain": "-",
+      "role": "test",
+      "declared_target_framework": null,
+      "packable": false,
+      "package_id": null,
+      "line": null,
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Design.Core",
+          "path": "Essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Runtime.Core",
+          "path": "Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Core",
+          "path": "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        }
+      ]
+    },
+    {
       "path": "Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj",
       "name": "Elsa.Workbench.Tests",
       "kind": "test",
@@ -18459,6 +18493,11 @@
           "type": "internal",
           "id": "Elsa.Workbench",
           "path": "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workbench.Tests.BackgroundActivities",
+          "path": "Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj"
         },
         {
           "type": "external",
@@ -20314,6 +20353,11 @@
           "type": "internal",
           "id": "Elsa.Activities.DispatchWorkflow.Runtime",
           "path": "Essentials/src/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Flowchart",
+          "path": "Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj"
         },
         {
           "type": "internal",

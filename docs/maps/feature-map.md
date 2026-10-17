@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 111
+- Discovered feature classes: 112
 
 ## Features
 
@@ -28,6 +28,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | ActivitiesHttpFeature | direct IShellFeature | Elsa.Activities.Http | IShellFeature, IMiddlewareShellFeature | [ActivitiesHttpFeature.cs](../../Essentials/src/Activities/Http/ActivitiesHttpFeature.cs) |
 | ActivitiesPrimitivesFeature | direct IShellFeature | Elsa.Activities.Primitives | IShellFeature | [ActivitiesPrimitivesFeature.cs](../../Essentials/src/Activities/Primitives/ActivitiesPrimitivesFeature.cs) |
 | ActivitiesRuntimeFeature | direct IShellFeature | Elsa.Activities.Runtime | IShellFeature | [ActivitiesRuntimeFeature.cs](../../Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/ActivitiesRuntimeFeature.cs) |
+| BackgroundActivitiesFeature | direct IShellFeature | Elsa.Activities.Runtime | IShellFeature | [BackgroundActivitiesFeature.cs](../../Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/BackgroundActivitiesFeature.cs) |
 | ActivitiesSchedulingFeature | direct IShellFeature | Elsa.Activities.Scheduling | IShellFeature | [ActivitiesSchedulingFeature.cs](../../Essentials/src/Activities/Scheduling/ActivitiesSchedulingFeature.cs) |
 | ActivitiesScriptingFeature | direct IShellFeature | Elsa.Activities.Scripting | IShellFeature | [ActivitiesScriptingFeature.cs](../../Essentials/src/Activities/Scripting/ActivitiesScriptingFeature.cs) |
 | ActivitiesSequenceFeature | direct IShellFeature | Elsa.Activities.Sequence | IShellFeature | [ActivitiesSequenceFeature.cs](../../Essentials/src/Activities/Sequence/ActivitiesSequenceFeature.cs) |
