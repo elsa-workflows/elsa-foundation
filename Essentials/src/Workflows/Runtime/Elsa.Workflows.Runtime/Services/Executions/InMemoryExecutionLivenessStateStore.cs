@@ -75,23 +75,21 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
             var stateId = RuntimeExecutionOwnershipStateId.For(workflowExecutionId);
             var key = new ExecutionLivenessStateKey(workflowExecutionId, stateId);
             var existing = Find(key);
-            if (existing is not null)
-            {
-                var fencingToken = ReadHighestIssuedToken(existing);
-                var metadata = new Dictionary<string, string>(existing.Metadata, StringComparer.Ordinal)
-                {
-                    [RuntimeMetadataKeys.OwnershipFencingToken] = fencingToken.ToString(CultureInfo.InvariantCulture)
-                };
-                SaveCore(new ExecutionLivenessState(
-                    stateId,
-                    workflowExecutionId,
-                    executionLease: null,
-                    heartbeat: null,
-                    existing.Drain,
-                    existing.InterruptedExecution,
-                    existing.PendingPostCommitIntentIds,
-                    metadata));
-            }
+            var fencingToken = ReadHighestIssuedToken(existing);
+            var metadata = existing is null
+                ? new Dictionary<string, string>(StringComparer.Ordinal)
+                : new Dictionary<string, string>(existing.Metadata, StringComparer.Ordinal);
+            metadata[RuntimeMetadataKeys.OwnershipFencingToken] = fencingToken.ToString(CultureInfo.InvariantCulture);
+            metadata[RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone] = "true";
+            SaveCore(new ExecutionLivenessState(
+                stateId,
+                workflowExecutionId,
+                executionLease: null,
+                heartbeat: null,
+                existing?.Drain,
+                existing?.InterruptedExecution,
+                existing?.PendingPostCommitIntentIds ?? [],
+                metadata));
 
             // Keep acquisitions/renewals behind the delete until the execution and its outstanding work are both
             // removed/tombstoned. A lease acquired between revocation and removal could otherwise survive deletion.
@@ -103,8 +101,10 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
         }
     }
 
-    private static long ReadHighestIssuedToken(ExecutionLivenessState state)
+    private static long ReadHighestIssuedToken(ExecutionLivenessState? state)
     {
+        if (state is null)
+            return 0;
         if (!state.Metadata.TryGetValue(RuntimeMetadataKeys.OwnershipFencingToken, out var raw))
             return state.ExecutionLease?.FencingToken ?? 0;
         if (!long.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var token) || token < 0 ||

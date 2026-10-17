@@ -1,4 +1,5 @@
 using Elsa.Workflows.Runtime.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -84,6 +85,58 @@ public sealed class BackgroundActivityWorkLifecycleTests
     }
 
     [Fact]
+    public async Task Initial_workflow_upsert_and_background_admission_can_share_the_first_checkpoint()
+    {
+        var state = new InMemoryRuntimeCheckpointStoreState();
+        var operational = new InMemoryExecutionLivenessStateStore();
+        var executions = new InMemoryWorkflowExecutionStateStore(state, operational);
+        var owner = await NewOwnership(operational, "initial-background-owner").AcquireAsync("workflow-a");
+        var accessor = new FixedAccessor("tenant-a");
+        var checkpoint = new InMemoryRuntimeCheckpointCommitStore(
+            workflowExecutionStateStore: executions,
+            operationalStateStore: operational,
+            rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance,
+            state: state,
+            persistenceAccessContextAccessor: accessor);
+        var request = Request("work-initial-upsert");
+        var commit = Commit("admit-initial-upsert") with
+        {
+            ExpectedFence = owner.ToFence(),
+            StateChanges = new RuntimeCheckpointStateChangeSet(
+                new RuntimeStateChange<WorkflowExecutionState>(
+                    "workflow-a", RuntimeStateChangeOperation.Upsert, ExecutionState(), new Dictionary<string, string>()),
+                null, [], [], [], [], []).WithBackgroundActivityWork(
+                new BackgroundActivityWorkCheckpointChanges(admissions: [request]))
+        };
+
+        await checkpoint.CommitAsync(commit, Immediate);
+
+        Assert.NotNull(await executions.FindAsync("workflow-a"));
+        Assert.Equal(BackgroundActivityWorkStatus.Pending,
+            (await new InMemoryBackgroundActivityWorkStore(state, accessor).FindAsync("workflow-a", request.WorkId))!.Status);
+
+        var orphanState = new InMemoryRuntimeCheckpointStoreState();
+        var orphanAccessor = new FixedAccessor("tenant-a");
+        var storeWithoutExecutionPersistence = new InMemoryRuntimeCheckpointCommitStore(
+            operationalStateStore: operational,
+            state: orphanState,
+            persistenceAccessContextAccessor: orphanAccessor);
+        var orphanRequest = Request("work-no-execution-store");
+        var unpersistableUpsert = Commit("admit-no-execution-store") with
+        {
+            ExpectedFence = owner.ToFence(),
+            StateChanges = new RuntimeCheckpointStateChangeSet(
+                new RuntimeStateChange<WorkflowExecutionState>(
+                    "workflow-a", RuntimeStateChangeOperation.Upsert, ExecutionState(), new Dictionary<string, string>()),
+                null, [], [], [], [], []).WithBackgroundActivityWork(
+                new BackgroundActivityWorkCheckpointChanges(admissions: [orphanRequest]))
+        };
+        await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() =>
+            storeWithoutExecutionPersistence.CommitAsync(unpersistableUpsert, Immediate).AsTask());
+        Assert.Null(await new InMemoryBackgroundActivityWorkStore(orphanState, orphanAccessor).FindAsync("workflow-a", orphanRequest.WorkId));
+    }
+
+    [Fact]
     public async Task Deleting_execution_cancels_claimed_work_and_blocks_stale_or_orphan_admission()
     {
         var state = new InMemoryRuntimeCheckpointStoreState();
@@ -126,6 +179,8 @@ public sealed class BackgroundActivityWorkLifecycleTests
         Assert.NotNull(claim);
 
         Assert.True(await executions.DeleteAsync("workflow-a"));
+        var tombstone = await operational.FindAsync("workflow-a", RuntimeExecutionOwnershipStateId.For("workflow-a"));
+        Assert.Equal("true", tombstone!.Metadata[RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone]);
         var cancelled = await worker.FindAsync("workflow-a", request.WorkId);
         Assert.Equal(BackgroundActivityWorkStatus.Cancelled, cancelled!.Status);
         Assert.True(cancelled.ClaimFence > claim!.ClaimFence);
@@ -145,6 +200,14 @@ public sealed class BackgroundActivityWorkLifecycleTests
         await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(() => checkpoint.CommitAsync(staleAdmission, Immediate).AsTask());
 
         var replacement = await ownership.AcquireAsync("workflow-a");
+        var bareAdmission = Commit("admit-after-delete-bare") with
+        {
+            ExpectedFence = replacement.ToFence(),
+            StateChanges = Commit("admit-after-delete-bare").StateChanges.WithBackgroundActivityWork(
+                new BackgroundActivityWorkCheckpointChanges(admissions: [Request("work-bare")]))
+        };
+        await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() => checkpoint.CommitAsync(bareAdmission, Immediate).AsTask());
+
         var orphanAdmission = Commit("admit-after-delete-new-owner") with
         {
             ExpectedFence = replacement.ToFence(),
@@ -157,6 +220,38 @@ public sealed class BackgroundActivityWorkLifecycleTests
         await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() => checkpoint.CommitAsync(orphanAdmission, Immediate).AsTask());
         Assert.Null(await worker.FindAsync("workflow-a", "work-stale"));
         Assert.Null(await worker.FindAsync("workflow-a", "work-orphan"));
+    }
+
+    [Fact]
+    public async Task Deleting_execution_without_a_prior_owner_still_tombstones_later_admission()
+    {
+        var state = new InMemoryRuntimeCheckpointStoreState();
+        var operational = new InMemoryExecutionLivenessStateStore();
+        var executions = new InMemoryWorkflowExecutionStateStore(state, operational);
+        await executions.SaveAsync(ExecutionState());
+        Assert.True(await executions.DeleteAsync("workflow-a"));
+
+        var owner = await NewOwnership(operational, "owner-after-ownerless-delete").AcquireAsync("workflow-a");
+        var accessor = new FixedAccessor("tenant-a");
+        var checkpoint = new InMemoryRuntimeCheckpointCommitStore(
+            workflowExecutionStateStore: executions,
+            operationalStateStore: operational,
+            rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance,
+            state: state,
+            persistenceAccessContextAccessor: accessor);
+        var recreateAndAdmit = Commit("admit-after-ownerless-delete") with
+        {
+            ExpectedFence = owner.ToFence(),
+            StateChanges = new RuntimeCheckpointStateChangeSet(
+                new RuntimeStateChange<WorkflowExecutionState>(
+                    "workflow-a", RuntimeStateChangeOperation.Upsert, ExecutionState(), new Dictionary<string, string>()),
+                null, [], [], [], [], []).WithBackgroundActivityWork(
+                new BackgroundActivityWorkCheckpointChanges(admissions: [Request("work-ownerless-delete")]))
+        };
+
+        await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() => checkpoint.CommitAsync(recreateAndAdmit, Immediate).AsTask());
+        Assert.Null(await executions.FindAsync("workflow-a"));
+        Assert.Null(await new InMemoryBackgroundActivityWorkStore(state, accessor).FindAsync("workflow-a", "work-ownerless-delete"));
     }
 
     [Fact]

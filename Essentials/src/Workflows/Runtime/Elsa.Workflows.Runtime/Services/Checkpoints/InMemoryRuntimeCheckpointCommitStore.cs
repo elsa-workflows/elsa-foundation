@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -235,8 +236,24 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         if (commit.ExpectedFence is null)
             throw new RuntimeCheckpointCommitValidationException("Background activity work admission requires the current workflow execution fence.");
 
-        if (_workflowExecutionStateStore is null ||
-            await _workflowExecutionStateStore.FindAsync(commit.WorkflowExecutionId, cancellationToken) is null)
+        var ownership = await _operationalStateStore!.FindAsync(
+            commit.WorkflowExecutionId,
+            RuntimeExecutionOwnershipStateId.For(commit.WorkflowExecutionId),
+            cancellationToken);
+        if (ownership?.Metadata.TryGetValue(RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone, out var tombstone) == true)
+        {
+            if (!StringComparer.Ordinal.Equals(tombstone, "true"))
+                throw new InvalidDataException("The persisted workflow-execution deletion tombstone is corrupt.");
+            throw new RuntimeCheckpointCommitValidationException("Background activity work cannot be admitted for a deleted workflow execution.");
+        }
+
+        if (_workflowExecutionStateStore is null)
+            throw new RuntimeCheckpointCommitValidationException("Background activity work cannot be admitted without a workflow execution state store.");
+
+        var hasLiveExecution = await _workflowExecutionStateStore.FindAsync(commit.WorkflowExecutionId, cancellationToken) is not null;
+        var upsertInThisCommit = commit.StateChanges.WorkflowExecution is { Operation: RuntimeStateChangeOperation.Upsert } workflowChange &&
+                                 StringComparer.Ordinal.Equals(workflowChange.StateId, commit.WorkflowExecutionId);
+        if (!hasLiveExecution && !upsertInThisCommit)
             throw new RuntimeCheckpointCommitValidationException("Background activity work cannot be admitted without a live workflow execution state.");
     }
 
