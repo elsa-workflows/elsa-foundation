@@ -196,6 +196,8 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // from the presentation-only elsa.activity-icon facet (ActivityIconName).
         // It moved again when ActivityInputDescriptorView gained Tier, the presentation-only disclosure
         // group (essential / optional / setting) projected from InputDefinition.Tier.
+        // It moved again when ActivityInputDescriptorView gained ConnectionType, the required connection
+        // type projected from [ActivityConnection] (#2729).
         // It moved again when the six legacy mediator requests and commands with no endpoint (GetDefinition,
         // GetVersion, ListDefinitions, ListDefinitionVersions, AddDefinition, AddVersion) and the three views
         // only they returned were deleted (#2785).
@@ -203,7 +205,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // contracts because NativeEndpoints otherwise binds an omitted optional array as an empty query value.
         // The wrapper serializes to the same nullable layout array, while ActivityOutputDescriptorView now
         // exposes its contract reference key explicitly as a body init property, retaining its prior positional API.
-        Assert.Equal("ee1f0378ade1d0b7128de6bede9a8dc3f6ce32a8f6c1ede7663e7ed5efe929fe", PublicShapeHash(ContractTypes));
+        Assert.Equal("71c697116b3d4afaf0a38c41d79684d81d3ed11dc652169ff1db2ed3fec7878e", PublicShapeHash(ContractTypes));
     }
 
     [Fact]

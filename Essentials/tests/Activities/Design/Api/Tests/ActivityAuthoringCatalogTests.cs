@@ -85,13 +85,13 @@ public sealed class ActivityAuthoringCatalogTests
         AssertProperties(provenance, "SourceKind", "SourceId", "FeatureId");
 
         var inputDescriptor = CollectionElementType(descriptor.GetProperty("Inputs")!.PropertyType);
-        AssertProperties(inputDescriptor, "ReferenceKey", "Name", "Type", "CollectionKind", "IsNullable", "IsSensitive", "IsCredential", "Tier");
+        AssertProperties(inputDescriptor, "ReferenceKey", "Name", "Type", "CollectionKind", "IsNullable", "IsSensitive", "IsCredential", "Tier", "ConnectionType");
         Assert.Equal(typeof(bool), inputDescriptor.GetProperty("IsNullable")!.PropertyType);
         Assert.Equal(typeof(bool), inputDescriptor.GetProperty("IsSensitive")!.PropertyType);
         Assert.Equal(typeof(bool), inputDescriptor.GetProperty("IsCredential")!.PropertyType);
         Assert.Equal(typeof(string), Nullable.GetUnderlyingType(inputDescriptor.GetProperty("Tier")!.PropertyType) ?? inputDescriptor.GetProperty("Tier")!.PropertyType);
         var inputConstructor = inputDescriptor.GetConstructors().Single();
-        Assert.Equal(18, inputConstructor.GetParameters().Length);
+        Assert.Equal(19, inputConstructor.GetParameters().Length);
         var nullability = Assert.Single(inputConstructor.GetParameters(), parameter =>
             StringComparer.OrdinalIgnoreCase.Equals(parameter.Name, "IsNullable"));
         Assert.False(nullability.HasDefaultValue);
@@ -100,7 +100,7 @@ public sealed class ActivityAuthoringCatalogTests
         Assert.True(tier.HasDefaultValue);
         Assert.Null(tier.DefaultValue);
         Assert.Contains(inputDescriptor.GetMethods(), method =>
-            method.Name == "Deconstruct" && method.GetParameters().Length == 18);
+            method.Name == "Deconstruct" && method.GetParameters().Length == 19);
         var outputDescriptor = CollectionElementType(descriptor.GetProperty("Outputs")!.PropertyType);
         AssertProperties(outputDescriptor, "Name", "ReferenceKey", "Type", "CollectionKind");
         var portDescriptor = CollectionElementType(descriptor.GetProperty("Ports")!.PropertyType);

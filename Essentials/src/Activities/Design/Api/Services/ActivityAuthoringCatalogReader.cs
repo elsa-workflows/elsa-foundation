@@ -117,7 +117,8 @@ public sealed class ActivityAuthoringCatalogReader(
             input.UISpecifications,
             IsSensitive: input.IsSensitive == true || input.IsCredential == true,
             IsCredential: input.IsCredential == true,
-            Tier: ActivityInputTiers.NormalizeOrNull(input.Tier));
+            Tier: ActivityInputTiers.NormalizeOrNull(input.Tier),
+            ConnectionType: string.IsNullOrWhiteSpace(input.ConnectionType) ? null : input.ConnectionType);
 
     private static ActivityOutputDescriptorView ToView(OutputDefinition output) =>
         new(
