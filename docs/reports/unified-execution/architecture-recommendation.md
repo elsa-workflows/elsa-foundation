@@ -1,11 +1,13 @@
-# Elsa 4 unified execution architecture — working recommendation
+# Elsa 4 unified execution architecture — research recommendation
 
-**Status: provisional research recommendation; combined witness review is not complete.**
+**Status: reviewed research recommendation; proposed for owner ratification.**
 Program [#2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892), decision task #2904. This report is not a ratified constitution, production API proposal, or migration authorization. Read the [source baseline](current-source-baseline.md), [evidence ledger](README.md) and [witness review](witness-review-2026-10-17.md) for exact pins, observed results and limitations. Terms here describe candidate boundaries; canonical repository terminology remains in `docs/glossary/`.
+
+See also [original ETL intent and Orchard prior art](original-requirements-and-prior-art.md) for dataset/connected-service modeling and the integrated user experience.
 
 ## Recommendation
 
-Build one execution platform with independently extensible semantic models, composition components and hosting providers. Share identity, durable commit/recovery and work delivery. Preserve model-specific definitions, state and behavior. Native workflows and BPMN should be first-class peers; ETL can use the same infrastructure without moving record-by-record processing through the workflow coordinator. Agent collaboration should initially be an explicit native composition with its own messaging semantics, subject to its durable witness.
+Build one execution platform with independently extensible semantic models, composition components and hosting providers. Share identity, durable commit/recovery and work delivery. Preserve model-specific definitions, state and behavior. Native workflows and BPMN should be first-class peers; ETL can use the same infrastructure without moving record-by-record processing through the workflow coordinator. Agent collaboration should initially be an explicit native composition with its own messaging semantics, supported by the bounded deterministic durable witness.
 
 The unifying contract is a durable transition of a scoped execution and its owed work. It is not a universal graph representation, a common join algorithm, an actor per activity, or a requirement that every model advance in the same scheduling loop. Those distinctions determine whether the architecture remains coherent as more models arrive.
 
@@ -27,7 +29,7 @@ These are logical boundaries, not a prescription to create a repository, process
 
 ## Execution and recovery contract
 
-An execution is addressed by a complete scope and stable execution ID. Persist a pinned artifact reference and state-schema identity before dispatch. Resolve the model through a registry, validate host capabilities, then allow that model to interpret the next accepted stimulus. A model may call its composition component; the kernel need not know whether a component is a Sequence, a Flowchart or something else.
+An execution is addressed by a complete scope and stable execution ID. Identity and signed capability fields require an unambiguous, versioned encoding; delimiter concatenation is unsafe unless every boundary rejects delimiter-bearing fields. Provider review exposed that flaw in the proof HMAC format; the adapter now rejects CR/LF scope fields and length-prefixes actor identity, while the shared fixture signer is not a production security contract. Persist a pinned artifact reference and state-schema identity before dispatch. Resolve the model through a registry, validate host capabilities, then allow that model to interpret the next accepted stimulus. A model may call its composition component; the kernel need not know whether a component is a Sequence, a Flowchart or something else.
 
 The resulting transition commits state, durable owed work/continuations and a stable receipt atomically. A worker processes a pinned invocation under its own attempt fence. An accepted result is another durable input, not permission to complete the root. The model/component consumes it, decides the next state and dispatches additional work. Empty work queues can mean suspended, awaiting a message, awaiting a semantic continuation, or complete; only semantics distinguish them.
 
@@ -63,13 +65,15 @@ The intended actor boundary is the full execution instance. This is a good fit f
 
 Make the execution hosting contract replaceable, but do not copy every feature of Orleans or Proto.Actor into a lowest-common-denominator interface. Specify the behavior Elsa needs: stable address, activation/deactivation, mailbox/concurrency policy, recovery entry, capability-aware routing and cancellation of hosting operations. Keep application durability and fencing independently authoritative.
 
-A provider must declare capabilities and pass the same behavioral suite. For Orleans, use Orleans membership/placement as the fleet authority; do not keep a competing Elsa node-liveness table. Framework activation and message delivery do not replace durable owed-work recovery or stable result identity. Default versus optional provider selection remains pending the full comparison. AI-assisted implementation reduces coding cost but does not remove distributed-systems maintenance, upgrades, diagnostics and failure-testing costs.
+A provider must declare capabilities and pass the same behavioral suite. For Orleans, use Orleans membership/placement as the fleet authority; do not keep a competing Elsa node-liveness table. Framework activation and message delivery do not replace durable owed-work recovery or stable result identity. The bounded comparison exercises identical Sequence/Flowchart definitions through a direct coordinator and Orleans, including held parallel workers and owner loss. It supports provider substitutability, not a default-provider winner. Keep the built-in provider as the compatibility baseline and offer Orleans as an optional adapter after production conformance; do not replace the default on the strength of this local witness. AI-assisted implementation reduces coding cost but does not remove distributed-systems maintenance, upgrades, diagnostics and failure-testing costs.
 
 ## BPMN as a first-class model and as a child
 
 Host the real BPMN interpreter as the owner of token, gateway, event, scope and error semantics. Give it durable state, work handles, timer/event inputs and ordered command dispatch. Do not reinterpret BPMN by translating every element into native Flowchart joins. Preserve its model-specific validator and inspection projections.
 
 An embedded BPMN activity still makes sense as a native adapter to a BPMN child execution. It should use the same BPMN host/model as direct BPMN execution. The parent awaits a child outcome through the native composition protocol. The direct-versus-composed witness compares identical child traces through a persisted Sequence-style adapter; current Elsa integration remains separate work.
+
+The service-task witness also starts a shared partition pipeline using a stable persisted BPMN work handle. It recovers partial provisioning, completed ETL work awaiting delivery, and a BPMN callback committed before process exit. A BPMN-side receipt makes callback replay idempotent; the two stores do not share a transaction. The BPMN host proof serializes its test driver and does not establish concurrent-host ownership/fencing; those guarantees must come from the production kernel. Success and business-error runs complete; fault/cancel adapters handle their BPMN outcomes while the experimental ETL model remains Running with cancelled work. That limitation reinforces the lifecycle revision above.
 
 A proper BPMN product also needs task assignment/claim/completion, external workers, durable timers and correlations, incident/retry policy, definition deployment/versioning, audit and operations. These can be built above the semantic/host boundary. Each action must address a stable task or listener incarnation and be authorized, correlated and idempotent. Model a human task projection as an operational view of durable owed work, not a second independent authority for process progression.
 
@@ -83,13 +87,15 @@ The real Microsoft Agent Framework probe distinguishes serial per-receiver handl
 
 Persist conversation/turn progress, pending approvals, budget consumption and tool-call identity at the appropriate boundaries. Store large conversation/knowledge content by reference where appropriate; a checkpoint must not silently become an unbounded transcript. Existing Elsa agent turn/tool/approval code is reuse material. Live model/tool integrations, durable approval-to-effect correlation, nondeterministic replay and retention remain separate product verification requirements beyond deterministic collaboration witnesses.
 
+The production lifecycle contract must explicitly define when a proposed model decision becomes durably accepted, how approval suspension/resumption consumes that decision without reevaluation, and how cancellation reaches a model-owned outcome after tool effects may have occurred. Deterministic recovery in the witness establishes useful boundaries but does not close that contract. Usage accounting also needs admission before dispatch: rejecting an over-budget result after expensive work ran is not a spending bound.
+
 A distinct agent execution model becomes justified only if native composition cannot express its lifecycle or scheduling without distorting the native contract. Different diagram edges alone are not sufficient justification. Keep this decision revisable after the native durable witness.
 
 ## Extension discipline
 
 A new model package should register its artifact/state contracts, capability requirements, transition implementation, work handlers and inspection projection. Registration must not require a model-name switch in the shared kernel. Shared inspection must allow model-specific details rather than forcing fields such as token count, round or current activity onto every model.
 
-The independent extension witness uses finite monotone rule inference to a fixed point. It is deliberately a semantic system with facts/rules and convergence rather than a renamed Sequence. Acceptance requires pinned package/artifact/state resolution, incompatible-host rejection, fresh-process recovery, result replay and cancellation without editing existing engines. Until that witness and provider comparison pass review, the extension seam is provisional.
+The independent extension witness uses finite monotone rule inference to a fixed point. It is deliberately a semantic system with facts/rules and convergence rather than a renamed Sequence. Acceptance requires pinned package/artifact/state resolution, incompatible-host rejection, fresh-process recovery, result replay and cancellation without editing existing engines. The package and provider witnesses passed bounded review. The extension seam remains a candidate production contract until compatibility and lifecycle integration are specified.
 
 ## Reconciliation with current governance
 
@@ -108,12 +114,74 @@ Executable-always-runs (§E2.6.1) also matters: a host lacking a required packag
 
 Activity versioning/Model X (§E2.8) and runnable-artifact material (§E2.9) carry draft/provisional qualifications in the current constitution. The experiment's package/artifact/schema pins inform those discussions; they do not silently ratify their final shapes. Propose any resulting amendments through the existing constitution-readiness ownership. No claim about current production implementation follows solely from an ADR's historical “already built” section.
 
+## Proposed boundary decisions
+
+These are research recommendations awaiting owner ratification, not claims that production Elsa already implements them.
+
+| Candidate | Disposition | Evidence and consequence |
+|---|---|---|
+| One durable execution foundation | Accept direction | Contract convergence is an inference: native/rule work and the ETL bridge share WorkProof; the BPMN interpreter host still has a separate checkpoint store. A production BPMN-to-kernel integration proof remains required. Their semantic state remains different. |
+| A universal workflow/data/agent graph | Reject | Control edges, data ports, state transitions and resource references encode different relationships. Share designer infrastructure through model-specific extensions. |
+| Sequence/Flowchart as composition semantics | Accept | Component-owned ordering and joins survive independent worker completion. Do not move those algorithms into the generic kernel. |
+| Execution-instance actors | Accept direction | Direct and Orleans hosting preserve the tested outcomes with workers outside the actor. Retain commit fencing independently of placement. |
+| Actor per partition/activity/agent | Reject as default | The witnesses do not require it; adding those actors would multiply coordination boundaries without demonstrated benefit. Specialized future models can justify their own boundaries. |
+| Pluggable hosting | Accept narrow contract | Start with existing built-in behavior; qualify an optional Orleans adapter. Proto.Actor remains an untested future adapter, not a claimed interchangeable implementation. |
+| ETL on shared work infrastructure | Accept with model-owned data plane | Partition cursors and bounded batches belong to ETL. Record admission is demonstrated; byte bounds and distributed capacity reclamation remain product requirements. |
+| First-class BPMN plus embedded adapter | Accept direction | Keep one real interpreter and expose direct/child hosting. Operational services build on stable handles; arbitrary alteration and conformance are separate scope. |
+| Agent collaboration as native composition | Accept provisionally | Deterministic mailbox, round, approval and feedback scenarios fit without a new kernel model. Live integrations and lifecycle requirements may change that conclusion. |
+| Independent execution-model registration | Accept direction | A packed rule-inference implementation loads through a generic registry without editing existing engines. Registration, schema and dependency compatibility need production governance. |
+| Completion boolean and work-only cancellation | Revise | Cancelling work can leave a model Running. Durable model stimuli, outcome projection and terminal race rules are required before production extraction. |
+| Exactly-once effects from actor delivery | Reject | Durable result acceptance cannot undo an external effect. Connectors must supply idempotency or explicitly expose weaker guarantees. |
+
+## Product foundations and deferred capabilities
+
+| Product capability | Foundation required now | Follow-up ownership |
+|---|---|---|
+| User tasks and external jobs | Stable work incarnation, authorized claim/complete commands, result correlation, audit and query projections | BPMN product #2907; align existing task/worker services |
+| Timers, messages and event subscriptions | Durable owed commands, listener identity and deduplication; model validates event scope | #2907; preserve the tested winner/late-event rules |
+| Incident retry and operations | Model-owned retry command with revision/authority preconditions and an inspectable outcome | Existing #2747; avoid a competing retry protocol |
+| Arbitrary BPMN alteration and live migration | Explicit supported command matrix, interpreter validation, audit and old/new schema compatibility | #2907; rejected by current witness, not a hidden promise |
+| ETL connectors and datasets | Typed ports/schema, versioned connected-service references, cursor ownership, delivery guarantees, byte-aware admission | ETL product #2908; original issue elsa-core#4809 |
+| Agent memory, tools and approvals | Resource scope/version, durable accepted decision and exact approval-to-effect correlation, bounded content references | Extend #2912/#2913 conclusions through #2905; reuse current Agent infrastructure |
+| Third-party models and hosting | Capability declarations, pin resolution, isolation and the same behavior suite | #2899 findings → #2905 production contract work |
+
+The first-party runtime should expose common inspection headers (identity, model/version, revision, lifecycle, current owner and pending work) plus model-specific detail. BPMN tokens, Flowchart joins, ETL partition progress and agent approvals need their own projections. User interfaces can share navigation, permissions and commands while presenting the right vocabulary for each model.
+
+Security remains explicit at every asynchronous boundary: tenant/persistence/authority scope is not interchangeable with actor address; worker credentials are not serialized resource bindings; result authenticity does not by itself authorize a tool effect. The experiment's HMAC and local resource fixtures are test mechanisms, not a proposed production identity provider. Retention and deletion must preserve enough receipt/correlation identity to avoid resurrecting work on replay.
+
+## First production work unit: lifecycle and offload contract specification
+
+The next slice under #2905 should specify and test the lifecycle boundary before extracting a generic runtime. Its output is a reviewed spec, compatibility fixtures and a small opt-in native integration proposal. It must not replace hosting, migrate existing BPMN execution, or introduce a second persistence authority.
+
+**Scenario.** A native Sequence contains a Flowchart with two offloadable activities and then a final activity. Workers finish in either order. The Flowchart reports completion exactly once; Sequence starts its final activity once. Repeat with a cancellation request before either result, between results, and after the child completed. Recover across each durable boundary and compare existing synchronous behavior.
+
+**Contract to specify.** An immutable invocation carries execution scope, definition/package/schema pins, activity invocation identity, inputs, required capability and an effect idempotency reference. Attempts carry their own fence. A result carries invocation/attempt identity and a typed success, fault or cancellation payload. A durable model input records result acceptance, cancellation request or operator action. A transition commits model state, work/child commands and an outcome projection with revision/fence checks. The public API shape must follow current domain terminology rather than copying the experimental DTOs.
+
+**Decisions for that spec.** Keep the coordinator serialized. Define cancellation acceptance as a durable request, not immediate proof that physical work stopped. The model decides whether to await, compensate or terminate and records its outcome; late results remain auditable without reopening a terminal execution. Define exactly when child outcome consumption advances the parent. Persist decision acceptance before approved work dispatch. Treat retryable work failure, incident suspension, business error and terminal fault as distinct model outcomes/projections. Specify retention for receipt identities before allowing their deletion.
+
+**Implementation seams to examine.** Start with the existing invocation scheduler, `RuntimeCheckpointCommitter`, `EfRuntimeCheckpointCommitStore`, ownership service and durable child-dispatch completion pattern identified in the [source baseline](current-source-baseline.md). Preserve the existing workflow checkpoint shape behind a compatibility adapter while designing a versioned neutral envelope. Do not replace these with the experiment's raw SQLite store. Recheck paths, open ownership and current main before starting production work.
+
+**Acceptance.** Existing definitions and saved executions retain behavior; default execution remains local unless offload is explicitly enabled. Scope mismatch, unavailable pinned handlers and stale writes fail before mutation. Duplicate receipts and parent continuations do not repeat semantic advancement. Cancellation fixtures reach a model-owned state rather than leaving unprocessable results. Crash tests cover dispatch commit, effect delivery, result acceptance and parent continuation. Run affected unit/integration and REST e2e suites, architecture and map checks, plus negative controls proving the new guards matter. Document any backend-specific transaction limitation.
+
+**Ordered tasks for the next approved slice.**
+
+1. Refresh source/ownership, replay the existing Sequence/Flowchart compatibility baseline, and map persisted-record readers/writers.
+2. Write the lifecycle/outcome specification and ADR 0031 amendment proposal; settle cancellation and child-completion race tables before naming public interfaces.
+3. Define the immutable invocation/result and versioned envelope schemas, security context, capability validation and retention requirements; review them against BPMN and rule state needs.
+4. Add contract fixtures for all acceptance scenarios, including negative controls, current persisted-execution compatibility and restart at each commit boundary.
+5. Implement one opt-in native durable offload path through existing EF commit/outbox infrastructure, retaining synchronous behavior and existing providers by default.
+6. Run the affected unit/integration/e2e and architectural gates, independently review the result, and document rollout/rollback. Only then select the separate BPMN-to-neutral-kernel integration slice with its existing owner.
+
+Tasks 1–3 are specification work under #2905; tasks 4–6 become implementation leaves only after that specification is approved. This keeps unresolved API and migration choices visible without pretending the entire future engine is ready to implement.
+
+**Rollout and rollback.** Keep the capability opt-in; introduce versioned persisted records additively, with compatibility readers and no automatic conversion of active executions. Rollback must stop new opt-in starts while retaining a capable worker/reader for already accepted instances. An old binary that cannot read the new schema is not a valid rollback plan. Approval of this research does not authorize a production migration.
+
 ## Adoption plan and decision gates
 
-1. Finish M1 evidence in #2896, #2898, #2900, #2913 and #2901. Record failed assumptions and review each claimed boundary. Do not graduate a generic API solely because the toy experiments compile.
-2. In #2904, disposition each boundary as accept, revise or reject and independently review the combined recommendation. Resolve whether host substitution exposes a useful narrow contract and whether any independent model required substrate changes.
+1. Use the completed bounded M1 evidence in #2896, #2898, #2900, #2913 and #2901, including its failed assumptions and explicit limitations. Do not graduate a generic API solely because the toy experiments compile.
+2. Review the #2904 accept/revise/reject proposals with the owner. The independent reviews support a narrow hosting seam; the rule package required no shared WorkProof edits. Production contract ratification remains distinct from research acceptance.
 3. Under #2905, design production migration slices against current source, preserving existing definitions, activity semantics and persisted executions. Add contract/compatibility tests before replacing providers or commit storage. Version persisted schemas and define rollback; do not change live instances implicitly.
 4. Build native durable offload and first-class BPMN hosting as bounded integration slices, with current owners. Expand BPMN operations through #2907 and ETL through #2908 based on explicit supported behavior. Agent composition remains linked to existing agent infrastructure rather than a parallel product stack.
-5. Produce #2911's interactive HTML after combined review, using real evidence traces alongside clearly labeled architecture simulations. Provide overview, responsibility views, failure/recovery walkthroughs and links back to durable issues/source. Keep it usable offline and by keyboard.
+5. Use #2911's interactive HTML to discuss the reviewed recommendation, with linked executed evidence alongside clearly labeled architecture simulations. Provide overview, responsibility views, failure/recovery walkthroughs and links back to durable issues/source. Keep it usable offline and by keyboard.
 
 The issue hierarchy is the progress authority. This report is the reasoning artifact; source/evidence packages are reproducible witnesses. The HTML is a communication view, not another independent backlog or a substitute for the contracts and acceptance criteria.
