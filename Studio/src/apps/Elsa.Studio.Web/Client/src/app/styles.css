@@ -2239,6 +2239,65 @@ textarea:focus {
   gap: 12px;
 }
 
+/* Feed forms are short: size the dialog to its content instead of stretching drawer rows. */
+.package-feeds-page .modules-dialog-backdrop {
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.package-feeds-page .modules-upload-dialog {
+  width: min(480px, 100%);
+  min-height: 0;
+  max-height: calc(100dvh - 48px);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-lg);
+  box-shadow: var(--studio-shadow-sm);
+}
+
+.package-feeds-page .modules-upload-dialog-heading {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--studio-border);
+}
+
+.package-feeds-page .modules-upload-dialog > .modules-form {
+  min-height: 0;
+  align-content: start;
+  gap: 16px;
+  overflow: auto;
+  padding: 24px;
+}
+
+.package-feeds-page .modules-upload-dialog .modules-form label {
+  align-content: start;
+  gap: 6px;
+}
+
+.package-feeds-page .modules-upload-dialog .modules-form input,
+.package-feeds-page .modules-upload-dialog .modules-form textarea {
+  font-weight: 400;
+}
+
+.package-feeds-page .modules-dialog-actions {
+  padding: 16px 24px;
+  border-top: 1px solid var(--studio-border);
+  background: var(--studio-surface-muted);
+}
+
+@media (max-width: 600px) {
+  .package-feeds-page .modules-dialog-backdrop {
+    padding: 12px;
+  }
+
+  .package-feeds-page .modules-upload-dialog {
+    max-height: calc(100dvh - 24px);
+  }
+}
+
 .package-feeds-workbench {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
