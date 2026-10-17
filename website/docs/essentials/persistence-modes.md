@@ -14,17 +14,27 @@ A persistence mode decides when a workflow run's state is committed to the runti
 
 ## What every mode commits
 
-Some checkpoints are committed in every mode, because skipping them would lose work or leave the database telling a different story than the run:
+Some checkpoints are committed in every mode, because skipping them would lose work or leave the database telling a different story than the run.
 
-- a suspension, and the bookmark the run waits on, so a resume always finds it;
-- resuming from a bookmark;
-- a fault and its incident;
-- a cancellation;
-- the dispatch of a child workflow;
-- completion;
-- the step before an activity that is not safe to repeat. Activities that call out to other systems (an HTTP endpoint, publishing an event, any custom activity not marked safe to repeat) are committed before they run, so a crash never repeats them silently.
+| Checkpoint | Durable | Balanced | Ephemeral |
+|---|:-:|:-:|:-:|
+| A suspension, and the bookmark the run waits on (so a resume always finds it) | ✓ | ✓ | ✓ |
+| Resuming from a bookmark | ✓ | ✓ | ✓ |
+| A fault and its incident | ✓ | ✓ | ✓ |
+| A cancellation | ✓ | ✓ | ✓ |
+| Dispatching a child workflow | ✓ | ✓ | ✓ |
+| The step before an activity that is not safe to repeat | ✓ | ✓ | ✓ |
+| Completion | ✓ | ✓ | ✓ (see the exception below) |
+| Each activity | ✓ | every `MaxActivitiesPerCommit` | ✗ |
+| End of a burst | ✓ | ✓ | only if the run stopped without completing |
 
-There is one exception, which a host opts into. Under Ephemeral with `RecordCompletion` off, a run that completes without ever having been persisted writes no record at all. A run that already has a record, because it suspended, faulted or ran an activity that is not safe to repeat, always gets its completion committed, so no stored run is left looking suspended. A run whose completion something else is waiting for is also always recorded: a dispatched child, whose parent is told about the result, and any run that leaves work behind for after its completion.
+"Not safe to repeat" covers activities that call out to other systems: an HTTP endpoint, publishing an event, and any custom activity not marked safe to repeat. They are committed before they run, so a crash never repeats them silently.
+
+> **Good to know: the one exception.** A host can opt into it. Under Ephemeral with `RecordCompletion` off, a run that completes **without ever having been saved** writes no record at all. Completion is still always committed when:
+>
+> - the run already has a record, because it suspended, was cancelled, recorded or resolved an incident, was altered, dispatched a child, or ran an activity that is not safe to repeat (so no stored run is left looking unfinished);
+> - something is waiting for the result, such as a dispatched child whose parent is told about it;
+> - the run leaves work behind for after its completion.
 
 ## What "suspend" means for Ephemeral
 
@@ -34,7 +44,9 @@ For Ephemeral, a suspension is any stop that is not completion. A run that waits
 
 - **Durable** for human-in-the-loop workflows and for workflows with side effects you never want repeated after a crash, when you are willing to pay a commit per activity.
 - **Balanced** for most workflows. After a crash, the activities since the last commit run again. Activities that are not safe to repeat are committed before they run in every mode, so Balanced repeats them no more often than Durable does.
-- **Ephemeral** for high-volume, short-lived runs whose history you do not need. A run leaves no record only if it completes in one pass without any earlier commit: no suspension, cancellation, incident or alteration, no child dispatch and no activity that is not safe to repeat. Note that a long Ephemeral pass that meets none of its commit points keeps all its work in memory until it does: there is no intermediate commit to bound it.
+- **Ephemeral** for high-volume, short-lived runs whose history you do not need. A run leaves no record only if it completes in one pass without any earlier commit: no suspension, cancellation, incident or alteration, no child dispatch and no activity that is not safe to repeat.
+
+> *Good to know:* a long Ephemeral pass that meets none of its commit points keeps all its work in memory until it does. There is no intermediate commit to bound it.
 
 ## Setting the mode
 
@@ -56,12 +68,18 @@ On the host, list the `WorkflowsRuntimeCheckpointPersistence` feature in your sh
 
 A shell that composes the runtime API gets the persistence modes without listing this feature, with these defaults. List it to change them.
 
-For a single workflow, choose **Persistence mode** in the workflow's settings in Studio, or set `strategyOptions.persistenceMode` to `Durable`, `Balanced` or `Ephemeral` in the workflow definition. Leave it unset to use the host default.
+For a single workflow, choose **Persistence mode** in the workflow's settings in Studio, or set `strategyOptions.persistenceMode` to `Durable`, `Balanced` or `Ephemeral` in the workflow definition. Leave it unset to use the host default. For example (other definition fields omitted):
+
+```json
+"strategyOptions": {
+  "persistenceMode": "Durable"
+}
+```
 
 - The workflow's choice wins over the host default, in both directions.
 - The choice is part of the published workflow: changing it takes a new published version.
 - A run keeps the mode it started with, even if the host default changes while it waits.
-- A host that composes the runtime without the persistence modes cannot run any workflow: every run drains through them, Durable included, so the run is refused with an error that names `AddPersistenceModes()`. Shell hosts always have them.
+- A host that composes the runtime without the persistence modes cannot run any workflow. Every run drains through them, Durable included, so the run is refused with an error that names `AddPersistenceModes()`. Shell hosts always have them.
 
 ## What you see afterwards
 
