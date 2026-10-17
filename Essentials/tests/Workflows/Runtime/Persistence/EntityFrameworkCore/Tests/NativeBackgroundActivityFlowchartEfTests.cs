@@ -52,20 +52,29 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
     private readonly string _databasePath = Path.Join(Path.GetTempPath(), $"elsa-native-background-ef-{Guid.NewGuid():N}.db");
 
     [Theory]
-    [InlineData(LeftNodeId)]
-    [InlineData(RightNodeId)]
-    public async Task Published_native_sequence_waits_for_both_background_results_in_either_order(string firstNodeId)
+    [InlineData(LeftNodeId, PersistenceMode.Durable)]
+    [InlineData(RightNodeId, PersistenceMode.Durable)]
+    [InlineData(LeftNodeId, PersistenceMode.Balanced)]
+    [InlineData(RightNodeId, PersistenceMode.Balanced)]
+    public async Task Published_native_sequence_waits_for_both_background_results_in_either_order(string firstNodeId, PersistenceMode persistenceMode)
     {
         var executionId = ExecutionIdPrefix + Guid.NewGuid().ToString("N");
         var barrier = new BackgroundBodyBarrier();
         var finalCounter = new FinalStepCounter();
-        await using var harness = await StartHarnessAsync(executionId, barrier, finalCounter);
+        await using var harness = await StartHarnessAsync(executionId, barrier, finalCounter, persistenceMode);
         var reference = await PublishAsync(harness);
         await CopyPublicationIntoPartitionAsync(harness, reference);
 
-        var started = await harness.StartPublishedAsync(reference, executionId);
+        var started = await harness.StartPublishedAsync(reference, executionId, correlationId: "background-correlation");
         Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, started.CommandDispatch.Status);
         Assert.Equal(WorkflowExecutionStatus.Running, await WorkflowStatusAsync(harness, executionId));
+        await using (var scope = await CreatePartitionScopeAsync(harness))
+        {
+            var admitted = await scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(executionId);
+            Assert.Equal("true", admitted!.SystemMetadata[RuntimeMetadataKeys.WorkflowHasBackgroundActivityWork]);
+            Assert.Equal(SourceReferenceId, admitted.SystemMetadata[RuntimeMetadataKeys.SourceReferenceId]);
+            Assert.Equal("background-correlation", admitted.CorrelationId);
+        }
 
         var workers = await ClaimTwoAsync(harness, executionId);
         Assert.Equal(2, workers.Count);
@@ -145,6 +154,9 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
 
         Assert.Single(completedHistory.Items);
         Assert.Equal(WorkflowExecutionStatus.Completed, completedHistory.Items[0].Status);
+        Assert.Equal("true", completedHistory.Items[0].SystemMetadata[RuntimeMetadataKeys.WorkflowHasBackgroundActivityWork]);
+        Assert.Equal(SourceReferenceId, completedHistory.Items[0].SystemMetadata[RuntimeMetadataKeys.SourceReferenceId]);
+        Assert.Equal("background-correlation", completedHistory.Items[0].CorrelationId);
         await harness.CancelAsync(executionId);
         var historyAfterCancel = await WorkflowHistoryAsync(harness, executionId);
         Assert.Single(historyAfterCancel.Items);
@@ -319,7 +331,8 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
     private async Task<WorkflowExecutionHarness> StartHarnessAsync(
         string executionId,
         BackgroundBodyBarrier barrier,
-        FinalStepCounter finalCounter)
+        FinalStepCounter finalCounter,
+        PersistenceMode persistenceMode = PersistenceMode.Durable)
     {
         var harness = WorkflowExecutionHarness.Create()
             .WithFeature(services => new WorkflowsRuntimeResumptionFeature().ConfigureServices(services))
@@ -346,6 +359,7 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
                 })
                 .AddEfModuleMigrations<RuntimeDbContext>("Sqlite");
             })
+            .WithPersistenceMode(persistenceMode)
             .Build(
                 WorkflowExecutionHarness.Identity,
                 executionId,

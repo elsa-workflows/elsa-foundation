@@ -296,6 +296,9 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.PersistenceMode, out var persistenceMode) == true)
             metadata[RuntimeMetadataKeys.PersistenceMode] = persistenceMode;
 
+        if (priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.WorkflowHasBackgroundActivityWork, out var hasBackgroundActivityWork) == true)
+            metadata[RuntimeMetadataKeys.WorkflowHasBackgroundActivityWork] = hasBackgroundActivityWork;
+
         return metadata;
     }
 

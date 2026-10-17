@@ -4,6 +4,7 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
@@ -63,12 +64,31 @@ public sealed class BackgroundActivityWorker(
         if (result is null || finalClaim is null || bodyCancellation.IsCancellationRequested)
             return;
         // A separate persistence scope also avoids accidentally saving changes made by user code's DI services.
-        await using var receiptScope = await scopeFactory.CreateAsync(persistenceScope, cancellationToken);
-        var receipt = await receiptScope.ServiceProvider.GetRequiredService<IBackgroundActivityWorkStore>()
-            .RecordResultAsync(finalClaim, result, timeProvider.GetUtcNow(), cancellationToken);
+        BackgroundActivityWorkItem receipt;
+        try
+        {
+            await using var receiptScope = await scopeFactory.CreateAsync(persistenceScope, cancellationToken);
+            receipt = await receiptScope.ServiceProvider.GetRequiredService<IBackgroundActivityWorkStore>()
+                .RecordResultAsync(finalClaim, result, timeProvider.GetUtcNow(), cancellationToken);
+        }
+        catch (BackgroundActivityWorkConflictException)
+        {
+            // Cancellation can commit after the body finishes but before its receipt is recorded. Re-read in a
+            // fresh scope to distinguish that expected fence from stale claims and other lifecycle conflicts.
+            await using var inspectionScope = await scopeFactory.CreateAsync(persistenceScope, cancellationToken);
+            var current = await inspectionScope.ServiceProvider.GetRequiredService<IBackgroundActivityWorkStore>()
+                .FindAsync(finalClaim.WorkflowExecutionId, finalClaim.WorkId, cancellationToken);
+            if (current?.Status != BackgroundActivityWorkStatus.Cancelled)
+                throw;
+
+            return;
+        }
         if (receipt.Status == BackgroundActivityWorkStatus.ResultReady)
-            await receiptScope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
+        {
+            await using var queueScope = await scopeFactory.CreateAsync(persistenceScope, cancellationToken);
+            await queueScope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
                 .EnqueueAsync(receipt.Request.CoordinatorWorkItem, cancellationToken);
+        }
 
         async Task RenewAsync()
         {

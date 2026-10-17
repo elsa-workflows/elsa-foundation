@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -44,12 +45,14 @@ internal sealed class BackgroundActivityCheckpointEnricher(
         if (appliesResult)
             acceptances.Add(new BackgroundActivityWorkAcceptance(item!.Request.WorkflowExecutionId, item.Request.WorkId, item.ReceiptDigest!, commit.Checkpoint.OccurredAt));
 
-        if (changes.WorkflowExecution is { Operation: not RuntimeStateChangeOperation.Delete } workflow && workflow.State.Status.IsTerminal())
+        if (changes.WorkflowExecution is { Operation: not RuntimeStateChangeOperation.Delete } workflow && workflow.State.Status.IsTerminal() &&
+            workflow.State.SystemMetadata.ContainsKey(RuntimeMetadataKeys.WorkflowHasBackgroundActivityWork))
             cancellations.Add(new BackgroundActivityWorkCancellationRequest(commit.Checkpoint.WorkflowExecutionId));
         else
         {
             var cancelledIds = changes.ActivityExecutions
                 .Where(change => change.Operation != RuntimeStateChangeOperation.Delete && change.State.Status == ActivityExecutionStatus.Cancelled &&
+                    change.State.Metadata.ContainsKey(BackgroundActivityEligibility.WorkIdMetadataKey) &&
                     (!appliesResult || change.StateId != item!.Request.ActivityExecutionId))
                 .Select(change => change.StateId).Distinct(StringComparer.Ordinal).ToArray();
             if (cancelledIds.Length > 0)

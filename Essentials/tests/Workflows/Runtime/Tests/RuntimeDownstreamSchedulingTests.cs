@@ -148,8 +148,11 @@ public sealed class RuntimeDownstreamSchedulingTests
         Assert.Single(harness.CheckpointWriter.ListCommits());
     }
 
-    [Fact]
-    public async Task CompleteActivityHandler_DiResolvesTheRequiredWorkflowStateStore()
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("other-workflow", "work-1")]
+    [InlineData("wfexec-1", "other-work-item")]
+    public async Task CompleteActivityHandler_DiResolvesTheTerminalGuardWithoutAMatchingDrainClaim(string? claimWorkflowId, string? claimWorkId)
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
@@ -173,9 +176,13 @@ public sealed class RuntimeDownstreamSchedulingTests
         services.AddSingleton<IWorkflowExecutableStore>(executableStore);
         services.AddSingleton<TimeProvider>(new FakeTimeProvider(_now));
         services.AddSingleton<IWorkflowExecutionStateStore>(workflowStateStore);
+        var claimAccessor = new RuntimeConsumedSchedulerWorkClaimAccessor();
+        services.AddSingleton<IRuntimeConsumedSchedulerWorkClaimAccessor>(claimAccessor);
         services.AddTransient<WorkflowCompleteActivitySchedulerWorkHandler>();
 
         using var provider = services.BuildServiceProvider();
+        using var claimFrame = claimWorkflowId is null ? null : claimAccessor.Begin(
+            new ConsumedSchedulerWorkItem(claimWorkflowId, claimWorkId!, "test-owner", 1));
         await provider.GetRequiredService<WorkflowCompleteActivitySchedulerWorkHandler>().HandleAsync(
             NewCompleteWorkItem(
                 NewIdentity(),
@@ -383,7 +390,7 @@ public sealed class RuntimeDownstreamSchedulingTests
     }
 
     [Fact]
-    public async Task CheckpointHandler_PreservesPinnedRunKindThroughCompletion()
+    public async Task CheckpointHandler_PreservesPinnedRunKindAndBackgroundAdmissionMarkerThroughCompletion()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var activityStateStore = new InMemoryActivityExecutionStateStore();
@@ -400,7 +407,10 @@ public sealed class RuntimeDownstreamSchedulingTests
             null,
             null,
             null,
-            new Dictionary<string, string>())
+            new Dictionary<string, string>
+            {
+                [RuntimeMetadataKeys.WorkflowHasBackgroundActivityWork] = "true"
+            })
         {
             RunKind = WorkflowRunKind.TestRun
         });
@@ -414,6 +424,7 @@ public sealed class RuntimeDownstreamSchedulingTests
 
         var state = await workflowStateStore.FindAsync("wfexec-1");
         Assert.Equal(WorkflowRunKind.TestRun, state!.RunKind);
+        Assert.Equal("true", state.SystemMetadata[RuntimeMetadataKeys.WorkflowHasBackgroundActivityWork]);
     }
 
     [Fact]

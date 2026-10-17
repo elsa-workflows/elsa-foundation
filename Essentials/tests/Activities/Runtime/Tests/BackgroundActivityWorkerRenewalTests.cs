@@ -35,9 +35,7 @@ public sealed class BackgroundActivityWorkerRenewalTests
         gate.AllowBodyCompletion.TrySetResult();
         try
         {
-            // The body gate allows its continuation to run inline. Requiring disposal to have completed before
-            // returning from TrySetResult makes the worker reach its post-body cleanup while renewal is still held.
-            Assert.True(gate.BodyDisposed.Task.IsCompleted);
+            await gate.BodyDisposed.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.False(run.IsCompleted);
         }
         finally
@@ -52,6 +50,69 @@ public sealed class BackgroundActivityWorkerRenewalTests
         Assert.NotNull(await harness.Queue.DequeueAsync(harness.Request.WorkflowExecutionId));
     }
 
+    [Fact]
+    public async Task Cancellation_before_receipt_is_treated_as_a_fenced_result_without_waking_the_coordinator()
+    {
+        var gate = new RenewalRaceGate { PauseReceipt = true };
+        await using var harness = await Harness.CreateAsync(gate);
+        var run = harness.Worker.ExecuteClaimAsync(harness.Scope, harness.Claim);
+
+        try
+        {
+            await FinishBodyBeforeReceiptAsync(gate, run);
+            harness.Store.Cancel();
+            gate.AllowReceipt.TrySetResult();
+            await run.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        finally
+        {
+            gate.AllowBodyCompletion.TrySetResult();
+            gate.AllowRenewalReturn.TrySetResult();
+            gate.AllowReceipt.TrySetResult();
+        }
+
+        Assert.Equal(BackgroundActivityWorkStatus.Cancelled, harness.Store.Item!.Status);
+        Assert.Null(harness.Store.Item.Result);
+        Assert.Null(await harness.Queue.DequeueAsync(harness.Request.WorkflowExecutionId));
+    }
+
+    [Fact]
+    public async Task Non_cancellation_receipt_conflict_still_escapes_the_worker()
+    {
+        var gate = new RenewalRaceGate { PauseReceipt = true };
+        await using var harness = await Harness.CreateAsync(gate);
+        var run = harness.Worker.ExecuteClaimAsync(harness.Scope, harness.Claim);
+
+        try
+        {
+            await FinishBodyBeforeReceiptAsync(gate, run);
+            harness.Store.MakeClaimStale();
+            gate.AllowReceipt.TrySetResult();
+            var conflict = await Assert.ThrowsAsync<BackgroundActivityWorkConflictException>(() => run.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.Contains("stale, expired, or superseded", conflict.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            gate.AllowBodyCompletion.TrySetResult();
+            gate.AllowRenewalReturn.TrySetResult();
+            gate.AllowReceipt.TrySetResult();
+        }
+
+        Assert.Equal(BackgroundActivityWorkStatus.Claimed, harness.Store.Item!.Status);
+        Assert.Null(await harness.Queue.DequeueAsync(harness.Request.WorkflowExecutionId));
+    }
+
+    private static async Task FinishBodyBeforeReceiptAsync(RenewalRaceGate gate, Task run)
+    {
+        await gate.RenewalCommitted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await gate.BodyEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        gate.AllowBodyCompletion.TrySetResult();
+        await gate.BodyDisposed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.False(run.IsCompleted);
+        gate.AllowRenewalReturn.TrySetResult();
+        await gate.ReceiptAttempted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
     private sealed class RenewalRaceGate
     {
         public TaskCompletionSource RenewalCommitted { get; } = NewSignal();
@@ -59,6 +120,9 @@ public sealed class BackgroundActivityWorkerRenewalTests
         public TaskCompletionSource BodyEntered { get; } = NewSignal();
         public TaskCompletionSource AllowBodyCompletion { get; } = new();
         public TaskCompletionSource BodyDisposed { get; } = NewSignal();
+        public bool PauseReceipt { get; init; }
+        public TaskCompletionSource ReceiptAttempted { get; } = NewSignal();
+        public TaskCompletionSource AllowReceipt { get; } = NewSignal();
 
         private static TaskCompletionSource NewSignal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
@@ -195,6 +259,10 @@ public sealed class BackgroundActivityWorkerRenewalTests
         }
 
         public RenewalRaceGate Gate { get; } = gate;
+
+        public void Cancel() => Item = BackgroundActivityWorkLifecycle.Cancel(Item!, DateTimeOffset.UtcNow);
+
+        public void MakeClaimStale() => Item = Item! with { Revision = checked(Item.Revision + 1) };
     }
 
     private sealed class TestBackgroundActivityWorkStore(
@@ -224,7 +292,7 @@ public sealed class BackgroundActivityWorkerRenewalTests
             return renewed;
         }
 
-        public ValueTask<BackgroundActivityWorkItem> RecordResultAsync(
+        public async ValueTask<BackgroundActivityWorkItem> RecordResultAsync(
             BackgroundActivityWorkClaim claim,
             BackgroundActivityWorkTerminalResult result,
             DateTimeOffset now,
@@ -232,9 +300,16 @@ public sealed class BackgroundActivityWorkerRenewalTests
         {
             if (!IsVisible)
                 throw new BackgroundActivityWorkConflictException(claim.WorkflowExecutionId, claim.WorkId, "work is outside the active persistence scope");
+
+            if (state.Gate.PauseReceipt)
+            {
+                state.Gate.ReceiptAttempted.TrySetResult();
+                await state.Gate.AllowReceipt.Task.WaitAsync(cancellationToken);
+            }
+
             var updated = BackgroundActivityWorkLifecycle.RecordResult(state.Item!, claim, result, now);
             state.Item = updated;
-            return ValueTask.FromResult(updated);
+            return updated;
         }
 
         public ValueTask<IReadOnlyCollection<BackgroundActivityWorkItem>> ListResultReadyAsync(int limit, string? workflowExecutionId = null, CancellationToken cancellationToken = default) =>

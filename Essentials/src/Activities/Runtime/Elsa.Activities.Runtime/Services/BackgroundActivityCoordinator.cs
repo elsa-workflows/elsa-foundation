@@ -11,6 +11,7 @@ namespace Elsa.Activities.Runtime.Services;
 internal sealed class BackgroundActivityCoordinator(
     BackgroundActivityCompletionCodec codec,
     RuntimeCheckpointCommitter committer,
+    IWorkflowExecutionStateStore workflowStateStore,
     TimeProvider timeProvider,
     IOptions<BackgroundActivityWorkerOptions> options,
     IBackgroundActivityWorkStore? store = null)
@@ -68,8 +69,23 @@ internal sealed class BackgroundActivityCoordinator(
         };
         var admitted = ActivityAttemptActivationClaimer.MarkInitialActivationCompleted(
             prepared.Claim.State with { Metadata = RuntimeModelMetadata.Snapshot(metadata), SubStatus = "BackgroundPending" }, workItem.WorkItemId);
+        // The marker is monotonic and committed with admission. Terminal checkpoints can then cancel all
+        // outstanding branches without querying the work table for workflows that have never offloaded a body.
+        var workflow = await workflowStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken)
+            ?? throw new BackgroundActivityValidationException("BG-ACT-003: Background admission requires a live workflow execution.");
+        RuntimeStateChange<WorkflowExecutionState>? workflowChange = null;
+        if (!workflow.SystemMetadata.ContainsKey(RuntimeMetadataKeys.WorkflowHasBackgroundActivityWork))
+        {
+            var workflowMetadata = new Dictionary<string, string>(workflow.SystemMetadata, StringComparer.Ordinal)
+            {
+                [RuntimeMetadataKeys.WorkflowHasBackgroundActivityWork] = "true"
+            };
+            workflowChange = new RuntimeStateChange<WorkflowExecutionState>(
+                workflow.WorkflowExecutionId, RuntimeStateChangeOperation.Upsert,
+                workflow with { SystemMetadata = RuntimeModelMetadata.Snapshot(workflowMetadata) }, prepared.Commit.Metadata);
+        }
         var changes = new RuntimeCheckpointStateChangeSet(
-            workflowExecution: null, scheduler: null,
+            workflowExecution: workflowChange, scheduler: null,
             activityExecutions: [new RuntimeStateChange<ActivityExecutionState>(payload.ActivityExecutionId, RuntimeStateChangeOperation.Upsert, admitted, prepared.Commit.Metadata)],
             bookmarks: [], durableValues: [], incidents: [], operational: [])
             .WithBackgroundActivityWork(new BackgroundActivityWorkCheckpointChanges(admissions: [request]));

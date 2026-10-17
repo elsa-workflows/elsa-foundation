@@ -84,6 +84,9 @@ public sealed class WorkbenchBackgroundActivityRecoveryTests
         var executionId = await PublishAndStartAsync(host, journal);
         await WaitForAsync(host, () => StartedCount(journal, "left") == 1 && StartedCount(journal, "right") == 1,
             "both background bodies to enter before cancellation");
+        await WaitForAsync(host, () => File.Exists(Path.Combine(journal, "left.claim.json")) && File.Exists(Path.Combine(journal, "right.claim.json")),
+            "the real pre-cancellation worker claims to be captured");
+        var originalProcessId = int.Parse(File.ReadAllLines(Path.Combine(journal, "left.started"))[0].Split('|')[0]);
         await PostAsync(host, "/runtime/workflows/alteration-plans", new
         {
             target = new { executionIds = new[] { executionId } },
@@ -96,8 +99,27 @@ public sealed class WorkbenchBackgroundActivityRecoveryTests
 
         File.WriteAllText(Path.Combine(journal, "left.release"), "release");
         File.WriteAllText(Path.Combine(journal, "right.release"), "release");
-        await using var restarted = await host.CrashAndRestartAsync();
+        await using var restarted = await host.CrashAndRestartAsync(directory =>
+            File.WriteAllText(Path.Combine(directory, "background-witness", "attempt-late-receipt-after-restart"), "submit"));
         await LoginAsync(restarted);
+        await WaitForAsync(restarted, () => File.Exists(Path.Combine(journal, "left.late-receipt.json")) &&
+                                                  File.Exists(Path.Combine(journal, "right.late-receipt.json")),
+            "the replacement process to reject both captured late receipts");
+        foreach (var key in new[] { "left", "right" })
+        {
+            var capturedClaim = JsonNode.Parse(File.ReadAllText(Path.Combine(journal, key + ".claim.json")))!;
+            var lateReceipt = JsonNode.Parse(File.ReadAllText(Path.Combine(journal, key + ".late-receipt.json")))!;
+            Assert.NotEqual(originalProcessId, lateReceipt["ProcessId"]!.GetValue<int>());
+            Assert.Equal(executionId, lateReceipt["WorkflowExecutionId"]!.GetValue<string>());
+            Assert.Equal(capturedClaim["WorkId"]!.GetValue<string>(), lateReceipt["WorkId"]!.GetValue<string>());
+            Assert.Equal(capturedClaim["ClaimOwnerId"]!.GetValue<string>(), lateReceipt["ClaimOwnerId"]!.GetValue<string>());
+            Assert.Equal(capturedClaim["ClaimFence"]!.GetValue<long>(), lateReceipt["ClaimFence"]!.GetValue<long>());
+            Assert.Equal(capturedClaim["Revision"]!.GetValue<long>(), lateReceipt["Revision"]!.GetValue<long>());
+            Assert.Contains("cancellation tombstone fenced this receipt", lateReceipt["Message"]!.GetValue<string>());
+            Assert.Equal("Cancelled", lateReceipt["Status"]!.GetValue<string>());
+            Assert.False(lateReceipt["HasResult"]!.GetValue<bool>());
+        }
+
         var state = await WaitForStateAsync(restarted, executionId, instance => instance["instance"]?["status"]?.GetValue<string>() == "Cancelled");
         Assert.Equal("Cancelled", ActivityStatus(state, "left"));
         Assert.Equal("Cancelled", ActivityStatus(state, "right"));

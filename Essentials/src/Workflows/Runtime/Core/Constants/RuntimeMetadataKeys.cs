@@ -4,6 +4,8 @@ public static class RuntimeMetadataKeys
 {
     public const string WorkflowExecutionOrigin = "runtime.workflowExecutionOrigin";
     public const string WorkflowStartedAt = "runtime.workflowStartedAt";
+    /// <summary>Monotonic workflow marker indicating that native background work was admitted for this execution.</summary>
+    public const string WorkflowHasBackgroundActivityWork = "runtime.hasBackgroundActivityWork";
     public const string CompletionOutcomeNames = "runtime.completionOutcomeNames";
     public const string CheckpointRequirement = "runtime.checkpointRequirement";
     public const string CheckpointRequirementMandatory = "Mandatory";
