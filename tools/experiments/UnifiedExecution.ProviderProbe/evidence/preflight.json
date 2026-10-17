@@ -1,0 +1,59 @@
+{
+  "package": "Microsoft.Orleans.Server 10.4.0",
+  "scope": "loopback multiprocess activation only",
+  "key": "367dd092-a1f5-4342-99cf-833807022747",
+  "attempts": [
+    {
+      "exit": 0,
+      "log": "client-0.log",
+      "seconds": 2.21636770805344
+    },
+    {
+      "exit": -6,
+      "log": "client-1.log",
+      "seconds": 4.164030083920807
+    },
+    {
+      "exit": -6,
+      "log": "client-2.log",
+      "seconds": 0.5183033749926835
+    },
+    {
+      "exit": -6,
+      "log": "client-3.log",
+      "seconds": 0.716213250067085
+    },
+    {
+      "exit": -6,
+      "log": "client-4.log",
+      "seconds": 2.4448535421397537
+    },
+    {
+      "exit": -6,
+      "log": "client-5.log",
+      "seconds": 1.9767434999812394
+    },
+    {
+      "exit": -6,
+      "log": "client-6.log",
+      "seconds": 1.5250039170496166
+    },
+    {
+      "exit": -6,
+      "log": "client-7.log",
+      "seconds": 0.6548700409475714
+    },
+    {
+      "exit": 0,
+      "log": "client-8.log",
+      "seconds": 1.765449000056833
+    }
+  ],
+  "siloPids": [
+    89280,
+    89281
+  ],
+  "killedActivationPid": 89281,
+  "recoveredActivationPid": 89280,
+  "passed": true
+}
