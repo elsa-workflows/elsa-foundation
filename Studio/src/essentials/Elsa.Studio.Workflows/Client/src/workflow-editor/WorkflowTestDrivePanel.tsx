@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type {
   StudioEndpointContext,
   StudioWorkflowRunInputEditorContribution,
@@ -227,6 +227,7 @@ export function WorkflowTestDrivePanel({
       {optionDiagnostics.length ? <ul className="wf-test-drive-diagnostics" aria-label="Start diagnostics">{optionDiagnostics.map((diagnostic, index) => <li key={`${diagnostic.code}-${diagnostic.nodeId ?? index}`}><strong>{diagnostic.code}</strong> {diagnostic.message}{diagnostic.nodeId ? <span> · Node {diagnostic.nodeId}</span> : null}</li>)}</ul> : null}
       {options.some(option => option.isAvailable === false) ? <ul className="wf-test-drive-diagnostics" aria-label="Unavailable starts">{options.filter(option => option.isAvailable === false).map(option => <li key={option.optionId}><strong>{option.label}</strong>{option.nodeId ? ` · Node ${option.nodeId}` : ""}{option.reason ? ` · ${option.reason}` : " · Unavailable"}</li>)}</ul> : null}
       {loading ? <p role="status">Loading available starts…</p> : null}
+      <Suspense fallback={<p className="wf-test-drive-loading" role="status">Loading Test Drive editor…</p>}>
       <form onSubmit={event => { void submit(event); }}>
         <label className="wf-form-field">
           <span>Start</span>
@@ -311,6 +312,7 @@ export function WorkflowTestDrivePanel({
           <button type="submit" disabled={busy || loading || isStale || triggerUnavailable || !snapshot.draft.state.rootActivity}>{busy ? "Starting…" : editor?.startLabel ?? "Run workflow"}</button>
         </div>
       </form>
+      </Suspense>
     </div>
   );
 }

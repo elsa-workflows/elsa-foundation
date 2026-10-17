@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy } from "react";
 import type { StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
 import { asRecord, isJsonValue, isRecord, isStringMap, readObject } from "./workflowTestStimulusEditorUtils";
 
@@ -13,7 +13,7 @@ export const httpWorkflowTestStimulusEditor: StudioTestStimulusEditorContributio
   startLabel: "Send request and start",
   actionLabel: "Send HTTP request",
   supports: ({ option, mode }) => option.driverId === "Elsa.HttpEndpoint" && mode.modeId === "http-request",
-  component: props => <Suspense fallback={null}><HttpRequestEditorView {...props} /></Suspense>,
+  component: HttpRequestEditorView,
   validate: ({ draft }) => {
     const value = readObject(draft);
     if (!value) return "Enter valid JSON for the HTTP request fields.";
@@ -29,7 +29,7 @@ export const httpWorkflowTestStimulusEditor: StudioTestStimulusEditorContributio
   },
   serialize: ({ draft }) => readObject(draft) ?? {},
   executeAction: sendHttpRequest,
-  actionResultComponent: props => <Suspense fallback={null}><HttpExchangeResultView {...props} /></Suspense>
+  actionResultComponent: HttpExchangeResultView
 };
 
 export const eventWorkflowTestStimulusEditor: StudioTestStimulusEditorContribution = {
@@ -37,7 +37,7 @@ export const eventWorkflowTestStimulusEditor: StudioTestStimulusEditorContributi
   order: 110,
   startLabel: "Fire event now",
   supports: ({ option, mode }) => option.driverId === "Elsa.Event" && mode.modeId === "event",
-  component: props => <Suspense fallback={null}><EventEditorView {...props} /></Suspense>,
+  component: EventEditorView,
   validate: ({ draft }) => {
     try {
       const value: unknown = JSON.parse(draft || "{}");
@@ -55,7 +55,7 @@ export const schedulingWorkflowTestStimulusEditor: StudioTestStimulusEditorContr
   startLabel: "Fire once now",
   supports: ({ option, mode }) =>
     (option.driverId === "Elsa.Timer" || option.driverId === "Elsa.Cron") && mode.modeId === "fire-now",
-  component: props => <Suspense fallback={null}><SchedulingEditorView {...props} /></Suspense>,
+  component: SchedulingEditorView,
   validate: () => undefined,
   serialize: () => undefined
 };

@@ -7,10 +7,16 @@ import type { WorkflowDraft, WorkflowExecutionInputs, WorkflowTestRunView } from
 import type { WorkflowTestDriveSetupState } from "../workflow-editor/editorTypes";
 
 const publishingMocks = vi.hoisted(() => ({ getOptions: vi.fn(), getRun: vi.fn() }));
+const stimulusEditorChunk = vi.hoisted(() => {
+  let resolveModule!: (module: Record<string, unknown>) => void;
+  const promise = new Promise<Record<string, unknown>>(resolve => { resolveModule = resolve; });
+  return { promise, resolveModule: (module: Record<string, unknown>) => resolveModule(module) };
+});
 vi.mock("../api/publishing", () => ({
   getWorkflowDraftTestRunOptions: publishingMocks.getOptions,
   getWorkflowTestRun: publishingMocks.getRun
 }));
+vi.mock("../workflowTestStimulusEditorComponents", () => stimulusEditorChunk.promise);
 
 import { WorkflowTestDrivePanel } from "../workflow-editor/WorkflowTestDrivePanel";
 import { httpWorkflowTestStimulusEditor } from "../workflowTestStimulusEditors";
@@ -33,6 +39,35 @@ afterEach(() => {
 });
 
 describe("workflow Test Run setup", () => {
+  it("withholds submission until a lazy built-in stimulus editor loads", async () => {
+    const httpOption = {
+      optionId: "http-option",
+      driverId: "Elsa.HttpEndpoint",
+      label: "HTTP endpoint",
+      modes: [{ modeId: "http-request", label: "Send HTTP request", isDefault: true }]
+    };
+    publishingMocks.getOptions.mockResolvedValue({ options: [httpOption] });
+    const onStart = vi.fn(async () => testRunView);
+    const container = renderPanel({ stimulusEditors: [httpWorkflowTestStimulusEditor], onStart });
+    await settle();
+
+    changeSelect(container.querySelector<HTMLSelectElement>("select")!, "trigger:http-option");
+    expect(container.textContent).toContain("Loading Test Drive editor…");
+    expect(container.querySelector<HTMLFormElement>("form")?.style.display).toBe("none");
+    expect(onStart).not.toHaveBeenCalled();
+
+    stimulusEditorChunk.resolveModule({
+      HttpRequestEditorView: ({ draft, controlProps }: { draft: string; controlProps: React.TextareaHTMLAttributes<HTMLTextAreaElement> }) =>
+        <textarea {...controlProps} value={draft} />
+    });
+    await vi.waitFor(() => {
+      expect(container.querySelector("textarea[aria-label='Send HTTP request data']")).toBeTruthy();
+      expect(container.querySelector<HTMLButtonElement>("button[type='submit']")?.disabled).toBe(false);
+    });
+    expect(container.textContent).not.toContain("Loading Test Drive editor…");
+    expect(onStart).not.toHaveBeenCalled();
+  });
+
   it("uses a public custom editor and keeps its data separate from workflow inputs", async () => {
     const customRegistry = createContributionRegistry<StudioTestStimulusEditorContribution>();
     customRegistry.add(customEditor);

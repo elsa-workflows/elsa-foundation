@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { AlertCircle, Check, Flag, MapPin, Wrench } from "lucide-react";
 import type { StudioEndpointContext, StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ValidationError, WorkflowDraft, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
@@ -205,7 +206,11 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
           <div><dt>Incidents</dt><dd>{formatEvidenceCount(view.incidentCount, "incident")}</dd></div>
           <div><dt>Expires</dt><dd title={view.expiresAt ? formatDate(view.expiresAt) : "None"}>{view.expiresAt ? formatDate(view.expiresAt) : "None"}</dd></div>
         </dl>
-        {ActionResult && runState.driverActionResult ? <ActionResult action={view.driverAction ?? { kind: runState.driverActionResult.value.kind }} result={runState.driverActionResult.value} /> : null}
+        {ActionResult && runState.driverActionResult ? (
+          <Suspense fallback={<p role="status">Loading Test Drive response…</p>}>
+            <ActionResult action={view.driverAction ?? { kind: runState.driverActionResult.value.kind }} result={runState.driverActionResult.value} />
+          </Suspense>
+        ) : null}
         {context && onRunViewUpdated && "view" in testRun ? <WorkflowTestRunControls context={context} testRun={runState} stimulusEditors={stimulusEditors ?? []} onRunViewUpdated={onRunViewUpdated} onWaitDraftUpdated={onWaitDraftUpdated} /> : null}
       </section>
     </div>
