@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>UnifiedExecution.FiniteRules.Swap</AssemblyName>
+    <RootNamespace>Elsa.UnifiedExecution.FiniteRules</RootNamespace>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.1.0</AssemblyVersion>
+    <FileVersion>1.0.1.0</FileVersion>
+    <PackageId>Elsa.UnifiedExecution.FiniteRules.Proof</PackageId>
+    <IsPackable>false</IsPackable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../RuleEngine/FiniteRulesPackage.cs" Link="FiniteRulesPackage.cs" />
+    <ProjectReference Include="../ModelContracts/UnifiedExecution.ModelContracts.csproj" />
+    <ProjectReference Include="../../UnifiedExecution.WorkProof/UnifiedExecution.WorkProof.csproj" />
+  </ItemGroup>
+</Project>

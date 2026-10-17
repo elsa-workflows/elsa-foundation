@@ -20,7 +20,7 @@ This workspace holds architecture experiments and evidence, not production APIs 
 | Shared work #2896 | [Failure matrix](https://github.com/elsa-workflows/elsa-foundation/issues/2896#issuecomment-6233491510) | Root rerun: 111 assertions, 43 OS process identities, four negative controls; aggregate record admission independently reviewed and configuration deadlock fixed |
 | Operational BPMN #2898 | Existing #2735 ownership/parity and upstream library | Root rerun passed pinned interpreter host, restart and Sequence-style adapter comparison; custom host, not production integration |
 | Provider substitution #2900 | Orleans 10.4.0 / source d114d7522a53b8cce4c6b97d44293e5c7273d766 candidate | Real multiprocess comparison required |
-| Independent model #2901 | Separate package required, with unchanged substrate | Pending |
+| Independent model #2901 | Separately packed finite-rule model, unchanged shared substrate | Root verified 26 assertions; package/worker pins corrected; cross-review pending |
 | Agent collaboration #2913 | [Pinned MAF source analysis](https://github.com/elsa-workflows/elsa-foundation/issues/2913#issuecomment-6233507776) | Root rerun of real MAF 1.25.0 package passed three semantic probes; native composite recovery implementation underway |
 | Architecture recommendation #2904 | All five witnesses required | Pending |
 | Interactive HTML #2911 | Follows evidence review | Pending |

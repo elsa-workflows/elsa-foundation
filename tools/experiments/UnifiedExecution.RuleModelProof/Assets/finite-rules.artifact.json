@@ -1,0 +1,10 @@
+{
+  "initialFacts": ["seed"],
+  "rules": [
+    { "id": "seed-to-left", "whenAll": ["seed"], "then": "left" },
+    { "id": "seed-to-right", "whenAll": ["seed"], "then": "right" },
+    { "id": "join-left-and-right", "whenAll": ["left", "right"], "then": "joined" },
+    { "id": "joined-to-final", "whenAll": ["joined"], "then": "final" },
+    { "id": "unreachable-rule", "whenAll": ["unreachable"], "then": "never-derived" }
+  ]
+}

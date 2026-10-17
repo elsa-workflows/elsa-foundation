@@ -1,0 +1,22 @@
+{
+  "modelId": "proof.finite-positive-rules",
+  "modelVersion": "1.0.0",
+  "stateSchema": "urn:elsa:proof:finite-positive-facts:1",
+  "artifactFile": "finite-rules.artifact.json",
+  "artifactSha256": "5808f702ec6ca27fde2bc39057796a9420f7801fdc5bff494cf2dce60a1e4c3e",
+  "packageId": "elsa.proof.finite-positive-rules",
+  "packageVersion": "1.0.0",
+  "packageAssembly": "../UnifiedExecution.FiniteRules.dll",
+  "packageSha256": "BUILD_TIME_PIN_REQUIRED",
+  "packageType": "Elsa.UnifiedExecution.FiniteRules.FiniteRulesPackage",
+  "workHandlers": [
+    { "id": "finite-rule-round", "version": "1" }
+  ],
+  "requiredCapabilities": [
+    "work.scope-authorization.v1",
+    "work.claim-fencing.v1",
+    "work.result-receipts.v1",
+    "composition.atomic-semantic-commit.v1",
+    "composition.inspect-state.v1"
+  ]
+}
