@@ -30,7 +30,7 @@ This implements #2914 under #2905/#2892. It does not extract a universal engine 
 | Serialized orchestration (ADR 0031/0078) | One coordinator fence; independent worker fences authorize only the worker row, never workflow state. Amend 0031's blanket intra-execution parallelism wording. |
 | Activity-owned composition (§E2.9.1, provisional) | No generic graph edges/joins. Sequence and Flowchart continue to own their structures. This section remains provisional. |
 | Optional composition and tests | Feature registration and shell task lifecycle tests; missing durable store fails before background execution. |
-| Security and value policy | Scope-isolated claims, pinned types, no worker-selected CLR names, secret masking; v1 rejects transient/encryption-required results it cannot safely carry. |
+| Security and value policy | Scope-isolated claims, pinned types, no worker-selected CLR names, secret masking; v1 rejects transient/sensitive or encryption-required results it cannot safely carry. |
 
 No unresolved product decision blocks this slice. Implementation may refine internal shapes while preserving [contracts](contracts/background-activity.md) and all acceptance tests.
 
