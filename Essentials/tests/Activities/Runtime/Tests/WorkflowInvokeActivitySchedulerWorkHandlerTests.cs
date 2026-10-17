@@ -714,6 +714,59 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
     }
 
     [Fact]
+    public async Task ParentCallback_ReplayIsSuppressedPerChildWhileAnotherLoopIterationStillRuns()
+    {
+        var activity = new RecordingDeferringChildCompletionActivity();
+        var activator = new FixedActivityActivator(activity);
+        var executable = NewCallbackExecutable();
+        await _executableStore.SaveAsync(executable);
+        await _activityStateStore.SaveAsync(NewCallbackParentState(executable));
+        await _activityStateStore.SaveAsync(NewCompletedCallbackChildState("actexec-child-iteration-1", "iteration-1", "branch-1"));
+        await _activityStateStore.SaveAsync(NewCompletedCallbackChildState("actexec-child-iteration-2", "iteration-2", "branch-2"));
+        await using var provider = NewProvider(activator, includeInspection: true);
+        var handler = new WorkflowParentActivityCompletionSchedulerWorkHandler(
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            new FakeTimeProvider(_now));
+        var firstIteration = NewParentCallbackWorkItem("callback-work-iteration-1", "command-iteration-1", "actexec-child-iteration-1");
+        var secondIteration = NewParentCallbackWorkItem("callback-work-iteration-2", "command-iteration-2", "actexec-child-iteration-2");
+
+        await handler.HandleAsync(firstIteration);
+        var parentAfterFirst = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        var commitsAfterFirst = _checkpointWriter.ListCommits().Count;
+        Assert.Equal(ActivityExecutionStatus.Running, parentAfterFirst!.Status);
+
+        // The first child has already committed its parent-callback marker. Replaying that callback is a no-op, while
+        // the second child execution belongs to a separate loop iteration and must still reach the parent.
+        await handler.HandleAsync(firstIteration);
+        Assert.Equal(parentAfterFirst, await _activityStateStore.FindAsync("wfexec-1", "actexec-1"));
+        Assert.Equal(commitsAfterFirst, _checkpointWriter.ListCommits().Count);
+
+        await handler.HandleAsync(secondIteration);
+
+        var parentAfterSecond = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+        Assert.Equal(ActivityExecutionStatus.Running, parentAfterSecond!.Status);
+        Assert.Equal(3, parentAfterSecond.Attempts!.Count);
+        Assert.Collection(
+            activity.Callbacks,
+            callback =>
+            {
+                Assert.Equal("actexec-child-iteration-1", callback.ChildExecutionId);
+                Assert.Equal("iteration-1", callback.IterationId);
+            },
+            callback =>
+            {
+                Assert.Equal("actexec-child-iteration-2", callback.ChildExecutionId);
+                Assert.Equal("iteration-2", callback.IterationId);
+            });
+        Assert.Equal("callback-work-iteration-1",
+            (await _activityStateStore.FindAsync("wfexec-1", "actexec-child-iteration-1"))!.Metadata[RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId]);
+        Assert.Equal("callback-work-iteration-2",
+            (await _activityStateStore.FindAsync("wfexec-1", "actexec-child-iteration-2"))!.Metadata[RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId]);
+        Assert.Equal("branch-1", (await _activityStateStore.FindAsync("wfexec-1", "actexec-child-iteration-1"))!.BranchId);
+        Assert.Equal("branch-2", (await _activityStateStore.FindAsync("wfexec-1", "actexec-child-iteration-2"))!.BranchId);
+    }
+
+    [Fact]
     public async Task ParentCallback_LongRunningContainerRetainsBoundedAttemptDiagnosticsAndMonotonicOrdinal()
     {
         var activator = new FixedActivityActivator(new DeferringChildCompletionActivity());
@@ -969,7 +1022,10 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
             new Dictionary<string, string> { ["source"] = "test" },
             new Dictionary<string, string> { ["transport"] = "in-process" });
 
-    private RuntimeSchedulerWorkItem NewParentCallbackWorkItem(string workItemId, string commandId) =>
+    private RuntimeSchedulerWorkItem NewParentCallbackWorkItem(
+        string workItemId,
+        string commandId,
+        string completedChildActivityExecutionId = "actexec-child") =>
         new(
             workItemId,
             "wfexec-1",
@@ -989,7 +1045,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
                 outcomeNames: [ActivityOutcomes.Done],
                 RuntimeCompleteActivityCommandPayload.ParentCompletionEvaluationReason,
                 SchedulerCompletionKind.ParentCompletionEvaluation,
-                completedChildActivityExecutionId: "actexec-child")),
+                completedChildActivityExecutionId: completedChildActivityExecutionId)),
             new Dictionary<string, string>(),
             new Dictionary<string, string>());
 
@@ -1107,9 +1163,12 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         };
     }
 
-    private ActivityExecutionState NewCompletedCallbackChildState() =>
+    private ActivityExecutionState NewCompletedCallbackChildState(
+        string activityExecutionId = "actexec-child",
+        string? iterationId = null,
+        string? branchId = null) =>
         new(
-            new ActivityExecution("actexec-child", "wfexec-1", "node-child", "authored-node-child", "test/child", "1.0.0"),
+            new ActivityExecution(activityExecutionId, "wfexec-1", "node-child", "authored-node-child", "test/child", "1.0.0"),
             ActivityExecutionStatus.Completed,
             null,
             _now,
@@ -1124,7 +1183,11 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
             [],
             0,
             0,
-            new Dictionary<string, string>());
+            new Dictionary<string, string>())
+        {
+            IterationId = iterationId,
+            BranchId = branchId
+        };
 
     private static WorkflowExecutable NewCallbackExecutable(IReadOnlyCollection<ActivityResultProjectionContract>? resultProjections = null)
     {
@@ -1637,6 +1700,17 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
     {
         public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
             ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+    }
+
+    private sealed class RecordingDeferringChildCompletionActivity : StructuralActivity, IRuntimeActivityChildCompletionHandler
+    {
+        public List<(string ChildExecutionId, string? IterationId)> Callbacks { get; } = [];
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
+        {
+            Callbacks.Add((context.CompletedChildActivityExecutionId, context.CompletedChildIterationId));
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+        }
     }
 
     private sealed class CompletingChildCompletionActivity : StructuralActivity, IRuntimeActivityChildCompletionHandler
