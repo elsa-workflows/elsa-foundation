@@ -4,7 +4,7 @@ using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Primitives.Activation;
 using Elsa.Activities.Primitives.Services;
 using Elsa.Activities.Runtime.Contracts;
-using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Extensions;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Extensions;
@@ -32,9 +32,7 @@ public class ActivitiesPrimitivesFeature : IShellFeature
         // The CLR activator binds each activity's scope to the partition of the scope it activates in.
         services.AddPersistenceCore();
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IActivityActivationStrategy, ClrActivityActivator>());
-        // A distinct type, not the shared generic capability record: TryAddEnumerable de-duplicates by
-        // implementation type, so two capabilities of one class silently collapse into whichever composed first.
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IRuntimeActivityConsumerCapability, ClrActivityConsumerCapability>());
+        services.AddRuntimeActivityConsumerCapability(WellKnownRuntimeActivityConsumers.ClrActivity, [RuntimeActivityDescriptor.InitialSchemaVersion]);
 
         // Contribute the Event start-trigger's stimulus provider so the publish-time trigger extractor
         // can recognize published Event nodes and index them. Enumerable so other activity features add their own.
