@@ -47,7 +47,8 @@ public sealed class WorkbenchBackgroundActivityRecoveryTests
         // Persist the first receipt while its notification and repair sweep are held, then lose the process.
         File.WriteAllText(Path.Combine(journal, "hold-receipts"), "hold");
         File.WriteAllText(Path.Combine(journal, first + ".release"), "release");
-        await WaitForAsync(restarted, () => File.Exists(Path.Combine(journal, first + ".receipt")), "the real EF receipt to commit before notification");
+        await WaitForAsync(restarted, () => File.Exists(Path.Combine(journal, first + ".receipt")),
+            "the real EF receipt to commit before notification", () => DescribeJournal(journal));
         Assert.False(File.Exists(Path.Combine(journal, "final.started")));
         var completedBodyCount = StartedCount(journal, first);
         await using var receiptRecovered = await restarted.CrashAndRestartAsync(_ => File.Delete(Path.Combine(journal, "hold-receipts")));
@@ -250,14 +251,71 @@ public sealed class WorkbenchBackgroundActivityRecoveryTests
         throw new InvalidOperationException($"Workflow did not reach the expected state: {last}\n{host.Output}");
     }
 
-    private static async Task WaitForAsync(WorkbenchProcess host, Func<bool> predicate, string expected)
+    private static async Task WaitForAsync(WorkbenchProcess host, Func<bool> predicate, string expected,
+        Func<string>? timeoutEvidence = null)
     {
         var deadline = DateTimeOffset.UtcNow + Patience;
         while (!predicate())
         {
-            Assert.True(DateTimeOffset.UtcNow < deadline, $"Timed out waiting for {expected}.\n{host.Output}");
+            if (DateTimeOffset.UtcNow >= deadline)
+            {
+                var evidence = timeoutEvidence?.Invoke();
+                Assert.Fail($"Timed out waiting for {expected}.\n{evidence}\n{host.Output}");
+            }
             await Task.Delay(100);
         }
+    }
+
+    private static string DescribeJournal(string journal)
+    {
+        const int maximumFiles = 32;
+        const int maximumFileCharacters = 768;
+        const int maximumTotalCharacters = 12000;
+        if (!Directory.Exists(journal))
+            return $"Background witness journal is missing: {journal}";
+
+        var output = new StringBuilder();
+        string[] files;
+        try
+        {
+            files = Directory.EnumerateFiles(journal)
+                .Where(path => !Path.GetFileName(path).EndsWith(".tmp", StringComparison.Ordinal))
+                .OrderBy(path => Path.GetFileName(path), StringComparer.Ordinal)
+                .Take(maximumFiles).ToArray();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return $"Background witness journal could not be enumerated: {exception.GetType().Name}";
+        }
+
+        foreach (var path in files)
+        {
+            if (output.Length >= maximumTotalCharacters)
+                break;
+
+            output.Append(Path.GetFileName(path)).Append(": ");
+            try
+            {
+                using var reader = new StreamReader(path);
+                var buffer = new char[maximumFileCharacters];
+                var count = reader.ReadBlock(buffer, 0, buffer.Length);
+                output.Append(buffer, 0, count);
+                if (reader.Peek() >= 0)
+                    output.Append("…");
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                output.Append("<unreadable: ").Append(exception.GetType().Name).Append('>');
+            }
+            output.AppendLine();
+        }
+
+        if (output.Length > maximumTotalCharacters)
+        {
+            output.Length = maximumTotalCharacters;
+            output.Append("… journal output truncated");
+        }
+        return output.ToString();
     }
 
     private static void PrepareContentRoot(string directory)

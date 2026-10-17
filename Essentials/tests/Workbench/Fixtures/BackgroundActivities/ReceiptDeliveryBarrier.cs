@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -41,15 +43,42 @@ internal sealed class ReceiptDeliveryBarrier(IBackgroundActivityWorkStore inner)
         return claim;
     }
 
-    public ValueTask<BackgroundActivityWorkClaim?> RenewClaimAsync(BackgroundActivityWorkClaim claim, DateTimeOffset now, TimeSpan visibilityTimeout, CancellationToken cancellationToken = default) =>
-        inner.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
+    public async ValueTask<BackgroundActivityWorkClaim?> RenewClaimAsync(BackgroundActivityWorkClaim claim, DateTimeOffset now,
+        TimeSpan visibilityTimeout, CancellationToken cancellationToken = default)
+    {
+        await TryWriteWorkStageAsync(claim, "renewal", "entered");
+        try
+        {
+            var renewed = await inner.RenewClaimAsync(claim, now, visibilityTimeout, cancellationToken);
+            await TryWriteWorkStageAsync(claim, "renewal", renewed is null ? "lost" : "returned", renewed?.Revision);
+            return renewed;
+        }
+        catch (Exception exception)
+        {
+            await TryWriteWorkStageAsync(claim, "renewal", "failed", exception: exception);
+            throw;
+        }
+    }
 
     public async ValueTask<BackgroundActivityWorkItem> RecordResultAsync(BackgroundActivityWorkClaim claim,
         BackgroundActivityWorkTerminalResult result, DateTimeOffset now, CancellationToken cancellationToken = default)
     {
-        var receipt = await inner.RecordResultAsync(claim, result, now, cancellationToken);
+        await TryWriteWorkStageAsync(claim, "receipt", "entered");
+
+        BackgroundActivityWorkItem receipt;
+        try
+        {
+            receipt = await inner.RecordResultAsync(claim, result, now, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            await TryWriteWorkStageAsync(claim, "receipt", "failed", exception: exception);
+            throw;
+        }
+
         Directory.CreateDirectory(Journal);
         await File.WriteAllTextAsync(Path.Combine(Journal, receipt.Request.ExecutableNodeId + ".receipt"), receipt.ReceiptDigest, cancellationToken);
+        await TryWriteWorkStageAsync(claim, "receipt", "committed", receipt.Revision, receipt.Status.ToString());
         while (HoldDelivery)
             await Task.Delay(25, cancellationToken);
         return receipt;
@@ -109,6 +138,40 @@ internal sealed class ReceiptDeliveryBarrier(IBackgroundActivityWorkStore inner)
         {
             if (File.Exists(temporaryPath))
                 File.Delete(temporaryPath);
+        }
+    }
+
+    private static async Task TryWriteWorkStageAsync(BackgroundActivityWorkClaim claim, string operation, string stage,
+        long? resultRevision = null, string? resultStatus = null, Exception? exception = null)
+    {
+        try
+        {
+            Directory.CreateDirectory(Journal);
+            // Keep old and replacement claims separate; each file is only that claim's latest observation.
+            var workHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{claim.WorkflowExecutionId}|{claim.WorkId}|{claim.ClaimOwnerId}|{claim.ClaimFence}"))).ToLowerInvariant();
+            var path = Path.Combine(Journal, $"work-{workHash}.{operation}.json");
+            var message = exception?.Message;
+            await BackgroundWitnessJournal.TryWriteJsonAtomicallyAsync(path, new
+            {
+                Stage = stage,
+                ProcessId = Environment.ProcessId,
+                RecordedAt = DateTimeOffset.UtcNow,
+                claim.WorkflowExecutionId,
+                claim.WorkId,
+                claim.ClaimOwnerId,
+                claim.ClaimFence,
+                claim.ClaimedAt,
+                claim.VisibleUntil,
+                PreviousRevision = claim.Revision,
+                Revision = resultRevision ?? claim.Revision,
+                ResultStatus = resultStatus,
+                ExceptionType = exception?.GetType().FullName,
+                Message = message is { Length: > 512 } ? message[..512] + "…" : message
+            });
+        }
+        catch (Exception ioException) when (ioException is IOException or UnauthorizedAccessException)
+        {
+            // Diagnostic filesystem failures must not replace the store outcome.
         }
     }
 }

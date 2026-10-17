@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CShells.Features;
 using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Reconciliation;
@@ -71,6 +72,50 @@ public sealed class BackgroundProbe : Activity<string>
             await File.WriteAllTextAsync(Path.Combine(DirectoryPath, Key + ".cancelled"), context.InvocationId);
             throw;
         }
+
+        // This records passing the release gate; transition serialization and disposal still follow.
+        await TryWriteBodyReleasedAsync(context);
         return ActivityTransition.Complete(Key);
+    }
+
+    private async Task TryWriteBodyReleasedAsync(ActivityExecutionContext context)
+    {
+        var path = Path.Combine(DirectoryPath, Key + ".body-released.json");
+        await BackgroundWitnessJournal.TryWriteJsonAtomicallyAsync(path, new
+        {
+            ProcessId = Environment.ProcessId,
+            RecordedAt = DateTimeOffset.UtcNow,
+            context.InvocationId,
+            context.AttemptId
+        });
+    }
+}
+
+internal static class BackgroundWitnessJournal
+{
+    public static async Task TryWriteJsonAtomicallyAsync<T>(string path, T value)
+    {
+        var temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try
+        {
+            await File.WriteAllTextAsync(temporaryPath, JsonSerializer.Serialize(value));
+            File.Move(temporaryPath, path, overwrite: true);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Diagnostic filesystem failures must not replace the activity or store outcome.
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(temporaryPath))
+                    File.Delete(temporaryPath);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // Best-effort cleanup for diagnostic output.
+            }
+        }
     }
 }
