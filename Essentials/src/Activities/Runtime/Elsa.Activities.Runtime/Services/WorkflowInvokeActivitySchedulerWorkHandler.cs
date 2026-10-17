@@ -127,11 +127,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         _ => throw new InvalidOperationException("BG-ACT-005: The background receipt has an unsupported terminal result.")
     };
 
-    private sealed class CommittedBackgroundResultActivity(ActivityTransition transition) : IActivity
-    {
-        public ValueTask<ActivityTransition> ExecuteAsync(ActivityExecutionContext context) => ValueTask.FromResult(transition);
-    }
-
     private async ValueTask InvokeActivityAsync(
         IServiceProvider serviceProvider,
         IActivityExecutionStateStore activityExecutionStateStore,
@@ -199,8 +194,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             return;
         }
         var valueSnapshots = new List<ActivityExecutionInspectionValueSnapshot>();
-        IActivity activity;
-        SimpleActivityExecutionContext context;
+        IActivity? activity = null;
+        SimpleActivityExecutionContext? context = null;
+        ActivityTransition? committedTransition = null;
         ActivityActivationLease? activationLease = null;
         ActivityAttempt? valueFlowAttempt = null;
         ActivityInputSnapshot? valueFlowSnapshot = null;
@@ -243,39 +239,41 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 // The worker already activated and executed the original body. Only its immutable typed
                 // transition enters the usual native projection/fault path; no second activation or effect.
                 valueFlowAttempt = backgroundResult.Request.Attempt;
-                activity = new CommittedBackgroundResultActivity(
-                    MaterializeBackgroundTransition(serviceProvider, activityContract, backgroundResult.Result!));
+                committedTransition = MaterializeBackgroundTransition(serviceProvider, activityContract, backgroundResult.Result!);
             }
 
-            var executionContextState = valueFlowAttempt is null
-                ? state
-                : state with
-                {
-                    InputSnapshot = valueFlowSnapshot,
-                    Attempts = (state.Attempts ?? [])
-                        .Where(attempt => attempt.AttemptId != valueFlowAttempt.AttemptId)
-                        .Append(valueFlowAttempt)
-                        .ToArray()
-                };
-            // A structural activity that reads its enclosing container-scoped variable values (the
-            // BpmnProcess) gets a committed name→envelope projection of its own visible frame chain; marker-gated,
-            // so a non-consumer activity pays nothing and reads always return false.
-            var scopedVariableEnvelopes = await scopeService.ProjectScopedVariablesForReaderAsync(
-                activity, executable, executionContextState, cancellationToken);
+            if (activity is not null)
+            {
+                var executionContextState = valueFlowAttempt is null
+                    ? state
+                    : state with
+                    {
+                        InputSnapshot = valueFlowSnapshot,
+                        Attempts = (state.Attempts ?? [])
+                            .Where(attempt => attempt.AttemptId != valueFlowAttempt.AttemptId)
+                            .Append(valueFlowAttempt)
+                            .ToArray()
+                    };
+                // A structural activity that reads its enclosing container-scoped variable values (the
+                // BpmnProcess) gets a committed name→envelope projection of its own visible frame chain; marker-gated,
+                // so a non-consumer activity pays nothing and reads always return false.
+                var scopedVariableEnvelopes = await scopeService.ProjectScopedVariablesForReaderAsync(
+                    activity, executable, executionContextState, cancellationToken);
 
-            context = SimpleActivityExecutionContext.ForExecution(
-                activity,
-                cancellationToken,
-                workItem.WorkflowExecutionId,
-                invokePayload.PinnedExecutable,
-                workItem,
-                executableNode,
-                executionContextState,
-                variableScope: null,
-                triggerPayload: projections.StimulusInput is JsonElement stimulusInput ? stimulusInput : null,
-                triggerNodeId: projections.TriggerNodeId,
-                triggerMetadata: projections.TriggerMetadata,
-                scopedVariableEnvelopes: scopedVariableEnvelopes);
+                context = SimpleActivityExecutionContext.ForExecution(
+                    activity,
+                    cancellationToken,
+                    workItem.WorkflowExecutionId,
+                    invokePayload.PinnedExecutable,
+                    workItem,
+                    executableNode,
+                    executionContextState,
+                    variableScope: null,
+                    triggerPayload: projections.StimulusInput is JsonElement stimulusInput ? stimulusInput : null,
+                    triggerNodeId: projections.TriggerNodeId,
+                    triggerMetadata: projections.TriggerMetadata,
+                    scopedVariableEnvelopes: scopedVariableEnvelopes);
+            }
         }
         catch (OperationCanceledException cancellationException) when (cancellationToken.IsCancellationRequested)
         {
@@ -319,15 +317,17 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                     serviceProvider.GetService<IExternalPayloadStore>(),
                     cancellationToken);
                 durableValueChanges = await checkpointParticipant.PrepareEntryCheckpointAsync(
-                    context,
+                    context!,
                     effectiveInputs,
                     TimeProvider.GetUtcNow(),
                     cancellationToken);
             }
 
-            if (activity is IRuntimeStructuralActivity structuralActivity)
+            if (committedTransition is not null)
+                returnedTransition = committedTransition;
+            else if (activity is IRuntimeStructuralActivity structuralActivity)
             {
-                structuralContinuation = await structuralActivity.ExecuteStructureAsync(context);
+                structuralContinuation = await structuralActivity.ExecuteStructureAsync(context!);
                 stagedState = RuntimeStructuralStateProjector.Apply(stagedState, structuralContinuation, TimeProvider.GetUtcNow());
                 returnedTransition = structuralContinuation.Kind switch
                 {
@@ -339,18 +339,18 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 };
             }
             else
-                returnedTransition = await activity.ExecuteAsync(context.ToActivityExecutionContext());
+                returnedTransition = await activity!.ExecuteAsync(context!.ToActivityExecutionContext());
 
-            var childScheduleRequests = context.GetChildActivityScheduleRequests();
+            var childScheduleRequests = context?.GetChildActivityScheduleRequests() ?? [];
             if (structuralContinuation is null && childScheduleRequests.Count > 0)
                 throw new InvalidOperationException("Only an engine structural activity can schedule child activities.");
             if (structuralContinuation is { IsDeferred: false } && childScheduleRequests.Count > 0)
                 throw new InvalidOperationException("A terminal structural decision cannot also schedule child activities in the same execution.");
             if (structuralContinuation?.IsDeferred == true && childScheduleRequests.Count == 0)
                 throw new InvalidOperationException("An initial structural execution cannot defer without scheduling at least one child activity.");
-            if (context.GetChildSubtreeCancellationRequests().Count > 0)
+            if (context?.GetChildSubtreeCancellationRequests().Count > 0)
                 throw new InvalidOperationException("An initial structural execution cannot cancel child subtrees; cancellation requests are only valid during a child-completion evaluation.");
-            if (context.GetChildFaultAbsorptionRequests().Count > 0)
+            if (context?.GetChildFaultAbsorptionRequests().Count > 0)
                 throw new InvalidOperationException("An initial structural execution cannot absorb child faults; absorption requests are only valid during a child-fault evaluation.");
 
             // Seam C: a non-root structural child may notify its own parent during its initial
@@ -363,7 +363,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 workItem,
                 invokePayload.PinnedExecutable,
                 stagedState,
-                context.GetParentNotificationRequests(),
+                context?.GetParentNotificationRequests() ?? [],
                 structuralContinuation ?? RuntimeStructuralContinuation.Defer,
                 cancellationToken);
 
@@ -378,7 +378,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                     workItem,
                     executable,
                     stagedState,
-                    context.GetAncestorNotificationRequests(),
+                    context?.GetAncestorNotificationRequests() ?? [],
                     structuralContinuation ?? RuntimeStructuralContinuation.Defer,
                     cancellationToken);
             }
@@ -428,7 +428,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 if (checkpointParticipant is not null)
                 {
                     var completionPreparation = await checkpointParticipant.PrepareCompletionCheckpointAsync(
-                        context,
+                        context!,
                         ApplyDurableValueChanges(persistedDurableValues, durableValueChanges),
                         TimeProvider.GetUtcNow(),
                         cancellationToken);
