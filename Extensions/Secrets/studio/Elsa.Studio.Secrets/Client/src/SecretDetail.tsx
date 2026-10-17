@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Ban, LockKeyhole, RotateCcw, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { CopySecretNameButton } from "./CopySecretNameButton";
 import type { SecretDescriptorsResponse, SecretMetadata } from "./secretTypes";
 
 export function SecretDetail({
@@ -59,7 +60,7 @@ export function SecretDetail({
         <div>
           <span className="secrets-kicker">Secret details</span>
           <h3>{secret.displayName || secret.name}</h3>
-          <p>{secret.name}</p>
+          <p className="secrets-technical-name"><code>{secret.name}</code><CopySecretNameButton key={secret.name} name={secret.name} /></p>
         </div>
         <span className={`secrets-badge ${secret.status.toLowerCase()}`}>{secret.status}</span>
       </header>

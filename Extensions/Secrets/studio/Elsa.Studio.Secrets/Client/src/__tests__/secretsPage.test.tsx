@@ -5,7 +5,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { SecretsPage } from "../SecretsPage";
 
 const cleanup = new Set<() => void>();
-afterEach(() => { for (const dispose of cleanup) dispose(); });
+const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+afterEach(() => {
+  for (const dispose of cleanup) dispose();
+  if (clipboardDescriptor) Object.defineProperty(navigator, "clipboard", clipboardDescriptor);
+  else Reflect.deleteProperty(navigator, "clipboard");
+});
 
 describe("secrets page", () => {
   it("offers creation from an empty collection without a blank details panel", async () => {
@@ -55,6 +60,31 @@ describe("secrets page", () => {
     expect(container.textContent).toContain("Values are never displayed.");
     expect(container.textContent).not.toContain("raw-secret-value");
     unmount();
+  });
+
+  it("copies only the technical name from both the list and details", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const { container } = render();
+    await waitForText(container, "Payments API");
+    const buttons = [...container.querySelectorAll<HTMLButtonElement>("button[aria-label='Copy technical name payments.api']")];
+    expect(buttons).toHaveLength(2);
+    for (const button of buttons) {
+      button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await waitFor(() => button.parentElement?.textContent === "Copied");
+    }
+    expect(writeText.mock.calls).toEqual([["payments.api"], ["payments.api"]]);
+    expect(JSON.stringify(writeText.mock.calls)).not.toContain("raw-secret-value");
+  });
+
+  it("reports clipboard failure without claiming a name was copied", async () => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn().mockRejectedValue(new Error("denied")) } });
+    const { container } = render();
+    await waitForText(container, "Payments API");
+    container.querySelector<HTMLButtonElement>("button[aria-label='Copy technical name payments.api']")!.click();
+    await waitForText(container, "Copy failed");
+    expect(container.textContent).not.toContain("Copied");
+    expect(container.textContent).toContain("payments.api");
   });
 
   it("keeps the created secret selected after refresh", async () => {

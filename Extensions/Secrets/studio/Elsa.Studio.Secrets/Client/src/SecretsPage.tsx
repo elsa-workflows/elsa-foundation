@@ -3,6 +3,7 @@ import { AlertCircle, Ban, CheckCircle2, KeyRound, Pencil, Plus, RefreshCw, Rota
 import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { createSecret, deleteSecret, getSecretDescriptors, listSecrets, revokeSecret, rotateSecret, testSecret, updateSecret } from "./secretsApi";
 import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata, SecretStatus, UpdateSecretRequest } from "./secretTypes";
+import { CopySecretNameButton } from "./CopySecretNameButton";
 import { SecretDetail } from "./SecretDetail";
 import { CreateSecretDialog, RotateSecretDialog } from "./SecretDialogs";
 
@@ -240,10 +241,11 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
               {!loading && filteredSecrets.map(secret => (
                 <tr key={secret.name} className={secret.name === selected?.name ? "active" : ""}>
                   <td className="secrets-name-cell">
-                    <button type="button" className="secrets-row-link" aria-pressed={secret.name === selected?.name} onClick={() => setSelectedName(secret.name)}>
-                      <strong>{secret.displayName || secret.name}</strong>
-                      {secret.displayName && secret.displayName !== secret.name ? <code>{secret.name}</code> : null}
-                    </button>
+                    <div className="secrets-name-heading">
+                      <button type="button" className="secrets-row-link" aria-pressed={secret.name === selected?.name} onClick={() => setSelectedName(secret.name)}><strong>{secret.displayName || secret.name}</strong></button>
+                      {!secret.displayName || secret.displayName === secret.name ? <CopySecretNameButton name={secret.name} /> : null}
+                    </div>
+                    {secret.displayName && secret.displayName !== secret.name ? <div className="secrets-technical-name"><code>{secret.name}</code><CopySecretNameButton name={secret.name} /></div> : null}
                   </td>
                   <td>{labelType(descriptors, secret.typeName)}</td>
                   <td>{labelStore(descriptors, secret.storeName)}</td>
