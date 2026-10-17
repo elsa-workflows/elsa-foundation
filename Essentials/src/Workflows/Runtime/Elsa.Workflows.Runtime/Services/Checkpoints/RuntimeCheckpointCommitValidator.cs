@@ -110,6 +110,9 @@ public static class RuntimeCheckpointCommitValidator
     private static void ValidateBackgroundActivityWork(RuntimeCheckpointCommit commit)
     {
         var participants = commit.StateChanges.BackgroundActivityWork;
+        if (participants.Admissions.Count > 0 && commit.ExpectedFence is null)
+            throw new RuntimeCheckpointCommitValidationException("Background activity work admission requires the current workflow execution fence.");
+
         var admissionIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var request in participants.Admissions)
         {

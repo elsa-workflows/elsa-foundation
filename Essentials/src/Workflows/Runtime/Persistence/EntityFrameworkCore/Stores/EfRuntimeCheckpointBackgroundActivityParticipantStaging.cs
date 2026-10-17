@@ -15,6 +15,9 @@ internal static class EfRuntimeCheckpointBackgroundActivityParticipantStaging
         CancellationToken cancellationToken)
     {
         var changes = commit.StateChanges.BackgroundActivityWork;
+        if (changes.Admissions.Count > 0)
+            await EnsureExecutionIsLiveAsync(context, commit.WorkflowExecutionId, scope, cancellationToken);
+
         foreach (var request in changes.Admissions)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -71,5 +74,32 @@ internal static class EfRuntimeCheckpointBackgroundActivityParticipantStaging
                     scope);
             }
         }
+    }
+
+    private static async ValueTask EnsureExecutionIsLiveAsync(
+        RuntimeDbContext context,
+        string workflowExecutionId,
+        string scope,
+        CancellationToken cancellationToken)
+    {
+        var id = EfWorkflowExecutionStateStore.CreateId(scope, workflowExecutionId);
+        var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
+        var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
+        var workflowHash = EfRuntimeOperationalStoreSupport.Hash(workflowExecutionId);
+        var workflowKey = EfRuntimeOperationalStoreSupport.Encode(workflowExecutionId);
+        var local = context.WorkflowExecutionStates.Local.FirstOrDefault(row => row.Id == id);
+        if (local is not null && context.Entry(local).State == EntityState.Deleted)
+            throw new RuntimeCheckpointCommitValidationException("Background activity work cannot be admitted for a deleted workflow execution.");
+
+        // The workflow must already exist in the database before this checkpoint begins. A workflow upsert in the same
+        // checkpoint is not proof that a deleted/missing execution is live and must not reopen admission after deletion.
+        var row = await context.WorkflowExecutionStates.AsNoTracking().SingleOrDefaultAsync(candidate =>
+            candidate.Id == id &&
+            candidate.ScopeKeyHash == scopeHash && candidate.ScopeKey == scopeKey &&
+            candidate.WorkflowExecutionIdHash == workflowHash && candidate.WorkflowExecutionId == workflowKey,
+            cancellationToken);
+        if (row is null)
+            throw new RuntimeCheckpointCommitValidationException("Background activity work cannot be admitted without a live workflow execution state.");
+        _ = EfWorkflowExecutionStateStore.ReadChecked(row, scope, workflowExecutionId);
     }
 }

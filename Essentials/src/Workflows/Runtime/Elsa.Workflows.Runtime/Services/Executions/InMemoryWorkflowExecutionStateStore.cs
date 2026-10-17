@@ -5,15 +5,38 @@ using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Models.Alterations;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 
 namespace Elsa.Workflows.Runtime.Services.Executions;
 
-public sealed class InMemoryWorkflowExecutionStateStore() : InMemoryKeyedStateStore<string, WorkflowExecutionState>(StringComparer.Ordinal), IWorkflowExecutionStateStore
+public sealed class InMemoryWorkflowExecutionStateStore : InMemoryKeyedStateStore<string, WorkflowExecutionState>, IWorkflowExecutionStateStore
 {
     private readonly string? _cursorScope;
+    private readonly InMemoryRuntimeCheckpointStoreState _checkpointState;
+    private readonly IExecutionLivenessStateStore? _executionLivenessStateStore;
+
+    public InMemoryWorkflowExecutionStateStore()
+        : this(new InMemoryRuntimeCheckpointStoreState(), new InMemoryExecutionLivenessStateStore(), null)
+    {
+    }
 
     /// <summary>Creates a history store whose cursors also bind an externally applied result-set predicate.</summary>
-    public InMemoryWorkflowExecutionStateStore(string? cursorScope) : this() => _cursorScope = cursorScope;
+    public InMemoryWorkflowExecutionStateStore(string? cursorScope)
+        : this(new InMemoryRuntimeCheckpointStoreState(), new InMemoryExecutionLivenessStateStore(), cursorScope)
+    {
+    }
+
+    public InMemoryWorkflowExecutionStateStore(
+        InMemoryRuntimeCheckpointStoreState checkpointState,
+        IExecutionLivenessStateStore? executionLivenessStateStore,
+        string? cursorScope = null)
+        : base(StringComparer.Ordinal)
+    {
+        ArgumentNullException.ThrowIfNull(checkpointState);
+        _checkpointState = checkpointState;
+        _executionLivenessStateStore = executionLivenessStateStore;
+        _cursorScope = cursorScope;
+    }
 
     public ValueTask<WorkflowExecutionState> SaveAsync(WorkflowExecutionState state, CancellationToken cancellationToken = default)
     {
@@ -73,12 +96,50 @@ public sealed class InMemoryWorkflowExecutionStateStore() : InMemoryKeyedStateSt
         return new(artifactIds);
     }
 
-    public ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
+    public async ValueTask<bool> DeleteAsync(string workflowExecutionId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         cancellationToken.ThrowIfCancellationRequested();
 
-        return new(Remove(workflowExecutionId));
+        await _checkpointState.WriteGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (Find(workflowExecutionId) is null)
+                return false;
+
+            if (_executionLivenessStateStore is InMemoryExecutionLivenessStateStore inMemoryLivenessStore)
+                return await inMemoryLivenessStore.ExecuteWorkflowDeletionAtomicAsync(
+                    workflowExecutionId,
+                    _ => ValueTask.FromResult(DeleteExecutionAndCancelOutstandingWork(workflowExecutionId)),
+                    cancellationToken);
+
+            return DeleteExecutionAndCancelOutstandingWork(workflowExecutionId);
+        }
+        finally
+        {
+            _checkpointState.WriteGate.Release();
+        }
+    }
+
+    private bool DeleteExecutionAndCancelOutstandingWork(string workflowExecutionId)
+    {
+        var now = DateTimeOffset.UtcNow;
+        lock (_checkpointState.SyncRoot)
+        {
+            // In-memory execution state is keyed only by execution ID, so deletion remains process-global and
+            // tombstones every scoped ledger row for that execution ID. The EF store performs scoped deletion.
+            var cancellations = _checkpointState.BackgroundActivityWorkItems
+                .Where(pair => StringComparer.Ordinal.Equals(pair.Key.WorkflowExecutionId, workflowExecutionId) &&
+                               pair.Value.Status is BackgroundActivityWorkStatus.Pending or
+                                   BackgroundActivityWorkStatus.Claimed or
+                                   BackgroundActivityWorkStatus.ResultReady)
+                .Select(pair => (pair.Key, Item: BackgroundActivityWorkLifecycle.Cancel(pair.Value, now)))
+                .ToArray();
+            foreach (var cancellation in cancellations)
+                _checkpointState.BackgroundActivityWorkItems[cancellation.Key] = cancellation.Item;
+        }
+
+        return Remove(workflowExecutionId);
     }
 
     private WorkflowExecutionStatePage QueryPage(

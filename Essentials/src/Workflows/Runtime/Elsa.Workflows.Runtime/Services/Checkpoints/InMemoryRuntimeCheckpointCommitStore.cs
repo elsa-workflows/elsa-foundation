@@ -154,6 +154,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         CancellationToken cancellationToken)
     {
         await EnsureExpectedFenceAsync(commit, cancellationToken);
+        await EnsureBackgroundActivityAdmissionsAreFencedAndLiveAsync(commit, cancellationToken);
 
         var stagedBackgroundActivityWork = PrepareBackgroundActivityWorkChanges(commit);
 
@@ -223,6 +224,20 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         {
             ConsumedSchedulerWorkItemIds = consumedSchedulerWorkItemIds
         };
+    }
+
+    private async ValueTask EnsureBackgroundActivityAdmissionsAreFencedAndLiveAsync(
+        RuntimeCheckpointCommit commit,
+        CancellationToken cancellationToken)
+    {
+        if (commit.StateChanges.BackgroundActivityWork.Admissions.Count == 0)
+            return;
+        if (commit.ExpectedFence is null)
+            throw new RuntimeCheckpointCommitValidationException("Background activity work admission requires the current workflow execution fence.");
+
+        if (_workflowExecutionStateStore is null ||
+            await _workflowExecutionStateStore.FindAsync(commit.WorkflowExecutionId, cancellationToken) is null)
+            throw new RuntimeCheckpointCommitValidationException("Background activity work cannot be admitted without a live workflow execution state.");
     }
 
     private Dictionary<(string Scope, string WorkflowExecutionId, string WorkId), BackgroundActivityWorkItem>? PrepareBackgroundActivityWorkChanges(

@@ -64,10 +64,14 @@ public sealed class BackgroundActivityWorkTests
 
     private static async Task AdmitAsync(RuntimeDbContext context, BackgroundActivityWorkRequest request, string commitId)
     {
+        var accessor = new FixedAccessor("tenant-a");
+        var lease = await BackgroundActivityWorkTestSupport.SeedLiveExecutionAsync(
+            context, accessor, request.WorkflowExecutionId, "tenant-a");
         var commit = Commit(commitId);
-        await new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a")).CommitAsync(
+        await new EfRuntimeCheckpointCommitStore(context, accessor).CommitAsync(
             commit with
             {
+                ExpectedFence = lease.ToFence(),
                 StateChanges = commit.StateChanges.WithBackgroundActivityWork(
                     new BackgroundActivityWorkCheckpointChanges(admissions: [request]))
             },

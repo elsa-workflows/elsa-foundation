@@ -21,12 +21,13 @@ public sealed class BackgroundActivityWorkCheckpointAtomicityTests
     {
         await using var database = await TestDatabase.CreateAsync();
         var request = Request("work-atomic", "activity-atomic");
+        var owner = await AcquireAsync(database, "owner-atomic", Now);
         string receiptDigest;
 
         await using (var context = database.Open("tenant-a"))
         {
             var checkpoints = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"));
-            var admission = AdmissionCommit("commit-admit-atomic", request);
+            var admission = AdmissionCommit("commit-admit-atomic", request) with { ExpectedFence = owner.ToFence() };
             await checkpoints.CommitAsync(admission, Decision());
 
             var worker = new EfBackgroundActivityWorkStore(context, new FixedAccessor("tenant-a"));
@@ -131,11 +132,12 @@ public sealed class BackgroundActivityWorkCheckpointAtomicityTests
             Request("work-grandchild", "activity-grandchild"),
             Request("work-sibling", "activity-sibling")
         };
+        var owner = await AcquireAsync(database, "owner-subtree", Now);
 
         await using (var context = database.Open("tenant-a"))
         {
             var checkpoints = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"));
-            var admission = AdmissionCommit("commit-subtree-admission", requests);
+            var admission = AdmissionCommit("commit-subtree-admission", requests) with { ExpectedFence = owner.ToFence() };
             await checkpoints.CommitAsync(admission, Decision());
 
             var worker = new EfBackgroundActivityWorkStore(context, new FixedAccessor("tenant-a"));
@@ -278,16 +280,17 @@ public sealed class BackgroundActivityWorkCheckpointAtomicityTests
     {
         await using var context = database.Open("tenant-a");
         var accessor = new FixedAccessor("tenant-a");
-        var liveness = new EfExecutionLivenessStateStore(context, accessor, new NoopContinuationCodec());
-        var ownership = new RuntimeExecutionOwnershipService(liveness, new FixedTimeProvider(now),
-            new RuntimeExecutionOwnershipOptions { OwnerId = ownerId, LeaseDuration = TimeSpan.FromMinutes(1) });
-        return await ownership.AcquireAsync("workflow-a");
+        return await BackgroundActivityWorkTestSupport.SeedLiveExecutionAsync(
+            context, accessor, "workflow-a", "tenant-a", new FixedTimeProvider(now), ownerId);
     }
 
     private static async Task<BackgroundActivityWorkClaim> AdmitAndClaimAsync(TestDatabase database, BackgroundActivityWorkRequest request)
     {
         await using var context = database.Open("tenant-a");
-        var checkpoint = AdmissionCommit($"commit-admit-{request.WorkId}", request);
+        var owner = await BackgroundActivityWorkTestSupport.SeedLiveExecutionAsync(
+            context, new FixedAccessor("tenant-a"), request.WorkflowExecutionId, "tenant-a",
+            new FixedTimeProvider(Now), $"owner-{request.WorkId}");
+        var checkpoint = AdmissionCommit($"commit-admit-{request.WorkId}", request) with { ExpectedFence = owner.ToFence() };
         await new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a")).CommitAsync(checkpoint, Decision());
         return (await new EfBackgroundActivityWorkStore(context, new FixedAccessor("tenant-a"))
             .ClaimNextAsync($"worker-{request.WorkId}", Now.AddSeconds(1), TimeSpan.FromMinutes(1)))!;

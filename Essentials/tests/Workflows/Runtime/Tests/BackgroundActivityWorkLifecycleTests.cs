@@ -16,14 +16,23 @@ public sealed class BackgroundActivityWorkLifecycleTests
     public async Task In_memory_checkpoint_admission_worker_receipt_and_terminal_acceptance_share_scope_and_state()
     {
         var state = new InMemoryRuntimeCheckpointStoreState();
+        var operational = new InMemoryExecutionLivenessStateStore();
+        var executions = new InMemoryWorkflowExecutionStateStore(state, operational);
+        await executions.SaveAsync(ExecutionState());
+        var ownership = NewOwnership(operational, "background-work-test-owner");
+        var owner = await ownership.AcquireAsync("workflow-a");
         var tenantA = new FixedAccessor("tenant-a");
         var tenantB = new FixedAccessor("tenant-b");
-        var checkpoint = new InMemoryRuntimeCheckpointCommitStore(state: state, persistenceAccessContextAccessor: tenantA);
+        var checkpoint = new InMemoryRuntimeCheckpointCommitStore(
+            workflowExecutionStateStore: executions,
+            operationalStateStore: operational,
+            state: state,
+            persistenceAccessContextAccessor: tenantA);
         var workerA = new InMemoryBackgroundActivityWorkStore(state, tenantA);
         var workerB = new InMemoryBackgroundActivityWorkStore(state, tenantB);
         var request = Request("work-memory");
 
-        var admission = Commit("admit");
+        var admission = Commit("admit") with { ExpectedFence = owner.ToFence() };
         await checkpoint.CommitAsync(admission with
         {
             StateChanges = admission.StateChanges.WithBackgroundActivityWork(new BackgroundActivityWorkCheckpointChanges(admissions: [request]))
@@ -59,6 +68,7 @@ public sealed class BackgroundActivityWorkLifecycleTests
         var request = Request("work-immediate");
         var commit = Commit("mandatory") with
         {
+            ExpectedFence = new RuntimeExecutionFence("lease", "owner", 1),
             StateChanges = Commit("mandatory").StateChanges.WithBackgroundActivityWork(new BackgroundActivityWorkCheckpointChanges(admissions: [request]))
         };
         var store = new RecordingStore();
@@ -71,6 +81,82 @@ public sealed class BackgroundActivityWorkLifecycleTests
         await committer.CommitAsync(commit);
 
         Assert.Equal(RuntimeCheckpointPersistenceMode.Immediate, Assert.Single(store.Decisions).Mode);
+    }
+
+    [Fact]
+    public async Task Deleting_execution_cancels_claimed_work_and_blocks_stale_or_orphan_admission()
+    {
+        var state = new InMemoryRuntimeCheckpointStoreState();
+        var operational = new InMemoryExecutionLivenessStateStore();
+        var executions = new InMemoryWorkflowExecutionStateStore(state, operational);
+        await executions.SaveAsync(ExecutionState());
+        var ownership = NewOwnership(operational, "delete-test-owner");
+        var oldOwner = await ownership.AcquireAsync("workflow-a");
+        var accessor = new FixedAccessor("tenant-a");
+        var accessorB = new FixedAccessor("tenant-b");
+        var checkpoint = new InMemoryRuntimeCheckpointCommitStore(
+            workflowExecutionStateStore: executions,
+            operationalStateStore: operational,
+            state: state,
+            persistenceAccessContextAccessor: accessor);
+        var worker = new InMemoryBackgroundActivityWorkStore(state, accessor);
+        var workerB = new InMemoryBackgroundActivityWorkStore(state, accessorB);
+        var request = Request("work-delete");
+        var admission = Commit("admit-delete") with
+        {
+            ExpectedFence = oldOwner.ToFence(),
+            StateChanges = Commit("admit-delete").StateChanges.WithBackgroundActivityWork(
+                new BackgroundActivityWorkCheckpointChanges(admissions: [request]))
+        };
+        await checkpoint.CommitAsync(admission, Immediate);
+        var checkpointB = new InMemoryRuntimeCheckpointCommitStore(
+            workflowExecutionStateStore: executions,
+            operationalStateStore: operational,
+            state: state,
+            persistenceAccessContextAccessor: accessorB);
+        var requestB = Request("work-delete-tenant-b");
+        var admissionB = Commit("admit-delete-tenant-b") with
+        {
+            ExpectedFence = oldOwner.ToFence(),
+            StateChanges = Commit("admit-delete-tenant-b").StateChanges.WithBackgroundActivityWork(
+                new BackgroundActivityWorkCheckpointChanges(admissions: [requestB]))
+        };
+        await checkpointB.CommitAsync(admissionB, Immediate);
+        var claim = await worker.ClaimNextAsync("worker-delete", Now.AddSeconds(1), TimeSpan.FromMinutes(1));
+        Assert.NotNull(claim);
+
+        Assert.True(await executions.DeleteAsync("workflow-a"));
+        var cancelled = await worker.FindAsync("workflow-a", request.WorkId);
+        Assert.Equal(BackgroundActivityWorkStatus.Cancelled, cancelled!.Status);
+        Assert.True(cancelled.ClaimFence > claim!.ClaimFence);
+        Assert.Empty(await worker.ListResultReadyAsync(10));
+        // The in-memory execution store is globally keyed by execution ID, so deletion cancels both scope projections.
+        Assert.Equal(BackgroundActivityWorkStatus.Cancelled, (await workerB.FindAsync("workflow-a", requestB.WorkId))!.Status);
+        await Assert.ThrowsAsync<BackgroundActivityWorkConflictException>(() => worker.RecordResultAsync(
+            claim, Complete("{}"), Now.AddSeconds(2)).AsTask());
+        Assert.Null(await executions.FindAsync("workflow-a"));
+
+        var staleAdmission = Commit("admit-after-delete-stale") with
+        {
+            ExpectedFence = oldOwner.ToFence(),
+            StateChanges = Commit("admit-after-delete-stale").StateChanges.WithBackgroundActivityWork(
+                new BackgroundActivityWorkCheckpointChanges(admissions: [Request("work-stale")]))
+        };
+        await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(() => checkpoint.CommitAsync(staleAdmission, Immediate).AsTask());
+
+        var replacement = await ownership.AcquireAsync("workflow-a");
+        var orphanAdmission = Commit("admit-after-delete-new-owner") with
+        {
+            ExpectedFence = replacement.ToFence(),
+            StateChanges = new RuntimeCheckpointStateChangeSet(
+                new RuntimeStateChange<WorkflowExecutionState>(
+                    "workflow-a", RuntimeStateChangeOperation.Upsert, ExecutionState(), new Dictionary<string, string>()),
+                null, [], [], [], [], []).WithBackgroundActivityWork(
+                new BackgroundActivityWorkCheckpointChanges(admissions: [Request("work-orphan")]))
+        };
+        await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() => checkpoint.CommitAsync(orphanAdmission, Immediate).AsTask());
+        Assert.Null(await worker.FindAsync("workflow-a", "work-stale"));
+        Assert.Null(await worker.FindAsync("workflow-a", "work-orphan"));
     }
 
     [Fact]
@@ -110,6 +196,28 @@ public sealed class BackgroundActivityWorkLifecycleTests
         new RuntimeCheckpointStateChangeSet(null, null, [], [], [], [], []), [], new Dictionary<string, string>());
 
     private static readonly RuntimeCheckpointPersistenceDecision Immediate = new(RuntimeCheckpointPersistenceMode.Immediate);
+
+    private static WorkflowExecutionState ExecutionState() => new(
+        "workflow-a",
+        new WorkflowExecutableIdentity("artifact", "definition", "version", "1", "hash"),
+        WorkflowExecutionStatus.Running,
+        null,
+        Now,
+        Now,
+        Now,
+        null,
+        null,
+        null,
+        "tenant-a",
+        new Dictionary<string, string>());
+
+    private static RuntimeExecutionOwnershipService NewOwnership(IExecutionLivenessStateStore operational, string ownerId) =>
+        new(operational, new FixedTimeProvider(Now), new RuntimeExecutionOwnershipOptions { OwnerId = ownerId, LeaseDuration = TimeSpan.FromHours(1) });
+
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
 
     private sealed class FixedAccessor(string scope) : IPersistenceAccessContextAccessor
     {

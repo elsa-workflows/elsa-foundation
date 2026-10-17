@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Recovery;
@@ -58,6 +60,57 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
         {
             _ownershipAtomicGate.Release();
         }
+    }
+
+    internal async ValueTask<TResult> ExecuteWorkflowDeletionAtomicAsync<TResult>(
+        string workflowExecutionId,
+        Func<CancellationToken, ValueTask<TResult>> deleteExecution,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
+        ArgumentNullException.ThrowIfNull(deleteExecution);
+        await _ownershipAtomicGate.WaitAsync(cancellationToken);
+        try
+        {
+            var stateId = RuntimeExecutionOwnershipStateId.For(workflowExecutionId);
+            var key = new ExecutionLivenessStateKey(workflowExecutionId, stateId);
+            var existing = Find(key);
+            if (existing is not null)
+            {
+                var fencingToken = ReadHighestIssuedToken(existing);
+                var metadata = new Dictionary<string, string>(existing.Metadata, StringComparer.Ordinal)
+                {
+                    [RuntimeMetadataKeys.OwnershipFencingToken] = fencingToken.ToString(CultureInfo.InvariantCulture)
+                };
+                SaveCore(new ExecutionLivenessState(
+                    stateId,
+                    workflowExecutionId,
+                    executionLease: null,
+                    heartbeat: null,
+                    existing.Drain,
+                    existing.InterruptedExecution,
+                    existing.PendingPostCommitIntentIds,
+                    metadata));
+            }
+
+            // Keep acquisitions/renewals behind the delete until the execution and its outstanding work are both
+            // removed/tombstoned. A lease acquired between revocation and removal could otherwise survive deletion.
+            return await deleteExecution(cancellationToken);
+        }
+        finally
+        {
+            _ownershipAtomicGate.Release();
+        }
+    }
+
+    private static long ReadHighestIssuedToken(ExecutionLivenessState state)
+    {
+        if (!state.Metadata.TryGetValue(RuntimeMetadataKeys.OwnershipFencingToken, out var raw))
+            return state.ExecutionLease?.FencingToken ?? 0;
+        if (!long.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out var token) || token < 0 ||
+            state.ExecutionLease is { } lease && lease.FencingToken != token)
+            throw new InvalidOperationException("Execution ownership state contains an invalid fencing-token counter.");
+        return token;
     }
 
     private ExecutionLivenessState SaveCore(ExecutionLivenessState state)

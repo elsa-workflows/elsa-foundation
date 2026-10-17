@@ -1151,8 +1151,10 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         var request = BackgroundRequest("work-receipt");
         await using (var context = database.Open("tenant-a"))
         {
-            var checkpoints = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"));
-            var admission = Commit("commit-bg-admission");
+            var accessor = new FixedAccessor("tenant-a");
+            var owner = await BackgroundActivityWorkTestSupport.SeedLiveExecutionAsync(context, accessor, "workflow-a", "tenant-a");
+            var checkpoints = new EfRuntimeCheckpointCommitStore(context, accessor);
+            var admission = Commit("commit-bg-admission") with { ExpectedFence = owner.ToFence() };
             await checkpoints.CommitAsync(admission with
             {
                 StateChanges = admission.StateChanges.WithBackgroundActivityWork(
@@ -1212,8 +1214,10 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
         var request = BackgroundRequest("work-cancel");
         await using (var context = database.Open("tenant-a"))
         {
-            var checkpoints = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"));
-            var admission = Commit("commit-bg-cancel-admit");
+            var accessor = new FixedAccessor("tenant-a");
+            var owner = await BackgroundActivityWorkTestSupport.SeedLiveExecutionAsync(context, accessor, "workflow-a", "tenant-a");
+            var checkpoints = new EfRuntimeCheckpointCommitStore(context, accessor);
+            var admission = Commit("commit-bg-cancel-admit") with { ExpectedFence = owner.ToFence() };
             await checkpoints.CommitAsync(admission with
             {
                 StateChanges = admission.StateChanges.WithBackgroundActivityWork(
