@@ -275,6 +275,7 @@ function useExpressionToolingSnapshot(
   document: StudioExpressionDocument,
   workflowState: WorkflowDefinitionState,
   enabled: boolean,
+  authorizationScope: string,
   authorizationEpoch: number,
   authorizationConfirmationRequired: boolean,
   onAuthorizationConfirmed: () => void
@@ -283,21 +284,38 @@ function useExpressionToolingSnapshot(
     useState<StudioExpressionToolingResult<StudioExpressionAuthoringContext>>();
   const [validation, setValidation] =
     useState<StudioExpressionToolingResult<StudioExpressionValidationResult>>();
+  const snapshotScope = useRef<{
+    tooling: StudioExpressionToolingClient;
+    documentId: string;
+    expressionType: string;
+    authorizationScope: string;
+    authorizationEpoch: number;
+  } | undefined>(undefined);
   const validateNowRef = useRef<() => void>(() => {});
   const validateNow = useCallback(() => validateNowRef.current(), []);
 
   useEffect(() => {
     if (!tooling || !enabled) {
+      snapshotScope.current = undefined;
       validateNowRef.current = () => {};
       setAuthoringContext(undefined);
       setValidation(undefined);
       return;
     }
 
-    // A snapshot is revision-bound. Suppress the previous revision immediately while the
-    // debounced context and validation requests for the new source are in flight.
-    setAuthoringContext(undefined);
-    setValidation(undefined);
+    const previousScope = snapshotScope.current;
+    const sameScope = previousScope?.tooling === tooling &&
+      previousScope.documentId === document.id &&
+      previousScope.expressionType === document.expressionType &&
+      previousScope.authorizationScope === authorizationScope &&
+      previousScope.authorizationEpoch === authorizationEpoch;
+    snapshotScope.current = {
+      tooling, documentId: document.id, expressionType: document.expressionType, authorizationScope, authorizationEpoch
+    };
+    // Payloads are revision-bound; availability is not. Keep only the generic status while
+    // refreshing this expression, so typing clears stale assistance without toggling its hint.
+    setAuthoringContext(current => sameScope ? toolingStatusOnly(current) : undefined);
+    setValidation(current => sameScope ? toolingStatusOnly(current) : undefined);
     const controller = new AbortController();
     let started = false;
     const run = () => {
@@ -343,6 +361,7 @@ function useExpressionToolingSnapshot(
   }, [
     authorizationConfirmationRequired,
     authorizationEpoch,
+    authorizationScope,
     document,
     enabled,
     onAuthorizationConfirmed,
@@ -351,6 +370,14 @@ function useExpressionToolingSnapshot(
   ]);
 
   return { authoringContext, validation, validateNow };
+}
+
+function toolingStatusOnly<T>(snapshot: StudioExpressionToolingResult<T> | undefined): StudioExpressionToolingResult<T> | undefined {
+  return snapshot ? {
+    state: snapshot.state,
+    contractVersion: snapshot.contractVersion,
+    expressionType: snapshot.expressionType
+  } : undefined;
 }
 
 function useExpressionToolingAuthorization(scope: string) {
@@ -482,6 +509,7 @@ function PropertyRow({
     expressionDocument,
     workflowState,
     toolingAuthorizationAvailable && toolingActive && wrapped != null && editingMode === "text",
+    expressionEditorSessionScope,
     toolingAuthorizationEpoch,
     toolingAuthorizationConfirmationRequired,
     onToolingAuthorizationConfirmed

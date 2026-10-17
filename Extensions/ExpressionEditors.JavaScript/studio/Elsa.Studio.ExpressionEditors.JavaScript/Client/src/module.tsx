@@ -154,9 +154,9 @@ function toolingStatus(context: StudioExpressionEditorProps["context"]) {
   if (authoringState === "supported-empty") return "No JavaScript symbols are available in this context.";
   const state = authoringState === "ready" ? context.validation?.state : authoringState;
   if (!state || state === "ready" || state === "supported-empty") return undefined;
-  if (state === "unauthorized") return "JavaScript code intelligence is unavailable for your permissions.";
-  if (state === "incompatible") return "JavaScript code intelligence is incompatible with this Studio version.";
-  return "JavaScript code intelligence is unavailable. Syntax highlighting remains active.";
+  if (state === "unauthorized") return "JavaScript IntelliSense is unavailable for your permissions.";
+  if (state === "incompatible") return "JavaScript IntelliSense requires a compatible server tooling version.";
+  return "JavaScript IntelliSense is unavailable. Syntax highlighting remains active.";
 }
 
 function formatValue(value: unknown) {
