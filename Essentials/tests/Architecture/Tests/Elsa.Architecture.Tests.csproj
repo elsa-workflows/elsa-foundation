@@ -85,6 +85,7 @@
     <!-- Structured Logs composes into the representative host in DomainManagementApiCompositionTests, so its endpoints appear in the committed endpoint-manifest baseline (#1455). -->
     <ProjectReference Include="..\..\..\src\Diagnostics\StructuredLogs\Elsa.Diagnostics.StructuredLogs\Elsa.Diagnostics.StructuredLogs.csproj" />
     <ProjectReference Include="..\..\..\src\Secrets\Core\Elsa.Secrets.Core.csproj" />
+    <ProjectReference Include="..\..\..\src\Connections\Core\Elsa.Connections.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Studio\Preferences\Core\Elsa.Studio.Preferences.Core.csproj" />
     <!-- Studio Preferences composes into the representative host in DomainManagementApiCompositionTests, so its endpoints appear in the committed endpoint-manifest baseline (#1455). -->
     <ProjectReference Include="..\..\..\src\Studio\Preferences\Api\Elsa.Studio.Preferences.Api.csproj" />
@@ -140,6 +141,10 @@
     <ProjectReference Include="..\..\..\src\Secrets\Nuplane\Elsa.Secrets.Nuplane.csproj" />
     <ProjectReference Include="..\..\..\src\Secrets\Persistence\EntityFrameworkCore\Elsa.Secrets.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Secrets\Workflows\Elsa.Secrets.Workflows.csproj" />
+    <ProjectReference Include="..\..\..\src\Connections\Elsa.Connections\Elsa.Connections.csproj" />
+    <ProjectReference Include="..\..\..\src\Connections\Api\Elsa.Connections.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\Connections\Design\Elsa.Connections.Design.csproj" />
+    <ProjectReference Include="..\..\..\src\Connections\Workflows\Elsa.Connections.Workflows.csproj" />
     <ProjectReference Include="..\..\..\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\src\Studio\Preferences\Persistence\EntityFrameworkCore\Elsa.Studio.Preferences.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Dashboard\Persistence\EntityFrameworkCore\Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.csproj" />

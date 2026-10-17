@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Elsa.Workflows.Runtime.Core.Models;
 
 public sealed class BookmarkStimulusLookupRequest
@@ -7,6 +9,17 @@ public sealed class BookmarkStimulusLookupRequest
         string stimulusType,
         string stimulusHash,
         DateTimeOffset evaluatedAt)
+        : this(workflowExecutionId, stimulusType, stimulusHash, evaluatedAt, bookmarkId: null)
+    {
+    }
+
+    [JsonConstructor]
+    public BookmarkStimulusLookupRequest(
+        string workflowExecutionId,
+        string stimulusType,
+        string stimulusHash,
+        DateTimeOffset evaluatedAt,
+        string? bookmarkId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
@@ -16,12 +29,14 @@ public sealed class BookmarkStimulusLookupRequest
         StimulusType = stimulusType;
         StimulusHash = stimulusHash;
         EvaluatedAt = evaluatedAt;
+        BookmarkId = bookmarkId;
     }
 
     public string WorkflowExecutionId { get; }
     public string StimulusType { get; }
     public string StimulusHash { get; }
     public DateTimeOffset EvaluatedAt { get; }
+    public string? BookmarkId { get; }
 }
 
 public sealed class BookmarkStimulusLookupResult

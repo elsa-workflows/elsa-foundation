@@ -57,6 +57,7 @@ export function createStudioRegistry(
     propertyEditors: createContributionRegistry({ slot: studioSlots.propertyEditors }),
     expressionEditors: createContributionRegistry({ slot: studioSlots.expressionEditors }),
     workflowRunInputEditors: createContributionRegistry({ slot: studioSlots.workflowRunInputEditors }),
+    workflowTestStimulusEditors: createContributionRegistry({ slot: studioSlots.workflowTestStimulusEditors }),
     settingEditors: createContributionRegistry({ slot: studioSlots.settingEditors }),
     agent: {
       contextProviders: createContributionRegistry({ slot: studioSlots.agentContextProviders }),

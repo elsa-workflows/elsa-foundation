@@ -138,6 +138,28 @@ export function ActivityPropertiesPanel({
   const generatedDictionarySessionScope = useId();
   const effectiveDictionarySessionScope = dictionarySessionScope ?? generatedDictionarySessionScope;
   const effectiveExpressionEditorSessionScope = expressionEditorSessionScope ?? effectiveDictionarySessionScope;
+  const latestActivity = useRef(activity);
+  const renderedActivity = useRef(activity);
+  if (renderedActivity.current !== activity) {
+    latestActivity.current = activity;
+    renderedActivity.current = activity;
+  }
+  const commitInputChange = useCallback((nextActivity: ActivityNode, input: StudioActivityInputDescriptor) => {
+    const current = latestActivity.current;
+    if (current.nodeId !== nextActivity.nodeId) {
+      onChange(nextActivity);
+      return;
+    }
+    const propertyName = getInputPropertyName(input);
+    const next = { ...current };
+    if (Object.prototype.hasOwnProperty.call(nextActivity, propertyName)) {
+      next[propertyName] = nextActivity[propertyName];
+    } else {
+      delete next[propertyName];
+    }
+    latestActivity.current = next;
+    onChange(next);
+  }, [onChange]);
   const conversionProfiles = useConversionProfiles(context);
   const [activeToolingProperty, setActiveToolingProperty] = useState<string>();
   const toolingAuthorization = useExpressionToolingAuthorization(effectiveExpressionEditorSessionScope);
@@ -208,7 +230,7 @@ export function ActivityPropertiesPanel({
               conversionProfiles={conversionProfiles}
               toolingActive={activeToolingProperty === `${activity.nodeId}\u001f${input.referenceKey?.trim() || input.name}`}
               onToolingFocus={activateToolingProperty}
-              onChange={onChange}
+              onChange={commitInputChange}
             />
           ))}
         </section>
@@ -380,7 +402,7 @@ type PropertyRowProps = {
   conversionProfiles: ConversionProfileReference[];
   toolingActive: boolean;
   onToolingFocus(property: string): void;
-  onChange(activity: ActivityNode): void;
+  onChange(activity: ActivityNode, input: StudioActivityInputDescriptor): void;
 };
 
 function PropertyRow({
@@ -611,11 +633,11 @@ function PropertyRow({
       : null;
     const cleared = clearSecretOnlyInput(current.activity, current.input, nextValue);
     if (cleared) {
-      current.onChange(cleared);
+      current.onChange(cleared, current.input);
       return;
     }
     const next = currentWrapped ? withLiteralValue(currentWrapped, nextValue) : nextValue;
-    current.onChange(writeInputValue(current.activity, current.input, next));
+    current.onChange(writeInputValue(current.activity, current.input, next), current.input);
   }, []);
 
   const getUnavailableReason = (descriptor: StudioExpressionDescriptor): string | null => {
@@ -646,7 +668,7 @@ function PropertyRow({
     if (!wrapped) return;
     setPendingTransition(null);
     setFocusRequested(true);
-    onChange(writeInputValue(activity, input, withExpression(wrapped, descriptor.type, nextValue)));
+    onChange(writeInputValue(activity, input, withExpression(wrapped, descriptor.type, nextValue)), input);
   };
 
   const cancelTransition = () => {
@@ -857,7 +879,7 @@ function PropertyRow({
                 wrapped={wrapped}
                 profiles={conversionProfiles}
                 disabled={readOnly}
-                onChange={next => onChange(writeInputValue(activity, input, next))}
+                onChange={next => onChange(writeInputValue(activity, input, next), input)}
               />
             </div>
           ) : (
@@ -943,7 +965,7 @@ function PropertyRow({
           wrapped={wrapped}
           conversionProfiles={conversionProfiles}
           onChange={setRaw}
-          onConversionChange={next => onChange(writeInputValue(activity, input, next))}
+          onConversionChange={next => onChange(writeInputValue(activity, input, next), input)}
           onSyntaxChange={setSyntax}
           onClose={closeExpanded}
         />

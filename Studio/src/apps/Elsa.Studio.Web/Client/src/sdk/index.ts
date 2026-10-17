@@ -631,6 +631,8 @@ export interface StudioActivityInputDescriptor extends StudioActivityPropertyDes
   isSensitive?: boolean | null;
   /** Activity-declared: accepts only a Secret Reference. Implies isSensitive. Absent on older backends. */
   isCredential?: boolean | null;
+  /** Activity-declared: the required connection type. Absent on older backends. */
+  connectionType?: string | null;
 }
 
 export function readActivityInputOptionsProvider(input: StudioActivityInputDescriptor): StudioActivityInputOptionsProviderDescriptor | null {
@@ -645,6 +647,8 @@ export function readActivityInputOptionsProvider(input: StudioActivityInputDescr
 }
 
 export interface StudioActivityOutputDescriptor extends StudioActivityPropertyDescriptor {
+  /** Stable identity used to correlate output captures with the activity's published contract. */
+  referenceKey?: string | null;
 }
 
 export interface StudioActivityPortDescriptor {
@@ -785,6 +789,105 @@ export interface StudioWorkflowRunInputEditorContribution {
   component: ComponentType<StudioWorkflowRunInputEditorProps>;
   validate(context: StudioWorkflowRunInputEditorContext): string | undefined;
   serialize(context: StudioWorkflowRunInputEditorContext): unknown;
+}
+
+/** A backend-discovered trigger mode available while driving a workflow Test Run. */
+export interface StudioTestRunModeDescriptor extends Record<string, unknown> {
+  modeId: string;
+  label: string;
+  description?: string;
+  isDefault?: boolean;
+  configurationVersion?: number;
+  /** Safe JSON Schema for the user-supplied stimulus value. */
+  configurationSchema?: unknown;
+  /** Read-only module context, such as a resolved route or authored schedule. */
+  configuration?: unknown;
+}
+
+/** One eligible, backend-validated workflow start option. */
+export interface StudioTestRunOptionDescriptor extends Record<string, unknown> {
+  optionId: string;
+  driverId?: string | null;
+  nodeId: string;
+  label: string;
+  isAvailable?: boolean;
+  reason?: string | null;
+  configuration?: unknown;
+  modes: StudioTestRunModeDescriptor[];
+}
+
+/** One active, module-supported wait on a workflow Test Run execution. */
+export interface StudioTestRunWaitDescriptor extends Record<string, unknown> {
+  waitId: string;
+  nodeId: string;
+  label: string;
+  driverId?: string | null;
+  isAvailable: boolean;
+  reason?: string | null;
+  modes: StudioTestRunModeDescriptor[];
+}
+
+/** Opaque module-owned action returned by a Test Run preparation response. */
+export interface StudioTestRunDriverAction extends Record<string, unknown> {
+  kind: string;
+  /** Server-resolved path from the API origin; includes the deployment PathBase when one is configured. */
+  relativeUrl?: string;
+  method?: string;
+  details?: unknown;
+}
+
+export interface StudioTestStimulusEditorContext {
+  option: StudioTestRunOptionDescriptor;
+  mode: StudioTestRunModeDescriptor;
+  draft: string;
+}
+
+export interface StudioTestStimulusControlProps {
+  id: string;
+  "aria-label": string;
+  "aria-describedby"?: string;
+  "aria-invalid": boolean;
+}
+
+export interface StudioTestStimulusEditorProps extends StudioTestStimulusEditorContext {
+  disabled?: boolean;
+  controlProps: StudioTestStimulusControlProps;
+  onChange(draft: string): void;
+}
+
+export interface StudioTestStimulusActionContext {
+  backend: StudioEndpointContext;
+  option: StudioTestRunOptionDescriptor;
+  mode: StudioTestRunModeDescriptor;
+  action: StudioTestRunDriverAction;
+  data: unknown;
+  editorDraft: string;
+}
+
+export interface StudioTestStimulusActionResult extends Record<string, unknown> {
+  kind: string;
+}
+
+export interface StudioTestStimulusResultProps {
+  action: StudioTestRunDriverAction;
+  result: StudioTestStimulusActionResult;
+}
+
+/**
+ * Edits a module's one-off trigger data and may execute a prepared module action through Studio's
+ * authenticated backend transport. Match on stable driver/mode identifiers, not workflow activity types.
+ */
+export interface StudioTestStimulusEditorContribution {
+  id: string;
+  order?: number;
+  startLabel?: string;
+  actionLabel?: string;
+  supports(context: Omit<StudioTestStimulusEditorContext, "draft">): boolean;
+  component: ComponentType<StudioTestStimulusEditorProps>;
+  validate(context: StudioTestStimulusEditorContext): string | undefined;
+  serialize(context: StudioTestStimulusEditorContext): unknown;
+  executeAction?(context: StudioTestStimulusActionContext): Promise<StudioTestStimulusActionResult>;
+  actionResultComponent?: ComponentType<StudioTestStimulusResultProps>;
 }
 
 export type StudioExpressionEditorSurface = "inline" | "expanded";
@@ -1388,6 +1491,7 @@ export const studioSlotIds = {
   propertyEditors: "workflow.activity.property-editors",
   expressionEditors: "workflow.expression-editors",
   workflowRunInputEditors: "workflow.run-input.editors",
+  workflowTestStimulusEditors: "workflow.test-stimulus.editors",
   settingEditors: "studio.setting-editors",
   agentContextProviders: "studio.weaver.context-providers",
   agentPromptStarters: "studio.weaver.prompt-starters",
@@ -1480,6 +1584,7 @@ export const studioSlots = {
   propertyEditors: defineStudioSlot({ id: studioSlotIds.propertyEditors, kind: "property-editor", title: "Activity property editors", owner: hostSlotOwner() }),
   expressionEditors: defineStudioSlot({ id: studioSlotIds.expressionEditors, kind: "expression-editor", title: "Expression editors", owner: hostSlotOwner() }),
   workflowRunInputEditors: defineStudioSlot({ id: studioSlotIds.workflowRunInputEditors, kind: "workflow-run-input-editor", title: "Workflow run input editors", owner: hostSlotOwner() }),
+  workflowTestStimulusEditors: defineStudioSlot({ id: studioSlotIds.workflowTestStimulusEditors, kind: "workflow-test-stimulus-editor", title: "Workflow Test Run stimulus editors", owner: hostSlotOwner() }),
   settingEditors: defineStudioSlot({ id: studioSlotIds.settingEditors, kind: "setting-editor", title: "Setting editors", owner: hostSlotOwner() }),
   agentContextProviders: defineStudioSlot({ id: studioSlotIds.agentContextProviders, kind: "weaver-context-provider", title: "Weaver context providers", owner: hostSlotOwner() }),
   agentPromptStarters: defineStudioSlot({ id: studioSlotIds.agentPromptStarters, kind: "weaver-prompt-starter", title: "Weaver prompt starters", owner: hostSlotOwner() }),
@@ -1737,6 +1842,8 @@ export interface ElsaStudioModuleApi {
   readonly expressionEditors: StudioContributionRegistry<StudioExpressionEditorContribution>;
   /** Available on hosts that support the workflow run-input editor Slot. */
   readonly workflowRunInputEditors?: StudioContributionRegistry<StudioWorkflowRunInputEditorContribution>;
+  /** Available on hosts that support module-owned workflow Test Run stimulus editors. */
+  readonly workflowTestStimulusEditors?: StudioContributionRegistry<StudioTestStimulusEditorContribution>;
   readonly settingEditors: StudioContributionRegistry<StudioSettingEditorContribution>;
   readonly agent: StudioAgentRegistry;
   readonly workflowDesigner: {

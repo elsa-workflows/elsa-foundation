@@ -338,7 +338,14 @@ internal static class StructuralParentEvaluationSupport
                     Metadata: metadata)
             ];
         var childWorkItems = SchedulerWorkItems.NewChildActivityScheduleWorkItems(
-            timeProvider, idGenerator, workItem, source.Payload.PinnedExecutable, activityExecutionId, scheduleRequests, source.DerivedCommandMetadata).ToArray();
+            timeProvider,
+            idGenerator,
+            workItem,
+            source.Payload.PinnedExecutable,
+            activityExecutionId,
+            scheduleRequests,
+            source.DerivedCommandMetadata,
+            SchedulerWorkItems.ResolveChildExecutionScopeId(parentState)).ToArray();
         var cancellationChanges = await BuildSubtreeCancellationChangesAsync(
             inspectionAccumulator, subtreeCancellations, checkpointId, occurredAt, metadata, cancellationToken);
         var commit = new RuntimeCheckpointCommit(

@@ -29,6 +29,14 @@ public sealed class ActivitiesHttpFeatureMiddlewareSeamTests
     }
 
     [Fact]
+    public void Feature_RunsAfterIdentityAuthenticationMiddleware()
+    {
+        // FoundationIdentityAbstractionsFeature orders its authentication middleware at 0. The HTTP feature must
+        // run later so request-handler schemes (such as OpenIddict) initialize request state before ingress.
+        Assert.Equal(1, new ActivitiesHttpFeature().Order);
+    }
+
+    [Fact]
     public async Task UseMiddleware_MountsTheHttpEndpointMiddleware_IntoThePipeline()
     {
         // A DI container with just enough to resolve the IMiddleware the feature mounts. UseMiddleware<T>() for an
@@ -37,8 +45,14 @@ public sealed class ActivitiesHttpFeatureMiddlewareSeamTests
         var services = new ServiceCollection();
         services.AddSingleton<IMiddlewareFactory, MiddlewareFactory>();
         services.AddScoped<HttpEndpointMiddleware>();
+        services.AddScoped<HttpTestRunIngressMiddleware>();
         services.AddSingleton<IStimulusRouter>(router);
         services.AddSingleton<IOptions<HttpEndpointOptions>>(Microsoft.Extensions.Options.Options.Create(new HttpEndpointOptions()));
+        services.AddSingleton<ITestRunTargetStore, UnusedTestTargetStore>();
+        services.AddSingleton<IWorkflowTestScopeStore, Elsa.Workflows.Runtime.Services.Dispatch.InMemoryWorkflowTestScopeStore>();
+        services.AddSingleton<ITestRunTargetDispatcher, UnusedTestTargetDispatcher>();
+        services.AddSingleton<IWorkflowExecutionPartitionAccessor>(new StubPartitionAccessor());
+        services.AddSingleton(TimeProvider.System);
         // The middleware's route-table/matcher/binding-store dependencies are contributed in production by the
         // features ActivitiesHttpFeature.DependsOn (Http provides IRouteTable/IRouteMatcher; WorkflowsRuntime-
         // Triggers provides IWorkflowTriggerBindingStore). Register production-equivalent doubles and an empty
@@ -57,7 +71,8 @@ public sealed class ActivitiesHttpFeatureMiddlewareSeamTests
         var app = new StubApplicationBuilder(provider);
         ((IMiddlewareShellFeature)new ActivitiesHttpFeature()).UseMiddleware(app, environment: null);
 
-        // Exactly one component was mounted; build the pipeline and drive a request under the endpoint base path.
+        // Both isolated TestRun ingress and production endpoint middleware are mounted, in that order. Drive a
+        // request under the production endpoint base path and verify the TestRun ingress passes it through.
         var pipeline = app.Build();
         var context = NewContext("/workflows/http/seam-probe", "GET");
         await pipeline(context);
@@ -97,7 +112,7 @@ public sealed class ActivitiesHttpFeatureMiddlewareSeamTests
 
         public RequestDelegate Build()
         {
-            Assert.Single(_components);
+            Assert.Equal(2, _components.Count);
             RequestDelegate app = context =>
             {
                 // Ensure an IMiddleware can resolve itself from the request scope during the run.
@@ -112,5 +127,25 @@ public sealed class ActivitiesHttpFeatureMiddlewareSeamTests
                 return app(context);
             };
         }
+    }
+
+    private sealed class UnusedTestTargetStore : ITestRunTargetStore
+    {
+        public ValueTask<TestRunTarget> SaveAsync(TestRunTarget target, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<TestRunTarget?> FindAsync(string testRunId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<TestRunTargetAdmission> BeginDispatchAsync(string testRunId, string stimulusDigest, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<TestRunTarget?> CompleteDispatchAsync(string testRunId, TestRunTargetDispatchResult result, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<TestRunTarget?> MarkStoppedAsync(string testRunId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<TestRunTarget?> RemoveAsync(string testRunId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class UnusedTestTargetDispatcher : ITestRunTargetDispatcher
+    {
+        public ValueTask<TestRunTargetDispatchResult> DispatchAsync(string testRunId, System.Text.Json.JsonElement? stimulusInput, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class StubPartitionAccessor : IWorkflowExecutionPartitionAccessor
+    {
+        public WorkflowExecutionPartition Current { get; } = new("test-partition");
     }
 }

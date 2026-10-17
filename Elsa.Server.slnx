@@ -141,6 +141,13 @@
     <Project Path="Essentials/src/Cli/Elsa.Cli/Elsa.Cli.csproj" />
     <Project Path="Essentials/src/Cli/Worker/Elsa.Cli.Worker.csproj" />
   </Folder>
+  <Folder Name="/Essentials/src/Connections/">
+    <Project Path="Essentials/src/Connections/Api/Elsa.Connections.Api.csproj" />
+    <Project Path="Essentials/src/Connections/Core/Elsa.Connections.Core.csproj" />
+    <Project Path="Essentials/src/Connections/Elsa.Connections/Elsa.Connections.csproj" />
+    <Project Path="Essentials/src/Connections/Design/Elsa.Connections.Design.csproj" />
+    <Project Path="Essentials/src/Connections/Workflows/Elsa.Connections.Workflows.csproj" />
+  </Folder>
   <Folder Name="/Essentials/src/Diagnostics/">
     <Project Path="Essentials/src/Diagnostics/Persistence/Elsa.Diagnostics.Persistence.csproj" />
     <Project Path="Essentials/src/Diagnostics/ConsoleLogStreaming/Elsa.Diagnostics.ConsoleLogStreaming.csproj" />
@@ -430,6 +437,9 @@
   </Folder>
   <Folder Name="/Essentials/tests/Cli/">
     <Project Path="Essentials/tests/Cli/Tests/Elsa.Cli.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/tests/Connections/">
+    <Project Path="Essentials/tests/Connections/Tests/Elsa.Connections.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Cli/Fixtures/">
     <Project Path="Essentials/tests/Cli/Fixtures/Collision/Acme.Widgets.Collision.csproj" />

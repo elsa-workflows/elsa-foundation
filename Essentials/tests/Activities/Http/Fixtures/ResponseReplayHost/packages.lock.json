@@ -155,6 +155,7 @@
           "Elsa.Mediator.Core": "[4.0.0-dev, )",
           "Elsa.Serialization.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Microsoft.AspNetCore.OpenApi": "[10.0.10, )",
           "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
@@ -214,6 +215,7 @@
           "CShells.AspNetCore.Abstractions": "[0.0.31, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Api.Capabilities": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Http.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Serialization.Core": "[4.0.0-dev, )",
@@ -845,6 +847,15 @@
           "Acornima": "1.6.1"
         }
       },
+      "Microsoft.AspNetCore.OpenApi": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.10, )",
+        "resolved": "10.0.10",
+        "contentHash": "d4Atx9IHq7JgX0F/h7Db+m9zAUzC+cKdI9k+OWnnyQIOUQtfvjIEuhvbjPigVMkAmPUgCbJ8Yp6M9ghUqHtJSQ==",
+        "dependencies": {
+          "Microsoft.OpenApi": "2.0.0"
+        }
+      },
       "Microsoft.EntityFrameworkCore": {
         "type": "CentralTransitive",
         "requested": "[10.0.10, )",
@@ -863,6 +874,12 @@
         "dependencies": {
           "Microsoft.EntityFrameworkCore": "10.0.10"
         }
+      },
+      "Microsoft.OpenApi": {
+        "type": "CentralTransitive",
+        "requested": "[2.7.5, )",
+        "resolved": "2.7.5",
+        "contentHash": "0FA67RSnRM4tcBKqiqVu/HPdZ9+QOKbmeRjxRUGTCjPU4C0bmUhd97Dso7Yild5P7nOV6GxJ2xrK0Kv/O9xp0w=="
       },
       "NativeEndpoints": {
         "type": "CentralTransitive",

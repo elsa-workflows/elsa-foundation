@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { getActivityDefinitionVersion } from "../api/activityDesign";
 import {
   getActivityExecutionDescendants,
   getActivityExecutionInspection,
@@ -24,6 +25,11 @@ vi.mock("../api/runtime", async importOriginal => ({
   getActivityExecutionLayout: vi.fn()
 }));
 
+vi.mock("../api/activityDesign", async importOriginal => ({
+  ...(await importOriginal<typeof import("../api/activityDesign")>()),
+  getActivityDefinitionVersion: vi.fn()
+}));
+
 vi.mock("../api/activityExecutionValuePayload", () => ({ getActivityExecutionValuePayload: vi.fn() }));
 
 let active: { root: Root; container: HTMLElement } | null = null;
@@ -39,9 +45,41 @@ afterEach(() => {
   vi.mocked(getActivityExecutionDescendants).mockReset();
   vi.mocked(getActivityExecutionLayout).mockReset();
   vi.mocked(getActivityExecutionValuePayload).mockReset();
+  vi.mocked(getActivityDefinitionVersion).mockReset();
 });
 
 describe("ReusableBoundaryInspector", () => {
+  it("links to the exact inspected Activity Definition version only after authorized source resolution", async () => {
+    vi.mocked(getActivityExecutionLayout).mockResolvedValue(layout("outer", []));
+    vi.mocked(getActivityExecutionDescendants).mockResolvedValue(page(1, []));
+    vi.mocked(getActivityDefinitionVersion).mockResolvedValue({
+      definition: { definitionId: "definition-outer" },
+      versionId: "definition-version-outer"
+    } as Awaited<ReturnType<typeof getActivityDefinitionVersion>>);
+    const container = render(<ReusableBoundaryInspector context={context} inspection={boundaryInspection("outer")} />);
+
+    await waitFor(() => {
+      const link = [...container.querySelectorAll<HTMLAnchorElement>("a")]
+        .find(candidate => candidate.textContent === "Open exact Activity Definition");
+      expect(link?.getAttribute("href")).toBe("/workflows/activity-definitions?definition=definition-outer&section=versions&version=definition-version-outer");
+    });
+    expect(getActivityDefinitionVersion).toHaveBeenCalledWith(context, "definition-version-outer", expect.any(AbortSignal));
+  });
+
+  it("does not link when the resolved version belongs to a different definition", async () => {
+    vi.mocked(getActivityExecutionLayout).mockResolvedValue(layout("outer", []));
+    vi.mocked(getActivityExecutionDescendants).mockResolvedValue(page(1, []));
+    vi.mocked(getActivityDefinitionVersion).mockResolvedValue({
+      definition: { definitionId: "definition-outer" },
+      versionId: "other-version"
+    } as Awaited<ReturnType<typeof getActivityDefinitionVersion>>);
+    const container = render(<ReusableBoundaryInspector context={context} inspection={boundaryInspection("outer")} />);
+
+    await waitFor(() => expect(container.textContent).toContain("Exact source link unavailable."));
+    expect([...container.querySelectorAll<HTMLAnchorElement>("a")]
+      .some(candidate => candidate.textContent === "Open exact Activity Definition")).toBe(false);
+  });
+
   it("loads pinned structure independently, virtualizes descendants, and does not preload a nested boundary", async () => {
     const layoutDeferred = deferred<ActivityExecutionLayout>();
     const descendantsDeferred = deferred<ActivityExecutionHierarchyPage>();

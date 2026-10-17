@@ -85,13 +85,13 @@ public sealed class ActivityAuthoringCatalogTests
         AssertProperties(provenance, "SourceKind", "SourceId", "FeatureId");
 
         var inputDescriptor = CollectionElementType(descriptor.GetProperty("Inputs")!.PropertyType);
-        AssertProperties(inputDescriptor, "ReferenceKey", "Name", "Type", "CollectionKind", "IsNullable", "IsSensitive", "IsCredential", "Tier");
+        AssertProperties(inputDescriptor, "ReferenceKey", "Name", "Type", "CollectionKind", "IsNullable", "IsSensitive", "IsCredential", "Tier", "ConnectionType");
         Assert.Equal(typeof(bool), inputDescriptor.GetProperty("IsNullable")!.PropertyType);
         Assert.Equal(typeof(bool), inputDescriptor.GetProperty("IsSensitive")!.PropertyType);
         Assert.Equal(typeof(bool), inputDescriptor.GetProperty("IsCredential")!.PropertyType);
         Assert.Equal(typeof(string), Nullable.GetUnderlyingType(inputDescriptor.GetProperty("Tier")!.PropertyType) ?? inputDescriptor.GetProperty("Tier")!.PropertyType);
         var inputConstructor = inputDescriptor.GetConstructors().Single();
-        Assert.Equal(18, inputConstructor.GetParameters().Length);
+        Assert.Equal(19, inputConstructor.GetParameters().Length);
         var nullability = Assert.Single(inputConstructor.GetParameters(), parameter =>
             StringComparer.OrdinalIgnoreCase.Equals(parameter.Name, "IsNullable"));
         Assert.False(nullability.HasDefaultValue);
@@ -100,9 +100,36 @@ public sealed class ActivityAuthoringCatalogTests
         Assert.True(tier.HasDefaultValue);
         Assert.Null(tier.DefaultValue);
         Assert.Contains(inputDescriptor.GetMethods(), method =>
-            method.Name == "Deconstruct" && method.GetParameters().Length == 18);
+            method.Name == "Deconstruct" && method.GetParameters().Length == 19);
+        var outputDescriptor = CollectionElementType(descriptor.GetProperty("Outputs")!.PropertyType);
+        AssertProperties(outputDescriptor, "Name", "ReferenceKey", "Type", "CollectionKind");
         var portDescriptor = CollectionElementType(descriptor.GetProperty("Ports")!.PropertyType);
         AssertProperties(portDescriptor, "Name", "ReferenceKey", "Type", "IsBrowsable");
+    }
+
+    [Fact]
+    public async Task Catalog_outputs_expose_their_stable_reference_key()
+    {
+        var definition = new ActivityDefinition { Id = "def-output", ActivityTypeKey = DeclaredActivityTypeKey, Category = "Acme", DisplayName = "Call Service" };
+        var version = new ActivityDefinitionVersion("1.0.0", definition.Id)
+        {
+            Id = "ver-output",
+            ConsumerKey = "elsa.clr-activity",
+            Outputs = [new OutputDefinition("sum", "Sum", new TypeReference("Int32"), null, "Sum", null, IsNullable: false)]
+        };
+
+        var view = await CatalogReaderFixture.ListAsync([definition], [version]);
+        var activity = Assert.Single(view.Activities, item => item.ActivityVersionId == "ver-output");
+        var output = Assert.Single(activity.Outputs);
+        var wire = JsonNode.Parse(JsonSerializer.Serialize(view,
+            ActivitiesDesignWire.Context.GetTypeInfo(typeof(ActivityAuthoringCatalogView))!))!;
+        var activityWire = Assert.Single(wire["activities"]!.AsArray(), item => (string?)item!["activityVersionId"] == "ver-output");
+        var outputWire = activityWire!["outputs"]![0]!;
+
+        Assert.Equal("Sum", output.Name);
+        Assert.Equal("sum", output.ReferenceKey);
+        Assert.Equal("Sum", (string?)outputWire["name"]);
+        Assert.Equal("sum", (string?)outputWire["referenceKey"]);
     }
 
     [Fact]

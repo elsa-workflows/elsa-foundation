@@ -124,6 +124,10 @@
           "Secrets": {},
           "SecretsApi": {},
           "SecretsWorkflows": {},
+          "Connections": {},
+          "ConnectionsApi": {},
+          "ConnectionsDesign": {},
+          "ConnectionsWorkflows": {},
           "SecretsEntityFrameworkCore": {
             "Provider": "PostgreSql"
           },

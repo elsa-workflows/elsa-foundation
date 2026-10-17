@@ -212,6 +212,7 @@
           "Elsa.Mediator.Core": "[4.0.0-dev, )",
           "Elsa.Serialization.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Microsoft.AspNetCore.OpenApi": "[10.0.10, )",
           "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
@@ -245,6 +246,8 @@
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
@@ -255,6 +258,7 @@
           "CShells.AspNetCore.Abstractions": "[0.0.31, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Api.Capabilities": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Http.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Serialization.Core": "[4.0.0-dev, )",

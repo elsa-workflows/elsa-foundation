@@ -1,3 +1,4 @@
+using Elsa.Activities.Design.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Models;
 using Elsa.Workflows.Design.Validations.Core;
@@ -105,6 +106,44 @@ public sealed class CredentialLiteralValidatorTests
     [Fact]
     public async Task Admission_of_an_accepted_state_does_not_throw() =>
         Assert.Null(await Record.ExceptionAsync(() => _validator.AdmitAsync(CredentialBoundAs("Secret"), CancellationToken.None)));
+
+    [Fact]
+    public async Task A_literal_on_a_connection_input_is_refused_and_never_echoed()
+    {
+        var catalog = new StubActivityCatalog().Add(
+            ActivityVersionId,
+            [
+                new InputDefinition(
+                    "Connection",
+                    "Connection",
+                    new TypeReference("Elsa.Activities.Runtime.Core.Models.ConnectionReference"),
+                    null,
+                    "Connection",
+                    null,
+                    IsNullable: true,
+                    ConnectionType: "http")
+            ]);
+        var validator = Validator(catalog);
+        var state = State(ActivityVersionId, Bind("Connection", "Literal"));
+
+        var finding = Assert.Single(await validator.Validate(state, CancellationToken.None));
+        Assert.Equal($"{NodeId}/inputs/Connection", finding.Path);
+        Assert.Equal(ConnectionInputBinding.RuleId, finding.Type);
+        Assert.DoesNotContain(Literal, finding.ToString(), StringComparison.Ordinal);
+
+        var accepted = State(
+            ActivityVersionId,
+            new ArgumentState(
+                "Connection",
+                new Elsa.Expressions.Core.Models.ArgumentValue(
+                    System.Text.Json.JsonSerializer.SerializeToElement(new { connection = "acme.api", type = "http" }),
+                    "Connection"),
+                null,
+                null,
+                null,
+                null));
+        Assert.Empty(await validator.Validate(accepted, CancellationToken.None));
+    }
 
     [Fact]
     public void A_finding_is_keyed_by_the_input_reference_key_and_names_the_input()

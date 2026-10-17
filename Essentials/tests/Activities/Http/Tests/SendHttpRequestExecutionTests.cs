@@ -1,6 +1,7 @@
 using System.Net;
 using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Primitives;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -85,69 +86,33 @@ public sealed class SendHttpRequestExecutionTests
     }
 
     [Fact]
-    public async Task AuthorizationInput_IsSentVerbatimAsTheRequestsSingleAuthorizationHeaderValue()
-    {
-        await using var harness = NewHarness(_ => Respond(HttpStatusCode.OK, "hello"));
-
-        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode(authorization: _authorizationValue)));
-
-        run.AssertOutcomes(NodeId, ActivityOutcomes.Done);
-        Assert.Equal([_authorizationValue], Assert.Single(AuthorizationHeaders(Assert.Single(_requests))));
-    }
-
-    [Fact]
-    public async Task AuthorizationInput_ReplacesARequestHeadersEntry_WhateverItsLetterCase()
+    public async Task UnboundConnection_LeavesTheRequestHeadersEntryUnchanged()
     {
         await using var harness = NewHarness(_ => Respond(HttpStatusCode.OK, "hello"));
 
         var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode(
-            authorization: _authorizationValue,
-            requestHeaders: new Dictionary<string, string> { ["authorization"] = _headersEntryValue, ["X-Trace"] = "kept" })));
-
-        run.AssertOutcomes(NodeId, ActivityOutcomes.Done);
-        var request = Assert.Single(_requests);
-        Assert.Equal([_authorizationValue], Assert.Single(AuthorizationHeaders(request)));
-        Assert.Equal(["kept"], request["X-Trace"]);
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData(" \t ")]
-    public async Task UnboundEmptyOrWhitespaceAuthorization_LeavesTheRequestHeadersEntryUnchanged(string? authorization)
-    {
-        await using var harness = NewHarness(_ => Respond(HttpStatusCode.OK, "hello"));
-
-        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode(
-            authorization: authorization,
             requestHeaders: new Dictionary<string, string> { ["authorization"] = _headersEntryValue })));
 
         run.AssertOutcomes(NodeId, ActivityOutcomes.Done);
         Assert.Equal([_headersEntryValue], Assert.Single(AuthorizationHeaders(Assert.Single(_requests))));
     }
 
-    // Over a loopback server, so a header the value smuggled in would arrive as its own header on the wire.
-    [Theory]
-    [InlineData("\r\n")]
-    [InlineData("\n")]
-    [InlineData("\r")]
-    public async Task AuthorizationHoldingALineBreak_FaultsTheActivityWithoutTheValue_AndSendsNothing(string lineBreak)
+    [Fact]
+    public async Task BoundConnection_WithoutConnectionsWorkflows_FaultsBeforeSend()
     {
-        var value = $"{_authorizationValue}{lineBreak}X-Injected: 1";
-        await using var server = new LoopbackHttpServer(_ => (200, null));
-        await using var harness = NewBuilder().Build(ActivityExecutionId);
+        await using var harness = NewHarness(_ => Respond(HttpStatusCode.OK, "hello"));
 
-        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode(url: server.BaseAddress, authorization: value)));
+        var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode(
+            connection: new ConnectionReference("acme-api", "http"))));
 
-        Assert.Empty(server.Requests);
         var state = run.State(NodeId);
         Assert.Equal(ActivityExecutionStatus.Faulted, state.Status);
-        Assert.Contains("Authorization", state.Fault!.Message, StringComparison.Ordinal);
-        Assert.DoesNotContain(_authorizationValue, state.Fault.Message, StringComparison.Ordinal);
+        Assert.Contains("acme-api", state.Fault!.Message, StringComparison.Ordinal);
+        Assert.Empty(_requests);
     }
 
     [Fact]
-    public async Task Result_HoldsOnlyTheResponse_AndNeitherAuthorizationValue()
+    public async Task Result_HoldsOnlyTheResponse_AndNotRequestHeaderValues()
     {
         await using var harness = NewHarness(_ =>
         {
@@ -157,7 +122,6 @@ public sealed class SendHttpRequestExecutionTests
         });
 
         var run = await harness.RunAsync(WorkflowExecutionHarness.NewExecutable(NewSendNode(
-            authorization: _authorizationValue,
             requestHeaders: new Dictionary<string, string> { ["authorization"] = _headersEntryValue, ["X-Trace"] = "sent" })));
 
         var result = run.AssertCompleted(NodeId).Completion!.Result.InlineValue!.Value;

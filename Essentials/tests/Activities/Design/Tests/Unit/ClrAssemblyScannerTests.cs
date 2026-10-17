@@ -789,7 +789,7 @@ public sealed class ClrAssemblyScannerTests
         { typeof(HttpEndpoint), "3432C91C232D91852818ED02A289497FD4DD17112199328DC65BBE1239FA84DA" },
         { typeof(WriteLine), "618BB61870A3FADC2551123EA520F7F5852CB0D00CD4AE5E6DB8A80D7677EF2C" },
         { typeof(ParallelActivity), "A466AC1D4873108D85B6BA08D2058ACD9FD51A60571E8BA043043A17B20CCC82" },
-        { typeof(SendHttpRequest), "3198C060D839A973424ED9347FB5468B13B2849B9D8FCCDE597C1D34FCE87DF9" }
+        { typeof(SendHttpRequest), "814577E3C1A0BFA2C780181584463ACC1ECE7BD74382D106EC80B2AFC8A8B8E6" }
     };
 
     [Theory]
@@ -816,7 +816,7 @@ public sealed class ClrAssemblyScannerTests
         Assert.Equal(ActivityInputTiers.Essential, sendInputs[nameof(SendHttpRequest.Content)].Tier);
         Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.ContentType)].Tier);
         Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.RequestHeaders)].Tier);
-        Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.Authorization)].Tier);
+        Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.Connection)].Tier);
         Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.ExpectedStatusCodes)].Tier);
         Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.Timeout)].Tier);
 
@@ -889,29 +889,22 @@ public sealed class ClrAssemblyScannerTests
     }
 
     [Fact]
-    public void SendHttpRequest_DeclaresOnlyAuthorizationAsASensitiveCredential_WithNoDefault()
+    public void SendHttpRequest_DeclaresConnectionAsAnHttpActivityConnection_AndNoCredentialInput()
     {
-        // The one built-in credential input. A credential is also sensitive, accepts
-        // only a secret reference, and never carries a default; every other SendHttpRequest input stays undeclared.
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(SendHttpRequest).Assembly);
         var inputs = CreateScanner().Scan(folder.Path)
             .Single(model => model.ActivityTypeKey == typeof(SendHttpRequest).FullName)
             .Inputs;
 
-        var authorization = Assert.Single(inputs, input => input.Name == nameof(SendHttpRequest.Authorization));
-        Assert.Equal("String", authorization.Type.Alias);
-        Assert.True(authorization.IsSensitive);
-        Assert.True(authorization.IsCredential);
-        Assert.Null(authorization.DefaultValue);
-        Assert.Null(authorization.DefaultSyntax);
-
-        var others = inputs.Where(input => input.Name != nameof(SendHttpRequest.Authorization)).ToList();
-        Assert.NotEmpty(others);
-        Assert.All(others, input =>
-        {
-            Assert.Null(input.IsSensitive);
-            Assert.Null(input.IsCredential);
-        });
+        var connection = Assert.Single(inputs, input => input.Name == nameof(SendHttpRequest.Connection));
+        Assert.Equal(typeof(ConnectionReference).FullName, connection.Type.Alias);
+        Assert.Equal("http", connection.ConnectionType);
+        Assert.Equal("connection-picker", connection.UiHint);
+        Assert.Equal("Connection", connection.DefaultSyntax);
+        Assert.Null(connection.IsCredential);
+        Assert.Null(connection.IsSensitive);
+        Assert.DoesNotContain(inputs, input => input.Name == "Authorization");
+        Assert.All(inputs, input => Assert.Null(input.IsCredential));
     }
 
     [Fact]

@@ -181,7 +181,7 @@ internal sealed partial class Elsa3BuiltInActivityMap
             Narrow("Method", "Method", Elsa3ValueContract.HttpMethodSupported),
             Narrow("Content", "Content", Elsa3ValueContract.StringOnly),
             DefaultFlip("ContentType", "ContentType", "application/json", whenBound: "Content"),
-            Narrow("Authorization", "Authorization", Elsa3ValueContract.SecretReferenceOnly),
+            Removed("Authorization", warning: HttpAuthorizationUseConnection),
             Removed("DisableAuthorizationHeaderValidation", "true", warning: AuthHeaderUnvalidated),
             Narrow("RequestHeaders", "RequestHeaders", Elsa3ValueContract.SingleHeaderValue),
             Removed("EnableResiliency", "false"),

@@ -931,6 +931,7 @@
           "Elsa.Mediator.Core": "[4.0.0-dev, )",
           "Elsa.Serialization.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Design.Persistence.Core": "[4.0.0-dev, )",
+          "Microsoft.AspNetCore.OpenApi": "[10.0.10, )",
           "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
@@ -1029,6 +1030,8 @@
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
           "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
@@ -1039,6 +1042,7 @@
           "CShells.AspNetCore.Abstractions": "[0.0.31, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
           "Elsa.Api.Capabilities": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "Elsa.Http.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Serialization.Core": "[4.0.0-dev, )",
@@ -1205,6 +1209,59 @@
           "Elsa.Cluster.InProcess": "[4.0.0-dev, )",
           "Elsa.Persistence.Schema": "[4.0.0-dev, )",
           "Nuplane.Loading.Abstractions": "[0.0.12, )"
+        }
+      },
+      "elsa.connections": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Connections.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Secrets.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.connections.api": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Connections": "[4.0.0-dev, )",
+          "Elsa.Connections.Core": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Microsoft.AspNetCore.OpenApi": "[10.0.10, )",
+          "NativeEndpoints": "[1.0.0-preview.6, )"
+        }
+      },
+      "elsa.connections.core": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Primitives": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.connections.design": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Connections": "[4.0.0-dev, )",
+          "Elsa.Connections.Core": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.connections.workflows": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Http": "[4.0.0-dev, )",
+          "Elsa.Connections": "[4.0.0-dev, )",
+          "Elsa.Connections.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.diagnostics.consolelogstreaming": {
