@@ -841,6 +841,7 @@ export function ActivityGraphImplementationEditor({
             nodes: accessibleNodes,
             edges: interactions.accessibleEdges,
             onInit: interactions.setReactFlowInstance,
+            onMoveEnd: interactions.onMoveEnd,
             onNodesChange: interactions.onNodesChange,
             onEdgesChange: interactions.onEdgesChange,
             onNodesDelete: interactions.onNodesDelete,
