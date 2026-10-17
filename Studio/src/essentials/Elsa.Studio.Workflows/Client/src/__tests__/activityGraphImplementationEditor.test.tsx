@@ -15,6 +15,7 @@ import {
 import { inputReferenceContribution } from "../inputReferenceContribution";
 import { flowchartStructureKind } from "../flowchartStartNode";
 import { bpmnStructureKind } from "../bpmn/bpmnTypes";
+import { sequenceStructureKind } from "../workflowAdapter";
 import { activityDragDataType } from "../workflow-editor/constants";
 import type { ActivityCatalogItem } from "../workflowTypes";
 
@@ -137,6 +138,26 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
 
     click(buttonByText(rendered.container, "Undo Activity Graph edit", "aria-label"));
     expect(onChange).toHaveBeenLastCalledWith(flowchartImplementationValue());
+  });
+
+  it("removes the selected second Sequence child in a controlled editor", () => {
+    catalogItems = [sequenceCatalogItem(), leafCatalogItem()];
+    const value = sequenceImplementationValue([
+      { nodeId: "write-line-1", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null },
+      { nodeId: "write-line-2", activityVersionId: "write-line-v1", inputs: [], outputs: [], structure: null }
+    ]);
+    const rendered = renderControlledDesigner(value);
+
+    click(rendered.container.querySelector("[data-graph-node-id='write-line-2']")!);
+    expect(rendered.container.querySelector(".wf-inspector-context h3")?.textContent).toBe("Write line");
+    confirmOnce();
+    click(buttonByText(rendered.container, "Remove"));
+
+    expect(rendered.onChange).toHaveBeenCalledTimes(1);
+    expect(rendered.onChange.mock.calls[0][0].payload.rootActivity.structure.payload.activities)
+      .toEqual([expect.objectContaining({ nodeId: "write-line-1" })]);
+    expect(rendered.container.querySelector("[data-graph-node-id='write-line-2']")).toBeNull();
+    expect(() => buttonByText(rendered.container, "Remove")).toThrow();
   });
 
   it("places public contract inputs in the graph node expression scope", async () => {
@@ -716,7 +737,15 @@ function renderDesigner(overrides: Partial<StudioActivityDefinitionImplementatio
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
-  const props: StudioActivityDefinitionImplementationEditorProps = {
+  const props = designerProps(overrides);
+  flushSync(() => root.render(<ActivityGraphImplementationEditor {...props} />));
+  const rendered = { root, container };
+  mounted.push(rendered);
+  return rendered;
+}
+
+function designerProps(overrides: Partial<StudioActivityDefinitionImplementationEditorProps> = {}): StudioActivityDefinitionImplementationEditorProps {
+  return {
     context: {
       baseUrl: "test://activity-graph",
       http: {
@@ -744,8 +773,24 @@ function renderDesigner(overrides: Partial<StudioActivityDefinitionImplementatio
     onChange: () => {},
     ...overrides
   };
-  flushSync(() => root.render(<ActivityGraphImplementationEditor {...props} />));
-  const rendered = { root, container };
+}
+
+function renderControlledDesigner(initialValue: StudioActivityDefinitionImplementationEditorProps["value"]) {
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  const onChange = vi.fn();
+  const props = designerProps({ value: initialValue });
+  function ControlledDesigner() {
+    const [value, setValue] = React.useState(initialValue);
+    const handleChange = React.useCallback((next: typeof initialValue) => {
+      onChange(next);
+      setValue(next);
+    }, []);
+    return <ActivityGraphImplementationEditor {...props} value={value} onChange={handleChange} />;
+  }
+  flushSync(() => root.render(<ControlledDesigner />));
+  const rendered = { root, container, onChange };
   mounted.push(rendered);
   return rendered;
 }
@@ -794,6 +839,20 @@ function flowchartCatalogItem() {
     version: "1.0.0",
     category: "Composition",
     displayName: "Flowchart",
+    executionType: "Action",
+    inputs: [],
+    outputs: [],
+    ports: []
+  };
+}
+
+function sequenceCatalogItem() {
+  return {
+    activityVersionId: "sequence-v1",
+    activityTypeKey: "Elsa.Sequence",
+    version: "1.0.0",
+    category: "Composition",
+    displayName: "Sequence",
     executionType: "Action",
     inputs: [],
     outputs: [],
@@ -850,6 +909,28 @@ function flowchartImplementationValue(kind = "Flowchart", activities: unknown[] 
             nodeMetadata: {},
             connectionMetadata: {}
           }
+        }
+      },
+      variables: [],
+      outputMappings: [],
+      outcomeMappings: []
+    },
+    layout: []
+  };
+}
+
+function sequenceImplementationValue(activities: unknown[] = []) {
+  return {
+    payload: {
+      rootActivity: {
+        nodeId: "root",
+        activityVersionId: "sequence-v1",
+        inputs: [],
+        outputs: [],
+        structure: {
+          kind: sequenceStructureKind,
+          schemaVersion: "1.0.0",
+          payload: { activities }
         }
       },
       variables: [],

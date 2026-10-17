@@ -28,6 +28,8 @@ export function ActivityDefinitionPublicationReview({
   currentSignature,
   disabled,
   flushExactSavedRevision,
+  onPublicationPending,
+  onPublished,
   onFocusDiagnostic,
   onOpenVersion
 }: {
@@ -38,6 +40,8 @@ export function ActivityDefinitionPublicationReview({
   currentSignature: string;
   disabled: boolean;
   flushExactSavedRevision(): Promise<ExactDraftBinding | null>;
+  onPublicationPending(pending: boolean): void;
+  onPublished(): void;
   onFocusDiagnostic(diagnostic: StudioActivityDiagnostic, trigger: HTMLButtonElement): Promise<StudioActivityDiagnosticFocusResult>;
   onOpenVersion(versionId: string): void;
 }) {
@@ -113,6 +117,8 @@ export function ActivityDefinitionPublicationReview({
       }
       setPhase("success");
       setFailure(null);
+      onPublished();
+      onPublicationPending(false);
       // Refresh the definition, drafts, and versions caches so the workbench's published-head and
       // recommendation panels reflect the new immutable version without a manual page reload.
       void queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionResources });
@@ -125,6 +131,7 @@ export function ActivityDefinitionPublicationReview({
       setPhase("stale");
       setFailure("The reviewed revision or published head is stale. Studio reopened preflight without publishing.");
       operationKeyRef.current = null;
+      onPublicationPending(false);
       return;
     }
     if (next.status === "OutcomeUnknown") {
@@ -137,6 +144,7 @@ export function ActivityDefinitionPublicationReview({
       setFailure(next.status === "Rejected"
         ? "The authoritative publication request was rejected. Review the returned diagnostics before reopening preflight."
         : "The authoritative publication operation failed. No success is assumed.");
+      onPublicationPending(false);
       return;
     }
     setPhase("unknown");
@@ -170,8 +178,17 @@ export function ActivityDefinitionPublicationReview({
 
   const publish = async () => {
     if (!preflight || !binding || phase !== "review" || !preflight.isPublishable || !isExactVersionAtLeast(version, preflight.minimumVersion)) return;
+    if (binding.revision !== currentRevision || binding.signature !== currentSignature) {
+      setPreflight(null);
+      setBinding(null);
+      setPhase("stale");
+      setFailure("The draft changed after review. Studio discarded the review without publishing.");
+      operationKeyRef.current = null;
+      return;
+    }
     const key = operationKeyRef.current ?? createOperationKey();
     operationKeyRef.current = key;
+    onPublicationPending(true);
     setPhase("publishing");
     setFailure(null);
     try {
@@ -189,6 +206,7 @@ export function ActivityDefinitionPublicationReview({
         setPhase("stale");
         setFailure("The reviewed revision or published head is stale. Studio reopened preflight without publishing.");
         operationKeyRef.current = null;
+        onPublicationPending(false);
         return;
       }
       await reconcile(key);
@@ -220,13 +238,13 @@ export function ActivityDefinitionPublicationReview({
       <ReadinessReview preflight={preflight} />
       {diagnosticSource.length ? <PublicationDiagnostics diagnostics={diagnosticSource} onFocus={onFocusDiagnostic} /> : null}
       <div className="ad-publication-version">
-        <label><span>Publication version</span><input value={version} onChange={event => setVersion(event.target.value.trim())} aria-invalid={Boolean(versionError)} disabled={phase === "publishing" || phase === "success"} /></label>
+        <label><span>Publication version</span><input value={version} onChange={event => setVersion(event.target.value.trim())} aria-invalid={Boolean(versionError)} disabled={phase === "publishing" || phase === "unknown" || phase === "success"} /></label>
         <div><strong>Minimum valid version: {preflight.minimumVersion}</strong><span>The minimum is selected by default. Advanced authors may enter any higher unique exact semantic version.</span>{preflight.validVersions.length > 1 ? <span>Server suggestions: {preflight.validVersions.join(", ")}</span> : null}</div>
         {versionError ? <p role="alert">{versionError}</p> : null}
       </div>
       <footer className="ad-publication-actions">
         <span><ShieldCheck size={16} aria-hidden /> Publication is atomic and idempotent for this reviewed revision and head.</span>
-        <button type="button" className="ad-primary-action" onClick={() => void publish()} disabled={phase !== "review" || !preflight.isPublishable || Boolean(versionError)}>
+        <button type="button" className="ad-primary-action" onClick={() => void publish()} disabled={disabled || phase !== "review" || !preflight.isPublishable || Boolean(versionError)}>
           {phase === "publishing" ? "Publishing atomically…" : phase === "success" ? `Published ${receipt?.outcome?.version ?? version}` : `Publish ${version || "exact version"}`}
         </button>
       </footer>

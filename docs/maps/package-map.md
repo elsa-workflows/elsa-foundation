@@ -29,14 +29,14 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | Elsa.Specifications.PackageManifests | 0.0.1-preview.8 | Elsa.Modularity.Nuplane (0.0.1-preview.8) |
 | Fluid.Core | 2.31.0 | Elsa.Expressions.Liquid (2.31.0)<br>Elsa3.Mapping (2.31.0) |
 | GitHub.Copilot.SDK | 1.0.4 | Elsa.Agent.GitHubCopilot (1.0.4) |
-| Jint | 4.9.1 | Elsa.Expressions.JavaScript.Jint (4.9.1)<br>Elsa.Expressions.JavaScript.Jint.Tests (4.9.1) |
+| Jint | 4.9.1 | Elsa.Activities.Graph.Tests (4.9.1)<br>Elsa.Expressions.JavaScript.Jint (4.9.1)<br>Elsa.Expressions.JavaScript.Jint.Tests (4.9.1) |
 | Microsoft.AspNetCore.Authentication.Abstractions | 2.3.11 | Elsa.Activities.Testing (2.3.11) |
 | Microsoft.AspNetCore.Authentication.JwtBearer | 10.0.10 | Elsa.Foundation.Identity.Oidc (10.0.10) |
 | Microsoft.AspNetCore.Authentication.OpenIdConnect | 10.0.10 | Elsa.Foundation.Identity.Oidc (10.0.10) |
 | Microsoft.AspNetCore.Authorization | 10.0.10 | Elsa.Activities.Http.Tests (10.0.10)<br>Elsa.Workflows.Runtime.Http.Tests (10.0.10) |
 | Microsoft.AspNetCore.Http | 2.3.10 | Elsa.Activities.Http.Tests (2.3.10)<br>Elsa.Workflows.Runtime.Http.Tests (2.3.10) |
 | Microsoft.AspNetCore.Http.Abstractions | 2.3.10 | Elsa.Activities.Testing (2.3.10) |
-| Microsoft.AspNetCore.OpenApi | 10.0.10 | Elsa.Activities.Design.Tests (10.0.10)<br>Elsa.Agent.Api (10.0.10)<br>Elsa.Architecture.Tests (10.0.10)<br>Elsa.Diagnostics.OpenTelemetry.Tests (10.0.10)<br>Elsa.Diagnostics.StructuredLogs.Tests (10.0.10)<br>Elsa.Foundation.Identity.Tests (10.0.10)<br>Elsa.Secrets.Api (10.0.10)<br>Elsa.Secrets.Tests (10.0.10)<br>Elsa.Studio.Preferences.Api (10.0.10)<br>Elsa.Studio.Preferences.Tests (10.0.10)<br>Elsa.Workbench (10.0.10)<br>Elsa.Workflows.Design.Api.Tests (10.0.10)<br>Elsa.Workflows.Publishing.Api.Tests (10.0.10) |
+| Microsoft.AspNetCore.OpenApi | 10.0.10 | Elsa.Activities.Design.Api (10.0.10)<br>Elsa.Activities.Design.Tests (10.0.10)<br>Elsa.Agent.Api (10.0.10)<br>Elsa.Architecture.Tests (10.0.10)<br>Elsa.Diagnostics.OpenTelemetry.Tests (10.0.10)<br>Elsa.Diagnostics.StructuredLogs.Tests (10.0.10)<br>Elsa.Foundation.Identity.Tests (10.0.10)<br>Elsa.Secrets.Api (10.0.10)<br>Elsa.Secrets.Tests (10.0.10)<br>Elsa.Studio.Preferences.Api (10.0.10)<br>Elsa.Studio.Preferences.Tests (10.0.10)<br>Elsa.Workbench (10.0.10)<br>Elsa.Workflows.Design.Api.Tests (10.0.10)<br>Elsa.Workflows.Publishing.Api.Tests (10.0.10) |
 | Microsoft.AspNetCore.Routing | 2.3.10 | Elsa.Activities.Http.Tests (2.3.10)<br>Elsa.Activities.Testing (2.3.10) |
 | Microsoft.AspNetCore.TestHost | 10.0.10 | Elsa.Activities.Design.Tests (10.0.10)<br>Elsa.Activities.Http.CommandCost.Tests (10.0.10)<br>Elsa.Activities.Http.IntegrationTests (10.0.10)<br>Elsa.Api.Compatibility.Testing (10.0.10)<br>Elsa.Architecture.Tests (10.0.10)<br>Elsa.Diagnostics.OpenTelemetry.Tests (10.0.10)<br>Elsa.Diagnostics.StructuredLogs.Tests (10.0.10)<br>Elsa.ExtensionBuilder.Api.Tests (10.0.10)<br>Elsa.Foundation.Identity.Tests (10.0.10)<br>Elsa.Modularity.Tests (10.0.10)<br>Elsa.Secrets.Tests (10.0.10)<br>Elsa.Secrets.Workflows.Tests (10.0.10)<br>Elsa.Studio.Preferences.Tests (10.0.10)<br>Elsa.Workflows.ExecutionEvidence.Tests (10.0.10)<br>Elsa.Workflows.Publishing.Api.Tests (10.0.10)<br>Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Tests (10.0.10)<br>Elsa.Workflows.Runtime.Api.Tests (10.0.10)<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests (10.0.10)<br>ResponseReplayHost (10.0.10) |
 | Microsoft.CodeAnalysis.CSharp | 5.0.0 | Elsa.Api.Compatibility.Testing (5.0.0)<br>Elsa.Architecture.Analyzers.Tests (5.0.0)<br>Elsa.Architecture.Tests (5.0.0)<br>Elsa.Workflows.Design.CodeGeneration (5.0.0)<br>Elsa.Workflows.Design.CodeGeneration.Tests (5.0.0) |
@@ -131,6 +131,7 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Activities.ControlFlow.Tests](../../Essentials/tests/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj) | test | xunit | 2.9.3 |
 | [Elsa.Activities.ControlFlow.Tests](../../Essentials/tests/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj) | test | xunit.runner.visualstudio | 3.1.5 |
 | [Elsa.Activities.Design.Api](../../Essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj) | source | Elsa.Specifications.PackageManifest.Generator | 0.0.1-preview.8 |
+| [Elsa.Activities.Design.Api](../../Essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj) | source | Microsoft.AspNetCore.OpenApi | 10.0.10 |
 | [Elsa.Activities.Design.Api](../../Essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj) | source | NativeEndpoints | 1.0.0-preview.6 |
 | [Elsa.Activities.Design.Api.Tests](../../Essentials/tests/Activities/Design/Api/Tests/Elsa.Activities.Design.Api.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 18.0.0 |
 | [Elsa.Activities.Design.Api.Tests](../../Essentials/tests/Activities/Design/Api/Tests/Elsa.Activities.Design.Api.Tests.csproj) | test | coverlet.collector | 6.0.2 |
@@ -200,6 +201,7 @@ Records direct `PackageReference` entries only; it does not compute transitive c
 | [Elsa.Activities.Graph.Design](../../Essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj) | source | Elsa.Specifications.PackageManifest.Generator | 0.0.1-preview.8 |
 | [Elsa.Activities.Graph.Runtime](../../Essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj) | source | CShells.Abstractions | 0.0.31 |
 | [Elsa.Activities.Graph.Runtime](../../Essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj) | source | Elsa.Specifications.PackageManifest.Generator | 0.0.1-preview.8 |
+| [Elsa.Activities.Graph.Tests](../../Essentials/tests/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj) | test | Jint | 4.9.1 |
 | [Elsa.Activities.Graph.Tests](../../Essentials/tests/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj) | test | Microsoft.Extensions.DependencyInjection | 10.0.10 |
 | [Elsa.Activities.Graph.Tests](../../Essentials/tests/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj) | test | Microsoft.Extensions.TimeProvider.Testing | 10.8.0 |
 | [Elsa.Activities.Graph.Tests](../../Essentials/tests/Activities/Graph/Tests/Elsa.Activities.Graph.Tests.csproj) | test | Microsoft.NET.Test.Sdk | 18.0.0 |

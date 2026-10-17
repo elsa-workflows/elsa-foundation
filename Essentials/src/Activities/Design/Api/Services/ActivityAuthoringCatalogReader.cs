@@ -127,7 +127,10 @@ public sealed class ActivityAuthoringCatalogReader(
             output.DisplayName,
             output.Description,
             output.Category,
-            output.IsBrowsable ?? true);
+            output.IsBrowsable ?? true)
+        {
+            ReferenceKey = output.ReferenceKey
+        };
 
     private static IEnumerable<ActivityPortDescriptorView> ToPorts(ActivityDesignFacet facet)
     {

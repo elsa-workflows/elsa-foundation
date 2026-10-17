@@ -645,6 +645,8 @@ export function readActivityInputOptionsProvider(input: StudioActivityInputDescr
 }
 
 export interface StudioActivityOutputDescriptor extends StudioActivityPropertyDescriptor {
+  /** Stable identity used to correlate output captures with the activity's published contract. */
+  referenceKey?: string | null;
 }
 
 export interface StudioActivityPortDescriptor {

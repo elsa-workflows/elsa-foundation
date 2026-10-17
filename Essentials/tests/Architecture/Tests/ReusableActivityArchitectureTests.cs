@@ -17,10 +17,13 @@ public sealed class ReusableActivityArchitectureTests
     }
 
     [Fact]
-    public void Graph_runtime_references_only_runtime_core_contracts() =>
+    public void Graph_runtime_references_only_stable_runtime_and_expression_contracts() =>
         AssertProjectReferences(
             "Essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj",
             "Elsa.Activities.Runtime.Core",
+            // Boundary expressions use portable evaluator/type contracts, never a concrete language engine.
+            "Elsa.Expressions.Core",
+            "Elsa.Serialization.Core",
             "Elsa.Workflows.Runtime.Core");
 
     [Fact]

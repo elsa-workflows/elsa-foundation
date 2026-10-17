@@ -4,6 +4,8 @@ using Elsa.Activities.Graph.Runtime.Models;
 using Elsa.Activities.Graph.Runtime.Services;
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Expressions.Core.Contracts;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -53,7 +55,9 @@ public sealed class GraphActivityActivationStrategy(IServiceScopeFactory scopeFa
                 payload,
                 scope.ServiceProvider.GetRequiredService<GraphActivityScopeFactory>(),
                 scope.ServiceProvider.GetRequiredService<GraphActivityRecovery>(),
-                scope.ServiceProvider.GetRequiredService<IDurableValueStateStore>());
+                scope.ServiceProvider.GetRequiredService<IDurableValueStateStore>(),
+                scope.ServiceProvider.GetService<IPortableExpressionEvaluator>(),
+                scope.ServiceProvider.GetService<IWellKnownTypeRegistry>());
             return new ActivityActivationLease(activity, scope);
         }
         catch (Exception activationException)

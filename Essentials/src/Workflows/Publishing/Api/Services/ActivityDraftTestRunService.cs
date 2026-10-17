@@ -734,8 +734,8 @@ public sealed class ActivityDraftTestRunService(
             if (!StringComparer.OrdinalIgnoreCase.Equals(value.State, "Present") || !value.Value.HasValue)
                 throw Reject("activity.test-run.input-state-invalid", $"Activity input '{input.ReferenceKey}' has an invalid state/value combination.");
             var targetType = new ValueTypeDescriptor(input.Type.Alias, input.Type.CollectionKind);
-            var policy = ValuePolicyCombiner.ToProtectionPolicy(
-                ValuePolicyCombiner.FromAuthoredStorage(input.StorageDriverKey));
+            // The contract driver encodes the boundary snapshot; it is not an external payload profile.
+            var policy = ValueProtectionPolicy.InstanceInline;
             var literal = value.Value.Value.ValueKind == JsonValueKind.Null
                 ? ValueEnvelope.Null(targetType, policy)
                 : ValueEnvelope.Inline(targetType, value.Value.Value, policy);

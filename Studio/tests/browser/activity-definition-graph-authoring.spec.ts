@@ -30,8 +30,14 @@ test("Activity Definition graph authoring shares the designer without workflow l
   await create.getByRole("textbox", { name: "Display name" }).fill("Payment decision");
   const category = create.getByRole("combobox", { name: "Category" });
   await category.fill("Financial controls");
-  await expect(create.getByRole("radio", { name: /Flowchart/ })).toBeChecked();
-  await create.getByRole("radio", { name: /Sequence/ }).check({ force: true });
+  const flowchartCard = create.locator(".wf-root-card").filter({ has: create.getByRole("radio", { name: /Flowchart/ }) });
+  const sequenceCard = create.locator(".wf-root-card").filter({ has: create.getByRole("radio", { name: /Sequence/ }) });
+  const cardBackground = (card: typeof flowchartCard) => card.evaluate(element => getComputedStyle(element).backgroundColor);
+  await expect(flowchartCard.getByRole("radio")).toBeChecked();
+  expect(await cardBackground(flowchartCard)).not.toBe(await cardBackground(sequenceCard));
+  await sequenceCard.getByRole("radio").check({ force: true });
+  await expect(sequenceCard.getByRole("radio")).toBeChecked();
+  expect(await cardBackground(sequenceCard)).not.toBe(await cardBackground(flowchartCard));
   await create.getByRole("button", { name: "Create definition" }).click();
   await expect(page.getByText("Created Payment decision.")).toBeVisible();
   expect(requests).toHaveLength(1);
