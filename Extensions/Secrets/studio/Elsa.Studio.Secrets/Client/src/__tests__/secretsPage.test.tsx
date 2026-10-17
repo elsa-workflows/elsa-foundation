@@ -13,6 +13,45 @@ afterEach(() => {
 });
 
 describe("secrets page", () => {
+  it.each([false, true])("dismisses operation notifications and shows later results (error=%s)", async error => {
+    const postJson = error
+      ? vi.fn().mockRejectedValue(new Error("Test unavailable."))
+      : vi.fn().mockResolvedValue({ succeeded: true, code: "resolved", message: "Secret resolved successfully." });
+    const { container } = render({ postJson });
+    await waitForText(container, "Payments API");
+    const runTest = () => container.querySelector<HTMLButtonElement>("button[aria-label='Test payments.api']")!.click();
+    runTest();
+    const message = error ? "Test unavailable." : "Secret resolved successfully.";
+    await waitForText(container, message);
+    const notice = container.querySelector<HTMLElement>(".secrets-notification")!;
+    const messageRegion = notice.querySelector("[role]")!;
+    expect(messageRegion.getAttribute("role")).toBe(error ? "alert" : "status");
+    expect(messageRegion.querySelector("button")).toBeNull();
+    const dismiss = notice.querySelector<HTMLButtonElement>("button")!;
+    expect(dismiss.getAttribute("aria-label")).toBe(error ? "Dismiss error" : "Dismiss notification");
+    flushSync(() => dismiss.click());
+    expect(container.querySelector(".secrets-notification")).toBeNull();
+    expect(container.textContent).toContain("Payments API");
+    runTest();
+    await waitForText(container, message);
+    expect(container.querySelector(".secrets-notification")).not.toBeNull();
+    expect(postJson).toHaveBeenCalledTimes(2);
+  });
+
+  it("clears entered rotation material and visibility when the target secret changes", async () => {
+    const { container } = render({ getItems: () => [paymentSecret(), secret({ id: "2", name: "other.api", displayName: "Other API" })] });
+    await waitForText(container, "Other API");
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Rotate payments.api']")!.click());
+    change(container.querySelector<HTMLInputElement>(".secrets-value-input input")!, "dummy-new-value");
+    await waitFor(() => container.querySelector<HTMLInputElement>(".secrets-value-input input")?.value === "dummy-new-value");
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Show value']")!.click());
+    expect(container.querySelector<HTMLInputElement>(".secrets-value-input input")?.type).toBe("text");
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Rotate other.api']")!.click());
+    const input = container.querySelector<HTMLInputElement>(".secrets-value-input input")!;
+    expect(input.value).toBe("");
+    expect(input.type).toBe("password");
+  });
+
   it("offers creation from an empty collection without a blank details panel", async () => {
     const { container } = render({ getItems: () => [] });
     await waitForText(container, "No secrets yet");
@@ -57,7 +96,6 @@ describe("secrets page", () => {
 
     expect(container.textContent).toContain("payments.api");
     expect(container.querySelector("button[aria-label='Open payments.api']")).not.toBeNull();
-    expect(container.textContent).toContain("Values are never displayed.");
     expect(container.textContent).not.toContain("raw-secret-value");
     unmount();
   });

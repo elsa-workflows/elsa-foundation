@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+import React, { useId, useMemo, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata } from "./secretTypes";
 
 const technicalNamePattern = /^[a-z0-9._:-]+$/;
@@ -86,7 +87,7 @@ export function CreateSecretDialog({
         {usesConfigurationKey ? (
           <Field label="Configuration key" value={configurationKey} onChange={setConfigurationKey} autoComplete="off" />
         ) : (
-          <SecretValueField label="Value" value={value} typeName={typeName} editorHint={selectedType?.editorHint ?? null} onChange={setValue} />
+          <SecretValueField key={typeName} label="Value" value={value} typeName={typeName} editorHint={selectedType?.editorHint ?? null} onChange={setValue} />
         )}
         <label>Expires<input type="datetime-local" value={expiresAt} onChange={event => setExpiresAt(event.target.value)} /></label>
         <div className="secrets-dialog-actions">
@@ -186,16 +187,23 @@ function Field({
 }
 
 function SecretValueField({ label, value, typeName, editorHint, onChange }: { label: string; value: string; typeName: string; editorHint?: string | null; onChange(value: string): void }) {
+  const inputId = useId();
+  const [visible, setVisible] = useState(false);
   const multiline = editorHint === "multiline" || typeName === "rsa-key" || typeName === "x509-certificate";
   return (
-    <label>
-      {label}
+    <div className="secrets-value-field">
+      <label htmlFor={inputId}>{label}</label>
       {multiline ? (
-        <textarea value={value} rows={6} autoComplete="new-password" spellCheck={false} onChange={event => onChange(event.target.value)} />
+        <textarea id={inputId} value={value} rows={6} autoComplete="new-password" spellCheck={false} onChange={event => onChange(event.target.value)} />
       ) : (
-        <input type="password" value={value} autoComplete="new-password" onChange={event => onChange(event.target.value)} />
+        <div className="secrets-value-input">
+          <input id={inputId} type={visible ? "text" : "password"} value={value} autoComplete="new-password" spellCheck={false} onChange={event => onChange(event.target.value)} />
+          <button type="button" className="secrets-value-toggle" aria-label={visible ? "Hide value" : "Show value"} aria-pressed={visible} aria-controls={inputId} title={visible ? "Hide value" : "Show value"} onClick={() => setVisible(current => !current)}>
+            {visible ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+          </button>
+        </div>
       )}
-    </label>
+    </div>
   );
 }
 
