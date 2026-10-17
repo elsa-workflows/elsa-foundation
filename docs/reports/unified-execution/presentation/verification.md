@@ -12,3 +12,12 @@ Browser verification, 17 October 2026. Executable evidence baseline: `5fa96727f`
 - Direct `file:` browser verification was refused by browser URL policy (only HTTP/HTTPS permitted); no bypass was attempted. Standalone/offline behavior is supported by the dependency audit, but a disconnected browser or direct-file run was not verified. GitHub source links intentionally require a connection; neighboring Markdown links require the accompanying report bundle.
 
 Evidence labels were refreshed after combined review. The distinction between executed proofs and explanatory simulations remains visible. Repeat focused checks after material UI changes.
+
+## Presenter path
+
+1. Start with Native workflow: inspect the execution model, nested Sequence/Flowchart and kernel. Use the scrollable diagram for pan and the zoom controls for scale.
+2. Switch to ETL: contrast partition work and record movement with serial coordinator decisions.
+3. Switch to BPMN: show the actual interpreter as semantic owner and the pipeline as a correlated child.
+4. Switch to Agent collaboration: distinguish message/round semantics from memory/knowledge/tool bindings.
+5. Switch to Independent rule model: demonstrate that extensibility is more than another kind of activity graph.
+6. Walk through crash/reclaim and cancellation in the Recovery lab, then use Evidence & decisions to discuss the explicit limits and next specification slice.
