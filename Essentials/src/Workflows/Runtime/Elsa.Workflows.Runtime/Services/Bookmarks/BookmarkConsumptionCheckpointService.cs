@@ -13,6 +13,7 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
     private readonly IRuntimeActivityExecutionInspectionAccumulator? _inspectionAccumulator;
     private readonly BookmarkLifecycleNotifier? _bookmarkLifecycleNotifier;
     private readonly TimeProvider _timeProvider;
+    private readonly IWorkflowExecutionStateStore? _workflowExecutions;
 
     public BookmarkConsumptionCheckpointService(RuntimeCheckpointCommitter checkpointCommitter)
         : this(checkpointCommitter, null, TimeProvider.System)
@@ -38,6 +39,17 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
         IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
         TimeProvider timeProvider,
         BookmarkLifecycleNotifier? bookmarkLifecycleNotifier = null)
+        : this(checkpointCommitter, inspectionAccumulator, timeProvider, bookmarkLifecycleNotifier,
+            workflowExecutions: null)
+    {
+    }
+
+    public BookmarkConsumptionCheckpointService(
+        RuntimeCheckpointCommitter checkpointCommitter,
+        IRuntimeActivityExecutionInspectionAccumulator? inspectionAccumulator,
+        TimeProvider timeProvider,
+        BookmarkLifecycleNotifier? bookmarkLifecycleNotifier,
+        IWorkflowExecutionStateStore? workflowExecutions)
     {
         ArgumentNullException.ThrowIfNull(checkpointCommitter);
         ArgumentNullException.ThrowIfNull(timeProvider);
@@ -45,6 +57,7 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
         _checkpointCommitter = checkpointCommitter;
         _inspectionAccumulator = inspectionAccumulator;
         _bookmarkLifecycleNotifier = bookmarkLifecycleNotifier;
+        _workflowExecutions = workflowExecutions;
         _timeProvider = timeProvider;
     }
 
@@ -80,6 +93,18 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
             commitMetadata[RuntimeMetadataKeys.ActivityAttemptActivationClaim] = attemptId;
         if (request.ActivityExecutionState.Metadata.TryGetValue(RuntimeMetadataKeys.ActivityAttemptActivationClaimWorkItemId, out var claimWorkItemId))
             commitMetadata[RuntimeMetadataKeys.ActivityAttemptActivationClaimWorkItemId] = claimWorkItemId;
+        var workflowChange = request.WorkflowExecutionChange;
+        if (request.ConsumesBookmarks && request.ResumePayload.TestRunDelivery is { } testDelivery)
+        {
+            if (_workflowExecutions is null)
+                throw new InvalidOperationException("Test event delivery requires the workflow execution store.");
+            var execution = await _workflowExecutions.FindAsync(request.ResumeWorkItem.WorkflowExecutionId, cancellationToken)
+                ?? throw new InvalidOperationException("The test workflow execution is unavailable.");
+            var recorded = testDelivery.Record(execution);
+            commitMetadata[TestRunDeliveryReceipt.MetadataKey] = testDelivery.DeliveryId;
+            workflowChange = new RuntimeStateChange<WorkflowExecutionState>(execution.WorkflowExecutionId,
+                RuntimeStateChangeOperation.Upsert, recorded, RuntimeModelMetadata.Snapshot(commitMetadata));
+        }
         var metadata = RuntimeModelMetadata.Snapshot(commitMetadata);
         var inspection = _inspectionAccumulator is null
             ? null
@@ -101,7 +126,7 @@ public sealed class BookmarkConsumptionCheckpointService : IBookmarkConsumptionC
                 ActivityExecutionIds: [request.ActivityExecutionState.Execution.ActivityExecutionId],
                 Metadata: metadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
-                workflowExecution: request.WorkflowExecutionChange,
+                workflowExecution: workflowChange,
                 scheduler: null,
                 activityExecutions:
                 [

@@ -93,6 +93,115 @@ adapters validate and translate the selected context at their own persistence bo
 - **Safety:** the guarded provider claim rejects conflicting durable providers in either composition order. Provider transactions serialize scope close against detached child admission and commit a Started child's cancellation marker with its deterministic cancel outbox responsibility. A cleanup that finds that cancel item already recorded converges when the item carries the same responsibility (`WorkflowDispatchLifecycle.EnsureTestScopeCancellationResponsibility`), whatever its delivery progress, and keeps the item unchanged; it must not re-save it as pending (spec 102 FR-014). A different responsibility under the same identity is a conflict.
 - **Defaults:** `InMemoryWorkflowTestScopeStore`; the EF Core module replaces the complete family.
 
+### Workflow Test Run trigger and wait drivers *(Core — `Elsa.Workflows.Runtime.Core`)*
+
+Modules can add Test Drive support without changing Elsa source. Register one
+`ITestRunTriggerDriver` for each start-trigger family the module owns;
+register an `ITestRunWaitDriver` separately when it can also deliver to an
+active workflow wait. Add the implementations from the module's feature during
+composition:
+
+```csharp
+services.TryAddEnumerable(ServiceDescriptor.Scoped<ITestRunTriggerDriver, ContosoOrderTestRunDriver>());
+services.TryAddEnumerable(ServiceDescriptor.Scoped<ITestRunWaitDriver, ContosoOrderWaitDriver>());
+```
+
+A new start-trigger activity also contributes `IActivityTriggerStimulusProvider`
+so the ordinary binding extractor recognizes it. Test Drive consumes that
+same compiled binding; adding a test driver alone does not declare a trigger.
+
+`ITestRunTriggerDriver` describes and prepares the selected initial
+start binding. `Supports(TestRunTriggerContext)` should match the exact
+provider, compiled node, and binding the module knows how to drive. `DriverId`
+is a stable, namespaced identifier; `ModeId` is stable within that driver.
+`ConfigurationVersion` lets Studio choose a compatible editor. Requests carry
+the mode ID and data, rather than an expected configuration version. For a
+breaking configuration change, version the mode ID or include and validate a
+version in the module-owned data.
+Runtime accepts exactly one matching driver for an option. No match makes the
+option unavailable; overlapping matches are reported as ambiguous at discovery
+and rejected again when the selected start is submitted. Keep `Supports` narrow
+so adding a module cannot shadow a different driver's trigger.
+
+Each `Describe` result is a `TestRunTriggerMode`. Its
+`ConfigurationSchema` is the JSON Schema for caller-supplied mode `data`; its
+`Configuration` is safe, read-only module context such as an authored event
+name or schedule. Do not put secrets or submitted request values in that
+context. Workflow inputs are a separate contract and do not belong in trigger
+data. `Validate` is called on the server before trigger preparation; return
+safe findings with useful field names and messages, without echoing rejected
+values. `PrepareAsync` can return an immediate logical stimulus:
+
+```csharp
+return ValueTask.FromResult(TestRunTriggerPreparation.Immediate(stimulusInput));
+```
+
+For a protocol that needs an actual client action, return
+`TestRunTriggerPreparation.External` with a
+`TestRunDriverAction`:
+
+```csharp
+return ValueTask.FromResult(TestRunTriggerPreparation.External(
+    new TestRunDriverAction(
+        kind: "contoso-order",
+        relativeUrl: preparedApiRootPath,
+        method: "POST",
+        details: safeDetails),
+    details: safeDetails,
+    driverState: minimalCleanupState));
+```
+
+The action URL must be a same-host API-root-relative path, with no authority or
+traversal segments. Include the host's actual ASP.NET `Request.PathBase` in
+that path when the app is mounted below the origin root; Studio resolves the
+path against the API origin and does not infer a prefix. The module owns and
+authorizes the endpoint behind the action; that endpoint should dispatch through
+`ITestRunTargetDispatcher.DispatchAsync(testRunId, stimulusInput)` so
+Runtime keeps the exact Test Run authority and idempotency fence. Keep action
+details and driver state minimal, bounded, and free of credentials or raw
+request bodies. `StopAsync` is the cleanup hook for resources the driver owns
+until the Test Run stops or expires.
+
+`ITestRunWaitDriver` is a separate contribution for later manual delivery to
+an active bookmark. Its `Supports`, `Describe`, and `Validate` receive a
+`TestRunWaitContext`; the server also requires exactly one matching wait
+driver. `PrepareAsync` converts the accepted mode data into the logical
+stimulus passed to ordinary bookmark-resume dispatch. It must not resume the
+bookmark itself. Runtime checks that the wait is still active and belongs to
+the open Test Run before delivery. A module may implement both interfaces when
+its protocol supports both starting and resuming, but neither interface is
+inferred from the other.
+
+For Studio, add a matching
+`StudioTestStimulusEditorContribution` to
+`api.workflowTestStimulusEditors`, matching the same stable `driverId` and
+`modeId`. This slot owns its data editor, validation, serialization, and
+optional prepared-action execution/result view; Studio does not switch on
+activity type. The same editor can be reused for a wait that reports the same
+driver/mode. A schema-backed JSON editor is available when no contribution
+matches; without either a matching editor or a declared schema, the trigger is
+disabled. For raw HTTP, implement the editor's `executeAction` with
+`context.backend.http.request`: when available, it uses Studio's configured
+authenticated transport and returns the original `Response`, preserving real
+status, headers, and text body. Do not fall back to browser `fetch` when that
+transport is absent. The request runs as the current Studio identity, so
+endpoint authorization still applies; do not treat it as an alternate
+credential channel. See the [Studio SDK contribution guide](../../../../../Studio/src/apps/Elsa.Studio.Web/Client/src/sdk/README.md)
+and its `Workflow Test Run stimulus editor Contributions` section.
+
+Current built-in identities are `Elsa.HttpEndpoint` / `http-request`,
+`Elsa.Event` / `event`, and `Elsa.Timer` or `Elsa.Cron` / `fire-now`; the Event
+module also supports the `event` wait mode. A module that adds a new driver
+should publish and match its own stable namespaced IDs in its backend and Studio
+contributions. `ActivitiesHttpFeature`, `ActivitiesPrimitivesFeature`, and
+`ActivitiesSchedulingFeature` register the corresponding built-in drivers.
+
+The Studio registry handoff is covered by
+`module.test.tsx` (“passes registered Test Run stimulus editors into the
+designer route”); `workflowTestDrive.test.tsx` exercises a custom start editor,
+and `workflowTestRunControls.test.tsx` exercises a custom editor reused for a
+wait. These tests prove the public SDK hook reaches both Test Drive surfaces.
+
 ### `IWorkflowExecutionStateStore` *(Core — `Elsa.Workflows.Runtime.Core`)*
 - **Kind:** Replacement (one provider owns retained workflow-execution state and its executable-retention projection).
 - **Signature:** in addition to save/find/list, `ListPinnedExecutableArtifactIdsAsync(...)` returns the distinct artifact IDs pinned by every retained execution status, and `DeleteAsync(workflowExecutionId, ...)` removes an execution. **No retention policy calls it yet:** Elsa does not currently delete workflow executions, so runtime history is kept indefinitely. Workflow-execution retention is planned in [#1770](https://github.com/elsa-workflows/elsa-foundation/issues/1770).

@@ -11,6 +11,7 @@ using Elsa.Workflows.Publishing.Api.Requests;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Runtime.Services.Values;
@@ -27,6 +28,17 @@ public interface IWorkflowTestRunStarter
 {
     Task<WorkflowTestRunView> StartAsync(StartWorkflowTestRun request, CancellationToken cancellationToken);
     Task<WorkflowTestRunView> StartDraftAsync(StartWorkflowDraftTestRun request, CancellationToken cancellationToken);
+
+    Task<DraftTestRunOptionsView> GetDraftOptionsAsync(
+        DraftTestRunOptionsRequest request,
+        CancellationToken cancellationToken) =>
+        Task.FromException<DraftTestRunOptionsView>(new NotSupportedException("Draft TestRun option discovery is not configured."));
+
+    Task<WorkflowTestRunView?> GetAsync(string testRunId, CancellationToken cancellationToken) =>
+        Task.FromException<WorkflowTestRunView?>(new NotSupportedException("Workflow TestRun inspection is not configured."));
+
+    Task<WorkflowTestRunView?> StopAsync(string testRunId, CancellationToken cancellationToken) =>
+        Task.FromException<WorkflowTestRunView?>(new NotSupportedException("Workflow TestRun stop is not configured."));
 }
 
 /// <summary>
@@ -53,7 +65,18 @@ public sealed class StartWorkflowTestRunRequestHandler(
     IWorkflowExecutionPartitionAccessor? partitionAccessor = null,
     IPersistenceAccessContextAccessor? accessContextAccessor = null,
     IExpressionDraftSemanticValidator? expressionValidator = null,
-    ILogger<StartWorkflowTestRunRequestHandler>? logger = null)
+    ILogger<StartWorkflowTestRunRequestHandler>? logger = null,
+    IWorkflowTriggerBindingExtractor? triggerBindingExtractor = null,
+    IEnumerable<ITestRunTriggerDriver>? triggerDrivers = null,
+    IWorkflowExecutableInputValidator? inputValidator = null,
+    ITestRunTargetStore? testRunTargetStore = null,
+    ITestRunTargetDispatcher? testRunTargetDispatcher = null,
+    ITestRunTargetCleaner? testRunTargetCleaner = null,
+    IWorkflowTestScopeCleaner? testScopeCleaner = null,
+    IRuntimeExecutionIdGenerator? executionIdGenerator = null,
+    IServiceProvider? ambientServices = null,
+    ITestRunRootCanceller? rootCanceller = null,
+    IWorkflowExecutionStateStore? executionStateStore = null)
     : IWorkflowTestRunStarter
 {
     public const string RequestedBy = "workflow-designer-test-run";
@@ -63,6 +86,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
     // behaviorally identical to a published version resolves to the SAME artifact id — the free equivalence signal.
     private const string ArtifactPrefix = "artifact-";
     private const string DraftArtifactVersion = "draft";
+    private readonly IReadOnlyCollection<ITestRunTriggerDriver> _triggerDrivers = (triggerDrivers ?? []).ToArray();
 
     /// <summary>
     /// Preserves the original direct-construction surface with one shared process-local scope provider.
@@ -118,6 +142,217 @@ public sealed class StartWorkflowTestRunRequestHandler(
     public Task<WorkflowTestRunView> StartDraftAsync(StartWorkflowDraftTestRun request, CancellationToken cancellationToken) =>
         Handle(request, cancellationToken);
 
+    public async Task<DraftTestRunOptionsView> GetDraftOptionsAsync(
+        DraftTestRunOptionsRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var now = timeProvider.GetUtcNow();
+        var expiresAt = now.Add(DefaultRetention);
+        var sourceDefinitionVersionId = $"draft:{request.SnapshotId}";
+        var artifactVersion = request.ArtifactVersion ?? DraftArtifactVersion;
+        var compileRequest = new WorkflowExecutableCompileRequest(
+            sourceDefinitionVersionId,
+            WorkflowExecutableReferenceScope.TestRun,
+            now,
+            PublishedAt: null,
+            expiresAt,
+            ArtifactPrefix,
+            TestRunCompatibilityMetadata("test-run-options"))
+        {
+            Source = new WorkflowExecutableCompileSource(
+                DefinitionId: request.DefinitionId,
+                DefinitionVersionId: sourceDefinitionVersionId,
+                ArtifactVersion: artifactVersion,
+                State: request.State,
+                SourceKind: WorkflowExecutableSourceKinds.WorkflowDraftSnapshot,
+                SourceId: request.SnapshotId,
+                SourceVersion: artifactVersion)
+            {
+                ActivityPresentation = request.ActivityPresentation
+            }
+        };
+
+        WorkflowExecutable executable;
+        try
+        {
+            executable = await compiler.CompileAsync(compileRequest, cancellationToken);
+        }
+        catch (Exception exception) when (exception is WorkflowExecutableCompilationException or ArgumentException)
+        {
+            return new DraftTestRunOptionsView(
+                string.Empty,
+                null,
+                [],
+                [new TestRunOptionsDiagnostic("compile.failed", exception.Message)]);
+        }
+
+        var diagnostics = new List<TestRunOptionsDiagnostic>();
+        if (triggerBindingExtractor is null)
+        {
+            diagnostics.Add(new("trigger.discovery.unavailable", "Trigger discovery is not configured."));
+            return new DraftTestRunOptionsView(executable.Identity.ArtifactHash, executable.InputContract, [], diagnostics);
+        }
+
+        WorkflowTriggerPreflightOutcome outcome;
+        try
+        {
+            outcome = triggerBindingExtractor.Evaluate(executable);
+        }
+        catch (Exception exception) when (exception is WorkflowTriggerPreflightException or WorkflowTriggerExtractionException)
+        {
+            diagnostics.Add(new("trigger.discovery.rejected", exception.Message));
+            return new DraftTestRunOptionsView(executable.Identity.ArtifactHash, executable.InputContract, [], diagnostics);
+        }
+
+        var options = new List<TestRunTriggerOptionView>();
+        foreach (var nodeOutcome in outcome.NodeOutcomes)
+        {
+            if (!executable.NodesById.TryGetValue(nodeOutcome.ExecutableNodeId, out var node))
+            {
+                diagnostics.Add(new("trigger.node.missing", "A discovered trigger node is missing from the compiled workflow.", nodeOutcome.ExecutableNodeId));
+                continue;
+            }
+
+            foreach (var binding in nodeOutcome.Bindings)
+            {
+                var context = new TestRunTriggerContext(executable, nodeOutcome.ProviderId, node, binding);
+                var drivers = MatchingDrivers(context);
+                if (drivers.Length == 0)
+                {
+                    options.Add(TriggerOption(binding, node, null, false, "No test-run driver is registered for this trigger.", []));
+                    continue;
+                }
+
+                if (drivers.Length > 1)
+                {
+                    options.Add(TriggerOption(binding, node, null, false, "More than one test-run driver claims this trigger.", []));
+                    diagnostics.Add(new("trigger.driver.ambiguous", "More than one test-run driver claims this trigger.", node.ExecutableNodeId));
+                    continue;
+                }
+
+                try
+                {
+                    var modes = drivers[0].Describe(context);
+                    var duplicateMode = modes.GroupBy(mode => mode.ModeId, StringComparer.Ordinal).FirstOrDefault(group => group.Count() > 1);
+                    if (duplicateMode is not null)
+                        options.Add(TriggerOption(binding, node, drivers[0].DriverId, false, "The test-run driver returned duplicate mode identities.", []));
+                    else if (modes.Count == 0)
+                        options.Add(TriggerOption(binding, node, drivers[0].DriverId, false, "The test-run driver has no available modes.", []));
+                    else
+                        options.Add(TriggerOption(binding, node, drivers[0].DriverId, true, null, modes));
+                }
+                catch (Exception exception)
+                {
+                    options.Add(TriggerOption(binding, node, drivers[0].DriverId, false, "The test-run driver could not describe this trigger.", []));
+                    diagnostics.Add(new("trigger.driver.describe-failed", exception.Message, node.ExecutableNodeId));
+                }
+            }
+        }
+
+        return new DraftTestRunOptionsView(executable.Identity.ArtifactHash, executable.InputContract, options, diagnostics);
+    }
+
+    public async Task<WorkflowTestRunView?> GetAsync(string testRunId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(testRunId);
+        var testRun = await testRunStore.FindAsync(testRunId, cancellationToken);
+        if (testRun is null)
+            return null;
+
+        var scopeRecord = await FindCurrentTestScopeAsync(testRunId, cancellationToken);
+        if (scopeRecord is null && (accessContextAccessor is not null || partitionAccessor is not null))
+            return null;
+
+        if (testRun.Status == WorkflowTestRunStatus.StopRequested && testRun.WorkflowExecutionId is { } stoppingExecutionId)
+        {
+            var execution = executionStateStore is null
+                ? null
+                : await executionStateStore.FindAsync(stoppingExecutionId, cancellationToken);
+            if (execution?.Status == WorkflowExecutionStatus.Cancelled)
+            {
+                var stopped = testRun with { Status = WorkflowTestRunStatus.Stopped, Reason = null };
+                if (scopeRecord?.State == WorkflowTestScopeState.Open)
+                    await testRunStore.SaveAsync(stopped, cancellationToken);
+                return WorkflowTestRunView.From(stopped);
+            }
+
+            return WorkflowTestRunView.From(testRun);
+        }
+
+        var target = testRunTargetStore is null
+            ? null
+            : await testRunTargetStore.FindAsync(testRunId, cancellationToken);
+        if (target?.DispatchResult is not { } result)
+            return WorkflowTestRunView.From(testRun);
+
+        var command = result.Dispatch.CommandDispatch;
+        var refreshed = testRun with
+        {
+            WorkflowExecutionId = result.Dispatch.WorkflowExecutionId,
+            Status = MapStatus(command.Status),
+            Reason = command.Reason,
+            DriverAction = null
+        };
+        if (scopeRecord?.State == WorkflowTestScopeState.Open)
+            await testRunStore.SaveAsync(refreshed, cancellationToken);
+        return WorkflowTestRunView.From(refreshed, command.Status);
+    }
+
+    public async Task<WorkflowTestRunView?> StopAsync(string testRunId, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(testRunId);
+        var testRun = await testRunStore.FindAsync(testRunId, cancellationToken);
+        if (testRun is null)
+            return null;
+
+        var scopeRecord = await FindCurrentTestScopeAsync(testRunId, cancellationToken);
+        if (scopeRecord is null && (accessContextAccessor is not null || partitionAccessor is not null))
+            return null;
+
+        var targetBeforeStop = testRunTargetStore is null
+            ? null
+            : await testRunTargetStore.FindAsync(testRunId, cancellationToken);
+
+        var observedAt = timeProvider.GetUtcNow();
+        if (testScopeCleaner is not null)
+            await testScopeCleaner.CloseAsync(testRunId, WorkflowTestScopeCloseReason.ExplicitTeardown, observedAt, cancellationToken);
+        else
+        {
+            await (testScopeStore ?? TestRunCompatibilityScope.Store).CloseAsync(
+                new WorkflowTestScopeCloseRequest(testRunId, WorkflowTestScopeCloseReason.ExplicitTeardown, observedAt),
+                cancellationToken);
+            await StopTargetAfterScopeCloseAsync(testRunId, cancellationToken);
+        }
+
+        var workflowExecutionId = targetBeforeStop?.DispatchResult?.Dispatch.WorkflowExecutionId ??
+                                  (targetBeforeStop?.State == TestRunTargetState.Dispatching ? targetBeforeStop.WorkflowExecutionId : null) ??
+                                  testRun.WorkflowExecutionId;
+        if (workflowExecutionId is not null && rootCanceller is not null && scopeRecord is not null)
+            await rootCanceller.RequestCancelAsync(testRunId, workflowExecutionId, scopeRecord.Scope.Partition, cancellationToken);
+
+        var executionState = workflowExecutionId is null || executionStateStore is null
+            ? null
+            : await executionStateStore.FindAsync(workflowExecutionId, cancellationToken);
+        var rootWasCancelled = executionState?.Status == WorkflowExecutionStatus.Cancelled;
+        var noRootWasStarted = workflowExecutionId is null ||
+                               targetBeforeStop is { State: TestRunTargetState.Prepared, DispatchResult: null } && executionState is null;
+
+        var stopped = testRun with
+        {
+            WorkflowExecutionId = workflowExecutionId,
+            Status = rootWasCancelled || noRootWasStarted
+                ? WorkflowTestRunStatus.Stopped
+                : WorkflowTestRunStatus.StopRequested,
+            Reason = rootWasCancelled || noRootWasStarted
+                ? "Workflow test run was stopped."
+                : "Workflow test-run scope was closed and root cancellation was requested.",
+            DriverAction = null
+        };
+        await testRunStore.SaveAsync(stopped, cancellationToken);
+        return WorkflowTestRunView.From(stopped);
+    }
+
     public async Task<WorkflowTestRunView> Handle(StartWorkflowTestRun request, CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
@@ -161,10 +396,11 @@ public sealed class StartWorkflowTestRunRequestHandler(
             fallbackDefinitionVersionId: request.VersionId,
             now,
             expiresAt,
-            ToInputValues(request.Inputs),
+            request.Inputs,
             draftSnapshot: null,
             versionValidation,
             request.AcknowledgeUnavailableExpressionValidation,
+            startSelection: null,
             cancellationToken);
 
     }
@@ -230,7 +466,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
             fallbackDefinitionVersionId: sourceDefinitionVersionId,
             now,
             expiresAt,
-            ToInputValues(request.Inputs),
+            request.Inputs,
             new WorkflowTestRunDraftSnapshot(
                 DefinitionId: request.DefinitionId,
                 DefinitionVersionId: sourceDefinitionVersionId,
@@ -240,6 +476,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
                 ExpiresAt: expiresAt),
             validation,
             request.AcknowledgeUnavailableExpressionValidation,
+            request.Start,
             cancellationToken);
     }
 
@@ -254,6 +491,160 @@ public sealed class StartWorkflowTestRunRequestHandler(
             ? "Expression validation is unavailable. Set acknowledgeUnavailableExpressionValidation to proceed with this test run."
             : "Expression validation rejected this test run.";
 
+    private async Task<WorkflowTestRunView> StartSelectedTriggerAsync(
+        WorkflowExecutable executable,
+        WorkflowExecutableSourceReference reference,
+        WorkflowTestScope testScope,
+        IWorkflowTestScopeStore runtimeScopeStore,
+        ResolvedTestRunTrigger selectedTrigger,
+        IReadOnlyDictionary<string, JsonElement> inputs,
+        IReadOnlyDictionary<string, object?> variables,
+        string testRunId,
+        DateTimeOffset now,
+        DateTimeOffset expiresAt,
+        ExpressionDraftValidationResult? expressionValidation,
+        bool unavailableValidationAcknowledged,
+        CancellationToken cancellationToken)
+    {
+        var driver = selectedTrigger.Driver;
+        var trigger = selectedTrigger.Context;
+        var targetId = ShortIdentityGenerator.Generate(now);
+        var prepareContext = new TestRunTriggerPrepareContext(
+            trigger,
+            testScope,
+            testRunId,
+            selectedTrigger.ModeId,
+            selectedTrigger.Data,
+            targetId);
+
+        TestRunTriggerPreparation preparation;
+        try
+        {
+            preparation = await driver.PrepareAsync(prepareContext, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            await CloseTestScopeAsync(runtimeScopeStore, testRunId, WorkflowTestScopeCloseReason.ExplicitTeardown, timeProvider.GetUtcNow());
+            await driver.StopAsync(
+                new TestRunTriggerStopContext(trigger, testScope, testRunId, selectedTrigger.ModeId, null),
+                CancellationToken.None);
+            throw;
+        }
+        catch (Exception exception)
+        {
+            logger?.LogWarning(exception, "Test-run trigger driver {DriverId} could not prepare test run {TestRunId}.", driver.DriverId, testRunId);
+            await CloseTestScopeAsync(runtimeScopeStore, testRunId, WorkflowTestScopeCloseReason.ExplicitTeardown, timeProvider.GetUtcNow());
+            await driver.StopAsync(
+                new TestRunTriggerStopContext(trigger, testScope, testRunId, selectedTrigger.ModeId, null),
+                CancellationToken.None);
+            return await RejectAsync(
+                testRunId,
+                executable.Identity.DefinitionId,
+                executable.Identity.DefinitionVersionId,
+                now,
+                expiresAt,
+                "The selected test trigger could not be prepared.",
+                CancellationToken.None,
+                ExpressionValidationMetadata(expressionValidation, unavailableValidationAcknowledged));
+        }
+
+        var workflowExecutionId = executionIdGenerator?.NewWorkflowExecutionId() ?? ShortIdentityGenerator.Generate(now);
+        var idempotencyKey = executionIdGenerator?.NewWorkflowExecutionCommandId() ?? ShortIdentityGenerator.Generate(now);
+        var target = new TestRunTarget(
+            testRunId,
+            driver.DriverId,
+            trigger.ProviderId,
+            selectedTrigger.ModeId,
+            executable.Identity,
+            reference.SourceReferenceId,
+            trigger.Binding,
+            testScope,
+            RequestedBy,
+            workflowExecutionId,
+            idempotencyKey,
+            inputs,
+            variables,
+            preparation.DriverState,
+            now);
+
+        try
+        {
+            await testRunTargetStore!.SaveAsync(target, cancellationToken);
+        }
+        catch
+        {
+            await CloseTestScopeAsync(runtimeScopeStore, testRunId, WorkflowTestScopeCloseReason.ExplicitTeardown, timeProvider.GetUtcNow());
+            await driver.StopAsync(
+                new TestRunTriggerStopContext(trigger, testScope, testRunId, selectedTrigger.ModeId, preparation.DriverState),
+                CancellationToken.None);
+            throw;
+        }
+
+        var metadata = TestRunMetadata(executable, reference, expressionValidation, unavailableValidationAcknowledged);
+        if (preparation.Kind == TestRunPreparationKind.ExternalAction)
+        {
+            var prepared = new WorkflowTestRun(
+                TestRunId: testRunId,
+                DefinitionId: executable.Identity.DefinitionId,
+                DefinitionVersionId: executable.Identity.DefinitionVersionId,
+                ArtifactId: executable.Identity.ArtifactId,
+                WorkflowExecutionId: null,
+                Status: WorkflowTestRunStatus.Prepared,
+                RequestedBy: RequestedBy,
+                RequestedAt: now,
+                ExpiresAt: expiresAt,
+                Reason: null,
+                Metadata: metadata,
+                DriverAction: preparation.Action,
+                DriverDetails: preparation.Details);
+            try
+            {
+                await testRunStore.SaveAsync(prepared, cancellationToken);
+            }
+            catch
+            {
+                await CloseTestScopeAsync(runtimeScopeStore, testRunId, WorkflowTestScopeCloseReason.ExplicitTeardown, timeProvider.GetUtcNow());
+                throw;
+            }
+            return WorkflowTestRunView.From(prepared);
+        }
+
+        TestRunTargetDispatchResult dispatch;
+        try
+        {
+            dispatch = await testRunTargetDispatcher!.DispatchAsync(
+                testRunId,
+                preparation.StimulusInput,
+                new WorkflowExecutionCommandDispatchOptions(ambientServices),
+                cancellationToken);
+        }
+        catch
+        {
+            await CloseTestScopeAsync(runtimeScopeStore, testRunId, WorkflowTestScopeCloseReason.ExplicitTeardown, timeProvider.GetUtcNow());
+            throw;
+        }
+
+        var status = MapStatus(dispatch.Dispatch.CommandDispatch.Status);
+        if (status == WorkflowTestRunStatus.DispatchRejected)
+            await CloseTestScopeAsync(runtimeScopeStore, testRunId, WorkflowTestScopeCloseReason.ExplicitTeardown, timeProvider.GetUtcNow());
+
+        var testRun = new WorkflowTestRun(
+            TestRunId: testRunId,
+            DefinitionId: executable.Identity.DefinitionId,
+            DefinitionVersionId: executable.Identity.DefinitionVersionId,
+            ArtifactId: executable.Identity.ArtifactId,
+            WorkflowExecutionId: dispatch.Dispatch.WorkflowExecutionId,
+            Status: status,
+            RequestedBy: RequestedBy,
+            RequestedAt: now,
+            ExpiresAt: expiresAt,
+            Reason: dispatch.Dispatch.CommandDispatch.Reason,
+            Metadata: metadata,
+            DriverDetails: preparation.Details);
+        await testRunStore.SaveAsync(testRun, cancellationToken);
+        return WorkflowTestRunView.From(testRun, dispatch.Dispatch.CommandDispatch.Status);
+    }
+
     private async Task<WorkflowTestRunView> StartAsync(
         WorkflowExecutableCompileRequest compileRequest,
         string testRunId,
@@ -261,10 +652,11 @@ public sealed class StartWorkflowTestRunRequestHandler(
         string fallbackDefinitionVersionId,
         DateTimeOffset now,
         DateTimeOffset expiresAt,
-        IReadOnlyDictionary<string, object?> inputs,
+        IReadOnlyDictionary<string, JsonElement>? inputs,
         WorkflowTestRunDraftSnapshot? draftSnapshot,
         ExpressionDraftValidationResult? expressionValidation,
         bool unavailableValidationAcknowledged,
+        WorkflowTestRunStartSelection? startSelection,
         CancellationToken cancellationToken)
     {
         WorkflowExecutable executable;
@@ -286,6 +678,64 @@ public sealed class StartWorkflowTestRunRequestHandler(
         catch (ArgumentException exception)
         {
             return await RejectAsync(testRunId, fallbackDefinitionId, fallbackDefinitionVersionId, now, expiresAt, exception.Message, cancellationToken);
+        }
+
+        var triggerResolution = ResolveTriggerSelection(executable, startSelection);
+        if (triggerResolution.Error is not null)
+            return await RejectAsync(
+                testRunId,
+                executable.Identity.DefinitionId,
+                executable.Identity.DefinitionVersionId,
+                now,
+                expiresAt,
+                triggerResolution.Error,
+                cancellationToken,
+                ExpressionValidationMetadata(expressionValidation, unavailableValidationAcknowledged));
+
+        if (triggerResolution.Trigger is not null &&
+            (testRunTargetStore is null || testRunTargetDispatcher is null || testRunTargetCleaner is null))
+            return await RejectAsync(
+                testRunId,
+                executable.Identity.DefinitionId,
+                executable.Identity.DefinitionVersionId,
+                now,
+                expiresAt,
+                "Test trigger target services are not configured.",
+                cancellationToken,
+                ExpressionValidationMetadata(expressionValidation, unavailableValidationAcknowledged));
+
+        var normalizedInputs = inputs ?? EmptyJsonInputs;
+        if (executable.InputContract is { } inputContract)
+        {
+            if (inputValidator is null)
+                return await RejectAsync(
+                    testRunId,
+                    executable.Identity.DefinitionId,
+                    executable.Identity.DefinitionVersionId,
+                    now,
+                    expiresAt,
+                    "Workflow input validation is not configured for this executable.",
+                    cancellationToken,
+                    ExpressionValidationMetadata(expressionValidation, unavailableValidationAcknowledged));
+
+            var validator = inputValidator;
+            var inputValidation = validator.Validate(inputContract, normalizedInputs);
+            if (!inputValidation.IsValid)
+            {
+                var inputMetadata = ExpressionValidationMetadata(expressionValidation, unavailableValidationAcknowledged);
+                inputMetadata["runtime.inputValidation.findings"] = JsonSerializer.Serialize(inputValidation.Findings);
+                return await RejectAsync(
+                    testRunId,
+                    executable.Identity.DefinitionId,
+                    executable.Identity.DefinitionVersionId,
+                    now,
+                    expiresAt,
+                    "Workflow input validation rejected this test run.",
+                    cancellationToken,
+                    inputMetadata);
+            }
+
+            normalizedInputs = inputValidation.NormalizedInputs;
         }
 
         // Idempotent save into the single content-addressed store: a behaviorally identical publish
@@ -315,6 +765,22 @@ public sealed class StartWorkflowTestRunRequestHandler(
         var runtimeScopeStore = testScopeStore ?? TestRunCompatibilityScope.Store;
         await runtimeScopeStore.CreateAsync(testScope, now, cancellationToken);
 
+        if (triggerResolution.Trigger is { } selectedTrigger)
+            return await StartSelectedTriggerAsync(
+                executable,
+                reference,
+                testScope,
+                runtimeScopeStore,
+                selectedTrigger,
+                normalizedInputs,
+                variables,
+                testRunId,
+                now,
+                expiresAt,
+                expressionValidation,
+                unavailableValidationAcknowledged,
+                cancellationToken);
+
         WorkflowExecutionStartDispatchResult dispatch;
         try
         {
@@ -333,7 +799,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
                         ["runtime.sourceDefinitionVersionId"] = executable.Identity.DefinitionVersionId
                     },
                     variables: variables,
-                    inputs: inputs,
+                    inputs: ToInputValues(normalizedInputs),
                     stimulusInput: null,
                     triggerNodeId: null,
                     runKind: WorkflowRunKind.TestRun,
@@ -348,6 +814,7 @@ public sealed class StartWorkflowTestRunRequestHandler(
                     dispatchNestingDepth: 0,
                     testScope: testScope),
                 WorkflowExecutableReferenceScope.TestRun,
+                dispatchOptions: new WorkflowExecutionCommandDispatchOptions(ambientServices),
                 cancellationToken: cancellationToken);
         }
         catch
@@ -447,6 +914,199 @@ public sealed class StartWorkflowTestRunRequestHandler(
         };
     }
 
+    private (ResolvedTestRunTrigger? Trigger, string? Error) ResolveTriggerSelection(
+        WorkflowExecutable executable,
+        WorkflowTestRunStartSelection? selection)
+    {
+        if (selection is null)
+            return (null, null);
+
+        if (StringComparer.Ordinal.Equals(selection.Kind, WorkflowTestRunStartSelection.Direct))
+            return selection.OptionId is null && selection.ModeId is null && selection.Data is null
+                ? (null, null)
+                : (null, "A direct workflow start cannot include a trigger option, mode, or data.");
+
+        if (!StringComparer.Ordinal.Equals(selection.Kind, WorkflowTestRunStartSelection.Trigger))
+            return (null, "The selected workflow test-run start kind is not supported.");
+        if (string.IsNullOrWhiteSpace(selection.OptionId) || string.IsNullOrWhiteSpace(selection.ModeId))
+            return (null, "A trigger start requires an option and mode.");
+        if (selection.Data is { ValueKind: JsonValueKind.Undefined })
+            return (null, "Trigger data must be a defined JSON value when provided.");
+        if (triggerBindingExtractor is null)
+            return (null, "Trigger discovery is not configured.");
+
+        WorkflowTriggerPreflightOutcome outcome;
+        try
+        {
+            outcome = triggerBindingExtractor.Evaluate(executable);
+        }
+        catch (Exception exception) when (exception is WorkflowTriggerPreflightException or WorkflowTriggerExtractionException)
+        {
+            return (null, "The compiled workflow triggers could not be validated.");
+        }
+
+        if (!StringComparer.Ordinal.Equals(outcome.Identity.ArtifactHash, executable.Identity.ArtifactHash))
+            return (null, "The selected trigger option does not belong to this compiled workflow.");
+
+        var binding = outcome.Bindings.SingleOrDefault(item =>
+            StringComparer.Ordinal.Equals(item.TriggerBindingId, selection.OptionId));
+        if (binding is null)
+            return (null, "The selected trigger option is not available for this workflow snapshot.");
+
+        var nodeOutcome = outcome.NodeOutcomes.SingleOrDefault(item =>
+            StringComparer.Ordinal.Equals(item.ExecutableNodeId, binding.ExecutableNodeId));
+        if (nodeOutcome is null || !executable.NodesById.TryGetValue(binding.ExecutableNodeId, out var node))
+            return (null, "The selected trigger node is missing from the compiled workflow.");
+
+        var context = new TestRunTriggerContext(executable, nodeOutcome.ProviderId, node, binding);
+        var drivers = MatchingDrivers(context);
+        if (drivers.Length == 0)
+            return (null, "No test-run driver can start the selected trigger.");
+        if (drivers.Length > 1)
+            return (null, "More than one test-run driver claims the selected trigger.");
+
+        var driver = drivers[0];
+        if (string.IsNullOrWhiteSpace(driver.DriverId))
+            return (null, "The selected test-run driver has no stable identity.");
+
+        IReadOnlyCollection<TestRunTriggerMode> modes;
+        try
+        {
+            modes = driver.Describe(context);
+        }
+        catch (Exception exception)
+        {
+            logger?.LogWarning(exception, "Test-run trigger driver {DriverId} could not describe node {NodeId}.", driver.DriverId, node.ExecutableNodeId);
+            return (null, "The selected test-run driver could not describe this trigger.");
+        }
+
+        var selectedModes = modes.Where(mode => StringComparer.Ordinal.Equals(mode.ModeId, selection.ModeId)).ToArray();
+        if (selectedModes.Length != 1)
+            return (null, "The selected trigger mode is not available.");
+
+        TestRunTriggerValidation validation;
+        try
+        {
+            validation = driver.Validate(context, selection.ModeId, selection.Data);
+        }
+        catch (Exception exception)
+        {
+            logger?.LogWarning(exception, "Test-run trigger driver {DriverId} could not validate node {NodeId}.", driver.DriverId, node.ExecutableNodeId);
+            return (null, "The selected test-run trigger data could not be validated.");
+        }
+
+        if (validation is null)
+            return (null, "The selected test-run driver returned no validation result.");
+        if (!validation.IsValid)
+            return (null, string.Join(" ", validation.Findings.Select(finding => finding.Message)));
+
+        return (new ResolvedTestRunTrigger(context, driver, selection.ModeId, selection.Data?.Clone()), null);
+    }
+
+    private ITestRunTriggerDriver[] MatchingDrivers(TestRunTriggerContext context)
+    {
+        var matches = new List<ITestRunTriggerDriver>();
+        foreach (var driver in _triggerDrivers)
+        {
+            try
+            {
+                if (driver.Supports(context))
+                    matches.Add(driver);
+            }
+            catch (Exception exception)
+            {
+                logger?.LogWarning(exception, "Test-run trigger driver {DriverId} failed its support check for node {NodeId}.", driver.DriverId, context.Node.ExecutableNodeId);
+            }
+        }
+
+        return matches.ToArray();
+    }
+
+    private static TestRunTriggerOptionView TriggerOption(
+        WorkflowTriggerBinding binding,
+        ExecutableNode node,
+        string? driverId,
+        bool available,
+        string? reason,
+        IReadOnlyCollection<TestRunTriggerMode> modes)
+    {
+        var label = node.Metadata.TryGetValue("name", out var authoredName) && !string.IsNullOrWhiteSpace(authoredName)
+            ? authoredName
+            : node.ActivityType;
+        return new TestRunTriggerOptionView(
+            binding.TriggerBindingId,
+            driverId,
+            binding.ExecutableNodeId,
+            label,
+            available,
+            reason,
+            Configuration: null,
+            Modes: modes);
+    }
+
+    private static Dictionary<string, string> TestRunMetadata(
+        WorkflowExecutable executable,
+        WorkflowExecutableSourceReference reference,
+        ExpressionDraftValidationResult? expressionValidation,
+        bool unavailableValidationAcknowledged)
+    {
+        var metadata = ExpressionValidationMetadata(expressionValidation, unavailableValidationAcknowledged);
+        metadata["runtime.artifactHash"] = executable.Identity.ArtifactHash;
+        metadata["runtime.sourceReferenceId"] = reference.SourceReferenceId;
+        return metadata;
+    }
+
+    private async ValueTask CloseTestScopeAsync(
+        IWorkflowTestScopeStore runtimeScopeStore,
+        string testRunId,
+        WorkflowTestScopeCloseReason reason,
+        DateTimeOffset observedAt)
+    {
+        if (testScopeCleaner is not null)
+            await testScopeCleaner.CloseAsync(testRunId, reason, observedAt, CancellationToken.None);
+        else
+        {
+            await runtimeScopeStore.CloseAsync(
+                new WorkflowTestScopeCloseRequest(testRunId, reason, observedAt),
+                CancellationToken.None);
+            await StopTargetAfterScopeCloseAsync(testRunId, CancellationToken.None);
+        }
+    }
+
+    private async ValueTask StopTargetAfterScopeCloseAsync(string testRunId, CancellationToken cancellationToken)
+    {
+        if (testRunTargetCleaner is not null)
+            await testRunTargetCleaner.StopAsync(testRunId, cancellationToken);
+        else if (testRunTargetStore is not null)
+        {
+            await testRunTargetStore.MarkStoppedAsync(testRunId, cancellationToken);
+            await testRunTargetStore.RemoveAsync(testRunId, cancellationToken);
+        }
+    }
+
+    private async Task<WorkflowTestScopeRecord?> FindCurrentTestScopeAsync(string testRunId, CancellationToken cancellationToken)
+    {
+        var scope = await (testScopeStore ?? TestRunCompatibilityScope.Store).FindAsync(testRunId, cancellationToken);
+        if (scope is null)
+            return null;
+
+        var currentTenantId = accessContextAccessor?.Current.Scope?.Value;
+        var currentPartition = partitionAccessor?.Current ??
+                               new WorkflowExecutionPartition(WorkflowExecutionPartition.DefaultValue);
+        if (accessContextAccessor is not null &&
+            !StringComparer.Ordinal.Equals(currentTenantId, scope.Scope.TenantId))
+            return null;
+        if (partitionAccessor is not null && !Equals(currentPartition, scope.Scope.Partition))
+            return null;
+        return scope;
+    }
+
+    private sealed record ResolvedTestRunTrigger(
+        TestRunTriggerContext Context,
+        ITestRunTriggerDriver Driver,
+        string ModeId,
+        JsonElement? Data);
+
     // Builds the expiring TestRun reference. Source identity comes from the compile source when present (draft
     // snapshot), else from the compiled identity (durable definition version). The layout sidecar is copied verbatim
     // from the definition-version layout store when a version id resolves one, else empty — a draft
@@ -498,6 +1158,9 @@ public sealed class StartWorkflowTestRunRequestHandler(
         inputs is not { Count: > 0 }
             ? EmptyInputs
             : inputs.ToDictionary(item => item.Key, item => (object?)item.Value, StringComparer.Ordinal);
+
+    private static readonly IReadOnlyDictionary<string, JsonElement> EmptyJsonInputs =
+        new Dictionary<string, JsonElement>(StringComparer.Ordinal);
 
     private static readonly IReadOnlyDictionary<string, object?> EmptyInputs = new Dictionary<string, object?>(StringComparer.Ordinal);
 

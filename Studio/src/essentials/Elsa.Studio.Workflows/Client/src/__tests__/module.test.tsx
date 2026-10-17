@@ -192,6 +192,34 @@ describe("workflows module", () => {
     }
   });
 
+  it("passes built-in and host-registered Test Run stimulus editors into the designer route", () => {
+    const api = testApi();
+    register(api);
+    const customEditor = {
+      id: "contoso.test-drive.custom-start",
+      supports: ({ option }: { option: { driverId?: string | null } }) => option.driverId === "Contoso.CustomStart",
+      component: () => null,
+      validate: () => undefined,
+      serialize: ({ draft }: { draft: string }) => JSON.parse(draft)
+    };
+    api.workflowTestStimulusEditors?.add(customEditor);
+
+    const route = api.routes.list().find(candidate => candidate.id === "workflows-definitions")!;
+    const renderRoute = route.component as (props: { navigate(path: string): void }) => React.ReactElement<{ children: React.ReactNode }>;
+    const boundary = renderRoute({ navigate: vi.fn() });
+    const surface = React.Children.only(boundary.props.children) as React.ReactElement<{ testStimulusEditors: unknown[] }>;
+
+    expect(surface.props.testStimulusEditors).toContain(customEditor);
+    const editorIds = (surface.props.testStimulusEditors as { id: string }[]).map(editor => editor.id);
+    expect(editorIds).toHaveLength(4);
+    expect(editorIds).toEqual(expect.arrayContaining([
+      "elsa.workflows.test-stimulus.http-request",
+      "elsa.workflows.test-stimulus.event",
+      "elsa.workflows.test-stimulus.schedule-fire-now",
+      customEditor.id
+    ]));
+  });
+
   it("keeps the JSON fallback when hosted by a pre-slot SDK registry", () => {
     const { workflowRunInputEditors: _unsupportedSlot, ...api } = testApi();
 
@@ -2589,6 +2617,21 @@ describe("workflows module", () => {
     });
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+      if (url.includes("/capabilities")) return response(capabilityDocument());
+      if (init?.method === "POST" && urlPath(url) === "/publishing/workflows/drafts/test-run-options") return response({ options: [
+        {
+          optionId: "http-start",
+          driverId: "Elsa.HttpEndpoint",
+          label: "HTTP endpoint",
+          modes: [{ modeId: "http-request", label: "Send HTTP request", isDefault: true }]
+        },
+        {
+          optionId: "custom-start",
+          driverId: "Contoso.CustomStart",
+          label: "Custom start",
+          modes: [{ modeId: "custom-start", label: "Deliver custom data", isDefault: true }]
+        }
+      ] });
       if (init?.method === "POST" && urlPath(url) === "/publishing/workflows/drafts/test-runs") return response(testRunView());
       if (init?.method === "POST" && urlPath(url) === "/_elsa/publishing/workflows/drafts/test-runs") return response(null, 404);
       if (init?.method === "POST" && url.includes("/drafts/draft-1/promote")) throw new Error("Designer Run must not promote drafts.");
@@ -2606,7 +2649,15 @@ describe("workflows module", () => {
       return response({ items: [definition()] });
     });
     vi.stubGlobal("fetch", fetchMock);
-    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
+    const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", api => {
+      api.workflowTestStimulusEditors?.add({
+        id: "contoso.test-drive.custom-start",
+        supports: ({ option, mode }) => option.driverId === "Contoso.CustomStart" && mode.modeId === "custom-start",
+        component: ({ draft, controlProps, onChange, disabled }) => <input {...controlProps} aria-label="Custom stimulus" value={draft} disabled={disabled} onChange={event => onChange(event.currentTarget.value)} />,
+        validate: () => undefined,
+        serialize: ({ draft }) => JSON.parse(draft || "{}")
+      });
+    });
 
     await waitForText(container, "Add activity");
     await click(buttonByText(container, "Add activity"));
@@ -2614,9 +2665,17 @@ describe("workflows module", () => {
     await click(Array.from(container.querySelectorAll<HTMLButtonElement>(".wf-palette-activity"))
       .find(button => button.textContent?.includes("Write Line")) ?? null);
     await click(buttonByText(container, "Run"));
-    await waitForText(container, "Provide the workflow inputs for this run.");
+    await waitForText(container, "Workflow inputs");
+    const startSelector = container.querySelector<HTMLSelectElement>(".wf-test-drive-panel select")!;
+    await waitForText(container, "HTTP endpoint");
+    await select(startSelector, "trigger:http-start");
+    await vi.waitFor(() => expect(container.querySelector("textarea[aria-label='Send HTTP request data']")).toBeTruthy());
+    await select(startSelector, "trigger:custom-start");
+    await vi.waitFor(() => expect(container.querySelector("input[aria-label='Custom stimulus']")).toBeTruthy());
+    await select(startSelector, "direct");
     expect(fetchMock.mock.calls.some(([url, init]) => init?.method === "POST" && urlPath(String(url)) === "/publishing/workflows/drafts/test-runs")).toBe(false);
     await fill(inputByLabel(container, "Greeting"), "Hello from test run");
+    await waitForEnabledButton(container, "Run workflow");
     await click(buttonByText(container, "Run workflow"));
     await waitForText(container, "Test run dispatched");
 
@@ -2694,6 +2753,8 @@ describe("workflows module", () => {
 
     await waitForText(container, "Run");
     await click(buttonByText(container, "Run"));
+    await waitForEnabledButton(container, "Run workflow");
+    await click(buttonByText(container, "Run workflow"));
     await waitForText(container, "Expression validation is unavailable");
     expect(testRunAttempts).toBe(1);
     await click(buttonByText(container, "Proceed with Test Run"));
@@ -2756,6 +2817,8 @@ describe("workflows module", () => {
 
     await waitForText(container, "Run");
     await click(buttonByText(container, "Run"));
+    await waitForEnabledButton(container, "Run workflow");
+    await click(buttonByText(container, "Run workflow"));
     await waitForText(container, "Test run dispatched");
     expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
     await waitForText(container, "test-run-1");
@@ -2767,9 +2830,11 @@ describe("workflows module", () => {
     await waitForText(container, "Text");
     await fill(container.querySelector<HTMLInputElement>(".wf-property-row input[type='text']"), "Stale capsule clearing");
 
-    await waitForTextToDisappear(container, "test-run-1");
-    expect(container.textContent).not.toContain("artifact-transient-1");
-    expect(container.textContent).not.toContain("wfexec-1");
+    await click(buttonByText(container, "Runtime"));
+    await waitForText(container, "Earlier draft");
+    expect(container.textContent).toContain("test-run-1");
+    expect(container.textContent).toContain("artifact-transient-1");
+    expect(container.textContent).toContain("wfexec-1");
 
     await unmount();
   });
@@ -2807,6 +2872,8 @@ describe("workflows module", () => {
 
     await waitForText(container, "Run");
     await click(buttonByText(container, "Run"));
+    await waitForEnabledButton(container, "Run workflow");
+    await click(buttonByText(container, "Run workflow"));
     await waitForText(container, "Test run rejected");
     expect(container.querySelector("[aria-label='Inspector panel tabs'] [role='tab'][aria-selected='true']")?.textContent).toContain("Runtime");
     await waitForText(container, "Workflow version has no root activity to publish.");
@@ -5457,6 +5524,13 @@ function dialog(container: HTMLElement) {
 async function waitForDialog(container: HTMLElement) {
   await vi.waitFor(() => expect(container.querySelector(".wf-dialog")).not.toBeNull());
   return dialog(container);
+}
+
+async function waitForEnabledButton(container: HTMLElement, text: string) {
+  await vi.waitFor(() => {
+    const button = buttonByText(container, text);
+    expect(button instanceof HTMLButtonElement && !button.disabled).toBe(true);
+  });
 }
 
 function optionByText(container: HTMLElement, text: string) {
