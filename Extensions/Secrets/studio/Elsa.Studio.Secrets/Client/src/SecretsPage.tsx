@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, Ban, CheckCircle2, KeyRound, Pencil, Plus, RefreshCw, RotateCcw, Search, ShieldCheck, Trash2 } from "lucide-react";
+import { AlertCircle, Ban, CheckCircle2, KeyRound, Pencil, Plus, RefreshCw, RotateCcw, Search, ShieldCheck, Trash2, X } from "lucide-react";
 import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { createSecret, deleteSecret, getSecretDescriptors, listSecrets, revokeSecret, rotateSecret, testSecret, updateSecret } from "./secretsApi";
 import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata, SecretStatus, UpdateSecretRequest } from "./secretTypes";
@@ -196,8 +196,8 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
         </div>
       </section>
 
-      {error ? <p className="secrets-alert" role="alert"><AlertCircle size={16} aria-hidden /> {error}</p> : null}
-      {status ? <p className="secrets-status" role="status"><CheckCircle2 size={16} aria-hidden /> {status}</p> : null}
+      {error ? <SecretNotification message={error} error onDismiss={() => setError(null)} /> : null}
+      {status ? <SecretNotification message={status} onDismiss={() => setStatus(null)} /> : null}
 
       <section className={`secrets-layout${selected ? "" : " secrets-layout--single"}`}>
         <div className="secrets-table-shell">
@@ -296,6 +296,21 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
         />
       ) : null}
     </main>
+  );
+}
+
+function SecretNotification({ message, error = false, onDismiss }: { message: string; error?: boolean; onDismiss(): void }) {
+  const Icon = error ? AlertCircle : CheckCircle2;
+  return (
+    <div className={`secrets-notification ${error ? "secrets-alert" : "secrets-status"}`}>
+      <div className="secrets-notification-message" role={error ? "alert" : "status"}>
+        <Icon size={16} aria-hidden />
+        <span>{message}</span>
+      </div>
+      <button type="button" className="secrets-notification-close" aria-label={error ? "Dismiss error" : "Dismiss notification"} title="Dismiss" onClick={onDismiss}>
+        <X size={16} aria-hidden />
+      </button>
+    </div>
   );
 }
 
