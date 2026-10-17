@@ -40,7 +40,7 @@ test("Activity Definition graph authoring shares the designer without workflow l
   await expect(sequenceRadio).toBeEnabled();
   await expect(flowchartRadio).toBeChecked();
   expect(await cardBackground(flowchartCard)).not.toBe(await cardBackground(sequenceCard));
-  await sequenceRadio.check();
+  await sequenceCard.click();
   await expect(sequenceRadio).toBeChecked();
   expect(await cardBackground(sequenceCard)).not.toBe(await cardBackground(flowchartCard));
   await create.getByRole("button", { name: "Create definition" }).click();
