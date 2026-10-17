@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { AlertCircle, Ban, CheckCircle2, KeyRound, Pencil, Plus, RotateCcw, Search, ShieldCheck, Trash2 } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertCircle, Ban, CheckCircle2, KeyRound, Pencil, Plus, RefreshCw, RotateCcw, Search, ShieldCheck, Trash2 } from "lucide-react";
 import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { createSecret, deleteSecret, getSecretDescriptors, listSecrets, revokeSecret, rotateSecret, testSecret, updateSecret } from "./secretsApi";
 import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata, SecretStatus, UpdateSecretRequest } from "./secretTypes";
@@ -11,6 +11,7 @@ const secretStatuses: SecretStatus[] = ["Active", "Retired", "Expired", "Revoked
 export function SecretsPage({ context, dialogs }: { context: StudioEndpointContext; dialogs: StudioDialogApi }) {
   const [search, setSearch] = useState("");
   const [secrets, setSecrets] = useState<SecretMetadata[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [descriptors, setDescriptors] = useState<SecretDescriptorsResponse | null>(null);
   const [dialog, setDialog] = useState<"create" | "rotate" | null>(null);
@@ -19,6 +20,7 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
   const [scopeFilter, setScopeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [busyName, setBusyName] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -36,31 +38,38 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
   const selected = useMemo(() => {
     return filteredSecrets.find(secret => secret.name === selectedName) ?? filteredSecrets[0] ?? null;
   }, [filteredSecrets, selectedName]);
+  const hasActiveFilters = Boolean(search.trim() || typeFilter || storeFilter || scopeFilter || statusFilter);
 
-  async function load(preferredName?: string) {
+  const load = useCallback(async (preferredName: string | undefined, searchTerm: string) => {
     setLoading(true);
+    setLoadError(false);
     setError(null);
     try {
-      const [list, descriptorResponse] = await Promise.all([listSecrets(context, { search, activeOnly: false, pageSize: 100 }), getSecretDescriptors(context)]);
+      const [list, descriptorResponse] = await Promise.all([listSecrets(context, { search: searchTerm, activeOnly: false, pageSize: 100 }), getSecretDescriptors(context)]);
       setSecrets(list.items);
+      setTotalCount(list.totalCount);
       setDescriptors(descriptorResponse);
       setSelectedName(current => {
         const candidate = preferredName ?? current;
         return candidate && list.items.some(secret => secret.name === candidate) ? candidate : list.items[0]?.name ?? null;
       });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Secrets could not be loaded.");
+    } catch {
+      setLoadError(true);
+      setError(null);
+      setSecrets([]);
+      setDescriptors(null);
+      setSelectedName(null);
     } finally {
       setLoading(false);
     }
-  }
+  }, [context]);
 
   useEffect(() => {
-    void load();
-  }, []);
+    void load(undefined, "");
+  }, [load]);
 
   async function refreshWithStatus(message: string, preferredName?: string) {
-    await load(preferredName);
+    await load(preferredName, search);
     setStatus(message);
   }
 
@@ -149,69 +158,101 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
     setDialog("rotate");
   };
 
+  const clearFilters = () => {
+    setSearch("");
+    setTypeFilter("");
+    setStoreFilter("");
+    setScopeFilter("");
+    setStatusFilter("");
+    void load(undefined, "");
+  };
+
   return (
     <main className="secrets-shell">
       <header className="secrets-header">
         <div>
-          <h2><KeyRound size={18} /> Secrets</h2>
-          <p>{filteredSecrets.length} shown · {secrets.length} total</p>
+          <span className="secrets-kicker">Secret management</span>
+          <h2><KeyRound size={18} aria-hidden /> Secrets</h2>
         </div>
-        <button type="button" className="secrets-primary" onClick={() => setDialog("create")}>
-          <Plus size={16} /> Create
-        </button>
+        {!loading && !loadError ? <p className="secrets-count" aria-live="polite">{filteredSecrets.length} shown · {totalCount} total</p> : null}
       </header>
 
       <section className="secrets-toolbar" aria-label="Secret filters">
-        <label className="secrets-search">
-          <Search size={16} />
-          <input value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => event.key === "Enter" && void load()} placeholder="Search secrets" />
-        </label>
+        <div className="secrets-search-wrap">
+          <label className="secrets-search">
+            <Search size={15} aria-hidden />
+            <input aria-label="Search secrets" value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => event.key === "Enter" && void load(undefined, search)} placeholder="Search secrets" />
+          </label>
+          <button type="button" className="secrets-search-action" onClick={() => void load(undefined, search)}>Search</button>
+        </div>
         <FilterSelect label="Type" value={typeFilter} onChange={setTypeFilter} options={descriptors?.types.map(type => ({ value: type.name, label: type.displayName || type.name })) ?? []} />
         <FilterSelect label="Store" value={storeFilter} onChange={setStoreFilter} options={descriptors?.stores.map(store => ({ value: store.name, label: store.displayName || store.name })) ?? []} />
         <FilterSelect label="Scope" value={scopeFilter} onChange={setScopeFilter} options={scopes.map(scope => ({ value: scope, label: scope }))} />
         <FilterSelect label="Status" value={statusFilter} onChange={setStatusFilter} options={secretStatuses.map(value => ({ value, label: value }))} />
-        <button type="button" onClick={() => void load()}>Search</button>
+        <div className="secrets-toolbar-actions">
+          <button type="button" onClick={() => void load(undefined, search)} disabled={loading}><RefreshCw size={15} aria-hidden /> Refresh</button>
+          <button type="button" onClick={() => setDialog("create")} disabled={!descriptors}><Plus size={15} aria-hidden /> Create</button>
+        </div>
       </section>
 
-      {error ? <p className="secrets-alert"><AlertCircle size={16} /> {error}</p> : null}
-      {status ? <p className="secrets-status"><CheckCircle2 size={16} /> {status}</p> : null}
+      {error ? <p className="secrets-alert" role="alert"><AlertCircle size={16} aria-hidden /> {error}</p> : null}
+      {status ? <p className="secrets-status" role="status"><CheckCircle2 size={16} aria-hidden /> {status}</p> : null}
 
-      <section className="secrets-layout">
+      <section className={`secrets-layout${selected ? "" : " secrets-layout--single"}`}>
         <div className="secrets-table-shell">
-          <table className="secrets-table">
+          <table className="secrets-table" aria-label="Secrets">
             <thead>
               <tr>
                 <th>Name</th>
-                <th>Display name</th>
                 <th>Type</th>
                 <th>Store</th>
                 <th>Scope</th>
                 <th>Status</th>
-                <th>Version</th>
                 <th>Updated</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={9} className="secrets-empty">Loading secrets...</td></tr>
+                <tr><td colSpan={7} className="secrets-empty"><span className="secrets-loading" role="status">Loading secrets…</span></td></tr>
               ) : null}
-              {!loading && filteredSecrets.length === 0 ? (
-                <tr><td colSpan={9} className="secrets-empty">No secrets found.</td></tr>
+              {!loading && loadError ? (
+                <tr><td colSpan={7} className="secrets-empty">
+                  <div className="secrets-empty-state" role="alert">
+                    <span className="secrets-empty-icon" aria-hidden><AlertCircle size={20} /></span>
+                    <strong>Secrets could not be loaded.</strong>
+                    <p>Check your connection and try again.</p>
+                    <button type="button" onClick={() => void load(undefined, search)}><RefreshCw size={14} aria-hidden /> Retry</button>
+                  </div>
+                </td></tr>
+              ) : null}
+              {!loading && !loadError && filteredSecrets.length === 0 ? (
+                <tr><td colSpan={7} className="secrets-empty">
+                  <div className="secrets-empty-state" role="status">
+                    <span className="secrets-empty-icon" aria-hidden><KeyRound size={20} /></span>
+                    <strong>{hasActiveFilters ? "No secrets match your filters" : "No secrets yet"}</strong>
+                    <p>{hasActiveFilters ? "Try adjusting your search or filters." : "Create a secret to make it available to workflows."}</p>
+                    {hasActiveFilters ? <button type="button" onClick={clearFilters}>Clear filters</button>
+                      : <button type="button" className="secrets-primary" onClick={() => setDialog("create")} disabled={!descriptors}><Plus size={14} aria-hidden /> Create secret</button>}
+                  </div>
+                </td></tr>
               ) : null}
               {!loading && filteredSecrets.map(secret => (
                 <tr key={secret.name} className={secret.name === selected?.name ? "active" : ""}>
-                  <td><button type="button" className="secrets-row-link" onClick={() => setSelectedName(secret.name)}>{secret.name}</button></td>
-                  <td>{secret.displayName || "-"}</td>
+                  <td className="secrets-name-cell">
+                    <button type="button" className="secrets-row-link" aria-pressed={secret.name === selected?.name} onClick={() => setSelectedName(secret.name)}>
+                      <strong>{secret.displayName || secret.name}</strong>
+                      {secret.displayName && secret.displayName !== secret.name ? <code>{secret.name}</code> : null}
+                    </button>
+                  </td>
                   <td>{labelType(descriptors, secret.typeName)}</td>
                   <td>{labelStore(descriptors, secret.storeName)}</td>
                   <td>{secret.scope || "-"}</td>
                   <td><StatusBadge status={secret.status} /></td>
-                  <td>{secret.currentVersion ?? "-"}</td>
                   <td>{formatDate(secret.updatedAt ?? secret.createdAt)}</td>
                   <td>
                     <div className="secrets-row-actions">
-                      <button type="button" title="Open" aria-label={`Open ${secret.name}`} onClick={() => setSelectedName(secret.name)}><Pencil size={14} /></button>
+                      <button type="button" className="secrets-open-action" aria-label={`Open ${secret.name}`} title={`Open ${secret.displayName || secret.name}`} onClick={() => setSelectedName(secret.name)}><Pencil size={14} aria-hidden /> Open</button>
                       <button type="button" title="Rotate" aria-label={`Rotate ${secret.name}`} disabled={secret.status === "Deleted" || busyName === secret.name} onClick={() => rotateSelected(secret)}><RotateCcw size={14} /></button>
                       <button type="button" title="Test" aria-label={`Test ${secret.name}`} disabled={busyName === secret.name || secret.status === "Deleted"} onClick={() => void runTest(secret)}><ShieldCheck size={14} /></button>
                       <button type="button" title="Revoke" aria-label={`Revoke ${secret.name}`} disabled={busyName === secret.name || secret.status === "Revoked" || secret.status === "Deleted"} onClick={() => void revoke(secret)}><Ban size={14} /></button>
@@ -224,16 +265,16 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
           </table>
         </div>
 
-        <SecretDetail
+        {selected ? <SecretDetail
           secret={selected}
           descriptors={descriptors}
-          busy={selected ? busyName === selected.name : false}
+          busy={busyName === selected.name}
           onSave={saveMetadata}
           onRotate={rotateSelected}
           onTest={secret => void runTest(secret)}
           onRevoke={secret => void revoke(secret)}
           onDelete={secret => void remove(secret)}
-        />
+        /> : null}
       </section>
 
       {dialog === "create" && descriptors ? (

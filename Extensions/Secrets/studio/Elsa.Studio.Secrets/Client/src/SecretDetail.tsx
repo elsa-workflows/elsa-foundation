@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Ban, RotateCcw, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { Ban, LockKeyhole, RotateCcw, Save, ShieldCheck, Trash2 } from "lucide-react";
 import type { SecretDescriptorsResponse, SecretMetadata } from "./secretTypes";
 
 export function SecretDetail({
@@ -31,7 +31,7 @@ export function SecretDetail({
   }, [secret?.name]);
 
   if (!secret) {
-    return <section className="secrets-detail secrets-empty">Select a secret.</section>;
+    return null;
   }
 
   const store = descriptors?.stores.find(x => x.name === secret.storeName);
@@ -54,9 +54,10 @@ export function SecretDetail({
   }
 
   return (
-    <section className="secrets-detail">
+    <section className="secrets-detail" aria-label="Secret details">
       <header>
         <div>
+          <span className="secrets-kicker">Secret details</span>
           <h3>{secret.displayName || secret.name}</h3>
           <p>{secret.name}</p>
         </div>
@@ -94,7 +95,7 @@ export function SecretDetail({
         </button>
       </form>
 
-      <div className="secrets-redaction">Values are never displayed. Studio does not reveal, cache, or export current secret material.</div>
+      <p className="secrets-redaction"><LockKeyhole size={15} aria-hidden="true" /> Values are never displayed.</p>
 
       <div className="secrets-detail-actions">
         <button type="button" disabled={!canMutate || busy} onClick={() => onRotate(secret)}><RotateCcw size={15} /> Rotate</button>
