@@ -87,7 +87,7 @@ test("the compact editor remains operable at a narrow touch viewport", async ({ 
   await context.close();
 });
 
-test("unavailable code intelligence keeps syntax-aware editing available", async ({ page }) => {
+test("unavailable IntelliSense keeps syntax-aware editing available", async ({ page }) => {
   await page.goto("/?mode=expression-code-intelligence&tooling=unavailable");
 
   await page.getByRole("button", { name: /JavaScript expression\. Activate to edit\./ }).click();
@@ -96,7 +96,7 @@ test("unavailable code intelligence keeps syntax-aware editing available", async
   await expect(editor).toBeVisible();
   await expect(editor).toHaveAttribute("contenteditable", "true");
   await expect(page.getByText(
-    "JavaScript code intelligence is unavailable. Syntax highlighting remains active."
+    "JavaScript IntelliSense is unavailable. Syntax highlighting remains active."
   )).toBeVisible();
 
   const initialSource = await editor.textContent();
