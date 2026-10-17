@@ -1285,6 +1285,10 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
             var successor = await worker.ClaimNextAsync("worker-new", staleClaim.VisibleUntil, TimeSpan.FromSeconds(5));
             Assert.NotNull(successor);
             Assert.True(successor.ClaimFence > staleClaim.ClaimFence);
+            await Assert.ThrowsAsync<BackgroundActivityWorkConflictException>(() => worker.RecordResultAsync(
+                staleClaim!,
+                new BackgroundActivityWorkTerminalResult(BackgroundActivityWorkResultKind.Complete, resultJson: "{\"value\":\"late-old-worker\"}"),
+                successor.ClaimedAt.AddSeconds(1)).AsTask());
             var acceptedResult = await worker.RecordResultAsync(
                 successor,
                 new BackgroundActivityWorkTerminalResult(BackgroundActivityWorkResultKind.Complete, resultJson: "{\"value\":\"current\"}"),
