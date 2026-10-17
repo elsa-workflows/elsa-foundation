@@ -22,7 +22,7 @@ namespace Elsa.Workflows.Publishing.Api.Tests;
 public sealed class ActivityTemplatePlacementTests
 {
     [Fact]
-    public async Task Placement_materializes_an_occurrence_overlays_authored_input_and_structure_against_placed_children()
+    public async Task Placement_materializes_occurrence_overlays_and_preserves_nested_background_execution_placement()
     {
         // #1051: source-owned templates have bare roots. The occurrence overlay must restore the graph-authored
         // input and reconcile the compiled structure after placement gives child nodes their final identities.
@@ -49,7 +49,10 @@ public sealed class ActivityTemplatePlacementTests
                 "source-owned-root", "source-owned-root", "type.sequence", "1", new("sequence", "1", Json("{}")),
                 new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(),
                 new Dictionary<string, string>(), activityContract: RuntimeContractWithCondition()));
-        var writeTemplate = Template("template-write", "hash-write", Node("source-owned-root"));
+        var writeTemplate = Template(
+            "template-write",
+            "hash-write",
+            Node("source-owned-root", ActivityExecutionPlacement.Background));
         var graphPublication = Publication("definition-graph", "version-graph", "type.graph", graphTemplate);
         var sequencePublication = Publication("definition-sequence", "version-sequence", "type.sequence", sequenceTemplate);
         var writePublication = Publication("definition-write", "version-write", "type.write", writeTemplate);
@@ -81,6 +84,7 @@ public sealed class ActivityTemplatePlacementTests
         Assert.True(condition.Value.LiteralValue!.Value.GetBoolean());
 
         var write = Assert.Single(Assert.Single(sequence.ChildSlots, x => x.Name == "Activities").Activities);
+        Assert.Equal(ActivityExecutionPlacement.Background, write.ExecutionPlacement);
         var structure = Assert.IsType<ExecutableActivityStructure>(sequence.Structure);
         var orderedChildIds = structure.Payload.Deserialize<SequenceExecutableStructure>(new JsonSerializerOptions(JsonSerializerDefaults.Web))!.Activities;
         Assert.Equal([write.ExecutableNodeId], orderedChildIds);
@@ -496,6 +500,10 @@ public sealed class ActivityTemplatePlacementTests
         id, id, "local", "1", new("local", "1", Json("{}")),
         new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>(),
         children.Length == 0 ? [] : [new ExecutableChildSlot("Activities", children)]);
+
+    private static ExecutableNode Node(string id, ActivityExecutionPlacement placement) => new(
+        id, id, "local", "1", new("local", "1", Json("{}")),
+        new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>(), placement);
 
     private static ActivityDefinitionVersionPublication Publication(
         string definitionId,

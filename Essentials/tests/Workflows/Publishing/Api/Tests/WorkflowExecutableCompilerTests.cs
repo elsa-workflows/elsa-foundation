@@ -347,6 +347,21 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task Background_placement_survives_real_metadata_enrichment_during_publication()
+    {
+        var executable = await BackgroundCompiler(
+                typeof(BackgroundSafeUnitActivity),
+                "activity-background-safe-unit",
+                ActivityExecutionPlacement.Background,
+                metadataEnricher: MetadataEnricher(new FixedMetadataSource("background-node", "runtime.pin", "pinned-value")))
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal(ActivityExecutionPlacement.Background, executable.RootActivity.ExecutionPlacement);
+        Assert.Equal("pinned-value", executable.RootActivity.Metadata["runtime.pin"]);
+        Assert.True(executable.RootActivity.ActivityContract!.SupportsBackgroundExecution);
+    }
+
+    [Fact]
     public async Task Background_placement_refuses_unmarked_structural_intrinsic_object_and_sensitive_result_nodes()
     {
         var unmarked = await AssertBackgroundRefusedAsync(
@@ -432,7 +447,8 @@ public sealed class WorkflowExecutableCompilerTests
         string activityVersionId,
         ActivityExecutionPlacement placement,
         IReadOnlyCollection<ArgumentState>? authoredOutputs = null,
-        IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition>? variables = null)
+        IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition>? variables = null,
+        IExecutableNodeMetadataEnricher? metadataEnricher = null)
     {
         var typeAlias = TypeAliasConvention.CanonicalAlias(activityType);
         var registry = TestWellKnownTypeRegistry.Create();
@@ -463,7 +479,8 @@ public sealed class WorkflowExecutableCompilerTests
                 variables: variables)),
             new FakeActivityVersionStore([activityVersion]),
             _activityStructureService,
-            registry);
+            registry,
+            metadataEnricher: metadataEnricher);
     }
 
     private static async Task<WorkflowExecutableCompilationException> AssertBackgroundRefusedAsync(
