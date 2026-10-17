@@ -818,7 +818,7 @@ textarea:focus {
   .sidebar-collapsed .sidebar .nav-label,
   .sidebar-collapsed .sidebar .nav-heading,
   .sidebar-collapsed .sidebar .nav-children,
-  .sidebar-collapsed .sidebar .nav-disclosure svg:last-child,
+  .sidebar-collapsed .sidebar .nav-disclosure > svg:last-child,
   .sidebar-collapsed .sidebar-footer span:last-child {
     display: none;
   }
