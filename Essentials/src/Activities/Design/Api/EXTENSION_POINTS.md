@@ -35,6 +35,10 @@ These are single-owner seams. Replace them through DI; do not register competing
 Provider packages own these implementations and their feature registrations. The Activity Graph contribution is
 documented in its [contributing-feature catalog](../../Graph/Design/EXTENSION_POINTS.md).
 
+Each authorable manifest schema declares its supported migration sources. The legacy schema-version list applies only
+to that same provider; cross-provider migrations must declare exact provider-key and schema-version pairs. Capability
+projection reads these declarations without running a migration.
+
 ## Sources and reconciliation
 
 Activity definitions are populated by Activity Design reconciliation sources, not by `Elsa.Workbench`. Provider modules contribute installed activity metadata through the reconciliation contracts described in [`Reconciliation/EXTENSION_POINTS.md`](../Reconciliation/Elsa.Activities.Design.Reconciliation/EXTENSION_POINTS.md). Persistence-specific seams are documented in their own catalog:

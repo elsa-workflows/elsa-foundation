@@ -240,7 +240,13 @@ public sealed record ActivityProviderManifestView(
 public sealed record ActivityProviderManifestSchemaCapabilityView(
     string SchemaVersion,
     bool IsAuthorable,
-    IReadOnlyList<string> MigratableFromSchemaVersions);
+    IReadOnlyList<string> MigratableFromSchemaVersions)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ActivityProviderManifestSourceView>? MigratableFrom { get; init; }
+}
+
+public sealed record ActivityProviderManifestSourceView(string ProviderKey, string SchemaVersion);
 
 public sealed record ActivityProviderAuthoringCapabilityView(
     string ProviderKey,

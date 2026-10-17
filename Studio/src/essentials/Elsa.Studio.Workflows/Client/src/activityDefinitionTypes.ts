@@ -294,6 +294,8 @@ export interface ActivityProviderAuthoringCapability {
     schemaVersion: string;
     isAuthorable: boolean;
     migratableFromSchemaVersions: string[];
+    /** Exact source identities supported by this target schema. Missing data is fail-closed across providers. */
+    migratableFrom?: Array<{ providerKey: string; schemaVersion: string }>;
   }>;
   requiredOutcomes: ActivityOutcomeContract[];
 }

@@ -39,7 +39,16 @@ public sealed class ActivityAuthoringCapabilitiesReader(
                     .Select(x => new ActivityProviderManifestSchemaCapabilityView(
                         x.SchemaVersion,
                         x.IsAuthorable,
-                        x.MigratableFromSchemaVersions.Order(StringComparer.Ordinal).ToArray()))
+                        x.MigratableFromSchemaVersions.Order(StringComparer.Ordinal).ToArray())
+                    {
+                        MigratableFrom = x.MigratableFrom is { Count: > 0 }
+                            ? x.MigratableFrom
+                                .OrderBy(source => source.ProviderKey, StringComparer.Ordinal)
+                                .ThenBy(source => source.SchemaVersion, StringComparer.Ordinal)
+                                .Select(source => new ActivityProviderManifestSourceView(source.ProviderKey, source.SchemaVersion))
+                                .ToArray()
+                            : null
+                    })
                     .ToArray(),
                 provider.AuthoringCapabilities.ContractConstraints.RequiredOutcomes
                     .OrderBy(x => x.ReferenceKey, StringComparer.Ordinal)
