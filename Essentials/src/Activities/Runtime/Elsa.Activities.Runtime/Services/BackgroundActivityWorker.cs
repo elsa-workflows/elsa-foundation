@@ -77,9 +77,12 @@ public sealed class BackgroundActivityWorker(
                 while (true)
                 {
                     await Task.Delay(settings.RenewalInterval, timeProvider, renewalCancellation.Token);
-                    await using var renewalScope = await scopeFactory.CreateAsync(persistenceScope, renewalCancellation.Token);
+                    // Stopping the renewal loop on normal body completion must not cancel a provider renewal that
+                    // may already have committed its claim revision. Keep the call alive until it returns so the
+                    // result is recorded with the exact claim now stored by the provider.
+                    await using var renewalScope = await scopeFactory.CreateAsync(persistenceScope, bodyCancellation.Token);
                     var renewed = await renewalScope.ServiceProvider.GetRequiredService<IBackgroundActivityWorkStore>()
-                        .RenewClaimAsync(Volatile.Read(ref currentClaim)!, timeProvider.GetUtcNow(), settings.LeaseDuration, renewalCancellation.Token);
+                        .RenewClaimAsync(Volatile.Read(ref currentClaim)!, timeProvider.GetUtcNow(), settings.LeaseDuration, bodyCancellation.Token);
                     Volatile.Write(ref currentClaim, renewed);
                     if (renewed is not null)
                         continue;
