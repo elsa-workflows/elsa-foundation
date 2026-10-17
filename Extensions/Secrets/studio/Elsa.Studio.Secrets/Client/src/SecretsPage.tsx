@@ -288,6 +288,7 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
       ) : null}
       {dialog === "rotate" && selected ? (
         <RotateSecretDialog
+          key={selected.id}
           secret={selected}
           descriptors={descriptors}
           onCancel={() => setDialog(null)}

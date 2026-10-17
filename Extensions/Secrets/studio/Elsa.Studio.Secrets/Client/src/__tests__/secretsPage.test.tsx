@@ -13,6 +13,20 @@ afterEach(() => {
 });
 
 describe("secrets page", () => {
+  it("clears entered rotation material and visibility when the target secret changes", async () => {
+    const { container } = render({ getItems: () => [paymentSecret(), secret({ id: "2", name: "other.api", displayName: "Other API" })] });
+    await waitForText(container, "Other API");
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Rotate payments.api']")!.click());
+    change(container.querySelector<HTMLInputElement>(".secrets-value-input input")!, "dummy-new-value");
+    await waitFor(() => container.querySelector<HTMLInputElement>(".secrets-value-input input")?.value === "dummy-new-value");
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Show value']")!.click());
+    expect(container.querySelector<HTMLInputElement>(".secrets-value-input input")?.type).toBe("text");
+    flushSync(() => container.querySelector<HTMLButtonElement>("button[aria-label='Rotate other.api']")!.click());
+    const input = container.querySelector<HTMLInputElement>(".secrets-value-input input")!;
+    expect(input.value).toBe("");
+    expect(input.type).toBe("password");
+  });
+
   it("offers creation from an empty collection without a blank details panel", async () => {
     const { container } = render({ getItems: () => [] });
     await waitForText(container, "No secrets yet");
