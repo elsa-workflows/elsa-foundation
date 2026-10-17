@@ -3,6 +3,8 @@ namespace Elsa.Activities.Runtime.Services;
 /// <summary>Bounds the opt-in background activity worker on one host.</summary>
 public sealed class BackgroundActivityWorkerOptions
 {
+    /// <summary>Explicitly enables background admission on a coordinator host, including hosts without local workers.</summary>
+    public bool Enabled { get; set; }
     public int MaxConcurrency { get; set; } = 4;
     public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(1);
     public TimeSpan LeaseDuration { get; set; } = TimeSpan.FromSeconds(30);
@@ -14,7 +16,7 @@ public sealed class BackgroundActivityWorkerOptions
     {
         if (MaxConcurrency is < 1 or > 256 || PollInterval <= TimeSpan.Zero ||
             LeaseDuration <= TimeSpan.Zero || RenewalInterval <= TimeSpan.Zero || RenewalInterval >= LeaseDuration ||
-            ResultSweepSize is < 1 or > 1000 || MaximumResultBytes is < 1 or > 16 * 1024 * 1024)
+            ResultSweepSize is < 1 or > 500 || MaximumResultBytes is < 1 or > 16 * 1024 * 1024)
             throw new InvalidOperationException("Background activity worker limits must be positive and bounded; renewal must occur before lease expiry.");
     }
 }

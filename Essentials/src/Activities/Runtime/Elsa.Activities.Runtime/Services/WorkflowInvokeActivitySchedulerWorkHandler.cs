@@ -90,8 +90,19 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         BackgroundActivityWorkItem? backgroundResult = null;
         if (executableNode.ExecutionPlacement == ActivityExecutionPlacement.Background)
         {
-            backgroundResult = await serviceProvider.GetRequiredService<BackgroundActivityCoordinator>()
-                .GetResultOrAdmitAsync(workItem, invokePayload, executableNode, state, cancellationToken);
+            try
+            {
+                backgroundResult = await serviceProvider.GetRequiredService<BackgroundActivityCoordinator>()
+                    .GetResultOrAdmitAsync(workItem, invokePayload, executableNode, state, cancellationToken);
+            }
+            catch (BackgroundActivityValidationException exception)
+            {
+                // Deterministic contract/configuration failures become visible native incidents. Provider errors
+                // and ownership-fence failures still escape to the scheduler's retry/ownership policy.
+                await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter,
+                    faultMasking, workItem, invokePayload, state, exception, "BackgroundActivityValidationFailed", [], cancellationToken);
+                return;
+            }
             if (backgroundResult is null)
                 return;
         }
@@ -100,8 +111,6 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             : serviceProvider.GetRequiredService<BackgroundActivityResultApplication>().Begin(backgroundResult);
         await InvokeActivityAsync(serviceProvider, activityExecutionStateStore, schedulerWorkQueue, durableValueStateStore, checkpointCommitter, activityFaultIncidentRecorder, inspectionAccumulator, payloadCapturePolicy, faultMasking, workItem, invokePayload, executable, executableNode, state, backgroundResult, cancellationToken);
     }
-
-
     private static ActivityTransition MaterializeBackgroundTransition(
         IServiceProvider services,
         ActivityContract contract,

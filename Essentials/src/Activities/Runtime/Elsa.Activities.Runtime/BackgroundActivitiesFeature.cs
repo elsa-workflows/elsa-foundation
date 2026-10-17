@@ -16,6 +16,9 @@ namespace Elsa.Activities.Runtime;
     DependsOn = new object[] { "ActivitiesRuntime", "Tasks", "WorkflowsRuntimeResumption" })]
 public sealed class BackgroundActivitiesFeature : IShellFeature
 {
+    [ManifestSetting(DisplayName = "Run workers", Description = "Run the local worker pump. Disable on coordinator-only hosts when another host consumes the same durable work store.", Category = "Runtime")]
+    public bool RunWorkers { get; set; } = true;
+
     [ManifestSetting(DisplayName = "Worker concurrency", Description = "Maximum activity bodies concurrently executing on this host (1-256).", Category = "Runtime")]
     public int MaxConcurrency { get; set; } = 4;
 
@@ -40,12 +43,14 @@ public sealed class BackgroundActivitiesFeature : IShellFeature
         settings.Validate();
         services.Configure<BackgroundActivityWorkerOptions>(options =>
         {
+            options.Enabled = true;
             options.MaxConcurrency = settings.MaxConcurrency;
             options.PollInterval = settings.PollInterval;
             options.LeaseDuration = settings.LeaseDuration;
             options.RenewalInterval = settings.RenewalInterval;
         });
         services.TryAddSingleton<BackgroundActivityWorker>();
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IBackgroundTask, BackgroundActivityWorkerPump>());
+        if (RunWorkers)
+            services.TryAddEnumerable(ServiceDescriptor.Singleton<IBackgroundTask, BackgroundActivityWorkerPump>());
     }
 }

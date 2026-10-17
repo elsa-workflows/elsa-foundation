@@ -1,6 +1,8 @@
 using Elsa.Activities.Runtime.Contracts;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Primitives.Models;
+using Elsa.Serialization.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Scheduler;
@@ -31,7 +33,7 @@ public sealed class BackgroundActivityWorker(
         using var bodyCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var renewalCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         BackgroundActivityWorkClaim? currentClaim = claim;
-        var renewal = RenewAsync();
+        Task renewal = Task.CompletedTask;
         BackgroundActivityWorkTerminalResult? result = null;
         try
         {
@@ -41,8 +43,10 @@ public sealed class BackgroundActivityWorker(
                 .FindAsync(claim.WorkflowExecutionId, claim.WorkId, bodyCancellation.Token);
             if (item is null || item.Status != BackgroundActivityWorkStatus.Claimed ||
                 item.ClaimFence != claim.ClaimFence || item.ClaimOwnerId != claim.ClaimOwnerId ||
+                item.Revision != claim.Revision || item.ClaimedAt != claim.ClaimedAt || item.VisibleUntil != claim.VisibleUntil ||
                 item.VisibleUntil <= timeProvider.GetUtcNow())
                 return;
+            renewal = RenewAsync();
             result = await ExecuteLeafAsync(services, item.Request, settings, bodyCancellation.Token);
         }
         catch (OperationCanceledException) when (bodyCancellation.IsCancellationRequested)
@@ -119,6 +123,17 @@ public sealed class BackgroundActivityWorker(
                 throw new InvalidOperationException("BG-ACT-002: Background input, invocation or activity contract pin does not match.");
             var codec = services.GetRequiredService<BackgroundActivityCompletionCodec>();
             codec.ResolveResultType(node.ActivityContract);
+            var types = services.GetRequiredService<IWellKnownTypeRegistry>();
+            if (!types.TryGetTypeOrDefault(node.ActivityContract.Activation.Capability, out var pinnedActivityType) ||
+                !typeof(IActivity).IsAssignableFrom(pinnedActivityType))
+                throw new InvalidOperationException("BG-ACT-002: The pinned background activity type is unavailable.");
+            if (node.ActivityContract.DescriptorKind == typeof(ClrActivityDescriptor).FullName)
+            {
+                var descriptor = services.GetRequiredService<IPayloadSerializer>()
+                    .Deserialize<ClrActivityDescriptor>(node.ActivityContract.DescriptorPayload);
+                if (!types.TryGetTypeOrDefault(descriptor.TypeAlias, out var descriptorType) || descriptorType != pinnedActivityType)
+                    throw new InvalidOperationException("BG-ACT-002: The background descriptor does not name the pinned activity type.");
+            }
             var dispatch = services.GetService<IWorkflowDispatchStagingAccessor>();
             var publish = services.GetService<IPublishStimulusStagingAccessor>();
             dispatch?.Reset(request.WorkflowExecutionId, request.ActivityExecutionId);
@@ -129,6 +144,8 @@ public sealed class BackgroundActivityWorker(
                     ActivityExecutionId: request.ActivityExecutionId,
                     node.ActivityContract, request.InputSnapshot, request.Attempt, Descriptor: node.Descriptor), cancellationToken);
             BackgroundActivityEligibility.Validate(activation.Activity);
+            if (activation.Activity.GetType() != pinnedActivityType)
+                throw new InvalidOperationException("BG-ACT-002: Activation returned a different type than the pinned background activity.");
             var transition = await activation.Activity.ExecuteAsync(new ActivityExecutionContext(
                 request.WorkflowExecutionId, request.InvocationId, request.AttemptId, request.ExecutableNodeId, cancellationToken));
             if (dispatch?.TakeWorkflowDispatch(request.WorkflowExecutionId, request.ActivityExecutionId) is not null ||

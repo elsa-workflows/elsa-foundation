@@ -20,10 +20,10 @@ internal sealed class BackgroundActivityCompletionCodec(IWellKnownTypeRegistry t
         var type = TypeReferenceFactory.Resolve(descriptor.ToTypeReference(), alias =>
             types.TryGetTypeOrDefault(alias, out var resolved) && resolved != typeof(object)
                 ? resolved
-                : throw new InvalidOperationException($"BG-ACT-004: Background result alias '{alias}' is not a registered concrete type."));
+                : throw new BackgroundActivityValidationException($"BG-ACT-004: Background result alias '{alias}' is not a registered concrete type."));
         if (!contract.Result.Policy.IsPersistable || contract.Result.Policy.HidesValue() ||
             contract.Result.Projections.Values.Any(projection => !projection.Policy.IsPersistable || projection.Policy.HidesValue()))
-            throw new InvalidOperationException("BG-ACT-004: Background results require a persistable result policy that can cross the worker boundary without unimplemented encryption.");
+            throw new BackgroundActivityValidationException("BG-ACT-004: Background results require a persistable result policy that can cross the worker boundary without unimplemented encryption.");
         return type;
     }
 
@@ -32,9 +32,9 @@ internal sealed class BackgroundActivityCompletionCodec(IWellKnownTypeRegistry t
         ValidateOutcome(contract, completion.Outcome);
         var type = ResolveResultType(contract);
         if (completion.Result is null && contract.Result.IsRequired)
-            throw new InvalidOperationException("BG-ACT-005: The background activity did not return its required result.");
+            throw new BackgroundActivityValidationException("BG-ACT-005: The background activity did not return its required result.");
         if (completion.Result is not null && !type.IsInstanceOfType(completion.Result))
-            throw new InvalidOperationException("BG-ACT-005: The background result does not match its pinned result type.");
+            throw new BackgroundActivityValidationException("BG-ACT-005: The background result does not match its pinned result type.");
         var json = JsonSerializer.Serialize(completion.Result, type, JsonOptions);
         ValidateSize(json, maximumBytes);
         return json;
@@ -47,21 +47,21 @@ internal sealed class BackgroundActivityCompletionCodec(IWellKnownTypeRegistry t
         var type = ResolveResultType(contract);
         var result = JsonSerializer.Deserialize(json, type, JsonOptions);
         if (result is null && contract.Result.IsRequired)
-            throw new InvalidOperationException("BG-ACT-005: The background receipt is missing its required result.");
+            throw new BackgroundActivityValidationException("BG-ACT-005: The background receipt is missing its required result.");
         return new RehydratedCompletion(result, type, outcome);
     }
 
     private static void ValidateOutcome(ActivityContract contract, string outcome)
     {
         if (!contract.Outcomes.Contains(outcome, StringComparer.Ordinal))
-            throw new InvalidOperationException($"BG-ACT-005: Outcome '{outcome}' is not declared by the pinned background activity contract.");
+            throw new BackgroundActivityValidationException($"BG-ACT-005: Outcome '{outcome}' is not declared by the pinned background activity contract.");
     }
 
     private static void ValidateSize(string json, int maximumBytes)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumBytes);
         if (Encoding.UTF8.GetByteCount(json) > maximumBytes)
-            throw new InvalidOperationException("BG-ACT-006: The background result exceeds the configured receipt size limit.");
+            throw new BackgroundActivityValidationException("BG-ACT-006: The background result exceeds the configured receipt size limit.");
     }
 
     private sealed record RehydratedCompletion(object? Result, Type ResultType, string Outcome)

@@ -3,6 +3,7 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Microsoft.Extensions.Options;
 
 namespace Elsa.Activities.Runtime.Services;
 
@@ -11,6 +12,7 @@ internal sealed class BackgroundActivityCoordinator(
     BackgroundActivityCompletionCodec codec,
     RuntimeCheckpointCommitter committer,
     TimeProvider timeProvider,
+    IOptions<BackgroundActivityWorkerOptions> options,
     IBackgroundActivityWorkStore? store = null)
 {
     public async ValueTask<BackgroundActivityWorkItem?> GetResultOrAdmitAsync(
@@ -20,26 +22,28 @@ internal sealed class BackgroundActivityCoordinator(
         ActivityExecutionState state,
         CancellationToken cancellationToken)
     {
+        if (!options.Value.Enabled)
+            throw new BackgroundActivityValidationException("BG-ACT-001: Enable BackgroundActivities on this coordinator; remote worker deployments can set RunWorkers to false.");
         if (store is null)
-            throw new InvalidOperationException("BG-ACT-001: Background activities require a checkpoint-integrated durable work store.");
+            throw new BackgroundActivityValidationException("BG-ACT-001: Background activities require a checkpoint-integrated work store.");
         BackgroundActivityEligibility.Validate(node);
         codec.ResolveResultType(node.ActivityContract!);
         if (state.Metadata.TryGetValue(BackgroundActivityEligibility.WorkIdMetadataKey, out var workId))
         {
             var item = await store.FindAsync(workItem.WorkflowExecutionId, workId, cancellationToken)
-                ?? throw new InvalidOperationException("BG-ACT-003: The admitted background work record is missing.");
+                ?? throw new BackgroundActivityValidationException("BG-ACT-003: The admitted background work record is missing.");
             ValidateReceiptTarget(item.Request, payload, state);
             if (item.Status != BackgroundActivityWorkStatus.ResultReady ||
                 item.Request.CoordinatorWorkItemId != workItem.WorkItemId)
                 return null;
             if (item.Result is null || item.ReceiptDigest != BackgroundActivityWorkReceipt.ComputeDigest(item.Request, item.Result))
-                throw new InvalidOperationException("BG-ACT-003: The background result receipt does not match its pinned work.");
+                throw new BackgroundActivityValidationException("BG-ACT-003: The background result receipt does not match its pinned work.");
             return item;
         }
         if (payload.Reason == BackgroundActivityEligibility.ResultReason)
-            throw new InvalidOperationException("BG-ACT-003: A background result cannot create a new invocation.");
+            throw new BackgroundActivityValidationException("BG-ACT-003: A background result cannot create a new invocation.");
         if (state.InputSnapshot is null)
-            throw new InvalidOperationException("BG-ACT-003: Background admission requires committed immutable inputs.");
+            throw new BackgroundActivityValidationException("BG-ACT-003: Background admission requires committed immutable inputs.");
         var prepared = ActivityAttemptActivationClaimer.PrepareBackgroundInvokeClaim(timeProvider, workItem, payload, state);
         var occurredAt = prepared.Commit.Checkpoint.OccurredAt;
         workId = RuntimeChainId.Derive($"background:{workItem.WorkflowExecutionId}", prepared.Claim.Attempt.AttemptId);
@@ -83,6 +87,6 @@ internal sealed class BackgroundActivityCoordinator(
             request.ContractFingerprint != state.InputSnapshot?.ContractFingerprint ||
             state.Attempts?.Any(attempt => attempt.AttemptId == request.AttemptId && attempt.EndedAt is null) != true ||
             !JsonElement.DeepEquals(JsonSerializer.SerializeToElement(request.InputSnapshot), JsonSerializer.SerializeToElement(state.InputSnapshot)))
-            throw new InvalidOperationException("BG-ACT-003: The receipt does not belong to the current pinned native invocation.");
+            throw new BackgroundActivityValidationException("BG-ACT-003: The receipt does not belong to the current pinned native invocation.");
     }
 }
