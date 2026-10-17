@@ -66,7 +66,7 @@ namespace Elsa.Activities.Http.IntegrationTests;
 /// the CLR construction descriptor depends on that type registration to resolve an activity's stable alias.
 /// </para>
 /// </remarks>
-public sealed class HttpEndpointHostFixture : IAsyncDisposable
+public sealed partial class HttpEndpointHostFixture : IAsyncDisposable
 {
     /// <summary>The status code the out-of-base-path sentinel terminal middleware returns (proves pass-through).</summary>
     public const int SentinelStatusCode = StatusCodes.Status418ImATeapot;
@@ -101,6 +101,9 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
     public IServiceProvider Services => _host.Services;
 
     public static Task<HttpEndpointHostFixture> StartAsync() => StartAsync(null, null);
+
+    public static Task<HttpEndpointHostFixture> StartAsync(Action<IServiceCollection> configureServices) =>
+        StartAsync(configureServices, null);
 
     /// <summary>
     /// Starts the production HTTP runtime against an isolated EF Core SQLite database and applies the requested
@@ -225,6 +228,8 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
                     // feature only registers the structure handler; construction goes through the primitives'
                     // ClrActivityConstructor, so the primitives feature must precede it (already does).
                     new ActivitiesSequenceFeature().ConfigureServices(services);
+                    // Composites only some consuming test projects compile (the Flowchart, for spec 238).
+                    ConfigureOptionalCompositeFeatures(services);
                     new ActivitiesHttpFeature().ConfigureServices(services);
 
                     // The real route-table stack. The REAL resolver, route-table startup task, and
@@ -513,6 +518,51 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         await PublishAsync(executable);
     }
 
+    /// <summary>
+    /// Registers composites that only some consuming test projects compile: the integration tests add the Flowchart
+    /// (<c>HttpEndpointHostFixture.Flowchart.cs</c>). The command-cost tests link this file without it.
+    /// </summary>
+    static partial void ConfigureOptionalCompositeFeatures(IServiceCollection services);
+
+    // ---- Start-path placement builders (spec 238) ----
+
+    /// <summary>A start-trigger <see cref="HttpEndpoint"/> (<c>CanStartWorkflow = true</c>, trigger-marked) on <paramref name="path"/>.</summary>
+    public ExecutableNode NewStartEndpointNode(string artifactId, string path, string method, string nodeId) =>
+        NewHttpEndpointNode($"{artifactId}-{nodeId}", path, $"{artifactId}-{nodeId}-result", [method],
+            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: true, isTriggerNode: true, nodeId: nodeId);
+
+    /// <summary>A mid-flow <see cref="HttpEndpoint"/> wait (<c>CanStartWorkflow = false</c>, not trigger-marked).</summary>
+    public ExecutableNode NewWaitEndpointNode(string artifactId, string path, string method, string nodeId) =>
+        NewHttpEndpointNode($"{artifactId}-{nodeId}", path, $"{artifactId}-{nodeId}-result", [method],
+            authorize: null, policy: null, requestSizeLimit: null, canStartWorkflow: false, isTriggerNode: false, nodeId: nodeId);
+
+    /// <summary>A real Sequence node over <paramref name="children"/>, in order.</summary>
+    public ExecutableNode NewSequenceNode(string nodeId, IReadOnlyList<ExecutableNode> children)
+    {
+        var descriptorPayload = ClrConstruction.Payload(Services.GetRequiredService<IPayloadSerializer>(), typeof(SequenceActivity));
+        return new ExecutableNode(
+            executableNodeId: nodeId,
+            authoredActivityId: $"authored-{nodeId}",
+            activityType: typeof(SequenceActivity).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptor: ClrRuntimeDescriptor(descriptorPayload),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            metadata: new Dictionary<string, string>(),
+            childSlots: SequenceShape.ChildSlots(children),
+            structure: SequenceShape.Structure(children),
+            activityContract: UnitActivityContract(typeof(SequenceActivity), descriptorPayload, [], [ActivityOutcomes.Done, ActivityOutcomes.Break]));
+    }
+
+    /// <summary>Publishes and indexes a workflow whose root activity is <paramref name="root"/>.</summary>
+    public Task PublishRootAsync(string artifactId, ExecutableNode root) =>
+        PublishAsync(new WorkflowExecutable(
+            identity: NewIdentity(artifactId),
+            rootActivity: root,
+            resumeTargets: new Dictionary<string, WorkflowExecutableResumeTarget>(),
+            createdAt: DateTimeOffset.UtcNow,
+            compatibilityMetadata: new Dictionary<string, string>(),
+            incidentStrategy: IncidentStrategyBuiltIns.FaultReference));
+
     // ---- Synchronous response publish helpers ----
 
     /// <summary>
@@ -580,7 +630,7 @@ public sealed class HttpEndpointHostFixture : IAsyncDisposable
         string path,
         string method,
         string resultValueId,
-        TimeSpan requestTimeout,
+        TimeSpan? requestTimeout,
         TimeSpan stallDuration)
     {
         var endpoint = NewHttpEndpointNode($"{artifactId}-endpoint", path, resultValueId, [method],

@@ -35,6 +35,8 @@
     <ProjectReference Include="..\..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
     <!-- The Sequence composite so spec 089 D scenario 2 can sequence two HttpEndpoints in one workflow. -->
     <ProjectReference Include="..\..\..\..\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
+    <!-- The Flowchart composite so spec 238 can publish a Flowchart with two start-trigger HttpEndpoints. -->
+    <ProjectReference Include="..\..\..\..\src\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
     <ProjectReference Include="..\..\..\..\src\Events\Elsa.Events\Elsa.Events.csproj" />
     <ProjectReference Include="..\..\..\..\src\Expressions\Elsa.Expressions\Elsa.Expressions.csproj" />
     <ProjectReference Include="..\..\..\..\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
@@ -58,6 +60,8 @@
     <Compile Include="../../../Persistence/EntityFramework/Tests/CommandCaptureInterceptor.cs" Link="CommandCaptureInterceptor.cs" />
     <None Include="../Fixtures/ResponseReplayHost/Fixtures/current-format-external-closure.json" Link="Fixtures/ResponseReplayHost/Fixtures/current-format-external-closure.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../Fixtures/ResponseReplayHost/Fixtures/current-format-external-manifest.json" Link="Fixtures/ResponseReplayHost/Fixtures/current-format-external-manifest.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../Fixtures/ResponseReplayHost/Fixtures/http-sync-default-external-closure.json" Link="Fixtures/ResponseReplayHost/Fixtures/http-sync-default-external-closure.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../Fixtures/ResponseReplayHost/Fixtures/http-sync-default-external-manifest.json" Link="Fixtures/ResponseReplayHost/Fixtures/http-sync-default-external-manifest.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="CommandBudgets/ef-command-budgets.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

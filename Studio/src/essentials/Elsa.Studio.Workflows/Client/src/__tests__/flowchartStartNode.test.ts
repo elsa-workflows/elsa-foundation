@@ -123,26 +123,49 @@ describe("setFlowchartStartNode", () => {
 });
 
 describe("findMisplacedStartTriggers", () => {
-  it("reports the reported repro: an If authored first, then an Http Endpoint that can start", () => {
-    // The trigger is neither the start nor connected into, so execution can never reach it.
-    const authored = flowchart([node("if"), trigger("http")], { startNodeId: "if" });
+  // Spec 238: a start trigger is an entry point when nothing connects into it, and misplaced when something
+  // does and it is not the start node — publishing refuses that placement.
 
-    expect(findMisplacedStartTriggers(authored).map(activity => activity.nodeId)).toEqual(["http"]);
-  });
-
-  it("reports nothing once the trigger is the start node", () => {
-    const fixed = setFlowchartStartNode(flowchart([node("if"), trigger("http")], { startNodeId: "if" }), "http");
-
-    expect(findMisplacedStartTriggers(fixed)).toEqual([]);
-  });
-
-  it("reports nothing when the trigger is connected into, since execution can arrive", () => {
+  it("reports a start trigger that something connects into and that is not the start node", () => {
     const wired = flowchart([node("if"), trigger("http")], {
       startNodeId: "if",
       connections: [{ from: "if", to: "http" }]
     });
 
-    expect(findMisplacedStartTriggers(wired)).toEqual([]);
+    expect(findMisplacedStartTriggers(wired).map(activity => activity.nodeId)).toEqual(["http"]);
+  });
+
+  it("reports nothing once the connected-into trigger is the start node", () => {
+    const wired = flowchart([node("if"), trigger("http")], {
+      startNodeId: "if",
+      connections: [{ from: "if", to: "http" }]
+    });
+
+    expect(findMisplacedStartTriggers(setFlowchartStartNode(wired, "http"))).toEqual([]);
+  });
+
+  it("reports nothing for a second start trigger heading its own branch, since it is an entry point", () => {
+    const multiTrigger = flowchart([trigger("http-a"), node("after-a"), trigger("http-b"), node("after-b")], {
+      startNodeId: "http-a",
+      connections: [{ from: "http-a", to: "after-a" }, { from: "http-b", to: "after-b" }]
+    });
+
+    expect(findMisplacedStartTriggers(multiTrigger)).toEqual([]);
+  });
+
+  it("reports nothing for a start trigger that nothing connects into, even when it is not the start node", () => {
+    const authored = flowchart([node("if"), trigger("http")], { startNodeId: "if" });
+
+    expect(findMisplacedStartTriggers(authored)).toEqual([]);
+  });
+
+  it("ignores a mid-flow trigger that cannot start the workflow, however it is connected", () => {
+    const midFlow = flowchart([node("if"), trigger("http", false)], {
+      startNodeId: "if",
+      connections: [{ from: "if", to: "http" }]
+    });
+
+    expect(findMisplacedStartTriggers(midFlow)).toEqual([]);
   });
 
   it("ignores activities that cannot start a workflow, however disconnected", () => {

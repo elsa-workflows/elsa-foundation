@@ -502,8 +502,10 @@ public sealed class ClrAssemblyScanner(
     private static InvalidOperationException InvalidCredentialDeclaration(Type type, PropertyInfo property, string reason) =>
         new($"Invalid credential input declaration for '{type.FullName}.{property.Name}': {reason}");
 
+    // A type with unbound generic parameters (an open generic, or a type nested in one) can never be instantiated,
+    // and the runtime registry skips it too, so cataloging it would offer an activity that always fails to activate.
     private static bool IsActivityType(Type type) =>
-        type is { IsClass: true, IsAbstract: false }
+        type is { IsClass: true, IsAbstract: false, ContainsGenericParameters: false }
         && type.GetInterfaces().Any(i => i.FullName == ActivityInterfaceFullName);
 
     private static Type? FindTypedActivityResult(Type activityType)

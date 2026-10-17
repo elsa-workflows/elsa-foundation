@@ -240,6 +240,25 @@ describe("workflow run workbench incident navigation", () => {
     await vi.waitFor(() => expect(container.querySelector(".wf-instance-detail-workbench.narrow-canvas-view")).toBeTruthy());
   });
 
+  it("opens and focuses an exact activity execution deep link even when it is absent from the run summary", async () => {
+    api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [], incidents: [] }));
+    api.supportsActivityExecutionInspection.mockResolvedValue(true);
+    api.getActivityExecutionInspection.mockResolvedValue(activityInspection({ incidents: [] }));
+
+    renderWorkbench("activity", "execution-target");
+
+    await vi.waitFor(() => expect(container.querySelector(".wf-instance-inspector [data-tab-id='activity']")?.getAttribute("aria-selected")).toBe("true"));
+    await vi.waitFor(() => expect(api.getActivityExecutionInspection).toHaveBeenCalledWith(
+      expect.anything(), "run-1", "execution-target", expect.anything()));
+    await vi.waitFor(() => expect(container.querySelector(".wf-activity-overview")?.textContent).toContain("Selected activity"));
+    await vi.waitFor(() => expect(container.querySelector("[data-flow-node-id='target-node']")?.getAttribute("data-selected")).toBe("true"));
+    expect(mockFlowInstance.fitView).toHaveBeenCalledWith({
+      nodes: [{ id: "target-node" }],
+      duration: 220,
+      padding: 0.35
+    });
+  });
+
   it("does not restore Activity or reopen the drawer after a user changes tab and closes during lookup", async () => {
     observedWidth = 600;
     api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [] }));
@@ -900,11 +919,15 @@ function buttonByText(scope: ParentNode, text: string) {
   return [...scope.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.trim() === text);
 }
 
-function renderWorkbench(initialInspectorTab: "issues" | "details" | "timeline" | "activity" = "issues") {
+function renderWorkbench(
+  initialInspectorTab: "issues" | "details" | "timeline" | "activity" = "issues",
+  initialActivityExecutionId: string | null = null
+) {
   flushSync(() => root.render(<WorkflowInstanceDetailsWorkbench
     context={{} as StudioEndpointContext}
     ai={{ promptActions: { list: () => [] } } as unknown as StudioAiContributionApi}
     workflowExecutionId="run-1"
+    initialActivityExecutionId={initialActivityExecutionId}
     initialInspectorTab={initialInspectorTab}
     navigate={() => {}}
   />));

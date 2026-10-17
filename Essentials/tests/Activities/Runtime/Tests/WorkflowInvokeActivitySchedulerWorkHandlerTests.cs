@@ -804,6 +804,61 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
         Assert.NotNull(await _durableValueStateStore.FindAsync("wfexec-1", "checkpoint:completion"));
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task StructuralCompletion_CommittedOutputSnapshotsRespectTheContractCapturePolicy(bool requiresEncryption, bool notifyParent)
+    {
+        var outputValue = $"callback-output-{Guid.NewGuid():N}";
+        var projection = new ActivityResultProjectionContract(
+            "output",
+            "output",
+            new ValueTypeDescriptor("String"),
+            isRequired: true,
+            policy: ActivityValuePolicy.Default with { RequiresEncryption = requiresEncryption });
+        var executable = NewCallbackExecutable([projection]);
+        await _executableStore.SaveAsync(executable);
+        await _activityStateStore.SaveAsync(NewCallbackParentState(executable));
+        await _activityStateStore.SaveAsync(NewCompletedCallbackChildState());
+        await using var provider = NewProvider(
+            new FixedActivityActivator(new OutputCompletionCheckpointParticipantActivity(outputValue)),
+            includeInspection: true);
+        if (notifyParent)
+        {
+            var handler = new WorkflowNotifyParentActivitySchedulerWorkHandler(
+                provider.GetRequiredService<IServiceScopeFactory>(),
+                new FakeTimeProvider(_now));
+            await handler.HandleAsync(NewParentNotificationWorkItem("notification-output-work", "notification-output-command"));
+        }
+        else
+        {
+            var handler = new WorkflowParentActivityCompletionSchedulerWorkHandler(
+                provider.GetRequiredService<IServiceScopeFactory>(),
+                new FakeTimeProvider(_now));
+            await handler.HandleAsync(NewParentCallbackWorkItem("callback-output-work", "callback-output-command"));
+        }
+
+        var inspection = await _inspectionStore.FindAsync("wfexec-1", "actexec-1");
+        var output = Assert.Single(inspection!.ValueSnapshots, snapshot => snapshot.Subject == ActivityExecutionInspectionValueSubject.ActivityOutput);
+        Assert.Equal("output", output.Name);
+        Assert.Equal(requiresEncryption, output.IsSensitive);
+        if (requiresEncryption)
+        {
+            var completedParent = await _activityStateStore.FindAsync("wfexec-1", "actexec-1");
+            Assert.Equal(ValuePresence.Withheld, completedParent!.Completion!.Result.Presence);
+            Assert.Equal(RuntimePayloadCaptureMode.None, output.CaptureMode);
+            Assert.Null(output.Payload);
+            Assert.DoesNotContain(outputValue, JsonSerializer.Serialize(inspection), StringComparison.Ordinal);
+        }
+        else
+        {
+            Assert.Equal(RuntimePayloadCaptureMode.DiagnosticSnapshot, output.CaptureMode);
+            Assert.Contains(outputValue, output.Payload!.Value.GetRawText(), StringComparison.Ordinal);
+        }
+    }
+
     private WorkflowInvokeActivitySchedulerWorkHandler NewHandler(ServiceProvider provider) =>
         new(provider.GetRequiredService<IServiceScopeFactory>(), new FakeTimeProvider(_now));
 
@@ -938,6 +993,32 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
             new Dictionary<string, string>(),
             new Dictionary<string, string>());
 
+    private RuntimeSchedulerWorkItem NewParentNotificationWorkItem(string workItemId, string commandId) =>
+        new(
+            workItemId,
+            "wfexec-1",
+            commandId,
+            WorkflowExecutionCommandKind.NotifyParentActivity,
+            "envelope-1",
+            $"wfexec-1:notification:{workItemId}",
+            _now,
+            _now,
+            32,
+            JsonSerializer.SerializeToElement(new RuntimeNotifyParentCommandPayload(
+                NewIdentity(),
+                "node-parent",
+                "actexec-1",
+                parentActivityExecutionId: null,
+                branchId: null,
+                notifyingChildActivityExecutionId: "actexec-child",
+                notifyingChildExecutableNodeId: "node-child",
+                notifyingChildIterationId: null,
+                code: "test-notification",
+                payload: null,
+                reason: RuntimeNotifyParentCommandPayload.NotifyParentReason)),
+            new Dictionary<string, string>(),
+            new Dictionary<string, string>());
+
     private ActivityExecutionState NewTypedRunningState(WorkflowExecutable? executable = null)
     {
         executable ??= NewTypedExecutable();
@@ -1045,7 +1126,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
             0,
             new Dictionary<string, string>());
 
-    private static WorkflowExecutable NewCallbackExecutable()
+    private static WorkflowExecutable NewCallbackExecutable(IReadOnlyCollection<ActivityResultProjectionContract>? resultProjections = null)
     {
         var descriptor = JsonSerializer.SerializeToElement(new { type = "callback-parent" });
         var contract = new ActivityContract(
@@ -1054,7 +1135,9 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
             "test/callback-parent",
             descriptor,
             [],
-            new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
+            resultProjections is { Count: > 0 }
+                ? new ActivityResultContract(new ValueTypeDescriptor("test/callback-result"), true, ActivityValuePolicy.Default, resultProjections)
+                : new ActivityResultContract(new ValueTypeDescriptor("Elsa.Unit"), true, ActivityValuePolicy.Default, []),
             [ActivityOutcomes.Done],
             new ActivityActivationRequirement("test/callback-parent", "test/callback-parent"));
         var child = new ExecutableNode(
@@ -1377,9 +1460,14 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
 
     private sealed class ChildSchedulingDeferringStructuralActivity : StructuralActivity, IRuntimeStructuralActivity
     {
+        private readonly ActivitySchedulingProvenance? _schedulingProvenance;
+
+        public ChildSchedulingDeferringStructuralActivity(ActivitySchedulingProvenance? schedulingProvenance = null) =>
+            _schedulingProvenance = schedulingProvenance;
+
         public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
         {
-            context.ScheduleChildActivity("child-node");
+            context.ScheduleChildActivity("child-node", schedulingProvenance: _schedulingProvenance);
             return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
         }
     }
@@ -1440,6 +1528,38 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
             ValueTask.FromResult(new RuntimeActivityCompletionCheckpointPreparation(
                 [CheckpointChange("completion", context.WorkflowExecutionId, capturedAt)],
                 ActivityTransition.Complete(ActivityUnit.Value)));
+    }
+
+    private sealed class OutputCompletionCheckpointParticipantActivity(string outputValue) :
+        StructuralActivity,
+        IRuntimeActivityChildCompletionHandler,
+        IRuntimeActivityChildNotificationHandler,
+        IRuntimeActivityCheckpointParticipant
+    {
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildNotifiedAsync(
+            IRuntimeActivityExecutionContext context,
+            ActivityChildNotifiedContext notification) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+
+        public ValueTask<IReadOnlyCollection<RuntimeStateChange<DurableValueState>>> PrepareEntryCheckpointAsync(
+            IRuntimeActivityExecutionContext context,
+            IReadOnlyDictionary<string, object?> effectiveInputs,
+            DateTimeOffset capturedAt,
+            CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("The parent callback path must not prepare entry.");
+
+        public ValueTask<RuntimeActivityCompletionCheckpointPreparation> PrepareCompletionCheckpointAsync(
+            IRuntimeActivityExecutionContext context,
+            IReadOnlyCollection<DurableValueState> persistedValues,
+            DateTimeOffset capturedAt,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(new RuntimeActivityCompletionCheckpointPreparation(
+                [],
+                ActivityTransition.Complete<IReadOnlyDictionary<string, object?>>(
+                    new Dictionary<string, object?> { ["output"] = outputValue })));
     }
 
     private sealed class CompletingCheckpointParticipantActivity :

@@ -74,7 +74,7 @@ internal sealed class Elsa3HttpTriggerResponseModeRewrite : IElsa3NodeRewrite
         var parent = context.Node.Parent;
         var parentPlan = parent is null ? null : context.Plan.Find(parent);
         if (parentPlan is { Resolved: null })
-            return; // the container itself is unconvertible (for example a Flowchart, until #2705) and already reported
+            return; // the container itself is unconvertible and already reported
 
         var slotIndex = parentPlan?.Slots.FindIndex(slot => ReferenceEquals(slot.Child, endpoint)) ?? -1;
         var slotName = slotIndex < 0 ? null : parentPlan!.Slots[slotIndex].SlotName;
@@ -134,5 +134,8 @@ internal sealed class Elsa3HttpTriggerResponseModeRewrite : IElsa3NodeRewrite
         var siblings = parent!.Activities!;
         siblings.Insert(siblings.IndexOf(endpoint) + 1, setNode);
         parentPlan!.Slots.Insert(slotIndex + 1, new Elsa3SlotChild(slotName!, null, setNode));
+        // In a list the position orders it; in a flowchart graph conversion connects it after the endpoint (spec 239 R-10).
+        if (Elsa3FlowchartGraphBuilder.IsFlowchart(parentPlan))
+            context.Node.FollowedBy.Insert(0, setNode);
     }
 }

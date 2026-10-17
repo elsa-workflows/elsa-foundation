@@ -46,13 +46,28 @@ public sealed class Elsa3ReusableTerminalTests
     public async Task End_completes_with_done_and_a_natural_end_needs_no_node()
     {
         var catalog = RealActivityCatalog.Create();
+        var root = Activity("root", "Elsa.Flowchart");
+        root.Activities = [Activity("end", "Elsa.End")];
 
-        var result = await ConversionServices.ConvertAsync(catalog, Reusable(Sequence("root", Activity("end", "Elsa.End"))), isReusable: true);
+        var result = await ConversionServices.ConvertAsync(catalog, Reusable(root), isReusable: true);
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         Assert.Equal("done", Text(Input(Node(result.Value!.State, "end"), "outcome")));
         Assert.Equal([("done", "Done")], Outcomes(result.Value));
         Assert.Empty(Errors(await GraphProviderProof.ValidateAsync(catalog, result.Value)));
+    }
+
+    [Fact]
+    public async Task End_outside_the_root_flowchart_is_unconvertible()
+    {
+        // Elsa 3 End ends only its enclosing flowchart, and does nothing in a Sequence (spec 239 FR-011, amends D-3).
+        var result = await ConversionServices.ConvertAsync(
+            RealActivityCatalog.Create(), Reusable(Sequence("root", Activity("end", "Elsa.End"))), isReusable: true);
+
+        Assert.False(result.Succeeded);
+        var error = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, error.Code);
+        Assert.Equal("end", error.Metadata["ActivityNodeId"]);
     }
 
     [Theory]

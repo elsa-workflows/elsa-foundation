@@ -11,10 +11,12 @@ namespace Elsa.Activities.Http.Activities;
 /// </summary>
 /// <remarks>
 /// <see cref="ToMetadata"/> (write) and <see cref="FromMetadata"/> (read) are paired here as the single owner of
-/// the wire encoding, so the describe side and the middleware read side cannot drift (#592 item 14). Defaults are
-/// omitted from the metadata to keep bindings lean: <c>Authorize == false</c>, a null <c>Policy</c>, a null
-/// <c>RequestTimeout</c>, and a null <c>RequestSizeLimit</c> each contribute no key; reading absent keys yields the
-/// same defaults, so <c>FromMetadata(ToMetadata()) == this</c> round-trips.
+/// the wire encoding, so the describe side and the middleware read side cannot drift (#592 item 14). Enforcement
+/// defaults are omitted from the metadata to keep bindings lean: <c>Authorize == false</c>, a null <c>Policy</c>, a
+/// null <c>RequestTimeout</c>, and a null <c>RequestSizeLimit</c> each contribute no key. The response mode is always
+/// stamped so new publications preserve their selected value; absent response-mode metadata still reads as Async for
+/// compatibility with existing persisted triggers and bookmarks. Thus <c>FromMetadata(ToMetadata()) == this</c>
+/// round-trips.
 /// </remarks>
 public sealed record HttpEndpointStimulusOptions(
     bool Authorize = false,
@@ -23,14 +25,15 @@ public sealed record HttpEndpointStimulusOptions(
     long? RequestSizeLimit = null,
     ResponseMode ResponseMode = ResponseMode.Async)
 {
-    /// <summary>An options value with every option at its default (contributes no metadata).</summary>
+    /// <summary>An options value with every option at its compatibility default.</summary>
     public static readonly HttpEndpointStimulusOptions None = new();
 
     /// <summary>
     /// Projects the non-default options to their invariant metadata encoding: <c>authorize</c> as
     /// <c>"true"</c> (omitted when false), <c>policy</c> as the raw string, <c>requestTimeout</c> as an invariant
-    /// <c>TimeSpan</c> <c>"c"</c> string (e.g. <c>00:00:30</c>), and <c>requestSizeLimit</c> as an invariant
-    /// <c>long</c> string.
+    /// <c>TimeSpan</c> <c>"c"</c> string (e.g. <c>00:00:30</c>), <c>requestSizeLimit</c> as an invariant
+    /// <c>long</c> string, and <c>responseMode</c> as its enum member name. Response mode is always emitted so new
+    /// publications record their selected behavior explicitly.
     /// </summary>
     public IReadOnlyDictionary<string, string> ToMetadata()
     {
@@ -48,10 +51,7 @@ public sealed record HttpEndpointStimulusOptions(
         if (RequestSizeLimit is { } sizeLimit)
             metadata[HttpEndpointRouting.RequestSizeLimitMetadataKey] = sizeLimit.ToString(CultureInfo.InvariantCulture);
 
-        // Omit the response mode when Async (the default) so an async endpoint round-trips to the same empty
-        // metadata as before response modes existed. Only a Sync endpoint contributes a key.
-        if (ResponseMode != ResponseMode.Async)
-            metadata[HttpEndpointRouting.ResponseModeMetadataKey] = ResponseMode.ToString();
+        metadata[HttpEndpointRouting.ResponseModeMetadataKey] = ResponseMode.ToString();
 
         return metadata;
     }
@@ -127,7 +127,7 @@ public sealed record HttpEndpointStimulusOptions(
                 && long.TryParse(sizeLimit, NumberStyles.None, CultureInfo.InvariantCulture, out var parsedSizeLimit)
                     ? parsedSizeLimit
                     : null,
-            // Absent or unparseable ⇒ Async (the default): an endpoint published before response modes, or a garbled key,
+            // Absent or unparseable ⇒ Async (the legacy metadata default): an endpoint published before response modes, or a garbled key,
             // preserves today's async/202 contract rather than silently opting into a live write.
             // Enum.TryParse accepts bare numeric strings (e.g. "99") as undefined values, so IsDefined guards them.
             ResponseMode: metadata.TryGetValue(HttpEndpointRouting.ResponseModeMetadataKey, out var responseMode)

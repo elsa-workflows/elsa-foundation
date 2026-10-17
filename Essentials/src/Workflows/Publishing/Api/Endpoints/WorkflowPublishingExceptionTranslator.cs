@@ -3,6 +3,7 @@ using Elsa.Primitives.Exceptions;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Publishing.Handlers;
 using Elsa.Workflows.Publishing.Services;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Microsoft.AspNetCore.Http;
 using NativeEndpoints;
 
@@ -28,6 +29,9 @@ internal sealed class PublicationPolicyRevisionConflictException()
 /// <see cref="PublicationPolicyResolutionException"/> all carry a failure code, so
 /// <see cref="WorkflowPublishingFaultRenderer"/> renders them with an <c>errorCode</c> extension before this
 /// translator ever runs; only the codeless arms below remain here.
+/// A <see cref="WorkflowTriggerPreflightException"/> with the <see cref="WorkflowTriggerPreflightException.PlacementFacet"/>
+/// is an authoring error, a start trigger no run can start from (spec 238), so it is a 400 with its guidance. Every
+/// other preflight facet is a host configuration failure and stays unmapped.
 /// </remarks>
 internal sealed class WorkflowPublishingExceptionTranslator : IEndpointExceptionTranslator
 {
@@ -35,6 +39,8 @@ internal sealed class WorkflowPublishingExceptionTranslator : IEndpointException
     {
         EntityNotFoundException => EndpointProblem.General(StatusCodes.Status404NotFound, exception.Message),
         ArgumentException => EndpointProblem.General(StatusCodes.Status400BadRequest, exception.Message),
+        WorkflowTriggerPreflightException { Facet: WorkflowTriggerPreflightException.PlacementFacet } =>
+            EndpointProblem.General(StatusCodes.Status400BadRequest, exception.Message),
         _ => null
     };
 }

@@ -4,8 +4,9 @@ using Elsa3.Models;
 namespace Elsa3.Mapping.Conversion;
 
 /// <summary>
-/// Converts Elsa 3 nodes one at a time, for graph conversion (#2705) to call per Flowchart child; graph-level members
-/// (connections, start, join and fork) are left to the caller. Single implementation per application.
+/// Converts Elsa 3 nodes one at a time from a definition prepared as a whole. A flowchart arrives with its connections
+/// and start node (spec 239); a FlowFork, FlowJoin or Start has no node of its own and is refused. Single implementation
+/// per application.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -16,9 +17,10 @@ namespace Elsa3.Mapping.Conversion;
 /// sibling nodes resolves.
 /// </para>
 /// <para>
-/// A graph-level node (a Flowchart, or a member only graph conversion can place) does not stop the rest of the
-/// definition from being prepared: it is deferred, reported in <see cref="Elsa3NodeConversionContext.Deferred"/>, and
-/// its children are prepared like any other node. Never throws for input or catalog content.
+/// A graph-level node a later conversion stage owns would not stop the rest of the definition from being prepared: it
+/// is deferred, reported in <see cref="Elsa3NodeConversionContext.Deferred"/>, and its children are prepared like any
+/// other node. No built-in shape is deferred since graph conversion runs during preparation (spec 239). Never throws
+/// for input or catalog content.
 /// </para>
 /// </remarks>
 public interface IElsa3NodeConverter
@@ -32,11 +34,15 @@ public interface IElsa3NodeConverter
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Converts <paramref name="node"/> (matched by node id within the prepared definition) and its non-graph
-    /// descendants. Fails with the node's diagnostics when the node or a descendant is graph-level, so a graph never
-    /// loses a child silently; on success the diagnostics are the node's warnings.
+    /// Converts <paramref name="node"/> (matched by node id within the prepared definition) and its descendants. Fails
+    /// with the node's diagnostics when the node or a descendant is unconvertible, so a graph never loses a child
+    /// silently, and fails for a FlowFork, FlowJoin or Start, which has no node of its own; on success the diagnostics
+    /// are the node's warnings.
     /// </summary>
-    /// <exception cref="ArgumentException">The node is not part of the definition <paramref name="context"/> was prepared from.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="context"/> was not created by this converter, or the node is not part of the definition it was
+    /// prepared from.
+    /// </exception>
     ValueTask<Elsa3MigrationResult<ActivityNode>> ConvertNodeAsync(
         Elsa3NodeConversionContext context,
         Elsa3Activity node,
@@ -44,18 +50,18 @@ public interface IElsa3NodeConverter
 }
 
 /// <summary>
-/// A definition prepared for node conversion by <see cref="IElsa3NodeConverter.PrepareAsync"/>: normalized and
-/// lowered definition-wide. Only a node converter creates one.
+/// A definition prepared for node conversion by <see cref="IElsa3NodeConverter.PrepareAsync"/>. Each node converter
+/// derives its own context to carry what its <see cref="IElsa3NodeConverter.PrepareAsync"/> computed, and accepts in
+/// <see cref="IElsa3NodeConverter.ConvertNodeAsync"/> only the contexts it created.
 /// </summary>
-public sealed class Elsa3NodeConversionContext
+public abstract class Elsa3NodeConversionContext
 {
-    internal Elsa3NodeConversionContext(
-        Elsa3ConversionRequest request,
-        Elsa3ConversionPlan plan,
-        IReadOnlyList<Elsa3MigrationDiagnostic> deferred)
+    /// <summary>Creates a context for <paramref name="request"/> with the graph-level nodes left to the caller.</summary>
+    protected Elsa3NodeConversionContext(Elsa3ConversionRequest request, IReadOnlyList<Elsa3MigrationDiagnostic> deferred)
     {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(deferred);
         Request = request;
-        Plan = plan;
         Deferred = deferred;
     }
 
@@ -64,9 +70,7 @@ public sealed class Elsa3NodeConversionContext
 
     /// <summary>
     /// The graph-level nodes left to the caller, one <c>ELS3-ACTIVITY-GRAPH-CONVERSION-PENDING</c> diagnostic each, with
-    /// the node id in its metadata.
+    /// the node id in its metadata. Empty for every built-in shape since flowchart graph conversion (spec 239).
     /// </summary>
     public IReadOnlyList<Elsa3MigrationDiagnostic> Deferred { get; }
-
-    internal Elsa3ConversionPlan Plan { get; }
 }

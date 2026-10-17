@@ -43,8 +43,35 @@ public static class Elsa3ActivityDiagnosticCodes
     /// <summary>A mode or placement Elsa 4 cannot express (Switch MatchAny, misplaced or multi-outcome Complete/End, …).</summary>
     public const string UnsupportedMode = "ELS3-ACTIVITY-UNSUPPORTED-MODE";
 
-    /// <summary>Flowchart, FlowFork, FlowJoin and Start need graph conversion, which #2705 owns.</summary>
+    /// <summary>
+    /// No longer raised by any built-in map entry: graph conversion (spec 239) converts Flowchart, FlowFork, FlowJoin and
+    /// Start. Kept because a code is never reused.
+    /// </summary>
     public const string GraphConversionPending = "ELS3-ACTIVITY-GRAPH-CONVERSION-PENDING";
+
+    /// <summary>Two activities of one flowchart share an id, so connections and Elsa 4 node ids cannot tell them apart.</summary>
+    public const string GraphDuplicateNodeId = "ELS3-ACTIVITY-GRAPH-DUPLICATE-NODE-ID";
+
+    /// <summary>A connection names a node that is not a child of its flowchart, or a container that is not a flowchart has connections.</summary>
+    public const string GraphConnectionInvalid = "ELS3-ACTIVITY-GRAPH-CONNECTION-INVALID";
+
+    /// <summary>A connection's port is not mapped, and the Elsa 4 activity does not emit it.</summary>
+    public const string GraphOutcomeUnmapped = "ELS3-ACTIVITY-GRAPH-OUTCOME-UNMAPPED";
+
+    /// <summary>A FlowJoin Elsa 4 cannot express exactly: WaitAny with concurrent inbound paths, WaitAll with a path that may not run, or a mode set by expression.</summary>
+    public const string GraphJoinUnsupported = "ELS3-ACTIVITY-GRAPH-JOIN-UNSUPPORTED";
+
+    /// <summary>A loop (back connection) whose shape Elsa 4's flowchart rejects.</summary>
+    public const string GraphLoopUnsupported = "ELS3-ACTIVITY-GRAPH-LOOP-UNSUPPORTED";
+
+    /// <summary>A Start activity or a FlowFork at the start leads to more than one node; an Elsa 4 flowchart starts at one.</summary>
+    public const string GraphStartAmbiguous = "ELS3-ACTIVITY-GRAPH-START-AMBIGUOUS";
+
+    /// <summary>
+    /// A start trigger sits where an Elsa 4 run cannot begin: a flowchart child with an inbound connection that is not the
+    /// start node (spec 238's start-path rule, which refuses it at publish).
+    /// </summary>
+    public const string GraphStartTriggerMisplaced = "ELS3-ACTIVITY-GRAPH-START-TRIGGER-MISPLACED";
 
     /// <summary>Activities nest deeper than the conversion supports.</summary>
     public const string NestingTooDeep = "ELS3-ACTIVITY-NESTING-TOO-DEEP";
@@ -90,4 +117,7 @@ public static class Elsa3ActivityDiagnosticCodes
 
     /// <summary>A reusable workflow's declared outcome is reached by no Complete; it is dropped from the contract.</summary>
     public const string OutcomeUnreached = "ELS3-BEHAVIOUR-OUTCOME-UNREACHED";
+
+    /// <summary>A connection Elsa 3 never follows (leaving Complete, End or Break, or a FlowFork port outside its branches) is removed.</summary>
+    public const string DeadConnectionRemoved = "ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED";
 }

@@ -151,8 +151,17 @@ export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [
 }) {
   const workflowExecutionId = readWorkflowExecutionIdFromUrl();
   const searchParams = new URLSearchParams(window.location.search);
-  const initialActivityExecutionId = searchParams.get("activityExecutionId");
-  const initialInspectorTab = searchParams.get("tab") === "issues" ? "issues" : "timeline";
+  const initialActivityExecutionId = searchParams.get("activityExecutionId")?.trim() || null;
+  const requestedInspectorTab = searchParams.get("tab");
+  const initialInspectorTab = requestedInspectorTab === "issues"
+    ? "issues"
+    : requestedInspectorTab === "details"
+      ? "details"
+      : requestedInspectorTab === "timeline"
+        ? "timeline"
+        : requestedInspectorTab === "activity" || initialActivityExecutionId
+          ? "activity"
+          : "timeline";
 
   return (
     <WorkflowsPageFrame

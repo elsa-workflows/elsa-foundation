@@ -1,0 +1,171 @@
+{
+  "name": "test http",
+  "definitionId": "14P4fBI3wlm",
+  "state": {
+    "variables": [
+      {
+        "referenceKey": "d0fd29cf-92c1-4377-ad4e-08c5986815eb",
+        "name": "InputRequest",
+        "default": null,
+        "type": {
+          "alias": "Object",
+          "collectionKind": "Single"
+        },
+        "storageDriverType": null
+      }
+    ],
+    "rootActivity": {
+      "nodeId": "flowchart-403af2f3",
+      "activityVersionId": "actver_KisJdvFv57YzYYbp0L7FoqBqtsiwGMC5HOpUAvQgEU0",
+      "inputs": [],
+      "outputs": [],
+      "structure": {
+        "kind": "elsa.flowchart.structure",
+        "schemaVersion": "1.0.0",
+        "payload": {
+          "activities": [
+            {
+              "nodeId": "httpendpoint-12550be0",
+              "activityVersionId": "actver_0QM0NdJrZ8kDy44Mbwhl51-Ig5OArLjpLYXkWq_aY44",
+              "inputs": [
+                {
+                  "referenceKey": "SupportedMethods",
+                  "value": {
+                    "value": "[\"POST\"]",
+                    "expressionType": "Object"
+                  }
+                },
+                {
+                  "referenceKey": "Path",
+                  "value": {
+                    "value": "/demo",
+                    "expressionType": "Literal"
+                  }
+                },
+                {
+                  "referenceKey": "CanStartWorkflow",
+                  "value": {
+                    "value": "true",
+                    "expressionType": "Literal"
+                  }
+                }
+              ],
+              "outputs": [
+                {
+                  "referenceKey": "ParsedContent",
+                  "value": {
+                    "value": {
+                      "referenceKey": "d0fd29cf-92c1-4377-ad4e-08c5986815eb",
+                      "declaringScopeId": "workflow"
+                    },
+                    "expressionType": "Variable"
+                  }
+                }
+              ],
+              "structure": null
+            },
+            {
+              "nodeId": "writehttpresponse-a34979ee",
+              "activityVersionId": "actver_GS50P7fLiBCappp3eZHM_0Q7k76r5l6-lgceHB6Qbao",
+              "inputs": [
+                {
+                  "referenceKey": "Body",
+                  "value": {
+                    "value": "{\"hey\" : \"John\"}",
+                    "expressionType": "Literal"
+                  }
+                },
+                {
+                  "referenceKey": "ContentType",
+                  "value": {
+                    "value": "application/json",
+                    "expressionType": "Literal"
+                  }
+                }
+              ],
+              "outputs": [],
+              "structure": null
+            },
+            {
+              "intrinsic": {
+                "kind": "SetCorrelationId",
+                "valueType": {
+                  "alias": "Elsa.Any",
+                  "collectionKind": "Single"
+                }
+              },
+              "nodeId": "setcorrelationid-add9748e",
+              "activityVersionId": "elsa.intrinsic.set-correlation-id@1",
+              "inputs": [
+                {
+                  "referenceKey": "value",
+                  "value": {
+                    "value": "dasfsafsfas",
+                    "expressionType": "Literal"
+                  }
+                }
+              ],
+              "outputs": [],
+              "structure": null
+            }
+          ],
+          "connections": [
+            {
+              "id": "flow-httpendpoint-12550be0-setcorrelationid-add9748e-Done-d7ab6887",
+              "source": {
+                "nodeId": "httpendpoint-12550be0",
+                "port": "Done"
+              },
+              "target": {
+                "nodeId": "setcorrelationid-add9748e"
+              }
+            },
+            {
+              "id": "flow-setcorrelationid-add9748e-writehttpresponse-a34979ee-Done-a9332d80",
+              "source": {
+                "nodeId": "setcorrelationid-add9748e",
+                "port": "Done"
+              },
+              "target": {
+                "nodeId": "writehttpresponse-a34979ee"
+              }
+            }
+          ],
+          "startNodeId": "httpendpoint-12550be0",
+          "nodeMetadata": {},
+          "connectionMetadata": {}
+        }
+      }
+    },
+    "inputs": [],
+    "outputs": [],
+    "strategyOptions": null
+  },
+  "layout": [
+    {
+      "nodeId": "httpendpoint-12550be0",
+      "x": -136,
+      "y": 156,
+      "width": null,
+      "height": null,
+      "additionalProperties": null
+    },
+    {
+      "nodeId": "writehttpresponse-a34979ee",
+      "x": 522,
+      "y": 155,
+      "width": null,
+      "height": null,
+      "additionalProperties": null
+    },
+    {
+      "nodeId": "setcorrelationid-add9748e",
+      "x": 185,
+      "y": 155,
+      "width": null,
+      "height": null,
+      "additionalProperties": null
+    }
+  ],
+  "activityPresentation": []
+}

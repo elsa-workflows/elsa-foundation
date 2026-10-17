@@ -101,8 +101,35 @@ public sealed class ActivityAuthoringCatalogTests
         Assert.Null(tier.DefaultValue);
         Assert.Contains(inputDescriptor.GetMethods(), method =>
             method.Name == "Deconstruct" && method.GetParameters().Length == 19);
+        var outputDescriptor = CollectionElementType(descriptor.GetProperty("Outputs")!.PropertyType);
+        AssertProperties(outputDescriptor, "Name", "ReferenceKey", "Type", "CollectionKind");
         var portDescriptor = CollectionElementType(descriptor.GetProperty("Ports")!.PropertyType);
         AssertProperties(portDescriptor, "Name", "ReferenceKey", "Type", "IsBrowsable");
+    }
+
+    [Fact]
+    public async Task Catalog_outputs_expose_their_stable_reference_key()
+    {
+        var definition = new ActivityDefinition { Id = "def-output", ActivityTypeKey = DeclaredActivityTypeKey, Category = "Acme", DisplayName = "Call Service" };
+        var version = new ActivityDefinitionVersion("1.0.0", definition.Id)
+        {
+            Id = "ver-output",
+            ConsumerKey = "elsa.clr-activity",
+            Outputs = [new OutputDefinition("sum", "Sum", new TypeReference("Int32"), null, "Sum", null, IsNullable: false)]
+        };
+
+        var view = await CatalogReaderFixture.ListAsync([definition], [version]);
+        var activity = Assert.Single(view.Activities, item => item.ActivityVersionId == "ver-output");
+        var output = Assert.Single(activity.Outputs);
+        var wire = JsonNode.Parse(JsonSerializer.Serialize(view,
+            ActivitiesDesignWire.Context.GetTypeInfo(typeof(ActivityAuthoringCatalogView))!))!;
+        var activityWire = Assert.Single(wire["activities"]!.AsArray(), item => (string?)item!["activityVersionId"] == "ver-output");
+        var outputWire = activityWire!["outputs"]![0]!;
+
+        Assert.Equal("Sum", output.Name);
+        Assert.Equal("sum", output.ReferenceKey);
+        Assert.Equal("Sum", (string?)outputWire["name"]);
+        Assert.Equal("sum", (string?)outputWire["referenceKey"]);
     }
 
     [Fact]

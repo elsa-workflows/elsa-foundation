@@ -64,9 +64,9 @@ public sealed class ActivityDraftValidationState : TenantEntity
 
     public long Revision { get; init; }
 
-    public DateTimeOffset ValidatedAt { get; init; }
+    public DateTimeOffset ValidatedAt { get; set; }
 
-    public ICollection<ActivityDiagnostic> Diagnostics { get; init; } = [];
+    public ICollection<ActivityDiagnostic> Diagnostics { get; set; } = [];
 
     public bool IsValid => Diagnostics.All(x => x.Severity != ActivityDiagnosticSeverity.Error);
 }

@@ -10,6 +10,7 @@ export interface CreateWorkflowDraft {
   name: string;
   description: string;
   rootActivityVersionId: string | null;
+  starter?: "http";
 }
 
 export const createWorkflowRootOptions: { value: CreateWorkflowKind; label: string; hint: string }[] = [

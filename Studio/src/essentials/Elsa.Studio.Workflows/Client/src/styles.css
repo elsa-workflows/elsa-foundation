@@ -1095,6 +1095,13 @@
   color: var(--wf-muted-text);
 }
 
+.wf-instance-meta .wf-identity-cell {
+  display: grid;
+  gap: 4px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .wf-instance-section.wf-activity-overview {
   overflow: hidden;
   padding: 0;
@@ -2677,6 +2684,12 @@
   letter-spacing: var(--wf-label-tracking, 0);
 }
 
+.wf-form-field small {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 .wf-form-field input,
 .wf-form-field select,
 .wf-form-field textarea {
@@ -3799,6 +3812,20 @@ html[data-theme-appearance="high-contrast"] .wf-node[data-trigger-enabled="true"
   gap: 2px;
 }
 
+.wf-node-http-response-badge {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  border: 1px solid var(--studio-border);
+  border-radius: 999px;
+  background: var(--studio-surface-muted);
+  color: var(--studio-text-muted);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.2;
+  padding: 2px 6px;
+}
+
 .wf-node strong {
   display: block;
   overflow: hidden;
@@ -4308,6 +4335,10 @@ button.wf-node-slot-badge:focus-visible {
   padding: 12px 12px 10px;
 }
 
+.wf-inspector .wf-inspector-context > dl {
+  margin: 0;
+}
+
 .wf-activity-presentation-fields {
   display: grid;
   gap: 14px;
@@ -4620,8 +4651,14 @@ button.wf-node-slot-badge:focus-visible {
 
 .wf-runtime-reason {
   display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: 6px;
   color: var(--wf-warning-text);
+}
+
+.wf-runtime-reason-text {
+  flex: 1 1 200px;
 }
 
 .wf-runtime-equivalence {
@@ -6545,6 +6582,33 @@ button.wf-reference-select {
   font-size: 12px;
 }
 
+.wf-http-response-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--studio-warning) 46%, var(--studio-border));
+  border-radius: var(--studio-radius);
+  background: color-mix(in srgb, var(--studio-warning) 9%, var(--studio-surface));
+  color: var(--studio-warning-fg);
+  font-size: 12px;
+}
+
+.wf-http-response-warning > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.wf-http-response-warning p {
+  margin: 0 0 5px;
+}
+
+.wf-http-response-warning .wf-link-button {
+  color: inherit;
+  font-size: inherit;
+}
+
 /* Scoped variables (ADR-0027): container declarations, picker, shadowing advisories, repair surface. */
 .wf-container-variables {
   margin-top: 10px;
@@ -7206,49 +7270,6 @@ html[data-theme-material] .availability-search .wf-search {
   border-color: color-mix(in srgb, var(--wf-accent) 36%, var(--wf-border));
   background: var(--wf-accent-soft);
   color: var(--wf-accent);
-  outline: none;
-}
-
-/* Activity Definition creation: a free-form Category input with authorized catalog suggestions. */
-.ad-category-combobox > div {
-  position: relative;
-}
-
-.ad-category-combobox [role="listbox"] {
-  position: absolute;
-  z-index: 2;
-  top: calc(100% + .25rem);
-  right: 0;
-  left: 0;
-  display: grid;
-  max-height: 12rem;
-  margin: 0;
-  padding: .25rem;
-  overflow: auto;
-  border: 1px solid var(--studio-border);
-  border-radius: var(--studio-radius);
-  background: var(--studio-surface);
-  box-shadow: var(--studio-shadow-md);
-  list-style: none;
-}
-
-.ad-category-combobox [role="option"] {
-  display: block;
-  width: 100%;
-  min-height: 2.1rem;
-  border: 0;
-  border-radius: calc(var(--studio-radius) * .75);
-  color: var(--studio-text);
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-  background: transparent;
-}
-
-.ad-category-combobox [role="option"][aria-selected="true"],
-.ad-category-combobox [role="option"]:hover,
-.ad-category-combobox [role="option"]:focus-visible {
-  background: var(--studio-accent-soft);
   outline: none;
 }
 

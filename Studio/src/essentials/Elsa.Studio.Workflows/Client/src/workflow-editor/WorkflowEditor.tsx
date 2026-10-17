@@ -57,6 +57,7 @@ import { ValidationPanel, TestRunStatus, WorkflowRuntimePanel } from "./editorPa
 import { useDraftValidations } from "./useDraftValidations";
 import { useExecutableArtifactExport } from "./useExecutableArtifactExport";
 import { combineValidationErrors, detectStructuralValidationErrors } from "../draftValidation";
+import { createValidationActivityLabels, humanizeValidationErrors } from "../validationActivityLabels";
 import { WorkflowArtifactsPanel } from "./WorkflowExecutables";
 import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
 import { useSidePanelLayout } from "./useSidePanelLayout";
@@ -91,6 +92,7 @@ import { PublicationReviewDialog } from "./PublicationReviewDialog";
 import { useAiProviderAvailability } from "./useAiProviderAvailability";
 import { useFullActivityDefinitionVersion } from "../api/activityDesign";
 import type { ActivityDefinitionVersionView, RecommendedActivityDefinition } from "../activityDefinitionTypes";
+import { isHttpEndpointType } from "./httpTestRequest";
 import type { ActivityVersionChangeApplyRequest } from "./ActivityVersionChangeDialog";
 import {
   applyActivityVersionChange,
@@ -102,6 +104,8 @@ import type { ExpressionToolingCacheIdentity } from "../expression-tooling/expre
 
 const ActivityVersionChangeDialog = React.lazy(() =>
   import("./ActivityVersionChangeDialog").then(module => ({ default: module.ActivityVersionChangeDialog })));
+const HttpTestRequestDialog = React.lazy(() =>
+  import("./HttpTestRequestDialog").then(module => ({ default: module.HttpTestRequestDialog })));
 
 export { PublicationReviewDialog } from "./PublicationReviewDialog";
 
@@ -183,6 +187,7 @@ export function WorkflowEditor({
   const [activeRightPanelId, setActiveRightPanelId] = useState("inspector");
   const [activeInspectorTabId, setActiveInspectorTabId] = useState<ActivityInspectorTabId>("inputs");
   const [canvasView, setCanvasView] = useState<CanvasView>("designer");
+  const [httpTestRequestActivityId, setHttpTestRequestActivityId] = useState<string | null>(null);
   const [versionChange, setVersionChange] = useState<{
     occurrence: ActivityNode;
     current: ActivityDefinitionVersionView;
@@ -272,6 +277,8 @@ export function WorkflowEditor({
       resolveActivityInspectorTabId(current, inspectedSupportsScopedVariables, inspectedSlots.length > 0));
   }, [inspectedSlots.length, inspectedSupportsScopedVariables]);
   const inspectedCatalogItem = inspectedNode ? catalogByVersion.get(inspectedNode.activityVersionId) : null;
+  const inspectedIsHttpEndpoint = !!inspectedNode && isHttpEndpointType(
+    inspectedDescriptor?.typeName ?? inspectedCatalogItem?.activityTypeKey);
   const inspectedReusableDefinitionId = inspectedCatalogItem?.activityDefinitionId ?? null;
   const inspectedReusableVersion = useFullActivityDefinitionVersion(
     context,
@@ -308,16 +315,25 @@ export function WorkflowEditor({
   // simply renders no button.
   const executableArtifactExport = useExecutableArtifactExport({ context, definitionId, publishedArtifactId });
   const publishedExecutable = executableArtifactExport.target;
+  // Live HTTP requests need only the published runtime artifact; they do not depend on export support.
+  const publishedRuntimeExecutable = executableArtifactExport.publishedTarget;
+  const activityLabels = useMemo(
+    () => createValidationActivityLabels({
+      root: draft?.state.rootActivity,
+      presentation: draft?.activityPresentation,
+      catalogByVersion
+    }),
+    [catalogByVersion, draft?.activityPresentation, draft?.state.rootActivity]);
   const structuralValidationErrors = useMemo(
-    () => detectStructuralValidationErrors(draft?.state),
-    [draft?.state]);
+    () => detectStructuralValidationErrors(draft?.state, activityLabels),
+    [activityLabels, draft?.state]);
   const combinedValidationErrors = useMemo(
-    () => combineValidationErrors({
+    () => humanizeValidationErrors(combineValidationErrors({
       draftErrors: draft?.validationErrors,
       serverErrors: draftValidations.available ? draftValidations.errors : null,
       structuralErrors: structuralValidationErrors
-    }),
-    [draft?.validationErrors, draftValidations.available, draftValidations.errors, structuralValidationErrors]);
+    }), activityLabels),
+    [activityLabels, draft?.validationErrors, draftValidations.available, draftValidations.errors, structuralValidationErrors]);
   const findRisksAction = findAiAction(ai, "weaver.workflows.find-draft-risks");
   const proposeUpdateAction = findAiAction(ai, "weaver.workflows.propose-update");
   const aiProviderAvailable = useAiProviderAvailability(ai);
@@ -990,6 +1006,10 @@ export function WorkflowEditor({
           onReplaceSlotActivity={replaceSlotActivity}
           isStartNode={isFlowchartScope && inspectedNode ? inspectedNode.nodeId === flowchartStartNodeId : undefined}
           onSetAsStartNode={isFlowchartScope ? setStartNode : undefined}
+          httpTestRequest={inspectedIsHttpEndpoint ? {
+            available: !!publishedRuntimeExecutable?.artifactId,
+            onOpen: () => { if (inspectedNode) setHttpTestRequestActivityId(inspectedNode.nodeId); }
+          } : undefined}
         />
       )
     },
@@ -998,7 +1018,7 @@ export function WorkflowEditor({
       title: "Runtime",
       order: 5,
       icon: <Play size={15} />,
-      render: () => <WorkflowRuntimePanel testRun={renderedTestRun} publishedEquivalent={publishedEquivalent} onOpenRun={openWorkflowRun} />
+      render: () => <WorkflowRuntimePanel testRun={renderedTestRun} publishedEquivalent={publishedEquivalent} onOpenRun={openWorkflowRun} activityLabels={activityLabels} />
     },
     {
       id: "artifacts",
@@ -1163,6 +1183,18 @@ export function WorkflowEditor({
           onSubmit={values => { void confirmRunInputs(values); }}
           onCancel={cancelRunInputs}
         />
+      ) : null}
+
+      {httpTestRequestActivityId ? (
+        <React.Suspense fallback={<p role="status">Loading HTTP request tool…</p>}>
+          <HttpTestRequestDialog
+            context={context}
+            open
+            artifactId={publishedRuntimeExecutable?.artifactId ?? null}
+            authoredActivityId={httpTestRequestActivityId}
+            onClose={() => setHttpTestRequestActivityId(null)}
+          />
+        </React.Suspense>
       ) : null}
 
       {expressionValidationWarning ? (

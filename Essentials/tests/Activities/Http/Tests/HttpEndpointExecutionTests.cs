@@ -236,6 +236,7 @@ public sealed class HttpEndpointExecutionTests
             Assert.Null(bookmark.ExpiresAt);
             Assert.Equal("callbacks/{id}", bookmark.Metadata[HttpEndpointRouting.TemplateMetadataKey]);
             Assert.Equal(method, bookmark.Metadata[HttpEndpointRouting.MethodMetadataKey]);
+            Assert.Equal("Sync", bookmark.Metadata[HttpEndpointRouting.ResponseModeMetadataKey]);
         }
     }
 
@@ -273,7 +274,7 @@ public sealed class HttpEndpointExecutionTests
     }
 
     [Fact]
-    public async Task MidFlow_ResponseModeAsync_IsOmittedFromBookmarkMetadata()
+    public async Task MidFlow_ResponseModeAsync_IsStampedInBookmarkMetadata()
     {
         await using var harness = NewHarness();
         var node = NewEndpointExecutableWithResponseMode("callbacks/{id}", ResponseMode.Async);
@@ -282,7 +283,7 @@ public sealed class HttpEndpointExecutionTests
 
         Assert.False(CompletedEndpoint(run));
         var bookmark = Assert.Single(await BookmarksAsync(harness));
-        Assert.DoesNotContain(HttpEndpointRouting.ResponseModeMetadataKey, bookmark.Metadata.Keys);
+        Assert.Equal("Async", bookmark.Metadata[HttpEndpointRouting.ResponseModeMetadataKey]);
     }
 
     [Fact]
@@ -468,7 +469,7 @@ public sealed class HttpEndpointExecutionTests
             [nameof(HttpEndpoint.Policy)] = TypedLiteralBinding(nameof(HttpEndpoint.Policy), null, typeof(string)),
             [nameof(HttpEndpoint.RequestTimeout)] = TypedLiteralBinding(nameof(HttpEndpoint.RequestTimeout), null, typeof(TimeSpan)),
             [nameof(HttpEndpoint.RequestSizeLimit)] = TypedLiteralBinding(nameof(HttpEndpoint.RequestSizeLimit), null, typeof(long)),
-            [nameof(HttpEndpoint.ResponseMode)] = TypedLiteralBinding(nameof(HttpEndpoint.ResponseMode), ResponseMode.Async, typeof(ResponseMode))
+            [nameof(HttpEndpoint.ResponseMode)] = TypedLiteralBinding(nameof(HttpEndpoint.ResponseMode), ResponseMode.Sync, typeof(ResponseMode))
         };
 
         var descriptorPayload = ClrConstruction.Payload(Serializer, typeof(HttpEndpoint));
@@ -581,7 +582,11 @@ public sealed class HttpEndpointExecutionTests
                 InputContract(nameof(HttpEndpoint.Policy), typeof(string)),
                 InputContract(nameof(HttpEndpoint.RequestTimeout), typeof(TimeSpan)),
                 InputContract(nameof(HttpEndpoint.RequestSizeLimit), typeof(long)),
-                InputContract(nameof(HttpEndpoint.ResponseMode), typeof(ResponseMode))
+                InputContract(
+                    nameof(HttpEndpoint.ResponseMode),
+                    typeof(ResponseMode),
+                    hasDefault: true,
+                    defaultValue: JsonSerializer.SerializeToElement("Sync"))
             },
             new ActivityResultContract(
                 ValueType(typeof(HttpEndpointResult)),
@@ -596,8 +601,13 @@ public sealed class HttpEndpointExecutionTests
             [ActivityOutcomes.Done],
             new ActivityActivationRequirement(ClrConstruction.DescriptorType, TypeAliasConvention.CanonicalAlias(typeof(HttpEndpoint))));
 
-    private static ActivityInputContract InputContract(string key, Type type, bool isRequired = false) =>
-        new(key, key, ValueType(type), isRequired, isNullable: !isRequired, hasDefault: false, defaultValue: null, ActivityValuePolicy.Default);
+    private static ActivityInputContract InputContract(
+        string key,
+        Type type,
+        bool isRequired = false,
+        bool hasDefault = false,
+        JsonElement? defaultValue = null) =>
+        new(key, key, ValueType(type), isRequired, isNullable: !isRequired, hasDefault, defaultValue, ActivityValuePolicy.Default);
 
     private static ActivityResultProjectionContract Projection(string key, string path, Type type, bool isRequired) =>
         new(key, path, ValueType(type), isRequired, ActivityValuePolicy.Default);

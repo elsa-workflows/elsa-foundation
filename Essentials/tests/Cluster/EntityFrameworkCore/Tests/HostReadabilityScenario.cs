@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Runtime.ExceptionServices;
 using System.Text.Json.Nodes;
@@ -44,10 +45,14 @@ internal static class HostReadabilityScenario
         var disposedMarker = $"FEED_MODULE_GENERATION_HOLD|{operationId}|disposed|";
         var failedMarker = $"FEED_MODULE_GENERATION_HOLD|{operationId}|failed|";
         Task<(HttpStatusCode Status, string Body)>? heldRequest = null;
+        long? heldRequestStartedAt = null;
         var released = false;
         var terminalMarkerObserved = false;
         Exception? primaryFailure = null;
         var cleanupFailures = new List<Exception>();
+
+        void WriteReleaseWritten(string source) =>
+            host.TestOutput.WriteLine($"HOST_READABILITY host={host.Name} phase=release-written pid={host.ProcessId} operation={operationId} source={source} markerExists={File.Exists(releasePath)} elapsedMs={(long)Stopwatch.GetElapsedTime(heldRequestStartedAt!.Value).TotalMilliseconds}");
 
         try
         {
@@ -60,6 +65,8 @@ internal static class HostReadabilityScenario
             WritePhase(host, "v1-active", initialReport, initialPackages);
             host.TestOutput.WriteLine($"HOST_READABILITY host={host.Name} phase=v1-shell pid={host.ProcessId} generation={initialGeneration} fixtureVersion=1");
 
+            heldRequestStartedAt = Stopwatch.GetTimestamp();
+            host.TestOutput.WriteLine($"HOST_READABILITY host={host.Name} phase=held-request-start pid={host.ProcessId} operation={operationId} monotonicTimestamp={heldRequestStartedAt.Value} elapsedMs=0");
             heldRequest = host.PostAsync(HoldPath + operationId, null, Patience);
             await Polling.UntilAsync(
                 () => Task.FromResult(File.Exists(enteredPath)),
@@ -101,6 +108,7 @@ internal static class HostReadabilityScenario
 
             await File.WriteAllTextAsync(releasePath, "release").ConfigureAwait(false);
             released = true;
+            WriteReleaseWritten("scenario");
             var (holdStatus, holdBody) = await heldRequest.WaitAsync(Patience).ConfigureAwait(false);
             Assert.Equal(HttpStatusCode.OK, holdStatus);
             var holdResponseGeneration = JsonNode.Parse(holdBody)!["generation"]!.GetValue<int>();
@@ -151,6 +159,8 @@ internal static class HostReadabilityScenario
                         Directory.CreateDirectory(host.ControlDirectory);
                         await File.WriteAllTextAsync(releasePath, "release").ConfigureAwait(false);
                         released = true;
+                        if (heldRequestStartedAt is not null)
+                            WriteReleaseWritten("cleanup");
                     }
                     catch (Exception exception)
                     {

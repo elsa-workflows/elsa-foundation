@@ -18,6 +18,22 @@ Maps are navigation and generated-fact surfaces. They should be cheap to refresh
 - [Architecture reference map](architecture-reference-map.md) - direct design/runtime reference signals for review.
 - [Map manifest](manifest.json) - what the v1 layer covers: project, package, feature and spec counts, and the files it generates.
 
+## Spec status metadata
+
+The Title column prefers the `# Feature Specification: <title>` heading. Otherwise, it uses the
+first `# ` heading and removes a leading numeric prefix separated by a spaced em dash or hyphen
+(for example, `# 108 — BPMN Container Activity`). If no usable heading is present, it uses the
+spec folder id. Speckit titles retain their existing formatting.
+
+The spec-status map reads Notes only from an optional, single-line `**Notes**:` entry in `spec.md`,
+alongside metadata such as `**Status**:`. The first explicit Notes entry supplies its trimmed value;
+if it is absent or blank, the map displays `-`. Ordinary headings and prose, including an
+`## Out of scope` section or discussion of deferred alternatives, do not create notes.
+
+```markdown
+**Notes**: Waiting for provider verification.
+```
+
 ## Dependency map dataset
 
 `dependency-map.json` is the one scan of the project files. The project-reference, package, test, domain,

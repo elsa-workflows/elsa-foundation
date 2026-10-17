@@ -10,7 +10,15 @@ export default mergeConfig(
   {
     build: {
       manifest: true,
-      cssCodeSplit: true
+      cssCodeSplit: true,
+      rollupOptions: {
+        output: {
+          // Keep the rich editor deferred and each downloaded chunk within the module budget.
+          manualChunks(id) {
+            if (id.includes("/@codemirror/view/")) return "code-editor-view";
+          }
+        }
+      }
     }
   }
 );

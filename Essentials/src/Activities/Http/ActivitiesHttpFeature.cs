@@ -1,11 +1,13 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
+using Elsa.Activities.Http.Capabilities;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Connections;
 using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Http.Options;
 using Elsa.Activities.Http.Services;
+using Elsa.Api.Capabilities.Extensions;
 using Elsa.Http.Core.Options;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -48,9 +50,14 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
     [ManifestSetting(DisplayName = "Base path", Description = "Base HTTP path used by workflow endpoints.", Category = "Routing")]
     public string BasePath { get; set; } = "/workflows/http";
 
+    [ManifestSetting(DisplayName = "Synchronous request timeout", Description = "Maximum duration of synchronous HTTP requests. An endpoint may select a shorter timeout.", Category = "Routing", UIHint = "duration")]
+    public TimeSpan SyncRequestTimeout { get; set; } = new HttpEndpointOptions().SyncRequestTimeout;
+
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddApiCapabilitySource<HttpWorkflowEndpointsCapabilitySource>();
         services.Configure<HttpEndpointOptions>(options => options.BasePath = BasePath);
+        services.Configure<HttpEndpointOptions>(options => options.SyncRequestTimeout = SyncRequestTimeout);
         services.Configure<HttpRoutePublicationOptions>(options => options.BasePath = BasePath);
 
         services.AddHttpClient(HttpActivityConstants.HttpClientName)

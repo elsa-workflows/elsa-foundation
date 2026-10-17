@@ -98,7 +98,7 @@ public sealed class ClrAssemblyScannerTests
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
         { typeof(TriggerFixtureActivity), "10C41B96E22D85F9A598D30A6AE51D2FAA0F4EF5AA9909D23932EBC3CD00D80E" },
-        { typeof(HttpEndpoint), "D081CBE360E49EDF9CA622EAFC6DA5B0029B400DA02538B2C6FC178285B665DD" }
+        { typeof(HttpEndpoint), "3432C91C232D91852818ED02A289497FD4DD17112199328DC65BBE1239FA84DA" }
     };
 
     [Theory]
@@ -784,9 +784,9 @@ public sealed class ClrAssemblyScannerTests
     public static TheoryData<Type, string> BuiltInCatalogHashesUnchangedFromMain => new()
     {
         // WriteLine and Parallel still declare no tier, so they keep the origin/main snapshot at
-        // 14dd6f6e7 (#2716). HttpEndpoint and SendHttpRequest declare tiers, which are hashed, so
-        // their snapshots move with this PR. Icon facets stay excluded from the hash.
-        { typeof(HttpEndpoint), "D081CBE360E49EDF9CA622EAFC6DA5B0029B400DA02538B2C6FC178285B665DD" },
+        // 14dd6f6e7 (#2716). HttpEndpoint's version and ResponseMode default changed; SendHttpRequest
+        // declares tiers. Those catalog changes move their snapshots with this PR. Icon facets stay excluded.
+        { typeof(HttpEndpoint), "3432C91C232D91852818ED02A289497FD4DD17112199328DC65BBE1239FA84DA" },
         { typeof(WriteLine), "618BB61870A3FADC2551123EA520F7F5852CB0D00CD4AE5E6DB8A80D7677EF2C" },
         { typeof(ParallelActivity), "A466AC1D4873108D85B6BA08D2058ACD9FD51A60571E8BA043043A17B20CCC82" },
         { typeof(SendHttpRequest), "814577E3C1A0BFA2C780181584463ACC1ECE7BD74382D106EC80B2AFC8A8B8E6" }
@@ -917,6 +917,20 @@ public sealed class ClrAssemblyScannerTests
         // The fixture assembly is "Elsa.Activities.Design.Tests.ClrFixture" → segment "ClrFixture",
         // humanized to "Clr Fixture" for display (issue #928).
         Assert.All(models, m => Assert.Equal("Clr Fixture", m.Category));
+    }
+
+    [Fact]
+    public void OpenGenericActivities_AreNotCataloged_ButAClosedGenericSubclassIs()
+    {
+        // The runtime registry skips types with unbound generic parameters, so a cataloged open generic could
+        // never be activated (issue #385).
+        using var folder = TempAssemblyFolder.WithCopyOf(typeof(UnannotatedFixtureActivity).Assembly);
+
+        var keys = CreateScanner().Scan(folder.Path).Select(m => m.ActivityTypeKey).ToHashSet(StringComparer.Ordinal);
+
+        Assert.DoesNotContain(typeof(OpenGenericFixtureActivity<>).FullName!, keys);
+        Assert.DoesNotContain(typeof(GenericFixtureHost<>.NestedFixtureActivity).FullName!, keys);
+        Assert.Contains(typeof(ClosedGenericFixtureActivity).FullName!, keys);
     }
 
     [Fact]

@@ -89,6 +89,8 @@ const activityDefinitionsFixture = searchParams.get("mode") === "activity-defini
 const reusableBoundaryFixture = searchParams.get("mode") === "reusable-boundary";
 const versionChangeFixture = searchParams.get("mode") === "version-change";
 const activityInspectorTabsFixture = searchParams.get("mode") === "activity-inspector-tabs";
+const validationLabelsFixture = searchParams.get("mode") === "validation-labels"
+  || searchParams.get("mode") === "validation-labels-before";
 const publicationReviewFixture = searchParams.get("mode") === "publication-review";
 const activityGraphAuthoringFixture = searchParams.get("mode") === "activity-definition-graph-authoring";
 const activityIconsFixture = searchParams.get("mode") === "activity-icons";
@@ -99,6 +101,7 @@ const navBeforeFixture = searchParams.get("mode") === "nav-before";
 const homeFixture = searchParams.get("mode") === "home" || searchParams.get("mode") === "home-before";
 const settingsBeforeFixture = searchParams.get("mode") === "settings-before";
 const settingsFixture = searchParams.get("mode") === "settings";
+const userMenuFixture = searchParams.get("mode") === "user-menu";
 const expressionCodeIntelligenceFixture = searchParams.get("mode") === "expression-code-intelligence";
 const expressionToolingUnavailable = searchParams.get("tooling") === "unavailable";
 const expressionFieldCount = Math.max(1, Math.min(50, Number(searchParams.get("fields") ?? 1)));
@@ -801,6 +804,7 @@ function ActivityInspectorTabsFixture() {
               referenceKind: "ActivityType",
               reason: "This fixture activity is intentionally unavailable."
             }}
+            selectedReusableDefinitionId="browser-definition"
             selectedSlots={activityInspectorTabSlots}
             inspectingScopeOwner
             catalog={[]}
@@ -994,6 +998,7 @@ function FolderRestructureFixture() {
           ];
           const query = new URL(url, window.location.origin).searchParams;
           const folderId = query.get("folderId");
+          const searchTerm = (query.get("searchTerm") ?? "").trim().toLowerCase();
           const items = folderId === "folder-operations"
             ? [definition("definition-operations", "Operations workflow", folderId)]
             : folderId === "folder-platform"
@@ -1006,7 +1011,10 @@ function FolderRestructureFixture() {
                     { id: "folder-platform", name: "Platform" },
                     { id: "folder-operations", name: "Operations" }
                   ])];
-          return { items, nextContinuationToken: null };
+          const filtered = searchTerm
+            ? items.filter(item => item.name.toLowerCase().includes(searchTerm))
+            : items;
+          return { items: filtered, nextContinuationToken: null };
         }
         throw new Error(`Unexpected browser fixture request: ${url}`);
       },
@@ -1603,12 +1611,12 @@ function browserVersion(
 // writes the chosen theme palette onto <html> itself, the way the provider does at runtime.
 // Activity-icon shots default to Classic light — Studio 4's default theme.
 const darkVariant = searchParams.get("theme") === "dark";
-const fixtureTheme = activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture ? "classic" : "meridian";
-if (!navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture && !homeFixture) {
+const fixtureTheme = activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture ? "classic" : "meridian";
+if (!navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture && !homeFixture && !userMenuFixture) {
   document.documentElement.dataset.theme = fixtureTheme;
   document.documentElement.dataset.themeLayout = "classic";
   document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
-  if (darkVariant || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture) {
+  if (darkVariant || activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture) {
     const palette = getTheme(fixtureTheme)![darkVariant ? "dark" : "light"];
     for (const token of themeTokenNames) {
       document.documentElement.style.setProperty(`--${token.replace(/([A-Z])/g, "-$1").toLowerCase()}`, palette[token]);
@@ -1640,6 +1648,11 @@ async function renderRequestedFixture() {
     root.render(<SettingsFixture />);
     return;
   }
+  if (userMenuFixture) {
+    const { UserMenuFixture } = await import("./userMenuFixture");
+    root.render(<UserMenuFixture />);
+    return;
+  }
   if (navPlacementFixture) {
     const { NavPlacementFixture } = await import("./navPlacementFixture");
     root.render(<NavPlacementFixture />);
@@ -1658,6 +1671,11 @@ async function renderRequestedFixture() {
   if (activityDuplicateEditorFixture) {
     const { ActivityDuplicateEditorFixture } = await import("./activityDuplicateEditorFixture");
     root.render(<ActivityDuplicateEditorFixture />);
+    return;
+  }
+  if (validationLabelsFixture) {
+    const { ValidationLabelsFixture } = await import("./validationLabelsFixture");
+    root.render(<ValidationLabelsFixture />);
     return;
   }
 

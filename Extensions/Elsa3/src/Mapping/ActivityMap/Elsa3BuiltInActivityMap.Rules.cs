@@ -5,8 +5,6 @@ namespace Elsa3.Mapping.ActivityMap;
 /// <summary>Vocabulary the built-in table is written in: one helper per member-map rule.</summary>
 internal sealed partial class Elsa3BuiltInActivityMap
 {
-    private const string Pending = "#2705";
-
     private static Elsa3ActivityMapEntry Catalog(
         string elsa3Type,
         string activityTypeKey,
@@ -23,8 +21,8 @@ internal sealed partial class Elsa3BuiltInActivityMap
         Elsa3NodeRewriteKind? rewrite = null) =>
         new($"Elsa.{elsa3Type}", new Elsa3ActivityTarget.Intrinsic(activityVersionId), members, [], rewrite);
 
-    private static Elsa3ActivityMapEntry GraphLevel(string elsa3Type, string reason, params Elsa3MemberRule[] members) =>
-        new($"Elsa.{elsa3Type}", new Elsa3ActivityTarget.GraphLevel(reason, Pending), members, []);
+    private static Elsa3ActivityMapEntry GraphConstruct(string elsa3Type, Elsa3GraphConstructKind kind, params Elsa3MemberRule[] members) =>
+        new($"Elsa.{elsa3Type}", new Elsa3ActivityTarget.GraphConstruct(kind), members, []);
 
     private static Elsa3ActivityMapEntry NoCounterpart(string elsa3Type, string reason, params Elsa3MemberRule[] members) =>
         new($"Elsa.{elsa3Type}", new Elsa3ActivityTarget.NoCounterpart(reason), members, []);
@@ -66,7 +64,7 @@ internal sealed partial class Elsa3BuiltInActivityMap
     private static Elsa3MemberRule Structure(string elsa3, Elsa3MemberKind kind = Elsa3MemberKind.Property, string? warning = null) =>
         new(elsa3, kind, Elsa3MemberRuleKind.Structure, BehaviourWarning: warning);
 
-    /// <summary>R8: graph-level data, applied by graph conversion (#2705).</summary>
+    /// <summary>R8: graph-level data, applied by graph conversion (spec 239), not by member rules.</summary>
     private static Elsa3MemberRule Graph(string elsa3, Elsa3MemberKind kind = Elsa3MemberKind.Property) =>
         new(elsa3, kind, Elsa3MemberRuleKind.GraphLevel);
 

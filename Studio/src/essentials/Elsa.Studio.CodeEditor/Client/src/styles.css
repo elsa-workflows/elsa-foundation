@@ -122,3 +122,18 @@
 .studio-code-editor-diagnostic.error {
   color: var(--studio-danger-fg);
 }
+
+.studio-code-editor-rich .cm-gutters {
+  background: var(--studio-surface-muted);
+  border-color: var(--studio-border);
+  color: var(--studio-text-muted);
+}
+
+.studio-code-editor-rich .cm-activeLine,
+.studio-code-editor-rich .cm-activeLineGutter {
+  background: color-mix(in srgb, var(--studio-accent) 8%, transparent);
+}
+
+.studio-code-editor-rich .cm-cursor {
+  border-left-color: var(--studio-text);
+}

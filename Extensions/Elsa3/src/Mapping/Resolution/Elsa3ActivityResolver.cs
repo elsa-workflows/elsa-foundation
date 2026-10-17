@@ -23,6 +23,7 @@ internal sealed class Elsa3ActivityResolver(
     IActivityDefinitionLookup activityLookup,
     Elsa3ReplacedActivityTypeIndex? aliasIndex = null)
 {
+    private const string OutcomesFacetKind = "elsa.outcomes";
     private static readonly JsonSerializerOptions FacetJsonOptions = new(JsonSerializerDefaults.Web);
     private readonly Dictionary<string, Elsa3Resolution> _byType = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Elsa3Resolution> _byTypeKey = new(StringComparer.Ordinal);
@@ -104,6 +105,13 @@ internal sealed class Elsa3ActivityResolver(
                            "Install the Elsa 4 module that provides this activity and reconcile the catalog before converting.");
             case Elsa3ActivityTarget.Intrinsic intrinsic:
                 return Elsa3Resolution.Resolved(Elsa3IntrinsicContracts.Resolve(intrinsic.ActivityVersionId, entry));
+            case Elsa3ActivityTarget.GraphConstruct:
+                // Consumed by graph conversion, never placed as a node, so it needs no catalog version (spec 239 R-2).
+                return Elsa3Resolution.Resolved(new Elsa3ResolvedActivity(
+                    Elsa3ResolvedSource.GraphConstruct, entry, string.Empty, null, [], [], null)
+                {
+                    Outcomes = Elsa3ActivityOutcomes.None
+                });
             case Elsa3ActivityTarget.GraphLevel graph:
                 return Elsa3Resolution.Failed(
                     Elsa3ActivityDiagnosticCodes.GraphConversionPending,
@@ -145,16 +153,18 @@ internal sealed class Elsa3ActivityResolver(
 
             var version = await activityLookup.GetVersion(highest.Id, cancellationToken);
             Elsa3StructureContract? structure;
+            Elsa3ActivityOutcomes outcomes;
             try
             {
                 structure = ReadStructure(version.DesignFacets);
+                outcomes = ReadOutcomes(version.DesignFacets);
             }
             catch (JsonException exception)
             {
                 return Elsa3Resolution.Failed(
                     Elsa3ActivityDiagnosticCodes.StructureUnreadable,
-                    $"Elsa 4 activity '{definition.ActivityTypeKey}' version '{version.Version}' has a structure facet that cannot be read: {exception.Message}",
-                    "Reconcile the activity catalog so the version's structure facet is rewritten, then convert again.");
+                    $"Elsa 4 activity '{definition.ActivityTypeKey}' version '{version.Version}' has a structure or outcomes facet that cannot be read: {exception.Message}",
+                    "Reconcile the activity catalog so the version's design facets are rewritten, then convert again.");
             }
 
             return Elsa3Resolution.Resolved(new Elsa3ResolvedActivity(
@@ -164,7 +174,10 @@ internal sealed class Elsa3ActivityResolver(
                 definition.ActivityTypeKey,
                 version.Inputs.ToArray(),
                 version.Outputs.ToArray(),
-                structure));
+                structure)
+            {
+                Outcomes = outcomes
+            });
         }
         catch (EntityNotFoundException)
         {
@@ -192,5 +205,54 @@ internal sealed class Elsa3ActivityResolver(
                 .Order(StringComparer.Ordinal)
                 .Select(name => new OutputDefinition(name, name, new TypeReference("Object"), null, name, null, true))
                 .ToArray(),
-            null);
+            null)
+        {
+            // The reusable's contract outcomes; its graph activity completes with these names (spec 239 R-3).
+            Outcomes = replacement.OutcomeNames is { } names
+                ? new Elsa3ActivityOutcomes(names.Order(StringComparer.Ordinal).ToArray())
+                : Elsa3ActivityOutcomes.DoneOnly
+        };
+
+    /// <summary>
+    /// The outcomes a catalog version emits, from its <c>elsa.outcomes</c> facet
+    /// (<c>{ ports: [{ name }], dynamicOutcomes?: { kind, source, unmatched } }</c>); no facet means <c>Done</c>.
+    /// </summary>
+    private static Elsa3ActivityOutcomes ReadOutcomes(IEnumerable<ActivityDesignFacet> facets)
+    {
+        var facet = facets.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(candidate.Kind, OutcomesFacetKind));
+        if (facet is null)
+            return Elsa3ActivityOutcomes.DoneOnly;
+
+        var payload = facet.Payload;
+        if (payload.ValueKind != JsonValueKind.Object)
+            throw new JsonException("The outcomes facet payload is not an object.");
+
+        var ports = new List<string>();
+        if (payload.TryGetProperty("ports", out var portsElement) && portsElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var port in portsElement.EnumerateArray())
+            {
+                if (port.ValueKind == JsonValueKind.Object &&
+                    port.TryGetProperty("name", out var name) &&
+                    name.ValueKind == JsonValueKind.String &&
+                    !string.IsNullOrWhiteSpace(name.GetString()))
+                    ports.Add(name.GetString()!);
+            }
+        }
+
+        Elsa3DynamicOutcomes? dynamic = null;
+        if (payload.TryGetProperty("dynamicOutcomes", out var dynamicElement) &&
+            dynamicElement.ValueKind == JsonValueKind.Object &&
+            dynamicElement.TryGetProperty("source", out var source) &&
+            source.ValueKind == JsonValueKind.String &&
+            !string.IsNullOrWhiteSpace(source.GetString()))
+        {
+            var unmatched = dynamicElement.TryGetProperty("unmatched", out var unmatchedElement) && unmatchedElement.ValueKind == JsonValueKind.String
+                ? unmatchedElement.GetString()
+                : null;
+            dynamic = new Elsa3DynamicOutcomes(source.GetString()!, unmatched);
+        }
+
+        return ports.Count == 0 && dynamic is null ? Elsa3ActivityOutcomes.DoneOnly : new Elsa3ActivityOutcomes(ports, dynamic);
+    }
 }

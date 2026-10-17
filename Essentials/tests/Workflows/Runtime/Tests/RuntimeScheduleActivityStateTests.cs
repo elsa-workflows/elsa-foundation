@@ -92,7 +92,7 @@ public sealed class RuntimeScheduleActivityStateTests
     }
 
     [Fact]
-    public async Task HandleAsync_NormalizesPlacedActivityDefinitionProvenanceToItsNewExecutionScope()
+    public async Task HandleAsync_RecordsEnclosingScopeForNestedPlacedBoundary()
     {
         var executable = NewExecutable(opensExecutionScope: true);
         await _executableStore.SaveAsync(executable);
@@ -115,6 +115,22 @@ public sealed class RuntimeScheduleActivityStateTests
         Assert.Equal("actexec-1", state.ExecutionScopeId);
         Assert.Equal(state.ExecutionScopeId, state.Provenance.ExecutionScopeId);
         Assert.Equal("actexec-parent", state.Provenance.ParentActivityExecutionId);
+        Assert.Equal("parent-scope", state.EnclosingExecutionScopeId);
+    }
+
+    [Fact]
+    public async Task HandleAsync_UsesItsOwnScopeForTopLevelPlacedBoundary()
+    {
+        var executable = NewExecutable(opensExecutionScope: true);
+        await _executableStore.SaveAsync(executable);
+        var handler = NewHandler();
+
+        await handler.HandleAsync(NewScheduleWorkItem(executable.Identity));
+
+        var state = Assert.Single(await _activityStateStore.ListAllAsync("wfexec-1"));
+        Assert.Equal("actexec-1", state.ExecutionScopeId);
+        Assert.Equal(state.ExecutionScopeId, state.Provenance.ExecutionScopeId);
+        Assert.Null(state.EnclosingExecutionScopeId);
     }
 
     [Fact]

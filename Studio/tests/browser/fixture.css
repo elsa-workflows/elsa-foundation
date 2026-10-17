@@ -253,3 +253,13 @@ body {
   height: 100vh;
   width: 100vw;
 }
+
+.validation-labels-fixture {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  min-height: 100vh;
+  padding: 32px;
+  background: var(--studio-surface, var(--background));
+  color: var(--studio-text, var(--foreground));
+}

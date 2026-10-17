@@ -9,6 +9,7 @@ import type { ActivityDefinitionUsageEvidence } from "../activityDefinitionTypes
 describe("Activity Definition dependency explorer", () => {
   afterEach(() => {
     document.body.replaceChildren();
+    window.history.replaceState({}, "", "/");
   });
 
   it("loads snapshot-bound pages, preserves repeated occurrences, and renders only the selected complete cycle", async () => {
@@ -34,8 +35,15 @@ describe("Activity Definition dependency explorer", () => {
     expect(rendered.container.textContent).toContain("2 visible rows · 2 server pages");
     expect(dependencyRequests[0]).toContain("direction=outbound&transitive=false&include=versions%2Cdrafts");
     expect(dependencyRequests[1]).toContain("cursor=cursor-2");
-    expect(rendered.container.querySelector<HTMLAnchorElement>("a")?.getAttribute("href"))
+    const sourceLink = rendered.container.querySelector<HTMLAnchorElement>("a")!;
+    expect(sourceLink.getAttribute("href"))
       .toBe("/workflows/definitions?definition=workflow-1&draft=workflow-draft-1&occurrence=occurrence-a");
+    const event = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    flushSync(() => sourceLink.dispatchEvent(event));
+    expect(event.defaultPrevented).toBe(true);
+    expect(window.location.pathname + window.location.search)
+      .toBe("/workflows/definitions?definition=workflow-1&draft=workflow-draft-1&occurrence=occurrence-a");
+    window.history.replaceState({}, "", "/");
 
     click(buttonByText(rendered.container, "Review exact path"));
     await waitForText(rendered.container, "Complete cycle path");

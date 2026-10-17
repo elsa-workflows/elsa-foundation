@@ -31,9 +31,7 @@ public sealed class RuntimeOutputCaptureCompiler(
     /// <summary>The minimal output shape the capture body reads, factored so boundary and leaf contracts share it.</summary>
     private sealed record OutputCaptureTarget(
         string ReferenceKey,
-        string Name,
         ValueTypeDescriptor Type,
-        bool IsRequired,
         string StorageDriverKey,
         ValueRepresentation? SourceRepresentation);
 
@@ -51,9 +49,7 @@ public sealed class RuntimeOutputCaptureCompiler(
             definitions
                 .Select(definition => new OutputCaptureTarget(
                     definition.ReferenceKey,
-                    definition.Name,
                     new ValueTypeDescriptor(definition.Type.Alias, definition.Type.CollectionKind),
-                    definition.IsRequired,
                     definition.StorageDriverKey,
                     definition.SourceRepresentation))
                 .ToArray(),
@@ -75,9 +71,7 @@ public sealed class RuntimeOutputCaptureCompiler(
             projections
                 .Select(projection => new OutputCaptureTarget(
                     projection.Key,
-                    projection.Key,
                     projection.Type,
-                    projection.IsRequired,
                     projection.Policy.StorageProfile ?? WellKnownRuntimeDurableValueStorageDrivers.Json,
                     projection.SourceRepresentation))
                 .ToArray(),
@@ -111,11 +105,9 @@ public sealed class RuntimeOutputCaptureCompiler(
         foreach (var definition in definitions.OrderBy(x => x.ReferenceKey, StringComparer.Ordinal))
         {
             if (!authoredByReferenceKey.TryGetValue(definition.ReferenceKey, out var output))
-            {
-                if (definition.IsRequired)
-                    throw new ArgumentException($"Activity node '{nodeId}' is missing required output target '{definition.ReferenceKey}'.");
+                // Requiredness governs the value the activity must produce, not whether its caller captures
+                // that value. Result projection and reusable boundary completion enforce the source contract.
                 continue;
-            }
 
             if (!StringComparer.OrdinalIgnoreCase.Equals(output.Value.ExpressionType, VariableExpressionType) ||
                 !VariableReference.TryParse(output.Value.Value, out var target) || target is null)
@@ -163,8 +155,8 @@ public sealed class RuntimeOutputCaptureCompiler(
                 variable.Type.Alias,
                 definition.StorageDriverKey,
                 System.Text.Json.JsonSerializer.SerializeToElement(variable.Type));
-            captures.Add(definition.Name, new RuntimeOutputCapture(
-                definition.Name,
+            captures.Add(definition.ReferenceKey, new RuntimeOutputCapture(
+                definition.ReferenceKey,
                 $"{RuntimeWorkflowStateSeed.VariableValueIdPrefix}{variable.Name}",
                 type,
                 DurableValueLifecycle.Instance,

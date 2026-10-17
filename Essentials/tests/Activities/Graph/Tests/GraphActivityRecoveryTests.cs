@@ -234,6 +234,42 @@ public sealed class GraphActivityRecoveryTests
     }
 
     [Fact]
+    public async Task Retry_NestedBoundaryKeepsItsEnclosingScopeOnTheFreshExecution()
+    {
+        await using var provider = Provider();
+        var states = provider.GetRequiredService<IActivityExecutionStateStore>();
+        var identity = Identity();
+        await provider.GetRequiredService<IWorkflowExecutableStore>().SaveAsync(Executable(identity, opensBoundary: true, nodeId: "node-nested"));
+        await states.SaveAsync(State("nested", "outer", "nested", ActivityExecutionStatus.Faulted) with
+        {
+            EnclosingExecutionScopeId = "outer",
+            Metadata = PinnedMetadata(identity)
+        });
+
+        var retryHandler = provider.GetServices<IWorkflowSchedulerWorkHandler>()
+            .Single(item => item is WorkflowRetryActivityBoundarySchedulerWorkHandler);
+        await retryHandler.HandleAsync(RetryWorkItem(identity, "nested", "nested-retry"));
+
+        var retryCommit = Assert.Single(provider.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>().ListCommits());
+        var scheduled = Assert.Single(retryCommit.Commit.PostCommitIntents)
+            .Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!;
+        Assert.Equal("outer", scheduled.ExecutionScopeId);
+        var retryPayload = scheduled.Payload!.Value.Deserialize<RuntimeScheduleActivityCommandPayload>()!;
+        Assert.Equal("outer", retryPayload.SchedulingProvenance.ExecutionScopeId);
+
+        var scheduleHandler = provider.GetServices<IWorkflowSchedulerWorkHandler>()
+            .Single(item => item is WorkflowScheduleActivitySchedulerWorkHandler);
+        await scheduleHandler.HandleAsync(scheduled);
+
+        var retriedState = await states.FindAsync(WorkflowId, "nested-retry");
+        Assert.Equal("nested-retry", retriedState!.ExecutionScopeId);
+        Assert.Equal("outer", retriedState.EnclosingExecutionScopeId);
+        var inspection = await provider.GetRequiredService<IActivityExecutionInspectionStore>().FindAsync(WorkflowId, "nested-retry");
+        Assert.Equal("outer", inspection!.EnclosingExecutionScopeId);
+        Assert.Equal("outer", ActivityExecutionHierarchyProjector.FromInspection(inspection).ExecutionScopeId);
+    }
+
+    [Fact]
     public async Task Retry_RejectsARequestedExecutionIdOwnedByAnotherAttempt()
     {
         await using var provider = Provider();
@@ -271,10 +307,13 @@ public sealed class GraphActivityRecoveryTests
         JsonSerializer.SerializeToElement(new CancelActivityScopeCommand("outer", "outer", "operator-request")),
         "outer");
 
-    private static RuntimeSchedulerWorkItem RetryWorkItem(WorkflowExecutableIdentity identity) => WorkItem(
+    private static RuntimeSchedulerWorkItem RetryWorkItem(
+        WorkflowExecutableIdentity identity,
+        string activityExecutionId = "outer",
+        string retryActivityExecutionId = "outer-retry") => WorkItem(
         WorkflowExecutionCommandKind.RetryActivityBoundary,
         "retry",
-        JsonSerializer.SerializeToElement(new RetryActivityBoundaryCommand("outer", "outer-retry", identity, "policy-retry")),
+        JsonSerializer.SerializeToElement(new RetryActivityBoundaryCommand(activityExecutionId, retryActivityExecutionId, identity, "policy-retry")),
         "outer");
 
     private static RuntimeSchedulerWorkItem WorkItem(
@@ -327,14 +366,19 @@ public sealed class GraphActivityRecoveryTests
             });
     }
 
-    private static WorkflowExecutable Executable(WorkflowExecutableIdentity identity)
+    private static WorkflowExecutable Executable(
+        WorkflowExecutableIdentity identity,
+        bool opensBoundary = false,
+        string nodeId = "outer-node")
     {
         var root = new ExecutableNode(
-            "outer-node", "authored-outer", "graph", "1",
+            nodeId, $"authored-{nodeId}", "graph", "1",
             new Elsa.Activities.Runtime.Core.Models.RuntimeActivityDescriptor("elsa.graph-activity", "1", JsonSerializer.SerializeToElement(new { })),
             new Dictionary<string, RuntimeInputBinding>(),
             new Dictionary<string, RuntimeOutputCapture>(),
-            new Dictionary<string, string>());
+            opensBoundary
+                ? new Dictionary<string, string> { ["activity.definitionVersionId"] = "activity-version" }
+                : new Dictionary<string, string>());
         return new WorkflowExecutable(identity, root, new Dictionary<string, WorkflowExecutableResumeTarget>(), Now, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference);
     }
 

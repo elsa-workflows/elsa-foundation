@@ -607,6 +607,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         if (checkpointCommitter is null)
             throw new InvalidOperationException("A checkpoint committer is required to atomically persist structural activity completion.");
 
+        var completedValueSnapshots = valueSnapshots.Concat(containerVariableSnapshots).ToArray();
         await StructuralParentEvaluationSupport.CommitCompletedParentActivityAsync(
             checkpointCommitter,
             inspectionAccumulator,
@@ -616,7 +617,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
             SchedulerWorkHandlerHelpers.ReadCompletionOutcomeNames(completedParentState, skippedSubStatus: null),
             subtreeCancellationPlans,
             parentNotificationWorkItems,
-            containerVariableSnapshots,
+            completedValueSnapshots,
             completionDurableValueChanges,
             completionWorkflowVariableWriteBack,
             cancellationToken);

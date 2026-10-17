@@ -1,9 +1,16 @@
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.OpenIddict;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using OpenIddict.Abstractions;
+using OpenIddict.Core;
+using OpenIddict.EntityFrameworkCore.Models;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
 
@@ -20,6 +27,7 @@ public sealed class TokenEndpointTests : IAsyncLifetime
     private const string TokenRoute = "/_elsa/identity/token";
     private const string LoginRoute = "/_elsa/identity/login";
     private const string RefreshRoute = "/_elsa/identity/refresh";
+    private const string LogoutRoute = "/_elsa/identity/logout/aspnetcore-identity";
 
     private TokenEndpointFixture _fixture = null!;
 
@@ -230,6 +238,130 @@ public sealed class TokenEndpointTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Logout_Revokes_The_Sessions_Tokens_So_An_Old_Refresh_Token_Gets_401()
+    {
+        var client = _fixture.Client;
+        await LoginTestHelper.LoginAsync(client);
+        var accessToken = await FetchAccessTokenAsync(client);
+
+        // The cookie exchange stores a refresh token but does not hand it out, so issue the pair a
+        // refresh-capable client would hold for the same subject. The control proves refresh works pre-logout.
+        var control = await IssueRefreshTokenForAsync(accessToken);
+        var refreshToken = await IssueRefreshTokenForAsync(accessToken);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = control })).StatusCode);
+
+        var logout = await client.PostAsJsonAsync(LogoutRoute, new { });
+        Assert.Equal(HttpStatusCode.NoContent, logout.StatusCode);
+
+        // A stale tab can neither refresh nor keep using the bearer it already had.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, await CallProtectedAsync(client, accessToken));
+    }
+
+    [Fact]
+    public async Task Logout_Revokes_Only_The_Signed_Out_Subjects_Tokens()
+    {
+        var client = _fixture.Client;
+        await LoginTestHelper.LoginAsync(client);
+        var accessToken = await FetchAccessTokenAsync(client);
+        var other = await IssueForAsync(_fixture, accessToken, subject: "other-user");
+
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync(LogoutRoute, new { })).StatusCode);
+
+        // The signed-out subject's bearer is dead; another user's refresh token and bearer are untouched.
+        Assert.Equal(HttpStatusCode.Unauthorized, await CallProtectedAsync(client, accessToken));
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = other.RefreshToken })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, await CallProtectedAsync(client, other.AccessToken));
+    }
+
+    [Fact]
+    public async Task Logout_That_Cannot_Revoke_Returns_503_Keeps_The_Session_And_A_Retry_Revokes()
+    {
+        var fault = new RevocationFault { Armed = true };
+        await using var faulting = await TokenEndpointFixture.StartAsync(services =>
+        {
+            services.AddScoped<OpenIddictTokenService>();
+            services.AddScoped<ITokenService>(provider => new RevocationFaultTokenService(provider.GetRequiredService<OpenIddictTokenService>(), fault));
+        });
+
+        await AssertFailedLogoutKeepsTheSessionAndARetryRevokesAsync(faulting, fault);
+    }
+
+    [Fact]
+    public async Task Logout_Whose_Store_Declines_A_Revocation_Returns_503_Keeps_The_Session_And_A_Retry_Revokes()
+    {
+        // OpenIddict's TryRevokeAsync answers false (no throw) on a non-fatal update failure such as a concurrency
+        // conflict. One entry declining must still fail the sign-out rather than leave that token valid.
+        var fault = new RevocationFault { Armed = true };
+        await using var faulting = await TokenEndpointFixture.StartAsync(services =>
+        {
+            services.AddSingleton(fault);
+            services.AddOpenIddict().AddCore(core =>
+                core.ReplaceTokenManager<OpenIddictEntityFrameworkCoreToken, DecliningTokenManager>());
+        });
+
+        await AssertFailedLogoutKeepsTheSessionAndARetryRevokesAsync(faulting, fault);
+    }
+
+    [Fact]
+    public async Task Logout_With_Another_Subjects_Bearer_Ends_The_Cookie_Session_And_Leaves_The_Bearer_Subject_Alone()
+    {
+        var client = _fixture.Client;
+        await LoginTestHelper.LoginAsync(client);
+        var sessionToken = await FetchAccessTokenAsync(client);
+        var sessionRefresh = await IssueRefreshTokenForAsync(sessionToken);
+        var other = await IssueForAsync(_fixture, sessionToken, subject: "other-user");
+
+        // The selector would pick the bearer, but logout acts on the provider's cookie session.
+        Assert.Equal(HttpStatusCode.NoContent, await LogoutWithBearerAsync(client, other.AccessToken));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(TokenRoute)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = sessionRefresh })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, await CallProtectedAsync(client, sessionToken));
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = other.RefreshToken })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, await CallProtectedAsync(client, other.AccessToken));
+    }
+
+    [Fact]
+    public async Task Bearer_Only_Logout_Signs_Out_The_Bearers_Own_Subject_And_No_Other()
+    {
+        var client = _fixture.Client;
+        await LoginTestHelper.LoginAsync(client);
+        var accessToken = await FetchAccessTokenAsync(client);
+        var refreshToken = await IssueRefreshTokenForAsync(accessToken);
+        var other = await IssueForAsync(_fixture, accessToken, subject: "other-user");
+        var cookie = WithoutCookie(client);
+
+        Assert.Equal(HttpStatusCode.NoContent, await LogoutWithBearerAsync(client, accessToken));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, await CallProtectedAsync(client, accessToken));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = other.RefreshToken })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, await CallProtectedAsync(client, other.AccessToken));
+
+        // The subject is an Identity user, so its security stamp rotated: the cookie it also held is dead too.
+        client.DefaultRequestHeaders.Add("Cookie", cookie);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(TokenRoute)).StatusCode);
+    }
+
+    [Fact]
+    public async Task Bearer_Only_Logout_Of_A_Subject_That_Is_No_Identity_User_Revokes_And_Returns_204()
+    {
+        var client = _fixture.Client;
+        await LoginTestHelper.LoginAsync(client);
+        var other = await IssueForAsync(_fixture, await FetchAccessTokenAsync(client), subject: "other-user");
+        var cookie = WithoutCookie(client);
+
+        // No Identity user resolves, so there is no stamp to rotate: revoke, then 204, never a 500.
+        Assert.Equal(HttpStatusCode.NoContent, await LogoutWithBearerAsync(client, other.AccessToken));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, await CallProtectedAsync(client, other.AccessToken));
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken = other.RefreshToken })).StatusCode);
+        client.DefaultRequestHeaders.Add("Cookie", cookie);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(TokenRoute)).StatusCode);
+    }
+
+    [Fact]
     public async Task Refresh_With_A_Garbage_Token_Returns_401_Not_500()
     {
         // Regression for the refresh error contract: an invalid/expired/replayed refresh token makes
@@ -274,5 +406,93 @@ public sealed class TokenEndpointTests : IAsyncLifetime
         return response.AccessToken;
     }
 
+    /// <summary>With the fault armed logout fails and keeps the session; once it clears, a retry revokes.</summary>
+    private static async Task AssertFailedLogoutKeepsTheSessionAndARetryRevokesAsync(TokenEndpointFixture fixture, RevocationFault fault)
+    {
+        var client = fixture.Client;
+        await LoginTestHelper.LoginAsync(client);
+        var accessToken = await FetchAccessTokenAsync(client);
+        var refreshToken = (await IssueForAsync(fixture, accessToken)).RefreshToken;
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await client.PostAsJsonAsync(LogoutRoute, new { })).StatusCode);
+
+        // The security stamp did not rotate: the same cookie still exchanges, so the retry runs as the subject.
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(TokenRoute)).StatusCode);
+
+        fault.Armed = false;
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync(LogoutRoute, new { })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync(RefreshRoute, new { refreshToken })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, await CallProtectedAsync(client, accessToken));
+    }
+
+    /// <summary>Posts logout carrying the bearer (plus whatever cookie the client holds).</summary>
+    private static async Task<HttpStatusCode> LogoutWithBearerAsync(HttpClient client, string accessToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, LogoutRoute) { Content = JsonContent.Create(new { }) };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        return (await client.SendAsync(request)).StatusCode;
+    }
+
+    /// <summary>Drops the client's cookie so the next request carries no provider session; returns it.</summary>
+    private static string WithoutCookie(HttpClient client)
+    {
+        var cookie = client.DefaultRequestHeaders.GetValues("Cookie").Single();
+        client.DefaultRequestHeaders.Remove("Cookie");
+        return cookie;
+    }
+
+    private async Task<string> IssueRefreshTokenForAsync(string accessToken) => (await IssueForAsync(_fixture, accessToken)).RefreshToken!;
+
+    /// <summary>Issues a pair in the access token's tenant, for its subject unless another is named.</summary>
+    private static async Task<TokenIssueResult> IssueForAsync(TokenEndpointFixture fixture, string accessToken, string? subject = null)
+    {
+        await using var scope = fixture.Services.CreateAsyncScope();
+        var tokens = scope.ServiceProvider.GetRequiredService<ITokenService>();
+        var principal = (await tokens.ValidateAsync(new TokenValidationRequest(accessToken))).Principal!;
+        return await tokens.IssueAsync(new TokenIssueRequest(
+            subject ?? principal.FindFirst(ClaimTypes.NameIdentifier)!.Value, principal.FindFirst(IdentityClaimTypes.TenantId)!.Value, []));
+    }
+
+    private static async Task<HttpStatusCode> CallProtectedAsync(HttpClient client, string accessToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/protected");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        return (await client.SendAsync(request)).StatusCode;
+    }
+
     private sealed record AccessTokenPayload(string AccessToken, DateTimeOffset ExpiresAt);
+
+    private sealed class RevocationFault
+    {
+        public bool Armed { get; set; }
+
+        /// <summary>The one entry a declining store refuses while armed: the first it is asked to revoke.</summary>
+        public string? DeclinedEntryId { get; set; }
+    }
+
+    /// <summary>The real token manager, except that while armed it declines (returns false for) one entry.</summary>
+    private sealed class DecliningTokenManager(
+        IOpenIddictTokenCache<OpenIddictEntityFrameworkCoreToken> cache,
+        ILogger<OpenIddictTokenManager<OpenIddictEntityFrameworkCoreToken>> logger,
+        IOptionsMonitor<OpenIddictCoreOptions> options,
+        IOpenIddictTokenStore<OpenIddictEntityFrameworkCoreToken> store,
+        RevocationFault fault) : OpenIddictTokenManager<OpenIddictEntityFrameworkCoreToken>(cache, logger, options, store)
+    {
+        public override ValueTask<bool> TryRevokeAsync(OpenIddictEntityFrameworkCoreToken token, CancellationToken cancellationToken = default) =>
+            fault.Armed && (fault.DeclinedEntryId ??= token.Id) == token.Id
+                ? ValueTask.FromResult(false)
+                : base.TryRevokeAsync(token, cancellationToken);
+    }
+
+    /// <summary>The real token service, except that subject revocation throws while the fault is armed.</summary>
+    private sealed class RevocationFaultTokenService(ITokenService inner, RevocationFault fault) : ITokenService
+    {
+        public ValueTask<TokenIssueResult> IssueAsync(TokenIssueRequest request, CancellationToken cancellationToken = default) => inner.IssueAsync(request, cancellationToken);
+        public ValueTask<TokenRefreshResult> RefreshAsync(TokenRefreshRequest request, CancellationToken cancellationToken = default) => inner.RefreshAsync(request, cancellationToken);
+        public ValueTask<TokenValidationResult> ValidateAsync(TokenValidationRequest request, CancellationToken cancellationToken = default) => inner.ValidateAsync(request, cancellationToken);
+        public ValueTask RevokeAsync(TokenRevocationRequest request, CancellationToken cancellationToken = default) => inner.RevokeAsync(request, cancellationToken);
+
+        public ValueTask RevokeSubjectAsync(string subjectId, CancellationToken cancellationToken = default) =>
+            fault.Armed ? throw new InvalidOperationException("The token store is unavailable.") : inner.RevokeSubjectAsync(subjectId, cancellationToken);
+    }
 }
