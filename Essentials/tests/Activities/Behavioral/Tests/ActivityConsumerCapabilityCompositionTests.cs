@@ -1,6 +1,7 @@
 using Elsa.Activities.Graph.Runtime;
 using Elsa.Activities.Primitives;
 using Elsa.Activities.Runtime.Core.Contracts;
+using Elsa.Activities.Runtime.Core.Extensions;
 using Elsa.Activities.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -10,13 +11,6 @@ namespace Elsa.Activities.Behavioral.Tests;
 /// <summary>
 /// Guards the capability registry against implementation-type collisions.
 /// </summary>
-/// <remarks>
-/// Capabilities are registered with <c>TryAddEnumerable</c>, which de-duplicates by implementation type.
-/// When two features registered instances of the same class, whichever composed second was silently dropped
-/// and the runtime refused artifacts it could execute. These cases compose <em>both</em> features — a container
-/// holding only one of them passes with or without the fix — and do so in both registration orders, because
-/// which capability loses a collision depends on composition order, which CShells does not guarantee.
-/// </remarks>
 public sealed class ActivityConsumerCapabilityCompositionTests
 {
     [Fact]
@@ -52,16 +46,20 @@ public sealed class ActivityConsumerCapabilityCompositionTests
         Assert.Equal(2, capabilities.Count);
     }
 
-    [Fact]
-    public void Every_registered_capability_has_its_own_implementation_type()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void A_third_consumer_can_share_the_capability_record_in_either_composition_order(bool thirdFirst)
     {
-        var capabilities = Compose(
-            services => new ActivitiesPrimitivesFeature().ConfigureServices(services),
-            services => new GraphActivitiesRuntimeFeature().ConfigureServices(services));
+        Action<IServiceCollection> third = services =>
+            services.AddRuntimeActivityConsumerCapability("sample.third", ["1"]);
+        Action<IServiceCollection> primitives = services => new ActivitiesPrimitivesFeature().ConfigureServices(services);
+        Action<IServiceCollection> graph = services => new GraphActivitiesRuntimeFeature().ConfigureServices(services);
+        var capabilities = thirdFirst ? Compose(third, graph, primitives) : Compose(primitives, graph, third);
 
-        var distinctTypes = capabilities.Select(capability => capability.GetType()).Distinct().Count();
-
-        Assert.Equal(capabilities.Count, distinctTypes);
+        AssertBothConsumersAdvertised(capabilities);
+        Assert.Equal("1", Assert.Single(Assert.Single(capabilities, capability => capability.ConsumerKey == "sample.third").SupportedSchemaVersions));
+        Assert.Equal(3, capabilities.Count);
     }
 
     private static void AssertBothConsumersAdvertised(IReadOnlyCollection<IRuntimeActivityConsumerCapability> capabilities)
@@ -78,6 +76,7 @@ public sealed class ActivityConsumerCapabilityCompositionTests
         var services = new ServiceCollection();
         foreach (var feature in features)
             feature(services);
-        return services.BuildServiceProvider().GetServices<IRuntimeActivityConsumerCapability>().ToList();
+        using var provider = services.BuildServiceProvider();
+        return provider.GetServices<IRuntimeActivityConsumerCapability>().ToList();
     }
 }

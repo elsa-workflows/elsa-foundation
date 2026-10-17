@@ -7,23 +7,8 @@ namespace Elsa.Activities.Primitives.Activation;
 /// Advertises that this engine can activate CLR-backed nodes (<see cref="WellKnownRuntimeActivityConsumers.ClrActivity"/>).
 /// </summary>
 /// <remarks>
-/// <para>
-/// <b>It is its own type on purpose, and that is load-bearing.</b> Capabilities are registered with
-/// <c>TryAddEnumerable</c>, which de-duplicates by <em>implementation type</em>. This capability and the graph
-/// one previously shared the single generic <c>RuntimeActivityConsumerCapability</c> class and differed only in
-/// data, so whichever feature composed second was <b>silently discarded</b> — an engine composing both
-/// <c>ActivitiesPrimitives</c> and <c>GraphActivitiesRuntime</c> advertised only one of them.
-/// </para>
-/// <para>
-/// The consequence was not cosmetic: the import gate and the publishing preflight both read this
-/// registry, so a fully-featured engine reported <c>activity consumer 'elsa.clr-activity' schema '1' is not
-/// installed</c> and refused to import artifacts it was perfectly able to run. It stayed hidden because nothing
-/// enumerated the registry until the import gate was added.
-/// </para>
-/// <para>
-/// A distinct type per capability keeps <c>TryAddEnumerable</c>'s idempotency — composing a feature twice still
-/// registers once — while making the de-duplication key match the thing being de-duplicated.
-/// </para>
+/// Retained for consumers constructing this public capability directly. Feature authors should use
+/// <c>AddRuntimeActivityConsumerCapability</c> to register by consumer key and supported schemas.
 /// </remarks>
 public sealed class ClrActivityConsumerCapability : IRuntimeActivityConsumerCapability
 {
