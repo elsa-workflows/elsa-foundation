@@ -83,9 +83,8 @@ export function isHttpEndpointType(activityType: string | null | undefined): boo
     || normalized?.endsWith(".httpendpoint") === true;
 }
 
-/** Produces a requestable example by replacing ASP.NET route parameters with editable sample values. */
-export function makeInitialHttpTestPath(routeTemplate: string, basePath: string): string {
-  const base = normalizePathPrefix(basePath, "HTTP base path");
+/** Produces an editable endpoint path with sample values for ASP.NET route parameters. */
+export function makeInitialHttpTestEndpointPath(routeTemplate: string): string {
   const exampleRoute = routeTemplate
     .trim()
     .replace(/^\/+/, "")
@@ -97,7 +96,7 @@ export function makeInitialHttpTestPath(routeTemplate: string, basePath: string)
     });
 
   if (!exampleRoute) throw new Error("The published HTTP endpoint does not have a request path.");
-  return `${base}/${exampleRoute}`;
+  return `/${exampleRoute}`;
 }
 
 /**

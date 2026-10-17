@@ -1,17 +1,19 @@
 import { useEffect, useRef, type RefObject } from "react";
 
 const focusableSelector = [
-  "button:not(:disabled)",
-  "input:not(:disabled)",
-  "textarea:not(:disabled)",
-  "select:not(:disabled)",
+  "button",
+  "input:not([type='hidden'])",
+  "textarea",
+  "select",
   "[href]",
-  "[tabindex]:not([tabindex='-1'])"
-].join(",");
+  "[contenteditable='true']",
+  "[tabindex]"
+].map(selector => `${selector}:not(:disabled)`).join(",");
 
 function getFocusableElements(dialog: HTMLElement | null) {
   return [...(dialog?.querySelectorAll<HTMLElement>(focusableSelector) ?? [])]
-    .filter(element => !element.closest("[hidden], [aria-hidden='true']"));
+    .filter(element => (!element.hasAttribute("tabindex") || element.tabIndex >= 0)
+      && !element.closest("[hidden], [aria-hidden='true']"));
 }
 
 export function useDialogFocus(
