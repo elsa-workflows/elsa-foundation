@@ -96,12 +96,13 @@ public sealed class BackgroundActivityWorkerTests
         Assert.Equal("body failed", throwHarness.Store.Item.Result.Fault.Message);
         Assert.Equal(1, throwProbe.Disposals);
 
-        var disposeProbe = new Probe(_ => ActivityTransition.Complete(9)) { DisposeFailure = true };
+        var disposeProbe = new Probe(_ => throw new ClassifiedActivityException("body failed", "RetryableBodyFailure", true)) { DisposeFailure = true };
         await using var disposeHarness = await Harness.CreateAsync<int>(disposeProbe, "0");
         await disposeHarness.RunAsync();
 
         Assert.Equal(BackgroundActivityWorkResultKind.Fault, disposeHarness.Store.Item!.Result!.Kind);
         Assert.Equal("ActivityDisposalFailed", disposeHarness.Store.Item.Result.Fault!.Code);
+        Assert.True(disposeHarness.Store.Item.Result.Fault.IsRetryable);
         Assert.Equal(1, disposeProbe.Disposals);
     }
 
@@ -168,6 +169,55 @@ public sealed class BackgroundActivityWorkerTests
         Assert.Equal(0, probe.Disposals);
         Assert.Equal(BackgroundActivityWorkResultKind.Fault, harness.Store.Item!.Result!.Kind);
         Assert.Contains("pinned executable artifact", harness.Store.Item.Result.Fault!.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Missing_pinned_executable_is_recorded_as_terminal_validation_fault()
+    {
+        var probe = new Probe(_ => ActivityTransition.Complete(1));
+        await using var harness = await Harness.CreateAsync<int>(
+            probe, "1", executableReaderOverride: new MissingWorkflowExecutableReader());
+
+        await harness.RunAsync();
+
+        Assert.Equal(0, probe.Executions);
+        Assert.Equal(0, probe.Disposals);
+        Assert.Equal(BackgroundActivityWorkResultKind.Fault, harness.Store.Item!.Result!.Kind);
+        Assert.Contains("pinned background executable is unavailable", harness.Store.Item.Result.Fault!.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("coordinator-work-1", (await harness.Queue.DequeueAsync(harness.Request.WorkflowExecutionId))!.WorkItemId);
+    }
+
+    [Fact]
+    public async Task Preserves_declared_classification_for_activation_faults()
+    {
+        var probe = new Probe(_ => ActivityTransition.Complete(1));
+        var failure = new ClassifiedActivityException("resolver unavailable", "SecretStoreUnavailable", isRetryable: true);
+        await using var harness = await Harness.CreateAsync<int>(probe, "1", activationOverride: () => throw failure);
+
+        await harness.RunAsync();
+
+        Assert.Equal(0, probe.Executions);
+        Assert.Equal(BackgroundActivityWorkResultKind.Fault, harness.Store.Item!.Result!.Kind);
+        Assert.Equal("SecretStoreUnavailable", harness.Store.Item.Result.Fault!.Code);
+        Assert.True(harness.Store.Item.Result.Fault.IsRetryable);
+    }
+
+    [Fact]
+    public async Task Pinned_executable_read_failure_propagates_and_leaves_claim_recoverable()
+    {
+        var probe = new Probe(_ => ActivityTransition.Complete(1));
+        var failure = new ProviderLikeExecutableReadException("simulated transient artifact read failure");
+        await using var harness = await Harness.CreateAsync<int>(
+            probe, "1", executableReaderOverride: new ThrowingWorkflowExecutableReader(failure));
+
+        var thrown = await Assert.ThrowsAsync<ProviderLikeExecutableReadException>(() => harness.RunAsync());
+
+        Assert.Same(failure, thrown);
+        Assert.Equal(0, probe.Executions);
+        Assert.Equal(0, probe.Disposals);
+        Assert.Equal(BackgroundActivityWorkStatus.Claimed, harness.Store.Item!.Status);
+        Assert.Null(harness.Store.Item.Result);
+        Assert.Null(await harness.Queue.DequeueAsync(harness.Request.WorkflowExecutionId));
     }
 
     [Fact]
@@ -250,7 +300,8 @@ public sealed class BackgroundActivityWorkerTests
             Probe probe,
             string expectedJson,
             Func<IActivity>? activationOverride = null,
-            WorkflowExecutableIdentity? requestIdentityOverride = null)
+            WorkflowExecutableIdentity? requestIdentityOverride = null,
+            IWorkflowExecutableReader? executableReaderOverride = null)
         {
             var activityType = typeof(ProbeActivity<TResult>);
             var activityAlias = TypeAliasConvention.CanonicalAlias(activityType);
@@ -270,6 +321,8 @@ public sealed class BackgroundActivityWorkerTests
                 RenewalIntervalSeconds = 3600
             }.ConfigureServices(services);
             services.Replace(ServiceDescriptor.Singleton<IWorkflowExecutableStore>(executableStore));
+            if (executableReaderOverride is not null)
+                services.Replace(ServiceDescriptor.Scoped<IWorkflowExecutableReader>(_ => executableReaderOverride));
             services.Replace(ServiceDescriptor.Scoped<IBackgroundActivityWorkStore>(serviceProvider =>
                 new TestBackgroundActivityWorkStore(serviceProvider.GetRequiredService<IPersistenceAccessContextAccessor>(), store)));
             services.Replace(ServiceDescriptor.Singleton<IActivityActivator>(new ProbeActivator(
@@ -329,6 +382,27 @@ public sealed class BackgroundActivityWorkerTests
     {
         public ValueTask<ActivityActivationLease> ActivateAsync(ActivityActivationRequest request, CancellationToken cancellationToken = default) =>
             ValueTask.FromResult(new ActivityActivationLease(create()));
+    }
+
+    private sealed class ProviderLikeExecutableReadException(string message) : InvalidOperationException(message);
+
+    private sealed class ClassifiedActivityException(string message, string? failureCode, bool isRetryable)
+        : Exception(message), IRuntimeFaultClassification
+    {
+        public string? FailureCode { get; } = failureCode;
+        public bool IsRetryable { get; } = isRetryable;
+    }
+
+    private sealed class ThrowingWorkflowExecutableReader(Exception failure) : IWorkflowExecutableReader
+    {
+        public ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<WorkflowExecutable?>(failure);
+    }
+
+    private sealed class MissingWorkflowExecutableReader : IWorkflowExecutableReader
+    {
+        public ValueTask<WorkflowExecutable?> FindAsync(string artifactId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<WorkflowExecutable?>(null);
     }
 
     private sealed class TestBackgroundActivityWorkStoreState

@@ -107,13 +107,19 @@ public sealed class BackgroundActivityWorker(
         CancellationToken cancellationToken)
     {
         using var masking = ActivityFaultMasking.For(services, request.ActivityExecutionId);
+        // A failed read of the immutable artifact is an infrastructure failure, not an activity outcome. Let it
+        // escape so the durable claim can expire and be retried; only a successful read that finds no artifact is a
+        // terminal validation fault for this admitted invocation.
+        var executable = await PinnedExecutableRead.FindAsync(services, request.Executable.ArtifactId, cancellationToken);
+
         ActivityActivationLease? activation = null;
         BackgroundActivityWorkTerminalResult? result = null;
         Exception? failure = null;
         try
         {
-            var executable = await PinnedExecutableRead.FindAsync(services, request.Executable.ArtifactId, cancellationToken)
-                ?? throw new InvalidOperationException("BG-ACT-002: The pinned background executable is unavailable.");
+            if (executable is null)
+                throw new InvalidOperationException("BG-ACT-002: The pinned background executable is unavailable.");
+
             SchedulerWorkHandlerHelpers.ValidatePinnedExecutable(request.CoordinatorWorkItem, request.Executable, executable.Identity);
             var node = SchedulerWorkHandlerHelpers.ResolveExecutableNode(request.CoordinatorWorkItem, executable, request.ExecutableNodeId, "BackgroundActivity");
             BackgroundActivityEligibility.Validate(node);
@@ -174,9 +180,15 @@ public sealed class BackgroundActivityWorker(
         if (failure is null)
             return result ?? throw new InvalidOperationException("The background activity returned no result.");
         var safe = masking.Mask(failure);
+        var classification = safe as IRuntimeFaultClassification;
+        var code = disposalFailure is not null
+            ? "ActivityDisposalFailed"
+            : string.IsNullOrWhiteSpace(classification?.FailureCode)
+                ? "BackgroundActivityFaulted"
+                : classification.FailureCode;
         return new BackgroundActivityWorkTerminalResult(BackgroundActivityWorkResultKind.Fault,
             fault: new NormalizedActivityFault(
-                disposalFailure is null ? "BackgroundActivityFaulted" : "ActivityDisposalFailed",
-                safe.GetType().FullName!, safe.Message, safe.StackTrace, isRetryable: false));
+                code,
+                safe.GetType().FullName!, safe.Message, safe.StackTrace, isRetryable: classification?.IsRetryable ?? false));
     }
 }
