@@ -180,6 +180,12 @@ public sealed class EfRuntimeCheckpointCommitStore(
                     touchedTestScopes,
                     writeCancellationToken);
 
+                await EfRuntimeCheckpointBackgroundActivityParticipantStaging.StageAsync(
+                    context,
+                    commit,
+                    scope,
+                    writeCancellationToken);
+
                 await EfRuntimeCheckpointOutboxParticipantStaging.StageAsync(
                     context,
                     commit,
@@ -263,6 +269,8 @@ public sealed class EfRuntimeCheckpointCommitStore(
     private static void ValidateThinSlice(RuntimeCheckpointCommit commit)
     {
         var changes = commit.StateChanges;
+        if (changes.BackgroundActivityWork.Admissions.Count > 0 && commit.ExpectedFence is null)
+            throw new RuntimeCheckpointCommitValidationException("Background activity work admission requires the current workflow execution fence.");
         if (changes.WorkflowExecution is { Operation: not RuntimeStateChangeOperation.Upsert })
             throw new NotSupportedException("The R19 EF checkpoint slice supports workflow-execution upserts only.");
         if (changes.Scheduler is { Operation: not RuntimeStateChangeOperation.Upsert })

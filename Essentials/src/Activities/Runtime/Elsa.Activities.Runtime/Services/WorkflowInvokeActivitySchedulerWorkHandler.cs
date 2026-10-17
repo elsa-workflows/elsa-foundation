@@ -87,7 +87,49 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         var payloadCapturePolicy = serviceProvider.GetService<IRuntimePayloadCapturePolicy>() ?? new DefaultRuntimePayloadCapturePolicy();
         // Released once the outcome is recorded, after every fault boundary below has masked its text.
         using var faultMasking = ActivityFaultMasking.For(serviceProvider, invokePayload.ActivityExecutionId);
-        await InvokeActivityAsync(serviceProvider, activityExecutionStateStore, schedulerWorkQueue, durableValueStateStore, checkpointCommitter, activityFaultIncidentRecorder, inspectionAccumulator, payloadCapturePolicy, faultMasking, workItem, invokePayload, executable, executableNode, state, cancellationToken);
+        BackgroundActivityWorkItem? backgroundResult = null;
+        if (executableNode.ExecutionPlacement == ActivityExecutionPlacement.Background)
+        {
+            try
+            {
+                backgroundResult = await serviceProvider.GetRequiredService<BackgroundActivityCoordinator>()
+                    .GetResultOrAdmitAsync(workItem, invokePayload, executableNode, state, cancellationToken);
+            }
+            catch (BackgroundActivityValidationException exception)
+            {
+                // Deterministic contract/configuration failures become visible native incidents. Provider errors
+                // and ownership-fence failures still escape to the scheduler's retry/ownership policy.
+                await RecordFaultAsync(activityFaultIncidentRecorder, activityExecutionStateStore, checkpointCommitter,
+                    faultMasking, workItem, invokePayload, state, exception, "BackgroundActivityValidationFailed", [], cancellationToken);
+                return;
+            }
+            if (backgroundResult is null)
+                return;
+        }
+        using var resultApplication = backgroundResult is null
+            ? null
+            : serviceProvider.GetRequiredService<BackgroundActivityResultApplication>().Begin(backgroundResult);
+        await InvokeActivityAsync(serviceProvider, activityExecutionStateStore, schedulerWorkQueue, durableValueStateStore, checkpointCommitter, activityFaultIncidentRecorder, inspectionAccumulator, payloadCapturePolicy, faultMasking, workItem, invokePayload, executable, executableNode, state, backgroundResult, cancellationToken);
+    }
+    private static ActivityTransition MaterializeBackgroundTransition(
+        IServiceProvider services,
+        ActivityContract contract,
+        BackgroundActivityWorkTerminalResult result) => result.Kind switch
+    {
+        BackgroundActivityWorkResultKind.Complete => services.GetRequiredService<BackgroundActivityCompletionCodec>().Deserialize(
+            contract, result.ResultJson ?? "null", result.Outcome,
+            services.GetRequiredService<Microsoft.Extensions.Options.IOptions<BackgroundActivityWorkerOptions>>().Value.MaximumResultBytes),
+        BackgroundActivityWorkResultKind.Fault => ActivityTransition.Fault<ActivityUnit>(new ActivityFault(
+            result.Fault!.Code, result.Fault.Message, result.Fault.IsRetryable,
+            result.Fault.Metadata.GetValueOrDefault(ActivityFault.CategoryMetadataKey),
+            result.Fault.Metadata.GetValueOrDefault(ActivityFault.FaultTypeMetadataKey))),
+        BackgroundActivityWorkResultKind.Cancel => ActivityTransition.Cancel<ActivityUnit>(result.CancellationReason!),
+        _ => throw new InvalidOperationException("BG-ACT-005: The background receipt has an unsupported terminal result.")
+    };
+
+    private sealed class CommittedBackgroundResultActivity(ActivityTransition transition) : IActivity
+    {
+        public ValueTask<ActivityTransition> ExecuteAsync(ActivityExecutionContext context) => ValueTask.FromResult(transition);
     }
 
     private async ValueTask InvokeActivityAsync(
@@ -105,6 +147,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         WorkflowExecutable executable,
         ExecutableNode executableNode,
         ActivityExecutionState state,
+        BackgroundActivityWorkItem? backgroundResult,
         CancellationToken cancellationToken)
     {
         var workflowDispatchStaging = serviceProvider.GetService<IWorkflowDispatchStagingAccessor>();
@@ -178,20 +221,31 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             // InvalidOperationException) escaped to the scheduler loop and left the run silently at Running with
             // no incident. Recording it as a blocking incident faults the activity and surfaces a queryable cause.
             valueFlowSnapshot = state.InputSnapshot!;
-            var activationClaim = await ActivityAttemptActivationClaimer.ClaimInvokeAsync(
-                checkpointCommitter,
-                TimeProvider,
-                workItem,
-                invokePayload,
-                state,
-                activityContract.SideEffectProfile,
-                cancellationToken);
-            state = activationClaim.State;
-            valueFlowAttempt = activationClaim.Attempt;
-            activationLease = await serviceProvider.GetRequiredService<IActivityActivator>().ActivateAsync(
-                new ActivityActivationRequest(WorkflowExecutionId: workItem.WorkflowExecutionId, ActivityExecutionId: invokePayload.ActivityExecutionId, activityContract, valueFlowSnapshot, valueFlowAttempt, Descriptor: executableNode.Descriptor),
-                cancellationToken);
-            activity = activationLease.Activity;
+            if (backgroundResult is null)
+            {
+                var activationClaim = await ActivityAttemptActivationClaimer.ClaimInvokeAsync(
+                    checkpointCommitter,
+                    TimeProvider,
+                    workItem,
+                    invokePayload,
+                    state,
+                    activityContract.SideEffectProfile,
+                    cancellationToken);
+                state = activationClaim.State;
+                valueFlowAttempt = activationClaim.Attempt;
+                activationLease = await serviceProvider.GetRequiredService<IActivityActivator>().ActivateAsync(
+                    new ActivityActivationRequest(WorkflowExecutionId: workItem.WorkflowExecutionId, ActivityExecutionId: invokePayload.ActivityExecutionId, activityContract, valueFlowSnapshot, valueFlowAttempt, Descriptor: executableNode.Descriptor),
+                    cancellationToken);
+                activity = activationLease.Activity;
+            }
+            else
+            {
+                // The worker already activated and executed the original body. Only its immutable typed
+                // transition enters the usual native projection/fault path; no second activation or effect.
+                valueFlowAttempt = backgroundResult.Request.Attempt;
+                activity = new CommittedBackgroundResultActivity(
+                    MaterializeBackgroundTransition(serviceProvider, activityContract, backgroundResult.Result!));
+            }
 
             var executionContextState = valueFlowAttempt is null
                 ? state
@@ -558,7 +612,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
             returnedFault = faultMasking.Mask(returnedFault);
             var faultedState = state with
             {
-                Fault = returnedFault.ToNormalized()
+                Fault = backgroundResult?.Result?.Fault ?? returnedFault.ToNormalized()
             };
             await RecordMaskedFaultAsync(
                 activityFaultIncidentRecorder,

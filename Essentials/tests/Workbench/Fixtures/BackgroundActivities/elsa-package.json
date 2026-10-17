@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1.0",
+  "package": {
+    "id": "Elsa.Workbench.Tests.BackgroundActivities",
+    "version": "1.0.0"
+  },
+  "displayName": "Background activity test witness",
+  "description": "Test-only package assembled into one owned Workbench feed.",
+  "features": [
+    {
+      "id": "Elsa.Workbench.Tests.BackgroundActivities.BackgroundActivityWitness",
+      "typeName": "Elsa.Workbench.Tests.BackgroundActivities.BackgroundActivityWitnessFeature",
+      "displayName": "Background activity witness",
+      "dependencies": [
+        { "featureId": "BackgroundActivities", "optional": false },
+        { "featureId": "WorkflowsRuntimeEntityFrameworkCore", "optional": false }
+      ],
+      "extensions": { "cshellsFeatureName": "BackgroundActivityWitness" }
+    }
+  ]
+}

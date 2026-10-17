@@ -128,6 +128,7 @@
       "Essentials/src/Workflows/Runtime/ReferenceGarbageCollection/Elsa.Workflows.Runtime.ReferenceGarbageCollection.csproj",
       "Essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj",
       "Essentials/src/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj",
+      "Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj",
       "Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj",
       "Extensions/Agent/src/Api/Elsa.Agent.Api.csproj",
       "Extensions/Agent/src/Core/Elsa.Agent.Core.csproj",

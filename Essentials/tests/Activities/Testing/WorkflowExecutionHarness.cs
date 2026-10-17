@@ -650,6 +650,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             inputBindings,
             node.OutputCaptures,
             node.Metadata,
+            node.ExecutionPlacement,
             childSlots,
             node.Structure,
             contract,
@@ -821,7 +822,8 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             new ActivityActivationRequirement(descriptor.Kind, alias),
             // Mirror ExecutableNodeCompiler.ResolveSideEffectProfile: unmarked ⇒ External.
             sideEffectProfile: activityType.GetCustomAttribute<ActivitySideEffectProfileAttribute>(inherit: true)?.Profile
-                ?? SideEffectProfile.External);
+                ?? SideEffectProfile.External,
+            supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true));
     }
 
     private static (string Kind, JsonElement Payload) NewClrDescriptor(Type activityType)

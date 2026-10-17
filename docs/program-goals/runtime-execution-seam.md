@@ -8,6 +8,12 @@ Area: Workflows Runtime architecture / executable artifact seam.
 
 Steward(s): Joey plus the incoming runtime architect.
 
+## Native background activity proof (2026-10-17)
+
+Owner-authorized production slice: [#2914](https://github.com/elsa-workflows/elsa-foundation/issues/2914), under [adoption feature #2905](https://github.com/elsa-workflows/elsa-foundation/issues/2905) and [unified execution program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892). [Spec 241](../../specs/241-native-durable-offload/spec.md), [plan](../../specs/241-native-durable-offload/plan.md) and [tasks](../../specs/241-native-durable-offload/tasks.md) are the resumable implementation record. This explicit owner-authorized slice does not reactivate the rest of the parked bucket.
+
+The native Sequence/Flowchart journey now proves overlapping background leaf work, EF durability, explicit cancellation and one logical parent continuation. The serialized workflow coordinator retains composition decisions; independent workers own only leased work/results. Both real Workbench recovery orders and explicit REST cancellation across restart pass. [The acceptance record](../../specs/241-native-durable-offload/quickstart.md) contains exact source revisions, affected suites, deliberate failure controls and limits. Delivery is [draft PR #2915](https://github.com/elsa-workflows/elsa-foundation/pull/2915); merge and deployment remain separate. The next production slice is not selected by this proof, and the broader BPMN/ETL/actor-provider decisions retain their program gates.
+
 ## Purpose
 
 Create a focused coordination bucket for the Workflows Runtime execution seam so the incoming architect can start from the current evidence, define the runnable artifact boundary, and move into Speckit without reopening the broader Elsa Foundation Operating Model work.

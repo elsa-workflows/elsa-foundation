@@ -17,6 +17,7 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
     private readonly IWorkflowExecutableStore? _workflowExecutableStore;
     private readonly TimeProvider _timeProvider;
     private readonly IWorkflowExecutableReader? _executableReader;
+    private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
 
     public WorkflowCompleteActivitySchedulerWorkHandler(
         IActivityExecutionStateStore activityExecutionStateStore,
@@ -32,6 +33,23 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         IWorkflowExecutableStore? workflowExecutableStore,
         TimeProvider timeProvider,
         IWorkflowExecutableReader? executableReader = null)
+        : this(
+            activityExecutionStateStore,
+            schedulerWorkQueue,
+            workflowExecutableStore,
+            timeProvider,
+            workflowExecutionStateStore: null,
+            executableReader: executableReader)
+    {
+    }
+
+    public WorkflowCompleteActivitySchedulerWorkHandler(
+        IActivityExecutionStateStore activityExecutionStateStore,
+        IWorkflowSchedulerWorkQueue schedulerWorkQueue,
+        IWorkflowExecutableStore? workflowExecutableStore,
+        TimeProvider timeProvider,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore,
+        IWorkflowExecutableReader? executableReader = null)
     {
         ArgumentNullException.ThrowIfNull(activityExecutionStateStore);
         ArgumentNullException.ThrowIfNull(schedulerWorkQueue);
@@ -42,6 +60,7 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         _workflowExecutableStore = workflowExecutableStore;
         _timeProvider = timeProvider;
         _executableReader = executableReader;
+        _workflowExecutionStateStore = workflowExecutionStateStore;
     }
 
     public string Name => HandlerName;
@@ -76,6 +95,17 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         cancellationToken.ThrowIfCancellationRequested();
 
         var payload = DeserializeCompletePayload(workItem);
+
+        // A delayed completion cascade can be redelivered after its queue rows were consumed. Its deterministic
+        // successor IDs then re-enter the queue as new rows, and the final checkpoint would be rebuilt with a new
+        // occurrence time and conflict with the already committed completion. The checkpoint is authoritative for
+        // this guard: once it has made the workflow terminal, every later completion stage is a no-op. Before that
+        // commit, the first legitimate completion still proceeds (even though its activity is already Completed).
+        if (_workflowExecutionStateStore is not null &&
+            await _workflowExecutionStateStore.FindAsync(workItem.WorkflowExecutionId, cancellationToken) is { Status: var status } &&
+            status.IsTerminal())
+            return;
+
         switch (payload.CompletionKind)
         {
             case SchedulerCompletionKind.ActivityCompleted:

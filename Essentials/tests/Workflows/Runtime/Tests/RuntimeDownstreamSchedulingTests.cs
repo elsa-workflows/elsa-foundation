@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
@@ -85,6 +86,102 @@ public sealed class RuntimeDownstreamSchedulingTests
                 third.WorkItemId));
         var write = Assert.Single(checkpointWriter.ListCommits());
         Assert.Equal(RuntimeCheckpointNames.WorkflowCompleted, write.Commit.Checkpoint.Name);
+        Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+    }
+
+    [Fact]
+    public async Task CompletionReplay_AfterWorkflowCheckpointIsTerminal_DoesNotReenqueueEitherStage()
+    {
+        var harness = await NewCompletionReplayHarness(includeTerminalStateGuard: true);
+
+        var firstChain = await RunCompletionChainAsync(harness.Queue, harness.CompleteHandler, harness.CheckpointHandler, harness.Original);
+
+        Assert.Equal(WorkflowExecutionStatus.Completed, (await harness.WorkflowStateStore.FindAsync("wfexec-1"))!.Status);
+        Assert.Single(harness.CheckpointWriter.ListCommits());
+        Assert.Equal(SchedulerCompletionKind.ContinuationScheduling,
+            firstChain.Continuation.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>()!.CompletionKind);
+
+        // Re-deliver the original activity-completed stage and the exact continuation item that completed the first
+        // chain. The first delivery was valid; once the workflow-completed checkpoint is durable, neither stage may
+        // generate fresh timestamped work or a second logical continuation.
+        harness.TimeProvider.Advance(TimeSpan.FromSeconds(1));
+        await harness.Queue.EnqueueAsync(harness.Original);
+        await harness.CompleteHandler.HandleAsync(
+            await harness.Queue.DequeueAsync("wfexec-1")
+            ?? throw new InvalidOperationException("The replayed root completion was not queued."));
+        await harness.Queue.EnqueueAsync(firstChain.Continuation);
+        await harness.CompleteHandler.HandleAsync(
+            await harness.Queue.DequeueAsync("wfexec-1")
+            ?? throw new InvalidOperationException("The replayed continuation was not queued."));
+
+        Assert.Empty(await harness.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        Assert.Single(harness.CheckpointWriter.ListCommits());
+    }
+
+    [Fact]
+    public async Task CompletionReplay_WithoutTerminalGuard_ReproducesConflictingCheckpointReplay()
+    {
+        var harness = await NewCompletionReplayHarness(includeTerminalStateGuard: false);
+        // Omitting the new state-store dependency is the explicit old-policy control: it replays the same drained
+        // chain, rebuilds the checkpoint at a new time, and the commit store must reject that conflicting replay.
+        await RunCompletionChainAsync(harness.Queue, harness.CompleteHandler, harness.CheckpointHandler, harness.Original);
+        Assert.Equal(WorkflowExecutionStatus.Completed, (await harness.WorkflowStateStore.FindAsync("wfexec-1"))!.Status);
+        harness.TimeProvider.Advance(TimeSpan.FromSeconds(1));
+
+        await harness.Queue.EnqueueAsync(harness.Original);
+        await harness.CompleteHandler.HandleAsync(
+            await harness.Queue.DequeueAsync("wfexec-1")
+            ?? throw new InvalidOperationException("The replayed root completion was not queued."));
+        var replayedContinuation = Assert.Single(await harness.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var continuationToReplay = await harness.Queue.DequeueAsync("wfexec-1")
+                                   ?? throw new InvalidOperationException("The replayed continuation was not queued.");
+        Assert.Equal(replayedContinuation.WorkItemId, continuationToReplay.WorkItemId);
+        await harness.CompleteHandler.HandleAsync(continuationToReplay);
+        var replayedCheckpoint = Assert.Single(await harness.Queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
+        var checkpointToReplay = await harness.Queue.DequeueAsync("wfexec-1")
+                                 ?? throw new InvalidOperationException("The conflicting checkpoint was not queued.");
+
+        var exception = await Assert.ThrowsAsync<RuntimeCheckpointReplayConflictException>(
+            () => harness.CheckpointHandler.HandleAsync(checkpointToReplay).AsTask());
+
+        Assert.Equal($"commit:{checkpointToReplay.WorkItemId}", exception.CommitId);
+        Assert.Single(harness.CheckpointWriter.ListCommits());
+    }
+
+    [Fact]
+    public async Task CompleteActivityHandler_DiResolvesTheRequiredWorkflowStateStore()
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        await workflowStateStore.SaveAsync(new WorkflowExecutionState(
+            "wfexec-1",
+            NewIdentity(),
+            WorkflowExecutionStatus.Completed,
+            null,
+            _now,
+            _now,
+            _now,
+            _now,
+            null,
+            null,
+            null,
+            new Dictionary<string, string>()));
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var services = new ServiceCollection();
+        services.AddSingleton<IActivityExecutionStateStore>(new InMemoryActivityExecutionStateStore());
+        services.AddSingleton<IWorkflowSchedulerWorkQueue>(queue);
+        services.AddSingleton<IWorkflowExecutableStore>(executableStore);
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider(_now));
+        services.AddSingleton<IWorkflowExecutionStateStore>(workflowStateStore);
+        services.AddTransient<WorkflowCompleteActivitySchedulerWorkHandler>();
+
+        using var provider = services.BuildServiceProvider();
+        await provider.GetRequiredService<WorkflowCompleteActivitySchedulerWorkHandler>().HandleAsync(
+            NewCompleteWorkItem(
+                NewIdentity(),
+                outcomeNames: ["Done"],
+                completionKind: SchedulerCompletionKind.ActivityCompleted));
+
         Assert.Empty(await queue.ListAllAsync(new RuntimeSchedulerWorkQuery("wfexec-1")));
     }
 
@@ -419,27 +516,87 @@ public sealed class RuntimeDownstreamSchedulingTests
 
     private WorkflowCompleteActivitySchedulerWorkHandler NewCompleteHandler(
         IWorkflowSchedulerWorkQueue queue,
-        IWorkflowExecutableStore executableStore) =>
+        IWorkflowExecutableStore executableStore,
+        IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
+        TimeProvider? timeProvider = null) =>
         new(
             new InMemoryActivityExecutionStateStore(),
             queue,
             executableStore,
-            new FakeTimeProvider(_now));
+            timeProvider ?? new FakeTimeProvider(_now),
+            workflowExecutionStateStore: workflowExecutionStateStore);
+
+    private async Task<CompletionReplayHarness> NewCompletionReplayHarness(bool includeTerminalStateGuard)
+    {
+        var queue = new InMemoryWorkflowSchedulerWorkQueue();
+        var activityStateStore = new InMemoryActivityExecutionStateStore();
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        var timeProvider = new FakeTimeProvider(_now);
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var executable = NewExecutable(["node-source", "node-next"]);
+        await executableStore.SaveAsync(executable);
+        await activityStateStore.SaveAsync(NewCompletedActivityState());
+        var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(
+            workflowExecutionStateStore: workflowStateStore,
+            rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance,
+            timeProvider: timeProvider);
+        var completeHandler = NewCompleteHandler(
+            queue,
+            executableStore,
+            includeTerminalStateGuard ? workflowStateStore : null,
+            timeProvider);
+        var checkpointHandler = NewCheckpointHandler(activityStateStore, checkpointWriter, queue, workflowStateStore, timeProvider);
+        var original = NewCompleteWorkItem(
+            executable.Identity,
+            outcomeNames: ["Done"],
+            completionKind: SchedulerCompletionKind.ActivityCompleted);
+
+        return new CompletionReplayHarness(queue, workflowStateStore, timeProvider, checkpointWriter, completeHandler, checkpointHandler, original);
+    }
 
     private WorkflowCheckpointSchedulerWorkHandler NewCheckpointHandler(
         IActivityExecutionStateStore activityStateStore,
         IRuntimeCheckpointCommitStore checkpointWriter,
         IWorkflowSchedulerWorkQueue queue,
-        IWorkflowExecutionStateStore? workflowExecutionStateStore = null) =>
+        IWorkflowExecutionStateStore? workflowExecutionStateStore = null,
+        TimeProvider? timeProvider = null) =>
         new(
             activityStateStore,
             new RuntimeCheckpointCommitter(
                 new ImmediateRuntimeCheckpointPersistencePolicy(),
                 checkpointWriter, new AsyncLocalRuntimeExecutionOwnershipContextAccessor(), [], []),
             inspectionAccumulator: null,
-            timeProvider: new FakeTimeProvider(_now),
+            timeProvider: timeProvider ?? new FakeTimeProvider(_now),
             workflowExecutionStateStore: workflowExecutionStateStore,
             workflowExecutableStore: _checkpointExecutableStore);
+
+    private static async Task<(RuntimeSchedulerWorkItem Continuation, RuntimeSchedulerWorkItem Checkpoint)> RunCompletionChainAsync(
+        IWorkflowSchedulerWorkQueue queue,
+        WorkflowCompleteActivitySchedulerWorkHandler completeHandler,
+        WorkflowCheckpointSchedulerWorkHandler checkpointHandler,
+        RuntimeSchedulerWorkItem original)
+    {
+        await queue.EnqueueAsync(original);
+        await completeHandler.HandleAsync(
+            await queue.DequeueAsync(original.WorkflowExecutionId)
+            ?? throw new InvalidOperationException("The original completion work item was not queued."));
+        var continuation = await queue.DequeueAsync(original.WorkflowExecutionId)
+                          ?? throw new InvalidOperationException("The continuation work item was not queued.");
+        await completeHandler.HandleAsync(continuation);
+        var checkpoint = await queue.DequeueAsync(original.WorkflowExecutionId)
+                         ?? throw new InvalidOperationException("The checkpoint work item was not queued.");
+        await checkpointHandler.HandleAsync(checkpoint);
+        return (continuation, checkpoint);
+    }
+
+    private sealed record CompletionReplayHarness(
+        IWorkflowSchedulerWorkQueue Queue,
+        IWorkflowExecutionStateStore WorkflowStateStore,
+        FakeTimeProvider TimeProvider,
+        InMemoryRuntimeCheckpointCommitStore CheckpointWriter,
+        WorkflowCompleteActivitySchedulerWorkHandler CompleteHandler,
+        WorkflowCheckpointSchedulerWorkHandler CheckpointHandler,
+        RuntimeSchedulerWorkItem Original);
 
     private RuntimeSchedulerWorkItem NewCompleteWorkItem(
         WorkflowExecutableIdentity pinnedExecutable,

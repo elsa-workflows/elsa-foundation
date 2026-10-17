@@ -110,6 +110,12 @@ public static class RuntimeMetadataKeys
     public const string OwnershipFencingToken = "runtime.ownership.fencingToken";
 
     /// <summary>
+    /// Durable tombstone on execution-ownership metadata. Preserved when ownership is reacquired so a stale
+    /// workflow-execution identity cannot be recreated after its workflow state was deleted.
+    /// </summary>
+    public const string WorkflowExecutionDeletionTombstone = "runtime.workflowExecutionDeletionTombstone";
+
+    /// <summary>
     /// System-metadata key on a workflow execution carrying the workflow instance name (#260). The compiled
     /// <c>SetInstanceName</c> workflow intrinsic folds it into the intrinsic-completed checkpoint's
     /// workflow-execution state change. Absent when no name has been assigned.
