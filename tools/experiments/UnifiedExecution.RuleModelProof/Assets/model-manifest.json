@@ -6,7 +6,7 @@
   "artifactSha256": "5808f702ec6ca27fde2bc39057796a9420f7801fdc5bff494cf2dce60a1e4c3e",
   "packageId": "elsa.proof.finite-positive-rules",
   "packageVersion": "1.0.0",
-  "packageAssembly": "../UnifiedExecution.FiniteRules.dll",
+  "packageAssembly": "../Packages/FiniteRules/1.0.0/lib/net10.0/UnifiedExecution.FiniteRules.dll",
   "packageSha256": "BUILD_TIME_PIN_REQUIRED",
   "packageType": "Elsa.UnifiedExecution.FiniteRules.FiniteRulesPackage",
   "workHandlers": [

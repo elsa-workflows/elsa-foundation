@@ -1,20 +1,20 @@
 {
   "Assets/finite-rules.artifact.json": "5808f702ec6ca27fde2bc39057796a9420f7801fdc5bff494cf2dce60a1e4c3e",
-  "Assets/model-manifest.json": "412537c1716dbaf82f172a1698601ac5547e10bfb26b452107de8f5ddb9537ea",
+  "Assets/model-manifest.json": "283ff9c5cd1d4f248de654ffe161e68b00d720fb3682a5992267a5ba4995587a",
   "ChildCommands.cs": "7b309df6fb7de3e0a6d736478ecd2f56c18e34d3bdeacc8ddc1934afe602c1a5",
   "ModelContracts/ExecutionModelContracts.cs": "2b75cdddb874127c0aeb8a0ddde2b95d77f4907f06fc00b62f5c545520ade31f",
   "ModelContracts/UnifiedExecution.ModelContracts.csproj": "b76eb42ae2b46607af5db8eefc708026dfa7dbcec1331b53ba30992f9cfe1253",
   "ModelContracts/packages.lock.json": "9d8929c5e23da9580a0a66a5440ed3d8965f80b62375d884751d1a8049fe67b0",
   "ModelRegistry.cs": "117e11d476f4e68f796adac4a40dbd66af8f18c25719a18ab82bb69832fda038",
   "Program.cs": "eb5c99a4f338885c0ca8e85c46926fde98cc0e2abe3a248e1a3673879902d01d",
-  "ProofHarness.cs": "31c5b053265debe5b0cbea3bdf16aedcddb163bd99de69789b554eef821f70a3",
-  "README.md": "ed5368179fabe5ead31dc29e73e52da6c8be38f2e96967d69666b8ff63641c7f",
-  "RuleEngine/FiniteRulesPackage.cs": "b65727bb40fdc6d188e52a9445775b9b5aae218c949c95d47960f5eab7b06b9e",
-  "RuleEngine/UnifiedExecution.FiniteRules.csproj": "fa724daa67b8b9e835f5d00fc4ccc614e42ac35c38bc7e79fd53450ab74c3620",
+  "ProofHarness.cs": "226138681c79c2b7f82d4ac45c56ab0b92b9ffe45b786ed5e60cbcde7051c1b8",
+  "README.md": "d773a2ad80776384e8db2b06a48ca840e8658c860a3eef7f530b91843d0a335e",
+  "RuleEngine/FiniteRulesPackage.cs": "59dff7b5a5b75869fbabe31c3833e0a301fab35b8b35f1f33a687f4a4159e990",
+  "RuleEngine/UnifiedExecution.FiniteRules.csproj": "1826ebe955bf27e7a92108af85d57e29d9304be852b6837f0bd43deee957513e",
   "RuleEngine/packages.lock.json": "8ad7e025a24517a6b4a5afef2775649c716ad1ff6cf4b83af50aa071f68d4ea8",
   "SwapPackage/UnifiedExecution.FiniteRules.Swap.csproj": "d00eb72cc0cbf9ae63a2b05d0364a05a80cf84e13a1c33c252f94f68dbf81031",
   "SwapPackage/packages.lock.json": "8ad7e025a24517a6b4a5afef2775649c716ad1ff6cf4b83af50aa071f68d4ea8",
-  "UnifiedExecution.RuleModelProof.csproj": "358212ad277743f65ff8d0df942f64c3907b2d5d9b08d060fed659fbcec8f6ca",
+  "UnifiedExecution.RuleModelProof.csproj": "a8c490f1190011c40ee784b453cdb2c1f0bddc5a88ebbf777305dc28f909b19e",
   "packages.lock.json": "f410cee19d3e75bfd13dbb2f90e86553d25953061f894c39adec4930239c9b81",
-  "run-proof.sh": "d9f3f59e37ad4fa36a8bc6c7ceaf3ce6c71a336377739151c36b10794e77b45b"
+  "run-proof.sh": "c12468e9f111668ed45e63d8b9de22d6b080513a6c14f31290f44d4c793503f6"
 }

@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Bpmn.Model.State;
 using Bpmn.Semantics;
@@ -68,6 +70,14 @@ internal sealed class ProofStore : IDisposable
                 handle TEXT NOT NULL,
                 message TEXT NOT NULL,
                 revision INTEGER NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS bridge_deliveries (
+                delivery_id TEXT PRIMARY KEY,
+                scope_id TEXT NOT NULL REFERENCES scopes(scope_id),
+                handle TEXT NOT NULL,
+                result_json TEXT NOT NULL,
+                fingerprint TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending'
             );
             CREATE TABLE IF NOT EXISTS trace_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -175,6 +185,66 @@ internal sealed class ProofStore : IDisposable
         return ReadWork(reader);
     }
 
+    public BridgeDeliveryRecord EnsureBridgeDelivery(string scopeId, string deliveryId, string handle, string resultJson)
+    {
+        string fingerprint = DeliveryFingerprint(scopeId, handle, resultJson);
+        using var transaction = _connection.BeginTransaction(deferred: false);
+        using (var ownedHandle = _connection.CreateCommand())
+        {
+            ownedHandle.Transaction = transaction;
+            ownedHandle.CommandText = "SELECT 1 FROM work_items WHERE scope_id=$scope AND handle=$handle;";
+            ownedHandle.Parameters.AddWithValue("$scope", scopeId);
+            ownedHandle.Parameters.AddWithValue("$handle", handle);
+            if (ownedHandle.ExecuteScalar() is null)
+                throw new InvalidOperationException($"Bridge delivery '{deliveryId}' references a handle outside scope '{scopeId}'.");
+        }
+
+        BridgeDeliveryRecord? prior = ReadBridgeDelivery(deliveryId, transaction);
+        if (prior is not null)
+        {
+            if (prior.ScopeId != scopeId || prior.Handle != handle || prior.Fingerprint != fingerprint)
+                throw new InvalidOperationException($"Bridge delivery '{deliveryId}' was retried with different scope, handle, or result content.");
+            transaction.Commit();
+            return prior;
+        }
+
+        using (var insert = _connection.CreateCommand())
+        {
+            insert.Transaction = transaction;
+            insert.CommandText = "INSERT INTO bridge_deliveries(delivery_id,scope_id,handle,result_json,fingerprint,status) VALUES($id,$scope,$handle,$result,$fingerprint,'pending');";
+            insert.Parameters.AddWithValue("$id", deliveryId);
+            insert.Parameters.AddWithValue("$scope", scopeId);
+            insert.Parameters.AddWithValue("$handle", handle);
+            insert.Parameters.AddWithValue("$result", resultJson);
+            insert.Parameters.AddWithValue("$fingerprint", fingerprint);
+            insert.ExecuteNonQuery();
+        }
+        transaction.Commit();
+        return new BridgeDeliveryRecord(deliveryId, scopeId, handle, resultJson, fingerprint, "pending");
+    }
+
+    public BridgeDeliveryRecord GetBridgeDelivery(string scopeId, string deliveryId)
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT delivery_id,scope_id,handle,result_json,fingerprint,status FROM bridge_deliveries WHERE scope_id=$scope AND delivery_id=$id;";
+        command.Parameters.AddWithValue("$scope", scopeId);
+        command.Parameters.AddWithValue("$id", deliveryId);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read())
+            throw new InvalidOperationException($"No bridge delivery '{deliveryId}' is stored for scope '{scopeId}'.");
+        return ReadBridgeDelivery(reader);
+    }
+
+    public BridgeDeliveryRecord? FindBridgeDelivery(string scopeId, string deliveryId)
+    {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT delivery_id,scope_id,handle,result_json,fingerprint,status FROM bridge_deliveries WHERE scope_id=$scope AND delivery_id=$id;";
+        command.Parameters.AddWithValue("$scope", scopeId);
+        command.Parameters.AddWithValue("$id", deliveryId);
+        using var reader = command.ExecuteReader();
+        return reader.Read() ? ReadBridgeDelivery(reader) : null;
+    }
+
     public IReadOnlyList<WorkRecord> GetDueTimers(string scopeId, long throughTicks)
     {
         using var command = _connection.CreateCommand();
@@ -188,18 +258,40 @@ internal sealed class ProofStore : IDisposable
         return items;
     }
 
-    public void CommitEvaluation(
+    public bool CommitEvaluation(
         string scopeId,
         BpmnEvaluation evaluation,
         IReadOnlyCollection<StoredHostCommand> commands,
         string? callbackHandle = null,
         string? callbackStatus = null,
         IncidentRecord? incident = null,
-        HostTraceEvent? trigger = null)
+        HostTraceEvent? trigger = null,
+        string? bridgeDeliveryId = null)
     {
         var commandBatch = commands.ToArray();
-        using var transaction = _connection.BeginTransaction();
+        using var transaction = _connection.BeginTransaction(deferred: bridgeDeliveryId is null);
         var scope = ReadScope(scopeId, transaction);
+        BridgeDeliveryRecord? bridgeDelivery = null;
+        if (bridgeDeliveryId is not null)
+        {
+            bridgeDelivery = ReadBridgeDelivery(bridgeDeliveryId, transaction);
+            if (bridgeDelivery is null || bridgeDelivery.ScopeId != scopeId || bridgeDelivery.Handle != callbackHandle)
+                throw new InvalidOperationException($"Bridge delivery '{bridgeDeliveryId}' does not match callback scope and handle.");
+            if (bridgeDelivery.Status == "delivered")
+            {
+                transaction.Rollback();
+                return false;
+            }
+            if (bridgeDelivery.Status != "pending")
+                throw new InvalidOperationException($"Bridge delivery '{bridgeDeliveryId}' has unsupported state '{bridgeDelivery.Status}'.");
+            using var workStatus = _connection.CreateCommand();
+            workStatus.Transaction = transaction;
+            workStatus.CommandText = "SELECT status FROM work_items WHERE scope_id=$scope AND handle=$handle;";
+            workStatus.Parameters.AddWithValue("$scope", scopeId);
+            workStatus.Parameters.AddWithValue("$handle", callbackHandle!);
+            if (!string.Equals(workStatus.ExecuteScalar() as string, "live", StringComparison.Ordinal))
+                throw new InvalidOperationException($"Bridge callback handle '{callbackHandle}' is not live.");
+        }
         var revision = scope.Revision + 1;
         var continuation = SerializeContinuation(evaluation.Continuation);
 
@@ -223,6 +315,17 @@ internal sealed class ProofStore : IDisposable
             updateWork.Parameters.AddWithValue("$status", callbackStatus ?? "completed");
             updateWork.Parameters.AddWithValue("$handle", callbackHandle);
             updateWork.ExecuteNonQuery();
+        }
+
+        if (bridgeDelivery is not null)
+        {
+            using var delivered = _connection.CreateCommand();
+            delivered.Transaction = transaction;
+            delivered.CommandText = "UPDATE bridge_deliveries SET status='delivered' WHERE delivery_id=$id AND scope_id=$scope AND status='pending';";
+            delivered.Parameters.AddWithValue("$id", bridgeDelivery.DeliveryId);
+            delivered.Parameters.AddWithValue("$scope", scopeId);
+            if (delivered.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException($"Bridge delivery '{bridgeDelivery.DeliveryId}' was concurrently applied.");
         }
 
         if (trigger is not null)
@@ -260,6 +363,7 @@ internal sealed class ProofStore : IDisposable
         }
 
         transaction.Commit();
+        return true;
     }
 
     public IReadOnlyList<PendingCommand> GetPendingCommands(string scopeId)
@@ -451,6 +555,22 @@ internal sealed class ProofStore : IDisposable
         reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
         reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5), reader.GetString(6),
         reader.IsDBNull(7) ? null : reader.GetInt64(7), reader.GetString(8));
+
+    private static BridgeDeliveryRecord ReadBridgeDelivery(SqliteDataReader reader) => new(
+        reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4), reader.GetString(5));
+
+    private BridgeDeliveryRecord? ReadBridgeDelivery(string deliveryId, SqliteTransaction transaction)
+    {
+        using var command = _connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "SELECT delivery_id,scope_id,handle,result_json,fingerprint,status FROM bridge_deliveries WHERE delivery_id=$id;";
+        command.Parameters.AddWithValue("$id", deliveryId);
+        using var reader = command.ExecuteReader();
+        return reader.Read() ? ReadBridgeDelivery(reader) : null;
+    }
+
+    private static string DeliveryFingerprint(string scopeId, string handle, string resultJson)
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{scopeId}\0{handle}\0{resultJson}"))).ToLowerInvariant();
 
     private static (string Kind, string? Json) SerializeContinuation(BpmnContinuation continuation) => continuation switch
     {

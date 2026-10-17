@@ -52,6 +52,8 @@ public sealed class FiniteRulesPackage : IExecutionModelPackage
         if (state.ModelId != artifact.ModelId || state.ModelVersion != artifact.ModelVersion
             || state.ArtifactFingerprint != artifact.Fingerprint || state.StateSchema != artifact.StateSchema)
             throw new InvalidDataException("Persisted model identity, artifact fingerprint, or state schema differs from the pinned package request.");
+        if (state.Status is not ("Running" or "Completed"))
+            throw new InvalidDataException($"Persisted rule-model status '{state.Status}' is unsupported.");
         if (state.Round < 0 || state.Trace.Length != state.Round)
             throw new InvalidDataException("Persisted rule round and trace length disagree.");
         if (state.Facts.Distinct(StringComparer.Ordinal).Count() != state.Facts.Length
@@ -61,21 +63,30 @@ public sealed class FiniteRulesPackage : IExecutionModelPackage
             throw new InvalidDataException("Persisted state contains a fact outside the finite artifact vocabulary.");
 
         var replayedFacts = program.InitialFacts.ToHashSet(StringComparer.Ordinal);
-        foreach (RuleRoundTrace round in state.Trace)
+        for (int i = 0; i < state.Trace.Length; i++)
         {
-            if (round.Round < 0 || !round.AddedFacts.SequenceEqual(round.AddedFacts.Order(StringComparer.Ordinal), StringComparer.Ordinal)
+            RuleRoundTrace round = state.Trace[i];
+            if (round.Round != i || !round.AddedFacts.SequenceEqual(round.AddedFacts.Order(StringComparer.Ordinal), StringComparer.Ordinal)
                 || round.AddedFacts.Distinct(StringComparer.Ordinal).Count() != round.AddedFacts.Length)
-                throw new InvalidDataException("Persisted round trace has invalid added facts.");
+                throw new InvalidDataException("Persisted round trace has invalid numbering or added facts.");
+
+            RuleDefinition[] fired = program.Rules.Where(rule => rule.WhenAll.All(replayedFacts.Contains)).ToArray();
+            string[] expectedFired = fired.Select(rule => rule.Id).Order(StringComparer.Ordinal).ToArray();
+            string[] expectedAdded = fired.Select(rule => rule.Then).Where(fact => !replayedFacts.Contains(fact))
+                .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+            if (!round.FiredRuleIds.SequenceEqual(expectedFired, StringComparer.Ordinal)
+                || !round.AddedFacts.SequenceEqual(expectedAdded, StringComparer.Ordinal))
+                throw new InvalidDataException("Persisted round trace differs from deterministic evaluation of the pinned rule artifact.");
             if (round.AddedFacts.Any(fact => !replayedFacts.Add(fact)))
                 throw new InvalidDataException("Rule inference trace is not monotone; it repeats an already-present fact.");
+            if (round.AddedFacts.Length == 0 && i != state.Trace.Length - 1)
+                throw new InvalidDataException("A least-fixed-point round cannot be followed by another persisted round.");
         }
         if (!replayedFacts.SetEquals(state.Facts))
             throw new InvalidDataException("Persisted facts do not equal the base facts plus the trace additions.");
-        if ((state.Status == "Completed") != state.LeastFixedPointReached)
+        bool fixedPointReached = state.Trace.Length > 0 && state.Trace[^1].AddedFacts.Length == 0;
+        if ((state.Status == "Completed") != fixedPointReached || state.LeastFixedPointReached != fixedPointReached)
             throw new InvalidDataException("Execution completion must coincide with the recorded least-fixed-point condition.");
-        for (int i = 0; i < state.Trace.Length; i++)
-            if (state.Trace[i].Round != i)
-                throw new InvalidDataException("Persisted rule trace rounds must be contiguous from zero.");
     }
 
     public ModelInspection Inspect(PinnedModelArtifact artifact, string stateJson)

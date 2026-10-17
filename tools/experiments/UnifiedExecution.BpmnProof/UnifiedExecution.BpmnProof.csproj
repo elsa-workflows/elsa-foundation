@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" />
+    <ProjectReference Include="../UnifiedExecution.WorkProof/UnifiedExecution.WorkProof.csproj" />
   </ItemGroup>
 
   <ItemGroup>

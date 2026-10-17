@@ -9,7 +9,6 @@
     <Compile Remove="ModelContracts/**/*.cs;RuleEngine/**/*.cs;SwapPackage/**/*.cs" />
     <ProjectReference Include="../UnifiedExecution.WorkProof/UnifiedExecution.WorkProof.csproj" />
     <ProjectReference Include="ModelContracts/UnifiedExecution.ModelContracts.csproj" />
-    <ProjectReference Include="RuleEngine/UnifiedExecution.FiniteRules.csproj" />
     <Content Include="Assets/**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

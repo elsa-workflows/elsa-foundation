@@ -6,8 +6,8 @@
   "artifactSha256": "5808f702ec6ca27fde2bc39057796a9420f7801fdc5bff494cf2dce60a1e4c3e",
   "packageId": "elsa.proof.finite-positive-rules",
   "packageVersion": "1.0.0",
-  "packageAssembly": "../UnifiedExecution.FiniteRules.dll",
-  "packageSha256": "ebec32978e08ddf04035ccac2213c4133cee28f950b359e9ffdb7ecf2d699f4e",
+  "packageAssembly": "../Packages/FiniteRules/1.0.0/lib/net10.0/UnifiedExecution.FiniteRules.dll",
+  "packageSha256": "22dbfbf0a822c352fbca52091c1fed4558058df1e01e292d373a92d3d26d371c",
   "packageType": "Elsa.UnifiedExecution.FiniteRules.FiniteRulesPackage",
   "workHandlers": [
     {

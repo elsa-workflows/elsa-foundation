@@ -6,9 +6,15 @@
   "artifactSha256": "5808f702ec6ca27fde2bc39057796a9420f7801fdc5bff494cf2dce60a1e4c3e",
   "packageId": "elsa.proof.finite-positive-rules",
   "packageVersion": "1.0.0",
-  "packageSha256": "ebec32978e08ddf04035ccac2213c4133cee28f950b359e9ffdb7ecf2d699f4e",
-  "policyId": "model-pin:b78dd4394e9530d61a0c6565c882b9071be1c0e2a8361a07dd77dc687ee7adce",
-  "executionPinFingerprint": "b78dd4394e9530d61a0c6565c882b9071be1c0e2a8361a07dd77dc687ee7adce",
+  "packageSha256": "22dbfbf0a822c352fbca52091c1fed4558058df1e01e292d373a92d3d26d371c",
+  "packageArtifact": {
+    "packageId": "elsa.proof.finite-positive-rules",
+    "packageVersion": "1.0.0",
+    "assemblySha256": "22dbfbf0a822c352fbca52091c1fed4558058df1e01e292d373a92d3d26d371c",
+    "loadedAssemblyPath": "Packages/FiniteRules/1.0.0/lib/net10.0/UnifiedExecution.FiniteRules.dll"
+  },
+  "policyId": "model-pin:64d5c58ce0decf309152f87c2766d6fb2f59d6639f94f5ab24c698dcfb930dc9",
+  "executionPinFingerprint": "64d5c58ce0decf309152f87c2766d6fb2f59d6639f94f5ab24c698dcfb930dc9",
   "executionId": "positive-rules-main",
   "finalInspection": {
     "modelId": "proof.finite-positive-rules",
@@ -91,9 +97,9 @@
     }
   },
   "packageSwap": {
-    "originalPackageSha256": "ebec32978e08ddf04035ccac2213c4133cee28f950b359e9ffdb7ecf2d699f4e",
-    "alternatePackageSha256": "b3ea8481170ec840bf5c108b0c3419cee0763766d6b76ad28ffa18c55acfdd3f",
-    "persistedExecutionPinFingerprint": "b78dd4394e9530d61a0c6565c882b9071be1c0e2a8361a07dd77dc687ee7adce",
+    "originalPackageSha256": "22dbfbf0a822c352fbca52091c1fed4558058df1e01e292d373a92d3d26d371c",
+    "alternatePackageSha256": "5cccffca5402b4078739c0e21a124d3c15531259a4bf9c2696ce735835cfc76d",
+    "persistedExecutionPinFingerprint": "64d5c58ce0decf309152f87c2766d6fb2f59d6639f94f5ab24c698dcfb930dc9",
     "rejectedAtResume": true,
     "rejection": "RULE_RESUME_ERROR: InvalidDataException: Persisted execution references a different model policy than the resolved artifact."
   },
@@ -104,9 +110,24 @@
       "observed": "missing host capability is rejected before start, durable execution creation, work dispatch, or sink effects"
     },
     {
+      "id": "package.loaded-from-packed-artifact",
+      "passed": true,
+      "observed": "resolved model package ID, version, and assembly bytes match the built NuGet artifact"
+    },
+    {
+      "id": "state.rejects-fabricated-inference-trace",
+      "passed": true,
+      "observed": "resume validation rejects a structurally monotone in-vocabulary fact whose trace is not derivable from the pinned rules"
+    },
+    {
+      "id": "state.rejects-unknown-status",
+      "passed": true,
+      "observed": "model state validation accepts only Running or Completed states; cancellation is represented by work status in this witness"
+    },
+    {
       "id": "start.pins-one-rule-round",
       "passed": true,
-      "observed": "fresh host process 2179 resolved the pinned model and durably dispatched its first inference round"
+      "observed": "fresh host process 10763 resolved the pinned model and durably dispatched its first inference round"
     },
     {
       "id": "resume.rejects-swapped-package-pin",
@@ -121,7 +142,7 @@
     {
       "id": "worker.round-1.completed",
       "passed": true,
-      "observed": "fresh worker process 2185 committed one deterministic rule result"
+      "observed": "fresh worker process 10790 committed one deterministic rule result"
     },
     {
       "id": "result.round-1.duplicate-idempotent",
@@ -131,7 +152,7 @@
     {
       "id": "restart.round-1.fresh-process",
       "passed": true,
-      "observed": "worker 2185 and rehydrated host 2186 are distinct OS processes"
+      "observed": "worker 10790 and rehydrated host 10799 are distinct OS processes"
     },
     {
       "id": "inspect.round-1.pinned-state",
@@ -141,7 +162,7 @@
     {
       "id": "worker.round-2.completed",
       "passed": true,
-      "observed": "fresh worker process 2187 committed one deterministic rule result"
+      "observed": "fresh worker process 10800 committed one deterministic rule result"
     },
     {
       "id": "result.round-2.duplicate-idempotent",
@@ -151,7 +172,7 @@
     {
       "id": "restart.round-2.fresh-process",
       "passed": true,
-      "observed": "worker 2187 and rehydrated host 2188 are distinct OS processes"
+      "observed": "worker 10800 and rehydrated host 10805 are distinct OS processes"
     },
     {
       "id": "inspect.round-2.pinned-state",
@@ -161,7 +182,7 @@
     {
       "id": "worker.round-3.completed",
       "passed": true,
-      "observed": "fresh worker process 2189 committed one deterministic rule result"
+      "observed": "fresh worker process 10806 committed one deterministic rule result"
     },
     {
       "id": "result.round-3.duplicate-idempotent",
@@ -171,7 +192,7 @@
     {
       "id": "restart.round-3.fresh-process",
       "passed": true,
-      "observed": "worker 2189 and rehydrated host 2190 are distinct OS processes"
+      "observed": "worker 10806 and rehydrated host 10807 are distinct OS processes"
     },
     {
       "id": "inspect.round-3.pinned-state",
@@ -181,7 +202,7 @@
     {
       "id": "worker.round-4.completed",
       "passed": true,
-      "observed": "fresh worker process 2191 committed one deterministic rule result"
+      "observed": "fresh worker process 10808 committed one deterministic rule result"
     },
     {
       "id": "result.round-4.duplicate-idempotent",
@@ -191,7 +212,7 @@
     {
       "id": "restart.round-4.fresh-process",
       "passed": true,
-      "observed": "worker 2191 and rehydrated host 2192 are distinct OS processes"
+      "observed": "worker 10808 and rehydrated host 10809 are distinct OS processes"
     },
     {
       "id": "inspect.round-4.pinned-state",
@@ -221,7 +242,7 @@
     {
       "id": "cancellation.host-starts-in-fresh-process",
       "passed": true,
-      "observed": "host process 2193 created one cancellable round"
+      "observed": "host process 10811 created one cancellable round"
     },
     {
       "id": "cancellation.late-round-does-not-advance",
@@ -232,81 +253,81 @@
   "childProcesses": [
     {
       "role": "fresh-host-start",
-      "processId": 2179,
+      "processId": 10763,
       "exitCode": 0,
-      "marker": "{\u0022processId\u0022:2179,\u0022status\u0022:\u0022Running\u0022,\u0022policyId\u0022:\u0022model-pin:b78dd4394e9530d61a0c6565c882b9071be1c0e2a8361a07dd77dc687ee7adce\u0022,\u0022workCount\u0022:1}"
+      "marker": "{\u0022processId\u0022:10763,\u0022status\u0022:\u0022Running\u0022,\u0022policyId\u0022:\u0022model-pin:64d5c58ce0decf309152f87c2766d6fb2f59d6639f94f5ab24c698dcfb930dc9\u0022,\u0022workCount\u0022:1}"
     },
     {
       "role": "fresh-host-rejects-package-swap",
-      "processId": 2183,
+      "processId": 10764,
       "exitCode": 3,
       "marker": "RULE_RESUME_ERROR: InvalidDataException: Persisted execution references a different model policy than the resolved artifact."
     },
     {
       "role": "fresh-worker-rejects-package-swap",
-      "processId": 2184,
+      "processId": 10767,
       "exitCode": 3,
       "marker": "RULE_WORKER_ERROR: InvalidDataException: Persisted execution references a different model policy than the resolved artifact."
     },
     {
       "role": "rule-round-worker",
-      "processId": 2185,
+      "processId": 10790,
       "exitCode": 0,
-      "marker": "{\u0022processId\u0022:2185,\u0022handlerId\u0022:\u0022finite-rule-round\u0022,\u0022receiptStatus\u0022:\u0022Succeeded\u0022,\u0022fingerprint\u0022:\u0022a25416c410caf33302f5f63efc940d9b8ad4b06db44e148a3b5026778f2a942c\u0022}"
+      "marker": "{\u0022processId\u0022:10790,\u0022handlerId\u0022:\u0022finite-rule-round\u0022,\u0022receiptStatus\u0022:\u0022Succeeded\u0022,\u0022fingerprint\u0022:\u0022a25416c410caf33302f5f63efc940d9b8ad4b06db44e148a3b5026778f2a942c\u0022}"
     },
     {
       "role": "fresh-host-resume",
-      "processId": 2186,
+      "processId": 10799,
       "exitCode": 0,
-      "marker": "{\u0022processId\u0022:2186,\u0022beforeRevision\u0022:1,\u0022afterRevision\u0022:2,\u0022applied\u0022:1,\u0022executionStatus\u0022:\u0022Running\u0022,\u0022inspection\u0022:{\u0022modelId\u0022:\u0022proof.finite-positive-rules\u0022,\u0022modelVersion\u0022:\u00221.0.0\u0022,\u0022stateSchema\u0022:\u0022urn:elsa:proof:finite-positive-facts:1\u0022,\u0022artifactFingerprint\u0022:\u00225808f702ec6ca27fde2bc39057796a9420f7801fdc5bff494cf2dce60a1e4c3e\u0022,\u0022status\u0022:\u0022Running\u0022,\u0022detailJson\u0022:\u0022{\\u0022facts\\u0022:[\\u0022left\\u0022,\\u0022right\\u0022,\\u0022seed\\u0022],\\u0022round\\u0022:1,\\u0022trace\\u0022:[{\\u0022Round\\u0022:0,\\u0022FiredRuleIds\\u0022:[\\u0022seed-to-left\\u0022,\\u0022seed-to-right\\u0022],\\u0022AddedFacts\\u0022:[\\u0022left\\u0022,\\u0022right\\u0022]}],\\u0022leastFixedPointReached\\u0022:false}\u0022}}"
+      "marker": "{\u0022processId\u0022:10799,\u0022beforeRevision\u0022:1,\u0022afterRevision\u0022:2,\u0022applied\u0022:1,\u0022executionStatus\u0022:\u0022Running\u0022,\u0022inspection\u0022:{\u0022modelId\u0022:\u0022proof.finite-positive-rules\u0022,\u0022modelVersion\u0022:\u00221.0.0\u0022,\u0022stateSchema\u0022:\u0022urn:elsa:proof:finite-positive-facts:1\u0022,\u0022artifactFingerprint\u0022:\u00225808f702ec6ca27fde2bc39057796a9420f7801fdc5bff494cf2dce60a1e4c3e\u0022,\u0022status\u0022:\u0022Running\u0022,\u0022detailJson\u0022:\u0022{\\u0022facts\\u0022:[\\u0022left\\u0022,\\u0022right\\u0022,\\u0022seed\\u0022],\\u0022round\\u0022:1,\\u0022trace\\u0022:[{\\u0022Round\\u0022:0,\\u0022FiredRuleIds\\u0022:[\\u0022seed-to-left\\u0022,\\u0022seed-to-right\\u0022],\\u0022AddedFacts\\u0022:[\\u0022left\\u0022,\\u0022right\\u0022]}],\\u0022leastFixedPointReached\\u0022:false}\u0022}}"
     },
     {
       "role": "rule-round-worker",
-      "processId": 2187,
+      "processId": 10800,
       "exitCode": 0,
-      "marker": "{\u0022processId\u0022:2187,\u0022handlerId\u0022:\u0022finite-rule-round\u0022,\u0022receiptStatus\u0022:\u0022Succeeded\u0022,\u0022fingerprint\u0022:\u00222b74f781a405b76829297a2a713f981e5db7b94979832aa6a36ece4e07c1826a\u0022}"
+      "marker": "{\u0022processId\u0022:10800,\u0022handlerId\u0022:\u0022finite-rule-round\u0022,\u0022receiptStatus\u0022:\u0022Succeeded\u0022,\u0022fingerprint\u0022:\u00222b74f781a405b76829297a2a713f981e5db7b94979832aa6a36ece4e07c1826a\u0022}"
     },
     {
       "role": "fresh-host-resume",
-      "processId": 2188,
+      "processId": 10805,
       "exitCode": 0,
-      "marker": "{\u0022processId\u0022:2188,\u0022beforeRevision\u0022:2,\u0022afterRevision\u0022:3,\u0022applied\u0022:1,\u0022executionStatus\u0022:\u0022Running\u0022,\u0022inspection\u0022:{\u0022modelId\u0022:\u0022proof.finite-positive-rules\u0022,\u0022modelVersion\u0022:\u00221.0.0\u0022,\u0022stateSchema\u0022:\u0022urn:elsa:proof:finite-positive-facts:1\u0022,\u0022artifactFingerprint\u0022:\u00225808f702ec6ca27fde2bc39057796a9420f7801fdc5bff494cf2dce60a1e4c3e\u0022,\u0022status\u0022:\u0022Running\u0022,\u0022detailJson\u0022:\u0022{\\u0022facts\\u0022:[\\u0022joined\\u0022,\\u0022left\\u0022,\\u0022right\\u0022,\\u0022seed\\u0022],\\u0022round\\u0022:2,\\u0022trace\\u0022:[{\\u0022Round\\u0022:0,\\u0022FiredRuleIds\\u0022:[\\u0022seed-to-left\\u0022,\\u0022seed-to-right\\u0022],\\u0022AddedFacts\\u0022:[\\u0022left\\u0022,\\u0022right\\u0022]},{\\u0022Round\\u0022:1,\\u0022FiredRuleIds\\u0022:[\\u0022join-left-and-right\\u0022,\\u0022seed-to-left\\u0022,\\u0022seed-to-right\\u0022],\\u0022AddedFacts\\u0022:[\\u0022joined\\u0022]}],\\u0022leastFixedPointReached\\u0022:false}\u0022}}"
+      "marker": "{\u0022processId\u0022:10805,\u0022beforeRevision\u0022:2,\u0022afterRevision\u0022:3,\u0022applied\u0022:1,\u0022executionStatus\u0022:\u0022Running\u0022,\u0022inspection\u0022:{\u0022modelId\u0022:\u0022proof.finite-positive-rules\u0022,\u0022modelVersion\u0022:\u00221.0.0\u0022,\u0022stateSchema\u0022:\u0022urn:elsa:proof:finite-positive-facts:1\u0022,\u0022artifactFingerprint\u0022:\u00225808f702ec6ca27fde2bc39057796a9420f7801fdc5bff494cf2dce60a1e4c3e\u0022,\u0022status\u0022:\u0022Running\u0022,\u0022detailJson\u0022:\u0022{\\u0022facts\\u0022:[\\u0022joined\\u0022,\\u0022left\\u0022,\\u0022right\\u0022,\\u0022seed\\u0022],\\u0022round\\u0022:2,\\u0022trace\\u0022:[{\\u0022Round\\u0022:0,\\u0022FiredRuleIds\\u0022:[\\u0022seed-to-left\\u0022,\\u0022seed-to-right\\u0022],\\u0022AddedFacts\\u0022:[\\u0022left\\u0022,\\u0022right\\u0022]},{\\u0022Round\\u0022:1,\\u0022FiredRuleIds\\u0022:[\\u0022join-left-and-right\\u0022,\\u0022seed-to-left\\u0022,\\u0022seed-to-right\\u0022],\\u0022AddedFacts\\u0022:[\\u0022joined\\u0022]}],\\u0022leastFixedPointReached\\u0022:false}\u0022}}"
     },
     {
       "role": "rule-round-worker",
-      "processId": 2189,
+      "processId": 10806,
       "exitCode": 0,
-      "marker": "{\u0022processId\u0022:2189,\u0022handlerId\u0022:\u0022finite-rule-round\u0022,\u0022receiptStatus\u0022:\u0022Succeeded\u0022,\u0022fingerprint\u0022:\u0022ca692ea81b8a7777c2efcbd94845f0e9a3bd8b5d8488830043fdb7b27ba39f8b\u0022}"
+      "marker": "{\u0022processId\u0022:10806,\u0022handlerId\u0022:\u0022finite-rule-round\u0022,\u0022receiptStatus\u0022:\u0022Succeeded\u0022,\u0022fingerprint\u0022:\u0022ca692ea81b8a7777c2efcbd94845f0e9a3bd8b5d8488830043fdb7b27ba39f8b\u0022}"
     },
     {
       "role": "fresh-host-resume",
-      "processId": 2190,
+      "processId": 10807,
       "exitCode": 0,
-      "marker": "{\u0022processId\u0022:2190,\u0022beforeRevision\u0022:3,\u0022afterRevision\u0022:4,\u0022applied\u0022:1,\u0022executionStatus\u0022:\u0022Running\u0022,\u0022inspection\u0022:{\u0022modelId\u0022:\u0022proof.finite-positive-rules\u0022,\u0022modelVersion\u0022:\u00221.0.0\u0022,\u0022stateSchema\u0022:\u0022urn:elsa:proof:finite-positive-facts:1\u0022,\u0022artifactFingerprint\u0022:\u00225808f702ec6ca27fde2bc39057796a9420f7801fdc5bff494cf2dce60a1e4c3e\u0022,\u0022status\u0022:\u0022Running\u0022,\u0022detailJson\u0022:\u0022{\\u0022facts\\u0022:[\\u0022final\\u0022,\\u0022joined\\u0022,\\u0022left\\u0022,\\u0022right\\u0022,\\u0022seed\\u0022],\\u0022round\\u0022:3,\\u0022trace\\u0022:[{\\u0022Round\\u0022:0,\\u0022FiredRuleIds\\u0022:[\\u0022seed-to-left\\u0022,\\u0022seed-to-right\\u0022],\\u0022AddedFacts\\u0022:[\\u0022left\\u0022,\\u0022right\\u0022]},{\\u0022Round\\u0022:1,\\u0022FiredRuleIds\\u0022:[\\u0022join-left-and-right\\u0022,\\u0022seed-to-left\\u0022,\\u0022seed-to-right\\u0022],\\u0022AddedFacts\\u0022:[\\u0022joined\\u0022]},{\\u0022Round\\u0022:2,\\u0022FiredRuleIds\\u0022:[\\u0022join-left-and-right\\u0022,\\u0022joined-to-final\\u0022,\\u0022seed-to-left\\u0022,\\u0022seed-to-right\\u0022],\\u0022AddedFacts\\u0022:[\\u0022final\\u0022]}],\\u0022leastFixedPointReached\\u0022:false}\u0022}}"
+      "marker": "{\u0022processId\u0022:10807,\u0022beforeRevision\u0022:3,\u0022afterRevision\u0022:4,\u0022applied\u0022:1,\u0022executionStatus\u0022:\u0022Running\u0022,\u0022inspection\u0022:{\u0022modelId\u0022:\u0022proof.finite-positive-rules\u0022,\u0022modelVersion\u0022:\u00221.0.0\u0022,\u0022stateSchema\u0022:\u0022urn:elsa:proof:finite-positive-facts:1\u0022,\u0022artifactFingerprint\u0022:\u00225808f702ec6ca27fde2bc39057796a9420f7801fdc5bff494cf2dce60a1e4c3e\u0022,\u0022status\u0022:\u0022Running\u0022,\u0022detailJson\u0022:\u0022{\\u0022facts\\u0022:[\\u0022final\\u0022,\\u0022joined\\u0022,\\u0022left\\u0022,\\u0022right\\u0022,\\u0022seed\\u0022],\\u0022round\\u0022:3,\\u0022trace\\u0022:[{\\u0022Round\\u0022:0,\\u0022FiredRuleIds\\u0022:[\\u0022seed-to-left\\u0022,\\u0022seed-to-right\\u0022],\\u0022AddedFacts\\u0022:[\\u0022left\\u0022,\\u0022right\\u0022]},{\\u0022Round\\u0022:1,\\u0022FiredRuleIds\\u0022:[\\u0022join-left-and-right\\u0022,\\u0022seed-to-left\\u0022,\\u0022seed-to-right\\u0022],\\u0022AddedFacts\\u0022:[\\u0022joined\\u0022]},{\\u0022Round\\u0022:2,\\u0022FiredRuleIds\\u0022:[\\u0022join-left-and-right\\u0022,\\u0022joined-to-final\\u0022,\\u0022seed-to-left\\u0022,\\u0022seed-to-right\\u0022],\\u0022AddedFacts\\u0022:[\\u0022final\\u0022]}],\\u0022leastFixedPointReached\\u0022:false}\u0022}}"
     },
     {
       "role": "rule-round-worker",
-      "processId": 2191,
+      "processId": 10808,
       "exitCode": 0,
-      "marker": "{\u0022processId\u0022:2191,\u0022handlerId\u0022:\u0022finite-rule-round\u0022,\u0022receiptStatus\u0022:\u0022Succeeded\u0022,\u0022fingerprint\u0022:\u0022667df3a2d21e1c2cab113e3f3d56b83113d6bee32f723455ddf12c3d71059e09\u0022}"
+      "marker": "{\u0022processId\u0022:10808,\u0022handlerId\u0022:\u0022finite-rule-round\u0022,\u0022receiptStatus\u0022:\u0022Succeeded\u0022,\u0022fingerprint\u0022:\u0022667df3a2d21e1c2cab113e3f3d56b83113d6bee32f723455ddf12c3d71059e09\u0022}"
     },
     {
       "role": "fresh-host-resume",
-      "processId": 2192,
+      "processId": 10809,
       "exitCode": 0,
-      "marker": "{\u0022processId\u0022:2192,\u0022beforeRevision\u0022:4,\u0022afterRevision\u0022:5,\u0022applied\u0022:1,\u0022executionStatus\u0022:\u0022Completed\u0022,\u0022inspection\u0022:{\u0022modelId\u0022:\u0022proof.finite-positive-rules\u0022,\u0022modelVersion\u0022:\u00221.0.0\u0022,\u0022stateSchema\u0022:\u0022urn:elsa:proof:finite-positive-facts:1\u0022,\u0022artifactFingerprint\u0022:\u00225808f702ec6ca27fde2bc39057796a9420f7801fdc5bff494cf2dce60a1e4c3e\u0022,\u0022status\u0022:\u0022Completed\u0022,\u0022detailJson\u0022:\u0022{\\u0022facts\\u0022:[\\u0022final\\u0022,\\u0022joined\\u0022,\\u0022left\\u0022,\\u0022right\\u0022,\\u0022seed\\u0022],\\u0022round\\u0022:4,\\u0022trace\\u0022:[{\\u0022Round\\u0022:0,\\u0022FiredRuleIds\\u0022:[\\u0022seed-to-left\\u0022,\\u0022seed-to-right\\u0022],\\u0022AddedFacts\\u0022:[\\u0022left\\u0022,\\u0022right\\u0022]},{\\u0022Round\\u0022:1,\\u0022FiredRuleIds\\u0022:[\\u0022join-left-and-right\\u0022,\\u0022seed-to-left\\u0022,\\u0022seed-to-right\\u0022],\\u0022AddedFacts\\u0022:[\\u0022joined\\u0022]},{\\u0022Round\\u0022:2,\\u0022FiredRuleIds\\u0022:[\\u0022join-left-and-right\\u0022,\\u0022joined-to-final\\u0022,\\u0022seed-to-left\\u0022,\\u0022seed-to-right\\u0022],\\u0022AddedFacts\\u0022:[\\u0022final\\u0022]},{\\u0022Round\\u0022:3,\\u0022FiredRuleIds\\u0022:[\\u0022join-left-and-right\\u0022,\\u0022joined-to-final\\u0022,\\u0022seed-to-left\\u0022,\\u0022seed-to-right\\u0022],\\u0022AddedFacts\\u0022:[]}],\\u0022leastFixedPointReached\\u0022:true}\u0022}}"
+      "marker": "{\u0022processId\u0022:10809,\u0022beforeRevision\u0022:4,\u0022afterRevision\u0022:5,\u0022applied\u0022:1,\u0022executionStatus\u0022:\u0022Completed\u0022,\u0022inspection\u0022:{\u0022modelId\u0022:\u0022proof.finite-positive-rules\u0022,\u0022modelVersion\u0022:\u00221.0.0\u0022,\u0022stateSchema\u0022:\u0022urn:elsa:proof:finite-positive-facts:1\u0022,\u0022artifactFingerprint\u0022:\u00225808f702ec6ca27fde2bc39057796a9420f7801fdc5bff494cf2dce60a1e4c3e\u0022,\u0022status\u0022:\u0022Completed\u0022,\u0022detailJson\u0022:\u0022{\\u0022facts\\u0022:[\\u0022final\\u0022,\\u0022joined\\u0022,\\u0022left\\u0022,\\u0022right\\u0022,\\u0022seed\\u0022],\\u0022round\\u0022:4,\\u0022trace\\u0022:[{\\u0022Round\\u0022:0,\\u0022FiredRuleIds\\u0022:[\\u0022seed-to-left\\u0022,\\u0022seed-to-right\\u0022],\\u0022AddedFacts\\u0022:[\\u0022left\\u0022,\\u0022right\\u0022]},{\\u0022Round\\u0022:1,\\u0022FiredRuleIds\\u0022:[\\u0022join-left-and-right\\u0022,\\u0022seed-to-left\\u0022,\\u0022seed-to-right\\u0022],\\u0022AddedFacts\\u0022:[\\u0022joined\\u0022]},{\\u0022Round\\u0022:2,\\u0022FiredRuleIds\\u0022:[\\u0022join-left-and-right\\u0022,\\u0022joined-to-final\\u0022,\\u0022seed-to-left\\u0022,\\u0022seed-to-right\\u0022],\\u0022AddedFacts\\u0022:[\\u0022final\\u0022]},{\\u0022Round\\u0022:3,\\u0022FiredRuleIds\\u0022:[\\u0022join-left-and-right\\u0022,\\u0022joined-to-final\\u0022,\\u0022seed-to-left\\u0022,\\u0022seed-to-right\\u0022],\\u0022AddedFacts\\u0022:[]}],\\u0022leastFixedPointReached\\u0022:true}\u0022}}"
     },
     {
       "role": "cancel-host-start",
-      "processId": 2193,
+      "processId": 10811,
       "exitCode": 0,
-      "marker": "{\u0022processId\u0022:2193,\u0022status\u0022:\u0022Running\u0022,\u0022policyId\u0022:\u0022model-pin:b78dd4394e9530d61a0c6565c882b9071be1c0e2a8361a07dd77dc687ee7adce\u0022,\u0022workCount\u0022:1}"
+      "marker": "{\u0022processId\u0022:10811,\u0022status\u0022:\u0022Running\u0022,\u0022policyId\u0022:\u0022model-pin:64d5c58ce0decf309152f87c2766d6fb2f59d6639f94f5ab24c698dcfb930dc9\u0022,\u0022workCount\u0022:1}"
     },
     {
       "role": "cancel-host-restart",
-      "processId": 2194,
+      "processId": 10812,
       "exitCode": 0,
-      "marker": "{\u0022processId\u0022:2194,\u0022beforeRevision\u0022:1,\u0022afterRevision\u0022:1,\u0022applied\u0022:0,\u0022executionStatus\u0022:\u0022Running\u0022,\u0022inspection\u0022:{\u0022modelId\u0022:\u0022proof.finite-positive-rules\u0022,\u0022modelVersion\u0022:\u00221.0.0\u0022,\u0022stateSchema\u0022:\u0022urn:elsa:proof:finite-positive-facts:1\u0022,\u0022artifactFingerprint\u0022:\u00225808f702ec6ca27fde2bc39057796a9420f7801fdc5bff494cf2dce60a1e4c3e\u0022,\u0022status\u0022:\u0022Running\u0022,\u0022detailJson\u0022:\u0022{\\u0022facts\\u0022:[\\u0022seed\\u0022],\\u0022round\\u0022:0,\\u0022trace\\u0022:[],\\u0022leastFixedPointReached\\u0022:false}\u0022}}"
+      "marker": "{\u0022processId\u0022:10812,\u0022beforeRevision\u0022:1,\u0022afterRevision\u0022:1,\u0022applied\u0022:0,\u0022executionStatus\u0022:\u0022Running\u0022,\u0022inspection\u0022:{\u0022modelId\u0022:\u0022proof.finite-positive-rules\u0022,\u0022modelVersion\u0022:\u00221.0.0\u0022,\u0022stateSchema\u0022:\u0022urn:elsa:proof:finite-positive-facts:1\u0022,\u0022artifactFingerprint\u0022:\u00225808f702ec6ca27fde2bc39057796a9420f7801fdc5bff494cf2dce60a1e4c3e\u0022,\u0022status\u0022:\u0022Running\u0022,\u0022detailJson\u0022:\u0022{\\u0022facts\\u0022:[\\u0022seed\\u0022],\\u0022round\\u0022:0,\\u0022trace\\u0022:[],\\u0022leastFixedPointReached\\u0022:false}\u0022}}"
     }
   ]
 }

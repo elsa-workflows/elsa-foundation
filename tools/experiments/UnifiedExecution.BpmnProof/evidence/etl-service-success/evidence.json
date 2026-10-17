@@ -1,0 +1,84 @@
+{
+  "scenario": "success",
+  "freshHostProcesses": [
+    10525,
+    10526,
+    10527,
+    10528,
+    10529,
+    10534,
+    10535,
+    10536
+  ],
+  "serviceHandle": "etl-service:success:work-1",
+  "messageListenerHandle": null,
+  "provisioningRecovery": {
+    "crashAfterOnePartition": {
+      "processId": 10526,
+      "partitionConfigs": 1,
+      "sourceRecords": 2
+    },
+    "resumed": {
+      "processId": 10527,
+      "partitionConfigs": 2,
+      "sourceRecords": 4,
+      "workRows": 2,
+      "provisioning": "created=[B]; reused=[A]; executionId=service-handle-derived-stable-key"
+    },
+    "afterInitialCommitRetry": {
+      "processId": 10528,
+      "partitionConfigs": 2,
+      "sourceRecords": 4,
+      "workRows": 2,
+      "provisioning": "created=[]; reused=[A,B]; executionId=service-handle-derived-stable-key"
+    }
+  },
+  "workProofExecution": {
+    "policyId": "dataflow-partition-witness-v1",
+    "status": "Completed",
+    "revision": 5
+  },
+  "work": [
+    {
+      "invocationId": "partition:A:after:-1",
+      "status": "succeeded",
+      "attempt": 1
+    },
+    {
+      "invocationId": "partition:A:after:1",
+      "status": "succeeded",
+      "attempt": 1
+    },
+    {
+      "invocationId": "partition:B:after:-1",
+      "status": "succeeded",
+      "attempt": 1
+    },
+    {
+      "invocationId": "partition:B:after:1",
+      "status": "succeeded",
+      "attempt": 1
+    }
+  ],
+  "bpmnContinuation": "complete",
+  "faultDisposition": null,
+  "businessErrorMapping": null,
+  "cancellationMapping": null,
+  "workerProcesses": 4,
+  "lateWorkerReceipt": null,
+  "destinationEffects": 4,
+  "resultDelivery": {
+    "pipelineCompletionProcess": 10529,
+    "preparedProcess": 10534,
+    "callbackCommitProcess": 10535,
+    "replayProcess": 10536,
+    "deliveryId": "etl-result:partition-pipeline:success:cea62c71caf651e0",
+    "status": "delivered",
+    "firstApplication": true,
+    "replayApplication": false,
+    "callbackCount": 1,
+    "pendingCommandsAfterRestore": 0
+  },
+  "incidentCount": 0,
+  "limitation": null
+}

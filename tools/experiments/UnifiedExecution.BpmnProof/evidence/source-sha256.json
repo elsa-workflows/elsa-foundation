@@ -1,0 +1,21 @@
+{
+  "tools/experiments/UnifiedExecution.BpmnProof/DurableBpmnHost.cs": "25671016cf7715e19f8e40846c13146ad17bdcdf31f7d90ed3f6e42a64302010",
+  "tools/experiments/UnifiedExecution.BpmnProof/Program.cs": "4485c69a6a013aeb803e4277b7d4ab920fd140800b5baefe5549efc455524518",
+  "tools/experiments/UnifiedExecution.BpmnProof/ProofContracts.cs": "04ffe1a679b00acd8755b58f43e0979dd75c3270aed27511c661c9a3411305a0",
+  "tools/experiments/UnifiedExecution.BpmnProof/ProofProcesses.cs": "1f062467b652b1dd0a9030db0decf297555a01c21095a2d002334e04dda1f822",
+  "tools/experiments/UnifiedExecution.BpmnProof/ProofStore.cs": "f5b414fbb1501ef396f94f5f58ea60a3ff01a4836a7b4d62aca71b8a0925bff4",
+  "tools/experiments/UnifiedExecution.BpmnProof/SequenceEnvelopeStore.cs": "be72cbdbb6a4294bd640a2ca786e47c32b8daf1e3d50cc4f64764132f6cc9996",
+  "tools/experiments/UnifiedExecution.BpmnProof/ServicePipelineBridge.cs": "46ec3d5f2769328763751c9f2c82b712622904582b6afabcaa51912037f3896c",
+  "tools/experiments/UnifiedExecution.BpmnProof/UnifiedExecution.BpmnProof.csproj": "b1882061d8631ff44a361e95a9558bb4ba114c8e177b382d816f545f3d3fffd5",
+  "tools/experiments/UnifiedExecution.BpmnProof/bootstrap.sh": "40d388b7b05190aaad9381ad4863de715df2e791a0188a6af31118860ce77858",
+  "tools/experiments/UnifiedExecution.BpmnProof/packages.lock.json": "870ad4749fd044409bac11e6a19eeb58d7fbfc80ffedd98c4148dea0c670bd5d",
+  "tools/experiments/UnifiedExecution.WorkProof/Composition.cs": "b35c5b28b19290ed0541b60de6d1af3a0df7e3072715a4940595335ad93602f8",
+  "tools/experiments/UnifiedExecution.WorkProof/Contracts.cs": "bcbdb6aae87a9e7ede1edf04d412466ded3ce179af81f3f93feda1bdfe0a9713",
+  "tools/experiments/UnifiedExecution.WorkProof/DurableWorkStore.cs": "7fdca55e4098100f41dac12d7a5d436ac9ba0d30825850c30909536b31ecc69f",
+  "tools/experiments/UnifiedExecution.WorkProof/IndependentSink.cs": "448e9b8d81d217bfc6d8bdfafa38dbe4318fd40cb2255c68c27e0f3396d9c8b9",
+  "tools/experiments/UnifiedExecution.WorkProof/PartitionSourceStore.cs": "1d3f51d48914958813c5179ca8b84ab0396a845ea5a70d15c9294beca90c286a",
+  "tools/experiments/UnifiedExecution.WorkProof/Program.cs": "4eab7e55eb9832fe3cfbe7558d08aca2bbd70e8b1c3ed1a624871f240591563a",
+  "tools/experiments/UnifiedExecution.WorkProof/ProofHarness.cs": "df2c128dcfd3effe0bb99f8a8b78bac3b0fe26323b2f086f7af69998a9e7c632",
+  "tools/experiments/UnifiedExecution.WorkProof/SqliteScopeParameters.cs": "a52c1f196e9e53a48be52813caa9cc199d450e0b6eef0cdac814d507971e4cc9",
+  "tools/experiments/UnifiedExecution.WorkProof/WorkerCommands.cs": "a0f35fc7ac03db70b7417f0f71ae239fb55eb70183e3867b333ecf680adefe40"
+}

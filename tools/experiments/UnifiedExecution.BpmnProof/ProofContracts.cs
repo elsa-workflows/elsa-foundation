@@ -64,6 +64,9 @@ internal sealed record HostTraceEvent(
 
 internal sealed record IncidentRecord(string ScopeId, string BindingRef, string Handle, string Message, int Revision);
 
+internal sealed record BridgeDeliveryRecord(string DeliveryId, string ScopeId, string Handle, string ResultJson, string Fingerprint, string Status);
+internal sealed record ServiceResultEnvelope(string ExecutionId, string PolicyId, string Status, long Revision);
+
 internal sealed class UnsupportedAlterationException(string operation)
     : Exception($"Unsupported BPMN alteration '{operation}'. Only modeled BPMN events and interpreter commands are supported here.")
 {

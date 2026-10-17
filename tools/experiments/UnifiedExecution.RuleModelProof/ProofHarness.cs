@@ -3,7 +3,6 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Elsa.UnifiedExecution.FiniteRules;
 using Elsa.UnifiedExecution.ModelContracts;
 using Elsa.UnifiedExecution.WorkProof;
 
@@ -31,6 +30,12 @@ internal static class ProofHarness
 
         await ProveIncompatibleHostPreflightAsync(manifestPath, workDb, sink, scope);
         ResolvedModel model = ModelRegistry.Resolve(manifestPath, HostCapabilities.Complete);
+        PackageArtifactEvidence packageArtifact = VerifyPackedPackage(model);
+        Assert(packageArtifact.PackageId == model.Manifest.PackageId
+            && packageArtifact.PackageVersion == model.Manifest.PackageVersion
+            && packageArtifact.AssemblySha256 == model.Manifest.PackageSha256,
+            "package.loaded-from-packed-artifact", "resolved model package ID, version, and assembly bytes match the built NuGet artifact");
+        AssertModelStateValidation(model);
         const string executionId = "positive-rules-main";
         const string owner = "rule-model-host";
         ChildResult startedProcess = await RunChildAsync("fresh-host-start", ChildCommands.Start("--start", workDb, sinkDb,
@@ -102,6 +107,7 @@ internal static class ProofHarness
             model.Package.PackageId,
             model.Package.PackageVersion,
             model.Manifest.PackageSha256,
+            packageArtifact,
             model.Policy.Id,
             model.ExecutionPinFingerprint,
             executionId,
@@ -111,11 +117,69 @@ internal static class ProofHarness
             packageSwap,
             Assertions.ToArray(),
             Children.ToArray());
-        string evidencePath = Path.Combine(scratch, "evidence.json");
+        string evidencePath = Environment.GetEnvironmentVariable("ELSA_RULE_MODEL_EVIDENCE")
+            ?? Path.Combine(scratch, "evidence.json");
         await File.WriteAllTextAsync(evidencePath, JsonSerializer.Serialize(report, new JsonSerializerOptions(WebJson) { WriteIndented = true }));
         Console.WriteLine($"Evidence: {evidencePath}");
         Console.WriteLine(JsonSerializer.Serialize(report, WebJson));
         return Assertions.All(x => x.Passed) ? 0 : 1;
+    }
+
+    private static PackageArtifactEvidence VerifyPackedPackage(ResolvedModel model)
+    {
+        string nupkgPath = Environment.GetEnvironmentVariable("ELSA_RULE_MODEL_NUPKG")
+            ?? throw new InvalidOperationException("Run this witness through run-proof.sh to provide the built NuGet artifact.");
+        using var archive = System.IO.Compression.ZipFile.OpenRead(nupkgPath);
+        System.IO.Compression.ZipArchiveEntry nuspec = archive.Entries.Single(entry => entry.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase));
+        using var nuspecStream = nuspec.Open();
+        System.Xml.Linq.XElement metadata = System.Xml.Linq.XDocument.Load(nuspecStream).Root!
+            .Elements().Single(element => element.Name.LocalName == "metadata");
+        string packageId = metadata.Elements().Single(element => element.Name.LocalName == "id").Value;
+        string packageVersion = metadata.Elements().Single(element => element.Name.LocalName == "version").Value;
+        System.IO.Compression.ZipArchiveEntry assembly = archive.GetEntry("lib/net10.0/UnifiedExecution.FiniteRules.dll")
+            ?? throw new InvalidDataException("The packed package has no net10.0 rule-engine assembly.");
+        using var assemblyStream = assembly.Open();
+        string assemblyHash = Convert.ToHexString(SHA256.HashData(assemblyStream)).ToLowerInvariant();
+        string loadedAssembly = Path.GetRelativePath(AppContext.BaseDirectory, model.PackageAssemblyPath);
+        string expectedLoadedAssembly = Path.Combine("Packages", "FiniteRules", "1.0.0", "lib", "net10.0", "UnifiedExecution.FiniteRules.dll");
+        if (!string.Equals(loadedAssembly, expectedLoadedAssembly, StringComparison.Ordinal))
+            throw new InvalidDataException($"The model package was loaded outside the extracted NuGet artifact location: '{loadedAssembly}'.");
+        return new PackageArtifactEvidence(packageId, packageVersion, assemblyHash, loadedAssembly);
+    }
+
+    private static void AssertModelStateValidation(ResolvedModel model)
+    {
+        string forgedState = JsonSerializer.Serialize(new
+        {
+            ModelId = model.Artifact.ModelId,
+            ModelVersion = model.Artifact.ModelVersion,
+            ArtifactFingerprint = model.Artifact.Fingerprint,
+            StateSchema = model.Artifact.StateSchema,
+            Facts = new[] { "joined", "seed" },
+            Round = 1,
+            Status = "Running",
+            LeastFixedPointReached = false,
+            Trace = new[] { new { Round = 0, FiredRuleIds = new[] { "forged-rule" }, AddedFacts = new[] { "joined" } } }
+        });
+        bool rejected = Throws<InvalidDataException>(() => model.Package.ValidateState(model.Artifact, forgedState));
+        Assert(rejected, "state.rejects-fabricated-inference-trace",
+            "resume validation rejects a structurally monotone in-vocabulary fact whose trace is not derivable from the pinned rules");
+
+        string unsupportedStatus = JsonSerializer.Serialize(new
+        {
+            ModelId = model.Artifact.ModelId,
+            ModelVersion = model.Artifact.ModelVersion,
+            ArtifactFingerprint = model.Artifact.Fingerprint,
+            StateSchema = model.Artifact.StateSchema,
+            Facts = new[] { "seed" },
+            Round = 0,
+            Status = "Cancelled",
+            LeastFixedPointReached = false,
+            Trace = Array.Empty<object>()
+        });
+        bool unknownStatusRejected = Throws<InvalidDataException>(() => model.Package.ValidateState(model.Artifact, unsupportedStatus));
+        Assert(unknownStatusRejected, "state.rejects-unknown-status",
+            "model state validation accepts only Running or Completed states; cancellation is represented by work status in this witness");
     }
 
     private static async Task<PackageSwapEvidence> ProvePackageSwapRejectedAsync(
@@ -257,8 +321,9 @@ internal static class ProofHarness
         bool RemainsUnclaimable, int AppliedResults, ModelInspection Inspection);
     private sealed record PackageSwapEvidence(string OriginalPackageSha256, string AlternatePackageSha256,
         string PersistedExecutionPinFingerprint, bool RejectedAtResume, string Rejection);
+    private sealed record PackageArtifactEvidence(string PackageId, string PackageVersion, string AssemblySha256, string LoadedAssemblyPath);
     private sealed record ProofReport(string Kind, string ModelId, string ModelVersion, string StateSchema,
-        string ArtifactSha256, string PackageId, string PackageVersion, string PackageSha256, string PolicyId,
+        string ArtifactSha256, string PackageId, string PackageVersion, string PackageSha256, PackageArtifactEvidence PackageArtifact, string PolicyId,
         string ExecutionPinFingerprint, string ExecutionId, ModelInspection FinalInspection, RuleInspection RuleTrace,
         CancellationEvidence Cancellation, PackageSwapEvidence PackageSwap,
         IReadOnlyList<ProofAssertion> Assertions, IReadOnlyList<ChildEvidence> ChildProcesses);

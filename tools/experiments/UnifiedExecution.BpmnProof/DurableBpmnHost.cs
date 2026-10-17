@@ -1,6 +1,7 @@
 using Bpmn.Model;
 using Bpmn.Model.State;
 using Bpmn.Semantics;
+using Elsa.UnifiedExecution.WorkProof;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -90,6 +91,50 @@ internal sealed class DurableBpmnHost : IDisposable
             callbackStatus: callbackStatus);
     }
 
+    public BridgeDeliveryRecord EnsureServiceResultDelivery(string handle, string deliveryId, string resultJson)
+    {
+        WorkRecord work = GetOwnedWork(handle);
+        BridgeDeliveryRecord? existing = _store.FindBridgeDelivery(ScopeId, deliveryId);
+        if (existing is null && work.Status != "live")
+            throw new InvalidOperationException($"Cannot create bridge delivery '{deliveryId}' for non-live handle '{handle}'.");
+        return _store.EnsureBridgeDelivery(ScopeId, deliveryId, handle, resultJson);
+    }
+
+    /// <summary>
+    /// Applies one durable service result exactly once within the BPMN store. The delivery receipt, callback,
+    /// interpreter checkpoint, and resulting host outbox commands commit in the same local transaction.
+    /// </summary>
+    public bool CompleteServiceResult(string deliveryId, bool dispatchOwedCommands = true)
+    {
+        BridgeDeliveryRecord delivery = _store.GetBridgeDelivery(ScopeId, deliveryId);
+        if (delivery.Status == "delivered")
+        {
+            if (dispatchOwedCommands) DrainOutbox();
+            return false;
+        }
+
+        ServiceResultEnvelope result = JsonSerializer.Deserialize<ServiceResultEnvelope>(delivery.ResultJson, JsonOptions)
+            ?? throw new InvalidDataException($"Service result delivery '{deliveryId}' is empty.");
+        if (string.IsNullOrWhiteSpace(result.ExecutionId) || result.Revision < 1
+            || result.Status != "Completed" || result.PolicyId != "dataflow-partition-witness-v1"
+            || deliveryId != $"etl-result:{result.ExecutionId}")
+            throw new InvalidOperationException($"Service result delivery '{deliveryId}' does not contain a matching successful ETL completion.");
+
+        WorkRecord work = GetOwnedWork(delivery.Handle);
+        if (work.Status != "live")
+            throw new InvalidOperationException($"Service result '{deliveryId}' targets non-live handle '{delivery.Handle}'.");
+        var live = _store.GetLiveWork(ScopeId).Where(item => !StringComparer.Ordinal.Equals(item.Handle, delivery.Handle)).ToArray();
+        var evaluation = _interpreter.OnWorkCompleted(new BpmnWorkCompletedRequest(
+            _graph, State, Snapshot(live), work.BindingRef, work.Handle, Array.Empty<string>(), work.IterationId));
+        return Persist(
+            evaluation,
+            new HostTraceEvent("service-result-delivered", work.BindingRef, work.ElementId, work.Handle, Message: deliveryId),
+            dispatchOwedCommands,
+            callbackHandle: work.Handle,
+            callbackStatus: "completed",
+            bridgeDeliveryId: deliveryId);
+    }
+
     public BpmnErrorDisposition FaultWork(string handle, string message)
     {
         var work = GetOwnedWork(handle);
@@ -166,18 +211,20 @@ internal sealed class DurableBpmnHost : IDisposable
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json))).ToLowerInvariant();
     }
 
-    private void Persist(
+    private bool Persist(
         BpmnEvaluation evaluation,
         HostTraceEvent trigger,
         bool dispatchOwedCommands,
         string? callbackHandle = null,
         string? callbackStatus = null,
-        IncidentRecord? incident = null)
+        IncidentRecord? incident = null,
+        string? bridgeDeliveryId = null)
     {
         var commands = evaluation.Commands.Select(command => HostCommandMapper.Map(command, _graph)).ToArray();
-        _store.CommitEvaluation(ScopeId, evaluation, commands, callbackHandle, callbackStatus, incident, trigger);
+        bool committed = _store.CommitEvaluation(ScopeId, evaluation, commands, callbackHandle, callbackStatus, incident, trigger, bridgeDeliveryId);
         if (dispatchOwedCommands)
             DrainOutbox();
+        return committed;
     }
 
     private void DrainOutbox()

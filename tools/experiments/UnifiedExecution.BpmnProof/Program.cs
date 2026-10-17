@@ -38,6 +38,10 @@ internal static class Program
                 return RestartStage(args[1], args[2]);
             if (args.Length > 0 && args[0] == "sequence-stage")
                 return SequenceStage(args[1], args[2]);
+            if (args.Length > 0 && args[0] == "service-stage")
+                return await ServicePipelineBridge.RunStageAsync(args);
+            if (args.Length > 0 && args[0] == "etl-worker")
+                return await ServicePipelineBridge.RunWorkerAsync(args);
 
             var command = args.FirstOrDefault() ?? "verify";
             var artifactsPath = ReadOption(args, "--artifacts")
@@ -75,6 +79,7 @@ internal static class Program
         var definitionPin = VerifyDefinitionPin(artifactsPath);
         var ownership = VerifyHandleOwnership(artifactsPath);
         var comparison = await VerifySequenceAdapterAsync(artifactsPath, restartPath);
+        var servicePipeline = await ServicePipelineBridge.VerifyAsync(artifactsPath);
         WriteJson(Path.Combine(artifactsPath, "direct-vs-sequence-adapter.json"), comparison);
 
         var report = new
@@ -90,11 +95,13 @@ internal static class Program
             definitionPin,
             handleOwnership = ownership,
             directVsSequenceAdapter = comparison,
+            servicePipelineBridge = servicePipeline,
             limitations = new[]
             {
-                "The SQLite host models work as local ledger rows; no external worker or broker is connected.",
+                "The original BPMN witness uses local SQLite work rows; the service-task extension connects a separate local ETL work store and worker processes, not a broker or distributed worker fleet.",
                 "The Sequence-style adapter is a small experimental host-side composition proof, not an Elsa integration.",
-                "The experiment proves process-restart recovery, not distributed execution or cross-system exactly-once effects."
+                "The ETL-to-BPMN service bridge is experimental and cannot atomically commit across the two stores; WorkProof also has no terminal composition cancel/fail transition.",
+                "The interpreter exposes no arbitrary token-alteration command; modeled message delivery is an event callback, and arbitrary move-token requests remain unsupported."
             }
         };
         WriteJson(Path.Combine(artifactsPath, "operational-witness.json"), report);

@@ -6,8 +6,8 @@
     "commit": "be9c6eaa963b846104d5aebf38d337bafab08710",
     "tree": "2f9549153b9342a1044c2efbd8e388f58b740467",
     "workingTreeClean": true,
-    "packagesLockSha256": "15b448250f59a38d539fdfcf9d3e97655ab11068f92eb2c540cedbb7514b4cb7",
-    "proofProjectSha256": "ed077c7117615a601cd0597996762d1f85089256967c6be85f5a6c77a123c6e8"
+    "packagesLockSha256": "870ad4749fd044409bac11e6a19eeb58d7fbfc80ffedd98c4148dea0c670bd5d",
+    "proofProjectSha256": "b1882061d8631ff44a361e95a9558bb4ba114c8e177b382d816f545f3d3fffd5"
   },
   "database": "SQLite; state, work ledger and command outbox checkpointed together",
   "freshProcesses": {
@@ -1028,9 +1028,301 @@
       }
     ]
   },
+  "servicePipelineBridge": {
+    "result": "passed",
+    "bridge": "experimental BPMN service-task adapter to the shared WorkProof PartitionPipelinePolicy",
+    "cases": [
+      {
+        "scenario": "success",
+        "freshHostProcesses": [
+          10525,
+          10526,
+          10527,
+          10528,
+          10529,
+          10534,
+          10535,
+          10536
+        ],
+        "serviceHandle": "etl-service:success:work-1",
+        "messageListenerHandle": null,
+        "provisioningRecovery": {
+          "crashAfterOnePartition": {
+            "processId": 10526,
+            "partitionConfigs": 1,
+            "sourceRecords": 2
+          },
+          "resumed": {
+            "processId": 10527,
+            "partitionConfigs": 2,
+            "sourceRecords": 4,
+            "workRows": 2,
+            "provisioning": "created=[B]; reused=[A]; executionId=service-handle-derived-stable-key"
+          },
+          "afterInitialCommitRetry": {
+            "processId": 10528,
+            "partitionConfigs": 2,
+            "sourceRecords": 4,
+            "workRows": 2,
+            "provisioning": "created=[]; reused=[A,B]; executionId=service-handle-derived-stable-key"
+          }
+        },
+        "workProofExecution": {
+          "policyId": "dataflow-partition-witness-v1",
+          "status": "Completed",
+          "revision": 5
+        },
+        "work": [
+          {
+            "invocationId": "partition:A:after:-1",
+            "status": "succeeded",
+            "attempt": 1
+          },
+          {
+            "invocationId": "partition:A:after:1",
+            "status": "succeeded",
+            "attempt": 1
+          },
+          {
+            "invocationId": "partition:B:after:-1",
+            "status": "succeeded",
+            "attempt": 1
+          },
+          {
+            "invocationId": "partition:B:after:1",
+            "status": "succeeded",
+            "attempt": 1
+          }
+        ],
+        "bpmnContinuation": "complete",
+        "faultDisposition": null,
+        "businessErrorMapping": null,
+        "cancellationMapping": null,
+        "workerProcesses": 4,
+        "lateWorkerReceipt": null,
+        "destinationEffects": 4,
+        "resultDelivery": {
+          "pipelineCompletionProcess": 10529,
+          "preparedProcess": 10534,
+          "callbackCommitProcess": 10535,
+          "replayProcess": 10536,
+          "deliveryId": "etl-result:partition-pipeline:success:cea62c71caf651e0",
+          "status": "delivered",
+          "firstApplication": true,
+          "replayApplication": false,
+          "callbackCount": 1,
+          "pendingCommandsAfterRestore": 0
+        },
+        "incidentCount": 0,
+        "limitation": null
+      },
+      {
+        "scenario": "business-error",
+        "freshHostProcesses": [
+          10537,
+          10538,
+          10551,
+          10552,
+          10553
+        ],
+        "serviceHandle": "etl-service:business-error:work-1",
+        "messageListenerHandle": null,
+        "provisioningRecovery": {
+          "crashAfterOnePartition": {
+            "processId": 10538,
+            "partitionConfigs": 1,
+            "sourceRecords": 2
+          },
+          "resumed": {
+            "processId": 10551,
+            "partitionConfigs": 2,
+            "sourceRecords": 4,
+            "workRows": 2,
+            "provisioning": "created=[B]; reused=[A]; executionId=service-handle-derived-stable-key"
+          },
+          "afterInitialCommitRetry": {
+            "processId": 10552,
+            "partitionConfigs": 2,
+            "sourceRecords": 4,
+            "workRows": 2,
+            "provisioning": "created=[]; reused=[A,B]; executionId=service-handle-derived-stable-key"
+          }
+        },
+        "workProofExecution": {
+          "policyId": "dataflow-partition-witness-v1",
+          "status": "Completed",
+          "revision": 5
+        },
+        "work": [
+          {
+            "invocationId": "partition:A:after:-1",
+            "status": "succeeded",
+            "attempt": 1
+          },
+          {
+            "invocationId": "partition:A:after:1",
+            "status": "succeeded",
+            "attempt": 1
+          },
+          {
+            "invocationId": "partition:B:after:-1",
+            "status": "succeeded",
+            "attempt": 1
+          },
+          {
+            "invocationId": "partition:B:after:1",
+            "status": "succeeded",
+            "attempt": 1
+          }
+        ],
+        "bpmnContinuation": "complete",
+        "faultDisposition": null,
+        "businessErrorMapping": "caught-at-BusinessError",
+        "cancellationMapping": null,
+        "workerProcesses": 4,
+        "lateWorkerReceipt": null,
+        "destinationEffects": 4,
+        "resultDelivery": null,
+        "incidentCount": 0,
+        "limitation": null
+      },
+      {
+        "scenario": "fault",
+        "freshHostProcesses": [
+          10561,
+          10562,
+          10563,
+          10564,
+          10583
+        ],
+        "serviceHandle": "etl-service:fault:work-1",
+        "messageListenerHandle": null,
+        "provisioningRecovery": {
+          "crashAfterOnePartition": {
+            "processId": 10562,
+            "partitionConfigs": 1,
+            "sourceRecords": 2
+          },
+          "resumed": {
+            "processId": 10563,
+            "partitionConfigs": 2,
+            "sourceRecords": 4,
+            "workRows": 2,
+            "provisioning": "created=[B]; reused=[A]; executionId=service-handle-derived-stable-key"
+          },
+          "afterInitialCommitRetry": {
+            "processId": 10564,
+            "partitionConfigs": 2,
+            "sourceRecords": 4,
+            "workRows": 2,
+            "provisioning": "created=[]; reused=[A,B]; executionId=service-handle-derived-stable-key"
+          }
+        },
+        "workProofExecution": {
+          "policyId": "dataflow-partition-witness-v1",
+          "status": "Running",
+          "revision": 1
+        },
+        "work": [
+          {
+            "invocationId": "partition:A:after:-1",
+            "status": "cancelled",
+            "attempt": 1
+          },
+          {
+            "invocationId": "partition:B:after:-1",
+            "status": "cancelled",
+            "attempt": 0
+          }
+        ],
+        "bpmnContinuation": "fault",
+        "faultDisposition": "Propagated",
+        "businessErrorMapping": null,
+        "cancellationMapping": null,
+        "workerProcesses": 1,
+        "lateWorkerReceipt": null,
+        "destinationEffects": 0,
+        "resultDelivery": null,
+        "incidentCount": 1,
+        "limitation": "WorkProof has per-invocation cancellation but no terminal pipeline-cancel/fail transition; the BPMN bridge records the terminal mapping while its ETL composition remains Running with cancelled work."
+      },
+      {
+        "scenario": "cancel",
+        "freshHostProcesses": [
+          10610,
+          10613,
+          10614,
+          10615,
+          10616
+        ],
+        "serviceHandle": "etl-service:cancel:work-1",
+        "messageListenerHandle": "etl-service:cancel:work-2",
+        "provisioningRecovery": {
+          "crashAfterOnePartition": {
+            "processId": 10613,
+            "partitionConfigs": 1,
+            "sourceRecords": 2
+          },
+          "resumed": {
+            "processId": 10614,
+            "partitionConfigs": 2,
+            "sourceRecords": 4,
+            "workRows": 2,
+            "provisioning": "created=[B]; reused=[A]; executionId=service-handle-derived-stable-key"
+          },
+          "afterInitialCommitRetry": {
+            "processId": 10615,
+            "partitionConfigs": 2,
+            "sourceRecords": 4,
+            "workRows": 2,
+            "provisioning": "created=[]; reused=[A,B]; executionId=service-handle-derived-stable-key"
+          }
+        },
+        "workProofExecution": {
+          "policyId": "dataflow-partition-witness-v1",
+          "status": "Running",
+          "revision": 1
+        },
+        "work": [
+          {
+            "invocationId": "partition:A:after:-1",
+            "status": "cancelled",
+            "attempt": 1
+          },
+          {
+            "invocationId": "partition:B:after:-1",
+            "status": "cancelled",
+            "attempt": 0
+          }
+        ],
+        "bpmnContinuation": "complete",
+        "faultDisposition": null,
+        "businessErrorMapping": null,
+        "cancellationMapping": "interrupting-message -\u003E BPMN CancelWorkSubtree -\u003E cancel ETL invocation work -\u003E late receipt rejected",
+        "workerProcesses": 1,
+        "lateWorkerReceipt": "LateRejected",
+        "destinationEffects": 0,
+        "resultDelivery": null,
+        "incidentCount": 0,
+        "limitation": "WorkProof has per-invocation cancellation but no terminal pipeline-cancel/fail transition; the BPMN bridge records the terminal mapping while its ETL composition remains Running with cancelled work."
+      }
+    ],
+    "guarantees": [
+      "A fresh process starts BPMN service-task work; after a simulated crash with only one source partition committed, a new process reuses that partition and starts one stable multi-partition WorkProof execution.",
+      "Pipeline completion is recorded in its own store before a durable BPMN-side delivery receipt; callback application and receipt advancement are one BPMN-store transaction, so lost acknowledgements replay without duplicate callback.",
+      "Batch work is claimed and executed by fresh worker processes; the WorkProof policy advances only from accepted durable batch receipts.",
+      "Success, caught business error, propagated worker fault, and BPMN interruption each have explicit adapter behavior and inspectable state."
+    ],
+    "boundaries": [
+      "This is a local SQLite proof adapter, not current Elsa integration, a broker-backed service, or a distributed exactly-once transaction.",
+      "The shared PartitionPipelinePolicy cannot terminalize an execution as failed or cancelled; the bridge cancels invocation work and reports that unresolved composition state explicitly.",
+      "The BPMN interpreter exposes no arbitrary token-alteration command; the existing validated modeled-message operation remains an event callback, and move-token remains unsupported."
+    ]
+  },
   "limitations": [
-    "The SQLite host models work as local ledger rows; no external worker or broker is connected.",
+    "The original BPMN witness uses local SQLite work rows; the service-task extension connects a separate local ETL work store and worker processes, not a broker or distributed worker fleet.",
     "The Sequence-style adapter is a small experimental host-side composition proof, not an Elsa integration.",
-    "The experiment proves process-restart recovery, not distributed execution or cross-system exactly-once effects."
+    "The ETL-to-BPMN service bridge is experimental and cannot atomically commit across the two stores; WorkProof also has no terminal composition cancel/fail transition.",
+    "The interpreter exposes no arbitrary token-alteration command; modeled message delivery is an event callback, and arbitrary move-token requests remain unsupported."
   ]
 }

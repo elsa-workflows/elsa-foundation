@@ -56,6 +56,12 @@
           "Bpmn.Model": "[0.3.0, )"
         }
       },
+      "unifiedexecution.workproof": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Data.Sqlite": "[10.0.10, )"
+        }
+      },
       "SQLitePCLRaw.bundle_e_sqlite3": {
         "type": "CentralTransitive",
         "requested": "[3.0.3, )",

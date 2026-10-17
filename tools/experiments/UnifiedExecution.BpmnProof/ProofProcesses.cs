@@ -98,6 +98,37 @@ internal static class ProofProcesses
             : builder.Build();
     }
 
+    public static BpmnProcessDefinition EtlService(string processId, string? boundary = null)
+    {
+        var builder = new BpmnProcessBuilder(processId)
+            .StartEvent("Start")
+            .ServiceTask("ExtractTransformLoad", bindingRef: "etl-pipeline")
+            .EndEvent("Succeeded")
+            .ConnectSequence("Start", "ExtractTransformLoad", "Succeeded");
+
+        if (boundary == "business-error")
+        {
+            builder.BoundaryEvent("BusinessError", "ExtractTransformLoad", new BpmnEventDefinition(BpmnEventDefinitionTypes.Error))
+                .UserTask("ReviewBusinessError", bindingRef: "business-review")
+                .EndEvent("BusinessErrorHandled")
+                .ConnectSequence("BusinessError", "ReviewBusinessError", "BusinessErrorHandled");
+        }
+        else if (boundary == "cancel-message")
+        {
+            builder.BoundaryEvent("CancelPipeline", "ExtractTransformLoad",
+                    new BpmnEventDefinition(BpmnEventDefinitionTypes.Message,
+                        new Dictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            [BpmnEventDefinitionProperties.Name] = "cancel-etl"
+                        }),
+                    bindingRef: "cancel-etl-listener")
+                .EndEvent("Cancelled")
+                .ConnectSequence("CancelPipeline", "Cancelled");
+        }
+
+        return builder.Build();
+    }
+
     public static BpmnProcessDefinition SequenceTail() =>
         new BpmnProcessBuilder("proof-sequence-tail")
             .StartEvent("Start")

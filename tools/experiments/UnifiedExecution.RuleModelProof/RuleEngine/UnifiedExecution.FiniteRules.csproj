@@ -4,7 +4,7 @@
     <AssemblyName>UnifiedExecution.FiniteRules</AssemblyName>
     <RootNamespace>Elsa.UnifiedExecution.FiniteRules</RootNamespace>
     <Version>1.0.0</Version>
-    <PackageId>Elsa.UnifiedExecution.FiniteRules.Proof</PackageId>
+    <PackageId>elsa.proof.finite-positive-rules</PackageId>
     <IsPackable>true</IsPackable>
   </PropertyGroup>
   <ItemGroup>
