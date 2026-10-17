@@ -3,3 +3,16 @@ root: ./website/docs/
 structure:
   readme: README.md
   summary: SUMMARY.md
+
+# GitBook published URLs follow the SUMMARY.md navigation tree, not the folder
+# layout. `##` page-group headings used to prefix every child slug, so the
+# folder-named pages published at doubled paths. Keep these redirects so inbound
+# links to those canonical URLs still resolve after the groups are removed.
+redirects:
+  contributing/contributing: contributing/README.md
+  essentials/essentials: essentials/README.md
+  essentials/essentials/first-workflow: essentials/first-workflow.md
+  essentials/essentials/persistence-modes: essentials/persistence-modes.md
+  essentials/essentials/quickstart: essentials/quickstart.md
+  extensions/extensions: extensions/README.md
+  studio/studio: studio/README.md
