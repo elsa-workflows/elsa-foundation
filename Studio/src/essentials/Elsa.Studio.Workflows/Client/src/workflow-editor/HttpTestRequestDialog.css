@@ -1,7 +1,7 @@
 .wf-dialog.wf-http-test-dialog {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  width: min(860px, 100%);
+  width: min(960px, 100%);
   max-height: min(900px, calc(100vh - 40px));
   overflow: hidden;
 }
@@ -9,9 +9,7 @@
 .wf-http-test-heading,
 .wf-http-test-body,
 .wf-http-test-request-line,
-.wf-http-test-actions,
-.wf-http-test-result header,
-.wf-http-test-result dl > div {
+.wf-http-test-result header {
   display: flex;
 }
 
@@ -28,7 +26,7 @@
 }
 
 .wf-http-test-heading > div > span,
-.wf-http-test-result header > div > span {
+.wf-http-test-result header > span {
   color: var(--studio-text-muted);
   font-size: var(--studio-label-size);
   font-weight: 600;
@@ -66,7 +64,7 @@
 }
 
 .wf-http-test-method {
-  flex: 0 0 140px;
+  flex: 0 0 100px;
 }
 
 .wf-http-test-path {
@@ -99,9 +97,7 @@
   font: inherit;
 }
 
-.wf-http-test-dialog .wf-form-field textarea,
-.wf-http-test-result pre,
-.wf-http-test-result dd {
+.wf-http-test-dialog .wf-form-field textarea {
   font-family: var(--studio-font-mono);
 }
 
@@ -153,37 +149,26 @@
   font-size: var(--studio-label-size);
 }
 
-.wf-http-test-actions {
-  justify-content: flex-end;
-  gap: 8px;
-  padding-top: 4px;
-}
-
-.wf-http-test-actions button {
+.wf-http-test-send {
   display: inline-flex;
-  min-height: 36px;
+  min-height: 38px;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   gap: 7px;
-  padding: 6px 12px;
-  border: 1px solid var(--studio-border);
+  padding: 8px 14px;
+  border: 1px solid var(--studio-accent);
   border-radius: var(--studio-radius-sm);
-  background: var(--studio-surface);
-  color: var(--studio-text);
+  background: var(--studio-accent);
+  color: var(--studio-accent-text);
   font: inherit;
+  font-weight: 600;
   cursor: pointer;
 }
 
-.wf-http-test-actions button:disabled {
-  color: var(--studio-text-muted);
+.wf-http-test-send:disabled {
+  opacity: .6;
   cursor: not-allowed;
-}
-
-.wf-http-test-actions .wf-http-test-send {
-  border-color: var(--studio-accent);
-  background: var(--studio-accent);
-  color: var(--studio-accent-text);
-  font-weight: 600;
 }
 
 .wf-http-test-state,
@@ -221,11 +206,6 @@
   justify-content: space-between;
 }
 
-.wf-http-test-result header > div {
-  display: grid;
-  gap: 4px;
-}
-
 .wf-http-test-result header strong[data-success] {
   color: var(--studio-success-fg);
 }
@@ -245,47 +225,57 @@
   margin-top: 2px;
 }
 
-.wf-http-test-result dl {
-  display: grid;
-  gap: 6px;
-  margin: 0;
+.wf-http-test-result .studio-tabs {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--studio-border);
 }
 
-.wf-http-test-result dl > div {
-  align-items: baseline;
-  gap: 12px;
-}
-
-.wf-http-test-result dt {
-  flex: 0 0 100px;
-  color: var(--studio-text-muted);
-}
-
-.wf-http-test-result dd {
-  min-width: 0;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.wf-http-test-response-body {
-  display: grid;
-  gap: 6px;
-}
-
-.wf-http-test-response-body pre {
-  max-height: 320px;
+.wf-http-test-headers {
+  max-height: 280px;
   overflow: auto;
-  margin: 0;
-  padding: 12px;
+  margin-top: 10px;
   border: 1px solid var(--studio-border);
   border-radius: var(--studio-radius-sm);
-  background: var(--studio-surface-muted);
-  color: var(--studio-text);
-  white-space: pre-wrap;
+}
+
+.wf-http-test-headers table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  text-align: left;
+}
+
+.wf-http-test-headers th,
+.wf-http-test-headers td {
+  padding: 9px 12px;
+  vertical-align: top;
+  border-bottom: 1px solid var(--studio-border);
   overflow-wrap: anywhere;
 }
 
-.wf-http-test-response-body p {
+.wf-http-test-headers th:first-child {
+  width: 35%;
+}
+
+.wf-http-test-headers thead th {
+  color: var(--studio-text-muted);
+  font-weight: 600;
+}
+
+.wf-http-test-headers tbody th,
+.wf-http-test-headers td {
+  font-family: var(--studio-font-mono);
+  font-weight: 400;
+}
+
+.wf-http-test-headers tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+.wf-http-test-empty {
   margin: 0;
   color: var(--studio-text-muted);
 }

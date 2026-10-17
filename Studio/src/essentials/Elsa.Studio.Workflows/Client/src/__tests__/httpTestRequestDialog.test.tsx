@@ -78,7 +78,7 @@ describe("HTTP test request dialog", () => {
     }));
     expect(new Headers(init?.headers).get("Content-Type")).toBe("application/json");
     expect(container.textContent).toContain("202 Accepted");
-    expect(container.textContent).toContain("Content type");
+    expect(container.querySelector("table[aria-label='Response headers']")?.textContent).toContain("content-type");
     expect(container.textContent).toContain("application/json");
     expect(container.textContent).toContain("The request was accepted.");
     expect(container.textContent).toContain("execution-1");
@@ -173,6 +173,77 @@ describe("HTTP test request dialog", () => {
     await waitFor(() => expect(requestResponse).toHaveBeenCalledOnce());
     expect(requestResponse.mock.calls[0][1]?.body).toBeUndefined();
     expect(new Headers(requestResponse.mock.calls[0][1]?.headers).has("Content-Type")).toBe(false);
+  });
+
+  it("shows real response headers with linked keyboard-accessible tabs and a read-only body", async () => {
+    advertiseWorkflowHttpBasePath();
+    vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
+    vi.mocked(getExecutableInputSources).mockResolvedValue(publishedEndpointInputs());
+    requestResponse.mockResolvedValue(new Response('{"message":"Hello"}', {
+      status: 200,
+      headers: { "content-type": "application/json; charset=utf-8", "x-request-id": "trace-123", "cache-control": "no-cache" }
+    }));
+    const container = await renderDialog();
+    await waitFor(() => expect(container.querySelector("textarea[aria-label='Request body']")).not.toBeNull());
+    await click(container.querySelector<HTMLButtonElement>("button[type='submit']")!);
+    await waitFor(() => expect(container.querySelector("[role='tablist'][aria-label='HTTP response sections']")).not.toBeNull());
+    const tabs = [...container.querySelectorAll<HTMLButtonElement>("[role='tab']")];
+    const [bodyTab, headersTab] = tabs;
+    expect(bodyTab.textContent).toBe("Body");
+    expect(bodyTab.getAttribute("aria-selected")).toBe("true");
+    expect(headersTab.textContent).toBe("Headers (3)");
+    const headersPanel = document.getElementById(headersTab.getAttribute("aria-controls")!)!;
+    expect(headersPanel.hidden).toBe(true);
+    expect(headersPanel.getAttribute("aria-labelledby")).toBe(headersTab.id);
+    await waitFor(() => expect(container.querySelector("[aria-label='Response body'].cm-content")).not.toBeNull());
+    const responseEditor = container.querySelector("[aria-label='Response body'].cm-content")!;
+    expect(responseEditor.getAttribute("contenteditable")).toBe("false");
+    expect(responseEditor.closest("[data-studio-code-editor]")?.getAttribute("data-language")).toBe("json");
+    flushSync(() => {
+      bodyTab.focus();
+      bodyTab.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true }));
+    });
+    expect(headersTab.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(headersTab);
+    expect(headersPanel.hidden).toBe(false);
+    const rows = [...headersPanel.querySelectorAll("tbody tr")].map(row => [...row.children].map(cell => cell.textContent));
+    expect(rows).toEqual([["cache-control", "no-cache"], ["content-type", "application/json; charset=utf-8"], ["x-request-id", "trace-123"]]);
+    flushSync(() => headersTab.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true, cancelable: true })));
+    expect(bodyTab.getAttribute("aria-selected")).toBe("true");
+    expect(headersPanel.hidden).toBe(true);
+    expect(requestResponse).toHaveBeenCalledOnce();
+  });
+
+  it("shows clear empty body and header states for a 204 response", async () => {
+    advertiseWorkflowHttpBasePath();
+    vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
+    vi.mocked(getExecutableInputSources).mockResolvedValue(publishedEndpointInputs());
+    requestResponse.mockResolvedValue(new Response(null, { status: 204, statusText: "No Content" }));
+    const container = await renderDialog();
+    await waitFor(() => expect(container.querySelector("textarea[aria-label='Request body']")).not.toBeNull());
+    await click(container.querySelector<HTMLButtonElement>("button[type='submit']")!);
+    await waitFor(() => expect(container.textContent).toContain("204 No Content"));
+    expect(container.textContent).toContain("The response body is empty.");
+    const headersTab = [...container.querySelectorAll<HTMLButtonElement>("[role='tab']")].find(tab => tab.textContent === "Headers (0)")!;
+    await click(headersTab);
+    expect(document.getElementById(headersTab.getAttribute("aria-controls")!)!.textContent).toContain("No response headers are available.");
+  });
+
+  it("clears the previous response when a new attempt has an invalid endpoint path", async () => {
+    advertiseWorkflowHttpBasePath();
+    vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
+    vi.mocked(getExecutableInputSources).mockResolvedValue(publishedEndpointInputs());
+    requestResponse.mockResolvedValue(new Response("previous response", { status: 200 }));
+    const container = await renderDialog();
+    await waitFor(() => expect(container.querySelector("textarea[aria-label='Request body']")).not.toBeNull());
+    const send = container.querySelector<HTMLButtonElement>("button[type='submit']")!;
+    await click(send);
+    await waitFor(() => expect(container.querySelector("[aria-label='HTTP response']")).not.toBeNull());
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Endpoint path']")!, "../api/admin");
+    await click(send);
+    expect(container.textContent).toContain("Dot segments are not allowed");
+    expect(container.querySelector("[aria-label='HTTP response']")).toBeNull();
+    expect(requestResponse).toHaveBeenCalledOnce();
   });
 
   it("preserves an error response body instead of turning non-2xx status into a client exception", async () => {

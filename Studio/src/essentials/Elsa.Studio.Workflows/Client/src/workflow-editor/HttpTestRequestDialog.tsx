@@ -1,19 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  StudioCodeEditor,
-  createStudioCodeEditorSession,
-  clearStudioCodeEditorSession,
-  jsonLanguageAdapter,
-  xmlLanguageAdapter,
-  htmlLanguageAdapter,
-  plainTextLanguageAdapter,
-  javaScriptLanguageAdapter
-} from "@elsa-workflows/studio-code-editor";
-import { getHttpContentTypeLanguage } from "./httpContentTypeLanguage";
-import { AlertTriangle, LoaderCircle, Send, X } from "lucide-react";
+import { LoaderCircle, Send, X } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { EditableCombobox } from "../EditableCombobox";
-import { StudioLink } from "../StudioLink";
+import { HttpMessageBodyEditor } from "./HttpMessageBodyEditor";
+import { HttpTestResponse, type HttpTestResult } from "./HttpTestResponse";
 import { getExecutable, getExecutableInputSources } from "../api/runtime";
 import {
   describeHttpEndpointAcceptedResponse,
@@ -43,14 +33,6 @@ const exampleJson = `{
 // Leave room for the default 30-second server deadline to return its HTTP 408 response.
 const requestTimeoutMs = 35_000;
 
-interface HttpTestResult {
-  status: number;
-  statusText: string;
-  contentType: string;
-  body: string;
-  acceptedMessage: string | null;
-}
-
 export function HttpTestRequestDialog({
   context,
   open,
@@ -64,11 +46,6 @@ export function HttpTestRequestDialog({
   authoredActivityId: string;
   onClose(): void;
 }) {
-  const [bodyEditorSession] = useState(createStudioCodeEditorSession);
-  useEffect(() => () => {
-    // The child editor saves its state during cleanup; release it after that cleanup finishes.
-    queueMicrotask(() => clearStudioCodeEditorSession(bodyEditorSession));
-  }, [bodyEditorSession]);
   const dialogRef = useRef<HTMLElement>(null);
   const activeRequest = useRef<AbortController | null>(null);
   const sending = useRef(false);
@@ -80,14 +57,6 @@ export function HttpTestRequestDialog({
   const [method, setMethod] = useState("");
   const [requestBody, setRequestBody] = useState(exampleJson);
   const [contentType, setContentType] = useState("application/json");
-  const bodyLanguage = getHttpContentTypeLanguage(contentType);
-  const bodyLanguageAdapter = {
-    json: jsonLanguageAdapter,
-    xml: xmlLanguageAdapter,
-    html: htmlLanguageAdapter,
-    javascript: javaScriptLanguageAdapter,
-    plaintext: plainTextLanguageAdapter
-  }[bodyLanguage];
   const [requestError, setRequestError] = useState("");
   const [result, setResult] = useState<HttpTestResult | null>(null);
   const [isSending, setIsSending] = useState(false);
@@ -161,6 +130,7 @@ export function HttpTestRequestDialog({
 
   const sendRequest = async () => {
     if (sending.current || !endpoint || !workflowHttpBasePath || !method) return;
+    setResult(null);
     const send = context.http.requestResponse;
     if (!send) {
       setRequestError("This Studio connection cannot send requests while preserving the backend response. Refresh Studio and try again.");
@@ -180,7 +150,6 @@ export function HttpTestRequestDialog({
     sending.current = true;
     setIsSending(true);
     setRequestError("");
-    setResult(null);
     let timedOut = false;
     const timeout = window.setTimeout(() => {
       timedOut = true;
@@ -215,7 +184,8 @@ export function HttpTestRequestDialog({
       setResult({
         status: response.status,
         statusText: response.statusText,
-        contentType: response.headers.get("content-type") || "Not provided",
+        contentType: response.headers.get("content-type") || "",
+        headers: [...response.headers.entries()],
         body,
         acceptedMessage: response.status === 202
           ? describeHttpEndpointAcceptedResponse(responseMetadata)
@@ -259,7 +229,7 @@ export function HttpTestRequestDialog({
           <div>
             <span>Published workflow</span>
             <h3 id="http-test-title">Send an HTTP test request</h3>
-            <p id="http-test-description">This sends a real request to the latest published workflow. It does not run a temporary test workflow.</p>
+            <p id="http-test-description">Send a real request to this workflow’s published endpoint.</p>
           </div>
           <button type="button" className="wf-icon-button" aria-label="Close test request" onClick={close}>
             <X size={18} aria-hidden="true" />
@@ -303,6 +273,10 @@ export function HttpTestRequestDialog({
                     />
                   </div>
                 </div>
+                <button type="submit" className="wf-http-test-send" disabled={!currentRequestPath || isSending}>
+                  {isSending ? <LoaderCircle size={15} className="wf-http-test-spinner" /> : <Send size={15} />}
+                  {isSending ? "Sending request…" : "Send request"}
+                </button>
               </div>
               <p id="http-test-path-hint" className="wf-http-test-hint">Edit the endpoint path. The HTTP mount is fixed by the server.</p>
 
@@ -317,54 +291,20 @@ export function HttpTestRequestDialog({
                 />
               <div className="wf-form-field wf-http-test-body-editor">
                 <span>Request body</span>
-                <StudioCodeEditor
-                  ariaLabel="Request body"
-                  document={{ uri: "elsa://http-test/request-body", language: bodyLanguage, value: requestBody }}
-                  session={bodyEditorSession}
-                  languageAdapter={bodyLanguageAdapter}
-                  minHeight="180px"
+                <HttpMessageBodyEditor
+                  label="Request body"
+                  contentType={contentType}
+                  value={requestBody}
                   readOnly={bodyDisabled || isSending}
-                  onChange={next => setRequestBody(next.value)}
+                  onChange={setRequestBody}
                 />
                 {bodyDisabled ? <small>GET and HEAD requests do not send a body.</small> : <small>You can edit this example to test your own request.</small>}
-              </div>
-
-              <div className="wf-http-test-actions">
-                <button type="button" onClick={close} disabled={isSending}>Close</button>
-                <button type="submit" className="wf-http-test-send" disabled={!currentRequestPath || isSending}>
-                  {isSending ? <LoaderCircle size={15} className="wf-http-test-spinner" /> : <Send size={15} />}
-                  {isSending ? "Sending request…" : "Send request"}
-                </button>
               </div>
             </form>
           ) : null}
 
           {requestError ? <p className="wf-http-test-error" role="alert">{requestError}</p> : null}
-          {result ? (
-            <section className="wf-http-test-result" aria-label="HTTP response">
-              <header>
-                <div>
-                  <span>Response</span>
-                  <strong data-success={result.status >= 200 && result.status < 300 || undefined} data-error={result.status < 200 || result.status >= 300 || undefined}>
-                    {result.status} {result.statusText}
-                  </strong>
-                </div>
-              </header>
-              {result.acceptedMessage ? (
-                <p className="wf-http-test-accepted" role="status">
-                  <AlertTriangle size={15} /> {result.acceptedMessage}{" "}
-                  <StudioLink href="/workflows/instances">Inspect workflow runs</StudioLink>
-                </p>
-              ) : null}
-              <dl>
-                <div><dt>Content type</dt><dd>{result.contentType}</dd></div>
-              </dl>
-              <div className="wf-http-test-response-body">
-                <strong>Response body</strong>
-                {result.body ? <pre>{result.body}</pre> : <p>The response body is empty.</p>}
-              </div>
-            </section>
-          ) : null}
+          {result ? <HttpTestResponse result={result} /> : null}
         </div>
       </section>
     </div>
