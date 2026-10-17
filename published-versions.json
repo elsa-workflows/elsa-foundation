@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "b0aea33a693b436f5bd03de837998d1a2b7e146d",
+  "last_publish_commit": "876e29d88b70805c8ed0405a1524c1616d362239",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -79,8 +79,8 @@
     },
     {
       "package_id": "Elsa.Activities.Http",
-      "version": "4.0.13-preview",
-      "commit": "c976625675e93fe5724b8cdd02a4125bb21cf08c"
+      "version": "4.0.14-preview",
+      "commit": "876e29d88b70805c8ed0405a1524c1616d362239"
     },
     {
       "package_id": "Elsa.Activities.Primitives",
@@ -354,8 +354,8 @@
     },
     {
       "package_id": "Elsa.Http.Core",
-      "version": "4.0.6-preview",
-      "commit": "d2acadc1c7eda9f2de3f35d481493ae4896cdb04"
+      "version": "4.0.7-preview",
+      "commit": "876e29d88b70805c8ed0405a1524c1616d362239"
     },
     {
       "package_id": "Elsa.Http.JavaScript",
