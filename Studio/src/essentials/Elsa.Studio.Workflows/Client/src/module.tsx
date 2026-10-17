@@ -9,6 +9,11 @@ import { registerInputReferenceContribution } from "./inputReferenceContribution
 import { WorkflowLazyBoundary } from "./WorkflowLazyBoundary";
 import { activityGraphImplementationEditorContribution, activityGraphSchema2ImplementationEditorContribution } from "./activityGraphContribution";
 import { clearActivityDefinitionRecoveryForIdentity } from "./activityDefinitionRecovery";
+import {
+  eventWorkflowTestStimulusEditor,
+  httpWorkflowTestStimulusEditor,
+  schedulingWorkflowTestStimulusEditor
+} from "./workflowTestStimulusEditors";
 
 const WorkflowManagementPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowManagementPage })));
 const WorkflowExecutablesPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowExecutablesPage })));
@@ -52,6 +57,9 @@ export function register(api: ElsaStudioModuleApi) {
   registerVariableReferenceContribution(api.expressionEditors);
   api.expressionEditors.add(createObjectExpressionEditorContribution(() => api.propertyEditors.list()));
   registerInputReferenceContribution(api.expressionEditors);
+  api.workflowTestStimulusEditors?.add(httpWorkflowTestStimulusEditor);
+  api.workflowTestStimulusEditors?.add(eventWorkflowTestStimulusEditor);
+  api.workflowTestStimulusEditors?.add(schedulingWorkflowTestStimulusEditor);
   api.activityEditors.add(activityGraphImplementationEditorContribution);
   api.activityEditors.add(activityGraphSchema2ImplementationEditorContribution);
   latestModuleApi = api;
@@ -108,7 +116,7 @@ export function register(api: ElsaStudioModuleApi) {
         id: "workflows-definitions",
         path: "/workflows/definitions",
         label: "Workflow definitions",
-        component: () => deferred("workflow definitions", <WorkflowManagementPage context={api.backend} ai={api.ai} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors?.list() ?? []} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors()} workflowDesignerPanels={api.workflowDesigner.panels.list()} autosaveEnabledByDefault={api.runtime.workflows?.autosaveEnabledByDefault ?? true} />)
+        component: () => deferred("workflow definitions", <WorkflowManagementPage context={api.backend} ai={api.ai} propertyEditors={api.propertyEditors.list()} expressionEditors={api.expressionEditors?.list() ?? []} expressionToolingIdentity={expressionToolingIdentity} runInputEditors={runInputEditors()} testStimulusEditors={api.workflowTestStimulusEditors?.list() ?? []} workflowDesignerPanels={api.workflowDesigner.panels.list()} autosaveEnabledByDefault={api.runtime.workflows?.autosaveEnabledByDefault ?? true} />)
       },
       {
         id: "workflows-executables",

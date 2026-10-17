@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 
@@ -16,6 +17,24 @@ public sealed class BookmarkResumeDispatchRequest
         IReadOnlyDictionary<string, string>? metadata = null,
         ValueTypeDescriptor? payloadType = null,
         string? providerId = null)
+        : this(workflowExecutionId, stimulusType, stimulusHash, input, idempotencyKey, requestedBy, metadata,
+            payloadType, providerId, bookmarkId: null, testRunDelivery: null)
+    {
+    }
+
+    [JsonConstructor]
+    public BookmarkResumeDispatchRequest(
+        string workflowExecutionId,
+        string stimulusType,
+        string stimulusHash,
+        JsonElement? input,
+        string? idempotencyKey,
+        string requestedBy,
+        IReadOnlyDictionary<string, string>? metadata,
+        ValueTypeDescriptor? payloadType,
+        string? providerId,
+        string? bookmarkId,
+        TestRunDeliveryReceipt? testRunDelivery)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(stimulusType);
@@ -38,6 +57,8 @@ public sealed class BookmarkResumeDispatchRequest
         Metadata = RuntimeModelMetadata.Snapshot(metadata);
         PayloadType = payloadType;
         ProviderId = providerId;
+        BookmarkId = bookmarkId;
+        TestRunDelivery = testRunDelivery;
     }
 
     public string WorkflowExecutionId { get; }
@@ -49,6 +70,8 @@ public sealed class BookmarkResumeDispatchRequest
     public IReadOnlyDictionary<string, string> Metadata { get; }
     public ValueTypeDescriptor? PayloadType { get; }
     public string? ProviderId { get; }
+    public string? BookmarkId { get; }
+    public TestRunDeliveryReceipt? TestRunDelivery { get; }
 }
 
 public sealed class BookmarkResumeDispatchResult
@@ -118,6 +141,24 @@ public sealed class RuntimeResumeBookmarkCommandPayload : IActivityCommandPayloa
         JsonElement? input,
         string reason,
         RuntimeTypedTriggerDeliveryMetadata? triggerDelivery = null)
+        : this(pinnedExecutable, bookmarkId, activityExecutionId, executableNodeId, resumeTargetId, stimulusType,
+            stimulusHash, input, reason, triggerDelivery, testRunDelivery: null)
+    {
+    }
+
+    [JsonConstructor]
+    public RuntimeResumeBookmarkCommandPayload(
+        WorkflowExecutableIdentity pinnedExecutable,
+        string bookmarkId,
+        string activityExecutionId,
+        string executableNodeId,
+        string resumeTargetId,
+        string stimulusType,
+        string stimulusHash,
+        JsonElement? input,
+        string reason,
+        RuntimeTypedTriggerDeliveryMetadata? triggerDelivery,
+        TestRunDeliveryReceipt? testRunDelivery)
     {
         ArgumentNullException.ThrowIfNull(pinnedExecutable);
         ArgumentException.ThrowIfNullOrWhiteSpace(bookmarkId);
@@ -138,6 +179,7 @@ public sealed class RuntimeResumeBookmarkCommandPayload : IActivityCommandPayloa
         Input = input?.Clone();
         Reason = reason;
         TriggerDelivery = triggerDelivery;
+        TestRunDelivery = testRunDelivery;
     }
 
     public WorkflowExecutableIdentity PinnedExecutable { get; }
@@ -150,6 +192,7 @@ public sealed class RuntimeResumeBookmarkCommandPayload : IActivityCommandPayloa
     public JsonElement? Input { get; }
     public string Reason { get; }
     public RuntimeTypedTriggerDeliveryMetadata? TriggerDelivery { get; }
+    public TestRunDeliveryReceipt? TestRunDelivery { get; }
 }
 
 /// <summary>

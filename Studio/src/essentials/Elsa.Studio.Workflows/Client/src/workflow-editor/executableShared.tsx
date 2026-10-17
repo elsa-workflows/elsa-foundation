@@ -23,7 +23,7 @@ export function ExecutableRunStatusLine({ status, run, compact = false }: { stat
   );
 }
 
-export function CopyValueButton({ value, ariaLabel, copiedLabel, onCopied, onCopyFailed }: { value: string | null | undefined; ariaLabel: string; copiedLabel: string; onCopied(label: string): void; onCopyFailed(label: string): void }) {
+export function CopyValueButton({ value, ariaLabel, copiedLabel, textLabel, onCopied, onCopyFailed }: { value: string | null | undefined; ariaLabel: string; copiedLabel: string; textLabel?: string; onCopied(label: string): void; onCopyFailed(label: string): void }) {
   if (!value) return null;
 
   const copy = async (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -40,6 +40,7 @@ export function CopyValueButton({ value, ariaLabel, copiedLabel, onCopied, onCop
   return (
     <button type="button" className="wf-copy-button" aria-label={ariaLabel} title={ariaLabel} onClick={event => void copy(event)}>
       <Copy size={12} />
+      {textLabel ? <span>{textLabel}</span> : null}
     </button>
   );
 }

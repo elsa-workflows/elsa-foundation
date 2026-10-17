@@ -179,6 +179,51 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
     }
 
     [Fact]
+    public async Task TestRunDeliveryId_AdmitsOnlyOneResumeAcrossConcurrentWaitAndConfigurationChanges()
+    {
+        var store = new InMemoryBookmarkStateStore();
+        var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        var processor = new CountingCommandExecutor();
+        using var agentProvider = new InProcessWorkflowExecutionActorProvider(processor);
+        var dispatcher = NewDispatcher(store, workflowStateStore, executableStore, agentProvider);
+        await store.SaveAsync(NewBookmark("wait-1", stimulusHash: "hash-1"));
+        await store.SaveAsync(NewBookmark("wait-2", stimulusHash: "hash-2"));
+        await workflowStateStore.SaveAsync(NewWorkflowExecution() with
+        {
+            RunKind = WorkflowRunKind.TestRun,
+            TestScope = new("test-run", _now.AddMinutes(30), null, new("default"))
+        });
+        await executableStore.SaveAsync(NewExecutable());
+
+        var deliveryId = Guid.NewGuid().ToString("D");
+        var firstInput = Json("{\"value\":1}");
+        var secondInput = Json("{\"value\":2}");
+        var firstReceipt = new TestRunDeliveryReceipt("test-run", deliveryId, "wait-1",
+            TestRunDeliveryReceipt.Digest(Json("{\"modeId\":\"event\",\"data\":{\"value\":1}}")),
+            TestRunDeliveryReceipt.Digest(firstInput));
+        var secondReceipt = new TestRunDeliveryReceipt("test-run", deliveryId, "wait-2",
+            TestRunDeliveryReceipt.Digest(Json("{\"modeId\":\"event\",\"data\":{\"value\":2}}")),
+            TestRunDeliveryReceipt.Digest(secondInput));
+
+        var results = await Task.WhenAll(
+            dispatcher.DispatchAsync(new BookmarkResumeDispatchRequest(
+                "wfexec-1", "delivery-status", "hash-1", firstInput,
+                idempotencyKey: null, requestedBy: "runtime.bookmark", metadata: null,
+                payloadType: null, providerId: null,
+                bookmarkId: "wait-1", testRunDelivery: firstReceipt)).AsTask(),
+            dispatcher.DispatchAsync(new BookmarkResumeDispatchRequest(
+                "wfexec-1", "delivery-status", "hash-2", secondInput,
+                idempotencyKey: null, requestedBy: "runtime.bookmark", metadata: null,
+                payloadType: null, providerId: null,
+                bookmarkId: "wait-2", testRunDelivery: secondReceipt)).AsTask());
+
+        Assert.Contains(results, result => result.Status == BookmarkResumeDispatchStatus.Dispatched);
+        Assert.Contains(results, result => result.Status == BookmarkResumeDispatchStatus.Duplicate);
+        Assert.Equal(1, processor.ProcessCalls);
+    }
+
+    [Fact]
     public async Task DispatchAsync_TypedMetadataCannotBypassExistingBookmarkProviderRecognition()
     {
         var store = new InMemoryBookmarkStateStore();
@@ -468,5 +513,19 @@ public sealed class RuntimeBookmarkStimulusResumeDispatchTests
         public string NewWorkflowExecutionCommandEnvelopeId() => "envelope-1";
 
         public string NewActivityExecutionId() => "actexec-new";
+    }
+
+    private sealed class CountingCommandExecutor : IWorkflowExecutionCommandExecutor
+    {
+        public int ProcessCalls { get; private set; }
+
+        public ValueTask<WorkflowExecutionCommandProcessResult> ProcessAsync(
+            WorkflowExecutionCommandEnvelope envelope,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ProcessCalls++;
+            return ValueTask.FromResult(WorkflowExecutionCommandProcessResult.NoDrain);
+        }
     }
 }

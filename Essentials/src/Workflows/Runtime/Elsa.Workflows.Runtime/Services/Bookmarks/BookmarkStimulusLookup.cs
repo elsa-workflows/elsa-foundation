@@ -40,6 +40,7 @@ public sealed class BookmarkStimulusLookup : IBookmarkStimulusLookup
 
     private static bool Matches(BookmarkState bookmark, BookmarkStimulusLookupRequest request) =>
         StringComparer.Ordinal.Equals(bookmark.WorkflowExecutionId, request.WorkflowExecutionId) &&
+        (request.BookmarkId is null || StringComparer.Ordinal.Equals(bookmark.BookmarkId, request.BookmarkId)) &&
         StringComparer.Ordinal.Equals(bookmark.StimulusType, request.StimulusType) &&
         StringComparer.Ordinal.Equals(bookmark.StimulusHash, request.StimulusHash) &&
         (bookmark.ExpiresAt is null || bookmark.ExpiresAt > request.EvaluatedAt);
