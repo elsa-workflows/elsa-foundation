@@ -262,6 +262,215 @@ public sealed class WorkflowExecutableCompilerTests
                 new ActivityActivationRequirement("test", "test.activity"));
     }
 
+    [Fact]
+    public void Background_execution_capability_is_opt_in_fingerprinted_and_omitted_when_false()
+    {
+        var inlineContract = BackgroundContract(supportsBackgroundExecution: false);
+        var backgroundContract = BackgroundContract(supportsBackgroundExecution: true);
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var inlineJson = JsonSerializer.Serialize(inlineContract, options);
+        var backgroundJson = JsonSerializer.Serialize(backgroundContract, options);
+        var restored = JsonSerializer.Deserialize<Elsa.Activities.Runtime.Core.Models.ActivityContract>(backgroundJson, options)!;
+
+        Assert.False(inlineContract.SupportsBackgroundExecution);
+        Assert.DoesNotContain("supportsBackgroundExecution", inlineJson, StringComparison.Ordinal);
+        Assert.True(backgroundContract.SupportsBackgroundExecution);
+        Assert.Contains("supportsBackgroundExecution", backgroundJson, StringComparison.Ordinal);
+        Assert.NotEqual(inlineContract.SchemaFingerprint, backgroundContract.SchemaFingerprint);
+        Assert.Equal(backgroundContract.SchemaFingerprint, restored.SchemaFingerprint);
+        Assert.True(restored.SupportsBackgroundExecution);
+
+        static Elsa.Activities.Runtime.Core.Models.ActivityContract BackgroundContract(bool supportsBackgroundExecution) => new(
+            "test.activity",
+            "1.0.0",
+            "test",
+            JsonSerializer.SerializeToElement(new { type = "test" }),
+            [],
+            new ActivityResultContract(
+                new ValueTypeDescriptor("Elsa.Unit"),
+                isRequired: true,
+                ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result },
+                []),
+            [ActivityOutcomes.Done],
+            new ActivityActivationRequirement("test", "test.activity"),
+            Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
+            supportsBackgroundExecution: supportsBackgroundExecution);
+    }
+
+    [Fact]
+    public async Task Background_safe_unit_activity_compiles_and_only_nondefault_placement_changes_artifact_hashes()
+    {
+        var inline = await CompileBackgroundActivityAsync(
+            typeof(BackgroundSafeUnitActivity),
+            "activity-background-safe-unit",
+            ActivityExecutionPlacement.Inline);
+        var background = await CompileBackgroundActivityAsync(
+            typeof(BackgroundSafeUnitActivity),
+            "activity-background-safe-unit",
+            ActivityExecutionPlacement.Background);
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var inlineAuthoredJson = JsonSerializer.Serialize(Node("authored", Text("hello")), options);
+        var backgroundAuthoredJson = JsonSerializer.Serialize(
+            Node("authored", Text("hello")) with { ExecutionPlacement = ActivityExecutionPlacement.Background },
+            options);
+        var inlineNodeJson = JsonSerializer.Serialize(inline.RootActivity, options);
+        var backgroundNodeJson = JsonSerializer.Serialize(background.RootActivity, options);
+        using var backgroundAuthoredDocument = JsonDocument.Parse(backgroundAuthoredJson);
+        using var backgroundJson = JsonDocument.Parse(backgroundNodeJson);
+        var restoredNode = JsonSerializer.Deserialize<ExecutableNode>(backgroundNodeJson, options)!;
+        var hasher = new WorkflowExecutableHasher();
+
+        Assert.Equal(ActivityExecutionPlacement.Inline, inline.RootActivity.ExecutionPlacement);
+        Assert.Equal(ActivityExecutionPlacement.Background, background.RootActivity.ExecutionPlacement);
+        Assert.True(background.RootActivity.ActivityContract!.SupportsBackgroundExecution);
+        Assert.DoesNotContain("executionPlacement", inlineAuthoredJson, StringComparison.Ordinal);
+        Assert.Equal((int)ActivityExecutionPlacement.Background, backgroundAuthoredDocument.RootElement.GetProperty("executionPlacement").GetInt32());
+        Assert.DoesNotContain("executionPlacement", inlineNodeJson, StringComparison.Ordinal);
+        Assert.Equal((int)ActivityExecutionPlacement.Background, backgroundJson.RootElement.GetProperty("executionPlacement").GetInt32());
+        Assert.Equal(ActivityExecutionPlacement.Background, restoredNode.ExecutionPlacement);
+        Assert.NotEqual(hasher.ComputeHash(inline.RootActivity), hasher.ComputeHash(background.RootActivity));
+        Assert.NotEqual(
+            hasher.ComputeHash(inline.RootActivity, inline.InputContract!, inline.Dependencies),
+            hasher.ComputeHash(background.RootActivity, background.InputContract!, background.Dependencies));
+        Assert.NotEqual(inline.Identity.ArtifactHash, background.Identity.ArtifactHash);
+
+        var scalar = await CompileBackgroundActivityAsync(
+            typeof(BackgroundSafeScalarActivity),
+            "activity-background-safe-scalar",
+            ActivityExecutionPlacement.Background);
+        var dto = await CompileBackgroundActivityAsync(
+            typeof(BackgroundSafeDtoActivity),
+            "activity-background-safe-dto",
+            ActivityExecutionPlacement.Background);
+        Assert.Equal("Int32", scalar.RootActivity.ActivityContract!.Result.Type.Alias);
+        Assert.Equal(TypeAliasConvention.CanonicalAlias(typeof(BackgroundSafeResult)), dto.RootActivity.ActivityContract!.Result.Type.Alias);
+    }
+
+    [Fact]
+    public async Task Background_placement_refuses_unmarked_structural_intrinsic_object_and_sensitive_result_nodes()
+    {
+        var unmarked = await AssertBackgroundRefusedAsync(
+            Compiler(WorkflowVersion(Node("write-one", Text("hello")) with { ExecutionPlacement = ActivityExecutionPlacement.Background })));
+        Assert.Contains("does not declare BackgroundExecutionSafe", unmarked.Message, StringComparison.Ordinal);
+
+        var structuralCompiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(SequenceNode("sequence", []) with { ExecutionPlacement = ActivityExecutionPlacement.Background })),
+            new FakeActivityVersionStore([_sequenceActivity]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create());
+        var structural = await AssertBackgroundRefusedAsync(structuralCompiler);
+        Assert.Contains("structural activities and nodes with children", structural.Message, StringComparison.Ordinal);
+
+        var intrinsicCompiler = TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(new ActivityNode("intrinsic", "", [], [])
+            {
+                Intrinsic = new AuthoredWorkflowIntrinsic(
+                    AuthoredWorkflowIntrinsicKind.Return,
+                    new TypeReference("String")),
+                ExecutionPlacement = ActivityExecutionPlacement.Background
+            })),
+            new FakeActivityVersionStore([]),
+            _activityStructureService,
+            TestWellKnownTypeRegistry.Create());
+        var intrinsic = await AssertBackgroundRefusedAsync(intrinsicCompiler);
+        Assert.Contains("engine intrinsics cannot run as background activities", intrinsic.Message, StringComparison.Ordinal);
+
+        var untyped = await AssertBackgroundRefusedAsync(BackgroundCompiler(
+            typeof(BackgroundSafeObjectActivity),
+            "activity-background-object",
+            ActivityExecutionPlacement.Background));
+        Assert.Contains("untyped object results are not supported", untyped.Message, StringComparison.Ordinal);
+
+        var transient = await AssertBackgroundRefusedAsync(BackgroundCompiler(
+            typeof(BackgroundSafeStreamActivity),
+            "activity-background-stream",
+            ActivityExecutionPlacement.Background));
+        Assert.Contains("transient result values are not supported", transient.Message, StringComparison.Ordinal);
+
+        var sensitive = await AssertBackgroundRefusedAsync(BackgroundCompiler(
+            typeof(BackgroundSafeResultActivity),
+            "activity-background-sensitive-result",
+            ActivityExecutionPlacement.Background,
+            authoredOutputs:
+            [
+                new ArgumentState(
+                    "value",
+                    new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "result-value" }), "Variable"),
+                    null,
+                    null,
+                    null,
+                    IsSensitive: true)
+            ],
+            variables: [new("result-value", "Result Value", new TypeReference("String"), null, null)]));
+        Assert.Contains("sensitive or encryption-required result values are not supported", sensitive.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Background_placement_rejects_unknown_enum_values_before_compilation()
+    {
+        var compiler = Compiler(WorkflowVersion(Node("write-one", Text("hello")) with
+        {
+            ExecutionPlacement = (ActivityExecutionPlacement)999
+        }));
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("VF-BG-001", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("is not defined", exception.Message, StringComparison.Ordinal);
+    }
+
+    private async Task<WorkflowExecutable> CompileBackgroundActivityAsync(
+        Type activityType,
+        string activityVersionId,
+        ActivityExecutionPlacement placement) =>
+        await BackgroundCompiler(activityType, activityVersionId, placement)
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+    private WorkflowExecutableCompiler BackgroundCompiler(
+        Type activityType,
+        string activityVersionId,
+        ActivityExecutionPlacement placement,
+        IReadOnlyCollection<ArgumentState>? authoredOutputs = null,
+        IReadOnlyCollection<Elsa.Expressions.Core.Models.VariableDefinition>? variables = null)
+    {
+        var typeAlias = TypeAliasConvention.CanonicalAlias(activityType);
+        var registry = TestWellKnownTypeRegistry.Create();
+        registry.RegisterType(activityType, typeAlias);
+        var activityVersion = ClrActivityVersion(activityVersionId, $"test.{activityType.Name}", typeAlias);
+        if (activityType == typeof(BackgroundSafeResultActivity))
+        {
+            activityVersion.Outputs =
+            [
+                new OutputDefinition(
+                    "value",
+                    "Value",
+                    new TypeReference("String"),
+                    null,
+                    "Value",
+                    null,
+                    IsNullable: false,
+                    IsRequired: true)
+            ];
+        }
+
+        return TestCompiler.Create(
+            new FakeVersionStore(WorkflowVersion(
+                new ActivityNode("background-node", activityVersionId, [], authoredOutputs ?? [])
+                {
+                    ExecutionPlacement = placement
+                },
+                variables: variables)),
+            new FakeActivityVersionStore([activityVersion]),
+            _activityStructureService,
+            registry);
+    }
+
+    private static async Task<WorkflowExecutableCompilationException> AssertBackgroundRefusedAsync(
+        WorkflowExecutableCompiler compiler) =>
+        await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
     private static async Task<ExecutableNode> CompileDeclaredInputAsync(string inputKey, string? binding, bool? authoredIsSensitive)
     {
         WorkflowArgumentState[] inputs = binding switch
@@ -499,6 +708,20 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task Background_placement_refuses_a_reusable_activity_boundary()
+    {
+        var compiler = PlacedReusableCompiler(
+            new WorkflowArgumentState("value", new ArgumentValue(JsonSerializer.SerializeToElement(42), "Literal"), null, null, null, null),
+            executionPlacement: ActivityExecutionPlacement.Background);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("VF-BG-001", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("reusable activity boundaries are not supported", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Placed_reusable_activity_materializes_codec_backed_inputs_inline_without_an_external_payload_store()
     {
         var compiler = PlacedReusableCompiler(
@@ -601,10 +824,13 @@ public sealed class WorkflowExecutableCompilerTests
             SecretInput("value"),
             "String",
             Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
-            ("Int32", new WorkflowArgumentState(
-                "aaa",
-                new ArgumentValue(JsonSerializer.SerializeToElement("not-a-number"), "Literal"),
-                null, null, null, null)));
+            extraInputs:
+            [
+                ("Int32", new WorkflowArgumentState(
+                    "aaa",
+                    new ArgumentValue(JsonSerializer.SerializeToElement("not-a-number"), "Literal"),
+                    null, null, null, null))
+            ]);
 
         var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
             () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
@@ -622,7 +848,7 @@ public sealed class WorkflowExecutableCompilerTests
             SecretInput("value"),
             "String",
             Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
-            ("String", SecretInput("beta")));
+            extraInputs: [("String", SecretInput("beta"))]);
 
         var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
             () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
@@ -647,6 +873,7 @@ public sealed class WorkflowExecutableCompilerTests
         WorkflowArgumentState authoredInput,
         string valueTypeAlias = "Int32",
         Elsa.Activities.Runtime.Core.Models.SideEffectProfile templateRootProfile = Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
+        ActivityExecutionPlacement executionPlacement = ActivityExecutionPlacement.Inline,
         params (string TypeAlias, WorkflowArgumentState State)[] extraInputs)
     {
         var primaryInputName = StringComparer.Ordinal.Equals(authoredInput.ReferenceKey, "value")
@@ -716,7 +943,10 @@ public sealed class WorkflowExecutableCompilerTests
             null, null, null, null);
         return TestCompiler.Create(
             new FakeVersionStore(WorkflowVersion(
-                new ActivityNode("use-greet", publication.DefinitionVersionId, [authoredInput, ..extraInputs.Select(extra => extra.State)], [outputTarget]),
+            new ActivityNode("use-greet", publication.DefinitionVersionId, [authoredInput, ..extraInputs.Select(extra => extra.State)], [outputTarget])
+            {
+                ExecutionPlacement = executionPlacement
+            },
                 variables: [new("caller-result", "CallerResult", new TypeReference("Int32"), null, null)])),
             new FakeActivityVersionStore([]),
             _activityStructureService,
@@ -2700,6 +2930,50 @@ public sealed class WorkflowExecutableCompilerTests
     private static ActivityNode ResumeNode(string nodeId) => new(nodeId, "activity-probe", Inputs: [], Outputs: []);
 
     private readonly ActivityDefinitionVersion _resumeProbeActivity = ActivityVersion("activity-probe", typeof(ResumeProbeActivity).FullName!);
+
+    [BackgroundExecutionSafe]
+    private sealed class BackgroundSafeUnitActivity : Activity
+    {
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition<ActivityUnit>.Complete(ActivityUnit.Value));
+    }
+
+    [BackgroundExecutionSafe]
+    private sealed class BackgroundSafeObjectActivity : Activity<object>
+    {
+        protected override ValueTask<ActivityTransition<object>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition<object>.Complete(new object()));
+    }
+
+    [BackgroundExecutionSafe]
+    private sealed class BackgroundSafeScalarActivity : Activity<int>
+    {
+        protected override ValueTask<ActivityTransition<int>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition<int>.Complete(42));
+    }
+
+    private sealed record BackgroundSafeResult([property: Output(Key = "value")] string Value);
+
+    [BackgroundExecutionSafe]
+    private sealed class BackgroundSafeResultActivity : Activity<BackgroundSafeResult>
+    {
+        protected override ValueTask<ActivityTransition<BackgroundSafeResult>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition<BackgroundSafeResult>.Complete(new BackgroundSafeResult("result")));
+    }
+
+    [BackgroundExecutionSafe]
+    private sealed class BackgroundSafeDtoActivity : Activity<BackgroundSafeResult>
+    {
+        protected override ValueTask<ActivityTransition<BackgroundSafeResult>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition<BackgroundSafeResult>.Complete(new BackgroundSafeResult("result")));
+    }
+
+    [BackgroundExecutionSafe]
+    private sealed class BackgroundSafeStreamActivity : Activity<System.IO.Stream>
+    {
+        protected override ValueTask<ActivityTransition<System.IO.Stream>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition.Complete<System.IO.Stream>(new System.IO.MemoryStream()));
+    }
 
     // A minimal type carrying a [ResumeTarget] handler plus the typed-result marker the publish-time
     // contract gate requires of every resolvable CLR activity.
