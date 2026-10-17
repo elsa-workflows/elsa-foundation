@@ -83,21 +83,20 @@ export function isHttpEndpointType(activityType: string | null | undefined): boo
     || normalized?.endsWith(".httpendpoint") === true;
 }
 
-/** Produces a requestable example by replacing ASP.NET route parameters with editable sample values. */
-export function makeInitialHttpTestPath(routeTemplate: string, basePath: string): string {
-  const base = normalizePathPrefix(basePath, "HTTP base path");
+/** Produces an editable endpoint path with sample values for ASP.NET route parameters. */
+export function makeInitialHttpTestEndpointPath(routeTemplate: string): string {
   const exampleRoute = routeTemplate
     .trim()
     .replace(/^\/+/, "")
     .replace(/\{(\*{0,2})?([^}:?]+)(?::([^}?]+))?(\?)?\}/g, (_match, _catchAll: string, _name: string, constraint: string | undefined) => {
-      const kind = constraint?.split(":").at(-1)?.toLowerCase();
-      if (["int", "long", "short", "byte", "uint", "ulong"].includes(kind ?? "")) return "1";
-      if (kind === "guid") return "00000000-0000-0000-0000-000000000001";
+      const kinds = constraint?.toLowerCase().split(":") ?? [];
+      if (kinds.some(kind => ["int", "long", "short", "byte", "uint", "ulong"].includes(kind))) return "1";
+      if (kinds.includes("guid")) return "00000000-0000-0000-0000-000000000001";
       return "sample";
     });
 
   if (!exampleRoute) throw new Error("The published HTTP endpoint does not have a request path.");
-  return `${base}/${exampleRoute}`;
+  return `/${exampleRoute}`;
 }
 
 /**

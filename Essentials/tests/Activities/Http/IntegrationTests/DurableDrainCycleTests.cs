@@ -44,12 +44,12 @@ public sealed class DurableDrainCycleTests
 
     private static async Task<HttpEndpointHostFixture> StartDurableHostAsync()
     {
-        // This tests drain-cycle progress through 200 activities, not the default HTTP deadline. Opt into
-        // a longer server limit while leaving the client's existing 100-second bound in place.
+        // This tests drain-cycle progress through 200 activities, not the default HTTP deadline. Match
+        // the client's existing 100-second bound rather than introducing a stricter server deadline.
         var fixture = await HttpEndpointHostFixture.StartDurableSqliteAsync(
             PersistenceMode.Durable,
             maxActivitiesPerCommit: 50,
-            services => services.Configure<HttpEndpointOptions>(options => options.SyncRequestTimeout = TimeSpan.FromSeconds(90)));
+            services => services.Configure<HttpEndpointOptions>(options => options.SyncRequestTimeout = TimeSpan.FromSeconds(100)));
         Assert.Equal(
             WorkflowDrainOrchestratorOptions.DefaultMaxCyclesWithoutProgress,
             fixture.Services.GetRequiredService<WorkflowDrainOrchestratorOptions>().MaxCyclesWithoutProgress);

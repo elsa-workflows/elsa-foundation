@@ -9,7 +9,7 @@ import {
   describeHttpEndpointAcceptedResponse,
   findPublishedHttpEndpoint,
   getWorkflowHttpBasePath,
-  makeInitialHttpTestPath,
+  makeInitialHttpTestEndpointPath,
   publishedHttpEndpointInputsUnavailableMessage,
   readHttpEndpointResponseMetadata,
   resolveHttpTestEndpointPath,
@@ -109,7 +109,7 @@ export function HttpTestRequestDialog({
           return;
         }
         setEndpoint(selected);
-        setPath(makeInitialHttpTestPath(selected.routeTemplate, configuredBasePath).slice(configuredBasePath.length));
+        setPath(makeInitialHttpTestEndpointPath(selected.routeTemplate));
         setMethod(selected.supportedMethods.includes("POST") ? "POST" : selected.supportedMethods[0]);
         setRequestBody(exampleJson);
         setContentType("application/json");
