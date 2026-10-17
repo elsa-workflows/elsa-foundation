@@ -55,6 +55,24 @@ dotnet test Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/T
 
 For the cancellation control, temporarily disabling the worker's `BackgroundActivityWorkConflictException` catch made `Cancellation_before_receipt_is_treated_as_a_fenced_result_without_waking_the_coordinator` fail with the cancellation-tombstone conflict. For the metadata control, omitting the marker copy in `PreserveSystemMetadata` made `CheckpointHandler_PreservesPinnedRunKindAndBackgroundAdmissionMarkerThroughCompletion` fail because the marker was absent. Each test passed after restoration. These controls supplement the original ten controls below.
 
+## Intermittent CI follow-up — 2026-10-17
+
+[CI run 39064697466](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39064697466/job/117489778092) at `b224d180b` no longer reports the previous 16 failures. Runtime EF passed 971/971. The remaining failure is the right-first Workbench recovery case timing out while waiting for the real receipt marker. Architecture and core-only downstream jobs were skipped; their local evidence above is not a claim that those CI jobs passed.
+
+The existing three process cases passed locally without code changes. That result does not explain or resolve the intermittent CI failure. Independent source investigation found no demonstrated journal-path or hold/release ordering defect. An in-flight renewal can delay a completed body's receipt, but the failed run provides insufficient evidence to attribute this timeout to that mechanism.
+
+The follow-up adds test-fixture diagnostics only: a marker for passing the body release gate, latest renewal/receipt observations isolated by workflow/work/claim identity, and a bounded journal snapshot on timeout. The original `.receipt` commit witness is written before diagnostic committed-stage output. The 90-second timeout, production worker/store behavior and recovery assertions are unchanged. Diagnostic filesystem failures do not replace activity/store outcomes. These observations add file I/O and can affect timing; an `entered` stage alone does not prove that provider I/O is stalled, because a later diagnostic write may itself be delayed. The body-released marker precedes transition serialization and disposal.
+
+Diagnostic source revision: `7222eff8fa4fdefe46335ff9c4b70e3419261ff4`. The final rebuilt background-recovery class passed 3/3; the unchanged class at `b224d180b` also passed 3/3. During diagnostic development, the full Workbench suite passed 39/42, including all three background-recovery cases. Its failures were:
+
+- `CompositionActivationObservationTests.Failed_candidate_reports_the_retained_ready_generation_without_error_details`: expected `reload-failed`, received `ready`.
+- `CompositionHostAttestationProbeTests.All_six_bundle_files_and_process_override_have_no_generation_bound_marker`: the invalid candidate did not report reload failure.
+- `CompositionHostAttestationProbeTests.Shell_reload_can_advance_while_startup_bound_host_configuration_stays_old`: the reloaded blueprint did not contain the new marker `402`.
+
+All three also failed individually on this Mac against the final build. They use separate processes/content roots and do not enable the background fixture. Their common fixed 1.2-second wait for JSON file-watcher propagation is an investigation lead, not an established cause. Machine load varied substantially, and neither parallel load nor this diagnostic change is established as the cause. These failures are retained as separate local observations; the full suite is not reported green. They were not failures in CI run 39064697466.
+
+Generated maps, solution filters and the final diff check passed. Two independent investigations and a follow-up source review found no demonstrated cause of the original CI receipt timeout. The diagnostic review corrected the placement of the commit witness, isolated observations by claim identity, and documented observation limits. Fresh CI is tracked on PR #2915. The intermittent failure remains under investigation until its cause is evidenced; a passing rerun alone is not a causal fix.
+
 ## Original delivery evidence — 2026-10-17
 
 Tracked by [#2914](https://github.com/elsa-workflows/elsa-foundation/issues/2914) and [PR #2915](https://github.com/elsa-workflows/elsa-foundation/pull/2915). The integrated production revision is `6648fd041`; the recorded source revisions below distinguish the EF/host proof from the later in-memory parity correction. Temporary mutation edits were restored in isolated worktrees before integration.
