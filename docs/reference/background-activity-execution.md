@@ -1,6 +1,6 @@
 # Native background activity execution
 
-Status: implementation under verification in [#2914](https://github.com/elsa-workflows/elsa-foundation/issues/2914), [spec 241](../../specs/241-native-durable-offload/spec.md). Do not infer a completed recovery proof from this reference. The recorded acceptance results belong in the spec's [quickstart](../../specs/241-native-durable-offload/quickstart.md).
+Status: native proof validated in [#2914](https://github.com/elsa-workflows/elsa-foundation/issues/2914), [spec 241](../../specs/241-native-durable-offload/spec.md), delivered as [draft PR #2915](https://github.com/elsa-workflows/elsa-foundation/pull/2915). The spec's [quickstart](../../specs/241-native-durable-offload/quickstart.md) records exact acceptance results and limits. Merge and deployment remain separate.
 
 Background placement runs an eligible native leaf body outside its workflow's serialized coordinator. Sequence and Flowchart keep their existing composition semantics. A workflow actor still owns orchestration and checkpoint writes; independently leased workers execute bodies and record terminal receipts. See [ADR 0031](../adr/0031-runtime-burst-execution-sticky-single-writer-drain-with-in-process-fast-path.md) for that boundary.
 

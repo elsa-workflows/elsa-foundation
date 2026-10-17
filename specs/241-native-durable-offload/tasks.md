@@ -35,7 +35,7 @@ Independent check: reopen fresh providers/processes against the same EF database
 - [x] T016 [US2] Repair lost receipt wakeups with a bounded ResultReady sweep in `Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/BackgroundActivityWorker.cs` and its pump.
 - [x] T017 [P] [US2] Resolve late native completion replay without suppressing the first callback in `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/WorkHandlers/WorkflowCompleteActivitySchedulerWorkHandler.cs` and affected activity completion helpers; add delayed replay/loop/fork tests.
 - [x] T018 [US2] Test rollback, lost response, expired/stale claim, conflicting receipt and competing coordinator fence in `Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/BackgroundActivityWorkTests.cs`.
-- [ ] T019 [US2] Add a real owned-process restart witness with `Essentials/tests/Workbench/Tests/WorkbenchProcess.cs` (the C# counterpart of `e2e-tests/_ServerLifecycle.ps1`); rebuild Workbench and record recovery evidence.
+- [x] T019 [US2] Add a real owned-process restart witness with `Essentials/tests/Workbench/Tests/WorkbenchProcess.cs` (the C# counterpart of `e2e-tests/_ServerLifecycle.ps1`); rebuild Workbench and record recovery evidence.
 
 ## Phase 5: US3 - Explicit cancellation (P1)
 
@@ -43,7 +43,7 @@ Independent check: cancellation before claim/during work/between results/before 
 
 - [x] T020 [US3] Stage workflow/subtree background cancellation in the native cancellation checkpoint path under `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/` and atomically retain provider tombstones.
 - [x] T021 [US3] Link worker cooperative cancellation to claim loss/explicit cancellation while keeping host shutdown reclaimable in `Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/BackgroundActivityWorker.cs`.
-- [ ] T022 [US3] Cover the race table and subtree isolation in EF/native tests and the owned Workbench process witness.
+- [x] T022 [US3] Cover the race table and subtree isolation in EF/native tests and the owned Workbench process witness.
 
 ## Phase 6: US4 - Eligibility, diagnostics and operational use (P2)
 
@@ -56,14 +56,14 @@ Independent check: invalid scope/pins/types cannot execute; native incidents/ins
 ## Phase 7: Integrated verification and delivery
 
 - [x] T026 Amend serialized-orchestration wording in `docs/adr/0031-runtime-burst-execution-sticky-single-writer-drain-with-in-process-fast-path.md` with links to the proven native boundary.
-- [ ] T027 Run meaningful fencing, cancellation, receipt atomicity/dedup, pin/scope and continuation replay mutations; record failing controls and restored green results in `specs/241-native-durable-offload/quickstart.md`.
-- [ ] T028 Run affected suites, architecture guard and generated-map check; refresh changed maps with manifest as needed under `docs/maps/` and record unrelated main #2293 separately.
-- [ ] T029 Independently review integrated code and the actual Workbench journey, resolve findings, and record final evidence in `specs/241-native-durable-offload/quickstart.md`.
-- [ ] T030 Commit reviewed work, open/attach one scoped draft PR for #2914, and update issue/program evidence plus `specs/241-native-durable-offload/tasks.md`; leave unrun gates explicitly pending.
+- [x] T027 Run meaningful fencing, cancellation, receipt atomicity/dedup, pin/scope and continuation replay mutations; record failing controls and restored green results in `specs/241-native-durable-offload/quickstart.md`.
+- [x] T028 Run affected suites, architecture guard and generated-map check; refresh changed maps with manifest as needed under `docs/maps/` and record unrelated main #2293 separately.
+- [x] T029 Independently review integrated code and the actual Workbench journey, resolve findings, and record final evidence in `specs/241-native-durable-offload/quickstart.md`.
+- [x] T030 Commit reviewed work, open/attach one scoped draft PR for #2914, and update issue/program evidence plus `specs/241-native-durable-offload/tasks.md`; leave unrun gates explicitly pending.
 
 ## Verification state
 
-Implementation tasks checked above have focused tests; the integrated proof is still in progress. Draft PR [#2915](https://github.com/elsa-workflows/elsa-foundation/pull/2915) is open. Both owned-process recovery orders passed across admission, body, receipt-before-notification, and terminal-history boundaries. Publication placement, renewal-response races, and execution-deletion lifecycle fixes are integrated; the latest combined run also adds REST cancellation across restart. Final combined suites, remaining negative controls, architecture verification, and independent review remain open. No merge or production-readiness claim follows from the checked implementation tasks.
+The native proof is delivered in draft PR [#2915](https://github.com/elsa-workflows/elsa-foundation/pull/2915). The rebuilt Workbench passes both owned-process recovery orders across admission, body, receipt-before-notification, and terminal-history boundaries, plus explicit REST cancellation across restart. Full activity runtime (485), workflow runtime (2,338), publishing (776), Sequence (22), Flowchart (121), Runtime EF (969), and architecture (576) suites pass. Publication placement, renewal-response races, coalesced first admission, and EF/in-memory deletion parity fixes are integrated. All recorded negative controls fail with their safeguard removed and pass after restoration. Exact revisions, commands, freshness results, review findings and limits are recorded in [quickstart.md](quickstart.md). The specification remains Approved until merge; remote CI and merge readiness are separate from this completed local proof.
 
 ## Dependencies and parallel lanes
 
