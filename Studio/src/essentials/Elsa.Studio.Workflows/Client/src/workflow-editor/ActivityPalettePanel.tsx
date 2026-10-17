@@ -142,6 +142,7 @@ export function ActivityPalettePanel({
                     activity.activityDefinitionVersion ?? activity.version);
                   const activityIdentity = activity.activityDefinitionId ?? activity.activityTypeKey;
                   const showVersion = (activityChoiceCounts.get(activityIdentity) ?? 0) > 1;
+                  const versionLabel = `Version ${version.short}`;
                   const exactVersionLabel = `Exact version ${version.full}`;
                   return (
                     <button
@@ -154,7 +155,7 @@ export function ActivityPalettePanel({
                       key={activity.activityVersionId}
                       disabled={disabled}
                       draggable={!disabled}
-                      title={[description || getActivityDisplay(activity), exactVersionLabel].filter(Boolean).join(" — ")}
+                      title={[description || getActivityDisplay(activity), versionLabel].filter(Boolean).join(" — ")}
                       aria-label={`${displayName}, ${exactVersionLabel}`}
                       aria-describedby={descriptionId}
                       onClick={() => onActivityClick(activity)}
@@ -176,7 +177,7 @@ export function ActivityPalettePanel({
                         {description ? <small id={descriptionId}>{description}</small> : null}
                       </span>
                       {showVersion ? (
-                        <span className="wf-palette-version" title={`Exact version ${version.full}`} aria-label={`Exact version ${version.full}`}>
+                        <span className="wf-palette-version" title={versionLabel} aria-label={exactVersionLabel}>
                           v{version.short}
                         </span>
                       ) : null}

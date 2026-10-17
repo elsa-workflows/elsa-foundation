@@ -694,7 +694,7 @@ describe("workflows module", () => {
       .find(button => button.textContent?.includes("Write Line"));
     expect(writeLine?.getAttribute("role")).toBe("treeitem");
     expect(writeLine?.getAttribute("title")).toBe(
-      "Writes a line to the console. — Exact version 1.0.0");
+      "Writes a line to the console. — Version 1.0.0");
     expect(writeLine?.textContent).toContain("Writes a line to the console.");
     expect(writeLine?.querySelector(".wf-activity-icon")).toBeTruthy();
     expect(writeLine?.querySelector(".wf-palette-activity-grip")).toBeTruthy();
