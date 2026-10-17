@@ -970,7 +970,8 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
     private ServiceProvider NewProvider(
         IActivityActivator activityActivator,
         bool includeInspection = false,
-        IRuntimePayloadCapturePolicy? capturePolicy = null)
+        IRuntimePayloadCapturePolicy? capturePolicy = null,
+        Action<IServiceCollection>? configure = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton<IActivityActivator>(activityActivator);
@@ -1003,6 +1004,7 @@ public sealed partial class WorkflowInvokeActivitySchedulerWorkHandlerTests
             services.AddSingleton<IRuntimeActivityExecutionInspectionAccumulator, RuntimeActivityExecutionInspectionAccumulator>();
             services.AddSingleton<IRuntimePayloadCapturePolicy>(capturePolicy ?? new DefaultRuntimePayloadCapturePolicy());
         }
+        configure?.Invoke(services);
         return services.BuildServiceProvider();
     }
 
