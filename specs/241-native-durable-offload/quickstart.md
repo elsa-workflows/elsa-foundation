@@ -14,7 +14,48 @@ The recipe below is followed by the recorded delivery evidence. A pending row is
 
 Operational documentation must include opt-in feature composition, worker concurrency/lease settings, diagnostic states, eligibility and output limits, schema migration, worker pause/drain, cancellation and rollback of hosts with pinned background artifacts still outstanding.
 
-## Delivery evidence — 2026-10-17
+## Self-review corrections — 2026-10-17
+
+CI on `539df7cce` exposed 16 failures beyond the separate main baseline: nine EF command budgets, six schema inventory assertions, and the worker cancellation/receipt race. The earlier local results below remain historical evidence, not proof that this CI head was green.
+
+The reviewed correction source is `69b9f2fab7ff820bafc16d89944779e229e0ee59`. The results below were obtained against those changes, with the narrower EF metadata run following its additional test cases. The architecture run uses the same commit in an isolated checkout with the complete CI dependency graph already restored.
+
+Four review passes, including final root verification, examined the current source, actual CI log and process witness. The correction batch:
+
+- Records a monotonic workflow marker in the admission checkpoint and gates cancellation participants on durable admission evidence. The normal workflow-completed projection preserves that marker. Inline runs no longer query the background ledger on terminal or ordinary activity cancellation.
+- Reuses the exact claimed-dispatch context to avoid repeating the drainer's terminal-state query in completion handlers. Direct, unclaimed and mismatched-claim calls retain their terminal replay guard. This addresses the remaining three fork/join reads; no command budget was raised.
+- Re-reads a receipt conflict in a fresh persistence scope. A confirmed cancellation is an expected worker no-op; other conflicts still escape. Deterministic barriers cover cancellation between body completion and receipt persistence, as well as stale-claim rejection.
+- Adds the new runtime schema family and payload column to the explicit readability, finalization and four-provider column inventories.
+- Strengthens the real-process cancellation witness: it captures actual claims before cancellation and submits them through the real EF store in the replacement process. The witness requires the cancellation-tombstone conflict, matching claim identity, retained Cancelled state with no result, and no final continuation. JSON evidence is published by atomic rename.
+
+The second pass caught the terminal projection dropping the new marker and a timing assumption in the new test fixture. Both were corrected. The third independent source review found no further actionable defect. Final verification also corrected the new EF test fixture's registration order: persistence decorators must wrap the selected EF stores. The local loop completed with no remaining actionable finding. Fresh CI and the CLA check on the updated PR remain independent merge gates.
+
+| Correction validation | Result |
+|---|---|
+| Original EF command budgets | 10/10 passed, budgets unchanged. |
+| Full readability suite | 117/117 passed. |
+| EF tooling finalization and four-provider payload-column classes | 27/27 passed. |
+| Full activity runtime suite | 491/491 passed. |
+| Full workflow runtime suite | 2,340/2,340 passed. |
+| Full Runtime EF suite | 969/969 passed before the additional balanced-admission assertions. |
+| Native EF admission metadata and both completion orders in Durable/Balanced modes | 7/7 passed; admission preserves source reference/correlation and completion retains the background marker. |
+| Rebuilt Workbench process witness with post-restart stale receipts | 3/3 passed, including both recovery orders and cancellation followed by late receipt submission from the replacement process. |
+| Correction-specific negative controls | Both failed when the production safeguard was removed, then passed after exact restoration: cancellation-conflict handling and terminal marker preservation. |
+| Generated maps and solution filters | Passed. The new test file required refreshing only `docs/maps/test-map.md`; the manifest and other maps were unchanged. |
+| Architecture guard | 576/576 passed against `69b9f2fab` in the isolated checkout. |
+
+Additional correction checks:
+
+```bash
+dotnet test Essentials/tests/Activities/Http/IntegrationTests/Elsa.Activities.Http.IntegrationTests.csproj --no-restore --filter FullyQualifiedName~EfCommandBudgetTests
+dotnet test Essentials/tests/Cluster/Readability/Tests/Elsa.Cluster.Readability.Tests.csproj --no-restore
+dotnet test Essentials/tests/Persistence/EntityFrameworkCore/Migrations/Tests/Elsa.Persistence.EntityFrameworkCore.Migrations.Tests.csproj --no-restore --filter 'FullyQualifiedName~EfToolingFinalizationTests|FullyQualifiedName~ModulePayloadColumnTests'
+dotnet test Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests.csproj --no-restore --filter FullyQualifiedName~NativeBackgroundActivityFlowchartEfTests
+```
+
+For the cancellation control, temporarily disabling the worker's `BackgroundActivityWorkConflictException` catch made `Cancellation_before_receipt_is_treated_as_a_fenced_result_without_waking_the_coordinator` fail with the cancellation-tombstone conflict. For the metadata control, omitting the marker copy in `PreserveSystemMetadata` made `CheckpointHandler_PreservesPinnedRunKindAndBackgroundAdmissionMarkerThroughCompletion` fail because the marker was absent. Each test passed after restoration. These controls supplement the original ten controls below.
+
+## Original delivery evidence — 2026-10-17
 
 Tracked by [#2914](https://github.com/elsa-workflows/elsa-foundation/issues/2914) and [PR #2915](https://github.com/elsa-workflows/elsa-foundation/pull/2915). The integrated production revision is `6648fd041`; the recorded source revisions below distinguish the EF/host proof from the later in-memory parity correction. Temporary mutation edits were restored in isolated worktrees before integration.
 
