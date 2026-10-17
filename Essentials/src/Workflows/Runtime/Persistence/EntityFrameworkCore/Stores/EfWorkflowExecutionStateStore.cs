@@ -357,7 +357,8 @@ public sealed class EfWorkflowExecutionStateStore(
                 pendingPostCommitIntentIds: [],
                 metadata: new Dictionary<string, string>
                 {
-                    [RuntimeMetadataKeys.OwnershipFencingToken] = "0"
+                    [RuntimeMetadataKeys.OwnershipFencingToken] = "0",
+                    [RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone] = "true"
                 });
             context.ExecutionLivenessStates.Add(EfExecutionLivenessStateStore.ToEntity(tombstone, scope, 1));
             return true;
@@ -367,6 +368,10 @@ public sealed class EfWorkflowExecutionStateStore(
         // Preserve the monotonic token and unrelated operational state. Clearing the lease makes every checkpoint
         // carrying the deleted execution's fence fail, while the row revision makes an in-flight fenced commit
         // conflict with this transaction.
+        var metadata = new Dictionary<string, string>(current.Metadata, StringComparer.Ordinal)
+        {
+            [RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone] = "true"
+        };
         var revoked = new ExecutionLivenessState(
             stateId,
             workflowExecutionId,
@@ -375,7 +380,7 @@ public sealed class EfWorkflowExecutionStateStore(
             current.Drain,
             current.InterruptedExecution,
             current.PendingPostCommitIntentIds,
-            current.Metadata);
+            metadata);
         EfExecutionLivenessStateStore.Copy(row, revoked, scope, checked(row.Revision + 1));
         return false;
     }

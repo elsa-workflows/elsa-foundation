@@ -1145,6 +1145,19 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
+    public void Full_runtime_ef_composition_resolves_execution_state_contracts_to_ef_stores()
+    {
+        var services = CompleteEfServices();
+        services.Configure<RuntimeRecoveryContinuationOptions>(options =>
+            options.SigningKey = new string('k', 32));
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        Assert.IsType<EfWorkflowExecutionStateStore>(scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>());
+        Assert.IsType<EfActivityExecutionStateStore>(scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>());
+    }
+
+    [Fact]
     public async Task Background_admission_receipt_replay_and_terminal_acceptance_are_checkpoint_scoped()
     {
         await using var database = await TestDatabase.CreateAsync();

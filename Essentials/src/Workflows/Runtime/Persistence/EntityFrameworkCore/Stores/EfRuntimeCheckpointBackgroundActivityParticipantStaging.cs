@@ -1,6 +1,8 @@
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -16,7 +18,7 @@ internal static class EfRuntimeCheckpointBackgroundActivityParticipantStaging
     {
         var changes = commit.StateChanges.BackgroundActivityWork;
         if (changes.Admissions.Count > 0)
-            await EnsureExecutionIsLiveAsync(context, commit.WorkflowExecutionId, scope, cancellationToken);
+            await EnsureExecutionIsLiveAsync(context, commit, commit.WorkflowExecutionId, scope, cancellationToken);
 
         foreach (var request in changes.Admissions)
         {
@@ -78,10 +80,23 @@ internal static class EfRuntimeCheckpointBackgroundActivityParticipantStaging
 
     private static async ValueTask EnsureExecutionIsLiveAsync(
         RuntimeDbContext context,
+        RuntimeCheckpointCommit commit,
         string workflowExecutionId,
         string scope,
         CancellationToken cancellationToken)
     {
+        var ownershipStateId = RuntimeExecutionOwnershipStateId.For(workflowExecutionId);
+        var ownershipId = EfRuntimeOperationalStoreSupport.CompositeId(scope, workflowExecutionId, ownershipStateId);
+        var ownership = context.ExecutionLivenessStates.Local.FirstOrDefault(row => row.Id == ownershipId)
+            ?? throw new RuntimeCheckpointCommitValidationException("Background activity work admission requires the current durable workflow ownership fence.");
+        var ownershipState = EfExecutionLivenessStateStore.Read(ownership, scope, workflowExecutionId, ownershipStateId);
+        if (ownershipState.Metadata.TryGetValue(RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone, out var deletionTombstone))
+        {
+            if (!StringComparer.Ordinal.Equals(deletionTombstone, "true"))
+                throw new InvalidDataException("The persisted workflow-execution deletion tombstone is corrupt.");
+            throw new RuntimeCheckpointCommitValidationException("Background activity work cannot be admitted for a deleted workflow execution.");
+        }
+
         var id = EfWorkflowExecutionStateStore.CreateId(scope, workflowExecutionId);
         var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
         var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
@@ -91,8 +106,15 @@ internal static class EfRuntimeCheckpointBackgroundActivityParticipantStaging
         if (local is not null && context.Entry(local).State == EntityState.Deleted)
             throw new RuntimeCheckpointCommitValidationException("Background activity work cannot be admitted for a deleted workflow execution.");
 
-        // The workflow must already exist in the database before this checkpoint begins. A workflow upsert in the same
-        // checkpoint is not proof that a deleted/missing execution is live and must not reopen admission after deletion.
+        // Coalescing can fold the first workflow upsert and its background admission into the same immediate
+        // checkpoint. StageWorkflowExecutionAsync has already added that scoped row to this context, but it is not
+        // visible to a database query until SaveChanges. Permit only this exact same-commit Upsert; a missing row on
+        // its own is still rejected, and the ownership tombstone above prevents post-delete recreation.
+        if (local is not null && context.Entry(local).State is EntityState.Added or EntityState.Modified &&
+            commit.StateChanges.WorkflowExecution is { Operation: RuntimeStateChangeOperation.Upsert } workflowChange &&
+            StringComparer.Ordinal.Equals(workflowChange.StateId, workflowExecutionId))
+            return;
+
         var row = await context.WorkflowExecutionStates.AsNoTracking().SingleOrDefaultAsync(candidate =>
             candidate.Id == id &&
             candidate.ScopeKeyHash == scopeHash && candidate.ScopeKey == scopeKey &&

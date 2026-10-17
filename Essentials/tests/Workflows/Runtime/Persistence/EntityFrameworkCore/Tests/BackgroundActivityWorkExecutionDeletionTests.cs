@@ -1,4 +1,5 @@
 using Elsa.Persistence.EntityFramework;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -14,6 +15,52 @@ namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Tests;
 public sealed class BackgroundActivityWorkExecutionDeletionTests
 {
     private static readonly DateTimeOffset Now = new(2034, 5, 6, 7, 8, 9, TimeSpan.Zero);
+
+    [Fact]
+    public async Task Initial_workflow_upsert_and_background_admission_can_share_the_first_checkpoint()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var accessor = new FixedAccessor("tenant-a");
+        await using var context = database.Open();
+        var liveness = new EfExecutionLivenessStateStore(context, accessor, new NoopContinuationCodec());
+        var owner = await new RuntimeExecutionOwnershipService(
+            liveness,
+            new FixedTimeProvider(Now),
+            new RuntimeExecutionOwnershipOptions { OwnerId = "initial-owner", LeaseDuration = TimeSpan.FromHours(1) })
+            .AcquireAsync("workflow-a");
+        var request = Request("work-initial-upsert");
+        var checkpointStore = new EfRuntimeCheckpointCommitStore(context, accessor, new FixedTimeProvider(Now), new PassThroughRootWriteLeaseManager());
+        await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() =>
+            checkpointStore.CommitAsync(AdmissionCommit("admit-missing-upsert", request, owner), Decision()).AsTask());
+        var workflowState = new WorkflowExecutionState(
+            "workflow-a",
+            new WorkflowExecutableIdentity("artifact", "definition", "version", "1", "hash"),
+            WorkflowExecutionStatus.Running,
+            null,
+            Now,
+            Now,
+            Now,
+            null,
+            null,
+            null,
+            "tenant-a",
+            new Dictionary<string, string>());
+        var commit = AdmissionCommit("admit-initial-upsert", request, owner) with
+        {
+            StateChanges = new RuntimeCheckpointStateChangeSet(
+                new RuntimeStateChange<WorkflowExecutionState>(
+                    "workflow-a", RuntimeStateChangeOperation.Upsert, workflowState, new Dictionary<string, string>()),
+                null, [], [], [], [], []).WithBackgroundActivityWork(
+                new BackgroundActivityWorkCheckpointChanges(admissions: [request]))
+        };
+
+        await checkpointStore.CommitAsync(commit, Decision());
+
+        Assert.NotNull(await ExecutionStore(context, accessor).FindAsync("workflow-a"));
+        Assert.Equal(BackgroundActivityWorkStatus.Pending,
+            (await new EfBackgroundActivityWorkStore(context, accessor).FindAsync("workflow-a", request.WorkId))!.Status);
+        Assert.Single(await context.RuntimeCheckpointCommits.ToArrayAsync());
+    }
 
     [Fact]
     public async Task Deleting_execution_without_prior_owner_seeds_a_fencing_tombstone()
@@ -41,6 +88,7 @@ public sealed class BackgroundActivityWorkExecutionDeletionTests
         var tombstone = await liveness.FindAsync("workflow-a", RuntimeExecutionOwnershipStateId.For("workflow-a"));
         Assert.Null(tombstone!.ExecutionLease);
         Assert.Equal("0", tombstone.Metadata[Elsa.Workflows.Runtime.Core.Constants.RuntimeMetadataKeys.OwnershipFencingToken]);
+        Assert.Equal("true", tombstone.Metadata[RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone]);
 
         var owner = await new RuntimeExecutionOwnershipService(
             liveness,
@@ -195,6 +243,9 @@ public sealed class BackgroundActivityWorkExecutionDeletionTests
                 new FixedTimeProvider(Now),
                 new RuntimeExecutionOwnershipOptions { OwnerId = "replacement-owner", LeaseDuration = TimeSpan.FromHours(1) })
                 .AcquireAsync("workflow-a");
+            var replacementOwnership = await new EfExecutionLivenessStateStore(context, accessor, new NoopContinuationCodec())
+                .FindAsync("workflow-a", RuntimeExecutionOwnershipStateId.For("workflow-a"));
+            Assert.Equal("true", replacementOwnership!.Metadata[RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone]);
             await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() =>
                 new EfRuntimeCheckpointCommitStore(context, accessor, new FixedTimeProvider(Now))
                     .CommitAsync(AdmissionCommit("admit-orphan-after-delete", Request("work-orphan"), replacementOwner), Decision()).AsTask());
