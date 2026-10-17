@@ -5798,6 +5798,25 @@ button.wf-reference-select {
   outline: none;
 }
 
+/* Compact-editor feedback stays below the source line and its overlaid controls. */
+.wf-expression-field:has(.studio-code-editor-compact) {
+  --wf-expression-chrome-width: 134px;
+}
+
+.wf-expression-field:has(.studio-code-editor-compact) > .wf-syntax-picker.inline,
+.wf-expression-field:has(.studio-code-editor-compact) > .wf-expression-expand-button {
+  bottom: auto;
+  height: calc(2.25rem - 8px);
+}
+
+.wf-expression-field .studio-code-editor-compact .studio-code-editor-preview {
+  padding-inline-end: var(--wf-expression-chrome-width);
+}
+
+.wf-expression-field .studio-code-editor-compact .cm-scroller {
+  margin-inline-end: var(--wf-expression-chrome-width);
+}
+
 .wf-dictionary-expression {
   display: grid;
   min-width: 0;
