@@ -16,13 +16,13 @@ describe("secrets api", () => {
     await deleteSecret(context, "payments/api");
 
     expect(calls).toEqual([
-      ["get", "/_elsa/secrets?activeOnly=false&pageSize=100&search=api+key"],
-      ["get", "/_elsa/secrets/descriptors"],
-      ["post", "/_elsa/secrets", { name: "payments.api", typeName: "text", storeName: "encrypted", value: "secret" }],
-      ["put", "/_elsa/secrets/payments.api", { displayName: "Payments API", description: "Payment provider token" }],
-      ["post", "/_elsa/secrets/payments%2Fapi/rotate", { value: "new-secret" }],
-      ["post", "/_elsa/secrets/picker", { search: "pay", typeNames: ["text"], storeNames: [], activeOnly: true }],
-      ["delete", "/_elsa/secrets/payments%2Fapi"]
+      ["get", "/secrets?activeOnly=false&pageSize=100&search=api+key"],
+      ["get", "/secrets/descriptors"],
+      ["post", "/secrets", { name: "payments.api", typeName: "text", storeName: "encrypted", value: "secret" }],
+      ["put", "/secrets/payments.api", { displayName: "Payments API", description: "Payment provider token" }],
+      ["post", "/secrets/payments%2Fapi/rotate", { value: "new-secret" }],
+      ["post", "/secrets/picker", { search: "pay", typeNames: ["text"], storeNames: [], activeOnly: true }],
+      ["delete", "/secrets/payments%2Fapi"]
     ]);
   });
 });
