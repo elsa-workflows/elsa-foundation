@@ -1095,6 +1095,13 @@
   color: var(--wf-muted-text);
 }
 
+.wf-instance-meta .wf-identity-cell {
+  display: grid;
+  gap: 4px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .wf-instance-section.wf-activity-overview {
   overflow: hidden;
   padding: 0;
