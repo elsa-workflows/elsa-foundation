@@ -45,6 +45,7 @@ internal static class ProofHarness
             await ProveCancellationAndLateReceiptsAsync();
             await ProveContextAndHandlerPinningAsync();
             await ProvePartitionBatchesAndRecoveryAsync();
+            await ProveAggregateAdmissionAsync();
             await ProveCommitReplayAndFencingAsync();
 
             var report = new ProofReport(
@@ -394,6 +395,53 @@ internal static class ProofHarness
             "partition.replay-no-loss-bounded", "all five rows complete with no lost effect and the two-row fetch bound held");
     }
 
+    private static async Task ProveAggregateAdmissionAsync()
+    {
+        const string id = "aggregate-admission";
+        var source = new PartitionSourceStore(_workDb, _authorizer);
+        foreach (string partition in new[] { "A", "B", "C" })
+            source.CreatePartition(_scope, id, partition, 3, 3, ["one", "two", "three"]);
+        Assert(Throws<InvalidOperationException>(() => source.ConfigureBudget(_scope, id, 2)),
+            "admission.reject-too-small-budget", "budget cannot be smaller than a configured pinned batch");
+        source.ConfigureBudget(_scope, "budget-first-validation", 2);
+        Assert(Throws<InvalidOperationException>(() => source.CreatePartition(_scope, "budget-first-validation", "A", 3, 3, [])),
+            "admission.reject-too-large-batch", "partition cannot exceed an already configured budget even when empty");
+        source.ConfigureBudget(_scope, id, 6);
+        var coordinator = new CompositionCoordinator(_store, _scope, id, "admission-owner", new PartitionPipelinePolicy());
+        coordinator.Start(JsonSupport.Serialize(new PartitionPipelineInput(
+            new[] { "A", "B", "C" }.Select(p => new PartitionBatchInput(p, -1, 3)).ToArray())));
+        _store.CreateBarrier("admission-A");
+        _store.CreateBarrier("admission-B");
+        RunningChild a = StartWorker(_workDb, _sinkDb, _scope, id, "partition:A:after:-1", "admission-a", "admission-A", "none");
+        RunningChild b = StartWorker(_workDb, _sinkDb, _scope, id, "partition:B:after:-1", "admission-b", "admission-B", "none");
+        await WaitForBarrier("admission-A", 1);
+        await WaitForBarrier("admission-B", 1);
+        ChildResult denied = await WaitChild("budget-refuses-third-worker", StartWorker(_workDb, _sinkDb, _scope, id, "partition:C:after:-1", "admission-c", "-", "none"));
+        Assert(denied.ExitCode == 12 && source.CurrentInFlight(_scope, id) == 6 && _sink.CountEffects(_scope, id) == 0,
+            "admission.third-worker-refused-before-fetch", "two held batches fill six-record budget; third OS worker receives backpressure without a source read or effect");
+        // Actual process death, rather than lease expiry, establishes that A's buffer is gone.
+        a.Process.Kill(entireProcessTree: true);
+        ChildResult killed = await WaitChild("budget-worker-killed-before-end-batch", a);
+        Assert(killed.ExitCode != 0 && source.CurrentInFlight(_scope, id) == 6,
+            "admission.crash-keeps-reservation", "a killed worker leaves conservative durable accounting until the host confirms its exit");
+        source.ReleaseAfterConfirmedWorkerExit(_scope, id, "partition:A:after:-1", 1);
+        Assert(source.CurrentInFlight(_scope, id) == 3, "admission.confirmed-exit-releases-budget", "confirmed exit releases only A's attempt reservation");
+        _store.ForceExpireWorkForProof(_scope, id, "partition:C:after:-1");
+        ChildResult c = await WaitChild("budget-third-worker-retry", StartWorker(_workDb, _sinkDb, _scope, id, "partition:C:after:-1", "admission-c-retry", "-", "none"));
+        Assert(c.ExitCode == 0 && source.CurrentInFlight(_scope, id) == 3 && _sink.CountEffects(_scope, id) == 3,
+            "admission.capacity-reused-without-blocking-B", "C succeeds after released capacity while B remains held");
+        _store.ReleaseBarrier("admission-B");
+        ChildResult completedB = await WaitChild("budget-B-resumes", b);
+        Assert(completedB.ExitCode == 0, "admission.B-completes", "held B completes normally");
+        _store.ForceExpireWorkForProof(_scope, id, "partition:A:after:-1");
+        ChildResult recoveredA = await WaitChild("budget-A-recovered", StartWorker(_workDb, _sinkDb, _scope, id, "partition:A:after:-1", "admission-a-retry", "-", "none"));
+        Assert(recoveredA.ExitCode == 0, "admission.A-recovered", "fresh worker recovers killed A's pinned batch");
+        coordinator.ApplyPendingResults();
+        await DrainPartitionAsync(coordinator, id);
+        Assert(_store.ReadExecution(_scope, id).Status == "Completed" && source.CurrentInFlight(_scope, id) == 0 && _sink.CountEffects(_scope, id) == 9,
+            "admission.all-partitions-complete", "three partitions complete with nine distinct effects and no retained reservation");
+    }
+
     private static async Task ProveCommitReplayAndFencingAsync()
     {
         const string executionId = "commit-replay-main";
@@ -522,7 +570,7 @@ internal static class ProofHarness
 
     private static IReadOnlyList<AuditEvidence> CaptureAudit()
     {
-        string[] executionIds = ["same-invocation-claim", "same-revision-result-race", "sequence-main", "flowchart-main", "flowchart-clean", "sequence-cancel-first", "sequence-success-first",
+        string[] executionIds = ["aggregate-admission", "same-invocation-claim", "same-revision-result-race", "sequence-main", "flowchart-main", "flowchart-clean", "sequence-cancel-first", "sequence-success-first",
             "red-only", "unsupported-handler-version", "etl-pipeline-main", "etl-crash-replay", "lease-expired-current-owner", "commit-replay-main"];
         return executionIds.SelectMany(executionId => _store.ReadAudit(_scope, executionId)
             .Select(x => new AuditEvidence(executionId, x.Kind, x.Subject, x.CreatedUtc))).ToArray();

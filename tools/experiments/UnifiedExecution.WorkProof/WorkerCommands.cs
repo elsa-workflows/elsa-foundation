@@ -101,6 +101,11 @@ internal static class WorkerCommands
             Console.WriteLine(JsonSupport.Serialize(result));
             return 0;
         }
+        catch (BatchAdmissionDeniedException)
+        {
+            Console.WriteLine("BACKPRESSURE: no source rows fetched");
+            return 12;
+        }
         catch (Exception exception)
         {
             Console.Error.WriteLine($"WORKER_ERROR: {exception.GetType().Name}: {exception.Message}");

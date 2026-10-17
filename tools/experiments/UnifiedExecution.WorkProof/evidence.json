@@ -1,7 +1,7 @@
 {
   "Format": "unified-execution-work-proof/v1",
-  "CapturedUtc": "2026-10-17T13:02:25.842464+00:00",
-  "SourceCommit": "d1edc64b1d2e534d8a87d06af24f0056a5b06815",
+  "CapturedUtc": "2026-10-17T13:09:15.367865+00:00",
+  "SourceCommit": "5128ba775eabe81cda31192fae9ea99343aa57d6",
   "SourceFiles": {
     "UnifiedExecution.WorkProof.csproj": "54c90b5607f16f613e8155b7095dd6c9d77d30c8f373187808662155be71e3d3",
     "packages.lock.json": "e62c9c8e3c5da023e7620a46b40adc07294ddd1ecc699defce0899ec3ad62979",
@@ -10,15 +10,15 @@
     "DurableWorkStore.cs": "7fdca55e4098100f41dac12d7a5d436ac9ba0d30825850c30909536b31ecc69f",
     "Composition.cs": "b35c5b28b19290ed0541b60de6d1af3a0df7e3072715a4940595335ad93602f8",
     "IndependentSink.cs": "448e9b8d81d217bfc6d8bdfafa38dbe4318fd40cb2255c68c27e0f3396d9c8b9",
-    "PartitionSourceStore.cs": "c8dc7a3db26c4d4641df03f3dc95020c7d8f91e9fee4ec6c04aee9d0471bc30d",
+    "PartitionSourceStore.cs": "1d3f51d48914958813c5179ca8b84ab0396a845ea5a70d15c9294beca90c286a",
     "SqliteScopeParameters.cs": "a52c1f196e9e53a48be52813caa9cc199d450e0b6eef0cdac814d507971e4cc9",
-    "WorkerCommands.cs": "99c6dfeae4ec2c35caaeea8f45e646e3976d4dfcc4c3f5cf00b2e7af365c6dfe",
-    "ProofHarness.cs": "935475e5445edeedd9877646a4d188fd82cc33b34b7edc28fa6bef52f4de4b5a",
-    "README.md": "184f799ac3fd7e7018e6d16ceba85da6875b62e3a8471ee056ad60ca8cded1df"
+    "WorkerCommands.cs": "a0f35fc7ac03db70b7417f0f71ae239fb55eb70183e3867b333ecf680adefe40",
+    "ProofHarness.cs": "df2c128dcfd3effe0bb99f8a8b78bac3b0fe26323b2f086f7af69998a9e7c632",
+    "README.md": "c8b36511d5f4e26405d33e9bad63cd40494547a5292927128602639b788023ef"
   },
   "SqlitePackageAssemblyVersion": "10.0.10.0",
   "NativeSqliteVersion": "3.50.4",
-  "ScratchRoot": "5a7233b00103447e8f4d3c9efd6d0ff2",
+  "ScratchRoot": "aed0de89f24b466181fc4aa3aa75bdaa",
   "Assertions": [
     {
       "Id": "dispatch.before-atomic-transaction",
@@ -33,7 +33,7 @@
     {
       "Id": "dispatch.commit-before-notification-crash",
       "Passed": true,
-      "Observed": "fresh coordinator process 96545 committed then exited before notification"
+      "Observed": "fresh coordinator process 99462 committed then exited before notification"
     },
     {
       "Id": "dispatch.owed-work-survives-coordinator-loss",
@@ -43,7 +43,7 @@
     {
       "Id": "dispatch.fresh-worker-completes",
       "Passed": true,
-      "Observed": "worker process 96546 completed after coordinator exit"
+      "Observed": "worker process 99470 completed after coordinator exit"
     },
     {
       "Id": "dispatch.initial-replay-pins-policy",
@@ -68,7 +68,7 @@
     {
       "Id": "coordinator-revision-cas-excludes-stale-plan",
       "Passed": true,
-      "Observed": "one distinct commit loses revision race; rejected=1, taskA=completed:1, taskB=InvalidOperationException"
+      "Observed": "one distinct commit loses revision race; rejected=1, taskA=InvalidOperationException, taskB=completed:1"
     },
     {
       "Id": "coordinator-revision-cas-no-lost-update",
@@ -88,7 +88,7 @@
     {
       "Id": "sequence.predecessor-worker-result",
       "Passed": true,
-      "Observed": "worker process 96570 returned successfully"
+      "Observed": "worker process 99479 returned successfully"
     },
     {
       "Id": "sequence.result-awaits-component",
@@ -118,7 +118,7 @@
     {
       "Id": "sequence.successor-executes",
       "Passed": true,
-      "Observed": "successor worker process 96571 completed"
+      "Observed": "successor worker process 99480 completed"
     },
     {
       "Id": "sequence.component-owns-completion",
@@ -133,7 +133,7 @@
     {
       "Id": "activity.real-overlap-two-fresh-processes",
       "Passed": true,
-      "Observed": "two distinct OS workers 96572,96573 both entered and remained blocked before release"
+      "Observed": "two distinct OS workers 99481,99482 both entered and remained blocked before release"
     },
     {
       "Id": "flowchart.reverse-first-branch",
@@ -298,7 +298,7 @@
     {
       "Id": "partition.drain-worker-etl-pipeline-main-0",
       "Passed": true,
-      "Observed": "worker process 96584 completed"
+      "Observed": "worker process 99493 completed"
     },
     {
       "Id": "partition.drain-receipt-etl-pipeline-main-0",
@@ -308,7 +308,7 @@
     {
       "Id": "partition.drain-worker-etl-pipeline-main-1",
       "Passed": true,
-      "Observed": "worker process 96585 completed"
+      "Observed": "worker process 99495 completed"
     },
     {
       "Id": "partition.drain-receipt-etl-pipeline-main-1",
@@ -318,7 +318,7 @@
     {
       "Id": "partition.drain-worker-etl-pipeline-main-2",
       "Passed": true,
-      "Observed": "worker process 96586 completed"
+      "Observed": "worker process 99496 completed"
     },
     {
       "Id": "partition.drain-receipt-etl-pipeline-main-2",
@@ -328,7 +328,7 @@
     {
       "Id": "partition.drain-worker-etl-pipeline-main-3",
       "Passed": true,
-      "Observed": "worker process 96588 completed"
+      "Observed": "worker process 99498 completed"
     },
     {
       "Id": "partition.drain-receipt-etl-pipeline-main-3",
@@ -338,7 +338,7 @@
     {
       "Id": "partition.drain-worker-etl-pipeline-main-4",
       "Passed": true,
-      "Observed": "worker process 96604 completed"
+      "Observed": "worker process 99499 completed"
     },
     {
       "Id": "partition.drain-receipt-etl-pipeline-main-4",
@@ -348,7 +348,7 @@
     {
       "Id": "partition.drain-worker-etl-pipeline-main-5",
       "Passed": true,
-      "Observed": "worker process 96608 completed"
+      "Observed": "worker process 99502 completed"
     },
     {
       "Id": "partition.drain-receipt-etl-pipeline-main-5",
@@ -428,7 +428,7 @@
     {
       "Id": "partition.drain-worker-etl-crash-replay-0",
       "Passed": true,
-      "Observed": "worker process 96611 completed"
+      "Observed": "worker process 99506 completed"
     },
     {
       "Id": "partition.drain-receipt-etl-crash-replay-0",
@@ -438,7 +438,7 @@
     {
       "Id": "partition.drain-worker-etl-crash-replay-1",
       "Passed": true,
-      "Observed": "worker process 96612 completed"
+      "Observed": "worker process 99509 completed"
     },
     {
       "Id": "partition.drain-receipt-etl-crash-replay-1",
@@ -448,7 +448,7 @@
     {
       "Id": "partition.drain-worker-etl-crash-replay-2",
       "Passed": true,
-      "Observed": "worker process 96613 completed"
+      "Observed": "worker process 99511 completed"
     },
     {
       "Id": "partition.drain-receipt-etl-crash-replay-2",
@@ -466,9 +466,89 @@
       "Observed": "all five rows complete with no lost effect and the two-row fetch bound held"
     },
     {
+      "Id": "admission.reject-too-small-budget",
+      "Passed": true,
+      "Observed": "budget cannot be smaller than a configured pinned batch"
+    },
+    {
+      "Id": "admission.reject-too-large-batch",
+      "Passed": true,
+      "Observed": "partition cannot exceed an already configured budget even when empty"
+    },
+    {
+      "Id": "admission.third-worker-refused-before-fetch",
+      "Passed": true,
+      "Observed": "two held batches fill six-record budget; third OS worker receives backpressure without a source read or effect"
+    },
+    {
+      "Id": "admission.crash-keeps-reservation",
+      "Passed": true,
+      "Observed": "a killed worker leaves conservative durable accounting until the host confirms its exit"
+    },
+    {
+      "Id": "admission.confirmed-exit-releases-budget",
+      "Passed": true,
+      "Observed": "confirmed exit releases only A\u0027s attempt reservation"
+    },
+    {
+      "Id": "admission.capacity-reused-without-blocking-B",
+      "Passed": true,
+      "Observed": "C succeeds after released capacity while B remains held"
+    },
+    {
+      "Id": "admission.B-completes",
+      "Passed": true,
+      "Observed": "held B completes normally"
+    },
+    {
+      "Id": "admission.A-recovered",
+      "Passed": true,
+      "Observed": "fresh worker recovers killed A\u0027s pinned batch"
+    },
+    {
+      "Id": "partition.drain-worker-aggregate-admission-0",
+      "Passed": true,
+      "Observed": "worker process 99517 completed"
+    },
+    {
+      "Id": "partition.drain-receipt-aggregate-admission-0",
+      "Passed": true,
+      "Observed": "component consumes exactly one batch result"
+    },
+    {
+      "Id": "partition.drain-worker-aggregate-admission-1",
+      "Passed": true,
+      "Observed": "worker process 99518 completed"
+    },
+    {
+      "Id": "partition.drain-receipt-aggregate-admission-1",
+      "Passed": true,
+      "Observed": "component consumes exactly one batch result"
+    },
+    {
+      "Id": "partition.drain-worker-aggregate-admission-2",
+      "Passed": true,
+      "Observed": "worker process 99519 completed"
+    },
+    {
+      "Id": "partition.drain-receipt-aggregate-admission-2",
+      "Passed": true,
+      "Observed": "component consumes exactly one batch result"
+    },
+    {
+      "Id": "partition.drain-terminal-aggregate-admission",
+      "Passed": true,
+      "Observed": "partition policy reaches its explicit terminal plan"
+    },
+    {
+      "Id": "admission.all-partitions-complete",
+      "Passed": true,
+      "Observed": "three partitions complete with nine distinct effects and no retained reservation"
+    },
+    {
       "Id": "commit.reply-loss-is-real-process-exit",
       "Passed": true,
-      "Observed": "process 96614 exited after commit marker/state/owed work transaction and before returning reply"
+      "Observed": "process 99521 exited after commit marker/state/owed work transaction and before returning reply"
     },
     {
       "Id": "commit.same-fingerprint-replay-after-owner-change",
@@ -499,211 +579,259 @@
   "Processes": [
     {
       "Role": "proof-harness",
-      "ProcessId": 96543,
+      "ProcessId": 99421,
       "ExitCode": 0,
       "Marker": "started"
     },
     {
       "Role": "coordinator-exit-before-dispatch",
-      "ProcessId": 96544,
+      "ProcessId": 99448,
       "ExitCode": 72,
       "Marker": "EXIT_BEFORE_ATOMIC_DISPATCH"
     },
     {
       "Role": "coordinator-exit-after-dispatch-before-notification",
-      "ProcessId": 96545,
+      "ProcessId": 99462,
       "ExitCode": 73,
       "Marker": "COMMIT_DONE_NO_NOTIFICATION_SENT"
     },
     {
       "Role": "fresh-worker-discovers-dispatch",
-      "ProcessId": 96546,
+      "ProcessId": 99470,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "same-invocation-competing-claim",
-      "ProcessId": 96548,
+      "ProcessId": 99472,
       "ExitCode": 9,
       "Marker": "exit=9"
     },
     {
       "Role": "same-invocation-claim-owner",
-      "ProcessId": 96547,
+      "ProcessId": 99471,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "cas-worker-a",
-      "ProcessId": 96558,
+      "ProcessId": 99475,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "cas-worker-b",
-      "ProcessId": 96562,
+      "ProcessId": 99476,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "sequence-predecessor",
-      "ProcessId": 96570,
+      "ProcessId": 99479,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "sequence-successor",
-      "ProcessId": 96571,
+      "ProcessId": 99480,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "flowchart-branch-b-first",
-      "ProcessId": 96573,
+      "ProcessId": 99482,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "flowchart-branch-a-second",
-      "ProcessId": 96572,
+      "ProcessId": 99481,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "negative-control-completion-owner",
-      "ProcessId": 96574,
+      "ProcessId": 99483,
       "ExitCode": 41,
       "Marker": "MUTATION_INVARIANT_FAILED: completion-owner"
     },
     {
       "Role": "flowchart-clean-branch-a",
-      "ProcessId": 96575,
+      "ProcessId": 99484,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "flowchart-clean-branch-b",
-      "ProcessId": 96576,
+      "ProcessId": 99485,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "cancellation-late-result",
-      "ProcessId": 96577,
+      "ProcessId": 99486,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "success-before-cancel",
-      "ProcessId": 96578,
+      "ProcessId": 99487,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "negative-control-scope-filter",
-      "ProcessId": 96579,
+      "ProcessId": 99488,
       "ExitCode": 41,
       "Marker": "MUTATION_INVARIANT_FAILED: scope-filter"
     },
     {
       "Role": "incompatible-handler-version",
-      "ProcessId": 96580,
+      "ProcessId": 99489,
       "ExitCode": 9,
       "Marker": "exit=9"
     },
     {
       "Role": "etl-partition-B-progress",
-      "ProcessId": 96583,
+      "ProcessId": 99491,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "etl-partition-A-progress",
-      "ProcessId": 96582,
+      "ProcessId": 99490,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "partition-drain-etl-pipeline-main-0",
-      "ProcessId": 96584,
+      "ProcessId": 99493,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "partition-drain-etl-pipeline-main-1",
-      "ProcessId": 96585,
+      "ProcessId": 99495,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "partition-drain-etl-pipeline-main-2",
-      "ProcessId": 96586,
+      "ProcessId": 99496,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "partition-drain-etl-pipeline-main-3",
-      "ProcessId": 96588,
+      "ProcessId": 99498,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "partition-drain-etl-pipeline-main-4",
-      "ProcessId": 96604,
+      "ProcessId": 99499,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "partition-drain-etl-pipeline-main-5",
-      "ProcessId": 96608,
+      "ProcessId": 99502,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "partition-crash-after-sink-before-result",
-      "ProcessId": 96609,
+      "ProcessId": 99503,
       "ExitCode": 73,
       "Marker": "FAILPOINT: destination effect persisted; result receipt not committed."
     },
     {
       "Role": "partition-retry-same-batch",
-      "ProcessId": 96610,
+      "ProcessId": 99504,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "partition-drain-etl-crash-replay-0",
-      "ProcessId": 96611,
+      "ProcessId": 99506,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "partition-drain-etl-crash-replay-1",
-      "ProcessId": 96612,
+      "ProcessId": 99509,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "partition-drain-etl-crash-replay-2",
-      "ProcessId": 96613,
+      "ProcessId": 99511,
+      "ExitCode": 0,
+      "Marker": "exit=0"
+    },
+    {
+      "Role": "budget-refuses-third-worker",
+      "ProcessId": 99514,
+      "ExitCode": 12,
+      "Marker": "exit=12"
+    },
+    {
+      "Role": "budget-worker-killed-before-end-batch",
+      "ProcessId": 99512,
+      "ExitCode": 137,
+      "Marker": "exit=137"
+    },
+    {
+      "Role": "budget-third-worker-retry",
+      "ProcessId": 99515,
+      "ExitCode": 0,
+      "Marker": "exit=0"
+    },
+    {
+      "Role": "budget-B-resumes",
+      "ProcessId": 99513,
+      "ExitCode": 0,
+      "Marker": "exit=0"
+    },
+    {
+      "Role": "budget-A-recovered",
+      "ProcessId": 99516,
+      "ExitCode": 0,
+      "Marker": "exit=0"
+    },
+    {
+      "Role": "partition-drain-aggregate-admission-0",
+      "ProcessId": 99517,
+      "ExitCode": 0,
+      "Marker": "exit=0"
+    },
+    {
+      "Role": "partition-drain-aggregate-admission-1",
+      "ProcessId": 99518,
+      "ExitCode": 0,
+      "Marker": "exit=0"
+    },
+    {
+      "Role": "partition-drain-aggregate-admission-2",
+      "ProcessId": 99519,
       "ExitCode": 0,
       "Marker": "exit=0"
     },
     {
       "Role": "commit-process-exits-after-transaction",
-      "ProcessId": 96614,
+      "ProcessId": 99521,
       "ExitCode": 73,
       "Marker": "COMMIT_DONE_RESPONSE_NOT_DELIVERED"
     },
     {
       "Role": "negative-control-receipt-fingerprint",
-      "ProcessId": 96615,
+      "ProcessId": 99522,
       "ExitCode": 41,
       "Marker": "MUTATION_INVARIANT_FAILED: conflicting-receipt-accepted"
     },
     {
       "Role": "negative-control-fence-check",
-      "ProcessId": 96616,
+      "ProcessId": 99523,
       "ExitCode": 41,
       "Marker": "MUTATION_INVARIANT_FAILED: stale-fence-write"
     }
@@ -711,28 +839,28 @@
   "NegativeControls": [
     {
       "Name": "completion-owner",
-      "ProcessId": 96574,
+      "ProcessId": 99483,
       "ExitCode": 41,
       "ExpectedFailureMarker": "MUTATION_INVARIANT_FAILED: completion-owner",
       "Detected": true
     },
     {
       "Name": "scope-filter",
-      "ProcessId": 96579,
+      "ProcessId": 99488,
       "ExitCode": 41,
       "ExpectedFailureMarker": "MUTATION_INVARIANT_FAILED: scope-filter",
       "Detected": true
     },
     {
       "Name": "receipt-fingerprint",
-      "ProcessId": 96615,
+      "ProcessId": 99522,
       "ExitCode": 41,
       "ExpectedFailureMarker": "MUTATION_INVARIANT_FAILED: conflicting-receipt-accepted",
       "Detected": true
     },
     {
       "Name": "commit-fencing",
-      "ProcessId": 96616,
+      "ProcessId": 99523,
       "ExitCode": 41,
       "ExpectedFailureMarker": "MUTATION_INVARIANT_FAILED: stale-fence-write",
       "Detected": true
@@ -740,526 +868,652 @@
   ],
   "DurableAudit": [
     {
+      "ExecutionId": "aggregate-admission",
+      "Kind": "initial-plan-committed",
+      "Subject": "start:aggregate-admission",
+      "CreatedUtc": "2026-10-17T13:09:14.0391240\u002B00:00"
+    },
+    {
+      "ExecutionId": "aggregate-admission",
+      "Kind": "work-claimed",
+      "Subject": "partition:A:after:-1",
+      "CreatedUtc": "2026-10-17T13:09:14.2149270\u002B00:00"
+    },
+    {
+      "ExecutionId": "aggregate-admission",
+      "Kind": "work-claimed",
+      "Subject": "partition:B:after:-1",
+      "CreatedUtc": "2026-10-17T13:09:14.2259970\u002B00:00"
+    },
+    {
+      "ExecutionId": "aggregate-admission",
+      "Kind": "work-claimed",
+      "Subject": "partition:C:after:-1",
+      "CreatedUtc": "2026-10-17T13:09:14.3492320\u002B00:00"
+    },
+    {
+      "ExecutionId": "aggregate-admission",
+      "Kind": "work-claimed",
+      "Subject": "partition:C:after:-1",
+      "CreatedUtc": "2026-10-17T13:09:14.4927470\u002B00:00"
+    },
+    {
+      "ExecutionId": "aggregate-admission",
+      "Kind": "work-result-accepted",
+      "Subject": "partition:C:after:-1",
+      "CreatedUtc": "2026-10-17T13:09:14.4978830\u002B00:00"
+    },
+    {
+      "ExecutionId": "aggregate-admission",
+      "Kind": "work-result-accepted",
+      "Subject": "partition:B:after:-1",
+      "CreatedUtc": "2026-10-17T13:09:14.5157150\u002B00:00"
+    },
+    {
+      "ExecutionId": "aggregate-admission",
+      "Kind": "work-claimed",
+      "Subject": "partition:A:after:-1",
+      "CreatedUtc": "2026-10-17T13:09:14.6350220\u002B00:00"
+    },
+    {
+      "ExecutionId": "aggregate-admission",
+      "Kind": "work-result-accepted",
+      "Subject": "partition:A:after:-1",
+      "CreatedUtc": "2026-10-17T13:09:14.6407680\u002B00:00"
+    },
+    {
+      "ExecutionId": "aggregate-admission",
+      "Kind": "plan-committed",
+      "Subject": "result:partition:C:after:-1",
+      "CreatedUtc": "2026-10-17T13:09:14.6464360\u002B00:00"
+    },
+    {
+      "ExecutionId": "aggregate-admission",
+      "Kind": "plan-committed",
+      "Subject": "result:partition:B:after:-1",
+      "CreatedUtc": "2026-10-17T13:09:14.6467060\u002B00:00"
+    },
+    {
+      "ExecutionId": "aggregate-admission",
+      "Kind": "plan-committed",
+      "Subject": "result:partition:A:after:-1",
+      "CreatedUtc": "2026-10-17T13:09:14.6469810\u002B00:00"
+    },
+    {
+      "ExecutionId": "aggregate-admission",
+      "Kind": "work-claimed",
+      "Subject": "partition:A:after:2",
+      "CreatedUtc": "2026-10-17T13:09:14.7551180\u002B00:00"
+    },
+    {
+      "ExecutionId": "aggregate-admission",
+      "Kind": "work-result-accepted",
+      "Subject": "partition:A:after:2",
+      "CreatedUtc": "2026-10-17T13:09:14.7595280\u002B00:00"
+    },
+    {
+      "ExecutionId": "aggregate-admission",
+      "Kind": "plan-committed",
+      "Subject": "result:partition:A:after:2",
+      "CreatedUtc": "2026-10-17T13:09:14.7652210\u002B00:00"
+    },
+    {
+      "ExecutionId": "aggregate-admission",
+      "Kind": "work-claimed",
+      "Subject": "partition:B:after:2",
+      "CreatedUtc": "2026-10-17T13:09:14.8718370\u002B00:00"
+    },
+    {
+      "ExecutionId": "aggregate-admission",
+      "Kind": "work-result-accepted",
+      "Subject": "partition:B:after:2",
+      "CreatedUtc": "2026-10-17T13:09:14.8760340\u002B00:00"
+    },
+    {
+      "ExecutionId": "aggregate-admission",
+      "Kind": "plan-committed",
+      "Subject": "result:partition:B:after:2",
+      "CreatedUtc": "2026-10-17T13:09:14.8816220\u002B00:00"
+    },
+    {
+      "ExecutionId": "aggregate-admission",
+      "Kind": "work-claimed",
+      "Subject": "partition:C:after:2",
+      "CreatedUtc": "2026-10-17T13:09:14.9951370\u002B00:00"
+    },
+    {
+      "ExecutionId": "aggregate-admission",
+      "Kind": "work-result-accepted",
+      "Subject": "partition:C:after:2",
+      "CreatedUtc": "2026-10-17T13:09:15.0004890\u002B00:00"
+    },
+    {
+      "ExecutionId": "aggregate-admission",
+      "Kind": "plan-committed",
+      "Subject": "result:partition:C:after:2",
+      "CreatedUtc": "2026-10-17T13:09:15.0068880\u002B00:00"
+    },
+    {
       "ExecutionId": "same-invocation-claim",
       "Kind": "initial-plan-committed",
       "Subject": "start:same-invocation-claim",
-      "CreatedUtc": "2026-10-17T13:02:22.3168860\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:10.2181810\u002B00:00"
     },
     {
       "ExecutionId": "same-invocation-claim",
       "Kind": "work-claimed",
       "Subject": "only-work",
-      "CreatedUtc": "2026-10-17T13:02:22.4207400\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:10.3479150\u002B00:00"
     },
     {
       "ExecutionId": "same-invocation-claim",
       "Kind": "work-result-accepted",
       "Subject": "only-work",
-      "CreatedUtc": "2026-10-17T13:02:22.5554450\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:10.5029460\u002B00:00"
     },
     {
       "ExecutionId": "same-revision-result-race",
       "Kind": "initial-plan-committed",
       "Subject": "start:same-revision-result-race",
-      "CreatedUtc": "2026-10-17T13:02:22.5654750\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:10.5133230\u002B00:00"
     },
     {
       "ExecutionId": "same-revision-result-race",
       "Kind": "work-claimed",
       "Subject": "race-a",
-      "CreatedUtc": "2026-10-17T13:02:22.6770190\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:10.6324340\u002B00:00"
     },
     {
       "ExecutionId": "same-revision-result-race",
       "Kind": "work-result-accepted",
       "Subject": "race-a",
-      "CreatedUtc": "2026-10-17T13:02:22.6791340\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:10.6346220\u002B00:00"
     },
     {
       "ExecutionId": "same-revision-result-race",
       "Kind": "work-claimed",
       "Subject": "race-b",
-      "CreatedUtc": "2026-10-17T13:02:22.6841090\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:10.6391830\u002B00:00"
     },
     {
       "ExecutionId": "same-revision-result-race",
       "Kind": "work-result-accepted",
       "Subject": "race-b",
-      "CreatedUtc": "2026-10-17T13:02:22.6866110\u002B00:00"
-    },
-    {
-      "ExecutionId": "same-revision-result-race",
-      "Kind": "plan-committed",
-      "Subject": "result:race-a",
-      "CreatedUtc": "2026-10-17T13:02:22.6979370\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:10.6414520\u002B00:00"
     },
     {
       "ExecutionId": "same-revision-result-race",
       "Kind": "plan-committed",
       "Subject": "result:race-b",
-      "CreatedUtc": "2026-10-17T13:02:22.8544230\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:10.6517130\u002B00:00"
+    },
+    {
+      "ExecutionId": "same-revision-result-race",
+      "Kind": "plan-committed",
+      "Subject": "result:race-a",
+      "CreatedUtc": "2026-10-17T13:09:10.8051340\u002B00:00"
     },
     {
       "ExecutionId": "sequence-main",
       "Kind": "initial-plan-committed",
       "Subject": "start:sequence-main",
-      "CreatedUtc": "2026-10-17T13:02:22.8588250\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:10.8082030\u002B00:00"
     },
     {
       "ExecutionId": "sequence-main",
       "Kind": "work-claimed",
       "Subject": "sequence-0",
-      "CreatedUtc": "2026-10-17T13:02:22.9702890\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:10.9178520\u002B00:00"
     },
     {
       "ExecutionId": "sequence-main",
       "Kind": "work-result-accepted",
       "Subject": "sequence-0",
-      "CreatedUtc": "2026-10-17T13:02:22.9854780\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:10.9331020\u002B00:00"
     },
     {
       "ExecutionId": "sequence-main",
       "Kind": "plan-committed",
       "Subject": "result:sequence-0",
-      "CreatedUtc": "2026-10-17T13:02:22.9935910\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:10.9418400\u002B00:00"
     },
     {
       "ExecutionId": "sequence-main",
       "Kind": "work-claimed",
       "Subject": "sequence-1",
-      "CreatedUtc": "2026-10-17T13:02:23.0944100\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.0897490\u002B00:00"
     },
     {
       "ExecutionId": "sequence-main",
       "Kind": "work-result-accepted",
       "Subject": "sequence-1",
-      "CreatedUtc": "2026-10-17T13:02:23.0964250\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.0921990\u002B00:00"
     },
     {
       "ExecutionId": "sequence-main",
       "Kind": "plan-committed",
       "Subject": "result:sequence-1",
-      "CreatedUtc": "2026-10-17T13:02:23.1031800\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.1000960\u002B00:00"
     },
     {
       "ExecutionId": "flowchart-main",
       "Kind": "initial-plan-committed",
       "Subject": "start:flowchart-main",
-      "CreatedUtc": "2026-10-17T13:02:23.1058230\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.1026290\u002B00:00"
     },
     {
       "ExecutionId": "flowchart-main",
       "Kind": "work-claimed",
       "Subject": "branch-a",
-      "CreatedUtc": "2026-10-17T13:02:23.2139440\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.2584920\u002B00:00"
     },
     {
       "ExecutionId": "flowchart-main",
       "Kind": "work-claimed",
       "Subject": "branch-b",
-      "CreatedUtc": "2026-10-17T13:02:23.2182520\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.2792380\u002B00:00"
     },
     {
       "ExecutionId": "flowchart-main",
       "Kind": "work-result-accepted",
       "Subject": "branch-b",
-      "CreatedUtc": "2026-10-17T13:02:23.2330500\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.2954070\u002B00:00"
     },
     {
       "ExecutionId": "flowchart-main",
       "Kind": "plan-committed",
       "Subject": "result:branch-b",
-      "CreatedUtc": "2026-10-17T13:02:23.2403110\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.3070750\u002B00:00"
     },
     {
       "ExecutionId": "flowchart-main",
       "Kind": "work-result-accepted",
       "Subject": "branch-a",
-      "CreatedUtc": "2026-10-17T13:02:23.2532560\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.3202630\u002B00:00"
     },
     {
       "ExecutionId": "flowchart-main",
       "Kind": "plan-committed",
       "Subject": "result:branch-a",
-      "CreatedUtc": "2026-10-17T13:02:23.2591470\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.3301500\u002B00:00"
     },
     {
       "ExecutionId": "flowchart-clean",
       "Kind": "initial-plan-committed",
       "Subject": "start:flowchart-clean",
-      "CreatedUtc": "2026-10-17T13:02:23.3634570\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.4856900\u002B00:00"
     },
     {
       "ExecutionId": "flowchart-clean",
       "Kind": "work-claimed",
       "Subject": "branch-a",
-      "CreatedUtc": "2026-10-17T13:02:23.4648250\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.6168490\u002B00:00"
     },
     {
       "ExecutionId": "flowchart-clean",
       "Kind": "work-result-accepted",
       "Subject": "branch-a",
-      "CreatedUtc": "2026-10-17T13:02:23.4669720\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.6192420\u002B00:00"
     },
     {
       "ExecutionId": "flowchart-clean",
       "Kind": "plan-committed",
       "Subject": "result:branch-a",
-      "CreatedUtc": "2026-10-17T13:02:23.4731460\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.6265280\u002B00:00"
     },
     {
       "ExecutionId": "flowchart-clean",
       "Kind": "work-claimed",
       "Subject": "branch-b",
-      "CreatedUtc": "2026-10-17T13:02:23.5755300\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.7445760\u002B00:00"
     },
     {
       "ExecutionId": "flowchart-clean",
       "Kind": "work-result-accepted",
       "Subject": "branch-b",
-      "CreatedUtc": "2026-10-17T13:02:23.5776980\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.7464550\u002B00:00"
     },
     {
       "ExecutionId": "flowchart-clean",
       "Kind": "plan-committed",
       "Subject": "result:branch-b",
-      "CreatedUtc": "2026-10-17T13:02:23.5835540\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.7533830\u002B00:00"
     },
     {
       "ExecutionId": "flowchart-clean",
       "Kind": "plan-committed",
       "Subject": "continuation:flowchart-join",
-      "CreatedUtc": "2026-10-17T13:02:23.5842240\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.7541740\u002B00:00"
     },
     {
       "ExecutionId": "sequence-cancel-first",
       "Kind": "initial-plan-committed",
       "Subject": "start:sequence-cancel-first",
-      "CreatedUtc": "2026-10-17T13:02:23.5850060\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.7554950\u002B00:00"
     },
     {
       "ExecutionId": "sequence-cancel-first",
       "Kind": "work-claimed",
       "Subject": "sequence-0",
-      "CreatedUtc": "2026-10-17T13:02:23.6872790\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.8692220\u002B00:00"
     },
     {
       "ExecutionId": "sequence-cancel-first",
       "Kind": "work-cancelled",
       "Subject": "sequence-0",
-      "CreatedUtc": "2026-10-17T13:02:23.6898920\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.8738750\u002B00:00"
     },
     {
       "ExecutionId": "sequence-cancel-first",
       "Kind": "late-result-rejected",
       "Subject": "sequence-0",
-      "CreatedUtc": "2026-10-17T13:02:23.7022160\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.8841020\u002B00:00"
     },
     {
       "ExecutionId": "sequence-success-first",
       "Kind": "initial-plan-committed",
       "Subject": "start:sequence-success-first",
-      "CreatedUtc": "2026-10-17T13:02:23.7083040\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:11.8907920\u002B00:00"
     },
     {
       "ExecutionId": "sequence-success-first",
       "Kind": "work-claimed",
       "Subject": "sequence-0",
-      "CreatedUtc": "2026-10-17T13:02:23.8101820\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.0030680\u002B00:00"
     },
     {
       "ExecutionId": "sequence-success-first",
       "Kind": "work-result-accepted",
       "Subject": "sequence-0",
-      "CreatedUtc": "2026-10-17T13:02:23.8119900\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.0054000\u002B00:00"
     },
     {
       "ExecutionId": "sequence-success-first",
       "Kind": "plan-committed",
       "Subject": "result:sequence-0",
-      "CreatedUtc": "2026-10-17T13:02:23.8181880\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.0127660\u002B00:00"
     },
     {
       "ExecutionId": "red-only",
       "Kind": "initial-plan-committed",
       "Subject": "start:red-only",
-      "CreatedUtc": "2026-10-17T13:02:23.8191470\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.0138540\u002B00:00"
     },
     {
       "ExecutionId": "unsupported-handler-version",
       "Kind": "initial-plan-committed",
       "Subject": "start:unsupported-handler-version",
-      "CreatedUtc": "2026-10-17T13:02:23.9176540\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.1264610\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "initial-plan-committed",
       "Subject": "start:etl-pipeline-main",
-      "CreatedUtc": "2026-10-17T13:02:24.0350090\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.2507220\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "work-claimed",
       "Subject": "partition:A:after:-1",
-      "CreatedUtc": "2026-10-17T13:02:24.1493720\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.3752840\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "work-claimed",
       "Subject": "partition:B:after:-1",
-      "CreatedUtc": "2026-10-17T13:02:24.1629760\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.3795100\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "work-result-accepted",
       "Subject": "partition:B:after:-1",
-      "CreatedUtc": "2026-10-17T13:02:24.1811220\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.3999500\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "plan-committed",
       "Subject": "result:partition:B:after:-1",
-      "CreatedUtc": "2026-10-17T13:02:24.1890390\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.4091160\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "work-result-accepted",
       "Subject": "partition:A:after:-1",
-      "CreatedUtc": "2026-10-17T13:02:24.2051150\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.4233330\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "plan-committed",
       "Subject": "result:partition:A:after:-1",
-      "CreatedUtc": "2026-10-17T13:02:24.2110150\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.4296650\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "work-claimed",
       "Subject": "partition:A:after:2",
-      "CreatedUtc": "2026-10-17T13:02:24.3143060\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.5577550\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "work-result-accepted",
       "Subject": "partition:A:after:2",
-      "CreatedUtc": "2026-10-17T13:02:24.3196840\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.5641240\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "plan-committed",
       "Subject": "result:partition:A:after:2",
-      "CreatedUtc": "2026-10-17T13:02:24.3250270\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.5715300\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "work-claimed",
       "Subject": "partition:A:after:5",
-      "CreatedUtc": "2026-10-17T13:02:24.4304850\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.7175560\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "work-result-accepted",
       "Subject": "partition:A:after:5",
-      "CreatedUtc": "2026-10-17T13:02:24.4358220\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.7233440\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "plan-committed",
       "Subject": "result:partition:A:after:5",
-      "CreatedUtc": "2026-10-17T13:02:24.4416930\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.7307110\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "work-claimed",
       "Subject": "partition:A:after:8",
-      "CreatedUtc": "2026-10-17T13:02:24.5482280\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.8643000\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "work-result-accepted",
       "Subject": "partition:A:after:8",
-      "CreatedUtc": "2026-10-17T13:02:24.5525800\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.8687340\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "plan-committed",
       "Subject": "result:partition:A:after:8",
-      "CreatedUtc": "2026-10-17T13:02:24.5589170\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.8767210\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "work-claimed",
       "Subject": "partition:B:after:2",
-      "CreatedUtc": "2026-10-17T13:02:24.6721380\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:12.9967210\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "work-result-accepted",
       "Subject": "partition:B:after:2",
-      "CreatedUtc": "2026-10-17T13:02:24.6777450\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.0024360\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "plan-committed",
       "Subject": "result:partition:B:after:2",
-      "CreatedUtc": "2026-10-17T13:02:24.6837420\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.0099370\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "work-claimed",
       "Subject": "partition:B:after:5",
-      "CreatedUtc": "2026-10-17T13:02:24.8044720\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.1367470\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "work-result-accepted",
       "Subject": "partition:B:after:5",
-      "CreatedUtc": "2026-10-17T13:02:24.8096580\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.1440520\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "plan-committed",
       "Subject": "result:partition:B:after:5",
-      "CreatedUtc": "2026-10-17T13:02:24.8149250\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.1528000\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "work-claimed",
       "Subject": "partition:B:after:8",
-      "CreatedUtc": "2026-10-17T13:02:24.9190610\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.3005310\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "work-result-accepted",
       "Subject": "partition:B:after:8",
-      "CreatedUtc": "2026-10-17T13:02:24.9234900\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.3079190\u002B00:00"
     },
     {
       "ExecutionId": "etl-pipeline-main",
       "Kind": "plan-committed",
       "Subject": "result:partition:B:after:8",
-      "CreatedUtc": "2026-10-17T13:02:24.9292120\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.3182260\u002B00:00"
     },
     {
       "ExecutionId": "etl-crash-replay",
       "Kind": "initial-plan-committed",
       "Subject": "start:etl-crash-replay",
-      "CreatedUtc": "2026-10-17T13:02:24.9326100\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.3254530\u002B00:00"
     },
     {
       "ExecutionId": "etl-crash-replay",
       "Kind": "work-claimed",
       "Subject": "partition:R:after:-1",
-      "CreatedUtc": "2026-10-17T13:02:25.0354590\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.4484820\u002B00:00"
     },
     {
       "ExecutionId": "etl-crash-replay",
       "Kind": "work-claimed",
       "Subject": "partition:R:after:-1",
-      "CreatedUtc": "2026-10-17T13:02:25.1462300\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.5915220\u002B00:00"
     },
     {
       "ExecutionId": "etl-crash-replay",
       "Kind": "work-result-accepted",
       "Subject": "partition:R:after:-1",
-      "CreatedUtc": "2026-10-17T13:02:25.1640450\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.6115540\u002B00:00"
     },
     {
       "ExecutionId": "etl-crash-replay",
       "Kind": "plan-committed",
       "Subject": "result:partition:R:after:-1",
-      "CreatedUtc": "2026-10-17T13:02:25.1696180\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.6181950\u002B00:00"
     },
     {
       "ExecutionId": "etl-crash-replay",
       "Kind": "work-claimed",
       "Subject": "partition:R:after:1",
-      "CreatedUtc": "2026-10-17T13:02:25.2744410\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.7456440\u002B00:00"
     },
     {
       "ExecutionId": "etl-crash-replay",
       "Kind": "work-result-accepted",
       "Subject": "partition:R:after:1",
-      "CreatedUtc": "2026-10-17T13:02:25.2795240\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.7513920\u002B00:00"
     },
     {
       "ExecutionId": "etl-crash-replay",
       "Kind": "plan-committed",
       "Subject": "result:partition:R:after:1",
-      "CreatedUtc": "2026-10-17T13:02:25.2850060\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.7591340\u002B00:00"
     },
     {
       "ExecutionId": "etl-crash-replay",
       "Kind": "work-claimed",
       "Subject": "partition:R:after:3",
-      "CreatedUtc": "2026-10-17T13:02:25.3884540\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.8767530\u002B00:00"
     },
     {
       "ExecutionId": "etl-crash-replay",
       "Kind": "work-result-accepted",
       "Subject": "partition:R:after:3",
-      "CreatedUtc": "2026-10-17T13:02:25.3931110\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.8821170\u002B00:00"
     },
     {
       "ExecutionId": "etl-crash-replay",
       "Kind": "plan-committed",
       "Subject": "result:partition:R:after:3",
-      "CreatedUtc": "2026-10-17T13:02:25.3984510\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.8888930\u002B00:00"
     },
     {
       "ExecutionId": "etl-crash-replay",
       "Kind": "work-claimed",
       "Subject": "partition:R:after:4",
-      "CreatedUtc": "2026-10-17T13:02:25.5020930\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:14.0231360\u002B00:00"
     },
     {
       "ExecutionId": "etl-crash-replay",
       "Kind": "work-result-accepted",
       "Subject": "partition:R:after:4",
-      "CreatedUtc": "2026-10-17T13:02:25.5064830\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:14.0284520\u002B00:00"
     },
     {
       "ExecutionId": "etl-crash-replay",
       "Kind": "plan-committed",
       "Subject": "result:partition:R:after:4",
-      "CreatedUtc": "2026-10-17T13:02:25.5117730\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:14.0362190\u002B00:00"
     },
     {
       "ExecutionId": "lease-expired-current-owner",
       "Kind": "initial-plan-committed",
       "Subject": "start:lease-expired-current-owner",
-      "CreatedUtc": "2026-10-17T13:02:24.9307430\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.3208590\u002B00:00"
     },
     {
       "ExecutionId": "lease-expired-current-owner",
       "Kind": "work-claimed",
       "Subject": "expiry-only",
-      "CreatedUtc": "2026-10-17T13:02:24.9318700\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.3227640\u002B00:00"
     },
     {
       "ExecutionId": "lease-expired-current-owner",
       "Kind": "work-result-accepted",
       "Subject": "expiry-only",
-      "CreatedUtc": "2026-10-17T13:02:24.9321790\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:13.3233630\u002B00:00"
     },
     {
       "ExecutionId": "commit-replay-main",
       "Kind": "initial-plan-committed",
       "Subject": "start:commit-replay-main",
-      "CreatedUtc": "2026-10-17T13:02:25.5129120\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:15.0081400\u002B00:00"
     },
     {
       "ExecutionId": "commit-replay-main",
       "Kind": "plan-committed",
       "Subject": "lost-response-commit",
-      "CreatedUtc": "2026-10-17T13:02:25.6182320\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:15.1235150\u002B00:00"
     },
     {
       "ExecutionId": "commit-replay-main",
       "Kind": "plan-committed",
       "Subject": "mutant-stale-write",
-      "CreatedUtc": "2026-10-17T13:02:25.8374140\u002B00:00"
+      "CreatedUtc": "2026-10-17T13:09:15.3625530\u002B00:00"
     }
   ],
   "Limits": "SQLite WAL on one machine; child OS processes share a local coordinator DB and a separate destination DB."

@@ -9,9 +9,11 @@ public sealed record PartitionBatchResult(string PartitionId, long InputCursor, 
 public sealed record PartitionMeasurement(int Fetched, int CurrentInFlight, string Status);
 
 /// <summary>
-/// ETL-specific source and in-flight measurements only. Claims, fencing, durable dispatch,
+/// ETL-specific source, optional record admission, and in-flight accounting. Claims, fencing, durable dispatch,
 /// terminal receipts, and coordinator transitions all use DurableWorkStore.
 /// </summary>
+public sealed class BatchAdmissionDeniedException() : Exception("The execution record budget is exhausted.");
+
 public sealed class PartitionSourceStore
 {
     private readonly string _connectionString;
@@ -25,6 +27,10 @@ public sealed class PartitionSourceStore
         using var connection = Open();
         using var command = connection.CreateCommand();
         command.CommandText = """
+            CREATE TABLE IF NOT EXISTS pipeline_budgets(
+                tenant TEXT NOT NULL,persistence_scope TEXT NOT NULL,authority TEXT NOT NULL,execution_id TEXT NOT NULL,
+                max_records INTEGER NOT NULL,
+                PRIMARY KEY(tenant,persistence_scope,authority,execution_id));
             CREATE TABLE IF NOT EXISTS partition_configs(
                 tenant TEXT NOT NULL,persistence_scope TEXT NOT NULL,authority TEXT NOT NULL,execution_id TEXT NOT NULL,
                 partition_id TEXT NOT NULL,batch_size INTEGER NOT NULL,max_batch_records INTEGER NOT NULL,
@@ -57,6 +63,16 @@ public sealed class PartitionSourceStore
         if (batchSize < 1 || maxBatchRecords < batchSize) throw new ArgumentOutOfRangeException(nameof(batchSize), "The record limit must be at least one configured batch.");
         using var connection = Open();
         using var transaction = connection.BeginTransaction();
+        using (var budget = connection.CreateCommand())
+        {
+            budget.Transaction = transaction;
+            budget.CommandText = "SELECT max_records FROM pipeline_budgets WHERE tenant=$tenant AND persistence_scope=$scope AND authority=$authority AND execution_id=$execution";
+            SqliteScopeParameters.Add(budget, scope);
+            budget.Parameters.AddWithValue("$execution", executionId);
+            object? limit = budget.ExecuteScalar();
+            if (limit is not null && Convert.ToInt32(limit) < batchSize)
+                throw new InvalidOperationException("Execution budget must admit at least one configured batch.");
+        }
         using (var insert = connection.CreateCommand())
         {
             insert.Transaction = transaction;
@@ -84,11 +100,41 @@ public sealed class PartitionSourceStore
         transaction.Commit();
     }
 
+    public void ConfigureBudget(WorkScope scope, string executionId, int maxRecords)
+    {
+        _scopeAuthorizer.EnsureAuthorized(scope);
+        if (maxRecords < 1) throw new ArgumentOutOfRangeException(nameof(maxRecords));
+        using var connection = Open();
+        using var transaction = connection.BeginTransaction(deferred: false);
+        using (var partitions = connection.CreateCommand())
+        {
+            partitions.Transaction = transaction;
+            partitions.CommandText = "SELECT coalesce(max(batch_size),0) FROM partition_configs WHERE tenant=$tenant AND persistence_scope=$scope AND authority=$authority AND execution_id=$execution";
+            SqliteScopeParameters.Add(partitions, scope);
+            partitions.Parameters.AddWithValue("$execution", executionId);
+            if (Convert.ToInt32(partitions.ExecuteScalar()) > maxRecords)
+                throw new InvalidOperationException("Execution budget must admit at least one configured batch.");
+        }
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "INSERT INTO pipeline_budgets VALUES($tenant,$scope,$authority,$execution,$max)";
+        SqliteScopeParameters.Add(command, scope);
+        command.Parameters.AddWithValue("$execution", executionId);
+        command.Parameters.AddWithValue("$max", maxRecords);
+        command.ExecuteNonQuery();
+        transaction.Commit();
+    }
+
+    // The host must confirm process termination before releasing a reservation. Lease
+    // expiry alone is insufficient: a partitioned/stalled worker may still hold buffers.
+    public void ReleaseAfterConfirmedWorkerExit(WorkScope scope, string executionId, string invocationId, int attempt)
+        => EndBatch(scope, executionId, invocationId, attempt, "host-confirmed-worker-exit");
+
     public IReadOnlyList<PartitionRecord> ReadBatch(WorkScope scope, string executionId, string invocationId, int attempt, PartitionBatchInput input)
     {
         _scopeAuthorizer.EnsureAuthorized(scope);
         using var connection = Open();
-        using var transaction = connection.BeginTransaction();
+        using var transaction = connection.BeginTransaction(deferred: false);
         int configuredBatchSize;
         int configuredMax;
         using (var config = connection.CreateCommand())
@@ -105,6 +151,22 @@ public sealed class PartitionSourceStore
         }
         if (input.BatchSize != configuredBatchSize || input.BatchSize > configuredMax)
             throw new InvalidOperationException("The pinned batch size differs from the authorized partition configuration.");
+        // BEGIN IMMEDIATE plus the measurement insert below makes admission and
+        // the bounded read atomic with respect to other workers on this database.
+        using (var budget = connection.CreateCommand())
+        {
+            budget.Transaction = transaction;
+            budget.CommandText = """
+                SELECT max_records - (SELECT coalesce(sum(in_flight),0) FROM partition_measurements
+                    WHERE tenant=$tenant AND persistence_scope=$scope AND authority=$authority AND execution_id=$execution)
+                FROM pipeline_budgets WHERE tenant=$tenant AND persistence_scope=$scope AND authority=$authority AND execution_id=$execution
+                """;
+            SqliteScopeParameters.Add(budget, scope);
+            budget.Parameters.AddWithValue("$execution", executionId);
+            object? remaining = budget.ExecuteScalar();
+            if (remaining is not null && Convert.ToInt32(remaining) < input.BatchSize)
+                throw new BatchAdmissionDeniedException();
+        }
         using var select = connection.CreateCommand();
         select.Transaction = transaction;
         select.CommandText = "SELECT ordinal,payload FROM partition_source WHERE tenant=$tenant AND persistence_scope=$scope AND authority=$authority AND execution_id=$execution AND partition_id=$partition AND ordinal>$cursor ORDER BY ordinal LIMIT $limit";

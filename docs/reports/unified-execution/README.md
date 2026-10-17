@@ -17,7 +17,7 @@ This workspace holds architecture experiments and evidence, not production APIs 
 |---|---|---|
 | Current source/ownership baseline #2895 | [Reviewed baseline](current-source-baseline.md), full remote report in issue | Complete as read-only audit; not runtime validation |
 | Historical three cases | [Remote source archive](https://github.com/elsa-workflows/elsa-foundation/issues/2895#issuecomment-6233432122) | Historical prototype; not a replacement for new witnesses |
-| Shared work #2896 | [Failure matrix](https://github.com/elsa-workflows/elsa-foundation/issues/2896#issuecomment-6233491510) | Root rerun: 95 assertions, 35 OS process identities, four negative controls; independent review recorded below; aggregate backpressure remains open |
+| Shared work #2896 | [Failure matrix](https://github.com/elsa-workflows/elsa-foundation/issues/2896#issuecomment-6233491510) | Root rerun: 111 assertions, 43 OS process identities, four negative controls; aggregate record admission independently reviewed and configuration deadlock fixed |
 | Operational BPMN #2898 | Existing #2735 ownership/parity and upstream library | Root rerun passed pinned interpreter host, restart and Sequence-style adapter comparison; custom host, not production integration |
 | Provider substitution #2900 | Orleans 10.4.0 / source d114d7522a53b8cce4c6b97d44293e5c7273d766 candidate | Real multiprocess comparison required |
 | Independent model #2901 | Separate package required, with unchanged substrate | Pending |
@@ -36,3 +36,7 @@ Sources: [placement filter contract](https://github.com/dotnet/orleans/blob/d114
 ## Completion guard
 
 Do not freeze a universal graph, move joins into the storage kernel, equate ETL partitions with persistence partitions, or count an agent composite as the independent fourth model. Do not claim full BPMN conformance from hosting tests. The recommendation must say accept, revise or reject for each proposed shared boundary, including failed assumptions and migration consequences. HTML must label verified traces versus simulation and preserve accessible offline navigation.
+
+## Working recommendation
+
+[Architecture recommendation](architecture-recommendation.md) is provisional until the combined witnesses and independent review complete. It records model/composition/provider boundaries, operational BPMN foundations, agent resource bindings and adoption gates.
