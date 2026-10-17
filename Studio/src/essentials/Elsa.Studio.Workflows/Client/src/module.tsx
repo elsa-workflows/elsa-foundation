@@ -87,10 +87,10 @@ export function register(api: ElsaStudioModuleApi) {
       items: [
         { id: "workflows-definitions", title: "Workflows", path: "/workflows/definitions", iconColor: "#0ea5e9", placement: "main", order: 20 },
         { id: "workflows-runs", title: "Runs", path: "/workflows/instances", iconColor: "#0ea5e9", placement: "main", order: 30 },
-        { id: "workflows-executables", title: "Executables", path: "/workflows/executables", iconColor: "#0ea5e9", placement: "more", order: 10 },
-        { id: "workflows-activity-definitions", title: "Activity definitions", path: "/workflows/activity-definitions", iconColor: "#0ea5e9", placement: "more", order: 20 },
+        { id: "workflows-executables", title: "Executables", path: "/workflows/executables", iconColor: "#d97706", placement: "more", order: 10 },
+        { id: "workflows-activity-definitions", title: "Activity definitions", path: "/workflows/activity-definitions", iconColor: "#8b5cf6", placement: "more", order: 20 },
         { id: "workflows-runtime-diagnostics", title: "Runtime diagnostics", path: "/workflows/runtime-diagnostics", iconColor: "#0ea5e9", placement: "more", order: 40 },
-        { id: "workflows-activity-availability", title: "Activity availability", path: "/workflows/activity-availability", iconColor: "#0ea5e9", placement: "more", order: 50 }
+        { id: "workflows-activity-availability", title: "Activity availability", path: "/workflows/activity-availability", iconColor: "#0d9488", placement: "more", order: 50 }
       ]
     },
     routes: [
