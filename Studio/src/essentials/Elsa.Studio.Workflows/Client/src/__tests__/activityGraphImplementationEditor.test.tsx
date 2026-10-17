@@ -140,6 +140,45 @@ describe("ActivityGraphImplementationEditor shared designer", () => {
     expect(onChange).toHaveBeenLastCalledWith(flowchartImplementationValue());
   });
 
+  it("canonicalizes direct inputs when the first composition is adopted from the palette", () => {
+    const inputKey = "public.amount/opaque-key";
+    catalogItems = [flowchartCatalogItemWithDirectInput(inputKey)];
+    const onChange = vi.fn();
+    const rendered = renderDesigner({ value: emptyActivityGraphImplementationValue(), onChange });
+
+    const palette = rendered.container.querySelector<HTMLElement>(".wf-palette")!;
+    click(palette.querySelector(".wf-palette-category-toggle")!);
+    click(palette.querySelector(".wf-palette-activity")!);
+
+    const payload = onChange.mock.calls.at(-1)![0].payload as Record<string, unknown>;
+    const root = payload.rootActivity as Record<string, unknown>;
+    expect(root.inputs).toEqual([{
+      referenceKey: inputKey,
+      value: { value: "seeded root value", expressionType: "Literal" }
+    }]);
+    expect(root[inputKey]).toBeUndefined();
+    expect(payload.outcomeMappings).toEqual([]);
+  });
+
+  it("canonicalizes direct inputs when a root composition is selected", () => {
+    const inputKey = "contract.input/with:opaque-key";
+    catalogItems = [flowchartCatalogItemWithDirectInput(inputKey)];
+    const onChange = vi.fn();
+    const rendered = renderDesigner({ value: emptyActivityGraphImplementationValue(), onChange });
+
+    const composition = rendered.container.querySelector<HTMLElement>("[aria-label='Graph composition']")!;
+    click(composition.querySelector("button")!);
+
+    const payload = onChange.mock.calls.at(-1)![0].payload as Record<string, unknown>;
+    const root = payload.rootActivity as Record<string, unknown>;
+    expect(root.inputs).toEqual([{
+      referenceKey: inputKey,
+      value: { value: "seeded root value", expressionType: "Literal" }
+    }]);
+    expect(root[inputKey]).toBeUndefined();
+    expect(payload.outcomeMappings).toEqual([]);
+  });
+
   it("removes the selected second Sequence child in a controlled editor", () => {
     catalogItems = [sequenceCatalogItem(), leafCatalogItem()];
     const value = sequenceImplementationValue([
@@ -846,6 +885,23 @@ function flowchartCatalogItem() {
   };
 }
 
+function flowchartCatalogItemWithDirectInput(referenceKey: string) {
+  return {
+    ...flowchartCatalogItem(),
+    authoringTemplate: {
+      nodeId: "template-root",
+      activityVersionId: "flowchart-v1",
+      inputs: [],
+      outputs: [],
+      [referenceKey]: {
+        typeName: "System.String",
+        expression: { type: "Literal", value: "seeded root value" }
+      },
+      structure: null
+    }
+  };
+}
+
 function sequenceCatalogItem() {
   return {
     activityVersionId: "sequence-v1",
@@ -914,6 +970,24 @@ function flowchartImplementationValue(kind = "Flowchart", activities: unknown[] 
       variables: [],
       outputMappings: [],
       outcomeMappings: []
+    },
+    layout: []
+  };
+}
+
+function emptyActivityGraphImplementationValue() {
+  return {
+    payload: {
+      rootActivity: {
+        nodeId: "root",
+        activityVersionId: "",
+        inputs: [],
+        outputs: [],
+        structure: null
+      },
+      variables: [],
+      outputMappings: [],
+      outcomeMappings: [{ sourceOutcomeReferenceKey: "old", boundaryOutcomeReferenceKey: "done" }]
     },
     layout: []
   };
