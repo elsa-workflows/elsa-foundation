@@ -1,0 +1,316 @@
+{
+  "claimBoundary": "Candidate native agent composition policy over the experimental UnifiedExecution.WorkProof substrate; not production Elsa integration and not exact Microsoft Agent Framework compatibility.",
+  "workProofProject": "tools/experiments/UnifiedExecution.WorkProof/UnifiedExecution.WorkProof.csproj (referenced unchanged)",
+  "repositoryHead": "2176219c82aa375dc0e19d154a73a47bbf6e0bd4",
+  "workProofSourceStatus": "clean",
+  "adapter": "Deterministic fake agent adapter; no LLM, external service, or network calls.",
+  "recordedUtc": "2026-10-17T13:32:06.476256+00:00",
+  "runtime": "10.0.8",
+  "harnessProcessId": 13698,
+  "runCommand": "dotnet run --project tools/experiments/AgentCompositionProof/AgentCompositionProof.csproj",
+  "verificationCommands": [
+    "dotnet build tools/experiments/AgentCompositionProof/AgentCompositionProof.csproj --no-restore",
+    "dotnet run --project tools/experiments/AgentCompositionProof/AgentCompositionProof.csproj --no-build"
+  ],
+  "frameworkSemanticsProbe": {
+    "path": "tools/experiments/UnifiedExecution.AgentFrameworkProbe/evidence.json",
+    "package": "Microsoft.Agents.AI.Workflows 1.25.0",
+    "assemblyInformationalVersion": "1.25.0\u002B95511ff025d81cc546c44e653d4be65de5bd7f35",
+    "sourceObservationCommit": "44fe223da7ea6853eefb7053e25c2c213a2e5c15",
+    "runCommand": "python3 fetch_feed.py; python3 prepare_package_cache.py; dotnet run --configuration Release",
+    "packageCommitProvenance": "The package nuspec does not declare that source commit; source observation is separate."
+  },
+  "recommendation": "Continue native-composite design; these candidate semantics do not warrant a separate execution model. This is not production acceptance.",
+  "hostingClassification": "open",
+  "independentReview": "Required by issue #2913; pending parent review of this isolated experiment.",
+  "issue2913Coverage": [
+    "Sequence before/composite/after lifecycle and sequential parent behavior",
+    "Researcher and Specialist concurrent work, Reviewer complete-round barrier",
+    "One bounded manager feedback round, exact tool approval, approval race, idempotent tool effect recovery",
+    "Private/conversation-shared/versioned knowledge references and denied access",
+    "Persisted configuration and deterministic usage/budget accounting",
+    "Fresh-process accepted-decision and fan-in recovery without re-running accepted model decisions",
+    "Conflicting message/result, early release, cancellation, budget admission boundaries, and exact tool invocation binding"
+  ],
+  "limitations": [
+    "SQLite WAL and child processes exercise one-machine durability and ownership, not a multi-node cluster or distributed transport.",
+    "The destination is a local idempotent SQLite test sink; production connector semantics, credentials, backpressure, and retry policies are not tested.",
+    "Memory references are read-only pinned snapshots. External memory writes, consistency under mutation, real approval identity, and cancellation compensation are not implemented.",
+    "If a live model response exists only in worker memory and is lost before result acceptance, provider-specific retry cost and duplicate-decision behavior are outside this deterministic probe.",
+    "Usage admission uses fixed deterministic test units per agent and manager step; it does not guarantee a real model\u0027s token or monetary cost.",
+    "This candidate policy proof does not integrate with Elsa production APIs or Studio, and does not prove exact compatibility with another agent framework."
+  ],
+  "typedReferences": {
+    "acceptedKinds": [
+      "knowledge",
+      "memory"
+    ],
+    "stableIdentities": [
+      "memory:tenant-red:shared-persistence:agent-host:external-shared:agent-context@r7",
+      "knowledge:tenant-red:shared-persistence:agent-host:versioned:dataset-runbook@r3"
+    ],
+    "contentSha256": [
+      "46fc3247e675506c3e911b2c4f3322f641eadd178595a3949c133a6a4e1b20df",
+      "e83dacf43a0144b74e7ae4c9ef028e58393cc1527a0fa664bcc865b73aaa1605"
+    ],
+    "wrongKindRejected": true,
+    "missingRejected": true,
+    "foreignScopeRejected": true,
+    "privateAndConversationVisibilityEnforced": true,
+    "memoryWritesDeniedByReadOnlyAdapter": true,
+    "contentExcludedFromDispatch": true
+  },
+  "policyRejectionFixtures": {
+    "outcome": "passed",
+    "rejected": [
+      "wrong mailbox receiver",
+      "empty mailbox",
+      "wrong round",
+      "same-receiver parallel round",
+      "unknown fan-in source",
+      "unsupported fan-in round",
+      "conflicting same-MessageId payload",
+      "wrong approved tool invocation ID"
+    ]
+  },
+  "exhaustedUsageBudget": {
+    "outcome": "passed",
+    "usageBudget": 7,
+    "usageUsed": 7,
+    "acceptedManagerDecisions": 1,
+    "managerEvaluations": 1,
+    "stage": "BudgetExhausted",
+    "toolDispatched": false
+  },
+  "usageBudgetAdmissionBoundaries": {
+    "outcome": "passed",
+    "fixedCostModel": "one deterministic test unit per participant, reviewer, and manager decision",
+    "boundaryResults": [
+      {
+        "budget": 0,
+        "used": 0,
+        "dispatchedAgentWork": 0,
+        "managerDecisions": 0,
+        "followUpRoundsUsed": 0,
+        "stage": "BudgetExhausted"
+      },
+      {
+        "budget": 1,
+        "used": 0,
+        "dispatchedAgentWork": 0,
+        "managerDecisions": 0,
+        "followUpRoundsUsed": 0,
+        "stage": "BudgetExhausted"
+      },
+      {
+        "budget": 2,
+        "used": 2,
+        "dispatchedAgentWork": 2,
+        "managerDecisions": 0,
+        "followUpRoundsUsed": 0,
+        "stage": "BudgetExhausted"
+      },
+      {
+        "budget": 3,
+        "used": 3,
+        "dispatchedAgentWork": 3,
+        "managerDecisions": 0,
+        "followUpRoundsUsed": 0,
+        "stage": "BudgetExhausted"
+      },
+      {
+        "budget": 4,
+        "used": 4,
+        "dispatchedAgentWork": 3,
+        "managerDecisions": 1,
+        "followUpRoundsUsed": 0,
+        "stage": "BudgetExhausted"
+      },
+      {
+        "budget": 5,
+        "used": 4,
+        "dispatchedAgentWork": 3,
+        "managerDecisions": 1,
+        "followUpRoundsUsed": 0,
+        "stage": "BudgetExhausted"
+      },
+      {
+        "budget": 6,
+        "used": 6,
+        "dispatchedAgentWork": 5,
+        "managerDecisions": 1,
+        "followUpRoundsUsed": 1,
+        "stage": "BudgetExhausted"
+      },
+      {
+        "budget": 7,
+        "used": 7,
+        "dispatchedAgentWork": 6,
+        "managerDecisions": 1,
+        "followUpRoundsUsed": 1,
+        "stage": "BudgetExhausted"
+      }
+    ],
+    "coordinatorBudget4": {
+      "status": "Completed",
+      "stage": "BudgetExhausted",
+      "usageUsed": 4,
+      "pendingReceipts": 0
+    }
+  },
+  "enclosingSequenceCollaboration": {
+    "outcome": "passed",
+    "executionId": "agent-sequence-collaboration-71547a7c0b0549c7b297eae81e841815",
+    "enclosingSequence": {
+      "beforeChild": "sequence-before",
+      "afterChild": "sequence-after",
+      "finalStatus": "Completed"
+    },
+    "parentCompletionHeldUntilAfterChild": true,
+    "participants": [
+      "Researcher",
+      "Specialist",
+      "Reviewer"
+    ],
+    "firstRoundWorkerProcessIds": [
+      13724,
+      13725
+    ],
+    "reviewerContexts": [
+      {
+        "invocationId": "reviewer-r1",
+        "messageCount": 2
+      },
+      {
+        "invocationId": "reviewer-r2",
+        "messageCount": 2
+      }
+    ],
+    "decisionsPersisted": 2,
+    "managerEvaluationsInFreshCompletionProcess": 0,
+    "usage": {
+      "budget": 8,
+      "used": 8,
+      "configurationsPersisted": 6
+    },
+    "exactToolApproval": {
+      "RequestId": "review-ticket-1",
+      "ToolName": "create-review-ticket",
+      "ArgumentsFingerprint": "7803de59deba4e18c36cbd8d1dae3db845af0619eff8bde163e58b124e2bf1fa",
+      "RequiredCapability": "ticket:create",
+      "commitId": "approval:review-ticket-1"
+    },
+    "approvalRace": {
+      "alteredArgumentsRejected": true,
+      "staleApprovalContenderRejected": true,
+      "exactReplayIdempotent": true
+    },
+    "toolEffect": {
+      "sinkEffects": 1,
+      "sinkDeliveries": 2,
+      "retryAttempt": 2
+    },
+    "workInvocationCount": 9
+  },
+  "receiverMailbox": {
+    "outcome": "passed",
+    "receiverAInvocationOrder": [
+      "A1",
+      "A2"
+    ],
+    "otherReceiver": "B1 completed while A1 was held",
+    "workerProcessIds": [
+      13742,
+      13743
+    ],
+    "invocationCount": 3,
+    "effects": 3,
+    "repeatedSameResultMarkedDuplicate": true,
+    "resolvedResourcesFromA1": [
+      {
+        "Kind": "memory",
+        "StableIdentity": "memory:tenant-red:shared-persistence:agent-host:external-shared:agent-context@r7",
+        "ContentSha256": "46fc3247e675506c3e911b2c4f3322f641eadd178595a3949c133a6a4e1b20df"
+      },
+      {
+        "Kind": "knowledge",
+        "StableIdentity": "knowledge:tenant-red:shared-persistence:agent-host:versioned:dataset-runbook@r3",
+        "ContentSha256": "e83dacf43a0144b74e7ae4c9ef028e58393cc1527a0fa664bcc865b73aaa1605"
+      }
+    ]
+  },
+  "roundBarrier": {
+    "outcome": "passed",
+    "currentRoundHeldAtBarrier": true,
+    "bufferedNextRoundMessages": [
+      "A2"
+    ],
+    "nextRoundDispatchObservedAfterCurrentRoundAccepted": true,
+    "status": "Completed"
+  },
+  "bufferedFanInRestore": {
+    "outcome": "passed",
+    "preRestoreDistinctBufferedMessagesFromA": 2,
+    "preRestoreDuplicateMessageIdDeliveries": 1,
+    "sameInvocationResultReplayCreatedNoMessage": true,
+    "freshCoordinatorProcessId": 13803,
+    "restoredMessageCount": 3,
+    "stableResourceIdentityAcrossRestart": true,
+    "sourceWorkAttemptsAllOne": true,
+    "executionStatus": "Completed"
+  },
+  "cancellation": {
+    "outcome": "passed",
+    "workStatus": "cancelled",
+    "lateResult": "LateRejected",
+    "acceptedResultEvents": 0,
+    "effectsRemainAfterCancellation": 1,
+    "limitation": "Cancellation rejects late result acceptance; it does not roll back an external side effect or advance this candidate composition policy."
+  },
+  "recoveryAfterEffect": {
+    "outcome": "passed",
+    "crashExitCode": 74,
+    "retry": {
+      "outcome": "Succeeded",
+      "Duplicate": false,
+      "duplicateEffect": true,
+      "invocationId": "recover-A1",
+      "processId": 13806,
+      "attempt": 2,
+      "fence": 2,
+      "result": {
+        "InvocationId": "recover-A1",
+        "ReceiverId": "agent-A",
+        "RoundId": 0,
+        "MessageId": "recover-message",
+        "OutputFingerprint": "620612ff581922ba91a3303eed65b52f43ca68c39b134e805ff684408ded90f7",
+        "ResolvedResources": [
+          {
+            "Kind": "memory",
+            "StableIdentity": "memory:tenant-red:shared-persistence:agent-host:external-shared:agent-context@r7",
+            "ContentSha256": "46fc3247e675506c3e911b2c4f3322f641eadd178595a3949c133a6a4e1b20df"
+          },
+          {
+            "Kind": "knowledge",
+            "StableIdentity": "knowledge:tenant-red:shared-persistence:agent-host:versioned:dataset-runbook@r3",
+            "ContentSha256": "e83dacf43a0144b74e7ae4c9ef028e58393cc1527a0fa664bcc865b73aaa1605"
+          }
+        ],
+        "Emission": null,
+        "Configuration": null,
+        "Usage": {
+          "InputUnits": 18,
+          "OutputUnits": 1,
+          "TotalUnits": 1,
+          "AccountingKind": "deterministic-test-units"
+        },
+        "ContextMessageIds": null
+      }
+    },
+    "sinkEffects": 1,
+    "sinkDeliveries": 2,
+    "finalStatus": "Completed"
+  },
+  "assertionCount": 142,
+  "outcome": "passed"
+}

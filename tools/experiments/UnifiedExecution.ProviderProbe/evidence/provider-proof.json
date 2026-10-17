@@ -1,0 +1,382 @@
+{
+  "schema": "unified-execution-provider-comparison-proof/v3",
+  "framework": "Microsoft.Orleans.Server 10.4.0",
+  "semantics": "same WorkProof SequencePolicy and FlowchartPolicy compare equal through direct CompositionCoordinator and one Orleans grain per complete execution",
+  "providerCostNotes": {
+    "builtIn": "Direct coordinator hosting adds no Orleans package, cluster membership, grain activation, or capability placement setup; distribution and failover remain the host's responsibility.",
+    "orleans": "The Orleans adapter adds framework packages and operational concerns for cluster membership, activation, canonical grain identity, capability metadata, and placement; it supplies execution-addressed placement and activation recovery.",
+    "measurement": "Qualitative dependency and operations comparison only; no performance or cost benchmark was run."
+  },
+  "placement": "custom Orleans placement director filters IPlacementContext.GetCompatibleSilos by membership-published capability metadata; no separate liveness registry",
+  "limits": [
+    "local loopback clustering and SQLite WAL on one machine",
+    "proof identity key and tenant scope are experiment-only",
+    "worker handlers execute in independent local OS processes"
+  ],
+  "capabilityRefusals": [
+    {
+      "requested": "missing-proof-v1",
+      "whilePolicy": "sequence",
+      "refused": true,
+      "log": "sequence-missing-capability.log"
+    },
+    {
+      "requested": "missing-proof-v1",
+      "whilePolicy": "flowchart",
+      "refused": true,
+      "log": "flowchart-missing-capability.log"
+    }
+  ],
+  "scenarios": [
+    {
+      "policy": "sequence",
+      "policyId": "native-sequence-witness-v1",
+      "executionId": "provider-sequence-ec870aec807e491badca6669150a4153",
+      "requiredCapability": "sequence-v1",
+      "compatibleSiloPids": [
+        12376,
+        12415
+      ],
+      "initialOwnerPid": 12415,
+      "killedOwnerPid": 12415,
+      "recoveredOwnerPid": 12376,
+      "oldOwner": "orleans:12415:650a98e12ee14a57af4e59b802915cb5",
+      "oldFence": 1,
+      "recoveredOwner": "orleans:12376:d269c742c52c425c95c1da3a95c52a67",
+      "recoveredFence": 2,
+      "sameExecutionKeyReused": true,
+      "workerReceiptsWereDurableBeforeCoordinatorPump": true,
+      "recoveryAttempts": [
+        {
+          "exit": -6,
+          "log": "sequence-recovery-read-0.log"
+        },
+        {
+          "exit": 0,
+          "log": "sequence-recovery-read-1.log"
+        }
+      ],
+      "stalePriorOwnerRejected": true,
+      "identityMismatchProbesRejected": [
+        "alias",
+        "changed-execution",
+        "changed-tenant"
+      ],
+      "ambiguousScopeRejectedBeforeMutation": true,
+      "identityMismatchChangedFenceOrRevision": false,
+      "finalStatus": "Completed",
+      "finalRevision": 3,
+      "destinationEffects": 2,
+      "builtInFinalStatus": "Completed",
+      "builtInFinalRevision": 3,
+      "semanticFingerprint": "f5c736d83b8c5ca09960c79e5afb22e88e2d552a3d6b3b38ce17f48e677101f8",
+      "workerOverlap": {
+        "workerBarrierProcessIds": []
+      }
+    },
+    {
+      "policy": "flowchart",
+      "policyId": "native-flowchart-witness-v1",
+      "executionId": "provider-flowchart-2b1748987f85490b92dd029ba4473b35",
+      "requiredCapability": "flowchart-v1",
+      "compatibleSiloPids": [
+        12800,
+        12817
+      ],
+      "initialOwnerPid": 12817,
+      "killedOwnerPid": 12817,
+      "recoveredOwnerPid": 12800,
+      "oldOwner": "orleans:12817:eb28ac244169410c9dd8ae4a3e39b2df",
+      "oldFence": 1,
+      "recoveredOwner": "orleans:12800:27c0933174c043ffa0c4b146df9381bf",
+      "recoveredFence": 2,
+      "sameExecutionKeyReused": true,
+      "workerReceiptsWereDurableBeforeCoordinatorPump": true,
+      "recoveryAttempts": [
+        {
+          "exit": -6,
+          "log": "flowchart-recovery-read-0.log"
+        },
+        {
+          "exit": -6,
+          "log": "flowchart-recovery-read-1.log"
+        },
+        {
+          "exit": -6,
+          "log": "flowchart-recovery-read-2.log"
+        },
+        {
+          "exit": -6,
+          "log": "flowchart-recovery-read-3.log"
+        },
+        {
+          "exit": -6,
+          "log": "flowchart-recovery-read-4.log"
+        },
+        {
+          "exit": -6,
+          "log": "flowchart-recovery-read-5.log"
+        },
+        {
+          "exit": 0,
+          "log": "flowchart-recovery-read-6.log"
+        }
+      ],
+      "stalePriorOwnerRejected": true,
+      "identityMismatchProbesRejected": [
+        "alias",
+        "changed-execution",
+        "changed-tenant"
+      ],
+      "ambiguousScopeRejectedBeforeMutation": true,
+      "identityMismatchChangedFenceOrRevision": false,
+      "finalStatus": "Completed",
+      "finalRevision": 4,
+      "destinationEffects": 2,
+      "builtInFinalStatus": "Completed",
+      "builtInFinalRevision": 4,
+      "semanticFingerprint": "534fefcde2e64d23b47ed6cf3f6f070f42e80ea7cdb7e7bace4230d52ddf0c1a",
+      "workerOverlap": {
+        "barrierId": "provider-flowchart-b06e34f704624267a2ebfade36926f05",
+        "enteredProcessIds": [
+          12900,
+          12901
+        ],
+        "workersOverlappedBeforeRelease": true
+      }
+    }
+  ],
+  "providerComparisons": [
+    {
+      "policy": "sequence",
+      "sameExecutionId": "provider-sequence-ec870aec807e491badca6669150a4153",
+      "samePolicyDefinition": true,
+      "builtInSemanticSha256": "f5c736d83b8c5ca09960c79e5afb22e88e2d552a3d6b3b38ce17f48e677101f8",
+      "orleansSemanticSha256": "f5c736d83b8c5ca09960c79e5afb22e88e2d552a3d6b3b38ce17f48e677101f8",
+      "semanticOutcomesEqual": true,
+      "effectPayloadsEqual": true,
+      "effectPayloadCount": 2,
+      "builtInWorkerOverlap": false,
+      "orleansWorkerOverlap": false,
+      "workerOverlap": {
+        "workerBarrierProcessIds": []
+      },
+      "orchestration": "one composition coordinator applies accepted results and owns successor/join completion"
+    },
+    {
+      "policy": "flowchart",
+      "sameExecutionId": "provider-flowchart-2b1748987f85490b92dd029ba4473b35",
+      "samePolicyDefinition": true,
+      "builtInSemanticSha256": "534fefcde2e64d23b47ed6cf3f6f070f42e80ea7cdb7e7bace4230d52ddf0c1a",
+      "orleansSemanticSha256": "534fefcde2e64d23b47ed6cf3f6f070f42e80ea7cdb7e7bace4230d52ddf0c1a",
+      "semanticOutcomesEqual": true,
+      "effectPayloadsEqual": true,
+      "effectPayloadCount": 2,
+      "builtInWorkerOverlap": true,
+      "orleansWorkerOverlap": true,
+      "workerOverlap": {
+        "barrierId": "provider-flowchart-b06e34f704624267a2ebfade36926f05",
+        "enteredProcessIds": [
+          12900,
+          12901
+        ],
+        "workersOverlappedBeforeRelease": true
+      },
+      "orchestration": "one composition coordinator applies accepted results and owns successor/join completion"
+    }
+  ],
+  "logs": {
+    "sequence-builtin-run.log": "18b742f0fd988cd03c4036bb5b5aa0b9c812616b9d49f7b792a4a022c26bd348",
+    "sequence-start.log": "95831ddf06f82da3743c8c4108d89f9b5ba11800f5a5835ed0641ffe4433152a",
+    "sequence-missing-capability.log": "32ddd3d40f656c8c4e5b9f2ab606dea19833522a12af9c154449c32c05a6e1b5",
+    "worker-sequence-sequence-0.log": "c05d36c34d47c3ddf2d1ad20c193df1e2b2b893932a3d8233ef0e89779bfede8",
+    "sequence-before-kill-read.log": "b4c75b76dad0e4e8ce1e647651011a43fe2eab0061b829449f4782598b94256b",
+    "sequence-recovery-read-0.log": "f6adb11ce100b238fa2437a08c6901160e78e5c425e30992c19be360aedb6814",
+    "sequence-recovery-read-1.log": "a73425fdd3d85ca8fc90e55ce38455cdba9b159e60ad054d44c7fe1709986f85",
+    "sequence-stale-owner.log": "2dc118831618b0b3d963927da60d5dc053b0f00810fbf6ea533a0543195a5ecd",
+    "sequence-canonical-key.log": "53b743935a615f708b340a164e3bf45cbad3b6c63c28a130410cebdd8f6d07f3",
+    "sequence-identity-alias.log": "7d9bc735ccd4fe8b99b1dad6aa2424056478e412444c7c40e15e30144d7765e2",
+    "sequence-identity-alias-state.log": "a73425fdd3d85ca8fc90e55ce38455cdba9b159e60ad054d44c7fe1709986f85",
+    "sequence-identity-changed-execution.log": "5a739f172fd4c35a8e39d0c834810d6ba1139a3c7fa566ffe8ce99808ff66cbc",
+    "sequence-identity-changed-execution-state.log": "a73425fdd3d85ca8fc90e55ce38455cdba9b159e60ad054d44c7fe1709986f85",
+    "sequence-identity-changed-tenant.log": "86e0864283af592e9db863b3c6769fb2fbe5ca930a7fd7e9011ef9e993786297",
+    "sequence-identity-changed-tenant-state.log": "a73425fdd3d85ca8fc90e55ce38455cdba9b159e60ad054d44c7fe1709986f85",
+    "sequence-identity-ambiguous-scope.log": "bcbd95c3a7f4a9fc82910dc37b93d1faaaf36e91b08cfe88189794fe30557a0d",
+    "sequence-identity-ambiguous-scope-state.log": "a73425fdd3d85ca8fc90e55ce38455cdba9b159e60ad054d44c7fe1709986f85",
+    "sequence-recovery-pump.log": "4e22acd092059767ad4d180c14cbe26e4dade18930791c5cee163161cb53d5c5",
+    "worker-sequence-sequence-1.log": "dcbea26c61ffdf403d2446d137495d6444a88fa848b26bea143fc5cb94995d7b",
+    "sequence-completion-pump.log": "30e77faeaf2b1f4254fcc1bdebe6cc9c9972aa73e3d6f93f220e889285772048",
+    "flowchart-builtin-run.log": "b34e5209fdab7ebd839f7ff5cdca4e6754822dd65b2a46cd1754c90e254b0964",
+    "flowchart-start.log": "ad817ed373c7b2e23fd90684fd1a446153df601d8f1e08d8589ebf88e3291d8b",
+    "flowchart-missing-capability.log": "32ddd3d40f656c8c4e5b9f2ab606dea19833522a12af9c154449c32c05a6e1b5",
+    "flowchart-barrier-create.log": "86f0a5aecaf68748fefb41559b63adf2b5d48ba3b570727e356b32cf18e01b42",
+    "flowchart-barrier-state.log": "81931997930d26278ae8d21ca898eb2ecae66c18dadfce334cefd60409488269",
+    "flowchart-barrier-release.log": "a50d7dfe96dccb788f8518c4e83d411fe79bf4dc84180b95282771c9a2cfeec1",
+    "worker-flowchart-branch-a.log": "1ed163ad7eea9d120c6551300c6b2d565d402a16aa57688d7eb46e6bfcf78932",
+    "worker-flowchart-branch-b.log": "589fbf12dcca858a6c8bcfbeeb37f1f483579604be426e4b2f75461cf8905ffc",
+    "flowchart-barrier-release-cleanup.log": "a50d7dfe96dccb788f8518c4e83d411fe79bf4dc84180b95282771c9a2cfeec1",
+    "flowchart-before-kill-read.log": "7da09205cf8902d2549775bd75c4a70ddca0d69223d0da7e79396d3283b5a3bc",
+    "flowchart-recovery-read-0.log": "93e837b9ea740408137ba109a384ac037219f68e683ea74c7b130f09314b3662",
+    "flowchart-recovery-read-1.log": "ea4aca52a5822ce93858d544f1ebf2157bb8e7f727878ddbc25eada796367be5",
+    "flowchart-recovery-read-2.log": "3d9b3972e2db9bf34486ad02f7593b983e4df6ad301f98447e2e91db61b3b88e",
+    "flowchart-recovery-read-3.log": "47b2f47205233dd9d2ce99fe176968bba6a3758ba17fcc799c40916459f79530",
+    "flowchart-recovery-read-4.log": "ea4aca52a5822ce93858d544f1ebf2157bb8e7f727878ddbc25eada796367be5",
+    "flowchart-recovery-read-5.log": "3c90d680261dbd8a63d1773a3f89fbc78d151d3cc65117c231ae0f44748a28c7",
+    "flowchart-recovery-read-6.log": "d87c8085254d44d117948c7b063a58ac864bcc72b702e763b3970d47e45e7d54",
+    "flowchart-stale-owner.log": "742e1545339e65c5b63fa06fdd2f6140da186c646c79d44b569abb661a650099",
+    "flowchart-canonical-key.log": "0496b22dce0280266ae8af257ef250a9b67d5ee0cb136d68446fd65bac1c8f5d",
+    "flowchart-identity-alias.log": "0316a57cca4eb62ba5d661e67bf93f081e9ee1538706b84503de769eafb34503",
+    "flowchart-identity-alias-state.log": "d87c8085254d44d117948c7b063a58ac864bcc72b702e763b3970d47e45e7d54",
+    "flowchart-identity-changed-execution.log": "4da730da62c9c7a88afda50809ed8a9455a086cee675af57faed8d8aa48e0bcd",
+    "flowchart-identity-changed-execution-state.log": "d87c8085254d44d117948c7b063a58ac864bcc72b702e763b3970d47e45e7d54",
+    "flowchart-identity-changed-tenant.log": "74e786c3022b581100f41fe6c73a3db663b572c5a8ffc01645f1cc0947541f01",
+    "flowchart-identity-changed-tenant-state.log": "d87c8085254d44d117948c7b063a58ac864bcc72b702e763b3970d47e45e7d54",
+    "flowchart-identity-ambiguous-scope.log": "bcbd95c3a7f4a9fc82910dc37b93d1faaaf36e91b08cfe88189794fe30557a0d",
+    "flowchart-identity-ambiguous-scope-state.log": "d87c8085254d44d117948c7b063a58ac864bcc72b702e763b3970d47e45e7d54",
+    "flowchart-recovery-pump.log": "11aceb5d4b61e5cd08a66c1f4a14a92cc65be1afc3462cee817ad265a6e390c9"
+  },
+  "processes": [
+    {
+      "role": "orleans-silo",
+      "cluster": "elsa-provider-sequence-c0988f70",
+      "pid": 12376,
+      "port": 19311,
+      "log": "silo-elsa-provider-sequence-c0988f70-19311.log",
+      "shutdownAction": "terminate",
+      "exitCode": 0,
+      "shutdownConfirmed": true
+    },
+    {
+      "role": "orleans-silo",
+      "cluster": "elsa-provider-sequence-c0988f70",
+      "pid": 12415,
+      "port": 19312,
+      "log": "silo-elsa-provider-sequence-c0988f70-19312.log",
+      "shutdownAction": "already-exited",
+      "exitCode": -9,
+      "shutdownConfirmed": true
+    },
+    {
+      "role": "workproof-worker",
+      "pid": 12431,
+      "name": "sequence-sequence-0",
+      "executionId": "provider-sequence-ec870aec807e491badca6669150a4153",
+      "invocationId": "sequence-0",
+      "exit": 0,
+      "cleanupAction": "completed"
+    },
+    {
+      "role": "killed-execution-owner",
+      "cluster": "elsa-provider-sequence-c0988f70",
+      "pid": 12415,
+      "signal": "SIGKILL",
+      "port": 19312,
+      "exitCode": -9,
+      "shutdownConfirmed": true
+    },
+    {
+      "role": "workproof-worker",
+      "pid": 12787,
+      "name": "sequence-sequence-1",
+      "executionId": "provider-sequence-ec870aec807e491badca6669150a4153",
+      "invocationId": "sequence-1",
+      "exit": 0,
+      "cleanupAction": "completed"
+    },
+    {
+      "role": "orleans-silo",
+      "cluster": "elsa-provider-flowchart-fa562847",
+      "pid": 12800,
+      "port": 19311,
+      "log": "silo-elsa-provider-flowchart-fa562847-19311.log",
+      "shutdownAction": "terminate",
+      "exitCode": 0,
+      "shutdownConfirmed": true
+    },
+    {
+      "role": "orleans-silo",
+      "cluster": "elsa-provider-flowchart-fa562847",
+      "pid": 12817,
+      "port": 19312,
+      "log": "silo-elsa-provider-flowchart-fa562847-19312.log",
+      "shutdownAction": "already-exited",
+      "exitCode": -9,
+      "shutdownConfirmed": true
+    },
+    {
+      "role": "workproof-worker",
+      "pid": 12900,
+      "name": "flowchart-branch-a",
+      "executionId": "provider-flowchart-2b1748987f85490b92dd029ba4473b35",
+      "invocationId": "branch-a",
+      "exit": 0,
+      "cleanupAction": "completed"
+    },
+    {
+      "role": "workproof-worker",
+      "pid": 12901,
+      "name": "flowchart-branch-b",
+      "executionId": "provider-flowchart-2b1748987f85490b92dd029ba4473b35",
+      "invocationId": "branch-b",
+      "exit": 0,
+      "cleanupAction": "completed"
+    },
+    {
+      "role": "killed-execution-owner",
+      "cluster": "elsa-provider-flowchart-fa562847",
+      "pid": 12817,
+      "signal": "SIGKILL",
+      "port": 19312,
+      "exitCode": -9,
+      "shutdownConfirmed": true
+    }
+  ],
+  "cleanup": {
+    "allSilosExited": true,
+    "allProviderWorkersExited": true,
+    "allProviderWorkersSucceeded": true,
+    "killedOwnersConfirmedExited": true,
+    "temporaryRunDirectoryRemoved": true
+  },
+  "canonicalScopeCollision": {
+    "leftIdentity": {
+      "TenantId": "collision-tenant\nsegment",
+      "PersistenceScope": "persist",
+      "Authority": "authority"
+    },
+    "rightIdentity": {
+      "TenantId": "collision-tenant",
+      "PersistenceScope": "segment\npersist",
+      "Authority": "authority"
+    },
+    "sameLegacyHmacInput": true,
+    "rejectedAtProviderBoundary": [
+      "sequence",
+      "flowchart"
+    ]
+  },
+  "sourceSha256": {
+    "tools/experiments/UnifiedExecution.ProviderProbe/Program.cs": "0c3d27c9b46d54ed723ad82219c753df76c60f5f3b82272670cd980b745cc42f",
+    "tools/experiments/UnifiedExecution.ProviderProbe/OrleansExecutionAdapter.cs": "cd7c19d9ece4ce1a54b96a95d3409c32ab19c8cb457e00f20373db8c1fddee57",
+    "tools/experiments/UnifiedExecution.ProviderProbe/ProviderClientCommands.cs": "14a36c71925f96edd45728ce9cab5acdaadc8c34bc64f6ce40e0efaf2a1360f0",
+    "tools/experiments/UnifiedExecution.ProviderProbe/BuiltInCoordinatorProbe.cs": "d02b15708540c770c46865f691317b4a1644a997addcdb866f61fa1ed2a9bd4d",
+    "tools/experiments/UnifiedExecution.ProviderProbe/README.md": "9ae7f0d68fd2d38dfb9e8603dd94d405c01f42cddaf81b89518583f45a077d12",
+    "tools/experiments/UnifiedExecution.ProviderProbe/UnifiedExecution.ProviderProbe.csproj": "a1728df6bd425b2ad3c45d8d18985483a6fe31cb02afd7dc9825fd6fdd24172a",
+    "tools/experiments/UnifiedExecution.ProviderProbe/packages.lock.json": "5fabbf3e5d92c0532b7eb4f0823d979d6080b8c41aa68057f255a442eb9ab7f1",
+    "tools/experiments/UnifiedExecution.ProviderProbe/provider-proof.py": "eb4c28c2033f06cb8ba8b0896fc185835f61e7d54ec6494bc19ea83b8dc7d241",
+    "tools/experiments/UnifiedExecution.WorkProof/Composition.cs": "b35c5b28b19290ed0541b60de6d1af3a0df7e3072715a4940595335ad93602f8",
+    "tools/experiments/UnifiedExecution.WorkProof/Contracts.cs": "bcbdb6aae87a9e7ede1edf04d412466ded3ce179af81f3f93feda1bdfe0a9713",
+    "tools/experiments/UnifiedExecution.WorkProof/DurableWorkStore.cs": "7fdca55e4098100f41dac12d7a5d436ac9ba0d30825850c30909536b31ecc69f",
+    "tools/experiments/UnifiedExecution.WorkProof/IndependentSink.cs": "448e9b8d81d217bfc6d8bdfafa38dbe4318fd40cb2255c68c27e0f3396d9c8b9",
+    "tools/experiments/UnifiedExecution.WorkProof/PartitionSourceStore.cs": "1d3f51d48914958813c5179ca8b84ab0396a845ea5a70d15c9294beca90c286a",
+    "tools/experiments/UnifiedExecution.WorkProof/Program.cs": "4eab7e55eb9832fe3cfbe7558d08aca2bbd70e8b1c3ed1a624871f240591563a",
+    "tools/experiments/UnifiedExecution.WorkProof/ProofHarness.cs": "df2c128dcfd3effe0bb99f8a8b78bac3b0fe26323b2f086f7af69998a9e7c632",
+    "tools/experiments/UnifiedExecution.WorkProof/SqliteScopeParameters.cs": "a52c1f196e9e53a48be52813caa9cc199d450e0b6eef0cdac814d507971e4cc9",
+    "tools/experiments/UnifiedExecution.WorkProof/WorkerCommands.cs": "a0f35fc7ac03db70b7417f0f71ae239fb55eb70183e3867b333ecf680adefe40",
+    "tools/experiments/UnifiedExecution.WorkProof/UnifiedExecution.WorkProof.csproj": "54c90b5607f16f613e8155b7095dd6c9d77d30c8f373187808662155be71e3d3",
+    "tools/experiments/UnifiedExecution.WorkProof/packages.lock.json": "e62c9c8e3c5da023e7620a46b40adc07294ddd1ecc699defce0899ec3ad62979",
+    "Directory.Build.props": "97f65f6d3a30a68ae97f27dfa09449bd3ae92096d59f0049b368fac27db36b90",
+    "Directory.Packages.props": "2ee9defde84a32952a1b6f08879dea7c3ee77cad392034c488594604638b9399"
+  },
+  "passed": true
+}

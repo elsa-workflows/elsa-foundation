@@ -1,0 +1,18 @@
+{
+  "tools/experiments/AgentCompositionProof/AgentCollaborationPolicy.cs": "455dd779ff720681a83208638988b4fad344a1b63b31fb87c30658bd7ff36e84",
+  "tools/experiments/AgentCompositionProof/AgentCompositionModel.cs": "092657ff881dd190a0b85b51381cb19b12a00e12315507424e968dcc9e812402",
+  "tools/experiments/AgentCompositionProof/AgentCompositionProof.csproj": "07003929a133ad5c39f7e8d9093c6761d4fc922c39d96be135e625ff3f59a844",
+  "tools/experiments/AgentCompositionProof/AgentToolWorker.cs": "b8bb626403ac22f538a921821a11aaf64906fdec372bc80b08c8f50ba07f02b1",
+  "tools/experiments/AgentCompositionProof/Program.cs": "60c2c613345b264fa4447bf77c53071175edbed6d984ab8f33aee426262ae534",
+  "tools/experiments/AgentCompositionProof/README.md": "c38387190706ad5df723ffaac73f13a6e67051ff3a7556f320ee5f9cbecdd12c",
+  "tools/experiments/AgentCompositionProof/packages.lock.json": "9d8929c5e23da9580a0a66a5440ed3d8965f80b62375d884751d1a8049fe67b0",
+  "tools/experiments/UnifiedExecution.WorkProof/Composition.cs": "b35c5b28b19290ed0541b60de6d1af3a0df7e3072715a4940595335ad93602f8",
+  "tools/experiments/UnifiedExecution.WorkProof/Contracts.cs": "bcbdb6aae87a9e7ede1edf04d412466ded3ce179af81f3f93feda1bdfe0a9713",
+  "tools/experiments/UnifiedExecution.WorkProof/DurableWorkStore.cs": "7fdca55e4098100f41dac12d7a5d436ac9ba0d30825850c30909536b31ecc69f",
+  "tools/experiments/UnifiedExecution.WorkProof/IndependentSink.cs": "448e9b8d81d217bfc6d8bdfafa38dbe4318fd40cb2255c68c27e0f3396d9c8b9",
+  "tools/experiments/UnifiedExecution.WorkProof/PartitionSourceStore.cs": "1d3f51d48914958813c5179ca8b84ab0396a845ea5a70d15c9294beca90c286a",
+  "tools/experiments/UnifiedExecution.WorkProof/Program.cs": "4eab7e55eb9832fe3cfbe7558d08aca2bbd70e8b1c3ed1a624871f240591563a",
+  "tools/experiments/UnifiedExecution.WorkProof/ProofHarness.cs": "df2c128dcfd3effe0bb99f8a8b78bac3b0fe26323b2f086f7af69998a9e7c632",
+  "tools/experiments/UnifiedExecution.WorkProof/SqliteScopeParameters.cs": "a52c1f196e9e53a48be52813caa9cc199d450e0b6eef0cdac814d507971e4cc9",
+  "tools/experiments/UnifiedExecution.WorkProof/WorkerCommands.cs": "a0f35fc7ac03db70b7417f0f71ae239fb55eb70183e3867b333ecf680adefe40"
+}

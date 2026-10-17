@@ -1,4 +1,6 @@
 {
   "preflight-logs.zip": "7b2d51fc3dc8d2ca2fb2c4591588a9f62117778647f10b37f0995c855fcf1246",
-  "preflight.json": "791ff92111f41b33a14316dcaf4f41caa6fc095d89d3c633595bc27016512f9f"
+  "preflight.json": "791ff92111f41b33a14316dcaf4f41caa6fc095d89d3c633595bc27016512f9f",
+  "provider-proof-logs.zip": "00d31a4c3e8b46710dfb662b810a7a320f37eb36a86448b578eb552d0a15cc13",
+  "provider-proof.json": "52cee0e3c74789f27393717b5d10cef4cdca4b1f79ea70b2f72dcf627b24d5f4"
 }
