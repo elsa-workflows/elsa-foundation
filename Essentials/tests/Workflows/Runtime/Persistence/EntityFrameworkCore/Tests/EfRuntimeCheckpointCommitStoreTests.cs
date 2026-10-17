@@ -1244,6 +1244,42 @@ public sealed class EfRuntimeCheckpointCommitStoreTests
     }
 
     [Fact]
+    public async Task Background_expired_claim_cannot_record_a_result_but_successor_can()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var request = BackgroundRequest("work-expired-claim");
+        await using (var context = database.Open("tenant-a"))
+        {
+            var checkpoints = new EfRuntimeCheckpointCommitStore(context, new FixedAccessor("tenant-a"));
+            var admission = Commit("commit-bg-expired-admission");
+            await checkpoints.CommitAsync(admission with
+            {
+                StateChanges = admission.StateChanges.WithBackgroundActivityWork(
+                    new BackgroundActivityWorkCheckpointChanges(admissions: [request]))
+            }, Decision());
+
+            var worker = new EfBackgroundActivityWorkStore(context, new FixedAccessor("tenant-a"));
+            var staleClaim = await worker.ClaimNextAsync("worker-old", OccurredAt.AddSeconds(1), TimeSpan.FromSeconds(5));
+            Assert.NotNull(staleClaim);
+
+            await Assert.ThrowsAsync<BackgroundActivityWorkConflictException>(() => worker.RecordResultAsync(
+                staleClaim!,
+                new BackgroundActivityWorkTerminalResult(BackgroundActivityWorkResultKind.Complete, resultJson: "{\"value\":\"stale\"}"),
+                staleClaim.VisibleUntil).AsTask());
+
+            var successor = await worker.ClaimNextAsync("worker-new", staleClaim.VisibleUntil, TimeSpan.FromSeconds(5));
+            Assert.NotNull(successor);
+            Assert.True(successor.ClaimFence > staleClaim.ClaimFence);
+            var acceptedResult = await worker.RecordResultAsync(
+                successor,
+                new BackgroundActivityWorkTerminalResult(BackgroundActivityWorkResultKind.Complete, resultJson: "{\"value\":\"current\"}"),
+                successor.ClaimedAt.AddSeconds(1));
+            Assert.Equal(BackgroundActivityWorkStatus.ResultReady, acceptedResult.Status);
+            Assert.Equal("{\"value\":\"current\"}", acceptedResult.Result!.ResultJson);
+        }
+    }
+
+    [Fact]
     public void Registration_rejects_a_tampered_dispatch_backend_without_any_mutation()
     {
         var services = CompleteEfServices();

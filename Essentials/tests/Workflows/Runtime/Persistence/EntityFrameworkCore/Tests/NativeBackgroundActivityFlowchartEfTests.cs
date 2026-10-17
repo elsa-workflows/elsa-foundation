@@ -127,6 +127,43 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
         Assert.Equal(WorkflowExecutionStatus.Completed, await WorkflowStatusAsync(harness, executionId));
         Assert.Equal(1, finalCounter.Count);
         Assert.Single(await ActivityStatesAsync(harness, executionId), state => state.Execution.ExecutableNodeId == FinalNodeId);
+
+        WorkflowExecutionStatePage completedHistory;
+        IReadOnlyDictionary<string, ActivityExecutionStatus> completedActivities;
+        await using (var scope = await CreatePartitionScopeAsync(harness))
+        {
+            var store = scope.ServiceProvider.GetRequiredService<IBackgroundActivityWorkStore>();
+            foreach (var item in workers)
+                Assert.Equal(BackgroundActivityWorkStatus.Accepted,
+                    (await store.FindAsync(executionId, item.Request.WorkId))!.Status);
+            completedHistory = await scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>()
+                .QueryPageAsync(new WorkflowExecutionStatePageQuery(10, WorkflowExecutionId: executionId));
+            completedActivities = (await scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>()
+                    .ListAllAsync(executionId))
+                .ToDictionary(state => state.Execution.ActivityExecutionId, state => state.Status, StringComparer.Ordinal);
+        }
+
+        Assert.Single(completedHistory.Items);
+        Assert.Equal(WorkflowExecutionStatus.Completed, completedHistory.Items[0].Status);
+        await harness.CancelAsync(executionId);
+        var historyAfterCancel = await WorkflowHistoryAsync(harness, executionId);
+        Assert.Single(historyAfterCancel.Items);
+        Assert.Equal(completedHistory.Items[0].WorkflowExecutionId, historyAfterCancel.Items[0].WorkflowExecutionId);
+        Assert.Equal(completedHistory.Items[0].Status, historyAfterCancel.Items[0].Status);
+        Assert.Equal(completedHistory.Items[0].CompletedAt, historyAfterCancel.Items[0].CompletedAt);
+        Assert.Equal(completedHistory.Items[0].UpdatedAt, historyAfterCancel.Items[0].UpdatedAt);
+        Assert.Equal(completedActivities,
+            (await ActivityStatesAsync(harness, executionId))
+            .ToDictionary(state => state.Execution.ActivityExecutionId, state => state.Status, StringComparer.Ordinal));
+        Assert.Equal(WorkflowExecutionStatus.Completed, await WorkflowStatusAsync(harness, executionId));
+        Assert.Equal(1, finalCounter.Count);
+        await using (var scope = await CreatePartitionScopeAsync(harness))
+        {
+            var store = scope.ServiceProvider.GetRequiredService<IBackgroundActivityWorkStore>();
+            foreach (var item in workers)
+                Assert.Equal(BackgroundActivityWorkStatus.Accepted,
+                    (await store.FindAsync(executionId, item.Request.WorkId))!.Status);
+        }
     }
 
     [Fact]
@@ -159,6 +196,7 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
         Assert.Equal(0, finalCounter.Count);
 
         await harness.CancelAsync(executionId);
+        barrier.Release("right");
         await rightRun.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Equal(WorkflowExecutionStatus.Cancelled, await WorkflowStatusAsync(harness, executionId));
@@ -213,6 +251,65 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
         Assert.Equal(0, finalCounter.Count);
     }
 
+    [Fact]
+    public async Task Cancellation_with_both_background_bodies_held_tombstones_both_claims()
+    {
+        var executionId = ExecutionIdPrefix + Guid.NewGuid().ToString("N");
+        var barrier = new BackgroundBodyBarrier();
+        var finalCounter = new FinalStepCounter();
+        await using var harness = await StartHarnessAsync(executionId, barrier, finalCounter);
+        var reference = await PublishAsync(harness);
+        await CopyPublicationIntoPartitionAsync(harness, reference);
+        await harness.StartPublishedAsync(reference, executionId);
+
+        var workers = await ClaimTwoAsync(harness, executionId);
+        var worker = harness.Services.GetRequiredService<BackgroundActivityWorker>();
+        var workerScope = new PersistenceScope(WorkflowExecutionHarness.Partition.Value);
+        var runs = workers.Select(item => worker.ExecuteClaimAsync(workerScope, item.Claim)).ToArray();
+        await Task.WhenAll(
+            barrier.WaitUntilEnteredAsync("left", TimeSpan.FromSeconds(10)),
+            barrier.WaitUntilEnteredAsync("right", TimeSpan.FromSeconds(10)));
+        Assert.Equal(2, barrier.EntryCount);
+        Assert.Equal(WorkflowExecutionStatus.Running, await WorkflowStatusAsync(harness, executionId));
+
+        await harness.CancelAsync(executionId);
+        foreach (var item in workers)
+            barrier.Release(item.Request.ExecutableNodeId == LeftNodeId ? "left" : "right");
+        await Task.WhenAll(runs).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(WorkflowExecutionStatus.Cancelled, await WorkflowStatusAsync(harness, executionId));
+        Assert.Equal(0, finalCounter.Count);
+        foreach (var item in workers)
+            Assert.Equal(ActivityExecutionStatus.Cancelled,
+                await ActivityStatusAsync(harness, executionId, item.Request.ExecutableNodeId));
+
+        await using (var scope = await CreatePartitionScopeAsync(harness))
+        {
+            var store = scope.ServiceProvider.GetRequiredService<IBackgroundActivityWorkStore>();
+            var queue = scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>();
+            foreach (var item in workers)
+            {
+                Assert.Equal(BackgroundActivityWorkStatus.Cancelled,
+                    (await store.FindAsync(executionId, item.Request.WorkId))!.Status);
+                await Assert.ThrowsAsync<BackgroundActivityWorkConflictException>(async () =>
+                    await store.RecordResultAsync(
+                        item.Claim,
+                        new BackgroundActivityWorkTerminalResult(
+                            BackgroundActivityWorkResultKind.Complete,
+                            resultJson: JsonSerializer.Serialize(new BackgroundLeafResult($"{item.Request.ExecutableNodeId}-late"))),
+                        DateTimeOffset.UtcNow));
+                await queue.EnqueueAsync(item.Request.CoordinatorWorkItem);
+            }
+        }
+
+        await DrivePartitionAsync(harness, executionId);
+        Assert.Equal(WorkflowExecutionStatus.Cancelled, await WorkflowStatusAsync(harness, executionId));
+        Assert.Equal(0, finalCounter.Count);
+        Assert.Equal(2, (await ActivityStatesAsync(harness, executionId))
+            .Count(state => state.Status == ActivityExecutionStatus.Cancelled &&
+                            state.Execution.ExecutableNodeId is LeftNodeId or RightNodeId));
+    }
+
     public void Dispose()
     {
         foreach (var file in new[] { _databasePath, $"{_databasePath}-wal", $"{_databasePath}-shm" })
@@ -232,8 +329,8 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
             {
                 RunWorkers = false,
                 MaxConcurrency = 2,
-                LeaseDurationSeconds = 2,
-                RenewalIntervalSeconds = 0.05
+                LeaseDurationSeconds = 60,
+                RenewalIntervalSeconds = 0.1
             }.ConfigureServices(services))
             .ConfigureServices(services =>
             {
@@ -345,6 +442,13 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
     {
         await using var scope = await CreatePartitionScopeAsync(harness);
         return await scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync(executionId);
+    }
+
+    private static async Task<WorkflowExecutionStatePage> WorkflowHistoryAsync(WorkflowExecutionHarness harness, string executionId)
+    {
+        await using var scope = await CreatePartitionScopeAsync(harness);
+        return await scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>()
+            .QueryPageAsync(new WorkflowExecutionStatePageQuery(10, WorkflowExecutionId: executionId));
     }
 
     private static WorkflowExecutable NewExecutable()
