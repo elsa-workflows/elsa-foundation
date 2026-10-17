@@ -19,6 +19,14 @@ import {
 afterEach(clearApiCapabilityCache);
 
 describe("published HTTP test request helpers", () => {
+  it.each([
+    ["orders/{id:int:min(1)}", "orders/1"],
+    ["orders/{id:min(1):int}", "orders/1"],
+    ["orders/{id:guid:required}", "orders/00000000-0000-0000-0000-000000000001"]
+  ])("uses the type constraint in %s to choose the editable example", (template, example) => {
+    expect(makeInitialHttpTestPath(template, "/workflows/http")).toBe(`/workflows/http/${example}`);
+  });
+
   it("explains when a newly added draft endpoint is absent from the published workflow", () => {
     const executable = executableWithEndpoint({ authoredActivityId: "published-endpoint", inputBindings: [] });
     expect(() => findPublishedHttpEndpoint(executable, "new-draft-endpoint", inputSources([])))

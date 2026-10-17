@@ -90,9 +90,9 @@ export function makeInitialHttpTestPath(routeTemplate: string, basePath: string)
     .trim()
     .replace(/^\/+/, "")
     .replace(/\{(\*{0,2})?([^}:?]+)(?::([^}?]+))?(\?)?\}/g, (_match, _catchAll: string, _name: string, constraint: string | undefined) => {
-      const kind = constraint?.split(":").at(-1)?.toLowerCase();
-      if (["int", "long", "short", "byte", "uint", "ulong"].includes(kind ?? "")) return "1";
-      if (kind === "guid") return "00000000-0000-0000-0000-000000000001";
+      const kinds = constraint?.toLowerCase().split(":") ?? [];
+      if (kinds.some(kind => ["int", "long", "short", "byte", "uint", "ulong"].includes(kind))) return "1";
+      if (kinds.includes("guid")) return "00000000-0000-0000-0000-000000000001";
       return "sample";
     });
 
