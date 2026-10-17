@@ -50,7 +50,7 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
 
         // Read every routing literal and endpoint option in a single pass, collecting all problems rather than
         // throwing on the first. Absent optional inputs fall back to the activity's declared defaults
-        // (SupportedMethods → ["GET"], Authorize → false, ResponseMode → Async, Policy → null,
+        // (SupportedMethods → ["GET"], Authorize → false, ResponseMode → Sync, Policy → null,
         // RequestTimeout/RequestSizeLimit → null), so a UI that authors none of them still publishes; only genuinely
         // required-but-missing or invalid values are reported — and all of them together, in one preflight pass (#925).
         var problems = new List<string>();
@@ -68,7 +68,7 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
         var policy = TryReadOption(problems, () => ReadLiteralStringOption(node, PolicyInput));
         var requestTimeout = TryReadOption(problems, () => ReadLiteralTimeSpan(node, RequestTimeoutInput));
         var requestSizeLimit = TryReadOption(problems, () => ReadLiteralLong(node, RequestSizeLimitInput));
-        var responseMode = TryReadOption(problems, () => (ResponseMode?)(ReadLiteralEnum<ResponseMode>(node, ResponseModeInput) ?? ResponseMode.Async));
+        var responseMode = TryReadOption(problems, () => (ResponseMode?)(ReadLiteralEnum<ResponseMode>(node, ResponseModeInput) ?? ResponseMode.Sync));
 
         if (problems.Count > 0)
             throw new ArgumentException(
@@ -80,7 +80,7 @@ public sealed class HttpEndpointTriggerStimulusProvider : IActivityTriggerStimul
             Policy: policy,
             RequestTimeout: requestTimeout,
             RequestSizeLimit: requestSizeLimit,
-            ResponseMode: responseMode ?? ResponseMode.Async);
+            ResponseMode: responseMode ?? ResponseMode.Sync);
 
         return ActivityTriggerStimulusResult.Recognized(HttpEndpointStimulus.Describe(path!, effectiveMethods, options));
     }

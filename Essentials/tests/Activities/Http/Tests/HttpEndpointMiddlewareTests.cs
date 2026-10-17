@@ -1,7 +1,9 @@
 using System.Text;
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Http.Middleware;
+using Elsa.Activities.Http.Models;
 using Elsa.Activities.Http.Options;
 using Elsa.Activities.Http.Services;
 using Elsa.Activities.Testing;
@@ -9,6 +11,7 @@ using Elsa.Http.Core;
 using Elsa.Http.Core.Contracts;
 using Elsa.Http.Core.Exceptions;
 using Elsa.Http.Core.Models;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
@@ -915,13 +918,15 @@ public sealed class HttpEndpointMiddlewareTests
 
     // ---- #592 item 12: a client disconnect during dispatch is swallowed, not surfaced as a pipeline exception ----
 
-    [Fact]
-    public async Task ClientAbortDuringDispatch_IsSwallowed_NoResponseWritten_NoRethrow()
+    [Theory]
+    [InlineData(ResponseMode.Async)]
+    [InlineData(ResponseMode.Sync)]
+    public async Task ClientAbortDuringDispatch_IsSwallowed_NoResponseWritten_NoRethrow(ResponseMode mode)
     {
         // The request is aborted while dispatch is in flight: the OperationCanceledException the dispatch observes
         // must not escape the middleware (there is no live connection to write to). No throw, status untouched.
         var router = BehaviourStimulusRouter.Throwing(new OperationCanceledException());
-        var store = await StoreWith(Binding("artifact-1", "aborted", "POST"));
+        var store = await StoreWith(Binding("artifact-1", "aborted", "POST", responseMode: mode));
         var middleware = Middleware(router, store, "aborted");
         using var aborted = new CancellationTokenSource();
         await aborted.CancelAsync();
@@ -938,19 +943,19 @@ public sealed class HttpEndpointMiddlewareTests
     // ---- Synchronous same-exchange responses + 202 degrade ----
 
     [Fact]
-    public async Task Sync_WorkflowAuthorsResponse_MiddlewareReturnsWithoutWriting_No202Stomp()
+    public async Task Sync_DefaultStatus200_WhenWorkflowAuthorsResponse_No202Stomp()
     {
         // A sync-mode claimant (http:responseMode=Sync). The router callback simulates the inline drain: it writes
         // the workflow-authored status + body to the live response and marks the sink. After RouteAsync the
         // middleware sees ResponseWritten and returns WITHOUT stomping a 202 — the response is whatever the workflow
-        // authored (here 201 + a JSON body), never the {started,resumed} degrade envelope.
+        // authored (here the default 200 + a JSON body), never the {started,resumed} degrade envelope.
         var (services, sink) = SyncServices();
         var router = RecordingStimulusRouter.WithCallback(
             async _ =>
             {
-                sink.HttpContext!.Response.StatusCode = StatusCodes.Status201Created;
-                sink.HttpContext.Response.ContentType = "application/json";
-                await sink.HttpContext.Response.WriteAsync("""{"ok":true}""");
+                var response = sink.HttpContext!.Response;
+                response.ContentType = "application/json";
+                await response.WriteAsync("""{"ok":true}""");
                 sink.MarkResponseWritten();
             },
             starts: new[] { StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1") });
@@ -962,9 +967,36 @@ public sealed class HttpEndpointMiddlewareTests
 
         Assert.True(sink.ResponseWritten);
         Assert.Same(context, sink.HttpContext);
-        Assert.Equal(StatusCodes.Status201Created, context.Response.StatusCode);
+        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
         var body = await ReadResponse(context);
         Assert.Equal("""{"ok":true}""", body);
+        Assert.DoesNotContain("started", body);
+    }
+
+    [Fact]
+    public async Task NewlyPublishedEndpointWithUnauthoredResponseMode_UsesSyncAndReturnsWorkflowResponse()
+    {
+        // Exercise publication through request handling: no ResponseMode input is authored, so the real stimulus
+        // provider applies Sync and stamps it into the trigger binding metadata consumed by the middleware. This
+        // would return 202 if the provider fallback or metadata hand-off regressed to Async.
+        var (services, sink) = SyncServices();
+        var router = RecordingStimulusRouter.WithCallback(
+            async _ =>
+            {
+                await sink.HttpContext!.Response.WriteAsync("workflow-response");
+                sink.MarkResponseWritten();
+            },
+            starts: [StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1")]);
+        var store = await StoreWith(BindingFromUnauthoredEndpoint());
+        var middleware = Middleware(router, store, "orders/webhook");
+        var context = NewContext("/workflows/http/orders/webhook", "POST", body: "{}", services: services);
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.True(sink.ResponseWritten);
+        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+        var body = await ReadResponse(context);
+        Assert.Equal("workflow-response", body);
         Assert.DoesNotContain("started", body);
     }
 
@@ -987,6 +1019,32 @@ public sealed class HttpEndpointMiddlewareTests
         var payload = JsonDocument.Parse(await ReadResponse(context)).RootElement;
         Assert.Equal("wf-exec-1", payload.GetProperty("started")[0].GetString());
         Assert.Empty(payload.GetProperty("resumed").EnumerateArray());
+        var response = payload.GetProperty("response");
+        Assert.Equal("sync", response.GetProperty("mode").GetString());
+        Assert.Equal("workflow-response-not-produced", response.GetProperty("reason").GetString());
+        Assert.Equal(
+            "The workflow may have suspended, reached no response activity, or continued on another worker. Inspect the run.",
+            response.GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task Sync_DeferredDispatch_UsesGenericResponseUnavailableDiagnostic()
+    {
+        // A deferred resume does not reveal why no response was produced. Keep the same truthful generic reason as
+        // the suspend/no-write path rather than claiming that the workflow suspended or completed.
+        var router = RecordingStimulusRouter.WithOutcomes(
+            starts: [StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1")],
+            resumes: [new StimulusResumeOutcome("wf-deferred", BookmarkResumeDispatchStatus.Deferred, "not-local")]);
+        var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST", responseMode: ResponseMode.Sync));
+        var middleware = Middleware(router, store, "orders/webhook");
+        var context = NewContext("/workflows/http/orders/webhook", "POST", body: "{}");
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
+        var payload = JsonDocument.Parse(await ReadResponse(context)).RootElement;
+        Assert.Equal("workflow-response-not-produced", payload.GetProperty("response").GetProperty("reason").GetString());
+        Assert.DoesNotContain("deferred", payload.GetProperty("response").GetProperty("message").GetString());
     }
 
     [Fact]
@@ -1010,13 +1068,18 @@ public sealed class HttpEndpointMiddlewareTests
     }
 
     [Fact]
-    public async Task Async_NoMetadata_DispatchOptionsNull_AndSinkUntouched()
+    public async Task LegacyMissingResponseModeMetadata_RemainsAsync_DispatchOptionsNull_AndSinkUntouched()
     {
-        // Async mode (no responseMode metadata) is bit-identical to the pre-E baseline: no ambient services on the
-        // dispatch and the sink is never populated even when one is registered on the request scope.
+        // Persisted pre-change trigger metadata has no responseMode key. It remains Async for compatibility: no
+        // ambient services on the dispatch and the sink is never populated even when one is registered on the scope.
         var (services, sink) = SyncServices();
-        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
-        var store = await StoreWith(Binding("artifact-1", "orders/webhook", "POST")); // Async default
+        var router = RecordingStimulusRouter.WithOutcomes(
+            starts: [StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-started-1")],
+            resumes: [new StimulusResumeOutcome("wf-resumed-1", BookmarkResumeDispatchStatus.Dispatched)]);
+        // Omitting the key models persisted legacy metadata.
+        var binding = Binding("artifact-1", "orders/webhook", "POST");
+        Assert.DoesNotContain(Elsa.Http.Core.HttpEndpointRouting.ResponseModeMetadataKey, binding.Metadata.Keys);
+        var store = await StoreWith(binding);
         var middleware = Middleware(router, store, "orders/webhook");
         var context = NewContext("/workflows/http/orders/webhook", "POST", body: "{}", services: services);
 
@@ -1027,6 +1090,29 @@ public sealed class HttpEndpointMiddlewareTests
         Assert.Null(sink.HttpContext);
         Assert.False(sink.ResponseWritten);
         Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
+        Assert.Equal(
+            """{"started":["wf-started-1"],"resumed":["wf-resumed-1"],"response":{"mode":"async","reason":"background-accepted","message":"The endpoint accepts work in the background and returns 202 before the workflow responds."}}""",
+            await ReadResponse(context));
+    }
+
+    [Fact]
+    public async Task Async_ExplicitModeMetadata_Replies202WithBackgroundDiagnostics()
+    {
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
+        var store = await StoreWith(Binding(
+            "artifact-1", "orders/webhook", "POST",
+            responseMode: ResponseMode.Async,
+            includeResponseMode: true));
+        var middleware = Middleware(router, store, "orders/webhook");
+        var context = NewContext("/workflows/http/orders/webhook", "POST", body: "{}");
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
+        var payload = JsonDocument.Parse(await ReadResponse(context)).RootElement;
+        Assert.Equal("wf-exec-1", payload.GetProperty("started")[0].GetString());
+        Assert.Equal("async", payload.GetProperty("response").GetProperty("mode").GetString());
+        Assert.Equal("background-accepted", payload.GetProperty("response").GetProperty("reason").GetString());
     }
 
     [Fact]
@@ -1131,6 +1217,80 @@ public sealed class HttpEndpointMiddlewareTests
         Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Sync_CanonicalDeliveryFault_PropagatesToTheHost(bool responseStarted)
+    {
+        var committed = await HttpResponseInstructionFixture.StoreWith(
+            new HttpResponseInstruction(StatusCodes.Status201Created, new Dictionary<string, string[]>(), "partial response", "text/plain"));
+        var delivery = new HttpResponseInstructionDelivery(committed, []);
+        var (services, _) = SyncServices(delivery);
+        var context = NewContext("/workflows/http/response-fault", "POST", body: "{}", services: services);
+        var started = new StartedResponseFeature();
+        context.Features.Set<Microsoft.AspNetCore.Http.Features.IHttpResponseFeature>(started);
+        var failure = new IOException("response stream failed");
+        await using var body = new FailingResponseStream(started, responseStarted, failure);
+        context.Response.Body = body;
+        var clientToken = context.RequestAborted;
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-1"));
+        var store = await StoreWith(Binding("artifact-1", "response-fault", "POST", responseMode: ResponseMode.Sync));
+        var middleware = Middleware(router, store, "response-fault");
+
+        // The host must see the fault so it can log it and abort a partially delivered response.
+        var exception = await Assert.ThrowsAsync<IOException>(() => middleware.InvokeAsync(context, _ => Task.CompletedTask));
+
+        Assert.Same(failure, exception);
+        Assert.Equal(responseStarted, context.Response.HasStarted);
+        Assert.Equal(StatusCodes.Status201Created, context.Response.StatusCode);
+        Assert.Equal(clientToken, context.RequestAborted);
+        Assert.Equal("par", Encoding.UTF8.GetString(body.ToArray()));
+    }
+
+    [Theory]
+    [InlineData(ResponseMode.Async)]
+    [InlineData(ResponseMode.Sync)]
+    public async Task UnexpectedAuthorizationFault_PropagatesToTheHost(ResponseMode mode)
+    {
+        var failure = new InvalidOperationException("authorization provider failed");
+        var services = ServicesWith<IHttpEndpointAuthorizationHandler>(FakeAuthorizationHandler.Throwing(failure));
+        var context = NewContext("/workflows/http/authorization-fault", "POST", body: "{}", services: services);
+        var clientToken = context.RequestAborted;
+        var router = new RecordingStimulusRouter();
+        var store = await StoreWith(Binding("artifact-1", "authorization-fault", "POST", authorize: true, responseMode: mode));
+        var middleware = Middleware(router, store, "authorization-fault");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => middleware.InvokeAsync(context, _ => Task.CompletedTask));
+
+        Assert.Same(failure, exception);
+        Assert.Equal(clientToken, context.RequestAborted);
+        Assert.Empty(router.Requests);
+        Assert.False(context.Response.HasStarted);
+    }
+
+    [Fact]
+    public async Task Sync_DeadlineAfterResponseStarted_AbortsConnectionWithoutOverwritingStatus()
+    {
+        var context = NewContext("/workflows/http/slow", "POST", body: "{}");
+        var started = new StartedResponseFeature { StatusCode = StatusCodes.Status201Created };
+        var lifetime = new RecordingRequestLifetimeFeature();
+        context.Features.Set<Microsoft.AspNetCore.Http.Features.IHttpResponseFeature>(started);
+        context.Features.Set<Microsoft.AspNetCore.Http.Features.IHttpRequestLifetimeFeature>(lifetime);
+        var router = RecordingStimulusRouter.WithCallback(async _ =>
+        {
+            started.MarkStarted();
+            await Task.Delay(Timeout.InfiniteTimeSpan, context.RequestAborted);
+        });
+        var store = await StoreWith(Binding("artifact-1", "slow", "POST", responseMode: ResponseMode.Sync));
+        var middleware = Middleware(router, store, "slow", syncRequestTimeout: TimeSpan.FromSeconds(1));
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.True(context.Response.HasStarted);
+        Assert.Equal(StatusCodes.Status201Created, context.Response.StatusCode);
+        Assert.Equal(1, lifetime.AbortCount);
+    }
+
     [Fact]
     public async Task Sync_DispatchTimeout_Replies408_FaultPathStillWraps()
     {
@@ -1148,6 +1308,101 @@ public sealed class HttpEndpointMiddlewareTests
         Assert.Equal(StatusCodes.Status408RequestTimeout, context.Response.StatusCode);
     }
 
+    [Theory]
+    [InlineData(0, 20)]
+    [InlineData(5000, 20)]
+    [InlineData(20, 5000)]
+    public async Task Sync_UsesTheShorterHostAndEndpointDeadline(int endpointMilliseconds, int hostMilliseconds)
+    {
+        var router = BehaviourStimulusRouter.Delaying(TimeSpan.FromSeconds(1));
+        var store = await StoreWith(Binding("artifact-1", "slow", "POST",
+            requestTimeout: endpointMilliseconds == 0 ? null : TimeSpan.FromMilliseconds(endpointMilliseconds),
+            responseMode: ResponseMode.Sync));
+        var middleware = Middleware(router, store, "slow", syncRequestTimeout: TimeSpan.FromMilliseconds(hostMilliseconds));
+        var context = NewContext("/workflows/http/slow", "POST", body: "{}");
+        var clientToken = context.RequestAborted;
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status408RequestTimeout, context.Response.StatusCode);
+        Assert.Equal(clientToken, context.RequestAborted);
+        Assert.False(context.RequestAborted.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task Sync_HostDeadlineAlsoCancelsBodyReadingBeforeDispatch()
+    {
+        var router = new RecordingStimulusRouter();
+        var store = await StoreWith(Binding("artifact-1", "slow-body", "POST", responseMode: ResponseMode.Sync));
+        var middleware = Middleware(router, store, "slow-body", syncRequestTimeout: TimeSpan.FromMilliseconds(20));
+        await using var body = new WaitingReadStream();
+        var context = NewContext("/workflows/http/slow-body", "POST", bodyStream: body);
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status408RequestTimeout, context.Response.StatusCode);
+        Assert.Empty(router.Requests);
+        Assert.False(context.RequestAborted.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task Sync_HostDeadlineAlsoCancelsResponseWritingAfterDispatch()
+    {
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
+        var store = await StoreWith(Binding("artifact-1", "slow-response", "POST", responseMode: ResponseMode.Sync));
+        var middleware = Middleware(router, store, "slow-response", syncRequestTimeout: TimeSpan.FromMilliseconds(20));
+        var context = NewContext("/workflows/http/slow-response", "POST", body: "{}");
+        await using var responseBody = new WaitingWriteStream();
+        context.Response.Body = responseBody;
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status408RequestTimeout, context.Response.StatusCode);
+        Assert.Single(router.Requests);
+        Assert.False(context.RequestAborted.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task Async_DoesNotInheritTheSynchronousHostDeadline()
+    {
+        var router = BehaviourStimulusRouter.Delaying(TimeSpan.FromMilliseconds(40));
+        var store = await StoreWith(Binding("artifact-1", "async", "POST", responseMode: ResponseMode.Async));
+        var middleware = Middleware(router, store, "async", syncRequestTimeout: TimeSpan.FromMilliseconds(1));
+        var context = NewContext("/workflows/http/async", "POST", body: "{}");
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status404NotFound, context.Response.StatusCode);
+        Assert.Single(router.Requests);
+    }
+
+    [Fact]
+    public async Task Async_AuthoredDispatchTimeoutDoesNotIncludeBodyReading()
+    {
+        var router = new RecordingStimulusRouter(StimulusStartOutcome.Started("binding-1", "artifact-1", "wf-exec-1"));
+        var store = await StoreWith(Binding("artifact-1", "async", "POST", requestTimeout: TimeSpan.FromMilliseconds(20)));
+        var middleware = Middleware(router, store, "async");
+        await using var body = new DelayedReadStream();
+        var context = NewContext("/workflows/http/async", "POST", bodyStream: body);
+
+        await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+
+        Assert.Equal(StatusCodes.Status202Accepted, context.Response.StatusCode);
+        Assert.Single(router.Requests);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(4294967295)]
+    public void InvalidSynchronousHostDeadlineCannotDisableTheLimit(double milliseconds)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new HttpEndpointOptions
+        {
+            SyncRequestTimeout = TimeSpan.FromMilliseconds(milliseconds)
+        });
+    }
+
     private static HttpEndpointMiddleware Middleware(
         IStimulusRouter router,
         IWorkflowTriggerBindingStore store,
@@ -1160,8 +1415,9 @@ public sealed class HttpEndpointMiddlewareTests
         string template,
         string? basePath = null,
         long? maxBodyBytes = null,
-        IGlobalBookmarkStimulusLookup? bookmarkLookup = null) =>
-        new(router, new FakeRouteTable(template), new TestRouteMatcher(), store, bookmarkLookup ?? EmptyBookmarkLookup(), Options(basePath, maxBodyBytes));
+        IGlobalBookmarkStimulusLookup? bookmarkLookup = null,
+        TimeSpan? syncRequestTimeout = null) =>
+        new(router, new FakeRouteTable(template), new TestRouteMatcher(), store, bookmarkLookup ?? EmptyBookmarkLookup(), Options(basePath, maxBodyBytes, syncRequestTimeout));
 
     /// <summary>A lookup over an empty bookmark store — the common case where every match is trigger-claimant-backed.</summary>
     private static IGlobalBookmarkStimulusLookup EmptyBookmarkLookup() =>
@@ -1224,6 +1480,59 @@ public sealed class HttpEndpointMiddlewareTests
         return store;
     }
 
+    private static WorkflowTriggerBinding BindingFromUnauthoredEndpoint()
+    {
+        var inputBindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase)
+        {
+            [nameof(HttpEndpoint.Path)] = LiteralBinding(nameof(HttpEndpoint.Path), "orders/webhook"),
+            [nameof(HttpEndpoint.SupportedMethods)] = LiteralCollectionBinding(nameof(HttpEndpoint.SupportedMethods), ["POST"]),
+            [nameof(HttpEndpoint.CanStartWorkflow)] = LiteralJsonBinding(nameof(HttpEndpoint.CanStartWorkflow), "true")
+        };
+        using var descriptorJson = JsonDocument.Parse("""{"type":"test"}""");
+        var node = new ExecutableNode(
+            executableNodeId: "node-http-endpoint",
+            authoredActivityId: "authored-node-http-endpoint",
+            activityType: HttpEndpoint.ActivityType,
+            activityTypeVersion: "1.0.0",
+            descriptor: new RuntimeActivityDescriptor("test", RuntimeActivityDescriptor.InitialSchemaVersion, descriptorJson.RootElement.Clone()),
+            inputBindings: inputBindings,
+            metadata: new Dictionary<string, string>());
+        var descriptor = Assert.Single(new HttpEndpointTriggerStimulusProvider().Describe(node).Descriptors);
+        const string artifactId = "artifact-published-unauthored-response-mode";
+        const string nodeId = "node-http-endpoint";
+
+        return new WorkflowTriggerBinding(
+            TriggerBindingId: WorkflowTriggerBinding.BuildId(artifactId, nodeId, descriptor.StimulusHash),
+            ArtifactId: artifactId,
+            DefinitionId: DefinitionId,
+            ArtifactVersion: "1.0.0",
+            ArtifactHash: "sha256:artifact-published-unauthored-response-mode",
+            ExecutableNodeId: nodeId,
+            StimulusType: descriptor.StimulusType,
+            StimulusHash: descriptor.StimulusHash,
+            CorrelationScope: null,
+            Metadata: descriptor.Metadata,
+            CreatedAt: DateTimeOffset.UnixEpoch);
+    }
+
+    private static RuntimeInputBinding LiteralBinding(string name, string value) =>
+        LiteralJsonBinding(name, JsonSerializer.Serialize(value));
+
+    private static RuntimeInputBinding LiteralCollectionBinding(string name, IReadOnlyCollection<string> values) =>
+        LiteralJsonBinding(name, JsonSerializer.Serialize(values));
+
+    private static RuntimeInputBinding LiteralJsonBinding(string name, string rawJson)
+    {
+        using var document = JsonDocument.Parse(rawJson);
+        var type = new ValueTypeDescriptor("Elsa.Any");
+        return new RuntimeInputBinding(
+            name,
+            type,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(type, document.RootElement, ValueProtectionPolicy.InstanceInline));
+    }
+
     private static WorkflowTriggerBinding Binding(
         string artifactId,
         string template,
@@ -1234,7 +1543,8 @@ public sealed class HttpEndpointMiddlewareTests
         string? policy = null,
         TimeSpan? requestTimeout = null,
         long? requestSizeLimit = null,
-        ResponseMode responseMode = ResponseMode.Async)
+        ResponseMode responseMode = ResponseMode.Async,
+        bool includeResponseMode = false)
     {
         var hash = HttpEndpointStimulus.Hash(template, method);
 
@@ -1255,7 +1565,7 @@ public sealed class HttpEndpointMiddlewareTests
         if (requestSizeLimit is { } sizeLimit)
             metadata[Elsa.Http.Core.HttpEndpointRouting.RequestSizeLimitMetadataKey] =
                 sizeLimit.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        if (responseMode != ResponseMode.Async)
+        if (includeResponseMode || responseMode != ResponseMode.Async)
             metadata[Elsa.Http.Core.HttpEndpointRouting.ResponseModeMetadataKey] = responseMode.ToString();
 
         return new WorkflowTriggerBinding(
@@ -1290,11 +1600,12 @@ public sealed class HttpEndpointMiddlewareTests
         return (collection.BuildServiceProvider(), sink);
     }
 
-    private static IOptions<HttpEndpointOptions> Options(string? basePath = null, long? maxBodyBytes = null) =>
+    private static IOptions<HttpEndpointOptions> Options(string? basePath = null, long? maxBodyBytes = null, TimeSpan? syncRequestTimeout = null) =>
         Microsoft.Extensions.Options.Options.Create(new HttpEndpointOptions
         {
             BasePath = basePath ?? new HttpEndpointOptions().BasePath,
-            MaxRequestBodyBytes = maxBodyBytes ?? new HttpEndpointOptions().MaxRequestBodyBytes
+            MaxRequestBodyBytes = maxBodyBytes ?? new HttpEndpointOptions().MaxRequestBodyBytes,
+            SyncRequestTimeout = syncRequestTimeout ?? new HttpEndpointOptions().SyncRequestTimeout
         });
 
     private static DefaultHttpContext NewContext(
@@ -1354,6 +1665,48 @@ public sealed class HttpEndpointMiddlewareTests
         {
             WasRead = true;
             return base.ReadAsync(buffer, cancellationToken);
+        }
+    }
+
+    private sealed class RecordingRequestLifetimeFeature : Microsoft.AspNetCore.Http.Features.IHttpRequestLifetimeFeature
+    {
+        public CancellationToken RequestAborted { get; set; }
+        public int AbortCount { get; private set; }
+        public void Abort() => AbortCount++;
+    }
+
+    private sealed class FailingResponseStream(StartedResponseFeature response, bool markStarted, IOException failure) : MemoryStream
+    {
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            await base.WriteAsync(buffer[..3], cancellationToken);
+            if (markStarted)
+                response.MarkStarted();
+            throw failure;
+        }
+    }
+
+    private sealed class WaitingReadStream : MemoryStream
+    {
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return 0;
+        }
+    }
+
+    private sealed class WaitingWriteStream : MemoryStream
+    {
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) =>
+            new(Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken));
+    }
+
+    private sealed class DelayedReadStream : MemoryStream
+    {
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(40, cancellationToken);
+            return 0;
         }
     }
 

@@ -2,6 +2,8 @@ using System.Reflection;
 using Elsa.Activities.Http.Activities;
 using Elsa.Activities.Runtime.Core;
 using Elsa.Activities.Runtime.Core.Attributes;
+using Elsa.Http.Core;
+using Elsa.Http.Services;
 using Xunit;
 
 namespace Elsa.Activities.Http.Tests;
@@ -35,5 +37,29 @@ public sealed class HttpEndpointMetadataTests
 
         Assert.Equal(ActivityInputUIHints.CheckList, metadata.UIHint);
         Assert.Equal(new[] { "GET", "POST", "PUT", "HEAD", "DELETE" }, metadata.Options);
+    }
+
+    [Fact]
+    public void ResponseMode_AdvertisesDropdownOptionsAndSyncDefault()
+    {
+        var property = typeof(HttpEndpoint).GetProperty(nameof(HttpEndpoint.ResponseMode), BindingFlags.Instance | BindingFlags.Public)!;
+        var metadata = Assert.IsType<ActivityInputAttribute>(property.GetCustomAttribute<ActivityInputAttribute>());
+        var options = property.GetCustomAttributes<ActivityInputOptionAttribute>().ToArray();
+
+        Assert.Equal(ActivityInputUIHints.Dropdown, metadata.UIHint);
+        Assert.Equal("Sync", metadata.DefaultValue);
+        Assert.Collection(
+            options,
+            option =>
+            {
+                Assert.Equal("Wait for workflow response", option.Label);
+                Assert.Equal(ResponseMode.Sync, option.Value);
+            },
+            option =>
+            {
+                Assert.Equal("Accept and run in background", option.Label);
+                Assert.Equal(ResponseMode.Async, option.Value);
+            });
+        Assert.Equal(ResponseMode.Sync, new HttpEndpoint(new HttpRequestBodyParser()).ResponseMode);
     }
 }

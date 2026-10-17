@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, ExternalLink, GitCompareArrows, LocateFixe
 import { useQueryClient } from "@tanstack/react-query";
 import { StudioHttpError, type StudioActivityDiagnostic, type StudioActivityDiagnosticFocusResult, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { activityDesignKeys, getActivityDefinition } from "./api/activityDesign";
+import { compareSemVer, parseSemVer } from "./semver";
 import {
   getActivityPublicationReceipt,
   preflightActivityDraftPublication,
@@ -337,39 +338,6 @@ export function isExactVersionAtLeast(value: string, minimum: string) {
   const floor = parseSemVer(minimum);
   if (!candidate || !floor) return false;
   return compareSemVer(candidate, floor) >= 0;
-}
-
-function parseSemVer(value: string) {
-  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.exec(value);
-  if (!match) return null;
-  const prerelease = match[4]?.split(".") ?? [];
-  if (prerelease.some(segment => /^\d+$/.test(segment) && segment.length > 1 && segment.startsWith("0"))) return null;
-  return { major: BigInt(match[1]!), minor: BigInt(match[2]!), patch: BigInt(match[3]!), prerelease };
-}
-
-function compareSemVer(left: NonNullable<ReturnType<typeof parseSemVer>>, right: NonNullable<ReturnType<typeof parseSemVer>>) {
-  for (const key of ["major", "minor", "patch"] as const) {
-    if (left[key] !== right[key]) return left[key] > right[key] ? 1 : -1;
-  }
-  if (!left.prerelease.length && right.prerelease.length) return 1;
-  if (left.prerelease.length && !right.prerelease.length) return -1;
-  for (let index = 0; index < Math.max(left.prerelease.length, right.prerelease.length); index += 1) {
-    const a = left.prerelease[index];
-    const b = right.prerelease[index];
-    if (a === undefined) return -1;
-    if (b === undefined) return 1;
-    if (a === b) continue;
-    const numericA = /^\d+$/.test(a);
-    const numericB = /^\d+$/.test(b);
-    if (numericA && numericB) {
-      if (a.length !== b.length) return a.length > b.length ? 1 : -1;
-      return a > b ? 1 : -1;
-    }
-    if (numericA) return -1;
-    if (numericB) return 1;
-    return a > b ? 1 : -1;
-  }
-  return 0;
 }
 
 function recommendationMessage(evidence: "first" | "unchanged" | "unconfirmed" | null) {

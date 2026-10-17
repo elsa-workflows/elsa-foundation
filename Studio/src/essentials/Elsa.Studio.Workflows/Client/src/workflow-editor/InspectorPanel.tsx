@@ -1,5 +1,5 @@
 import { useEffect, useId, useState, type ReactNode } from "react";
-import { AlertTriangle, Flag, Repeat2 } from "lucide-react";
+import { AlertTriangle, Flag, Repeat2, Send } from "lucide-react";
 import { CopyableIdentifier, StudioTabPanel, StudioTabs, type StudioTabItem } from "@elsa-workflows/studio-ui";
 import type {
   StudioActivityDescriptor,
@@ -13,6 +13,9 @@ import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem, Activity
 import type { ActivityDefinitionVersionView, RecommendedActivityDefinition } from "../activityDefinitionTypes";
 import type { ScopedVariableAnalysis } from "../api/workflowDesign";
 import { slotCrumbLabel, type ChildSlot } from "../workflowAdapter";
+import { HttpEndpointResponseWarning } from "../HttpEndpointResponseWarning";
+import { withHttpEndpointResponseMode } from "../httpEndpointResponseMode";
+import { isHttpEndpointType } from "./httpTestRequest";
 import { getAvailabilityStateLabel } from "../activityAvailability";
 import { ActivityPropertiesPanel } from "../ActivityPropertiesPanel";
 import { ActivityOutputsPanel } from "../ActivityOutputsPanel";
@@ -96,6 +99,8 @@ interface InspectorPanelProps {
   isStartNode?: boolean;
   /** Points the containing Flowchart's start at the inspected node. Absent when the canvas has no start. */
   onSetAsStartNode?(nodeId: string): void;
+  /** Opens the live HTTP request dialog for the selected published HttpEndpoint. */
+  httpTestRequest?: { available: boolean; onOpen(): void };
 }
 
 // The right-hand inspector for the selected activity: identity, availability notice, property editors,
@@ -139,7 +144,8 @@ export function InspectorPanel({
   onEnterSlot,
   onReplaceSlotActivity,
   isStartNode,
-  onSetAsStartNode
+  onSetAsStartNode,
+  httpTestRequest
 }: InspectorPanelProps) {
   const [slotPicker, setSlotPicker] = useState<SlotPickerState | null>(null);
   const [localActiveTabId, setLocalActiveTabId] = useState<ActivityInspectorTabId>("inputs");
@@ -235,6 +241,8 @@ export function InspectorPanel({
       onChange={onSelectedActivityChange}
     />
   );
+  const selectedCatalogItem = catalogByVersion?.get(selectedNode.activityVersionId)
+    ?? catalog.find(item => item.activityVersionId === selectedNode.activityVersionId);
 
   return (
     <div className="wf-inspector-content">
@@ -266,6 +274,22 @@ export function InspectorPanel({
             )}
           </div>
         ) : null}
+        {httpTestRequest && !inspectingScopeOwner ? (
+          <div className="wf-start-node-control">
+            <button
+              type="button"
+              className="wf-link-button"
+              disabled={readOnly || !httpTestRequest.available}
+              title={httpTestRequest.available
+                ? "Send a real HTTP request to this endpoint in the latest published workflow"
+                : "Publish this workflow before testing its HTTP endpoint"}
+              onClick={httpTestRequest.onOpen}
+            >
+              <Send size={13} /> Send HTTP test request
+            </button>
+            {!httpTestRequest.available ? <small className="wf-muted">Publish this workflow to enable a live request.</small> : null}
+          </div>
+        ) : null}
       </div>
       <StudioTabs
         baseId={tabBaseId}
@@ -277,6 +301,14 @@ export function InspectorPanel({
       />
       <fieldset className="wf-inspector-tab-panels" disabled={readOnly} aria-disabled={readOnly || undefined}>
         <StudioTabPanel {...tabPanelProps("inputs")}>
+          {isHttpEndpointType(selectedActivityType) ? (
+            <HttpEndpointResponseWarning
+              rootActivity={workflowState.rootActivity}
+              endpointNodeId={selectedNode.nodeId}
+              catalog={catalog}
+              onUseSync={() => onSelectedActivityChange(withHttpEndpointResponseMode(selectedNode, selectedCatalogItem, "Sync"))}
+            />
+          ) : null}
           {propertiesPanel}
         </StudioTabPanel>
         <StudioTabPanel {...tabPanelProps("outputs")}>

@@ -197,6 +197,7 @@
           "CShells.Abstractions": "[0.0.31, )",
           "CShells.AspNetCore.Abstractions": "[0.0.31, )",
           "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Api.Capabilities": "[4.0.0-dev, )",
           "Elsa.Http.Core": "[4.0.0-dev, )",
           "Elsa.Primitives": "[4.0.0-dev, )",
           "Elsa.Serialization.Core": "[4.0.0-dev, )",
@@ -266,6 +267,18 @@
         "type": "Project",
         "dependencies": {
           "Elsa.Primitives": "[4.0.0-dev, )",
+          "NativeEndpoints": "[1.0.0-preview.6, )"
+        }
+      },
+      "elsa.api.capabilities": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
           "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },

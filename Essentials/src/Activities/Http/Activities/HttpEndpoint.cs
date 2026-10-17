@@ -21,6 +21,7 @@ namespace Elsa.Activities.Http.Activities;
 [RefusesSecretBinding(nameof(RequestSizeLimit), SecretBindingRefusalReason.FixedAtPublish)]
 [RefusesSecretBinding(nameof(ResponseMode), SecretBindingRefusalReason.FixedAtPublish)]
 [TriggerActivity]
+[Version("1.1.0")]
 public sealed class HttpEndpoint :
     StatefulTriggerActivity<HttpEndpointResult, HttpEndpointState, HttpRequestModel>
 {
@@ -66,8 +67,18 @@ public sealed class HttpEndpoint :
     [ActivityInput(Key = nameof(RequestSizeLimit), Category = "Advanced", Order = 130, Tier = InputTier.Optional)]
     public long? RequestSizeLimit { get; set; }
 
-    [ActivityInput(Key = nameof(ResponseMode), Category = "Simple", Order = 30, Tier = InputTier.Essential)]
-    public ResponseMode ResponseMode { get; set; } = ResponseMode.Async;
+    [ActivityInput(
+        Key = nameof(ResponseMode),
+        DisplayName = "Response mode",
+        Description = "Choose whether to wait for the workflow response or accept the request and run the workflow in the background.",
+        Category = "Simple",
+        Order = 30,
+        UIHint = ActivityInputUIHints.Dropdown,
+        DefaultValue = "Sync",
+        Tier = InputTier.Essential)]
+    [ActivityInputOption("Wait for workflow response", ResponseMode.Sync)]
+    [ActivityInputOption("Accept and run in background", ResponseMode.Async)]
+    public ResponseMode ResponseMode { get; set; } = ResponseMode.Sync;
 
     protected override ValueTask<ActivityTransition<HttpEndpointResult, HttpEndpointState>> ExecuteAsync(
         ActivityStartContext<HttpRequestModel> context)
