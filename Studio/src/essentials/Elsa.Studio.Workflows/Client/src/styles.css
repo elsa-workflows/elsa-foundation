@@ -7262,49 +7262,6 @@ html[data-theme-material] .availability-search .wf-search {
   outline: none;
 }
 
-/* Activity Definition creation: a free-form Category input with authorized catalog suggestions. */
-.ad-category-combobox > div {
-  position: relative;
-}
-
-.ad-category-combobox [role="listbox"] {
-  position: absolute;
-  z-index: 2;
-  top: calc(100% + .25rem);
-  right: 0;
-  left: 0;
-  display: grid;
-  max-height: 12rem;
-  margin: 0;
-  padding: .25rem;
-  overflow: auto;
-  border: 1px solid var(--studio-border);
-  border-radius: var(--studio-radius);
-  background: var(--studio-surface);
-  box-shadow: var(--studio-shadow-md);
-  list-style: none;
-}
-
-.ad-category-combobox [role="option"] {
-  display: block;
-  width: 100%;
-  min-height: 2.1rem;
-  border: 0;
-  border-radius: calc(var(--studio-radius) * .75);
-  color: var(--studio-text);
-  cursor: pointer;
-  font: inherit;
-  text-align: left;
-  background: transparent;
-}
-
-.ad-category-combobox [role="option"][aria-selected="true"],
-.ad-category-combobox [role="option"]:hover,
-.ad-category-combobox [role="option"]:focus-visible {
-  background: var(--studio-accent-soft);
-  outline: none;
-}
-
 .ad-composition-picker {
   display: grid;
   gap: .55rem;

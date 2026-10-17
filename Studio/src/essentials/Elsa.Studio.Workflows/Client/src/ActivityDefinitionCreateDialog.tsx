@@ -1,10 +1,11 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 import { StudioHttpError, type StudioActivityDefinitionImplementationEditorContribution, type StudioActivityDefinitionImplementationState, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import type { ActivityProviderAuthoringCapability, CreateActivityDefinitionResponse } from "./activityDefinitionTypes";
 import type { ActivityCatalogItem } from "./workflowTypes";
 import { createActivityDefinition, useActivityAuthoringCapabilities, useWorkflowActivities } from "./api/activityDesign";
 import { observeActivityDefinitions } from "./activityDefinitionObservability";
+import { EditableCombobox } from "./EditableCombobox";
 import { deriveActivityCategorySuggestions } from "./activityCategories";
 import { getCreateInitialState } from "./workflow-editor/editorHelpers";
 import { WorkflowRootRadioCards } from "./workflow-editor/WorkflowRootCards";
@@ -190,58 +191,14 @@ export function ActivityCategoryCombobox({ value, suggestions, onChange }: {
   suggestions: string[];
   onChange(value: string): void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const listboxId = useId();
-  const filteredSuggestions = useMemo(() => {
-    const normalized = value.trim().toLocaleLowerCase();
-    return normalized
-      ? suggestions.filter(suggestion => suggestion.toLocaleLowerCase().includes(normalized))
-      : suggestions;
-  }, [suggestions, value]);
-  const activeSuggestion = filteredSuggestions[activeIndex];
-  const choose = (suggestion: string) => {
-    onChange(suggestion);
-    setOpen(false);
-    setActiveIndex(-1);
-  };
-  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setOpen(true);
-      setActiveIndex(current => Math.min(Math.max(current + 1, 0), filteredSuggestions.length - 1));
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setOpen(true);
-      setActiveIndex(current => current <= 0 ? filteredSuggestions.length - 1 : current - 1);
-    } else if (event.key === "Enter" && open && activeSuggestion) {
-      event.preventDefault();
-      choose(activeSuggestion);
-    } else if (event.key === "Escape") {
-      setOpen(false);
-      setActiveIndex(-1);
-    }
-  };
-
-  return <label className="ad-category-combobox"><span>Category</span><div>
-    <input
-      name="category"
-      role="combobox"
-      aria-label="Category"
-      aria-autocomplete="list"
-      aria-controls={listboxId}
-      aria-haspopup="listbox"
-      aria-expanded={open && filteredSuggestions.length > 0}
-      aria-activedescendant={activeSuggestion ? `${listboxId}-${activeIndex}` : undefined}
-      value={value}
-      onChange={event => { onChange(event.target.value); setOpen(true); setActiveIndex(-1); }}
-      onFocus={() => setOpen(true)}
-      onBlur={() => { setOpen(false); setActiveIndex(-1); }}
-      onKeyDown={onKeyDown}
-      placeholder="e.g. Custom"
-    />
-    {open && filteredSuggestions.length ? <ul id={listboxId} role="listbox" aria-label="Existing categories">{filteredSuggestions.map((suggestion, index) => <li key={suggestion} role="none"><button id={`${listboxId}-${index}`} role="option" aria-selected={index === activeIndex} tabIndex={-1} type="button" onMouseDown={event => event.preventDefault()} onClick={() => choose(suggestion)}>{suggestion}</button></li>)}</ul> : null}
-  </div></label>;
+  return <EditableCombobox
+    label="Category"
+    name="category"
+    value={value}
+    suggestions={suggestions}
+    onChange={onChange}
+    placeholder="e.g. Custom"
+  />;
 }
 
 function createErrorCopy(error: unknown) {

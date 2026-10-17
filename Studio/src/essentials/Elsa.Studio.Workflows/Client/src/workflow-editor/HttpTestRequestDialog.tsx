@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, LoaderCircle, Send, X } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { EditableCombobox } from "../EditableCombobox";
 import { StudioLink } from "../StudioLink";
 import { getExecutable, getExecutableInputSources } from "../api/runtime";
 import {
@@ -15,6 +16,15 @@ import {
 } from "./httpTestRequest";
 import { useDialogFocus } from "./useDialogFocus";
 import "./HttpTestRequestDialog.css";
+
+const contentTypeSuggestions = [
+  "application/json",
+  "text/plain",
+  "text/html",
+  "application/xml",
+  "application/x-www-form-urlencoded",
+  "application/octet-stream"
+];
 
 const exampleJson = `{
   "name": "Ada Lovelace"
@@ -272,10 +282,15 @@ export function HttpTestRequestDialog({
               </div>
               <p id="http-test-path-hint" className="wf-http-test-hint">Edit the endpoint path. The HTTP mount is fixed by the server.</p>
 
-              <label className="wf-form-field wf-http-test-content-type">
-                <span>Request content type</span>
-                <input value={contentType} disabled={bodyDisabled || isSending} onChange={event => setContentType(event.target.value)} />
-              </label>
+              <EditableCombobox
+                  className="wf-form-field wf-http-test-content-type"
+                  label="Request content type"
+                  value={contentType}
+                  suggestions={contentTypeSuggestions}
+                  disabled={bodyDisabled || isSending}
+                  onChange={setContentType}
+                  spellCheck={false}
+                />
               <label className="wf-form-field wf-http-test-json">
                 <span>Request body</span>
                 <textarea

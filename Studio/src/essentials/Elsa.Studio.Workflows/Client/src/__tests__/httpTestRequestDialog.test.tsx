@@ -85,6 +85,45 @@ describe("HTTP test request dialog", () => {
     expect(getExecutableInputSources).toHaveBeenCalledWith(context, "artifact-1", "reference-1");
   });
 
+  it("offers common content types and sends a custom type unchanged", async () => {
+    advertiseWorkflowHttpBasePath();
+    vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
+    vi.mocked(getExecutableInputSources).mockResolvedValue(publishedEndpointInputs());
+    requestResponse.mockResolvedValue(new Response("ok", { status: 200 }));
+    const container = await renderDialog();
+    await waitFor(() => expect(container.querySelector("input[role='combobox']")).not.toBeNull());
+    const input = container.querySelector<HTMLInputElement>("input[role='combobox']")!;
+    flushSync(() => input.focus());
+    expect(container.querySelector("[role='listbox']")?.textContent).toContain("text/plain");
+    await click([...container.querySelectorAll<HTMLElement>("[role='option']")].find(option => option.textContent === "text/plain")!);
+    expect(input.value).toBe("text/plain");
+    expect(requestResponse).not.toHaveBeenCalled();
+    await changeInput(input, "application/vnd.acme.order+json; charset=utf-8");
+    expect(input.value).toBe("application/vnd.acme.order+json; charset=utf-8");
+    expect(container.querySelector("[role='listbox']")).toBeNull();
+    await click(container.querySelector<HTMLButtonElement>("button[type='submit']")!);
+    await waitFor(() => expect(requestResponse).toHaveBeenCalledOnce());
+    expect(new Headers(requestResponse.mock.calls[0][1]?.headers).get("Content-Type"))
+      .toBe("application/vnd.acme.order+json; charset=utf-8");
+  });
+
+  it("closes content type suggestions before closing the dialog with Escape", async () => {
+    advertiseWorkflowHttpBasePath();
+    vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
+    vi.mocked(getExecutableInputSources).mockResolvedValue(publishedEndpointInputs());
+    const onClose = vi.fn();
+    const container = await renderDialog(onClose);
+    await waitFor(() => expect(container.querySelector("input[role='combobox']")).not.toBeNull());
+    const input = container.querySelector<HTMLInputElement>("input[role='combobox']")!;
+    flushSync(() => input.focus());
+    expect(input.getAttribute("aria-expanded")).toBe("true");
+    flushSync(() => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(input.getAttribute("aria-expanded")).toBe("false");
+    expect(onClose).not.toHaveBeenCalled();
+    flushSync(() => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
   it("preserves an error response body instead of turning non-2xx status into a client exception", async () => {
     advertiseWorkflowHttpBasePath();
     vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
@@ -125,6 +164,8 @@ describe("HTTP test request dialog", () => {
 
     expect(requestResponse).toHaveBeenCalledTimes(1);
     expect(requestSignal?.aborted).toBe(false);
+    expect(container.querySelector<HTMLInputElement>("input[role='combobox']")!.disabled).toBe(true);
+    expect(container.querySelector("[role='listbox']")).toBeNull();
     await click(container.querySelector<HTMLButtonElement>("button[aria-label='Close test request']")!);
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(requestSignal?.aborted).toBe(true);
