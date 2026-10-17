@@ -220,6 +220,15 @@
   color: var(--studio-warning-fg);
 }
 
+.wf-http-test-accepted[data-error] {
+  border-color: var(--studio-danger);
+  color: var(--studio-danger-fg);
+}
+
+.wf-http-test-accepted p {
+  margin: 0 0 4px;
+}
+
 .wf-http-test-accepted svg {
   flex: 0 0 auto;
   margin-top: 2px;
