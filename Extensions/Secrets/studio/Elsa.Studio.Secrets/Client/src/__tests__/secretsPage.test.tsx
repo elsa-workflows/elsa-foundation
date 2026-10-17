@@ -96,7 +96,6 @@ describe("secrets page", () => {
 
     expect(container.textContent).toContain("payments.api");
     expect(container.querySelector("button[aria-label='Open payments.api']")).not.toBeNull();
-    expect(container.textContent).toContain("Values are never displayed.");
     expect(container.textContent).not.toContain("raw-secret-value");
     unmount();
   });

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Ban, LockKeyhole, RotateCcw, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { Ban, RotateCcw, Save, ShieldCheck, Trash2 } from "lucide-react";
 import { CopySecretNameButton } from "./CopySecretNameButton";
 import type { SecretDescriptorsResponse, SecretMetadata } from "./secretTypes";
 
@@ -95,8 +95,6 @@ export function SecretDetail({
           <Save size={15} /> Save metadata
         </button>
       </form>
-
-      <p className="secrets-redaction"><LockKeyhole size={15} aria-hidden="true" /> Values are never displayed.</p>
 
       <div className="secrets-detail-actions">
         <button type="button" disabled={!canMutate || busy} onClick={() => onRotate(secret)}><RotateCcw size={15} /> Rotate</button>
