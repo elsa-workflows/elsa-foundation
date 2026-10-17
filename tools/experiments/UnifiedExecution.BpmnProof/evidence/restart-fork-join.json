@@ -1,0 +1,118 @@
+{
+  "scope": "fork-instance",
+  "processes": 3,
+  "initialCommandsLeftOwedAtExit": 2,
+  "restartBoundaries": 2,
+  "joinedAfterRestore": true,
+  "continuation": "complete",
+  "trace": [
+    {
+      "kind": "scope-created",
+      "bindingRef": null,
+      "elementId": null,
+      "handle": null,
+      "outcome": null,
+      "message": "proof-fork-join",
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": null
+    },
+    {
+      "kind": "process-started",
+      "bindingRef": null,
+      "elementId": null,
+      "handle": null,
+      "outcome": null,
+      "message": "proof-fork-join",
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": 1
+    },
+    {
+      "kind": "evaluation",
+      "bindingRef": null,
+      "elementId": null,
+      "handle": null,
+      "outcome": null,
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": "defer",
+      "revision": 1
+    },
+    {
+      "kind": "start-work",
+      "bindingRef": "left",
+      "elementId": "Left",
+      "handle": "fork-instance:work-1",
+      "outcome": null,
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": null
+    },
+    {
+      "kind": "start-work",
+      "bindingRef": "right",
+      "elementId": "Right",
+      "handle": "fork-instance:work-2",
+      "outcome": null,
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": null
+    },
+    {
+      "kind": "worker-completed",
+      "bindingRef": "left",
+      "elementId": "Left",
+      "handle": "fork-instance:work-1",
+      "outcome": "",
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": 2
+    },
+    {
+      "kind": "evaluation",
+      "bindingRef": null,
+      "elementId": null,
+      "handle": null,
+      "outcome": null,
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": "defer",
+      "revision": 2
+    },
+    {
+      "kind": "worker-completed",
+      "bindingRef": "right",
+      "elementId": "Right",
+      "handle": "fork-instance:work-2",
+      "outcome": "",
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": 3
+    },
+    {
+      "kind": "evaluation",
+      "bindingRef": null,
+      "elementId": null,
+      "handle": null,
+      "outcome": null,
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": "complete",
+      "revision": 3
+    }
+  ]
+}

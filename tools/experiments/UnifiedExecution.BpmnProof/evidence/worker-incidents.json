@@ -1,0 +1,215 @@
+{
+  "caught": {
+    "disposition": "Caught",
+    "incidentCount": 0,
+    "trace": [
+      {
+        "kind": "scope-created",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": "proof-risky-caught",
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "process-started",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": "proof-risky-caught",
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": 1
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "defer",
+        "revision": 1
+      },
+      {
+        "kind": "start-work",
+        "bindingRef": "worker",
+        "elementId": "Worker",
+        "handle": "worker-caught:work-1",
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "worker-faulted",
+        "bindingRef": "worker",
+        "elementId": "Worker",
+        "handle": "worker-caught:work-1",
+        "outcome": null,
+        "message": "upstream service refused the request",
+        "reason": null,
+        "disposition": "Caught",
+        "continuation": null,
+        "revision": 2
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "defer",
+        "revision": 2
+      },
+      {
+        "kind": "start-work",
+        "bindingRef": "recover",
+        "elementId": "Recover",
+        "handle": "worker-caught:work-2",
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "worker-completed",
+        "bindingRef": "recover",
+        "elementId": "Recover",
+        "handle": "worker-caught:work-2",
+        "outcome": "",
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": 3
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "complete",
+        "revision": 3
+      }
+    ]
+  },
+  "propagated": {
+    "disposition": "Propagated",
+    "incidentCount": 1,
+    "incidents": [
+      {
+        "scopeId": "worker-propagated",
+        "bindingRef": "worker",
+        "handle": "worker-propagated:work-1",
+        "message": "upstream service refused the request",
+        "revision": 2
+      }
+    ],
+    "trace": [
+      {
+        "kind": "scope-created",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": "proof-risky-propagated",
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "process-started",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": "proof-risky-propagated",
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": 1
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "defer",
+        "revision": 1
+      },
+      {
+        "kind": "start-work",
+        "bindingRef": "worker",
+        "elementId": "Worker",
+        "handle": "worker-propagated:work-1",
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "worker-faulted",
+        "bindingRef": "worker",
+        "elementId": "Worker",
+        "handle": "worker-propagated:work-1",
+        "outcome": null,
+        "message": "upstream service refused the request",
+        "reason": null,
+        "disposition": "Propagated",
+        "continuation": null,
+        "revision": 2
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "fault",
+        "revision": 2
+      },
+      {
+        "kind": "incident-recorded",
+        "bindingRef": "worker",
+        "elementId": null,
+        "handle": "worker-propagated:work-1",
+        "outcome": null,
+        "message": "upstream service refused the request",
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": 2
+      }
+    ]
+  }
+}

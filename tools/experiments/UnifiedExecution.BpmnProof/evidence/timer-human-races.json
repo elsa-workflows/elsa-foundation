@@ -1,0 +1,293 @@
+{
+  "humanFirst": {
+    "winner": "human",
+    "continuation": "complete",
+    "trace": [
+      {
+        "kind": "scope-created",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": "proof-human-deadline",
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "process-started",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": "proof-human-deadline",
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": 1
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "defer",
+        "revision": 1
+      },
+      {
+        "kind": "start-work",
+        "bindingRef": "review",
+        "elementId": "Review",
+        "handle": "human-first:work-1",
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "start-work",
+        "bindingRef": "timeout",
+        "elementId": "Timeout",
+        "handle": "human-first:work-2",
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "worker-completed",
+        "bindingRef": "review",
+        "elementId": "Review",
+        "handle": "human-first:work-1",
+        "outcome": "",
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": 2
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "complete",
+        "revision": 2
+      },
+      {
+        "kind": "cancel-work-subtree",
+        "bindingRef": null,
+        "elementId": "Timeout",
+        "handle": "human-first:work-2",
+        "outcome": null,
+        "message": null,
+        "reason": "bpmn.boundary.superseded-by-host-completion",
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      }
+    ]
+  },
+  "timerFirst": {
+    "winner": "timer",
+    "lateResultAbsorbedOnce": true,
+    "duplicateLateResultRejected": true,
+    "continuation": "complete",
+    "trace": [
+      {
+        "kind": "scope-created",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": "proof-human-deadline",
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "process-started",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": "proof-human-deadline",
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": 1
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "defer",
+        "revision": 1
+      },
+      {
+        "kind": "start-work",
+        "bindingRef": "review",
+        "elementId": "Review",
+        "handle": "timer-first:work-1",
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "start-work",
+        "bindingRef": "timeout",
+        "elementId": "Timeout",
+        "handle": "timer-first:work-2",
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "clock-advanced",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": "01:00:00",
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "worker-completed",
+        "bindingRef": "timeout",
+        "elementId": "Timeout",
+        "handle": "timer-first:work-2",
+        "outcome": "",
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": 2
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "defer",
+        "revision": 2
+      },
+      {
+        "kind": "start-work",
+        "bindingRef": "cleanup",
+        "elementId": "Cleanup",
+        "handle": "timer-first:work-3",
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "cancel-work-subtree",
+        "bindingRef": null,
+        "elementId": "Review",
+        "handle": "timer-first:work-1",
+        "outcome": null,
+        "message": null,
+        "reason": "bpmn.boundary.host-interrupted",
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "worker-completed",
+        "bindingRef": "review",
+        "elementId": "Review",
+        "handle": "timer-first:work-1",
+        "outcome": "",
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": 3
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "defer",
+        "revision": 3
+      },
+      {
+        "kind": "worker-completed",
+        "bindingRef": "cleanup",
+        "elementId": "Cleanup",
+        "handle": "timer-first:work-3",
+        "outcome": "",
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": 4
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "complete",
+        "revision": 4
+      }
+    ],
+    "diagnostics": [
+      "TokenEmitted|Start|BPMN start event \u0027Start\u0027 emitted the initial token.",
+      "TokenEmitted|Review|BPMN token \u0027token:4\u0027 arrived at element \u0027Review\u0027 via flow \u0027flow-Start-Review\u0027.",
+      "Scheduled|Review|BPMN element \u0027Review\u0027 started work \u0027review\u0027.",
+      "Scheduled|Timeout|BPMN boundary event \u0027Timeout\u0027 armed listener work \u0027timeout\u0027 alongside host \u0027Review\u0027.",
+      "Canceled|Review|BPMN interrupting boundary \u0027Timeout\u0027 cancelled host token \u0027token:4\u0027 at \u0027Review\u0027.",
+      "TokenEmitted|Cleanup|BPMN token \u0027token:17\u0027 arrived at element \u0027Cleanup\u0027 via flow \u0027flow-Timeout-Cleanup\u0027.",
+      "Scheduled|Cleanup|BPMN element \u0027Cleanup\u0027 started work \u0027cleanup\u0027.",
+      "Canceled|Review|BPMN ignored a late completion of work \u0027review\u0027 (handle \u0027timer-first:work-1\u0027): the scope had already torn that work down when it cancelled token \u0027token:4\u0027.",
+      "TokenEmitted|Expired|BPMN token \u0027token:27\u0027 arrived at element \u0027Expired\u0027 via flow \u0027flow-Cleanup-Expired\u0027.",
+      "Consumed|Expired|BPMN end event \u0027Expired\u0027 consumed token \u0027token:27\u0027.",
+      "Completed||BPMN process completed with the \u0027Done\u0027 outcome because no live tokens remain."
+    ]
+  }
+}

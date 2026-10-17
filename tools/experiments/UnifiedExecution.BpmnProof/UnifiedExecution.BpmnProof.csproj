@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <BpmnSourceRoot Condition="'$(BpmnSourceRoot)' == ''">$(MSBuildThisFileDirectory).source/bpmn</BpmnSourceRoot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(BpmnSourceRoot)/src/Bpmn.Model/Bpmn.Model.csproj" />
+    <ProjectReference Include="$(BpmnSourceRoot)/src/Bpmn.Semantics/Bpmn.Semantics.csproj" />
+    <Compile Remove=".source/**/*.cs" />
+  </ItemGroup>
+</Project>

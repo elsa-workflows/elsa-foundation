@@ -1,0 +1,5 @@
+{
+  "sameProcessId": "proof-fork-join",
+  "changedGraph": "Right -\u003E RightV2",
+  "result": "restore-rejected-by-definition-fingerprint"
+}

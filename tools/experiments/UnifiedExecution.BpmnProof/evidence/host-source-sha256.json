@@ -1,0 +1,12 @@
+{
+  "DurableBpmnHost.cs": "37ce292aa2b550a8bd33af21fc89f8c87662b2e8667127bb8afca9d9d2b3e9e1",
+  "Program.cs": "c399b1d599a792c39933b0b9e465022cefe1bb4f4f351005185f64de4e7dad3e",
+  "ProofContracts.cs": "ae78279dd6bdaa3f4548e08d2c1a7869eb97fea35efb8acaeaac1bcf22e4979d",
+  "ProofProcesses.cs": "0166c7a9d1f0a1329169aa5d4dd46cd861e88f3037fa044b590f0ade2afeb64c",
+  "ProofStore.cs": "bf5b27f3130e6bf1114fb66051a95578d32963526d3382ad4fba9af9527d4e8a",
+  "README.md": "a56be639ddf19a546444fa1e1b91b1affa573ec26cff29fa021124f2bc4dd28f",
+  "SequenceEnvelopeStore.cs": "be72cbdbb6a4294bd640a2ca786e47c32b8daf1e3d50cc4f64764132f6cc9996",
+  "UnifiedExecution.BpmnProof.csproj": "ed077c7117615a601cd0597996762d1f85089256967c6be85f5a6c77a123c6e8",
+  "bootstrap.sh": "40d388b7b05190aaad9381ad4863de715df2e791a0188a6af31118860ce77858",
+  "packages.lock.json": "15b448250f59a38d539fdfcf9d3e97655ab11068f92eb2c540cedbb7514b4cb7"
+}

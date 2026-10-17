@@ -1,0 +1,1036 @@
+{
+  "result": "passed",
+  "upstreamPin": "be9c6eaa963b846104d5aebf38d337bafab08710",
+  "sourceIntegrity": {
+    "repository": "valence-works/bpmn",
+    "commit": "be9c6eaa963b846104d5aebf38d337bafab08710",
+    "tree": "2f9549153b9342a1044c2efbd8e388f58b740467",
+    "workingTreeClean": true,
+    "packagesLockSha256": "15b448250f59a38d539fdfcf9d3e97655ab11068f92eb2c540cedbb7514b4cb7",
+    "proofProjectSha256": "ed077c7117615a601cd0597996762d1f85089256967c6be85f5a6c77a123c6e8"
+  },
+  "database": "SQLite; state, work ledger and command outbox checkpointed together",
+  "freshProcesses": {
+    "scope": "fork-instance",
+    "processes": 3,
+    "initialCommandsLeftOwedAtExit": 2,
+    "restartBoundaries": 2,
+    "joinedAfterRestore": true,
+    "continuation": "complete",
+    "trace": [
+      {
+        "kind": "scope-created",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": "proof-fork-join",
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "process-started",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": "proof-fork-join",
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": 1
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "defer",
+        "revision": 1
+      },
+      {
+        "kind": "start-work",
+        "bindingRef": "left",
+        "elementId": "Left",
+        "handle": "fork-instance:work-1",
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "start-work",
+        "bindingRef": "right",
+        "elementId": "Right",
+        "handle": "fork-instance:work-2",
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "worker-completed",
+        "bindingRef": "left",
+        "elementId": "Left",
+        "handle": "fork-instance:work-1",
+        "outcome": "",
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": 2
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "defer",
+        "revision": 2
+      },
+      {
+        "kind": "worker-completed",
+        "bindingRef": "right",
+        "elementId": "Right",
+        "handle": "fork-instance:work-2",
+        "outcome": "",
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": 3
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "complete",
+        "revision": 3
+      }
+    ]
+  },
+  "timerHumanLateResult": {
+    "humanFirst": {
+      "winner": "human",
+      "continuation": "complete",
+      "trace": [
+        {
+          "kind": "scope-created",
+          "bindingRef": null,
+          "elementId": null,
+          "handle": null,
+          "outcome": null,
+          "message": "proof-human-deadline",
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": null
+        },
+        {
+          "kind": "process-started",
+          "bindingRef": null,
+          "elementId": null,
+          "handle": null,
+          "outcome": null,
+          "message": "proof-human-deadline",
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": 1
+        },
+        {
+          "kind": "evaluation",
+          "bindingRef": null,
+          "elementId": null,
+          "handle": null,
+          "outcome": null,
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": "defer",
+          "revision": 1
+        },
+        {
+          "kind": "start-work",
+          "bindingRef": "review",
+          "elementId": "Review",
+          "handle": "human-first:work-1",
+          "outcome": null,
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": null
+        },
+        {
+          "kind": "start-work",
+          "bindingRef": "timeout",
+          "elementId": "Timeout",
+          "handle": "human-first:work-2",
+          "outcome": null,
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": null
+        },
+        {
+          "kind": "worker-completed",
+          "bindingRef": "review",
+          "elementId": "Review",
+          "handle": "human-first:work-1",
+          "outcome": "",
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": 2
+        },
+        {
+          "kind": "evaluation",
+          "bindingRef": null,
+          "elementId": null,
+          "handle": null,
+          "outcome": null,
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": "complete",
+          "revision": 2
+        },
+        {
+          "kind": "cancel-work-subtree",
+          "bindingRef": null,
+          "elementId": "Timeout",
+          "handle": "human-first:work-2",
+          "outcome": null,
+          "message": null,
+          "reason": "bpmn.boundary.superseded-by-host-completion",
+          "disposition": null,
+          "continuation": null,
+          "revision": null
+        }
+      ]
+    },
+    "timerFirst": {
+      "winner": "timer",
+      "lateResultAbsorbedOnce": true,
+      "duplicateLateResultRejected": true,
+      "continuation": "complete",
+      "trace": [
+        {
+          "kind": "scope-created",
+          "bindingRef": null,
+          "elementId": null,
+          "handle": null,
+          "outcome": null,
+          "message": "proof-human-deadline",
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": null
+        },
+        {
+          "kind": "process-started",
+          "bindingRef": null,
+          "elementId": null,
+          "handle": null,
+          "outcome": null,
+          "message": "proof-human-deadline",
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": 1
+        },
+        {
+          "kind": "evaluation",
+          "bindingRef": null,
+          "elementId": null,
+          "handle": null,
+          "outcome": null,
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": "defer",
+          "revision": 1
+        },
+        {
+          "kind": "start-work",
+          "bindingRef": "review",
+          "elementId": "Review",
+          "handle": "timer-first:work-1",
+          "outcome": null,
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": null
+        },
+        {
+          "kind": "start-work",
+          "bindingRef": "timeout",
+          "elementId": "Timeout",
+          "handle": "timer-first:work-2",
+          "outcome": null,
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": null
+        },
+        {
+          "kind": "clock-advanced",
+          "bindingRef": null,
+          "elementId": null,
+          "handle": null,
+          "outcome": null,
+          "message": "01:00:00",
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": null
+        },
+        {
+          "kind": "worker-completed",
+          "bindingRef": "timeout",
+          "elementId": "Timeout",
+          "handle": "timer-first:work-2",
+          "outcome": "",
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": 2
+        },
+        {
+          "kind": "evaluation",
+          "bindingRef": null,
+          "elementId": null,
+          "handle": null,
+          "outcome": null,
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": "defer",
+          "revision": 2
+        },
+        {
+          "kind": "start-work",
+          "bindingRef": "cleanup",
+          "elementId": "Cleanup",
+          "handle": "timer-first:work-3",
+          "outcome": null,
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": null
+        },
+        {
+          "kind": "cancel-work-subtree",
+          "bindingRef": null,
+          "elementId": "Review",
+          "handle": "timer-first:work-1",
+          "outcome": null,
+          "message": null,
+          "reason": "bpmn.boundary.host-interrupted",
+          "disposition": null,
+          "continuation": null,
+          "revision": null
+        },
+        {
+          "kind": "worker-completed",
+          "bindingRef": "review",
+          "elementId": "Review",
+          "handle": "timer-first:work-1",
+          "outcome": "",
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": 3
+        },
+        {
+          "kind": "evaluation",
+          "bindingRef": null,
+          "elementId": null,
+          "handle": null,
+          "outcome": null,
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": "defer",
+          "revision": 3
+        },
+        {
+          "kind": "worker-completed",
+          "bindingRef": "cleanup",
+          "elementId": "Cleanup",
+          "handle": "timer-first:work-3",
+          "outcome": "",
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": 4
+        },
+        {
+          "kind": "evaluation",
+          "bindingRef": null,
+          "elementId": null,
+          "handle": null,
+          "outcome": null,
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": "complete",
+          "revision": 4
+        }
+      ],
+      "diagnostics": [
+        "TokenEmitted|Start|BPMN start event \u0027Start\u0027 emitted the initial token.",
+        "TokenEmitted|Review|BPMN token \u0027token:4\u0027 arrived at element \u0027Review\u0027 via flow \u0027flow-Start-Review\u0027.",
+        "Scheduled|Review|BPMN element \u0027Review\u0027 started work \u0027review\u0027.",
+        "Scheduled|Timeout|BPMN boundary event \u0027Timeout\u0027 armed listener work \u0027timeout\u0027 alongside host \u0027Review\u0027.",
+        "Canceled|Review|BPMN interrupting boundary \u0027Timeout\u0027 cancelled host token \u0027token:4\u0027 at \u0027Review\u0027.",
+        "TokenEmitted|Cleanup|BPMN token \u0027token:17\u0027 arrived at element \u0027Cleanup\u0027 via flow \u0027flow-Timeout-Cleanup\u0027.",
+        "Scheduled|Cleanup|BPMN element \u0027Cleanup\u0027 started work \u0027cleanup\u0027.",
+        "Canceled|Review|BPMN ignored a late completion of work \u0027review\u0027 (handle \u0027timer-first:work-1\u0027): the scope had already torn that work down when it cancelled token \u0027token:4\u0027.",
+        "TokenEmitted|Expired|BPMN token \u0027token:27\u0027 arrived at element \u0027Expired\u0027 via flow \u0027flow-Cleanup-Expired\u0027.",
+        "Consumed|Expired|BPMN end event \u0027Expired\u0027 consumed token \u0027token:27\u0027.",
+        "Completed||BPMN process completed with the \u0027Done\u0027 outcome because no live tokens remain."
+      ]
+    }
+  },
+  "workerIncidents": {
+    "caught": {
+      "disposition": "Caught",
+      "incidentCount": 0,
+      "trace": [
+        {
+          "kind": "scope-created",
+          "bindingRef": null,
+          "elementId": null,
+          "handle": null,
+          "outcome": null,
+          "message": "proof-risky-caught",
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": null
+        },
+        {
+          "kind": "process-started",
+          "bindingRef": null,
+          "elementId": null,
+          "handle": null,
+          "outcome": null,
+          "message": "proof-risky-caught",
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": 1
+        },
+        {
+          "kind": "evaluation",
+          "bindingRef": null,
+          "elementId": null,
+          "handle": null,
+          "outcome": null,
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": "defer",
+          "revision": 1
+        },
+        {
+          "kind": "start-work",
+          "bindingRef": "worker",
+          "elementId": "Worker",
+          "handle": "worker-caught:work-1",
+          "outcome": null,
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": null
+        },
+        {
+          "kind": "worker-faulted",
+          "bindingRef": "worker",
+          "elementId": "Worker",
+          "handle": "worker-caught:work-1",
+          "outcome": null,
+          "message": "upstream service refused the request",
+          "reason": null,
+          "disposition": "Caught",
+          "continuation": null,
+          "revision": 2
+        },
+        {
+          "kind": "evaluation",
+          "bindingRef": null,
+          "elementId": null,
+          "handle": null,
+          "outcome": null,
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": "defer",
+          "revision": 2
+        },
+        {
+          "kind": "start-work",
+          "bindingRef": "recover",
+          "elementId": "Recover",
+          "handle": "worker-caught:work-2",
+          "outcome": null,
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": null
+        },
+        {
+          "kind": "worker-completed",
+          "bindingRef": "recover",
+          "elementId": "Recover",
+          "handle": "worker-caught:work-2",
+          "outcome": "",
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": 3
+        },
+        {
+          "kind": "evaluation",
+          "bindingRef": null,
+          "elementId": null,
+          "handle": null,
+          "outcome": null,
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": "complete",
+          "revision": 3
+        }
+      ]
+    },
+    "propagated": {
+      "disposition": "Propagated",
+      "incidentCount": 1,
+      "incidents": [
+        {
+          "scopeId": "worker-propagated",
+          "bindingRef": "worker",
+          "handle": "worker-propagated:work-1",
+          "message": "upstream service refused the request",
+          "revision": 2
+        }
+      ],
+      "trace": [
+        {
+          "kind": "scope-created",
+          "bindingRef": null,
+          "elementId": null,
+          "handle": null,
+          "outcome": null,
+          "message": "proof-risky-propagated",
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": null
+        },
+        {
+          "kind": "process-started",
+          "bindingRef": null,
+          "elementId": null,
+          "handle": null,
+          "outcome": null,
+          "message": "proof-risky-propagated",
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": 1
+        },
+        {
+          "kind": "evaluation",
+          "bindingRef": null,
+          "elementId": null,
+          "handle": null,
+          "outcome": null,
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": "defer",
+          "revision": 1
+        },
+        {
+          "kind": "start-work",
+          "bindingRef": "worker",
+          "elementId": "Worker",
+          "handle": "worker-propagated:work-1",
+          "outcome": null,
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": null
+        },
+        {
+          "kind": "worker-faulted",
+          "bindingRef": "worker",
+          "elementId": "Worker",
+          "handle": "worker-propagated:work-1",
+          "outcome": null,
+          "message": "upstream service refused the request",
+          "reason": null,
+          "disposition": "Propagated",
+          "continuation": null,
+          "revision": 2
+        },
+        {
+          "kind": "evaluation",
+          "bindingRef": null,
+          "elementId": null,
+          "handle": null,
+          "outcome": null,
+          "message": null,
+          "reason": null,
+          "disposition": null,
+          "continuation": "fault",
+          "revision": 2
+        },
+        {
+          "kind": "incident-recorded",
+          "bindingRef": "worker",
+          "elementId": null,
+          "handle": "worker-propagated:work-1",
+          "outcome": null,
+          "message": "upstream service refused the request",
+          "reason": null,
+          "disposition": null,
+          "continuation": null,
+          "revision": 2
+        }
+      ]
+    }
+  },
+  "validatedAlteration": {
+    "supportedOperation": "deliver-modeled-message",
+    "result": "accepted-only-for-live-matching-listener",
+    "emittedCommand": "CancelWorkSubtree",
+    "mismatchedMessage": "rejected-without-state-mutation",
+    "staleListener": "rejected-without-state-mutation",
+    "unsupportedOperation": "move-token",
+    "unsupportedResult": "rejected-without-state-mutation",
+    "trace": [
+      {
+        "kind": "scope-created",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": "proof-human-message-interrupt",
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "process-started",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": "proof-human-message-interrupt",
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": 1
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "defer",
+        "revision": 1
+      },
+      {
+        "kind": "start-work",
+        "bindingRef": "review",
+        "elementId": "Review",
+        "handle": "alteration-proof:work-1",
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "start-work",
+        "bindingRef": "cancel-review-listener",
+        "elementId": "CancelReview",
+        "handle": "alteration-proof:work-2",
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "worker-completed",
+        "bindingRef": "cancel-review-listener",
+        "elementId": "CancelReview",
+        "handle": "alteration-proof:work-2",
+        "outcome": "cancel-review",
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": 2
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "defer",
+        "revision": 2
+      },
+      {
+        "kind": "start-work",
+        "bindingRef": "cleanup",
+        "elementId": "Cleanup",
+        "handle": "alteration-proof:work-3",
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "cancel-work-subtree",
+        "bindingRef": null,
+        "elementId": "Review",
+        "handle": "alteration-proof:work-1",
+        "outcome": null,
+        "message": null,
+        "reason": "bpmn.boundary.host-interrupted",
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      }
+    ]
+  },
+  "definitionPin": {
+    "sameProcessId": "proof-fork-join",
+    "changedGraph": "Right -\u003E RightV2",
+    "result": "restore-rejected-by-definition-fingerprint"
+  },
+  "handleOwnership": {
+    "foreignComplete": "rejected",
+    "foreignFault": "rejected",
+    "foreignMessage": "rejected",
+    "receivingScopeUnchanged": true
+  },
+  "directVsSequenceAdapter": {
+    "match": true,
+    "childContinuation": "complete",
+    "parentContinuation": "complete",
+    "directChildTrace": [
+      {
+        "kind": "scope-created",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": "proof-fork-join",
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "process-started",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": "proof-fork-join",
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": 1
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "defer",
+        "revision": 1
+      },
+      {
+        "kind": "start-work",
+        "bindingRef": "left",
+        "elementId": "Left",
+        "handle": "work-1",
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "start-work",
+        "bindingRef": "right",
+        "elementId": "Right",
+        "handle": "work-2",
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "worker-completed",
+        "bindingRef": "left",
+        "elementId": "Left",
+        "handle": "work-1",
+        "outcome": "",
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": 2
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "defer",
+        "revision": 2
+      },
+      {
+        "kind": "worker-completed",
+        "bindingRef": "right",
+        "elementId": "Right",
+        "handle": "work-2",
+        "outcome": "",
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": 3
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "complete",
+        "revision": 3
+      }
+    ],
+    "embeddedChildTrace": [
+      {
+        "kind": "scope-created",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": "proof-fork-join",
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "process-started",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": "proof-fork-join",
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": 1
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "defer",
+        "revision": 1
+      },
+      {
+        "kind": "start-work",
+        "bindingRef": "left",
+        "elementId": "Left",
+        "handle": "work-1",
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "start-work",
+        "bindingRef": "right",
+        "elementId": "Right",
+        "handle": "work-2",
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": null
+      },
+      {
+        "kind": "worker-completed",
+        "bindingRef": "left",
+        "elementId": "Left",
+        "handle": "work-1",
+        "outcome": "",
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": 2
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "defer",
+        "revision": 2
+      },
+      {
+        "kind": "worker-completed",
+        "bindingRef": "right",
+        "elementId": "Right",
+        "handle": "work-2",
+        "outcome": "",
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": null,
+        "revision": 3
+      },
+      {
+        "kind": "evaluation",
+        "bindingRef": null,
+        "elementId": null,
+        "handle": null,
+        "outcome": null,
+        "message": null,
+        "reason": null,
+        "disposition": null,
+        "continuation": "complete",
+        "revision": 3
+      }
+    ],
+    "parentTransitions": [
+      {
+        "sequenceId": "sequence-proof",
+        "status": "waiting-child",
+        "currentChildScopeId": "sequence-proof:child",
+        "childOutcome": null,
+        "revision": 0
+      },
+      {
+        "sequenceId": "sequence-proof",
+        "status": "child-outcome-recorded",
+        "currentChildScopeId": "sequence-proof:child",
+        "childOutcome": "complete",
+        "revision": 1
+      },
+      {
+        "sequenceId": "sequence-proof",
+        "status": "next-child-pending",
+        "currentChildScopeId": "sequence-proof:tail",
+        "childOutcome": "complete",
+        "revision": 2
+      },
+      {
+        "sequenceId": "sequence-proof",
+        "status": "waiting-tail",
+        "currentChildScopeId": "sequence-proof:tail",
+        "childOutcome": "complete",
+        "revision": 3
+      },
+      {
+        "sequenceId": "sequence-proof",
+        "status": "complete",
+        "currentChildScopeId": "sequence-proof:tail",
+        "childOutcome": "complete",
+        "revision": 4
+      }
+    ]
+  },
+  "limitations": [
+    "The SQLite host models work as local ledger rows; no external worker or broker is connected.",
+    "The Sequence-style adapter is a small experimental host-side composition proof, not an Elsa integration.",
+    "The experiment proves process-restart recovery, not distributed execution or cross-system exactly-once effects."
+  ]
+}

@@ -1,0 +1,262 @@
+{
+  "match": true,
+  "childContinuation": "complete",
+  "parentContinuation": "complete",
+  "directChildTrace": [
+    {
+      "kind": "scope-created",
+      "bindingRef": null,
+      "elementId": null,
+      "handle": null,
+      "outcome": null,
+      "message": "proof-fork-join",
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": null
+    },
+    {
+      "kind": "process-started",
+      "bindingRef": null,
+      "elementId": null,
+      "handle": null,
+      "outcome": null,
+      "message": "proof-fork-join",
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": 1
+    },
+    {
+      "kind": "evaluation",
+      "bindingRef": null,
+      "elementId": null,
+      "handle": null,
+      "outcome": null,
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": "defer",
+      "revision": 1
+    },
+    {
+      "kind": "start-work",
+      "bindingRef": "left",
+      "elementId": "Left",
+      "handle": "work-1",
+      "outcome": null,
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": null
+    },
+    {
+      "kind": "start-work",
+      "bindingRef": "right",
+      "elementId": "Right",
+      "handle": "work-2",
+      "outcome": null,
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": null
+    },
+    {
+      "kind": "worker-completed",
+      "bindingRef": "left",
+      "elementId": "Left",
+      "handle": "work-1",
+      "outcome": "",
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": 2
+    },
+    {
+      "kind": "evaluation",
+      "bindingRef": null,
+      "elementId": null,
+      "handle": null,
+      "outcome": null,
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": "defer",
+      "revision": 2
+    },
+    {
+      "kind": "worker-completed",
+      "bindingRef": "right",
+      "elementId": "Right",
+      "handle": "work-2",
+      "outcome": "",
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": 3
+    },
+    {
+      "kind": "evaluation",
+      "bindingRef": null,
+      "elementId": null,
+      "handle": null,
+      "outcome": null,
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": "complete",
+      "revision": 3
+    }
+  ],
+  "embeddedChildTrace": [
+    {
+      "kind": "scope-created",
+      "bindingRef": null,
+      "elementId": null,
+      "handle": null,
+      "outcome": null,
+      "message": "proof-fork-join",
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": null
+    },
+    {
+      "kind": "process-started",
+      "bindingRef": null,
+      "elementId": null,
+      "handle": null,
+      "outcome": null,
+      "message": "proof-fork-join",
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": 1
+    },
+    {
+      "kind": "evaluation",
+      "bindingRef": null,
+      "elementId": null,
+      "handle": null,
+      "outcome": null,
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": "defer",
+      "revision": 1
+    },
+    {
+      "kind": "start-work",
+      "bindingRef": "left",
+      "elementId": "Left",
+      "handle": "work-1",
+      "outcome": null,
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": null
+    },
+    {
+      "kind": "start-work",
+      "bindingRef": "right",
+      "elementId": "Right",
+      "handle": "work-2",
+      "outcome": null,
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": null
+    },
+    {
+      "kind": "worker-completed",
+      "bindingRef": "left",
+      "elementId": "Left",
+      "handle": "work-1",
+      "outcome": "",
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": 2
+    },
+    {
+      "kind": "evaluation",
+      "bindingRef": null,
+      "elementId": null,
+      "handle": null,
+      "outcome": null,
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": "defer",
+      "revision": 2
+    },
+    {
+      "kind": "worker-completed",
+      "bindingRef": "right",
+      "elementId": "Right",
+      "handle": "work-2",
+      "outcome": "",
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": 3
+    },
+    {
+      "kind": "evaluation",
+      "bindingRef": null,
+      "elementId": null,
+      "handle": null,
+      "outcome": null,
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": "complete",
+      "revision": 3
+    }
+  ],
+  "parentTransitions": [
+    {
+      "sequenceId": "sequence-proof",
+      "status": "waiting-child",
+      "currentChildScopeId": "sequence-proof:child",
+      "childOutcome": null,
+      "revision": 0
+    },
+    {
+      "sequenceId": "sequence-proof",
+      "status": "child-outcome-recorded",
+      "currentChildScopeId": "sequence-proof:child",
+      "childOutcome": "complete",
+      "revision": 1
+    },
+    {
+      "sequenceId": "sequence-proof",
+      "status": "next-child-pending",
+      "currentChildScopeId": "sequence-proof:tail",
+      "childOutcome": "complete",
+      "revision": 2
+    },
+    {
+      "sequenceId": "sequence-proof",
+      "status": "waiting-tail",
+      "currentChildScopeId": "sequence-proof:tail",
+      "childOutcome": "complete",
+      "revision": 3
+    },
+    {
+      "sequenceId": "sequence-proof",
+      "status": "complete",
+      "currentChildScopeId": "sequence-proof:tail",
+      "childOutcome": "complete",
+      "revision": 4
+    }
+  ]
+}

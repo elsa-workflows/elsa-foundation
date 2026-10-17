@@ -1,0 +1,6 @@
+{
+  "foreignComplete": "rejected",
+  "foreignFault": "rejected",
+  "foreignMessage": "rejected",
+  "receivingScopeUnchanged": true
+}

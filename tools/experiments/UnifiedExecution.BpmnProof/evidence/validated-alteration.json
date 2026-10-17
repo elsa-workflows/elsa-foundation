@@ -1,0 +1,119 @@
+{
+  "supportedOperation": "deliver-modeled-message",
+  "result": "accepted-only-for-live-matching-listener",
+  "emittedCommand": "CancelWorkSubtree",
+  "mismatchedMessage": "rejected-without-state-mutation",
+  "staleListener": "rejected-without-state-mutation",
+  "unsupportedOperation": "move-token",
+  "unsupportedResult": "rejected-without-state-mutation",
+  "trace": [
+    {
+      "kind": "scope-created",
+      "bindingRef": null,
+      "elementId": null,
+      "handle": null,
+      "outcome": null,
+      "message": "proof-human-message-interrupt",
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": null
+    },
+    {
+      "kind": "process-started",
+      "bindingRef": null,
+      "elementId": null,
+      "handle": null,
+      "outcome": null,
+      "message": "proof-human-message-interrupt",
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": 1
+    },
+    {
+      "kind": "evaluation",
+      "bindingRef": null,
+      "elementId": null,
+      "handle": null,
+      "outcome": null,
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": "defer",
+      "revision": 1
+    },
+    {
+      "kind": "start-work",
+      "bindingRef": "review",
+      "elementId": "Review",
+      "handle": "alteration-proof:work-1",
+      "outcome": null,
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": null
+    },
+    {
+      "kind": "start-work",
+      "bindingRef": "cancel-review-listener",
+      "elementId": "CancelReview",
+      "handle": "alteration-proof:work-2",
+      "outcome": null,
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": null
+    },
+    {
+      "kind": "worker-completed",
+      "bindingRef": "cancel-review-listener",
+      "elementId": "CancelReview",
+      "handle": "alteration-proof:work-2",
+      "outcome": "cancel-review",
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": 2
+    },
+    {
+      "kind": "evaluation",
+      "bindingRef": null,
+      "elementId": null,
+      "handle": null,
+      "outcome": null,
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": "defer",
+      "revision": 2
+    },
+    {
+      "kind": "start-work",
+      "bindingRef": "cleanup",
+      "elementId": "Cleanup",
+      "handle": "alteration-proof:work-3",
+      "outcome": null,
+      "message": null,
+      "reason": null,
+      "disposition": null,
+      "continuation": null,
+      "revision": null
+    },
+    {
+      "kind": "cancel-work-subtree",
+      "bindingRef": null,
+      "elementId": "Review",
+      "handle": "alteration-proof:work-1",
+      "outcome": null,
+      "message": null,
+      "reason": "bpmn.boundary.host-interrupted",
+      "disposition": null,
+      "continuation": null,
+      "revision": null
+    }
+  ]
+}

@@ -17,8 +17,8 @@ This workspace holds architecture experiments and evidence, not production APIs 
 |---|---|---|
 | Current source/ownership baseline #2895 | [Reviewed baseline](current-source-baseline.md), full remote report in issue | Complete as read-only audit; not runtime validation |
 | Historical three cases | [Remote source archive](https://github.com/elsa-workflows/elsa-foundation/issues/2895#issuecomment-6233432122) | Historical prototype; not a replacement for new witnesses |
-| Shared work #2896 | [Failure matrix](https://github.com/elsa-workflows/elsa-foundation/issues/2896#issuecomment-6233491510) | Implementation underway; verification pending |
-| Operational BPMN #2898 | Existing #2735 ownership/parity and upstream library | Source-pinned isolated host investigation; verification pending |
+| Shared work #2896 | [Failure matrix](https://github.com/elsa-workflows/elsa-foundation/issues/2896#issuecomment-6233491510) | Root rerun: 95 assertions, 35 OS process identities, four negative controls; independent review recorded below; aggregate backpressure remains open |
+| Operational BPMN #2898 | Existing #2735 ownership/parity and upstream library | Root rerun passed pinned interpreter host, restart and Sequence-style adapter comparison; custom host, not production integration |
 | Provider substitution #2900 | Orleans 10.4.0 / source d114d7522a53b8cce4c6b97d44293e5c7273d766 candidate | Real multiprocess comparison required |
 | Independent model #2901 | Separate package required, with unchanged substrate | Pending |
 | Agent collaboration #2913 | [Pinned MAF source analysis](https://github.com/elsa-workflows/elsa-foundation/issues/2913#issuecomment-6233507776) | Actual framework probe and native composite recovery pending |
