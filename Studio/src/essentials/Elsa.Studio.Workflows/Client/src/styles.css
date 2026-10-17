@@ -4308,6 +4308,10 @@ button.wf-node-slot-badge:focus-visible {
   padding: 12px 12px 10px;
 }
 
+.wf-inspector .wf-inspector-context > dl {
+  margin: 0;
+}
+
 .wf-activity-presentation-fields {
   display: grid;
   gap: 14px;
