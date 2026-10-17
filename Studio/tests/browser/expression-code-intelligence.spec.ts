@@ -105,3 +105,35 @@ test("unavailable IntelliSense keeps syntax-aware editing available", async ({ p
   await page.keyboard.insertText(" updated");
   await expect.poll(() => editor.textContent()).toBe(`${initialSource} updated`);
 });
+
+for (const width of [390, 900]) {
+  test(`keeps syntax controls on the input line when compact feedback grows (${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto("/?mode=expression-code-intelligence&tooling=unavailable&theme=dark");
+
+    const syntax = page.getByRole("button", { name: "Path expression syntax" });
+    const expand = page.getByRole("button", { name: "Open expanded Path editor" });
+    for (const language of ["JavaScript", "Liquid"]) {
+      if (language === "Liquid") {
+        await syntax.click();
+        await page.getByRole("option", { name: language, exact: true }).click();
+      }
+      const preview = page.getByRole("button", { name: `${language} expression. Activate to edit.`, exact: true });
+      if (await preview.isVisible()) await preview.click();
+      const editor = page.locator(".studio-code-editor-rich-compact .cm-editor");
+      await expect(editor).toBeVisible();
+      const feedback = page.locator(".studio-code-editor-status");
+      await expect(feedback).toContainText(`${language} IntelliSense is unavailable`);
+      const editorBox = (await editor.boundingBox())!;
+      const feedbackBox = (await feedback.boundingBox())!;
+      for (const control of [syntax, expand]) {
+        const box = (await control.boundingBox())!;
+        expect(box.y).toBeGreaterThanOrEqual(editorBox.y);
+        expect(box.y + box.height).toBeLessThanOrEqual(editorBox.y + editorBox.height + 1);
+        expect(box.y + box.height).toBeLessThanOrEqual(feedbackBox.y);
+      }
+      const scrollerBox = (await page.locator(".studio-code-editor-rich-compact .cm-scroller").boundingBox())!;
+      expect(scrollerBox.x + scrollerBox.width).toBeLessThanOrEqual((await syntax.boundingBox())!.x);
+    }
+  });
+}
