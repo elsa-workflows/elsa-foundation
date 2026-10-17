@@ -608,8 +608,10 @@
     <Project Path="Essentials/tests/Tasks/Tests/Elsa.Tasks.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Workbench/">
-    <Project Path="Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj" />
     <Project Path="Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/tests/Workbench/Fixtures/">
+    <Project Path="Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Workflows/" />
   <Folder Name="/Essentials/tests/Workflows/Design/">
