@@ -795,13 +795,103 @@
   font-size: 13px;
 }
 
-.wf-executable-grid .wf-grid-head,
-.wf-executable-grid .wf-grid-row {
-  grid-template-columns: minmax(230px, 1fr) 96px minmax(220px, 1fr) 130px 170px minmax(100px, auto);
+.wf-executable-toolbar {
+  flex-wrap: wrap;
 }
 
-.wf-executable-grid .wf-grid-row {
-  cursor: default;
+.wf-executable-toolbar .wf-search {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.wf-executable-toolbar .wf-search input {
+  min-width: 0;
+}
+
+/* One table controls column geometry for both headers and artifact rows. */
+.wf-executable-table-wrap {
+  min-width: 0;
+  margin: 14px 18px;
+  overflow-x: auto;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+}
+
+.wf-executable-table {
+  width: 100%;
+  min-width: 1120px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: var(--studio-text);
+  font-size: 13px;
+}
+
+.wf-executable-workflow-column { width: 24%; }
+.wf-executable-artifact-column { width: 22%; }
+.wf-executable-version-column { width: 9%; }
+.wf-executable-root-column { width: 9%; }
+.wf-executable-date-column { width: 14%; }
+.wf-executable-actions-column { width: 22%; }
+
+.wf-executable-table th,
+.wf-executable-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--studio-border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.wf-executable-table th {
+  background: var(--studio-surface-muted);
+  color: var(--studio-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.wf-executable-table th:last-child { text-align: right; }
+.wf-executable-table tr:last-child td { border-bottom: 0; }
+.wf-executable-table tbody tr:hover { background: var(--studio-surface-muted); }
+.wf-executable-table .wf-row-actions { justify-content: flex-end; flex-wrap: wrap; }
+.wf-executable-table .wf-cell-line > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.wf-executable-workflow-cell,
+.wf-executable-origin {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.wf-executable-workflow-cell { gap: 6px; }
+
+.wf-executable-workflow-name {
+  justify-self: start;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--studio-accent);
+  text-align: left;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.wf-executable-table .wf-cell-line-muted {
+  color: var(--studio-text-muted);
+  font-size: 12px;
+}
+
+.wf-executable-reference-row td {
+  background: var(--studio-surface-muted);
+  padding: 12px 18px;
+}
+
+.wf-reference-origin {
+  overflow-wrap: anywhere;
 }
 
 .wf-instance-workbench {
@@ -5337,15 +5427,6 @@ button.wf-node-slot-badge:focus-visible {
 .wf-toolbar-checkbox input {
   margin: 0;
   accent-color: var(--wf-accent);
-}
-
-.wf-executable-row-group {
-  display: grid;
-  border-bottom: 1px solid var(--wf-border);
-}
-
-.wf-executable-row-group .wf-grid-row {
-  border-bottom: 0;
 }
 
 .wf-executable-version-cell {
