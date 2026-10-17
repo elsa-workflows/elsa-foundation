@@ -28,3 +28,9 @@ This corrects the earlier comparison with a nested BPMN subprocess, which did no
 ## Next acceptance work
 
 Complete the aggregate work-bound witness, actual provider comparison over the same definitions, native agent composition and separately packaged independent model. Then independently review the combined recommendation before producing the interactive HTML presentation. The Orleans preflight only proves same-key activation recovery after a silo kill; it is not yet the full provider comparison.
+
+## Microsoft Agent Framework package probe (#2913)
+
+Root independently ran the Release executable for the real `Microsoft.Agents.AI.Workflows` 1.25.0 package; all three probes passed. Two receiver handlers overlap while each receiver processes its queue serially. A fast branch cannot start its next round before a slow branch completes. A partial fan-in checkpoint retains two distinct A messages across restore into fresh executor objects; B then releases all three arrivals, without reexecuting A. These are multiple messages from one source, not evidence of deduplication of the same message identity.
+
+The assembly reports informational version `1.25.0+95511ff025d81cc546c44e653d4be65de5bd7f35`. This is stronger package provenance than the nuspec alone; the separately inspected source revision `44fe223...` is still not equated with the package. Package-download manifests pin lengths and SHA512 hashes. The checkpoint store is in-memory and restore remains in-process. Native composition over durable work is a separate pending witness; no LLM or production Elsa agent integration is proved here.

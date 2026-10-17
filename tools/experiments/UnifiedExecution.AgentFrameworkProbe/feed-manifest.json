@@ -1,0 +1,290 @@
+{
+  "source": "https://api.nuget.org/v3-flatcontainer",
+  "packageHashSource": "NuGet v3 registration catalogEntry.packageHash; verified for every manifest package on 2026-10-17",
+  "targetFramework": "net10.0",
+  "packages": [
+    {
+      "id": "Google.Protobuf",
+      "version": "3.30.2",
+      "size": 1396473,
+      "sha512Base64": "tWTVR9r54/C/7ssz1LkTYsYKAE16UpBIQGh7bM48LIiVmY0cOyZYo41s7FC+ko0FFFNI3Bp205q3KOd0ajHiIA==",
+      "dependencies": []
+    },
+    {
+      "id": "Microsoft.Agents.AI",
+      "version": "1.25.0",
+      "size": 2154846,
+      "sha512Base64": "1i/dP91Zd/+tBtRk7JZJKCGOy7OoSOQpj5OtcNYdjCHawYkLoLRmQxxe94b/ik9qpAwwr0ZaRMzik8IuixElug==",
+      "dependencies": [
+        {
+          "id": "Microsoft.Agents.AI.Abstractions",
+          "version": "1.25.0"
+        },
+        {
+          "id": "Microsoft.Extensions.AI",
+          "version": "10.10.0"
+        },
+        {
+          "id": "Microsoft.Extensions.AI.Evaluation",
+          "version": "10.10.0"
+        },
+        {
+          "id": "Microsoft.Extensions.Compliance.Abstractions",
+          "version": "10.10.0"
+        },
+        {
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "id": "Microsoft.Extensions.FileSystemGlobbing",
+          "version": "10.0.12"
+        },
+        {
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "id": "Microsoft.Extensions.VectorData.Abstractions",
+          "version": "10.10.0"
+        },
+        {
+          "id": "Microsoft.ML.Tokenizers",
+          "version": "2.0.0"
+        },
+        {
+          "id": "Microsoft.Extensions.AI.Abstractions",
+          "version": "10.10.1"
+        }
+      ]
+    },
+    {
+      "id": "Microsoft.Agents.AI.Abstractions",
+      "version": "1.25.0",
+      "size": 672081,
+      "sha512Base64": "AovO9V/f2u/PvusbMWCh4s1hcFcxkDtOpBYJB6Cz3Us1hU9MOqGz4Rxvf4imcd466timWmWGVKn8TxGI8VjnEQ==",
+      "dependencies": [
+        {
+          "id": "Microsoft.Extensions.AI.Abstractions",
+          "version": "10.10.1"
+        }
+      ]
+    },
+    {
+      "id": "Microsoft.Agents.AI.Workflows",
+      "version": "1.25.0",
+      "size": 2138665,
+      "sha512Base64": "2xDVU0N1YXCAaS9oBJyXBqzUs5G6mLW/IhnE2oj9n29MoaCyAoNd2Fd2i/is53Rx/uAMVLYXuL5oJfdTJP8InA==",
+      "dependencies": [
+        {
+          "id": "Microsoft.Agents.AI.Abstractions",
+          "version": "1.25.0"
+        },
+        {
+          "id": "Microsoft.Agents.AI",
+          "version": "1.25.0"
+        },
+        {
+          "id": "OpenTelemetry.Api",
+          "version": "1.18.0"
+        },
+        {
+          "id": "Microsoft.Extensions.AI",
+          "version": "10.10.0"
+        },
+        {
+          "id": "Microsoft.Extensions.AI.Abstractions",
+          "version": "10.10.1"
+        },
+        {
+          "id": "Microsoft.Extensions.AI.Evaluation",
+          "version": "10.10.0"
+        },
+        {
+          "id": "Microsoft.Extensions.Compliance.Abstractions",
+          "version": "10.10.0"
+        },
+        {
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "id": "Microsoft.Extensions.FileSystemGlobbing",
+          "version": "10.0.12"
+        },
+        {
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "id": "Microsoft.Extensions.VectorData.Abstractions",
+          "version": "10.10.0"
+        },
+        {
+          "id": "Microsoft.ML.Tokenizers",
+          "version": "2.0.0"
+        }
+      ]
+    },
+    {
+      "id": "Microsoft.Extensions.AI",
+      "version": "10.10.0",
+      "size": 1193788,
+      "sha512Base64": "ffxfkXJvU90FhBfNiuci1b/pUpBbxiPn0mrkXFO1M1C7QBj27RddAA/F5/cAd1MeUzo7BABfcwR/HBgyMnmaeA==",
+      "dependencies": [
+        {
+          "id": "Microsoft.Extensions.AI.Abstractions",
+          "version": "10.10.0"
+        },
+        {
+          "id": "Microsoft.Extensions.Caching.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "id": "System.Numerics.Tensors",
+          "version": "10.0.12"
+        }
+      ]
+    },
+    {
+      "id": "Microsoft.Extensions.AI.Abstractions",
+      "version": "10.10.0",
+      "size": 1477894,
+      "sha512Base64": "saXTvg2D4mw0iCNfWZBzVBJLQGYhwY2aygv5mT7aljpGux/GSErMUGi6G9vmnU7X0sfI3RbwCXPAEqIBW9ed2w==",
+      "dependencies": []
+    },
+    {
+      "id": "Microsoft.Extensions.AI.Abstractions",
+      "version": "10.10.1",
+      "size": 1477939,
+      "sha512Base64": "vvWinW8uqMgqBrMYNWQlky7joJV1E1ItuM5zm2ctuRLeGXhI/wYAE+5L2Tuz5TmiGTgV7xwFaYQBhisJhHk4ww==",
+      "dependencies": []
+    },
+    {
+      "id": "Microsoft.Extensions.AI.Evaluation",
+      "version": "10.10.0",
+      "size": 250191,
+      "sha512Base64": "3RHW6Fmb45UeF/Vo0chLO5sVVrKQILvoOA7cvJFonfW/F5WjrsL2lwspcuc1tKjHYEERWkYFe3J6FesJbPwYkw==",
+      "dependencies": [
+        {
+          "id": "Microsoft.Extensions.AI.Abstractions",
+          "version": "10.10.0"
+        }
+      ]
+    },
+    {
+      "id": "Microsoft.Extensions.Caching.Abstractions",
+      "version": "10.0.12",
+      "size": 178623,
+      "sha512Base64": "tpbESsKJgXYHIAmM6KWhw8utAY0isZKBjPlAbsaZ1ccV1MhGBE+gX1ZKiwyFAAkLW3Qr50Y8OprmAoRsP3PvbQ==",
+      "dependencies": [
+        {
+          "id": "Microsoft.Extensions.Primitives",
+          "version": "10.0.12"
+        }
+      ]
+    },
+    {
+      "id": "Microsoft.Extensions.Compliance.Abstractions",
+      "version": "10.10.0",
+      "size": 152131,
+      "sha512Base64": "4KKOUTgbwxFmK0F/qUgvrDTaSOBdrtcnxxN7x21EQhzoNPc49lxoJu7IbeIxuwkahbEVk+Qe/xyb6CEMhPjaTQ==",
+      "dependencies": [
+        {
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        },
+        {
+          "id": "Microsoft.Extensions.ObjectPool",
+          "version": "10.0.12"
+        }
+      ]
+    },
+    {
+      "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+      "version": "10.0.12",
+      "size": 283719,
+      "sha512Base64": "kTf3x6w7DOuNj6kS0kL8oEGSSXJnqiPm3G+ddUfVB743EaO5Np8CX3r9pQp0ovBY7/J+KY0JLbwuhC02nFQO1g==",
+      "dependencies": []
+    },
+    {
+      "id": "Microsoft.Extensions.FileSystemGlobbing",
+      "version": "10.0.12",
+      "size": 191110,
+      "sha512Base64": "0/lPXMeZ5I6aoJDngKqwI8Wvy2GEuSHGCuW+FkkezqdJ8P49YwsVmIuZuNYL0coOIKqLNKVQxqWtXUxlDezEmA==",
+      "dependencies": []
+    },
+    {
+      "id": "Microsoft.Extensions.Logging.Abstractions",
+      "version": "10.0.12",
+      "size": 807511,
+      "sha512Base64": "6U8g6MRgR1JhFCr4XnlPJIjgKh9Fhh30wwUnuFvnaeJqpgx6c1J4BA5RnPNaMm7vE1zN/QOR+nTSTNswgInX2w==",
+      "dependencies": [
+        {
+          "id": "Microsoft.Extensions.DependencyInjection.Abstractions",
+          "version": "10.0.12"
+        }
+      ]
+    },
+    {
+      "id": "Microsoft.Extensions.ObjectPool",
+      "version": "10.0.12",
+      "size": 87190,
+      "sha512Base64": "5aEhzu+SVL6hmLBROftyuvD1DYjJsbqT0ChVOy9H/wrwzKXesP2MeSPCXlppvYAnLOr+6Ek398TQm8KgNzlJNQ==",
+      "dependencies": []
+    },
+    {
+      "id": "Microsoft.Extensions.Primitives",
+      "version": "10.0.12",
+      "size": 206850,
+      "sha512Base64": "G4hMZ9wJv75ufnnBkHAHbqiywfMGfeyfz/aiBZoLeg5vVgEqZPPAT/nLFb/Pk+/mGCAIRi3i0WfGHTcVDN9lCg==",
+      "dependencies": []
+    },
+    {
+      "id": "Microsoft.Extensions.VectorData.Abstractions",
+      "version": "10.10.0",
+      "size": 294190,
+      "sha512Base64": "e1S4HlPCbVMClyx5v0yhVzSfkjIR359U3pRZgOT/f8D7DtVyOkHiKe5meJOowDCyI85YLCrNICEUHVsK0FGOwA==",
+      "dependencies": [
+        {
+          "id": "Microsoft.Extensions.AI.Abstractions",
+          "version": "10.10.0"
+        }
+      ]
+    },
+    {
+      "id": "Microsoft.ML.Tokenizers",
+      "version": "2.0.0",
+      "size": 348586,
+      "sha512Base64": "yeYLmXdFz1mcStgBlCpM+N/zrLhWTC2SN3iX/QZUF7GuS29Frqns3FjoOlBUqgJ8zvPOFWEJrm39ETKamkoVXA==",
+      "dependencies": [
+        {
+          "id": "Google.Protobuf",
+          "version": "3.30.2"
+        }
+      ]
+    },
+    {
+      "id": "OpenTelemetry.Api",
+      "version": "1.18.0",
+      "size": 299683,
+      "sha512Base64": "lzdQf+ETtxvytGMS11TFr46eE/mHMATYalag3mZdbK8M46NRAfGPGwK5ndAGyT8cLmAdiBIkgT0pjMdsYscF+w==",
+      "dependencies": []
+    },
+    {
+      "id": "System.Numerics.Tensors",
+      "version": "10.0.12",
+      "size": 767764,
+      "sha512Base64": "X6zENYDmcsi0J3a5KK4WwXBVVIig47QIlUepaMIZJDLi9u7zmcQM8XwiGmflQWwAiO5WHfJLM9S+4zcI1p7jJQ==",
+      "dependencies": []
+    }
+  ]
+}

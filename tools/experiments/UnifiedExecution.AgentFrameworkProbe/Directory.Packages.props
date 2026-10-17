@@ -1,0 +1,13 @@
+<Project>
+  <Import Project="../../../Directory.Packages.props" />
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.25.0" />
+    <!-- Match the Agent Framework package's declared minimums without changing the repository pins. -->
+    <PackageVersion Update="Microsoft.Extensions.AI.Abstractions" Version="10.10.1" />
+    <PackageVersion Update="Microsoft.Extensions.Caching.Abstractions" Version="10.0.12" />
+    <PackageVersion Update="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
+    <PackageVersion Update="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
+    <PackageVersion Update="Microsoft.Extensions.Primitives" Version="10.0.12" />
+    <PackageVersion Include="OpenTelemetry.Api" Version="1.18.0" />
+  </ItemGroup>
+</Project>

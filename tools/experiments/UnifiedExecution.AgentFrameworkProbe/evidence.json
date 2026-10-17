@@ -1,0 +1,70 @@
+{
+  "package": {
+    "id": "Microsoft.Agents.AI.Workflows",
+    "version": "1.25.0",
+    "assemblyVersion": "1.25.0.0",
+    "informationalVersion": "1.25.0\u002B95511ff025d81cc546c44e653d4be65de5bd7f35"
+  },
+  "sourceReference": {
+    "repository": "https://github.com/microsoft/agent-framework",
+    "commit": "44fe223da7ea6853eefb7053e25c2c213a2e5c15",
+    "packageCommitProvenance": "The 1.25.0 nuspec does not declare a source commit; the source SHA is a separate observation."
+  },
+  "probes": [
+    {
+      "name": "concurrent receivers and serialized same receiver",
+      "passed": true,
+      "observed": {
+        "receiverAOrder": [
+          "A1",
+          "A2"
+        ],
+        "receiverAMaxActiveHandlers": 1,
+        "receiverBEnteredBeforeReceiverA1Released": true,
+        "receiverBMessageCount": 1
+      },
+      "assertions": [
+        "B entered while A1 was blocked, proving receiver-level overlap in this execution.",
+        "A1 and A2 were queued to the same receiver; their handler active-count never exceeded one."
+      ]
+    },
+    {
+      "name": "round barrier holds fast branch next step for slow branch",
+      "passed": true,
+      "observed": {
+        "fastMessageSentBeforeSlowRelease": true,
+        "fastNextEnteredAfterSlowCompletion": true,
+        "eventOrder": [
+          "slow.entered",
+          "fast.sent-fast-next",
+          "slow.completed",
+          "fast-next.after-slow"
+        ]
+      }
+    },
+    {
+      "name": "fan-in duplicate buffering survives partial checkpoint and resume",
+      "passed": true,
+      "observed": {
+        "checkpointSessionId": "fan-in-probe",
+        "sourceAMessagesProcessedBeforeCheckpoint": 2,
+        "sourceAMessagesReexecutedAfterResume": false,
+        "joinItemsBeforeResume": 0,
+        "joinItemsAfterResume": [
+          "A:A-1",
+          "A:A-2",
+          "B:B-1"
+        ]
+      },
+      "assertions": [
+        "Source A processed two messages but they did not release the fan-in barrier before checkpoint.",
+        "After checkpoint resume and one source B message, all three arrivals reached the join."
+      ]
+    }
+  ],
+  "limitations": [
+    "This is an in-process execution probe of the released NuGet package, not proof of distributed execution or Elsa hosting semantics.",
+    "No LLM, connector, external network, retry, metrics, cancellation, or crash-after-side-effect behavior is exercised.",
+    "The fan-in checkpoint probe uses the package in-memory checkpoint manager; it does not prove durable storage or cross-process restore."
+  ]
+}
