@@ -16,7 +16,7 @@ describe("workflow Test Run control API", () => {
         { rel: "workflow-test-run-stop", href: "publishing/workflow-test-runs/{testRunId}/stop", templated: true }
       ]
     }] };
-    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? response : { waits: [] });
+    const getJson = vi.fn(async (url: string) => url === "/elsa/api/capabilities" ? response : { waits: [] });
     const postJson = vi.fn(async () => ({ status: "Delivered" }));
     const requestJson = vi.fn(async () => ({ testRunId: "test/run", status: "Stopped" }));
     const context = { baseUrl: "https://studio.example/elsa/api", http: { getJson, postJson, requestJson } } as unknown as StudioEndpointContext;
@@ -30,13 +30,13 @@ describe("workflow Test Run control API", () => {
     });
     await stopWorkflowTestRun(context, "test/run");
 
-    expect(getJson).toHaveBeenLastCalledWith("/publishing/workflow-test-runs/test%2Frun/waits");
-    expect(postJson).toHaveBeenCalledWith("/publishing/workflow-test-runs/test%2Frun/events", {
+    expect(getJson).toHaveBeenLastCalledWith("/elsa/api/publishing/workflow-test-runs/test%2Frun/waits");
+    expect(postJson).toHaveBeenCalledWith("/elsa/api/publishing/workflow-test-runs/test%2Frun/events", {
       waitId: "bookmark/1",
       deliveryId: "a56240db-cc7a-4e1a-a694-3e12335cdb11",
       modeId: "event",
       data: { payload: { id: 7 } }
     });
-    expect(requestJson).toHaveBeenCalledWith("/publishing/workflow-test-runs/test%2Frun/stop", { method: "POST" });
+    expect(requestJson).toHaveBeenCalledWith("/elsa/api/publishing/workflow-test-runs/test%2Frun/stop", { method: "POST" });
   });
 });
