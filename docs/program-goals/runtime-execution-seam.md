@@ -8,6 +8,12 @@ Area: Workflows Runtime architecture / executable artifact seam.
 
 Steward(s): Joey plus the incoming runtime architect.
 
+## Native background activity proof (2026-10-17)
+
+Active production slice: [#2914](https://github.com/elsa-workflows/elsa-foundation/issues/2914), under [adoption feature #2905](https://github.com/elsa-workflows/elsa-foundation/issues/2905) and [unified execution program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892). [Spec 241](../../specs/241-native-durable-offload/spec.md), [plan](../../specs/241-native-durable-offload/plan.md) and [tasks](../../specs/241-native-durable-offload/tasks.md) are the resumable implementation record.
+
+The active goal is one real native Sequence/Flowchart journey with overlapping background leaf work, EF durability, explicit cancellation and one logical parent continuation. The serialized workflow coordinator retains composition decisions; independent workers own only leased work/results. Research proofs are prior design evidence, not production acceptance. All recovery/cancellation and native replay criteria remain required. Status: specification reviewed, implementation plan prepared; no production proof claimed yet.
+
 ## Purpose
 
 Create a focused coordination bucket for the Workflows Runtime execution seam so the incoming architect can start from the current evidence, define the runnable artifact boundary, and move into Speckit without reopening the broader Elsa Foundation Operating Model work.
