@@ -82,6 +82,20 @@ describe("navigation mode stylesheet", () => {
     expect(menubar).toMatch(/overflow:\s*visible;/);
   });
 
+  it("opens More tools out of flow and keeps nested links inside the scrollable dropdown", () => {
+    const overlay = ruleBody(desktopCss, `${topNav} :is(.nav-children, .nav-disclosure-panel)`);
+    const disclosure = ruleBody(desktopCss, `${topNav} .nav-disclosure-panel`);
+
+    expect(ruleBody(desktopCss, `${topNav} .nav-section-more`)).toMatch(/position:\s*relative;/);
+    expect(ruleBody(desktopCss, `${topNav} .nav-disclosure`)).toMatch(/width:\s*auto;/);
+    expect(overlay).toMatch(/position:\s*absolute;/);
+    expect(overlay).toMatch(/top:\s*100%;/);
+    expect(zIndex(overlay)).toBeGreaterThan(0);
+    expect(disclosure).toMatch(/max-height:\s*calc\(100dvh - 110px\);/);
+    expect(disclosure).toMatch(/overflow-y:\s*auto;/);
+    expect(ruleBody(desktopCss, `${topNav} .nav-disclosure-panel .nav-children`)).toMatch(/position:\s*static;/);
+  });
+
   it("keeps narrow-screen navigation in a compact, horizontally reachable strip", () => {
     expect(ruleBody(mobileShellCss, ".sidebar")).toMatch(/flex-direction:\s*row;/);
     expect(ruleBody(mobileShellCss, ".sidebar")).toMatch(/overflow-x:\s*auto;/);
