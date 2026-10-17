@@ -4,12 +4,12 @@
 .DESCRIPTION
     Regression for an exported HttpEndpoint -> SetCorrelationId -> WriteHttpResponse workflow that returned
     202 because ResponseMode was omitted, and could not publish with unused required outputs left unbound.
-    The corrected fixture explicitly selects Sync and captures only ParsedContent. Activity version IDs
+    The fixture leaves ResponseMode unset to prove the synchronous default, and captures only ParsedContent. Activity version IDs
     are resolved from this server's catalog because the export's content-addressed IDs belong to its source
     server. All inputs, output captures, variables and Flowchart connections are otherwise used as exported.
 
     Owns a rebuilt Workbench on a free loopback port with fresh SQLite databases; build Workbench first.
-    Pass the original export as -WorkflowPath to reproduce the failing response assertion.
+    Pass an export as -WorkflowPath to test the same journey with its authored inputs and captures.
 #>
 [CmdletBinding()]
 param(

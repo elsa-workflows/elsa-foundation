@@ -52,7 +52,49 @@ internal sealed class Elsa3ActivityNormalizer(
 
         var pending = new Dictionary<Elsa3Activity, string>(ReferenceEqualityComparer.Instance);
         await VisitAsync(plan, clone.Root, "$.root", null, RootJsonLevel, pending, cancellationToken);
+
+        // Graph conversion needs every child's Elsa 4 outcomes, so it runs once the tree is normalized, innermost
+        // flowchart first (spec 239 R-1). Plans are added in visiting order, so reversing it puts children first.
+        foreach (var flowchart in plan.Nodes.Values.Reverse().Where(Elsa3FlowchartGraphBuilder.IsFlowchart).ToArray())
+            Elsa3FlowchartGraphBuilder.Build(plan, flowchart);
         return plan;
+    }
+
+    /// <summary>
+    /// A FlowFork, FlowJoin or Start: graph conversion consumes it, so its setting (fork branches, join mode) is kept
+    /// before structure members are removed. Outside a flowchart Elsa 3 gives it no behaviour, so it is refused.
+    /// </summary>
+    private static void ReadGraphConstruct(Elsa3RewriteContext context)
+    {
+        if (context.Node.Resolved?.Entry?.Target is not Elsa3ActivityTarget.GraphConstruct construct)
+            return;
+
+        context.Node.GraphConstruct = construct.Kind;
+        var setting = construct.Kind switch
+        {
+            Elsa3GraphConstructKind.Fork => "Branches",
+            Elsa3GraphConstructKind.Join => "Mode",
+            _ => null
+        };
+        if (setting is not null && context.TryGetProperty(setting, out _, out var value))
+            context.Node.GraphConstructSetting = value.Clone();
+
+        if (context.Node.Parent is not { } parent || !Elsa3FlowchartGraphBuilder.IsFlowchart(context.Plan.Find(parent)))
+            context.Error(UnsupportedMode,
+                $"Elsa 3 '{context.Activity.Type}' only has meaning inside a Flowchart, where it becomes connections or the start node.",
+                "Remove it, or move it into a Flowchart, before converting.");
+    }
+
+    /// <summary>Connections belong to a flowchart; anywhere else Elsa 3 never follows them (FR-012).</summary>
+    private static void CheckConnectionsOwner(Elsa3RewriteContext context)
+    {
+        if (context.Activity.Connections is not { Count: > 0 } || Elsa3FlowchartGraphBuilder.IsFlowchart(context.Node))
+            return;
+
+        context.Error(GraphConnectionInvalid,
+            $"Elsa 3 activity '{context.Activity.Type}' has connections, but only a Flowchart routes connections.",
+            "Remove the connections, or make the container a Flowchart, before converting.",
+            "connections");
     }
 
     private async ValueTask VisitAsync(
@@ -87,19 +129,17 @@ internal sealed class Elsa3ActivityNormalizer(
         var descend = true;
         if (resolution.Failure is { } failure)
         {
+            // An unresolved node has no structure to route children into; its own error stands for them.
             Error(plan, nodePlan, failure.Code, failure.Message, failure.Guidance);
-            // A graph-level container still converts its children node by node (FR-006); anything else has no
-            // structure to route them into.
-            descend = failure.Code == GraphConversionPending;
-            if (descend)
-                foreach (var child in node.Activities ?? [])
-                    nodePlan.Slots.Add(new Elsa3SlotChild("activities", null, child));
+            descend = false;
         }
         else
         {
             nodePlan.Resolved = resolution.Activity;
             var context = new Elsa3RewriteContext(plan, nodePlan, resolver, ResolveType, (json, path) => ReadChild(plan, nodePlan, json, path, childPaths));
             ApplyMembers(context);
+            ReadGraphConstruct(context);
+            CheckConnectionsOwner(context);
             ReadContainerVariables(context);
             if (nodePlan.Resolved!.Entry?.Rewrite is { } kind && _rewrites.TryGetValue(kind, out var rewrite))
                 await rewrite.ApplyAsync(context, cancellationToken);
@@ -780,6 +820,7 @@ internal sealed class Elsa3ActivityNormalizer(
         [RequestSizeNoOutcome] = "A request over the size limit has no outcome in Elsa 4; the request is refused.",
         [HttpOutcomeSingle] = "Elsa 4 emits one outcome per response: Done no longer fires together with a status-code outcome, and a non-2xx response goes to Failed.",
         [AuthHeaderUnvalidated] = "Elsa 4 does not validate the Authorization header, as if validation were disabled.",
+        [HttpAuthorizationUseConnection] = "Create an http connection and bind it to Connection. SendHttpRequest.Authorization was removed.",
         [WhilePersistedCondition] = "Elsa 4 re-reads the While condition only from persisted state.",
         [ForZeroStepFaults] = "A For step of 0 faults in Elsa 4.",
         [BreakStopsAtParallel] = "In Elsa 4, Break does not cross a Parallel branch.",

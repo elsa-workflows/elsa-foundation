@@ -7,4 +7,6 @@
 5. Timer/Cron Fire once now; inspect UTC upcoming times and unchanged authored schedule.
 6. Exercise supported active wait, duplicate delivery and Stop/expiry; verify isolation from global events/production.
 7. Register a custom driver/editor in tests and prove it works without modifying built-ins.
-8. Record the verified workflow in Screen Studio with narration and quiet original music after all relevant checks pass.
+8. Recording, rendering and upload remain deferred on Sipke’s 16 October instruction; preserve the existing partial capture.
+
+The default Test Run records and prepared targets are process-local and expire or disappear on restart. A multi-replica authoring host needs request affinity for preparation, HTTP firing and inspection, or host-supplied shared stores for both records and targets. Production workflow bindings are unaffected.

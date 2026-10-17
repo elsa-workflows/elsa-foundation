@@ -1,0 +1,80 @@
+.wf-editable-field {
+  display: grid;
+  min-width: 0;
+  gap: .35rem;
+}
+
+.wf-editable-field > label {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  font-weight: 600;
+}
+
+.wf-editable-combobox {
+  position: relative;
+}
+
+.wf-editable-combobox [role="listbox"] {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + .25rem);
+  right: 0;
+  left: 0;
+  display: grid;
+  max-height: 12rem;
+  margin: 0;
+  padding: .25rem;
+  overflow: auto;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface);
+  box-shadow: var(--studio-shadow-md);
+  list-style: none;
+}
+
+.wf-editable-combobox [role="option"] {
+  display: block;
+  width: 100%;
+  min-height: 2.1rem;
+  border: 0;
+  border-radius: calc(var(--studio-radius) * .75);
+  color: var(--studio-text);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  text-align: left;
+  background: transparent;
+}
+
+.wf-editable-combobox [role="option"][aria-selected="true"],
+.wf-editable-combobox [role="option"]:hover,
+.wf-editable-combobox [role="option"]:focus-visible {
+  background: var(--studio-accent-soft);
+  outline: none;
+}
+
+
+.wf-editable-combobox > input {
+  padding-right: 2.5rem !important;
+}
+
+.wf-editable-combobox > .wf-combobox-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--studio-text-muted);
+}
+
+.wf-combobox-toggle:disabled {
+  cursor: default;
+}

@@ -90,7 +90,7 @@ public sealed class Elsa3NodeConverterTests
     }
 
     [Fact]
-    public async Task The_flowchart_itself_is_deferred_and_refused_as_a_node()
+    public async Task The_flowchart_itself_converts_as_a_node_and_nothing_is_deferred()
     {
         var catalog = RealActivityCatalog.Create();
         await using var provider = ConversionServices.Create(catalog);
@@ -101,11 +101,36 @@ public sealed class Elsa3NodeConverterTests
         var prepared = await converter.PrepareAsync(new Elsa3ConversionRequest(definition));
         var chart = await converter.ConvertNodeAsync(prepared.Value!, definition.Root!);
 
-        var deferred = Assert.Single(prepared.Value!.Deferred);
-        Assert.Equal("chart", deferred.Metadata["ActivityNodeId"]);
-        Assert.False(chart.Succeeded);
-        Assert.Equal(Elsa3ActivityDiagnosticCodes.GraphConversionPending, Assert.Single(chart.Diagnostics).Code);
+        // Graph conversion runs inside preparation (spec 239 R-1, R-9), so a Flowchart is no longer left to the caller.
+        Assert.Empty(prepared.Value!.Deferred);
+        Assert.True(chart.Succeeded, Describe(chart.Diagnostics));
+        Assert.Equal("elsa.flowchart.structure", chart.Value!.Structure!.Kind);
+        Assert.Equal("node", chart.Value.Structure.Payload.GetProperty("startNodeId").GetString());
     }
+
+    [Fact]
+    public async Task A_flowchart_construct_has_no_node_of_its_own()
+    {
+        var catalog = RealActivityCatalog.Create();
+        await using var provider = ConversionServices.Create(catalog);
+        await using var scope = provider.CreateAsyncScope();
+        var converter = scope.ServiceProvider.GetRequiredService<IElsa3NodeConverter>();
+        var start = Activity("start", "Elsa.Start");
+        var write = Activity("write", "Elsa.WriteLine", ("text", Literal("x")));
+        var chart = Flowchart("chart", start, write);
+        chart.Connections = [Connect("start", "Done", "write")];
+        var definition = ConversionServices.Definition(chart);
+
+        var prepared = await converter.PrepareAsync(new Elsa3ConversionRequest(definition));
+        var construct = await converter.ConvertNodeAsync(prepared.Value!, start);
+
+        Assert.True(prepared.Succeeded, Describe(prepared.Diagnostics));
+        Assert.False(construct.Succeeded);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.UnsupportedMode, Assert.Single(construct.Diagnostics).Code);
+    }
+
+    private static Elsa3Connection Connect(string source, string port, string target) =>
+        new() { Source = new Elsa3Endpoint { Activity = source, Port = port }, Target = new Elsa3Endpoint { Activity = target, Port = "In" } };
 
     [Fact]
     public async Task Preparing_fails_when_a_node_other_than_a_graph_node_is_unconvertible()

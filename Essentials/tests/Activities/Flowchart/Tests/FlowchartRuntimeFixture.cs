@@ -106,7 +106,8 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
         IReadOnlyCollection<FlowchartConnection> connections,
         string? startNodeId = null,
         IReadOnlyDictionary<string, FlowchartNodeMetadata>? nodeMetadata = null,
-        IReadOnlyDictionary<string, FlowchartConnectionMetadata>? connectionMetadata = null)
+        IReadOnlyDictionary<string, FlowchartConnectionMetadata>? connectionMetadata = null,
+        bool opensActivityBoundary = false)
     {
         var root = new ExecutableNode(
             executableNodeId: "node-flowchart",
@@ -116,7 +117,9 @@ public sealed class FlowchartRuntimeFixture : IAsyncDisposable
             descriptorType: typeof(FlowchartDescriptor).FullName!,
             descriptorPayload: JsonSerializer.SerializeToElement(new FlowchartDescriptor()),
             inputBindings: new Dictionary<string, RuntimeInputBinding>(),
-            metadata: new Dictionary<string, string>(),
+            metadata: opensActivityBoundary
+                ? new Dictionary<string, string> { ["activity.definitionVersionId"] = "activity-version" }
+                : new Dictionary<string, string>(),
             childSlots:
             [
                 new ExecutableChildSlot(

@@ -657,7 +657,19 @@ test("Activity Definition publication keeps first and later recommendation seman
   await expect(page.getByText("first published version became recommended automatically", { exact: false })).toBeVisible();
   expect(state.recommendedVersionId).toBe("published-version-1");
 
-  await page.getByRole("button", { name: "Reopen preflight" }).click();
+  await expect(page.getByRole("button", { name: "Reopen preflight" })).toBeDisabled();
+  await page.goto("/workflows/activity-definitions?definition=activity-def-browser&section=versions&version=published-version-1");
+  await expect(page.getByRole("button", { name: "Create draft from this exact version" })).toBeEnabled();
+  await page.getByRole("button", { name: "Create draft from this exact version" }).click();
+  const cloneDialog = page.getByRole("dialog", { name: "Create parallel draft" });
+  await expect(cloneDialog.getByRole("radio", { name: /Clone exact version/ })).toBeChecked();
+  await cloneDialog.getByRole("button", { name: "Clone exact version" }).click();
+  await expect(page).toHaveURL(/definition=activity-def-browser.*section=editor.*draft=activity-draft-browser-follow-up/);
+  await expectSavedRevision(page, 1);
+  await openDraftDetails(page);
+  expect(state.draftCreationRequests).toEqual([{ sourceVersionId: "published-version-1", presentationLabel: null }]);
+
+  await page.getByRole("button", { name: "Prepare publication" }).click();
   await expect(page.getByText("Compared with published head")).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Publication version" })).toHaveValue("2.1.0");
   await page.getByRole("textbox", { name: "Publication version" }).fill("3.4.5");
@@ -668,6 +680,7 @@ test("Activity Definition publication keeps first and later recommendation seman
   expect(state.requestedVersions).toEqual(["2.0.0", "3.4.5"]);
   expect(state.publicationWrites).toBe(2);
   expect(state.proposalApplies).toBe(0);
+  expect(state.publishedDraftIds).toEqual(["activity-draft-browser", "activity-draft-browser-follow-up"]);
 });
 
 test("published recommendation is placed exactly, dispatched once, and inspected as one reusable boundary", async ({ page }) => {
@@ -1369,6 +1382,10 @@ async function mockActivityDefinitionAuthoring(page: Page) {
     catalogBlocked: false,
     releaseCatalog: () => {},
     draft: authoringDraft("activity-draft-browser", 1, initialGraphPayload()),
+    draftsById: new Map<string, ReturnType<typeof authoringDraft>>(),
+    draftCreationRequests: [] as unknown[],
+    publishedDraftIds: [] as string[],
+    publishedVersions: [] as Array<{ versionId: string; version: string; draft: ReturnType<typeof authoringDraft> }>,
     headVersionId: null as string | null,
     recommendedVersionId: null as string | null,
     publicationWrites: 0,
@@ -1396,6 +1413,7 @@ async function mockActivityDefinitionAuthoring(page: Page) {
   let releaseCatalog!: () => void;
   const catalogGate = new Promise<void>(resolve => { releaseCatalog = resolve; });
   state.releaseCatalog = releaseCatalog;
+  state.draftsById.set(state.draft.draftId, state.draft);
   await page.route("**/capabilities", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(authoringApiCapabilities()) }));
   await page.route(/\/design\/activities\/definitions\?.*/, route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(pageOf([])) }));
   await page.route("**/design/activities/authoring-capabilities", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(authoringCapabilities()) }));
@@ -1408,6 +1426,7 @@ async function mockActivityDefinitionAuthoring(page: Page) {
     if (route.request().method() !== "POST") return route.fallback();
     const body = route.request().postDataJSON() as { provider: { payload: unknown } };
     state.draft = authoringDraft("activity-draft-browser", 1, body.provider.payload);
+    state.draftsById.set(state.draft.draftId, state.draft);
     await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ definition: authoringDefinition(), draft: authoringDraftSummary(state.draft) }) });
   });
   await page.route("**/design/activities/definitions/activity-def-browser", route => route.fulfill({
@@ -1415,16 +1434,70 @@ async function mockActivityDefinitionAuthoring(page: Page) {
     contentType: "application/json",
     body: JSON.stringify(authoringManagementDefinition(state))
   }));
-  await page.route("**/design/activities/drafts/activity-draft-browser", async route => {
-    if (route.request().method() === "GET") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(state.draft) });
+  await page.route(/\/design\/activities\/definitions\/activity-def-browser\/versions\?.*/, route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(pageOf(state.publishedVersions.map(item => ({
+      version: { versionId: item.versionId, definitionId: "activity-def-browser", version: item.version, lifecycle: "Active", publishedAt: "2026-07-17T11:00:00Z" },
+      providerKey: item.draft.provider.providerKey,
+      providerSchemaVersion: item.draft.provider.schemaVersion,
+      isRecommended: state.recommendedVersionId === item.versionId,
+      actions: [{ action: "clone-draft", allowed: true }]
+    }))))
+  }));
+  await page.route(/\/design\/activities\/versions\/([^/]+)$/, route => {
+    const versionId = new URL(route.request().url()).pathname.split("/").at(-1)!;
+    const item = state.publishedVersions.find(candidate => candidate.versionId === versionId);
+    if (!item) return route.fulfill({ status: 404, contentType: "application/problem+json", body: JSON.stringify({ title: "Version not found" }) });
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        definition: { ...authoringDefinition(), headVersionId: state.headVersionId, recommendedVersionId: state.recommendedVersionId },
+        versionId: item.versionId,
+        version: item.version,
+        sourceDraftId: item.draft.draftId,
+        sourceVersionId: item.draft.sourceVersionId,
+        contract: item.draft.contract,
+        provider: item.draft.provider,
+        lifecycle: "Active",
+        publishedAt: "2026-07-17T11:00:00Z"
+      })
+    });
+  });
+  await page.route("**/design/activities/definitions/activity-def-browser/drafts", async route => {
+    if (route.request().method() !== "POST") return route.fallback();
+    const request = route.request().postDataJSON() as { sourceVersionId: string; presentationLabel: string | null };
+    state.draftCreationRequests.push(request);
+    const source = state.publishedVersions.find(item => item.versionId === request.sourceVersionId);
+    if (!source) return route.fulfill({ status: 404, contentType: "application/problem+json", body: JSON.stringify({ title: "Version not found" }) });
+    const clone = {
+      ...authoringDraft("activity-draft-browser-follow-up", 1, source.draft.provider.payload),
+      sourceVersionId: source.versionId,
+      contract: source.draft.contract,
+      provider: source.draft.provider,
+      layout: source.draft.layout,
+      presentationLabel: request.presentationLabel
+    };
+    state.draft = clone;
+    state.draftsById.set(clone.draftId, clone);
+    return route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(clone) });
+  });
+  await page.route(/\/design\/activities\/drafts\/[^/]+$/, async route => {
+    const draftId = new URL(route.request().url()).pathname.split("/").at(-1)!;
+    const current = state.draft.draftId === draftId ? state.draft : state.draftsById.get(draftId);
+    if (!current) return route.fulfill({ status: 404, contentType: "application/problem+json", body: JSON.stringify({ title: "Draft not found" }) });
+    if (route.request().method() === "GET") return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(current) });
     if (route.request().method() === "PUT") {
-      const body = route.request().postDataJSON() as { expectedRevision: number; provider: { payload: unknown }; layout: unknown[]; contract: unknown; presentationLabel?: string | null };
+      const body = route.request().postDataJSON() as { expectedRevision: number; provider: { payload: unknown }; layout: unknown[]; contract: ReturnType<typeof authoringDraft>["contract"]; presentationLabel?: string | null };
       if (state.conflictNextSave) {
         state.conflictNextSave = false;
-        return route.fulfill({ status: 409, contentType: "application/problem+json", body: JSON.stringify({ title: "Stale revision", status: 409, errorCode: "activity.draft.stale-revision", recovery: { currentRevision: state.draft.revision + 1, relation: "activity-draft-conflict-copies" } }) });
+        return route.fulfill({ status: 409, contentType: "application/problem+json", body: JSON.stringify({ title: "Stale revision", status: 409, errorCode: "activity.draft.stale-revision", recovery: { currentRevision: current.revision + 1, relation: "activity-draft-conflict-copies" } }) });
       }
-      state.draft = { ...state.draft, revision: body.expectedRevision + 1, provider: { ...state.draft.provider, payload: body.provider.payload }, layout: body.layout, contract: body.contract, presentationLabel: body.presentationLabel ?? null, updatedAt: new Date().toISOString() };
-      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(state.draft) });
+      const saved = { ...current, revision: body.expectedRevision + 1, provider: { ...current.provider, payload: body.provider.payload }, layout: body.layout, contract: body.contract, presentationLabel: body.presentationLabel ?? null, updatedAt: new Date().toISOString() };
+      state.draftsById.set(draftId, saved);
+      if (state.draft.draftId === draftId) state.draft = saved;
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(saved) });
     }
     return route.fallback();
   });
@@ -1465,7 +1538,7 @@ async function mockActivityDefinitionAuthoring(page: Page) {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(state.draft) });
   });
   await page.route("**/design/activities/drafts/activity-draft-browser/conflict-copies", async route => {
-    const body = route.request().postDataJSON() as { provider: { payload: unknown }; layout: unknown[]; contract: unknown; presentationLabel?: string | null };
+    const body = route.request().postDataJSON() as { provider: { payload: unknown }; layout: unknown[]; contract: ReturnType<typeof authoringDraft>["contract"]; presentationLabel?: string | null };
     state.conflictCopyPayload = body.provider.payload;
     state.draft = { ...authoringDraft("activity-draft-recovery", 1, body.provider.payload), layout: body.layout, contract: body.contract, presentationLabel: body.presentationLabel ?? null };
     await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify(state.draft) });
@@ -1542,7 +1615,8 @@ async function mockActivityDefinitionAuthoring(page: Page) {
       })
     });
   });
-  await page.route("**/design/activities/drafts/activity-draft-browser/publication-preflight", async route => {
+  await page.route(/\/design\/activities\/drafts\/[^/]+\/publication-preflight$/, async route => {
+    const draftId = new URL(route.request().url()).pathname.split("/").at(-2)!;
     const body = route.request().postDataJSON() as { expectedDraftRevision: number; expectedDefinitionHeadVersionId?: string | null };
     const invalid = state.preflightMode === "invalid";
     await route.fulfill({
@@ -1551,11 +1625,15 @@ async function mockActivityDefinitionAuthoring(page: Page) {
       body: JSON.stringify(browserPublicationPreflight(
         body.expectedDraftRevision,
         state.headVersionId,
-        invalid
+        invalid,
+        draftId
       ))
     });
   });
-  await page.route("**/design/activities/drafts/activity-draft-browser/publish", async route => {
+  await page.route(/\/design\/activities\/drafts\/[^/]+\/publish$/, async route => {
+    const draftId = new URL(route.request().url()).pathname.split("/").at(-2)!;
+    const draft = state.draft.draftId === draftId ? state.draft : state.draftsById.get(draftId);
+    if (!draft) return route.fulfill({ status: 404, contentType: "application/problem+json", body: JSON.stringify({ title: "Draft not found" }) });
     const body = route.request().postDataJSON() as { version: string; idempotencyKey: string; expectedDraftRevision: number; expectedDefinitionHeadVersionId?: string | null; reviewToken: string };
     state.publicationWrites += 1;
     state.requestedVersions.push(body.version);
@@ -1570,13 +1648,19 @@ async function mockActivityDefinitionAuthoring(page: Page) {
     state.appliedPublications += 1;
     state.headVersionId = versionId;
     state.recommendedVersionId ??= versionId;
+    state.publishedVersions.push({ versionId, version: body.version, draft });
+    state.publishedDraftIds.push(draftId);
+    const publishedDraft = { ...draft, status: "published" };
+    state.draftsById.set(draftId, publishedDraft);
+    if (state.draft.draftId === draftId) state.draft = publishedDraft;
     state.latestReceipt = browserPublicationReceipt(
       body.idempotencyKey,
       body.version,
       body.expectedDraftRevision,
       body.expectedDefinitionHeadVersionId ?? null,
       body.reviewToken,
-      versionId
+      versionId,
+      draftId
     );
     if (state.publishMode === "ambiguous") {
       state.publishMode = "normal";
@@ -2248,6 +2332,9 @@ function authoringApiCapabilities() {
     { rel: "activity-definitions", href: "design/activities/definitions" },
     { rel: "activity-authoring-capabilities", href: "design/activities/authoring-capabilities" },
     { rel: "activity-definition", href: "design/activities/definitions/{definitionId}", templated: true },
+    { rel: "activity-definition-drafts", href: "design/activities/definitions/{definitionId}/drafts", templated: true },
+    { rel: "activity-definition-versions", href: "design/activities/definitions/{definitionId}/versions", templated: true },
+    { rel: "activity-definition-version", href: "design/activities/versions/{versionId}", templated: true },
     { rel: "activity-definition-draft", href: "design/activities/drafts/{draftId}", templated: true },
     { rel: "activity-draft-validation", href: "design/activities/drafts/{draftId}/validate", templated: true },
     { rel: "activity-draft-conflict-copies", href: "design/activities/drafts/{draftId}/conflict-copies", templated: true },
@@ -2289,17 +2376,18 @@ function authoringDefinition() {
   return { definitionId: "activity-def-browser", activityTypeKey: "elsa.user.browser-graph-activity.activity-def-browser", tenantId: "browser-tenant", category: "Browser tests", displayName: "Browser graph activity", description: null, contentAuthority: { kind: "design", authorityKey: "elsa.activity-design", sourceId: null }, forkedFrom: null, headVersionId: null, recommendedVersionId: null };
 }
 
-function authoringManagementDefinition(state: { headVersionId: string | null; recommendedVersionId: string | null; appliedPublications: number }) {
+function authoringManagementDefinition(state: { headVersionId: string | null; recommendedVersionId: string | null; appliedPublications: number; draftsById: Map<string, ReturnType<typeof authoringDraft>> }) {
   const definition = { ...authoringDefinition(), headVersionId: state.headVersionId, recommendedVersionId: state.recommendedVersionId };
   const reference = state.headVersionId ? { versionId: state.headVersionId, version: state.appliedPublications === 1 ? "2.0.0" : "3.4.5", lifecycle: "Active", providerKey: "elsa.activity-graph", providerSchemaVersion: "1" } : null;
   const recommendation = state.recommendedVersionId ? { versionId: state.recommendedVersionId, version: "2.0.0", lifecycle: "Active", providerKey: "elsa.activity-graph", providerSchemaVersion: "1" } : null;
-  return { definition, lifecycle: { draftCount: 1, versionCount: state.appliedPublications, head: reference, recommendation }, actions: [], updatedAt: "2026-07-17T10:00:00Z" };
+  const draftCount = [...state.draftsById.values()].filter(draft => draft.status === "active").length;
+  return { definition, lifecycle: { draftCount, versionCount: state.appliedPublications, head: reference, recommendation }, actions: [{ action: "create-draft", allowed: true }], updatedAt: "2026-07-17T10:00:00Z" };
 }
 
-function browserPublicationPreflight(revision: number, headVersionId: string | null, invalid: boolean) {
+function browserPublicationPreflight(revision: number, headVersionId: string | null, invalid: boolean, draftId = "activity-draft-browser") {
   const first = headVersionId === null;
   return {
-    draftId: "activity-draft-browser",
+    draftId,
     draftRevision: revision,
     definitionId: "activity-def-browser",
     definitionHeadVersionId: headVersionId,
@@ -2324,15 +2412,15 @@ function browserPublicationPreflight(revision: number, headVersionId: string | n
     provider: { kind: "Provider", key: "elsa.activity-graph", schemaVersion: "1", status: invalid ? "Unavailable" : "Available", supportedSchemaVersions: invalid ? [] : ["1"] },
     storage: [],
     runtime: [{ kind: "Runtime", key: "elsa.activity-graph", schemaVersion: "1", status: invalid ? "Missing" : "Available", supportedSchemaVersions: invalid ? [] : ["1"] }],
-    diagnostics: invalid ? [{ code: "activity.runtime.consumer-missing", severity: "Error", message: "Required Runtime consumer is missing.", subject: { kind: "ActivityDraft", id: "activity-draft-browser", revision }, location: null, remediation: "Install Runtime support.", metadata: {} }] : []
+    diagnostics: invalid ? [{ code: "activity.runtime.consumer-missing", severity: "Error", message: "Required Runtime consumer is missing.", subject: { kind: "ActivityDraft", id: draftId, revision }, location: null, remediation: "Install Runtime support.", metadata: {} }] : []
   };
 }
 
-function browserPublicationReceipt(idempotencyKey: string, version: string, revision: number, expectedHeadVersionId: string | null, reviewToken: string, versionId: string) {
+function browserPublicationReceipt(idempotencyKey: string, version: string, revision: number, expectedHeadVersionId: string | null, reviewToken: string, versionId: string, draftId = "activity-draft-browser") {
   return {
     idempotencyKey,
     status: "Applied",
-    draftId: "activity-draft-browser",
+    draftId,
     expectedDraftRevision: revision,
     expectedDefinitionHeadVersionId: expectedHeadVersionId,
     reviewToken,
@@ -2340,7 +2428,7 @@ function browserPublicationReceipt(idempotencyKey: string, version: string, revi
     outcome: {
       definitionId: "activity-def-browser",
       definitionVersionId: versionId,
-      draftId: "activity-draft-browser",
+      draftId,
       version,
       templateId: `template-${versionId}`,
       templateHash: `sha256:${versionId}`,

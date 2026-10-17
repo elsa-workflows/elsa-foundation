@@ -102,6 +102,9 @@ public sealed partial class HttpEndpointHostFixture : IAsyncDisposable
 
     public static Task<HttpEndpointHostFixture> StartAsync() => StartAsync(null, null);
 
+    public static Task<HttpEndpointHostFixture> StartAsync(Action<IServiceCollection> configureServices) =>
+        StartAsync(configureServices, null);
+
     /// <summary>
     /// Starts the production HTTP runtime against an isolated EF Core SQLite database and applies the requested
     /// persistence mode after the provider has replaced the in-memory runtime stores.
@@ -627,7 +630,7 @@ public sealed partial class HttpEndpointHostFixture : IAsyncDisposable
         string path,
         string method,
         string resultValueId,
-        TimeSpan requestTimeout,
+        TimeSpan? requestTimeout,
         TimeSpan stallDuration)
     {
         var endpoint = NewHttpEndpointNode($"{artifactId}-endpoint", path, resultValueId, [method],

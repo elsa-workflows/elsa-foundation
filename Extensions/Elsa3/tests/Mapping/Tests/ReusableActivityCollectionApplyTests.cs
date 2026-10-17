@@ -9,6 +9,44 @@ namespace Elsa3.Mapping.Tests;
 public sealed class ReusableActivityCollectionApplyTests
 {
     [Fact]
+    public async Task A_caller_flowchart_routes_by_the_outcomes_of_a_reusable_flowchart()
+    {
+        // Spec 239 R-3, T034: the reusable's graph keeps its connections, and the caller's connections on the reusable's
+        // Elsa 3 outcomes ('succeed', 'fail') arrive under the contract names its graph activity completes with.
+        var sub = Elsa3FlowchartDiagnosticsTests.Flowchart("sub-root",
+            Elsa3BuiltInConversionTests.Activity("decide", "Elsa.FlowDecision", ("condition", Elsa3BuiltInConversionTests.Expression("JavaScript", "true", "Boolean"))),
+            Elsa3BuiltInConversionTests.Activity("ok", "Elsa.Complete", ("outcomes", Elsa3BuiltInConversionTests.Literal("succeed"))),
+            Elsa3BuiltInConversionTests.Activity("ko", "Elsa.Complete", ("outcomes", Elsa3BuiltInConversionTests.Literal("fail"))));
+        sub.Connections = [Elsa3FlowchartDiagnosticsTests.Connect("decide", "True", "ok"), Elsa3FlowchartDiagnosticsTests.Connect("decide", "False", "ko")];
+        var call = ReusableActivityImportFixtures.Reference("call", targetVersionId: "sub-v1");
+        var caller = Elsa3FlowchartDiagnosticsTests.Flowchart("caller-root", call, Elsa3FlowchartDiagnosticsTests.Write("handled"), Elsa3FlowchartDiagnosticsTests.Write("failed"));
+        caller.Connections = [Elsa3FlowchartDiagnosticsTests.Connect(call.Id, "succeed", "handled"), Elsa3FlowchartDiagnosticsTests.Connect(call.Id, "fail", "failed")];
+        var collection = ReusableActivityImportFixtures.Collection(
+            WithOutcomes(ReusableActivityImportFixtures.Workflow("sub", "sub-v1", 1, true, sub), "succeed", "fail"),
+            ReusableActivityImportFixtures.Workflow("caller", "caller-v1", 1, false, caller));
+        var analyzer = new ReusableActivityCollectionAnalyzer();
+        var plan = await analyzer.AnalyzeAsync(collection);
+        var command = new ReusableActivityImportFixtures.CapturingCommand();
+        var importer = new ReusableActivityCollectionImporter(
+            analyzer, ReusableActivityImportFixtures.Materializer(Support.RealActivityCatalog.Create()), command, ReusableActivityImportFixtures.Validator());
+
+        await importer.ApplyAsync(new(plan.PlanId, collection, ["sub-v1", "caller-v1"]));
+
+        var mutation = Assert.IsType<ReusableActivityImportMutation>(command.Mutation);
+        var callerRoot = mutation.Workflows.Single(x => x.Version.Id == "caller-v1").Version.State.RootActivity!;
+        Assert.Equal(["call:succeed->handled", "call:fail->failed"], Support.Elsa3FlowchartFixtures.Connections(callerRoot));
+        var subGraph = Assert.Single(mutation.Activities).Version.DescriptorPayload.GetRawText();
+        Assert.Contains("\"decide\"", subGraph, StringComparison.Ordinal);
+        Assert.Contains("\"True\"", subGraph, StringComparison.Ordinal);
+    }
+
+    private static Elsa3.Models.Elsa3WorkflowDefinition WithOutcomes(Elsa3.Models.Elsa3WorkflowDefinition definition, params string[] outcomes)
+    {
+        definition.Outcomes = outcomes;
+        return definition;
+    }
+
+    [Fact]
     public async Task Apply_materializes_dependency_closed_exact_rewrites_and_original_identity_wrappers()
     {
         var collection = ValidCollection();

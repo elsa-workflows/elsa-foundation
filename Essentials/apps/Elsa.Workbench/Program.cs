@@ -51,6 +51,10 @@ using Elsa.Modularity.EntityFramework.Extensions;
 using Elsa.Modularity.Nuplane.Extensions;
 using Elsa.Modularity.Nuplane.Services;
 using Elsa.Primitives.Hosting;
+using Elsa.Connections.Api.Features;
+using Elsa.Connections.Design.Features;
+using Elsa.Connections.Features;
+using Elsa.Connections.Workflows.Features;
 using Elsa.Secrets.Attention;
 using Elsa.Serialization.Newtonsoft;
 using Elsa.Serialization.SystemText;
@@ -382,6 +386,10 @@ builder.Services.AddCShellsAspNetCore(shells =>
             typeof(ModularityApiFeature).Assembly,
             typeof(ModularityAttentionFeature).Assembly,
             typeof(SecretsAttentionFeature).Assembly,
+            typeof(ConnectionsFeature).Assembly,
+            typeof(ConnectionsApiFeature).Assembly,
+            typeof(ConnectionsDesignFeature).Assembly,
+            typeof(ConnectionsWorkflowsFeature).Assembly,
             typeof(WorkflowsRuntimeAttentionFeature).Assembly,
             typeof(StructuredLogsFeature).Assembly,
             typeof(OpenTelemetryFeature).Assembly,

@@ -158,6 +158,11 @@
 		<ProjectReference Include="..\..\src\Secrets\Core\Elsa.Secrets.Core.csproj" />
 		<ProjectReference Include="..\..\src\Secrets\Elsa.Secrets\Elsa.Secrets.csproj" />
 		<ProjectReference Include="..\..\src\Secrets\Workflows\Elsa.Secrets.Workflows.csproj" />
+		<ProjectReference Include="..\..\src\Connections\Core\Elsa.Connections.Core.csproj" />
+		<ProjectReference Include="..\..\src\Connections\Elsa.Connections\Elsa.Connections.csproj" />
+		<ProjectReference Include="..\..\src\Connections\Api\Elsa.Connections.Api.csproj" />
+		<ProjectReference Include="..\..\src\Connections\Design\Elsa.Connections.Design.csproj" />
+		<ProjectReference Include="..\..\src\Connections\Workflows\Elsa.Connections.Workflows.csproj" />
 		<ProjectReference Include="..\..\src\Tasks\Core\Elsa.Tasks.Core.csproj" />
 		<ProjectReference Include="..\..\src\Tasks\Schedules\Elsa.Tasks.Schedules.csproj" />
 		<ProjectReference Include="..\..\src\Tasks\Elsa.Tasks\Elsa.Tasks.csproj" />

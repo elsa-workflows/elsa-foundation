@@ -1,7 +1,9 @@
 # Connections and Secrets: conceptual model
 
-**Status:** Proposed. Decisions D1-D10 below were made in review on 2026-09-30; the rest of the document is still a proposal. Nothing is built.
+**Status:** Phase 1 core shipped in `elsa-foundation` (issue #2729): provider-neutral connections, the `http` type (api-key, basic, bearer), `SendHttpRequest.Connection` replacing `Authorization`, publish gate, API, picker, and a Studio Connections page. Persistence is in-memory only in this slice — restarting the host drops connection definitions while owned secrets remain in the encrypted store, and published workflows that reference them fault until the connections are recreated. A durable `ConnectionRepository` on the Secrets provider matrix and a workflow Connections panel are deferred (follow #2729). OAuth as a scheme remains phase 2; the callback route is reserved. Decisions D1–D10 were made in review on 2026-09-30. Phase 0 (Secrets + the interim `SendHttpRequest.Authorization` input) shipped earlier.
 **Date:** 2026-09-30
+
+Elsa 4 is unreleased, so stored drafts that still bind `SendHttpRequest.Authorization` lose that input with no shim (D1). Imported Elsa 3 workflows map `Authorization` as removed and warn to create an http connection and bind `Connection`.
 **Scope:** `elsa-foundation` (backend, SDK) and `elsa-foundation-studio` (designer UI)
 **Follow-ups if accepted:** one ADR (next free number is 0072, but 0001/0002/0003/0050/0062 have been reused, so check for collisions), glossary entries in `docs/glossary/elsa.md` and Studio `CONTEXT.md`, then Speckit specs per phase.
 
@@ -324,7 +326,7 @@ The original eleven questions are resolved as D1-D10 above, with one exception (
 | Phase | Unit | Notes |
 |---|---|---|
 | 0 | Wire `Secret` expression evaluation; add `Sensitive` flag to `[ActivityInput]` and definition guard; add `isSensitive` to Studio SDK descriptor; canary test v1; interim credential input `Authorization` on `SendHttpRequest` (D1, amended 2026-10-01) | No new concepts. Closes today's real leak risk. |
-| 1 | Connections core: types, repository, manager, resolver, `SensitiveValue`, `[ActivityConnection]`, publish gate, permissions; `http` type (api-key, basic, bearer); migrate `SendHttpRequest`, replacing and removing its phase 0 `Authorization` input | Studio: Connections page, picker, workflow Connections panel. |
+| 1 | Connections core: types, in-memory repository, manager, resolver, `SensitiveValue`, `[ActivityConnection]`, publish gate, permissions; `http` type (api-key, basic, bearer); migrate `SendHttpRequest`, replacing and removing its phase 0 `Authorization` input | Studio: Connections page and picker shipped. durable `ConnectionRepository` and workflow Connections panel deferred (follow #2729). |
 | 2 | OAuth: authorization-code with PKCE, client credentials, Grant secret type, single-flight refresh, revocation, Attention integration, `FakeOAuthProvider` | Needs answers to questions 2 and 3. |
 | 3 | External stores: KeyVault first, then AWS SM, Vault; store contract suite | Independent of phase 2. |
 | 4 | First real connectors (Google Drive, OneDrive), migrate Anthropic and Copilot options to connection types | Proves the SDK ergonomics on real providers. |

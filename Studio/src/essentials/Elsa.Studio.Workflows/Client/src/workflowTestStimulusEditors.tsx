@@ -116,7 +116,7 @@ async function sendHttpRequest({ backend, action, data }: Parameters<NonNullable
   if (!relativeUrl || !relativeUrl.startsWith("/") || relativeUrl.startsWith("//")) {
     throw new Error("The prepared HTTP action did not contain a safe server-relative URL.");
   }
-  if (!backend.http.request) throw new Error("This Studio host does not expose the authenticated HTTP transport.");
+  if (!backend.http.requestResponse) throw new Error("This Studio host does not expose the authenticated HTTP transport.");
   const base = new URL(backend.baseUrl || window.location.href, window.location.href);
   const url = new URL(relativeUrl, base.origin);
   if (url.origin !== base.origin) throw new Error("The prepared HTTP action must stay on the Studio API host.");
@@ -140,11 +140,12 @@ async function sendHttpRequest({ backend, action, data }: Parameters<NonNullable
     : 30000;
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await backend.http.request(url.href, {
+    const response = await backend.http.requestResponse(url.href, {
       method,
       headers,
       ...(textBody !== undefined && !["GET", "HEAD"].includes(method) ? { body: textBody } : {}),
-      signal: controller.signal
+      signal: controller.signal,
+      retryOnUnauthorized: false
     });
     const responseText = await response.text();
     return {

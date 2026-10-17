@@ -31,4 +31,18 @@ namespace Elsa.Workflows.Design.Validations.Core.Models;
 /// extend by prefixing with their domain (e.g. <c>Http/AuthPolicyUnknown</c>).
 /// </para>
 /// </remarks>
-public sealed record ValidationError(string Path, string Type, string Message);
+public sealed record ValidationError(string Path, string Type, string Message)
+{
+    /// <summary>
+    /// <see cref="ValidationSeverities.Error"/> blocks publish. <see cref="ValidationSeverities.Warning"/>
+    /// is reported on the validations surface and does not block.
+    /// </summary>
+    public string Severity { get; init; } = ValidationSeverities.Error;
+}
+
+/// <summary>Severity values for <see cref="ValidationError.Severity"/>.</summary>
+public static class ValidationSeverities
+{
+    public const string Error = "Error";
+    public const string Warning = "Warning";
+}

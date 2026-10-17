@@ -106,6 +106,13 @@ internal sealed class Elsa3DefinitionConverter(
             if (diagnostics.Any(diagnostic => diagnostic.IsError))
                 return ValueTask.FromResult(Elsa3MigrationResult<ActivityNode>.Failure(diagnostics));
 
+            // A FlowFork, FlowJoin or Start became connections or the start node of its flowchart; it has no node.
+            if (nodePlan.GraphConstruct is not null)
+                return ValueTask.FromResult(Elsa3MigrationResult<ActivityNode>.Failure(
+                    Elsa3ConversionDiagnostics.Error(plan, nodePlan, Elsa3ActivityDiagnosticCodes.UnsupportedMode,
+                        $"Elsa 3 '{prepared.Type}' becomes connections or the start node of its flowchart, so it has no Elsa 4 node of its own.",
+                        "Convert the enclosing flowchart instead.")));
+
             var mapped = activityMapper.Map(plan, prepared);
             return ValueTask.FromResult(mapped is null
                 ? Elsa3MigrationResult<ActivityNode>.Failure(MappingFailed(context.Request, new InvalidOperationException($"Node '{nodeId}' produced no Elsa 4 activity.")))
@@ -129,7 +136,10 @@ internal sealed class Elsa3DefinitionConverter(
         return (plan, boundaryOutcomes);
     }
 
-    /// <summary>A graph-level node left to graph conversion (#2705); it does not stop lowering of the rest.</summary>
+    /// <summary>
+    /// A graph-level node left to a later conversion stage; it does not stop lowering of the rest. No built-in entry
+    /// raises it since graph conversion (spec 239) runs in the normalizer.
+    /// </summary>
     private static bool IsDeferred(Elsa3MigrationDiagnostic diagnostic) =>
         StringComparer.Ordinal.Equals(diagnostic.Code, Elsa3ActivityDiagnosticCodes.GraphConversionPending);
 

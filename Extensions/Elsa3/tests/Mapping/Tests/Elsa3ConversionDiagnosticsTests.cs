@@ -26,10 +26,10 @@ public sealed class Elsa3ConversionDiagnosticsTests
         { "unmapped", Elsa3ActivityDiagnosticCodes.UnmappedType },
         { "unknown-member", Elsa3ActivityDiagnosticCodes.UnknownMember },
         { "semantics-changed", Elsa3ActivityDiagnosticCodes.MemberSemanticsChanged },
-        { "graph:FlowFork", Elsa3ActivityDiagnosticCodes.GraphConversionPending },
-        { "graph:FlowJoin", Elsa3ActivityDiagnosticCodes.GraphConversionPending },
-        { "graph:Flowchart", Elsa3ActivityDiagnosticCodes.GraphConversionPending },
-        { "graph:Start", Elsa3ActivityDiagnosticCodes.GraphConversionPending },
+        // Flowchart constructs mean nothing outside a Flowchart (spec 239 R-2); a Flowchart itself now converts.
+        { "graph:FlowFork", Elsa3ActivityDiagnosticCodes.UnsupportedMode },
+        { "graph:FlowJoin", Elsa3ActivityDiagnosticCodes.UnsupportedMode },
+        { "graph:Start", Elsa3ActivityDiagnosticCodes.UnsupportedMode },
         { "version-unavailable", Elsa3ActivityDiagnosticCodes.VersionUnavailable },
         { "structure-unreadable", Elsa3ActivityDiagnosticCodes.StructureUnreadable },
         { "removed-input-bound", Elsa3ActivityDiagnosticCodes.RemovedInputBound },
@@ -48,6 +48,7 @@ public sealed class Elsa3ConversionDiagnosticsTests
         Elsa3ActivityDiagnosticCodes.RequestSizeNoOutcome,
         Elsa3ActivityDiagnosticCodes.HttpOutcomeSingle,
         Elsa3ActivityDiagnosticCodes.AuthHeaderUnvalidated,
+        Elsa3ActivityDiagnosticCodes.HttpAuthorizationUseConnection,
         Elsa3ActivityDiagnosticCodes.WhilePersistedCondition,
         Elsa3ActivityDiagnosticCodes.ForZeroStepFaults,
         Elsa3ActivityDiagnosticCodes.BreakStopsAtParallel,
@@ -230,6 +231,8 @@ public sealed class Elsa3ConversionDiagnosticsTests
                 return Sequence("root", Activity("node", "Elsa.FlowSendHttpRequest", ("url", Literal("https://example.org")), ("disableAuthorizationHeaderValidation", Literal("true", "Boolean"))));
             case Elsa3ActivityDiagnosticCodes.AuthHeaderUnvalidated:
                 return Sequence("root", Activity("node", "Elsa.FlowSendHttpRequest", ("url", Literal("https://example.org"))));
+            case Elsa3ActivityDiagnosticCodes.HttpAuthorizationUseConnection:
+                return Sequence("root", Activity("node", "Elsa.SendHttpRequest", ("url", Literal("https://example.org")), ("authorization", Literal("Bearer x"))));
             case Elsa3ActivityDiagnosticCodes.WhilePersistedCondition:
                 return Sequence("root", Activity("node", "Elsa.While", ("condition", Literal("false", "Boolean"))));
             case Elsa3ActivityDiagnosticCodes.ForZeroStepFaults:

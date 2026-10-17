@@ -1,5 +1,7 @@
 # Tasks: HTTP Endpoint Full Parity — Sub-unit E (synchronous responses)
 
+
+Current HTTP usability changes, including additive 202 diagnostics and the Sync host deadline, are tracked in [spec 240](../240-http-usability/spec.md). The completion notes below record the original parity deliveries.
 **Input**: Design documents from `/specs/089-http-endpoint-parity/` (plan.md §E milestone row, research.md D4/D4a, contracts/internal-seams.md §E, spec.md User Story 5 / FR-018..FR-022)
 
 **Status note**: Sub-units A (PR #578), B (PR #585), C (PR #589) merged; **D on PR #604 awaiting merge** — this pass covers **sub-unit E only**, branch `089e-sync-responses` STACKED on `089d-midflow-endpoint` (rebase onto main when #604 lands; GitHub retargets the PR). E is the FINAL unit of spec 089 — its merge completes the program.

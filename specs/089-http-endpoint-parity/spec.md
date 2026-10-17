@@ -25,7 +25,7 @@ A workflow author publishes a workflow starting with an HTTP Endpoint trigger. A
 
 **Acceptance Scenarios**:
 
-1. **Given** a published workflow triggered at path `orders/webhook`, **When** a client POSTs a JSON body to that path under the endpoints base path, **Then** the response is `202 Accepted` with the started execution id and the workflow observes the live body, headers, and query values.
+1. **Given** a published workflow triggered at path `orders/webhook`, **When** a client POSTs a JSON body to that path under the endpoints base path, **Then** the response is `202 Accepted` with the started execution id and the `response` diagnostic object, and the workflow observes the live body, headers, and query values.
 2. **Given** the same request, **When** the workflow's trigger activity produces its result, **Then** the result reflects the live request (not the authored route projection).
 3. **Given** a request to a path with no published trigger, **When** it arrives under the base path, **Then** the response is `404 Not Found`.
 
@@ -83,18 +83,18 @@ A workflow starts (by any trigger), performs work, then suspends at a mid-flow H
 
 ### User Story 5 - Synchronous response in the same request (Priority: P5) — sub-unit E
 
-An author sets an endpoint's response mode to synchronous. A client calls the endpoint and receives, in the same HTTP exchange, the status/headers/body produced by the workflow's Write HTTP Response activity. If the workflow suspends at a durable boundary before responding, the caller receives `202 Accepted` instead. Endpoints in async mode keep today's immediate-202 behavior.
+An author sets an endpoint's response mode to synchronous. A client calls the endpoint and receives, in the same HTTP exchange, the status/headers/body produced by the workflow's Write HTTP Response activity. If the workflow suspends at a durable boundary before responding, the caller receives `202 Accepted` instead. Endpoints in async mode return 202 on acceptance; their authored dispatch timeout can still return 408.
 
 **Why this priority**: This is the headline elsa-core parity item, but it depends on A (input), and benefits from B/C (routing identity, faults/timeouts); it lands last by design.
 
-**Independent Test**: Sync-mode endpoint whose workflow writes a response → caller receives it in-request; workflow that suspends first → caller receives 202; async-mode endpoint → 202 always.
+**Independent Test**: Sync-mode endpoint whose workflow writes a response → caller receives it in-request; workflow that suspends first → caller receives 202; async-mode endpoint → 202 on acceptance when dispatch completes within its authored timeout.
 
 **Acceptance Scenarios**:
 
 1. **Given** a sync-mode endpoint whose workflow executes Write HTTP Response, **When** a client calls it, **Then** the same HTTP exchange returns the workflow-authored status, headers, and body, and the durable response artifact is also recorded.
-2. **Given** a sync-mode endpoint whose workflow suspends before responding, **When** a client calls it, **Then** the client receives `202 Accepted` with the execution id (degrade path).
-3. **Given** a sync-mode endpoint with a request timeout, **When** the workflow exceeds it, **Then** the caller receives `408` and the instance continues per normal runtime semantics.
-4. **Given** an async-mode endpoint, **When** called, **Then** behavior is identical to today's 202 baseline.
+2. **Given** a sync-mode endpoint whose workflow suspends before responding, **When** a client calls it, **Then** the client receives `202 Accepted` with the execution id and `response.mode = "sync"`, `response.reason = "workflow-response-not-produced"` (degrade path).
+3. **Given** a sync-mode endpoint with a request timeout, **When** cooperative request work observes the deadline before a response starts, **Then** the caller receives `408` and the instance retains its last committed state per normal runtime semantics.
+4. **Given** an async-mode endpoint, **When** called, **Then** it keeps today's immediate-202 acceptance behavior and returns the documented response diagnostics.
 5. **Given** a suspended mid-flow endpoint in sync mode, **When** the resuming request arrives, **Then** the resuming caller can receive the workflow's subsequent Write HTTP Response in that same exchange (fresh ambient context on resume).
 
 ### Edge Cases
@@ -105,6 +105,7 @@ An author sets an endpoint's response mode to synchronous. A client calls the en
 - Write HTTP Response executes with no live HTTP context (async mode, resumed later, or non-HTTP start): the durable artifact is still recorded; no fault is raised for the missing context (decided: softer than elsa-core's fault — see Assumptions).
 - Two concurrent requests resume the same single suspended bookmark: exactly one resume wins (existing bookmark-consumption semantics); the loser gets the no-match outcome.
 - Body read must respect the size limit during streaming, not only Content-Length declarations.
+- Sync handling uses the server-wide `SyncRequestTimeout` (default 30 seconds), selected after the route and endpoint settings are resolved. A positive endpoint `RequestTimeout` may shorten but cannot extend it. The deadline covers authorization, body reading, inline dispatch, and response delivery. Cancellation is cooperative; work that ignores its cancellation token cannot be forcibly stopped. Async keeps its existing authored timeout for dispatch only and does not inherit the Sync deadline.
 
 ## Requirements *(mandatory)*
 
@@ -131,7 +132,7 @@ An author sets an endpoint's response mode to synchronous. A client calls the en
 - **FR-011**: The middleware MUST parse the request body by content type through the prioritized content-parser set and deliver the parsed value to the activity's ParsedContent output; unrecognized content types fall back to the raw body string.
 - **FR-012**: Endpoints marked Authorize MUST be enforced through the endpoint authorization handler seam before any dispatch; failures return `401`. Policy names, when present, are evaluated by the handler.
 - **FR-013**: Endpoint faults MUST map to HTTP status codes through the endpoint fault handler seam: execution timeout → `408`, bad-request classification → `400`, other faults → `500`.
-- **FR-014**: Per-endpoint request timeout MUST bound synchronous processing; per-endpoint request size limit MUST be enforced during body reading (not only via declared Content-Length).
+- **FR-014**: The server-wide `SyncRequestTimeout` MUST bound Sync request processing after endpoint settings are selected, including authorization, body reading, inline dispatch, and response delivery. A positive per-endpoint `RequestTimeout` MAY shorten this deadline but MUST NOT extend it. Cooperative timeout cancellation maps to `408 Request Timeout` before a response starts. Async mode MUST retain its existing authored dispatch timeout behavior. The per-endpoint request size limit MUST be enforced during body reading, not only via declared Content-Length.
 
 **Sub-unit D — mid-workflow endpoint**
 
@@ -141,7 +142,7 @@ An author sets an endpoint's response mode to synchronous. A client calls the en
 
 **Sub-unit E — synchronous response**
 
-- **FR-018**: Endpoints MUST support a per-endpoint response mode (Sync | Async). Async preserves the current immediate-202 contract exactly.
+- **FR-018**: Endpoints MUST support a per-endpoint response mode (Sync | Async). Async preserves immediate-202 acceptance behavior and includes the additive `response` diagnostics described in the HTTP endpoint surface contract.
 - **FR-019**: In sync mode, the middleware MUST dispatch with request-affine ambient services (per spec 069) so the run drains inline on the caller's flow; the caller receives the workflow-authored response produced by Write HTTP Response within the same HTTP exchange.
 - **FR-020**: Write HTTP Response MUST write the live response (status, headers, body via the content-factory set) when a live HTTP context is exposed by ambient request services, and MUST always record the durable response artifact regardless.
 - **FR-021**: Ambient request services MUST never enter durable command envelopes or any persisted state (spec 069 FR-001 invariant re-asserted here).
@@ -160,7 +161,7 @@ An author sets an endpoint's response mode to synchronous. A client calls the en
 
 - **SC-001**: A developer can go from `git clone` to a working HTTP-triggered workflow (publish → curl → observe live payload in workflow state) using only shell configuration — zero host-code edits.
 - **SC-002**: An endpoint declared with a route template and restricted methods matches exactly its (template, method) set: 100% of non-matching methods/paths return 404 in the acceptance suite.
-- **SC-003**: A sync-mode endpoint returns the workflow-authored response in the same HTTP exchange for workflows that respond without suspending; degrade cases (suspend-first, distributed) return 202 — no request ever hangs past its configured timeout.
+- **SC-003**: A sync-mode endpoint returns the workflow-authored response in the same HTTP exchange for workflows that respond without suspending; degrade cases (suspend-first, distributed) return 202. When work observes the host or shorter endpoint deadline before the response starts, the caller receives 408; cancellation remains cooperative.
 - **SC-004**: All five sub-units land as independent PRs, each passing the full test-project QA gate and architecture guard without changes to the others' scope.
 - **SC-005**: Behavior parity checklist against elsa-core's module (trigger start, method/template routing, parsed content, authorize/policy, fault mapping, timeout/size limits, mid-flow resume, sync response, 202 mode) is fully green, with the two documented exceptions (multipart upload validation descoped; missing-HTTP-context is artifact-only instead of a fault).
 

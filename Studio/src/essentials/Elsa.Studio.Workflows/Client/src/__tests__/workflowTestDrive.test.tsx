@@ -191,12 +191,12 @@ describe("workflow Test Run setup", () => {
   });
 
   it("sends only a same-origin root-relative HTTP action and records the real response", async () => {
-    const request = vi.fn(async () => new Response("created body", {
+    const requestResponse = vi.fn(async () => new Response("created body", {
       status: 202,
       statusText: "Accepted",
       headers: { "x-request-id": "response-123" }
     }));
-    const backend = { baseUrl: "https://studio.example/elsa/api", http: { request } } as unknown as StudioEndpointContext;
+    const backend = { baseUrl: "https://studio.example/elsa/api", http: { requestResponse } } as unknown as StudioEndpointContext;
     const execute = httpWorkflowTestStimulusEditor.executeAction!;
     const result = await execute({
       backend,
@@ -207,11 +207,12 @@ describe("workflow Test Run setup", () => {
       editorDraft: "{}"
     });
 
-    expect(request).toHaveBeenCalledTimes(1);
-    const [url, init] = request.mock.calls[0] as unknown as [string, RequestInit];
+    expect(requestResponse).toHaveBeenCalledTimes(1);
+    const [url, init] = requestResponse.mock.calls[0] as unknown as [string, RequestInit & { retryOnUnauthorized?: boolean }];
     expect(url).toBe("https://studio.example/elsa/workflows/test-runs/run-1/http/orders/42?tag=one&tag=two");
     expect(init.method).toBe("POST");
     expect(init.body).toBe("private request body");
+    expect(init.retryOnUnauthorized).toBe(false);
     expect(new Headers(init.headers).get("x-client")).toBe("studio");
     expect(result).toMatchObject({ kind: "http-exchange", status: 202, statusText: "Accepted", body: "created body" });
     expect(JSON.stringify(result)).not.toContain("private request body");
@@ -224,9 +225,9 @@ describe("workflow Test Run setup", () => {
       data: {},
       editorDraft: "{}"
     })).rejects.toThrow("safe server-relative URL");
-    expect(request).toHaveBeenCalledTimes(1);
+    expect(requestResponse).toHaveBeenCalledTimes(1);
 
-    request.mockRejectedValueOnce(new Error("Authorization: Bearer secret-token"));
+    requestResponse.mockRejectedValueOnce(new Error("Authorization: Bearer secret-token"));
     const failedExchange = await execute({
       backend,
       option: customOption,

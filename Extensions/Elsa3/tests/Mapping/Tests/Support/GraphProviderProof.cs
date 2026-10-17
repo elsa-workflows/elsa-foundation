@@ -3,6 +3,7 @@ using Elsa.Activities.Design.Core.Models;
 using Elsa.Activities.Design.Core.Services;
 using Elsa.Activities.Graph.Design.Services;
 using Elsa.Activities.ControlFlow;
+using Elsa.Activities.Flowchart;
 using Elsa.Activities.Sequence;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Contracts;
@@ -31,6 +32,7 @@ internal static class GraphProviderProof
         services.AddSingleton<IActivityDefinitionLookup>(catalog);
         new ActivitiesSequenceFeature().ConfigureServices(services);
         new ActivitiesControlFlowFeature().ConfigureServices(services);
+        new ActivitiesFlowchartFeature().ConfigureServices(services);
         await using var provider = services.BuildServiceProvider();
 
         var graphProvider = new GraphActivityProvider(

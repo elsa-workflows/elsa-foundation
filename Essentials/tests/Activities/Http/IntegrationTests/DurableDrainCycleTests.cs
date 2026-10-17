@@ -1,4 +1,5 @@
 using System.Net;
+using Elsa.Activities.Http.Options;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -43,7 +44,12 @@ public sealed class DurableDrainCycleTests
 
     private static async Task<HttpEndpointHostFixture> StartDurableHostAsync()
     {
-        var fixture = await HttpEndpointHostFixture.StartDurableSqliteAsync(PersistenceMode.Durable, maxActivitiesPerCommit: 50);
+        // This tests drain-cycle progress through 200 activities, not the default HTTP deadline. Match
+        // the client's existing 100-second bound rather than introducing a stricter server deadline.
+        var fixture = await HttpEndpointHostFixture.StartDurableSqliteAsync(
+            PersistenceMode.Durable,
+            maxActivitiesPerCommit: 50,
+            services => services.Configure<HttpEndpointOptions>(options => options.SyncRequestTimeout = TimeSpan.FromSeconds(100)));
         Assert.Equal(
             WorkflowDrainOrchestratorOptions.DefaultMaxCyclesWithoutProgress,
             fixture.Services.GetRequiredService<WorkflowDrainOrchestratorOptions>().MaxCyclesWithoutProgress);

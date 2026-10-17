@@ -129,6 +129,51 @@ internal sealed class HttpTestRunIngressMiddleware(
         }
 
         var authoredOptions = HttpEndpointStimulusOptions.FromMetadata(target.Binding.Metadata);
+        var clientAborted = context.RequestAborted;
+        var requestTimeout = authoredOptions.RequestTimeout is { } authoredTimeout && authoredTimeout > TimeSpan.Zero
+            ? authoredTimeout
+            : (TimeSpan?)null;
+        var sync = authoredOptions.ResponseMode == ResponseMode.Sync;
+        if (sync)
+            requestTimeout = requestTimeout is { } shorter && shorter < _endpointOptions.SyncRequestTimeout
+                ? shorter
+                : _endpointOptions.SyncRequestTimeout;
+
+        using var timeoutSource = requestTimeout is not null
+            ? CancellationTokenSource.CreateLinkedTokenSource(clientAborted)
+            : null;
+        if (sync && timeoutSource is not null)
+        {
+            timeoutSource.CancelAfter(requestTimeout!.Value);
+            context.RequestAborted = timeoutSource.Token;
+        }
+
+        try
+        {
+            await HandleTargetAsync(context, testRunId, endpointPath, target, authoredOptions, timeoutSource);
+        }
+        catch (OperationCanceledException) when (!clientAborted.IsCancellationRequested && timeoutSource?.IsCancellationRequested == true)
+        {
+            context.RequestAborted = clientAborted;
+            if (context.Response.HasStarted)
+                context.Abort();
+            else
+                context.Response.StatusCode = StatusCodes.Status408RequestTimeout;
+        }
+        finally
+        {
+            context.RequestAborted = clientAborted;
+        }
+    }
+
+    private async Task HandleTargetAsync(
+        HttpContext context,
+        string testRunId,
+        string endpointPath,
+        TestRunTarget target,
+        HttpEndpointStimulusOptions authoredOptions,
+        CancellationTokenSource? timeoutSource)
+    {
         if (authoredOptions.Authorize && !await AuthorizeEndpointAsync(context, authoredOptions.Policy))
             return;
 
@@ -170,10 +215,8 @@ internal sealed class HttpTestRunIngressMiddleware(
         }
 
         var stimulusInput = JsonSerializer.SerializeToElement(requestModel);
-        using var timeoutSource = authoredOptions.RequestTimeout is { } timeout && timeout > TimeSpan.Zero
-            ? CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted)
-            : null;
-        timeoutSource?.CancelAfter(authoredOptions.RequestTimeout!.Value);
+        if (authoredOptions.ResponseMode != ResponseMode.Sync)
+            timeoutSource?.CancelAfter(authoredOptions.RequestTimeout!.Value);
         var cancellationToken = timeoutSource?.Token ?? context.RequestAborted;
 
         TestRunTargetDispatchResult dispatchResult;
@@ -184,11 +227,6 @@ internal sealed class HttpTestRunIngressMiddleware(
                 stimulusInput,
                 new WorkflowExecutionCommandDispatchOptions(context.RequestServices),
                 cancellationToken);
-        }
-        catch (OperationCanceledException) when (timeoutSource?.IsCancellationRequested == true && !context.RequestAborted.IsCancellationRequested)
-        {
-            context.Response.StatusCode = StatusCodes.Status408RequestTimeout;
-            return;
         }
         catch (KeyNotFoundException)
         {

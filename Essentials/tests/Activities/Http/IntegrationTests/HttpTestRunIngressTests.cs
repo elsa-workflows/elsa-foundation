@@ -185,6 +185,25 @@ public sealed class HttpTestRunIngressTests
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SynchronousHostDeadline_CancelsBodyReadingAndDispatch(bool blockBody)
+    {
+        await using var fixture = await IngressFixture.StartAsync(
+            responseMode: ResponseMode.Sync,
+            syncRequestTimeout: TimeSpan.FromMilliseconds(500),
+            blockBody: blockBody,
+            blockDispatch: !blockBody);
+
+        using var ceiling = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var response = await fixture.Client.SendAsync(
+            Request(HttpMethod.Post, "/workflows/test-runs/run-1/http/orders/42"), ceiling.Token);
+
+        Assert.Equal(HttpStatusCode.RequestTimeout, response.StatusCode);
+        Assert.Equal(blockBody ? 0 : 1, fixture.Dispatcher.CallCount);
+    }
+
     private static HttpRequestMessage Request(HttpMethod method, string path, string? body = null)
     {
         var request = new HttpRequestMessage(method, path);
@@ -219,11 +238,15 @@ public sealed class HttpTestRunIngressTests
             bool stopped = false,
             bool closedScope = false,
             string? pathBase = null,
-            bool useRequestHandlerAuthentication = false)
+            bool useRequestHandlerAuthentication = false,
+            ResponseMode responseMode = ResponseMode.Async,
+            TimeSpan? syncRequestTimeout = null,
+            bool blockBody = false,
+            bool blockDispatch = false)
         {
             var targets = new TargetStore();
             var scopes = new ScopeStore();
-            var target = Target("run-1", authorizeEndpoint, expired);
+            var target = Target("run-1", authorizeEndpoint, expired, responseMode);
             if (stopped)
                 target = target.WithStopped();
             targets.Add(target);
@@ -237,7 +260,7 @@ public sealed class HttpTestRunIngressTests
                     closeReason: WorkflowTestScopeCloseReason.ExplicitTeardown)
                 : new WorkflowTestScopeRecord(target.Scope, WorkflowTestScopeState.Open, target.CreatedAt);
             scopes.Add(scopeRecord);
-            var dispatcher = new CapturingDispatcher(targets);
+            var dispatcher = new CapturingDispatcher(targets) { BlockUntilCancelled = blockDispatch };
             var permissions = new TestPermissionAuthorizationService(allowManagement);
             var endpointAuthorization = new TestEndpointAuthorization(allowEndpoint);
             var server = new TestServer(new WebHostBuilder()
@@ -263,7 +286,11 @@ public sealed class HttpTestRunIngressTests
                     services.AddSingleton<IWorkflowExecutionPartitionAccessor>(new PartitionAccessor("test-partition"));
                     services.AddSingleton(TimeProvider.System);
                     services.AddSingleton<IOptions<HttpEndpointOptions>>(
-                        Microsoft.Extensions.Options.Options.Create(new HttpEndpointOptions { MaxRequestBodyBytes = 5 }));
+                        Microsoft.Extensions.Options.Options.Create(new HttpEndpointOptions
+                        {
+                            MaxRequestBodyBytes = 5,
+                            SyncRequestTimeout = syncRequestTimeout ?? TimeSpan.FromSeconds(30)
+                        }));
                     services.AddScoped<HttpTestRunIngressMiddleware>();
                 })
                 .Configure(app =>
@@ -272,6 +299,12 @@ public sealed class HttpTestRunIngressTests
                         app.UsePathBase(pathBase);
                     if (useRequestHandlerAuthentication)
                         app.UseAuthentication();
+                    if (blockBody)
+                        app.Use(async (context, next) =>
+                        {
+                            context.Request.Body = new CancellationWaitStream();
+                            await next(context);
+                        });
                     app.UseMiddleware<HttpTestRunIngressMiddleware>();
                     app.Run(context =>
                     {
@@ -283,7 +316,7 @@ public sealed class HttpTestRunIngressTests
         }
     }
 
-    private static TestRunTarget Target(string id, bool authorizeEndpoint, bool expired = false)
+    private static TestRunTarget Target(string id, bool authorizeEndpoint, bool expired = false, ResponseMode responseMode = ResponseMode.Async)
     {
         const string artifactId = "artifact-1";
         const string method = "post";
@@ -299,7 +332,8 @@ public sealed class HttpTestRunIngressTests
         var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             [HttpEndpointRouting.TemplateMetadataKey] = template,
-            [HttpEndpointRouting.MethodMetadataKey] = method
+            [HttpEndpointRouting.MethodMetadataKey] = method,
+            [HttpEndpointRouting.ResponseModeMetadataKey] = responseMode.ToString()
         };
         if (authorizeEndpoint)
         {
@@ -315,6 +349,25 @@ public sealed class HttpTestRunIngressTests
         return new TestRunTarget(id, "Elsa.HttpEndpoint", "Elsa.HttpEndpoint", "http-request", identity, "source-1", binding, scope,
             "test-run", $"execution-{id}", $"idem-{id}", new Dictionary<string, JsonElement>(),
             new Dictionary<string, object?>(), null, createdAt);
+    }
+
+    private sealed class CancellationWaitStream : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() => throw new NotSupportedException();
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return 0;
+        }
     }
 
     private sealed class TargetStore : ITestRunTargetStore
@@ -355,6 +408,7 @@ public sealed class HttpTestRunIngressTests
     private sealed class CapturingDispatcher(TargetStore targets) : ITestRunTargetDispatcher
     {
         public int CallCount { get; private set; }
+        public bool BlockUntilCancelled { get; init; }
         public string? TestRunId { get; private set; }
         public JsonElement? Stimulus { get; private set; }
         public IServiceProvider? AmbientServices { get; private set; }
@@ -372,6 +426,8 @@ public sealed class HttpTestRunIngressTests
             TestRunId = testRunId;
             Stimulus = stimulusInput?.Clone();
             AmbientServices = dispatchOptions?.AmbientServices;
+            if (BlockUntilCancelled)
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             var target = (await targets.FindAsync(testRunId, cancellationToken))!;
             var now = DateTimeOffset.UtcNow;
             var commandDispatch = new WorkflowExecutionCommandDispatchResult("envelope-1", target.WorkflowExecutionId,

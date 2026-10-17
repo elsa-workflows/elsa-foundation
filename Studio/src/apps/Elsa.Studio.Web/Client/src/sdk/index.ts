@@ -130,6 +130,8 @@ export const studioBackendManagementRegistryPath = "/_elsa/studio/backend-manage
  */
 export interface StudioRequestInit extends RequestInit {
   timeoutMs?: number;
+  /** Disables the authenticated transport's automatic 401 refresh retry for endpoint-defined responses. */
+  retryOnUnauthorized?: boolean;
 }
 
 /**
@@ -145,11 +147,11 @@ export interface StudioJsonResponse<T> {
 
 export interface StudioHttpClient {
   /**
-   * Sends a request through the configured transport and returns the untouched response. Unlike the JSON
-   * verbs, this preserves non-2xx responses and leaves body parsing to the caller. Optional for existing
-   * host implementations that expose only JSON operations.
+   * Sends a request through the configured backend transport and returns the untouched response. Optional so
+   * existing module-owned and test clients remain compatible; callers that need status, headers, or a non-JSON
+   * body should check for its presence rather than falling back to global fetch.
    */
-  request?(url: string, init?: StudioRequestInit): Promise<Response>;
+  requestResponse?(url: string, init?: StudioRequestInit): Promise<Response>;
   requestJson<T>(url: string, init?: StudioRequestInit): Promise<T>;
   getJson<T>(url: string, init?: StudioRequestInit): Promise<T>;
   postJson<T>(url: string, body: unknown, init?: StudioRequestInit): Promise<T>;
@@ -629,6 +631,8 @@ export interface StudioActivityInputDescriptor extends StudioActivityPropertyDes
   isSensitive?: boolean | null;
   /** Activity-declared: accepts only a Secret Reference. Implies isSensitive. Absent on older backends. */
   isCredential?: boolean | null;
+  /** Activity-declared: the required connection type. Absent on older backends. */
+  connectionType?: string | null;
 }
 
 export function readActivityInputOptionsProvider(input: StudioActivityInputDescriptor): StudioActivityInputOptionsProviderDescriptor | null {
@@ -643,6 +647,8 @@ export function readActivityInputOptionsProvider(input: StudioActivityInputDescr
 }
 
 export interface StudioActivityOutputDescriptor extends StudioActivityPropertyDescriptor {
+  /** Stable identity used to correlate output captures with the activity's published contract. */
+  referenceKey?: string | null;
 }
 
 export interface StudioActivityPortDescriptor {
@@ -2200,7 +2206,7 @@ export function createHttpClient(baseUrl: string, defaultHeadersOrOptions?: Head
   const send = <T>(url: string, init?: StudioRequestInit) => requestJson<T>(baseUrl, url, init, options);
 
   return {
-    async request(url: string, init?: StudioRequestInit) {
+    async requestResponse(url: string, init?: StudioRequestInit) {
       const { response } = await sendRequest(baseUrl, url, withDefaultHeaders(defaultHeaders, init), options);
       return response;
     },

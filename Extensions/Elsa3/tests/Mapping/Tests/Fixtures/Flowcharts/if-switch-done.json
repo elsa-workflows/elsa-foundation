@@ -1,0 +1,304 @@
+{
+  "id": "fixture-v1",
+  "definitionId": "fixture",
+  "name": "fixture",
+  "description": "Test-owned flowchart shape.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false
+  },
+  "root": {
+    "id": "root",
+    "nodeId": "root",
+    "name": "root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "size": {
+          "width": 100,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "first",
+        "nodeId": "first",
+        "name": "first",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "first"
+          }
+        }
+      },
+      {
+        "id": "check",
+        "nodeId": "check",
+        "name": "check",
+        "type": "Elsa.If",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "condition": {
+          "typeName": "Boolean",
+          "expression": {
+            "type": "JavaScript",
+            "value": "true"
+          }
+        },
+        "then": {
+          "id": "then-branch",
+          "nodeId": "then-branch",
+          "name": "then-branch",
+          "type": "Elsa.WriteLine",
+          "version": 1,
+          "customProperties": {
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+          },
+          "metadata": {
+            "designer": {
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "size": {
+                "width": 100,
+                "height": 50
+              }
+            }
+          },
+          "text": {
+            "typeName": "String",
+            "expression": {
+              "type": "Literal",
+              "value": "then-branch"
+            }
+          }
+        },
+        "else": {
+          "id": "else-branch",
+          "nodeId": "else-branch",
+          "name": "else-branch",
+          "type": "Elsa.WriteLine",
+          "version": 1,
+          "customProperties": {
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+          },
+          "metadata": {
+            "designer": {
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "size": {
+                "width": 100,
+                "height": 50
+              }
+            }
+          },
+          "text": {
+            "typeName": "String",
+            "expression": {
+              "type": "Literal",
+              "value": "else-branch"
+            }
+          }
+        }
+      },
+      {
+        "id": "route",
+        "nodeId": "route",
+        "name": "route",
+        "type": "Elsa.Switch",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "cases": [
+          {
+            "label": "a",
+            "condition": {
+              "typeName": "Boolean",
+              "expression": {
+                "type": "JavaScript",
+                "value": "true"
+              }
+            },
+            "activity": {
+              "id": "case-a",
+              "nodeId": "case-a",
+              "name": "case-a",
+              "type": "Elsa.WriteLine",
+              "version": 1,
+              "customProperties": {
+                "canStartWorkflow": false,
+                "runAsynchronously": false
+              },
+              "metadata": {
+                "designer": {
+                  "position": {
+                    "x": 0,
+                    "y": 0
+                  },
+                  "size": {
+                    "width": 100,
+                    "height": 50
+                  }
+                }
+              },
+              "text": {
+                "typeName": "String",
+                "expression": {
+                  "type": "Literal",
+                  "value": "case-a"
+                }
+              }
+            }
+          }
+        ],
+        "mode": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "MatchFirst"
+          }
+        }
+      },
+      {
+        "id": "last",
+        "nodeId": "last",
+        "name": "last",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "last"
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "first",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "check",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "check",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "route",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "route",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "last",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ],
+    "variables": []
+  }
+}

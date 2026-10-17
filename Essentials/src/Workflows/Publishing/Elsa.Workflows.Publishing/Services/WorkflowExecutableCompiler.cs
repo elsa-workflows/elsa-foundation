@@ -318,24 +318,7 @@ public sealed class WorkflowExecutableCompiler(
         compiler.EnsureSecretBindingsAdmissible(activity.NodeId, boundaryDescriptor, inputStates.Select(x => x.State));
         var result = new Dictionary<string, RuntimeInputBinding>(StringComparer.OrdinalIgnoreCase);
         foreach (var (input, inputState) in inputStates)
-        {
-            var definition = new InputDefinition(
-                input.ReferenceKey,
-                input.Name,
-                input.Type,
-                input.StorageDriverKey,
-                input.DisplayName ?? input.Name,
-                input.Category,
-                input.IsNullable,
-                Description: input.Description,
-                Order: input.Order,
-                UiHint: input.UiHint,
-                UISpecifications: input.UiSpecifications,
-                IsRequired: input.IsRequired,
-                DefaultValue: input.Default?.Value,
-                DefaultSyntax: input.Default?.Syntax);
-            result[input.ReferenceKey] = compiler.Compile(activity.NodeId, definition, inputState);
-        }
+            result[input.ReferenceKey] = compiler.CompilePublishedBoundaryInput(activity.NodeId, input, inputState);
         return result;
     }
 

@@ -88,9 +88,11 @@ public sealed class Elsa3ActivityToState
 
 /// <summary>
 /// The exact reusable activity version a reference node is rewritten to, with the inputs that version declares (their
-/// reference keys are what the node's bindings are stored under) and its output names.
+/// reference keys are what the node's bindings are stored under), its output names and the outcome names it completes
+/// with, which a caller's flowchart connections route by (null: only <c>Done</c>).
 /// </summary>
 public sealed record Elsa3ActivityExactReplacement(
     string ActivityVersionId,
     IReadOnlyCollection<InputDefinition> Inputs,
-    IReadOnlySet<string> OutputNames);
+    IReadOnlySet<string> OutputNames,
+    IReadOnlySet<string>? OutcomeNames = null);

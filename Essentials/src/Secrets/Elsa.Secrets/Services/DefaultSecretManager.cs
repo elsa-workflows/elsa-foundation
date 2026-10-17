@@ -1,7 +1,9 @@
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 using Elsa.Primitives.Persistence;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Events;
+using Elsa.Secrets.Core.Exceptions;
 using Elsa.Secrets.Core.Models;
 
 namespace Elsa.Secrets.Services;
@@ -16,6 +18,8 @@ public sealed class DefaultSecretManager(
     SecretModelMapper mapper,
     TimeProvider timeProvider) : ISecretManager
 {
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> RotateGates = new(StringComparer.Ordinal);
+
     public ValueTask<SecretMetadata> CreateAsync(string tenantId, CreateSecretRequest request, CancellationToken cancellationToken = default)
         => AuditFailureAsync(tenantId, "create", request.Name, async () =>
         {
@@ -123,8 +127,18 @@ public sealed class DefaultSecretManager(
     public ValueTask<SecretMetadata> RotateAsync(string tenantId, string name, RotateSecretRequest request, CancellationToken cancellationToken = default)
         => AuditFailureAsync(tenantId, "rotate", name, async () =>
         {
+            ValidateTenantId(tenantId);
+            var normalizedName = nameValidator.Normalize(name);
+            var gate = RotateGates.GetOrAdd($"{tenantId}\u001f{normalizedName}", static _ => new SemaphoreSlim(1, 1));
+            await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
             var loaded = await GetExistingSecretWithRevisionAsync(tenantId, name, cancellationToken);
             var secret = loaded.Secret;
+            var currentVersion = secret.LatestActiveVersion?.Version;
+            if (request.ExpectedVersion is int expected && currentVersion != expected)
+                throw new SecretVersionConflictException(secret.Name, currentVersion);
+
             var store = storeRegistry.Get(secret.StoreName);
             var typeProvider = typeRegistry.Get(secret.TypeName);
             EnsureStoreIsSupported(typeProvider, store.Descriptor.Name);
@@ -150,9 +164,22 @@ public sealed class DefaultSecretManager(
             secret.Status = SecretStatus.Active;
             secret.UpdatedAt = now;
 
-            await SaveExistingSecretAsync(secret, loaded.Revision, cancellationToken);
+            try
+            {
+                await SaveExistingSecretAsync(secret, loaded.Revision, cancellationToken);
+            }
+            catch (InvalidOperationException) when (request.ExpectedVersion is not null)
+            {
+                throw new SecretVersionConflictException(secret.Name, currentVersion);
+            }
+
             await RecordAsync(tenantId, "rotate", secret.Name, "succeeded", null, cancellationToken);
             return mapper.Map(secret);
+            }
+            finally
+            {
+                gate.Release();
+            }
         }, cancellationToken);
 
     public ValueTask<SecretMetadata?> RevokeAsync(string tenantId, string name, CancellationToken cancellationToken = default)
