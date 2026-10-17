@@ -2,7 +2,7 @@ import { useReducer, useMemo } from "react";
 import type { WorkflowDraft } from "../workflowTypes";
 import type { ScopeFrame } from "../workflowAdapter";
 import { removeActivityPresentation } from "../activityPresentation";
-import type { WorkflowTestRunState } from "./editorTypes";
+import type { WorkflowTestRunState, WorkflowTestRunWaitDraftState } from "./editorTypes";
 
 /**
  * Drops the per-node side tables of nodes that just left the document. A draft keeps two of them —
@@ -73,6 +73,8 @@ export type WorkflowDocumentAction =
   // single container child needs multi-frame hops, so there is no single-frame "enter slot" transition.
   | { type: "scopeNavigated"; frames: ScopeFrame[]; selectedNodeId: string | null }
   | { type: "testRunStarted"; testRun: WorkflowTestRunState }
+  | { type: "testRunViewUpdated"; view: WorkflowTestRunState["view"] }
+  | { type: "testRunWaitDraftUpdated"; waitId: string; state: WorkflowTestRunWaitDraftState }
   | { type: "testRunCleared" }
   | { type: "publishedArtifactChanged"; publishedArtifactId: string | null };
 
@@ -103,6 +105,13 @@ export function workflowDocumentReducer(state: WorkflowDocumentState, action: Wo
       return { ...state, frames: action.frames, selectedNodeId: action.selectedNodeId };
     case "testRunStarted":
       return { ...state, testRun: action.testRun };
+    case "testRunViewUpdated":
+      return state.testRun ? { ...state, testRun: { ...state.testRun, view: action.view } } : state;
+    case "testRunWaitDraftUpdated":
+      return state.testRun ? {
+        ...state,
+        testRun: { ...state.testRun, waitDrafts: { ...state.testRun.waitDrafts, [action.waitId]: action.state } }
+      } : state;
     case "testRunCleared":
       return state.testRun === null ? state : { ...state, testRun: null };
     case "publishedArtifactChanged":
@@ -146,6 +155,12 @@ export function useWorkflowDocument() {
     },
     startTestRun(testRun: WorkflowTestRunState) {
       dispatch({ type: "testRunStarted", testRun });
+    },
+    updateTestRunView(view: WorkflowTestRunState["view"]) {
+      dispatch({ type: "testRunViewUpdated", view });
+    },
+    updateTestRunWaitDraft(waitId: string, draftState: WorkflowTestRunWaitDraftState) {
+      dispatch({ type: "testRunWaitDraftUpdated", waitId, state: draftState });
     },
     clearTestRun() {
       dispatch({ type: "testRunCleared" });

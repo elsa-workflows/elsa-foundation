@@ -51,6 +51,29 @@ describe("authenticated HTTP transport", () => {
     expect(new Headers(init.headers).get("Accept")).toBe("application/json");
   });
 
+  it("returns the untouched authenticated response for module-owned protocol actions", async () => {
+    const fetchMock = vi.fn(async () => new Response("accepted by HTTP driver", {
+      status: 202,
+      headers: { "content-type": "text/plain", "x-driver-result": "deferred" }
+    }));
+    const auth = stubAuth("token-1");
+    const client = createAuthenticatedHttpClient("https://foundation.example/", auth, { fetch: fetchMock });
+
+    const response = await client.requestResponse!("/test-runs/run-1/http", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+      retryOnUnauthorized: false
+    });
+
+    expect(response.status).toBe(202);
+    expect(response.headers.get("x-driver-result")).toBe("deferred");
+    await expect(response.text()).resolves.toBe("accepted by HTTP driver");
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe("https://foundation.example/test-runs/run-1/http");
+    expect(new Headers((init as RequestInit).headers).get("Authorization")).toBe("Bearer token-1");
+  });
+
   it("returns the untouched response through the authenticated transport", async () => {
     const fetchMock = vi.fn(async () => new Response("workflow response", {
       status: 202,
@@ -76,7 +99,7 @@ describe("authenticated HTTP transport", () => {
     expect(init.credentials).toBe("include");
   });
 
-  it("preserves a workflow 401 without refreshing and replaying a live request", async () => {
+  it("preserves a Test Drive HTTP 401 without refreshing and replaying a live request", async () => {
     const fetchMock = vi.fn(async () => new Response("workflow says unauthorized", {
       status: 401,
       statusText: "Unauthorized",
@@ -85,9 +108,10 @@ describe("authenticated HTTP transport", () => {
     const auth = stubAuth("token-1");
     const client = createAuthenticatedHttpClient("https://foundation.example/", auth, { fetch: fetchMock });
 
-    const response = await client.requestResponse!("/workflows/http/orders/1", {
+    const response = await client.requestResponse!("/test-runs/run-1/http", {
       method: "POST",
-      body: "{\"orderId\":1}",
+      headers: { "content-type": "application/json" },
+      body: "{}",
       retryOnUnauthorized: false
     });
 
