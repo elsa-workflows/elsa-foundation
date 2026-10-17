@@ -34,6 +34,11 @@ public class ActivitiesRuntimeFeature : IShellFeature
         // activation. The runtime registers the mask's default; the activator and the work handlers consume it.
         RuntimeSecretResolverCompositionValidator.Register(services);
         RuntimeSecretMaskCompositionValidator.Register(services);
+        services.AddOptions<BackgroundActivityWorkerOptions>();
+        services.TryAddScoped<BackgroundActivityCompletionCodec>();
+        services.TryAddScoped<BackgroundActivityCoordinator>();
+        services.TryAddScoped<BackgroundActivityResultApplication>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IRuntimeCheckpointCommitEnricher, BackgroundActivityCheckpointEnricher>());
         services.TryAddScoped<IActivityActivator, ActivityActivator>();
         services.TryAddScoped<IRuntimeActivityInputMaterializer, RuntimeActivityInputMaterializer>();
         services.TryAddSingleton<ActivityCompletionProjector>();
