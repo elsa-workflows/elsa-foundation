@@ -7,7 +7,7 @@ import {
   describeHttpEndpointAcceptedResponse,
   findPublishedHttpEndpoint,
   getWorkflowHttpBasePath,
-  makeInitialHttpTestPath,
+  makeInitialHttpTestEndpointPath,
   publishedHttpEndpointInputsUnavailableMessage,
   readHttpEndpointResponseMetadata,
   resolveHttpTestEndpointPath,
@@ -19,6 +19,14 @@ import {
 afterEach(clearApiCapabilityCache);
 
 describe("published HTTP test request helpers", () => {
+  it.each([
+    ["orders/{id:int:min(1)}", "orders/1"],
+    ["orders/{id:min(1):int}", "orders/1"],
+    ["orders/{id:guid:required}", "orders/00000000-0000-0000-0000-000000000001"]
+  ])("uses the type constraint in %s to choose the editable example", (template, example) => {
+    expect(makeInitialHttpTestEndpointPath(template)).toBe(`/${example}`);
+  });
+
   it("explains when a newly added draft endpoint is absent from the published workflow", () => {
     const executable = executableWithEndpoint({ authoredActivityId: "published-endpoint", inputBindings: [] });
     expect(() => findPublishedHttpEndpoint(executable, "new-draft-endpoint", inputSources([])))
@@ -47,8 +55,7 @@ describe("published HTTP test request helpers", () => {
       supportedMethods: ["GET", "POST"],
       responseMode: "async"
     });
-    expect(makeInitialHttpTestPath(endpoint!.routeTemplate, "/workflows/http")).toBe("/workflows/http/orders/1");
-    expect(makeInitialHttpTestPath(endpoint!.routeTemplate, "/tenant/api/workflows/")).toBe("/tenant/api/workflows/orders/1");
+    expect(makeInitialHttpTestEndpointPath(endpoint!.routeTemplate)).toBe("/orders/1");
   });
 
   it("applies the engine's GET default only when no SupportedMethods input is authored", () => {
@@ -168,8 +175,8 @@ describe("published HTTP test request helpers", () => {
     } as unknown as StudioEndpointContext;
 
     await expect(getWorkflowHttpBasePath(context)).resolves.toBe(expectedPath);
-    const requestPath = makeInitialHttpTestPath("probe", expectedPath);
-    expect(resolveHttpTestRequestPath(context.baseUrl, requestPath, expectedPath)).toBe(`${expectedPath}/probe`);
+    const endpointPath = makeInitialHttpTestEndpointPath("probe");
+    expect(resolveHttpTestEndpointPath(context.baseUrl, endpointPath, expectedPath)).toBe(`${expectedPath}/probe`);
     expect(getJson).toHaveBeenCalledWith("/engine/shell-a/capabilities");
   });
 
