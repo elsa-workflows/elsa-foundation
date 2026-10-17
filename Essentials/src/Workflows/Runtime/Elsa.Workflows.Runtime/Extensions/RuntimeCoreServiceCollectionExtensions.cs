@@ -232,6 +232,7 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<TimeProvider>(),
                 serviceProvider.GetRequiredService<RuntimeExecutionOwnershipOptions>()));
         services.TryAddSingleton<InMemoryRuntimeCheckpointStoreState>();
+        services.TryAddScoped<IBackgroundActivityWorkStore, InMemoryBackgroundActivityWorkStore>();
         services.TryAddSingleton<InMemoryWorkflowTestScopeStore>();
         services.TryAddSingleton<IWorkflowTestScopeStore>(serviceProvider =>
             serviceProvider.GetRequiredService<InMemoryWorkflowTestScopeStore>());

@@ -30,6 +30,9 @@ public static class RuntimeCheckpointFold
         var workflowDispatches = new MergeBuffer<WorkflowDispatchRecord>();
         var workflowDispatchCancellations = new List<WorkflowDispatchCancellationRequest>();
         var activityScopeCleanups = new List<ActivityScopeCleanupRequest>();
+        var backgroundActivityAdmissions = new List<BackgroundActivityWorkRequest>();
+        var backgroundActivityAcceptances = new List<BackgroundActivityWorkAcceptance>();
+        var backgroundActivityCancellations = new List<BackgroundActivityWorkCancellationRequest>();
         var consumedSchedulerWorkItems = new Dictionary<string, ConsumedSchedulerWorkItem>(StringComparer.Ordinal);
         WorkflowAlterationJobTerminalChange? alterationJobTerminalChange = null;
 
@@ -50,6 +53,9 @@ public static class RuntimeCheckpointFold
             workflowDispatches.AddRange(changeSet.WorkflowDispatches);
             workflowDispatchCancellations.AddRange(changeSet.WorkflowDispatchCancellations);
             activityScopeCleanups.AddRange(changeSet.ActivityScopeCleanups);
+            backgroundActivityAdmissions.AddRange(changeSet.BackgroundActivityWork.Admissions);
+            backgroundActivityAcceptances.AddRange(changeSet.BackgroundActivityWork.Acceptances);
+            backgroundActivityCancellations.AddRange(changeSet.BackgroundActivityWork.Cancellations);
             // Union consumed work items across the segment (last writer per work-item id) so no per-hop consumption is
             // lost or duplicated in the fold.
             foreach (var consumed in changeSet.ConsumedSchedulerWorkItems)
@@ -76,7 +82,11 @@ public static class RuntimeCheckpointFold
             activityScopeCleanups: activityScopeCleanups,
             workflowDispatchCancellations: workflowDispatchCancellations,
             consumedSchedulerWorkItems: consumedSchedulerWorkItems.Values.ToArray(),
-            alterationJobTerminalChange: alterationJobTerminalChange);
+            alterationJobTerminalChange: alterationJobTerminalChange,
+            backgroundActivityWork: new BackgroundActivityWorkCheckpointChanges(
+                backgroundActivityAdmissions,
+                backgroundActivityAcceptances,
+                backgroundActivityCancellations));
     }
 
     private sealed class MergeBuffer<TState>

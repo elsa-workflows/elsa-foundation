@@ -185,6 +185,9 @@ public sealed record BackgroundActivityWorkItem(
     string? ReceiptDigest = null,
     string? ResultClaimOwnerId = null,
     long? ResultClaimFence = null,
+    DateTimeOffset? ResultClaimedAt = null,
+    DateTimeOffset? ResultClaimVisibleUntil = null,
+    long? ResultClaimRevision = null,
     DateTimeOffset? AcceptedAt = null,
     DateTimeOffset? CancelledAt = null);
 
@@ -209,9 +212,8 @@ public static class BackgroundActivityWorkReceipt
             request.WorkId,
             request.WorkflowExecutionId,
             request.ActivityExecutionId,
-            request.InvocationId,
-            request.AttemptId,
-            request.AttemptOrdinal,
+            request.Attempt,
+            request.CoordinatorWorkItem,
             request.Executable,
             request.ExecutableNodeId,
             request.ContractFingerprint,
