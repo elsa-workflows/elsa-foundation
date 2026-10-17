@@ -35,6 +35,12 @@ Retries reuse identity. Authorization is checked before receipt lookup. Identica
 
 The current Foundation checkpoint envelope contains workflow/activity/bookmark/incident state explicitly. Extracting a neutral kernel therefore requires deliberate refactoring, not renaming that envelope. The experimental JSON state/plan is evidence of a boundary, not the recommended production serialization or public API.
 
+### A contract limitation exposed by cancellation
+
+The experimental `CompositionPlan` has only `IsComplete`; the store projects Running/Completed, while `CancelWork` terminates an invocation without notifying the semantic model. The rule witness therefore remains Running after its only work item is cancelled. This is explicit evidence that these experiment DTOs are not a complete execution-model contract.
+
+Revise the production candidate to separate common execution lifecycle from model-owned outcome. A model must receive a durable cancellation request, decide which work/subscopes to stop and commit its terminal or compensating state. Work cancellation receipts must be consumable semantic inputs, with a defined race against accepted success. A terminal envelope should carry a stable model outcome and inspection projection; it must not force BPMN business errors, native faults and rule cancellation into the same success flag. Already delivered external effects remain separate. Keep this as a proposed contract requirement until an end-to-end cancellation transition is witnessed; do not infer it from the current work-level test.
+
 ## Native composition and background activities
 
 Keep joins with Flowchart semantics. Sequence should not acquire join concepts because the kernel supports Flowchart. Similarly, a state machine owns its transition rules. The native execution model provides the invocation protocol and hosts components; components supply their control semantics through explicit, testable transitions.
