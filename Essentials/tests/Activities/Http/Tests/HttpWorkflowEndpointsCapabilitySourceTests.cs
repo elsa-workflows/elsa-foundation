@@ -6,6 +6,7 @@ using Elsa.Activities.Http.Options;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace Elsa.Activities.Http.Tests;
@@ -116,9 +117,10 @@ public sealed class HttpWorkflowEndpointsCapabilitySourceTests
         await using var provider = services.BuildServiceProvider();
         var document = await provider.GetRequiredService<IApiCapabilityCatalog>().GetAsync();
 
+        provider.GetRequiredService<ILoggerFactory>().CreateLogger("UnrelatedFeature").LogWarning("Unrelated warning.");
         Assert.Contains(document.Capabilities, capability => capability.Id == "elsa.test.other");
         Assert.DoesNotContain(document.Capabilities, capability => capability.Id == "elsa.http.workflow-endpoints");
-        Assert.Single(logs.Warnings);
+        Assert.Equal(1, logs.WarningCount);
     }
 
     [Theory]
@@ -153,9 +155,12 @@ public sealed class HttpWorkflowEndpointsCapabilitySourceTests
 
     private sealed class CapturingLoggerProvider : ILoggerProvider
     {
-        public List<LogLevel> Warnings { get; } = [];
+        public int WarningCount { get; private set; }
 
-        public ILogger CreateLogger(string categoryName) => new CapturingLogger(this);
+        public ILogger CreateLogger(string categoryName) =>
+            categoryName == "Elsa.Activities.Http.Capabilities.HttpWorkflowEndpointsCapabilitySource"
+                ? new CapturingLogger(this)
+                : NullLogger.Instance;
 
         public void Dispose()
         {
@@ -175,7 +180,7 @@ public sealed class HttpWorkflowEndpointsCapabilitySourceTests
                 Func<TState, Exception?, string> formatter)
             {
                 if (logLevel == LogLevel.Warning)
-                    owner.Warnings.Add(logLevel);
+                    owner.WarningCount++;
             }
         }
     }
