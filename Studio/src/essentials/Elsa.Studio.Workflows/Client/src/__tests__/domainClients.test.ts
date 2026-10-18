@@ -117,6 +117,29 @@ describe("canonical domain clients", () => {
     expect(getJson).toHaveBeenLastCalledWith("/design/workflows/definitions?state=all&searchTerm=Definition");
   });
 
+  it("returns the full unpaged Design response for one-shot name enrichment", async () => {
+    const items = Array.from({ length: 140 }, (_, index) => ({
+      id: `definition-${index + 1}`,
+      name: `Definition ${index + 1}`,
+      createdAt: "2026-07-13T00:00:00Z",
+      lastModifiedAt: "2026-07-13T00:00:00Z",
+      versionCount: 0
+    }));
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : { items });
+
+    const result = await listDefinitions(createContext({ getJson }), {
+      search: "",
+      state: "all",
+      page: 1,
+      pageSize: 100,
+      includeAllWhenUnpaged: true
+    });
+
+    expect(result.definitions).toHaveLength(140);
+    expect(result.definitions[139].id).toBe("definition-140");
+    expect(getJson).toHaveBeenCalledTimes(2);
+  });
+
   it("sends searchTerm so the Design list binder can filter, not the client-only search alias", async () => {
     const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : { items: [] });
 

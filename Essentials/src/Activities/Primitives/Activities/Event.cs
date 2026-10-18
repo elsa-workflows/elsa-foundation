@@ -31,6 +31,7 @@ namespace Elsa.Activities.Primitives.Activities;
 [RefusesSecretBinding(nameof(EventName), SecretBindingRefusalReason.FixedAtPublish)]
 [RefusesSecretBinding(nameof(CorrelationId), SecretBindingRefusalReason.FixedAtPublish)]
 [RefusesSecretBinding(nameof(CanStartWorkflow), SecretBindingRefusalReason.FixedAtPublish)]
+[Activity(Icon = "Bell")]
 [TriggerActivity]
 public sealed class Event : StatefulTriggerActivity<EventResult, EventWaitState, EventReceived>
 {

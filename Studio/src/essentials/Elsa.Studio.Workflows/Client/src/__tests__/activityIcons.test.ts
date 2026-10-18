@@ -33,6 +33,33 @@ describe("resolveActivityIcon", () => {
     expect(toActivityIconAssetUrl("asset:Acme.Slack/icons/slack.svg")).toBe("/_content/Acme.Slack/icons/slack.svg");
   });
 
+  it.each(["GitBranch", "asset:Acme.Slack/icons/slack.svg", "ext:acme-slack"])(
+    "honors module icon %s on a recommended activity with a definition identity",
+    iconName => {
+      expect(resolveActivityIcon(catalog({
+        activityDefinitionId: "acme-slack",
+        icon: "reusable",
+        iconName
+      }))).toBe(iconName);
+    }
+  );
+
+  it.each([
+    ["HttpEndpoint", "HTTP", "http"],
+    ["Event", "Primitives", "event"],
+    ["Timer", "Scheduling", "timer"],
+    ["Cron", "Scheduling", "clock"],
+    ["If", "Control Flow", "branch"],
+    ["ForEach", "Control Flow", "loop"]
+  ])("keeps the semantic icon for recommended %s activities without icon metadata", (type, category, icon) => {
+    expect(resolveActivityIcon(catalog({
+      activityDefinitionId: `definition-${type}`,
+      activityTypeKey: `Elsa.Activities.${type}`,
+      displayName: type,
+      category
+    }))).toBe(icon);
+  });
+
   it("builds an asset: URL from the Studio host base path", () => {
     expect(toActivityIconAssetUrl("asset:Acme.Slack/icons/slack.svg", "https://host.example/elsa/studio/workflows"))
       .toBe("/elsa/_content/Acme.Slack/icons/slack.svg");
@@ -146,10 +173,12 @@ describe("resolveActivityIcon", () => {
     }))).toBe("variable");
   });
 
-  it("keeps reusable activities on the reusable icon", () => {
+  it("uses the reusable fallback when no icon metadata, type or category is known", () => {
     expect(resolveActivityIcon(catalog({
       activityDefinitionId: "invoice",
-      displayName: "Invoice"
+      activityTypeKey: "Acme.Invoice",
+      displayName: "Invoice",
+      category: "Custom"
     }))).toBe("reusable");
   });
 });

@@ -11,6 +11,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 
 namespace Elsa.Activities.Sequence.Activities;
 
+[Activity(Icon = "ListTree")]
 [ActivityStructure("elsa.sequence.structure", "1.0.0", Mode = "sequence", SupportsScopedVariables = true)]
 [ActivityChildSlot("Sequence.Activities", "activities", "Activities", ActivityChildSlotCardinalities.Many)]
 [ActivityOutcome(ActivityOutcomes.Done)]
