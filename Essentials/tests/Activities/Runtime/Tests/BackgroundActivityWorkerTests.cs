@@ -65,6 +65,24 @@ public sealed class BackgroundActivityWorkerTests
     }
 
     [Fact]
+    public async Task Rejects_an_outcome_only_callback_from_background_execution()
+    {
+        var probe = new Probe(_ => ActivityTransition.Complete(ActivityUnit.Value));
+        await using var harness = await Harness.CreateAsync<ActivityUnit>(
+            probe,
+            "{}",
+            activationOverride: () => new OutcomeOnlyProbeActivity(probe));
+
+        await harness.RunAsync();
+
+        Assert.Equal(BackgroundActivityWorkResultKind.Fault, harness.Store.Item!.Result!.Kind);
+        Assert.Equal("BackgroundActivityFaulted", harness.Store.Item.Result.Fault!.Code);
+        Assert.Contains("pinned background-safe leaf contract", harness.Store.Item.Result.Fault.Message, StringComparison.Ordinal);
+        Assert.Equal(0, probe.Executions);
+        Assert.Equal(1, probe.Disposals);
+    }
+
+    [Fact]
     public async Task Records_returned_fault_and_cancel_as_distinct_terminal_results()
     {
         var faultProbe = new Probe(_ => ActivityTransition.Fault<int>(new ActivityFault("business-error", "No")));
@@ -258,6 +276,13 @@ public sealed class BackgroundActivityWorkerTests
 
     [BackgroundExecutionSafe]
     private sealed class AlternateProbeActivity<TResult>(Probe probe) : ProbeActivityCore<TResult>(probe);
+
+    [BackgroundExecutionSafe]
+    private sealed class OutcomeOnlyProbeActivity(Probe probe) : ProbeActivityCore<ActivityUnit>(probe), IRuntimeActivityChildOutcomeHandler
+    {
+        public ValueTask<RuntimeStructuralContinuation> OnChildOutcomeAsync(ActivityChildOutcomeContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+    }
 
     private sealed class Probe(Func<ActivityExecutionContext, ActivityTransition> execute)
     {

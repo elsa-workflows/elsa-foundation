@@ -82,7 +82,7 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
         {
             // Reuse the single per-work-item parse rather than deserializing the payload again.
             var completionPayload = RuntimeCompleteActivityPayloadMemo.Deserialize(workItem);
-            return completionPayload?.CompletionKind != SchedulerCompletionKind.ParentCompletionEvaluation;
+            return completionPayload?.CompletionKind is not (SchedulerCompletionKind.ParentCompletionEvaluation or SchedulerCompletionKind.ParentOutcomeEvaluation);
         }
         catch (Exception exception) when (
             exception is JsonException or NotSupportedException ||
@@ -301,7 +301,17 @@ public sealed class WorkflowCompleteActivitySchedulerWorkHandler : IWorkflowSche
             "outcomeNames" or
             "reason" or
             "completionKind" or
-            "completedChildActivityExecutionId";
+            "completedChildActivityExecutionId" or
+            "parentOutcome" or
+            "version" or
+            "fault" or
+            "incidentId" or
+            "notifications" or
+            "notifyingChildActivityExecutionId" or
+            "notifyingChildExecutableNodeId" or
+            "code" or
+            "notifyingChildIterationId" or
+            "message";
 
     private sealed record DownstreamSchedulingResult(
         bool IsTerminal,

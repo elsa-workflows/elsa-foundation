@@ -92,6 +92,7 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
 
         SimpleActivityExecutionContext? context = null;
         RuntimeStructuralContinuation? continuation = null;
+        IReadOnlyList<ActivityChildNotifiedContext> parentOutcomeNotifications = [];
         IReadOnlyCollection<ActivitySubtreeCancellationPlan> subtreeCancellationPlans = [];
         IReadOnlyCollection<RuntimeSchedulerWorkItem> parentNotificationWorkItems = [];
         ActivityExecutionState? callbackBypassParentState = null;
@@ -188,7 +189,7 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
                     cancellationToken);
 
                 // The notification consumer may itself notify ITS parent (bubbling is the consumer's recursion).
-                parentNotificationWorkItems = await ParentNotificationEvaluation.BuildAsync(
+                var parentNotifications = await ParentNotificationEvaluation.BuildAsync(
                     activityExecutionStateStore,
                     TimeProvider,
                     workItem,
@@ -197,6 +198,8 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
                     context.GetParentNotificationRequests(),
                     continuation,
                     cancellationToken);
+                parentNotificationWorkItems = parentNotifications.WorkItems;
+                parentOutcomeNotifications = parentNotifications.FaultOutcomeNotifications;
 
                 if (continuation.IsComplete && parentActivity is IRuntimeActivityCheckpointParticipant checkpointParticipant)
                 {
@@ -268,7 +271,17 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
             var request = NewFaultIncidentRecordRequest(checkpointCommitter, workItem, payload, faultedParentState, exception, "ActivityReturnedFault", valueSnapshots);
             var incidentId = ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, payload.ActivityExecutionId, "ActivityReturnedFault");
             var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(
-                activityExecutionStateStore, TimeProvider, workItem, payload.PinnedExecutable, faultedParentState, incidentId, cancellationToken);
+                activityExecutionStateStore,
+                TimeProvider,
+                workItem,
+                payload.PinnedExecutable,
+                faultedParentState,
+                incidentId,
+                cancellationToken,
+                fault,
+                parentOutcomeNotifications);
+            if (parentOutcomeNotifications.Count > 0 && parentEvaluation is not null)
+                request = ChildFaultParentEvaluation.MarkPendingOutcome(request, parentEvaluation);
             await activityFaultIncidentRecorder.CommitAsync(
                 parentEvaluation is null ? request : request with { PostCommitSchedulerWorkItemsOrNull = [parentEvaluation] },
                 cancellationToken);

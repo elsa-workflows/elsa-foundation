@@ -26,7 +26,8 @@ internal static class BackgroundActivityEligibility
     {
         if (activity.GetType().GetCustomAttribute<BackgroundExecutionSafeAttribute>() is null ||
             activity is IRuntimeStructuralActivity or IRuntimeActivityCheckpointParticipant or IStatefulActivity or
-                IRuntimeActivityChildCompletionHandler or IRuntimeActivityChildFaultHandler or IRuntimeActivityChildNotificationHandler)
+                IRuntimeActivityChildCompletionHandler or IRuntimeActivityChildFaultHandler or IRuntimeActivityChildNotificationHandler or
+                IRuntimeActivityChildOutcomeHandler)
             throw new BackgroundActivityValidationException("VF-BG-001: The activated activity does not implement the pinned background-safe leaf contract.");
     }
 }

@@ -439,7 +439,8 @@ internal static class StructuralParentEvaluationSupport
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
         RuntimeStateChange<WorkflowExecutionState>? workflowVariableWriteBack,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>>? additionalActivityExecutions = null)
     {
         var occurredAt = timeProvider.GetUtcNow();
         var (workItem, activityExecutionId, metadata) = (source.WorkItem, source.Payload.ActivityExecutionId, source.Metadata);
@@ -459,7 +460,12 @@ internal static class StructuralParentEvaluationSupport
                 Name: RuntimeCheckpointNames.ActivityCompleted,
                 WorkflowExecutionId: workItem.WorkflowExecutionId,
                 OccurredAt: occurredAt,
-                ActivityExecutionIds: [activityExecutionId, .. cancellationChanges.CancelledActivityExecutionIds],
+                ActivityExecutionIds:
+                [
+                    activityExecutionId,
+                    .. (additionalActivityExecutions ?? []).Select(change => change.StateId),
+                    .. cancellationChanges.CancelledActivityExecutionIds
+                ],
                 Metadata: metadata),
             StateChanges: new RuntimeCheckpointStateChangeSet(
                 workflowExecution: workflowVariableWriteBack,
@@ -471,6 +477,7 @@ internal static class StructuralParentEvaluationSupport
                         Operation: RuntimeStateChangeOperation.Upsert,
                         State: completedParentState,
                         Metadata: metadata),
+                    .. (additionalActivityExecutions ?? []),
                     .. cancellationChanges.ActivityExecutions
                 ],
                 bookmarks: [],

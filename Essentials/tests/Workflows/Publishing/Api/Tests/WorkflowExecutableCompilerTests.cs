@@ -362,6 +362,17 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task Background_placement_refuses_an_outcome_only_consumer_even_when_marked_safe()
+    {
+        var inline = await CompileBackgroundActivityAsync(typeof(BackgroundSafeOutcomeConsumer), "outcome-consumer", ActivityExecutionPlacement.Inline);
+        Assert.Equal(ActivityExecutionPlacement.Inline, inline.RootActivity.ExecutionPlacement);
+
+        var refusal = await AssertBackgroundRefusedAsync(BackgroundCompiler(
+            typeof(BackgroundSafeOutcomeConsumer), "outcome-consumer", ActivityExecutionPlacement.Background));
+        Assert.Contains("structural activities and nodes with children", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Background_placement_refuses_unmarked_structural_intrinsic_object_and_sensitive_result_nodes()
     {
         var unmarked = await AssertBackgroundRefusedAsync(
@@ -3035,6 +3046,16 @@ public sealed class WorkflowExecutableCompilerTests
     private static ActivityNode ResumeNode(string nodeId) => new(nodeId, "activity-probe", Inputs: [], Outputs: []);
 
     private readonly ActivityDefinitionVersion _resumeProbeActivity = ActivityVersion("activity-probe", typeof(ResumeProbeActivity).FullName!);
+
+    [BackgroundExecutionSafe]
+    private sealed class BackgroundSafeOutcomeConsumer : Activity, IRuntimeActivityChildOutcomeHandler
+    {
+        protected override ValueTask<ActivityTransition<ActivityUnit>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(ActivityTransition<ActivityUnit>.Complete(ActivityUnit.Value));
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildOutcomeAsync(ActivityChildOutcomeContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+    }
 
     [BackgroundExecutionSafe]
     private sealed class BackgroundSafeUnitActivity : Activity

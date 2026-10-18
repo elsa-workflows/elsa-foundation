@@ -42,6 +42,11 @@ public static class RuntimeMetadataKeys
     /// which owns exactly one parent-completion notification, instead of in an append-only parent history.
     /// </summary>
     public const string ParentCompletionProcessedWorkItemId = "runtime.parentCompletionProcessedWorkItemId";
+    /// <summary>
+    /// Combined parent-outcome work item committed with a child fault incident. Incident policy waits until
+    /// the parent evaluation commits its processed marker or the parent can no longer consume the outcome.
+    /// </summary>
+    public const string ParentOutcomeWorkItemId = "runtime.parentOutcomeWorkItemId";
     /// <summary>Highest activity-attempt ordinal allocated before bounded diagnostic-history compaction.</summary>
     public const string ActivityAttemptOrdinalHighWatermark = "runtime.activityAttemptOrdinalHighWatermark";
     public const string BookmarkId = "runtime.bookmarkId";
