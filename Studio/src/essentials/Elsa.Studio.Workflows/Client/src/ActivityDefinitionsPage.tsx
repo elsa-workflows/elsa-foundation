@@ -144,8 +144,7 @@ function ActivityDefinitionCollection({ context, activityEditors, onImport, onPl
   const directFailure = query.error ? classifyActivityDefinitionReadFailure(query.error) : null;
   const failure = privacyFailure ?? directFailure;
   const mustDiscardData = failure === "forbidden" || failure === "unavailable";
-  const hideStaleDesignedData = authority === "Design" && query.isPlaceholderData;
-  const data = mustDiscardData || hideStaleDesignedData ? undefined : query.data;
+  const data = mustDiscardData ? undefined : query.data;
   const defaultDesignedView = authority === "Design" && !searchInput.trim() && !providerInput.trim();
   const filtersActive = Boolean(searchInput.trim() || providerInput.trim() || authority !== "Design");
 

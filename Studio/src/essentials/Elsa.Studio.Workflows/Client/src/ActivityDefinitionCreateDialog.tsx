@@ -213,6 +213,7 @@ export function initializeGraphBoundaryOutcomes(
 ) {
   const outcomes = requiredOutcomes.map(outcome => ({ ...outcome, description: outcome.description ?? null }));
   const sourceOutcomes = getActivityGraphOutcomeMappingOptions(rootActivity, catalogItem, { outcomes }).sourceOutcomes;
+  // Unmatched required outcomes intentionally stay unmapped; never guess a root outcome key.
   const mappings = outcomes.flatMap(outcome => outcome.isEmitted && sourceOutcomes.some(source => source.referenceKey === outcome.referenceKey)
     ? [{ sourceOutcomeReferenceKey: outcome.referenceKey, boundaryOutcomeReferenceKey: outcome.referenceKey }]
     : []);

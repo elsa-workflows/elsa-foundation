@@ -188,6 +188,25 @@ describe("Activity Definitions experience", () => {
     await rendered.unmount();
   });
 
+  it("does not choose the only active draft on a final cursor page", async () => {
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url === "/design/activities/definitions/definition-1") return definition();
+      if (url.includes("/definitions/definition-1/drafts?")) return url.includes("cursor=last-page")
+        ? page([{ ...draft({ draftId: "last-active", presentationLabel: "Final active draft" }), actions: [{ action: "edit-draft", allowed: true }] }])
+        : page([draft({ presentationLabel: "Earlier active draft" })], { hasMore: true, continuation: "last-page", totalCount: 2 });
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = renderPage(getJson, undefined, "/workflows/activity-definitions?definition=definition-1&section=drafts");
+    await waitForText(rendered.container, "Earlier active draft");
+    click(buttonByText(rendered.container, "Next"));
+    await waitForText(rendered.container, "Final active draft");
+    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent === "Edit activity")).toBe(false);
+    click(buttonByText(rendered.container, "Open drafts"));
+    expect(new URLSearchParams(window.location.search).has("draft")).toBe(false);
+    await rendered.unmount();
+  });
+
   it("starts editing the authorized published head when only historical draft records remain", async () => {
     const postJson = vi.fn(async () => draftDetail());
     const rendered = renderOverview({
@@ -668,9 +687,34 @@ describe("Activity Definitions experience", () => {
     change(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Exact provider key']")!, "visual-graph");
     await waitFor(() => expect(getJson.mock.calls.some(([url]) => String(url).includes("search=invoice") && String(url).includes("authority=Design") && String(url).includes("providerKey=visual-graph"))).toBe(true));
 
+    await waitFor(() => expect(buttonByText(rendered.container, "Next").disabled).toBe(false));
     click(buttonByText(rendered.container, "Next"));
     await waitForText(rendered.container, "Second definition");
     expect(getJson.mock.calls.some(([url]) => String(url).includes("limit=25") && String(url).includes("cursor=cursor-2"))).toBe(true);
+    await rendered.unmount();
+  });
+
+  it("retains rows for same-authority searches but hides them when authority changes", async () => {
+    let resolveSearch!: (value: ReturnType<typeof page<ActivityDefinitionManagementView>>) => void;
+    let resolveBuiltIn!: (value: ReturnType<typeof page<ActivityDefinitionManagementView>>) => void;
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url.includes("authority=ProviderSource")) return new Promise<ReturnType<typeof page<ActivityDefinitionManagementView>>>(resolve => { resolveBuiltIn = resolve; });
+      if (url.includes("search=invoice")) return new Promise<ReturnType<typeof page<ActivityDefinitionManagementView>>>(resolve => { resolveSearch = resolve; });
+      return page([definition()]);
+    });
+    const rendered = renderPage(getJson);
+    await waitForText(rendered.container, "Invoice evaluator");
+    change(rendered.container.querySelector<HTMLInputElement>("input[placeholder='Name, type key, or category']")!, "invoice");
+    await waitFor(() => expect(resolveSearch).toBeDefined());
+    expect(rendered.container.textContent).toContain("Invoice evaluator");
+    resolveSearch(page([definition()]));
+    await waitFor(() => expect(rendered.container.querySelector(".ad-skeleton")).toBeNull());
+    click(buttonByText(rendered.container, "Built-in"));
+    await waitFor(() => expect(resolveBuiltIn).toBeDefined());
+    expect(rendered.container.textContent).not.toContain("Invoice evaluator");
+    resolveBuiltIn(page([definition({ displayName: "Built-in activity" })]));
+    await waitForText(rendered.container, "Built-in activity");
     await rendered.unmount();
   });
 

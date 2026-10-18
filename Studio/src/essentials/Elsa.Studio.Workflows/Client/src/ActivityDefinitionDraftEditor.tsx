@@ -106,6 +106,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
   const [publicationPending, setPublicationPending] = useState(false);
   const [migrationOpen, setMigrationOpen] = useState(false);
   const [testRunOpen, setTestRunOpen] = useState(false);
+  const [boundaryMappingsRequested, setBoundaryMappingsRequested] = useState(false);
   const [activeView, setActiveView] = useState<ActivityDefinitionAuthoringView>("designer");
   const [codeBufferState, setCodeBufferState] = useState<ActivityDefinitionDraftCodeBufferState>({
     dirty: false,
@@ -473,6 +474,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
       location.providerKey === draft.provider.providerKey &&
       isBoundaryMappingPointer(location.jsonPointer)
     ) {
+      setBoundaryMappingsRequested(true);
       setActiveView("public-interface");
       await waitForAuthoringView();
       if (request !== diagnosticFocusRequestRef.current) return unsupportedDiagnosticFocus();
@@ -509,6 +511,9 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
     const target = diagnosticReturnRef.current;
     diagnosticReturnRef.current = null;
     setFocusAnnouncement("Returned to the selected diagnostic.");
+    for (let parent = target?.parentElement; parent; parent = parent.parentElement) {
+      if (parent instanceof HTMLDetailsElement) parent.open = true;
+    }
     target?.focus();
   };
 
@@ -665,7 +670,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
       onFocusDiagnostic={focusDiagnostic}
     />
     </details>
-    {PublicInterfaceEditor && (draft.contract.outputs.length > 0 || draft.contract.outcomes.some(outcome => outcome.isEmitted)) ? <section ref={providerPublicInterfaceRef} className="ad-provider-public-interface" aria-label="Provider boundary mappings">
+    {PublicInterfaceEditor && (boundaryMappingsRequested || hasBoundaryMappings(draft.provider.payload) || draft.contract.outputs.length > 0 || draft.contract.outcomes.some(outcome => outcome.isEmitted)) ? <section ref={providerPublicInterfaceRef} className="ad-provider-public-interface" aria-label="Provider boundary mappings">
       <Suspense fallback={<div className="ad-inline-status" role="status">Loading provider boundary mappings…</div>}>
         <PublicInterfaceEditor
           context={context}
@@ -935,4 +940,10 @@ function formatRecoveryPreview(recovery: ActivityDefinitionRecoverySnapshot) {
     },
     layout: recovery.layout
   }, null, 2);
+}
+
+function hasBoundaryMappings(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object") return false;
+  const mappings = payload as { outputMappings?: unknown; outcomeMappings?: unknown };
+  return [mappings.outputMappings, mappings.outcomeMappings].some(value => Array.isArray(value) && value.length > 0);
 }

@@ -155,7 +155,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
     ? detail.lifecycle.recommendation
     : null;
   const canFork = forkAllowed && Boolean(recommendedActiveVersion);
-  const confirmedDrafts = !effectiveDraftPrivacyFailure && !draftsQuery.error && !draftsQuery.isFetching && draftsQuery.data && !draftsQuery.data.hasMore && !draftsQuery.data.continuation
+  const confirmedDrafts = draftRequest.cursor === null && !effectiveDraftPrivacyFailure && !draftsQuery.error && !draftsQuery.isFetching && draftsQuery.data && !draftsQuery.data.hasMore && !draftsQuery.data.continuation
     ? draftsQuery.data.items : null;
   const activeDrafts = confirmedDrafts?.filter(item => isActivityDefinitionEnumValue(item.draft.status, "Active"));
   const editableDraft = activeDrafts?.length === 1 && isActionAllowed(activeDrafts[0].actions, "edit-draft") ? activeDrafts[0] : null;

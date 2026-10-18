@@ -1081,6 +1081,41 @@ describe("Activity Definition authoring", () => {
     await rendered.unmount();
   });
 
+  it.each([true, false])("keeps empty-contract boundary mappings reachable (existing mappings: %s)", async existingMappings => {
+    const draft = fullDraft({ revision: 3 });
+    draft.contract.outputs = [];
+    draft.contract.outcomes = [];
+    draft.provider.payload = { outcomeMappings: existingMappings ? [{ sourceOutcomeReferenceKey: "Done", boundaryOutcomeReferenceKey: "removed" }] : [] };
+    const contribution: StudioActivityDefinitionImplementationEditorContribution = {
+      ...graphContribution(),
+      publicInterfaceComponent: () => <section className="ad-graph-outcome-mappings">Outcome mappings</section>
+    };
+    const rendered = renderPage({
+      path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
+      contributions: [contribution],
+      getJson: async (url: string) => {
+        if (url === "/capabilities") return capabilities();
+        if (url === "/design/activities/drafts/activity-draft-1") return draft;
+        throw new Error(`Unexpected GET ${url}`);
+      },
+      postJson: async () => ({
+        draftId: draft.draftId, revision: draft.revision, isValid: false,
+        validatedAt: "2026-07-17T10:01:00Z",
+        diagnostics: [{ code: "activity.graph.mapping", severity: "Error", message: "Remove the old mapping.",
+          subject: { kind: "ActivityDraft", id: draft.draftId, revision: draft.revision },
+          location: { providerKey: draft.provider.providerKey, jsonPointer: "/outcomeMappings/0" }, metadata: {} }]
+      })
+    });
+    await waitForText(rendered.container, "Saved revision 3");
+    expect(Boolean(rendered.container.querySelector("[aria-label='Provider boundary mappings']"))).toBe(existingMappings);
+    click(buttonByText(rendered.container, "Validate saved revision"));
+    await waitForText(rendered.container, "activity.graph.mapping");
+    click(rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.graph.mapping']")!);
+    await waitFor(() => expect(document.activeElement?.classList.contains("ad-graph-outcome-mappings")).toBe(true));
+    expect(rendered.container.querySelector<HTMLElement>("[aria-label='Public Interface']")?.hidden).toBe(false);
+    await rendered.unmount();
+  });
+
   it("delegates provider locations through focusDiagnosticLocation and restores keyboard context", async () => {
     const focusDiagnosticLocation = vi.fn(({ editorElement }: { editorElement: HTMLElement }) => {
       editorElement.querySelector<HTMLButtonElement>("[data-provider-focus]")?.focus();
