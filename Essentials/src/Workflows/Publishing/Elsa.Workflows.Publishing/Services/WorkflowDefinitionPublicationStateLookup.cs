@@ -11,8 +11,9 @@ namespace Elsa.Workflows.Publishing.Services;
 /// Draft from Published, Retracted, and Retired without Design taking a Publishing reference.
 /// </summary>
 /// <remarks>
-/// Live and empty slots are the authority for Published and Retracted. The active version is taken
-/// from the configured default slot only when its policy is available through a complete batch read.
+/// Live and empty slots are the authority for Published and Retracted. Version selection prefers
+/// the configured active default slot when policy lookup is complete; otherwise all valid active
+/// publications must identify one shared source version.
 /// Retired is journal-only, and only when the record store can answer by definition id. Providers
 /// without that capability leave no-slot definitions unresolved rather than guessing Draft.
 /// </remarks>
@@ -116,9 +117,11 @@ public sealed class WorkflowDefinitionPublicationStateLookup(
     {
         PublicationRecord? GetRecord(WorkflowActivationSlot slot)
         {
+            // The serving slot commits before journal completion, which can leave its exact record
+            // Candidate or Retired until recovery. Those states still identify the serving source.
             if (slot.ActiveActivationId is not { } activeId ||
                 !publicationsById.TryGetValue(activeId, out var publication) ||
-                publication.Status != PublicationStatus.Active ||
+                publication.Status is not (PublicationStatus.Active or PublicationStatus.Candidate or PublicationStatus.Retired) ||
                 !StringComparer.Ordinal.Equals(publication.WorkflowDefinitionId, definitionId) ||
                 !StringComparer.Ordinal.Equals(publication.SlotId, slot.SlotId) ||
                 !StringComparer.Ordinal.Equals(publication.SlotName, slot.SlotName))

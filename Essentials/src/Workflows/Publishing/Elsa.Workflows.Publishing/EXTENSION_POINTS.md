@@ -53,9 +53,17 @@ accepting the receipt.
   definition. Publishing requests activation through `IWorkflowActivationCoordinator` and retains only its
   publication record attempt journal; that journal never decides serving.
 - `IPublicationRecordStore` retains publication lifecycle and failure facts and supports conditional status
-  transitions.
+  transitions. `FindByIdsAsync(publicationIds)` resolves exact publication identities in a bounded batch;
+  providers without this lookup may return no records, leaving the published source version unavailable.
+  Override `ListByDefinitionIdsAsync(definitionIds)` and set `SupportsDefinitionIdLookup` to true only when
+  the provider can completely resolve a bounded definition set without scanning the journal. The default
+  capability is false: absent records cannot establish Draft instead of Retired. In-memory storage supports
+  it; EF does not. See the [Design lookup contract](../../Design/Api/EXTENSION_POINTS.md#iworkflowdefinitionpublicationstatelookup-contract--elsaworkflowsdesignpersistencecore)
+  for how these facts enrich definition views.
 - `IPublicationPolicyStore` stores the host policy under a null workflow ID and optional workflow overrides;
-  writes are revision-checked.
+  writes are revision-checked. `FindByDefinitionIdsAsync(definitionIds)` resolves workflow overrides in a
+  bounded batch when `SupportsBatchDefinitionLookup` is true; otherwise readers treat the configured primary
+  slot as unknown. In-memory and EF providers support this capability.
 - `IPublicationProjectionIntentStore` durably transitions idempotent prepare/activate/remove intents. Providers
   must preserve deterministic intent IDs, attempt state, retry timing, and failure details across restart. It has
   no writer: its only one, `PublicationProjectionReconciler`, had not been registered since activation moved to the

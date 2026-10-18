@@ -27,6 +27,60 @@ public sealed class WorkflowDefinitionPublicationStateLookupTests
         Assert.Equal("version-orders-default", states["orders"].PublishedVersionId);
     }
 
+    [Theory]
+    [InlineData(PublicationStatus.Candidate)]
+    [InlineData(PublicationStatus.Retired)]
+    public async Task Lagging_record_named_by_the_active_slot_still_reports_its_published_version(PublicationStatus laggingStatus)
+    {
+        var fixture = await Fixture.CreateAsync();
+        await fixture.ActivateAsync("orders");
+        await fixture.SetPublicationStatusAsync("orders", "default", laggingStatus);
+
+        var states = await fixture.Lookup.ListByDefinitionIdsAsync(["orders"]);
+
+        Assert.Equal(WorkflowDefinitionPublicationState.Published, states["orders"].State);
+        Assert.Equal("version-orders-default", states["orders"].PublishedVersionId);
+    }
+
+    [Fact]
+    public async Task Failed_record_named_by_the_active_slot_does_not_supply_a_published_version()
+    {
+        var fixture = await Fixture.CreateAsync();
+        await fixture.ActivateAsync("orders");
+        await fixture.SetPublicationStatusAsync("orders", "default", PublicationStatus.Failed);
+
+        var states = await fixture.Lookup.ListByDefinitionIdsAsync(["orders"]);
+
+        Assert.Equal(WorkflowDefinitionPublicationState.Published, states["orders"].State);
+        Assert.Null(states["orders"].PublishedVersionId);
+    }
+
+    [Theory]
+    [InlineData("publication")]
+    [InlineData("definition")]
+    [InlineData("slot id")]
+    [InlineData("slot name")]
+    public async Task Record_with_mismatched_identity_does_not_supply_the_active_slots_version(string identityPart)
+    {
+        var fixture = await Fixture.CreateAsync();
+        await fixture.ActivateAsync("orders");
+        var publications = new CountingPublicationRecordStore(
+            fixture.Publications,
+            transformFoundPublication: publication => identityPart switch
+            {
+                "publication" => publication with { PublicationId = "other-publication" },
+                "definition" => publication with { WorkflowDefinitionId = "other" },
+                "slot id" => publication with { SlotId = "other-slot-id" },
+                _ => publication with { SlotName = "other-slot-name" }
+            });
+        var lookup = new WorkflowDefinitionPublicationStateLookup(fixture.Authority, publications, fixture.Policies);
+
+        var states = await lookup.ListByDefinitionIdsAsync(["orders"]);
+
+        Assert.Equal(WorkflowDefinitionPublicationState.Published, states["orders"].State);
+        Assert.Null(states["orders"].PublishedVersionId);
+    }
+
     [Fact]
     public async Task Empty_slot_after_unpublish_is_retracted_not_published()
     {
@@ -284,6 +338,21 @@ public sealed class WorkflowDefinitionPublicationStateLookupTests
             Assert.True(result.Succeeded);
         }
 
+        public async Task SetPublicationStatusAsync(string definitionId, string slotName, PublicationStatus status)
+        {
+            var publicationId = $"publication-{definitionId}-{slotName}";
+            var current = await Publications.FindAsync(publicationId);
+            Assert.NotNull(current);
+            Assert.True(await Publications.TryTransitionAsync(
+                current with
+                {
+                    Status = status,
+                    ActivatedAt = status is PublicationStatus.Candidate or PublicationStatus.Failed ? null : current.ActivatedAt,
+                    RetiredAt = status == PublicationStatus.Retired ? Now.AddMinutes(1) : null
+                },
+                current.Status));
+        }
+
         public async Task ActivateAsync(string definitionId, string slotName = "default")
         {
             var slotId = WorkflowActivationSlotIdentity.Create(definitionId, slotName);
@@ -357,7 +426,8 @@ public sealed class WorkflowDefinitionPublicationStateLookupTests
 
     private sealed class CountingPublicationRecordStore(
         IPublicationRecordStore inner,
-        bool? supportsDefinitionIdLookup = null) : IPublicationRecordStore
+        bool? supportsDefinitionIdLookup = null,
+        Func<PublicationRecord, PublicationRecord>? transformFoundPublication = null) : IPublicationRecordStore
     {
         public int IdentityBatchCalls { get; private set; }
         public List<int> IdentityBatchSizes { get; } = [];
@@ -370,13 +440,16 @@ public sealed class WorkflowDefinitionPublicationStateLookupTests
         public ValueTask<PublicationRecord?> FindAsync(string publicationId, CancellationToken cancellationToken = default) =>
             inner.FindAsync(publicationId, cancellationToken);
 
-        public ValueTask<IReadOnlyCollection<PublicationRecord>> FindByIdsAsync(
+        public async ValueTask<IReadOnlyCollection<PublicationRecord>> FindByIdsAsync(
             IReadOnlyCollection<string> publicationIds,
             CancellationToken cancellationToken = default)
         {
             IdentityBatchCalls++;
             IdentityBatchSizes.Add(publicationIds.Count);
-            return inner.FindByIdsAsync(publicationIds, cancellationToken);
+            var publications = await inner.FindByIdsAsync(publicationIds, cancellationToken);
+            return transformFoundPublication is null
+                ? publications
+                : publications.Select(transformFoundPublication).ToArray();
         }
 
         public ValueTask<IReadOnlyCollection<PublicationRecord>> ListBySlotAsync(string slotId, CancellationToken cancellationToken = default) =>
