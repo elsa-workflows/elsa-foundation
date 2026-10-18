@@ -26,6 +26,7 @@ import { WorkflowTestRunControls } from "../workflow-editor/WorkflowTestRunContr
 let active: { root: Root; container: HTMLElement } | null = null;
 
 beforeEach(() => {
+  vi.useRealTimers();
   publishingMocks.deliver.mockReset();
   publishingMocks.getRun.mockReset();
   publishingMocks.getInstance.mockReset();
@@ -112,23 +113,24 @@ describe("Workflow Test Run controls", () => {
   it("shows Waiting for an active wait and refreshes the wait list while the root is Running", async () => {
     publishingMocks.getInstance.mockResolvedValue({ instance: { workflowExecutionId: "execution-1", status: "Running" } });
     const container = render({ stimulusEditors: [] });
-    await settle();
-
-    expect(container.querySelector(".wf-test-run-execution-state")?.textContent).toContain("Waiting");
+    // settle() is one macrotask. Seed 1 can run this case first, before React has applied both
+    // the wait-list and execution effects, so the execution-state node is still missing.
+    await vi.waitFor(() => {
+      const text = container.querySelector(".wf-test-run-execution-state")?.textContent;
+      expect(text).toBeTruthy();
+      expect(text).toContain("Waiting");
+    });
     const initialWaitReads = publishingMocks.getWaits.mock.calls.length;
     expect(initialWaitReads).toBeGreaterThanOrEqual(2);
 
-    await vi.waitFor(() => expect(publishingMocks.getWaits.mock.calls.length).toBeGreaterThan(initialWaitReads), { timeout: 5000, interval: 100 });
+    await vi.waitFor(() => expect(publishingMocks.getWaits.mock.calls.length).toBeGreaterThan(initialWaitReads), { timeout: 5000, interval: 50 });
   });
 
   it("stops polling when the host does not expose workflow instance status", async () => {
     vi.useFakeTimers();
     publishingMocks.getInstance.mockRejectedValue(new ApiCapabilityUnavailableError(capabilityIds.runtime, "workflow-instance"));
     render({ stimulusEditors: [] });
-    for (let i = 0; i < 10; i++) {
-      await Promise.resolve();
-      flushSync(() => undefined);
-    }
+    await flushEffects();
 
     expect(publishingMocks.getInstance).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(8000);
@@ -187,4 +189,11 @@ async function settle() {
   await Promise.resolve();
   await new Promise(resolve => setTimeout(resolve, 0));
   flushSync(() => undefined);
+}
+
+async function flushEffects(turns = 10) {
+  for (let i = 0; i < turns; i++) {
+    await Promise.resolve();
+    flushSync(() => undefined);
+  }
 }
