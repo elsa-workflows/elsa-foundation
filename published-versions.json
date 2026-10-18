@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "06dad4b4e08c0e8b35359335800fdd5932a1b4e7",
+  "last_publish_commit": "eea75dd448143553f9afd6649ca3a425f870be97",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -189,8 +189,8 @@
     },
     {
       "package_id": "Elsa.Connections",
-      "version": "4.0.0-preview",
-      "commit": "15feed9e0be709348602e054cca85a33f0f76873"
+      "version": "4.0.1-preview",
+      "commit": "eea75dd448143553f9afd6649ca3a425f870be97"
     },
     {
       "package_id": "Elsa.Connections.Api",
@@ -199,8 +199,8 @@
     },
     {
       "package_id": "Elsa.Connections.Core",
-      "version": "4.0.0-preview",
-      "commit": "15feed9e0be709348602e054cca85a33f0f76873"
+      "version": "4.0.1-preview",
+      "commit": "eea75dd448143553f9afd6649ca3a425f870be97"
     },
     {
       "package_id": "Elsa.Connections.Design",
@@ -609,8 +609,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Publishing",
-      "version": "4.0.24-preview",
-      "commit": "9a1c5c5317f34da544464f6e9ea55c2059918edf"
+      "version": "4.0.25-preview",
+      "commit": "eea75dd448143553f9afd6649ca3a425f870be97"
     },
     {
       "package_id": "Elsa.Workflows.Publishing.Api",
@@ -634,8 +634,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Api",
-      "version": "4.0.22-preview",
-      "commit": "e6b652f27ed1d81ff33e15fbff4adc35ff2bbce4"
+      "version": "4.0.23-preview",
+      "commit": "eea75dd448143553f9afd6649ca3a425f870be97"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Core",
