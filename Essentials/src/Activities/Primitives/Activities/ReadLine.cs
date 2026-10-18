@@ -16,6 +16,7 @@ namespace Elsa.Activities.Primitives.Activities;
 /// a <c>null</c> result rather than blocking. Hosts that need genuine interactive input should suspend
 /// on a bookmark instead; that durable-input pattern is out of scope for this leaf parity port.
 /// </remarks>
+[Activity(Icon = "TextCursorInput")]
 public sealed class ReadLine : Activity<ReadLineResult>
 {
     protected override ValueTask<ActivityTransition<ReadLineResult>> ExecuteAsync(ActivityExecutionContext context) =>

@@ -30,6 +30,7 @@ namespace Elsa.Activities.Scheduling.Activities;
 /// </para>
 /// </remarks>
 [RefusesSecretBinding(nameof(Interval), SecretBindingRefusalReason.FixedAtPublish)]
+[Activity(Icon = "Timer")]
 [TriggerActivity]
 public sealed class Timer : Activity<TimerResult>
 {

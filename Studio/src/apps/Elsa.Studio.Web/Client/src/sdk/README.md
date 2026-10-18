@@ -57,6 +57,10 @@ Third-party activity packages can supply a designer icon without growing the Wor
 entry bundle. The catalog field is `iconName`, written from `[Activity(Icon = …)]` on the
 CLR activity. Accepted values:
 
+`iconName` takes precedence over historical `icon` values and the generic reusable icon.
+Recommended activities retain their module icon when the catalog assigns them definition
+IDs. Use a vendor-prefixed extension name such as `ext:acme-slack` to avoid name collisions.
+
 | Value | Renders as |
 |---|---|
 | A lucide export or kebab name (`Rocket`, `git-branch`) | That lucide glyph, loaded on demand when it is not already in the shared table. An unknown name shows the category placeholder briefly while the lazy import resolves, then the glyph or the fallback. |
@@ -80,10 +84,32 @@ export function register(api: ElsaStudioModuleApi) {
 ```
 
 Then declare `[Activity(Icon = "ext:slack")]` on the activity. An unknown, invalid or
-failed value falls back to the existing category / placeholder icon and never crashes the
+failed value uses the semantic type/category fallback (or placeholder) and never crashes the
 palette or canvas. `Icon` is presentation only: the `elsa.activity-icon` facet is excluded
 from the descriptor hash, so adding or changing it does not throw
 `ActivityVersionHashMismatchException`.
+
+Existing persisted versions retain their icon facets during duplicate reconciliation.
+Changing the attribute alone does not refresh an already stored version's icon metadata;
+a newly contributed version carries the declaration. Older entries without metadata use
+the semantic type/category fallback. No workflow or executable identity changes for icons.
+
+### Module navigation icons
+
+Sidebar navigation uses the module contribution's own component, independently of
+activity catalog metadata. Register it with the existing navigation slot:
+
+```ts
+api.navigation.add({
+  id: "acme-slack",
+  label: "Slack",
+  path: "/acme/slack",
+  icon: SlackIcon
+});
+```
+
+Both forms keep icon code and assets in the contributing module; neither needs a Studio
+source change. Use `currentColor` and accept the `size` prop on navigation components too.
 
 ## Expression editor Contributions
 

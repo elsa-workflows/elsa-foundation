@@ -785,7 +785,8 @@ public sealed class ClrAssemblyScannerTests
     {
         // WriteLine and Parallel still declare no tier, so they keep the origin/main snapshot at
         // 14dd6f6e7 (#2716). HttpEndpoint's version and ResponseMode default changed; SendHttpRequest
-        // declares tiers. Those catalog changes move their snapshots with this PR. Icon facets stay excluded.
+        // declares tiers. Those catalog changes move their snapshots with this PR. Icon facets are present
+        // on the descriptors but excluded from descriptor hashes.
         { typeof(HttpEndpoint), "3432C91C232D91852818ED02A289497FD4DD17112199328DC65BBE1239FA84DA" },
         { typeof(WriteLine), "618BB61870A3FADC2551123EA520F7F5852CB0D00CD4AE5E6DB8A80D7677EF2C" },
         { typeof(ParallelActivity), "A466AC1D4873108D85B6BA08D2058ACD9FD51A60571E8BA043043A17B20CCC82" },
@@ -799,7 +800,8 @@ public sealed class ClrAssemblyScannerTests
         using var folder = TempAssemblyFolder.WithCopyOf(activityType.Assembly);
         var model = CreateScanner().Scan(folder.Path).Single(candidate => candidate.ActivityTypeKey == activityType.FullName);
 
-        Assert.DoesNotContain(model.DesignFacets, facet => facet.Kind == ActivityIconName.FacetKind);
+        // Icons remain available as presentation metadata; the descriptor hash deliberately ignores them.
+        Assert.Contains(model.DesignFacets, facet => facet.Kind == ActivityIconName.FacetKind);
         var actualHash = CatalogVersion(model, model, activityType.Assembly).Hash;
         Assert.True(expectedHash == actualHash, $"Expected hash '{expectedHash}', actual hash '{actualHash}'.");
     }
