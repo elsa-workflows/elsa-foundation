@@ -1,7 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { makeHttpTestRequestHeaders } from "../workflow-editor/httpTestRequestHeaders";
+import { parseHttpTestRequestHeaders } from "../httpTestHeaderPolicy";
 
 describe("HTTP test request headers", () => {
+  it("preserves trimmed-name support and checks normalized host-header collisions", () => {
+    expect(makeHttpTestRequestHeaders([{ id: 1, name: " X-Custom ", value: "test" }], null).get("x-custom"))
+      .toBe("test");
+    expect(() => makeHttpTestRequestHeaders([{ id: 1, name: " X-Host ", value: "test" }], null, { "X-Host": "managed" }))
+      .toThrow("Header 1 is configured by Studio and cannot be overridden.");
+    expect(parseHttpTestRequestHeaders([{ name: " X-Custom ", values: ["test"] }]).headers?.get("x-custom"))
+      .toBe("test");
+  });
+
+  it("validates names even when the stimulus contains an empty value array", () => {
+    expect(parseHttpTestRequestHeaders([{ name: "X Invalid", values: [] }]).error)
+      .toBe("Header 1 has an invalid name or value.");
+  });
   it("ignores wholly blank rows and supplies the default Accept and body content type", () => {
     const headers = makeHttpTestRequestHeaders([
       { id: 1, name: "", value: "" },

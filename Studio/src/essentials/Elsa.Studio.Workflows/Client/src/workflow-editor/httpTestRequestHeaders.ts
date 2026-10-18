@@ -38,10 +38,11 @@ export function makeValidatedHttpTestRequestHeaders(
     throw new HttpTestRequestHeaderPolicyError("Studio host headers could not be validated. Refresh Studio and try again.");
   }
   for (const [index, { name }] of requestHeaders.entries()) {
-    if (options.rejectContentTypeHeader && name.toLowerCase() === "content-type") {
+    const normalizedName = name.trim();
+    if (options.rejectContentTypeHeader && normalizedName.toLowerCase() === "content-type") {
       throw new HttpTestRequestHeaderPolicyError("Set Content-Type using the Request content type field.");
     }
-    if (configured.has(name)) {
+    if (configured.has(normalizedName)) {
       throw new HttpTestRequestHeaderPolicyError(`Header ${index + 1} is configured by Studio and cannot be overridden.`);
     }
   }

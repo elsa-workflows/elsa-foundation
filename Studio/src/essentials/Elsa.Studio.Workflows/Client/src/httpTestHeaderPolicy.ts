@@ -19,9 +19,9 @@ export function toHttpTestRequestHeaderValues(headers: Record<string, unknown>):
 export function parseHttpTestRequestHeaders(headers: HttpTestRequestHeaderValues[]): { headers?: Headers; error?: string } {
   const result = new Headers();
   for (const [index, header] of headers.entries()) {
-    const name = typeof header?.name === "string" ? header.name : "";
+    const name = typeof header?.name === "string" ? header.name.trim() : "";
     const values = Array.isArray(header?.values) ? header.values : [];
-    if (!name || name !== name.trim() || !Array.isArray(header?.values) || values.some(value => typeof value !== "string")) {
+    if (!name || !Array.isArray(header?.values) || values.some(value => typeof value !== "string")) {
       return { error: invalidHeader(index) };
     }
 
@@ -35,6 +35,7 @@ export function parseHttpTestRequestHeaders(headers: HttpTestRequestHeaderValues
     }
 
     try {
+      if (!values.length) new Headers([[name, ""]]);
       for (const value of values) result.append(name, value);
     } catch {
       return { error: invalidHeader(index) };
