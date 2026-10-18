@@ -1,4 +1,5 @@
 import { lazy } from "react";
+import { validateHttpTestRequestHeaderNames } from "./httpTestHeaderPolicy";
 import type { StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
 import { asRecord, isJsonValue, isRecord, isStringMap, readObject } from "./workflowTestStimulusEditorUtils";
 
@@ -22,16 +23,10 @@ export const httpWorkflowTestStimulusEditor: StudioTestStimulusEditorContributio
     }
     if (value.body !== undefined && value.body !== null && typeof value.body !== "string") return "body must be text or null.";
     const headers = asRecord(value.headers) ?? {};
-    if (Object.keys(headers).some(name => ["authorization", "cookie", "proxy-authorization"].includes(name.toLowerCase()))) {
-      return "Authentication headers are supplied by the authenticated API transport.";
-    }
-    return undefined;
+    return validateHttpTestRequestHeaderNames(Object.keys(headers));
   },
   serialize: ({ draft }) => readObject(draft) ?? {},
-  executeAction: async args => {
-    const { sendHttpRequest } = await import("./workflowTestStimulusHttpAction");
-    return sendHttpRequest(args);
-  },
+  executeAction: async context => (await import("./workflowTestHttpAction")).sendHttpRequest(context),
   actionResultComponent: HttpExchangeResultView
 };
 

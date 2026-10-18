@@ -1,11 +1,7 @@
 import type { StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
 import { asRecord } from "./workflowTestStimulusEditorUtils";
 
-export async function sendHttpRequest({
-  backend,
-  action,
-  data
-}: Parameters<NonNullable<StudioTestStimulusEditorContribution["executeAction"]>>[0]) {
+export async function sendHttpRequest({ backend, action, data }: Parameters<NonNullable<StudioTestStimulusEditorContribution["executeAction"]>>[0]) {
   const relativeUrl = action.relativeUrl;
   if (!relativeUrl || !relativeUrl.startsWith("/") || relativeUrl.startsWith("//")) {
     throw new Error("The prepared HTTP action did not contain a safe server-relative URL.");

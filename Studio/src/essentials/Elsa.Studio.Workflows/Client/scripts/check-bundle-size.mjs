@@ -88,7 +88,7 @@ const deferredHeavySurfaces = [
   "WorkflowTestDrivePanel",
   "WorkflowTestRunControls",
   "CreateWorkflowDialog",
-  "workflowTestStimulusHttpAction"
+  "workflowTestHttpAction"
 ];
 
 const excludedFromDefinitionsLanding = deferredHeavySurfaces.filter(name => name !== "WorkflowDefinitions");
