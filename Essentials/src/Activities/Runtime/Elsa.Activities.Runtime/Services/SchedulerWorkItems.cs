@@ -99,7 +99,8 @@ internal static class SchedulerWorkItems
         WorkflowExecutableIdentity pinnedExecutable,
         string parentActivityExecutionId,
         IReadOnlyCollection<RuntimeChildActivityScheduleRequest> scheduleRequests,
-        IReadOnlyDictionary<string, string>? commandMetadata = null)
+        IReadOnlyDictionary<string, string>? commandMetadata = null,
+        string? childExecutionScopeId = null)
     {
         var inheritedMetadata = commandMetadata ?? sourceWorkItem.CommandMetadata;
         var requests = scheduleRequests.ToArray();
@@ -123,10 +124,16 @@ internal static class SchedulerWorkItems
                         branchId: null,
                         iterationId: null,
                         executionPathId: null,
-                        executionScopeId: null,
+                        executionScopeId: childExecutionScopeId,
                         schedulingCause: RuntimeScheduleActivityCommandPayload.ActivityCompletionReason,
                         metadata: request.Metadata)
-                    : request.SchedulingProvenance,
+                    : request.SchedulingProvenance with
+                    {
+                        // Composite schedulers can carry local correlation scopes (such as Flowchart paths) in
+                        // provenance. When the parent has a runtime execution scope, children belong to that
+                        // hierarchy scope while local scope metadata remains available to the composite.
+                        ExecutionScopeId = childExecutionScopeId ?? request.SchedulingProvenance.ExecutionScopeId
+                    },
                 request.IterationFrame);
 
             var childCommandMetadata = inheritedMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
@@ -148,7 +155,20 @@ internal static class SchedulerWorkItems
                 sequence: sourceWorkItem.Sequence is { } sequence ? sequence + index + 1 : null,
                 payload: JsonSerializer.SerializeToElement(payload),
                 commandMetadata: childCommandMetadata,
-                envelopeMetadata: sourceWorkItem.EnvelopeMetadata);
+                envelopeMetadata: sourceWorkItem.EnvelopeMetadata,
+                executionScopeId: payload.SchedulingProvenance.ExecutionScopeId);
         }
+    }
+
+    /// <summary>
+    /// Resolves the scope children should inherit: a placed activity boundary owns the scope opened for its body,
+    /// while ordinary structural activities remain within their enclosing scope.
+    /// </summary>
+    public static string? ResolveChildExecutionScopeId(ActivityExecutionState parentState)
+    {
+        ArgumentNullException.ThrowIfNull(parentState);
+        return parentState.Metadata.ContainsKey("activity.definitionVersionId")
+            ? parentState.Execution.ActivityExecutionId
+            : parentState.ExecutionScopeId ?? parentState.Provenance.ExecutionScopeId;
     }
 }

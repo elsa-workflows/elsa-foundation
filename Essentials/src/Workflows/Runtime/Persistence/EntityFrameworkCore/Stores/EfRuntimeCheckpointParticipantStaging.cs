@@ -49,6 +49,9 @@ internal static class EfRuntimeCheckpointParticipantStaging
             return;
         }
 
+        if (change.Metadata.ContainsKey(TestRunDeliveryReceipt.MetadataKey) && change.State.TestScope is { } resumeScope)
+            await EfRuntimeCheckpointTestScopeParticipantStaging.AssertOpenAndStageAsync(
+                context, resumeScope, occurredAt, scope, touchedTestScopes, cancellationToken);
         _ = EfWorkflowExecutionStateStore.ReadChecked(row, scope, change.StateId);
         EfWorkflowExecutionStateStore.CopyToEntity(row, change.State, scope, id, checked(row.Revision + 1));
     }

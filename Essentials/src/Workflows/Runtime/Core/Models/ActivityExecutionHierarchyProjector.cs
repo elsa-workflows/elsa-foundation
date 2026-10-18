@@ -8,7 +8,9 @@ public static class ActivityExecutionHierarchyProjector
     public static ActivityExecutionHierarchyRecord FromInspection(ActivityExecutionInspectionProjection projection)
     {
         ArgumentNullException.ThrowIfNull(projection);
-        var scopeId = projection.ExecutionScopeId ?? projection.Provenance.ExecutionScopeId;
+        var scopeId = projection.EnclosingExecutionScopeId ??
+                      projection.ExecutionScopeId ??
+                      projection.Provenance.ExecutionScopeId;
         if (string.IsNullOrWhiteSpace(scopeId))
             throw new ArgumentException("Committed hierarchy evidence requires an execution scope id.", nameof(projection));
 

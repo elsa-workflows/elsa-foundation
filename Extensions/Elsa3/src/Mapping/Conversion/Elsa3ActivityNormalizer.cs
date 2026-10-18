@@ -820,6 +820,7 @@ internal sealed class Elsa3ActivityNormalizer(
         [RequestSizeNoOutcome] = "A request over the size limit has no outcome in Elsa 4; the request is refused.",
         [HttpOutcomeSingle] = "Elsa 4 emits one outcome per response: Done no longer fires together with a status-code outcome, and a non-2xx response goes to Failed.",
         [AuthHeaderUnvalidated] = "Elsa 4 does not validate the Authorization header, as if validation were disabled.",
+        [HttpAuthorizationUseConnection] = "Create an http connection and bind it to Connection. SendHttpRequest.Authorization was removed.",
         [WhilePersistedCondition] = "Elsa 4 re-reads the While condition only from persisted state.",
         [ForZeroStepFaults] = "A For step of 0 faults in Elsa 4.",
         [BreakStopsAtParallel] = "In Elsa 4, Break does not cross a Parallel branch.",

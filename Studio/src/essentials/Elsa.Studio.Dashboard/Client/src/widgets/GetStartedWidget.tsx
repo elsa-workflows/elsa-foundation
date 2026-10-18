@@ -1,5 +1,5 @@
 import React from "react";
-import { Check, Circle } from "lucide-react";
+import { ArrowUpRight, BookOpen, Check } from "lucide-react";
 import { type StudioDashboardWidgetBodyProps } from "@elsa-workflows/studio-sdk";
 import { navigateStudioPath } from "./homeData";
 
@@ -41,10 +41,11 @@ export function GetStartedWidget({ snapshot }: StudioDashboardWidgetBodyProps<Ge
       <p className="home-get-started-progress" aria-live="polite">
         {complete ? "All steps done" : `${doneCount} of ${steps.length} done`}
       </p>
+      <progress className="home-get-started-meter" aria-label="Getting started progress" value={doneCount} max={steps.length} />
       <ol className="home-get-started-steps">
-        {steps.map(step => (
+        {steps.map((step, index) => (
           <li key={step.id} data-done={step.done ? "true" : "false"}>
-            <span aria-hidden="true">{step.done ? <Check size={16} /> : <Circle size={16} />}</span>
+            <span aria-hidden="true">{step.done ? <Check size={16} /> : index + 1}</span>
             <span>{step.title}</span>
             {step.done ? <span className="visually-hidden">Done</span> : null}
           </li>
@@ -70,7 +71,7 @@ export function GetStartedWidget({ snapshot }: StudioDashboardWidgetBodyProps<Ge
         <ul>
           {homeDocsLinks.map(link => (
             <li key={link.href}>
-              <a href={link.href} target="_blank" rel="noreferrer">{link.title}</a>
+              <a href={link.href} target="_blank" rel="noreferrer"><BookOpen size={16} aria-hidden="true" /><span>{link.title}</span><ArrowUpRight size={15} aria-hidden="true" /></a>
             </li>
           ))}
         </ul>

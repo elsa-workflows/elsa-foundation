@@ -190,7 +190,7 @@ public sealed class ActivitiesDesignScopeStoreRouteTests
     }
 
     [Fact]
-    public async Task Sqlite_validation_fence_and_duplicate_insert_are_atomic_per_scope()
+    public async Task Sqlite_validation_refreshes_the_same_exact_revision_and_rejects_a_different_duplicate_atomically()
     {
         await using var connection = await OpenDatabaseAsync();
         await using var db = CreateContext(connection);
@@ -208,11 +208,36 @@ public sealed class ActivitiesDesignScopeStoreRouteTests
         var tokenBeforeDuplicate = await db.ActivityDefinitionDrafts
             .Select(x => EF.Property<byte[]>(x, "ConcurrencyToken"))
             .SingleAsync();
+        var createdAt = (await db.ActivityDraftValidations.AsNoTracking().SingleAsync()).CreatedAt;
         db.ChangeTracker.Clear();
+
+        var refreshedAt = DateTimeOffset.UtcNow.AddMinutes(1);
+        var refreshedDiagnostic = new ActivityDiagnostic(
+            "activity.validation.refreshed",
+            ActivityDiagnosticSeverity.Warning,
+            "Refreshed validation result.",
+            new("draft", "draft", Revision: 1));
+        await store.ExecuteAsync(new ActivityDraftValidationState
+        {
+            Id = "validation", DraftId = "draft", TenantId = "tenant-a", Revision = 1,
+            ValidatedAt = refreshedAt, Diagnostics = [refreshedDiagnostic]
+        });
+
+        db.ChangeTracker.Clear();
+        var stored = await db.ActivityDraftValidations.AsNoTracking().SingleAsync();
+        Assert.Equal("validation", stored.Id);
+        Assert.Equal(createdAt, stored.CreatedAt);
+        Assert.Equal(refreshedAt, stored.ValidatedAt);
+        Assert.Equal("activity.validation.refreshed", Assert.Single(stored.Diagnostics).Code);
+        Assert.Single(await db.ActivityDraftValidations.AsNoTracking().ToListAsync());
+        var tokenAfterRefresh = await db.ActivityDefinitionDrafts
+            .Select(x => EF.Property<byte[]>(x, "ConcurrencyToken"))
+            .SingleAsync();
+        Assert.NotEqual(tokenBeforeDuplicate, tokenAfterRefresh);
 
         await Assert.ThrowsAsync<DesignPersistenceException>(() => store.ExecuteAsync(new ActivityDraftValidationState
         {
-            Id = "validation", DraftId = "draft", TenantId = "tenant-a", Revision = 1, Diagnostics = []
+            Id = "validation-duplicate", DraftId = "draft", TenantId = "tenant-a", Revision = 1, Diagnostics = []
         }));
 
         db.ChangeTracker.Clear();
@@ -220,7 +245,7 @@ public sealed class ActivitiesDesignScopeStoreRouteTests
         var tokenAfterDuplicate = await db.ActivityDefinitionDrafts
             .Select(x => EF.Property<byte[]>(x, "ConcurrencyToken"))
             .SingleAsync();
-        Assert.Equal(tokenBeforeDuplicate, tokenAfterDuplicate);
+        Assert.Equal(tokenAfterRefresh, tokenAfterDuplicate);
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => store.ExecuteAsync(new ActivityDraftValidationState
         {
             Id = "stale", DraftId = "draft", TenantId = "tenant-a", Revision = 0, Diagnostics = []

@@ -31,7 +31,6 @@ public sealed class RuntimeOutputCaptureCompiler(
     /// <summary>The minimal output shape the capture body reads, factored so boundary and leaf contracts share it.</summary>
     private sealed record OutputCaptureTarget(
         string ReferenceKey,
-        string Name,
         ValueTypeDescriptor Type,
         string StorageDriverKey,
         ValueRepresentation? SourceRepresentation);
@@ -50,7 +49,6 @@ public sealed class RuntimeOutputCaptureCompiler(
             definitions
                 .Select(definition => new OutputCaptureTarget(
                     definition.ReferenceKey,
-                    definition.Name,
                     new ValueTypeDescriptor(definition.Type.Alias, definition.Type.CollectionKind),
                     definition.StorageDriverKey,
                     definition.SourceRepresentation))
@@ -72,7 +70,6 @@ public sealed class RuntimeOutputCaptureCompiler(
             nodeId,
             projections
                 .Select(projection => new OutputCaptureTarget(
-                    projection.Key,
                     projection.Key,
                     projection.Type,
                     projection.Policy.StorageProfile ?? WellKnownRuntimeDurableValueStorageDrivers.Json,
@@ -158,8 +155,8 @@ public sealed class RuntimeOutputCaptureCompiler(
                 variable.Type.Alias,
                 definition.StorageDriverKey,
                 System.Text.Json.JsonSerializer.SerializeToElement(variable.Type));
-            captures.Add(definition.Name, new RuntimeOutputCapture(
-                definition.Name,
+            captures.Add(definition.ReferenceKey, new RuntimeOutputCapture(
+                definition.ReferenceKey,
                 $"{RuntimeWorkflowStateSeed.VariableValueIdPrefix}{variable.Name}",
                 type,
                 DurableValueLifecycle.Instance,

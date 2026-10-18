@@ -88,8 +88,8 @@ def verify_project_inventory(root: Path) -> dict:
         raise ValueError(f"Studio project inventory mismatch; missing={missing}, unexpected={unexpected}.")
 
     ids = [item["id"] for item in packable]
-    if len(ids) != len(set(ids)) or len(ids) != 17:
-        raise ValueError("The declared Studio packable package IDs must contain exactly 17 unique IDs.")
+    if len(ids) != len(set(ids)) or len(ids) != 18:
+        raise ValueError("The declared Studio packable package IDs must contain exactly 18 unique IDs.")
 
     for item in packable + non_packable:
         project_path = root / item["project"]
@@ -212,7 +212,7 @@ def self_test(root: Path) -> None:
         package_dir = Path(temp)
         for package_id in ids:
             _write_test_package(package_dir / f"{package_id}.nupkg", package_id, "4.0.0-preview.1", inventory["package_icon"])
-        if len(verify_packages(root, package_dir, "4.0.0-preview.1")) != 17:
+        if len(verify_packages(root, package_dir, "4.0.0-preview.1")) != 18:
             raise AssertionError("Complete package fixture was not accepted.")
         (package_dir / f"{ids[-1]}.nupkg").unlink()
         try:

@@ -10,6 +10,7 @@ import { bpmnStructureKind } from "./bpmn/bpmnTypes";
 import { buildIntrinsicWireBlock, readIntrinsicDescriptor } from "./intrinsicActivities";
 import { getActivityDisplay } from "./activityDisplay";
 import { indexActivityPresentation, resolveActivityLabel } from "./activityPresentation";
+import { getHttpEndpointResponseMode, type HttpEndpointResponseMode } from "./httpEndpointResponseMode";
 import type { ActivityIconTone, WorkflowNodeIcon } from "./activityIcons";
 
 export { getActivityDisplay } from "./activityDisplay";
@@ -53,6 +54,8 @@ export interface WorkflowNodeData extends Record<string, unknown> {
   isStartNode?: boolean;
   /** True when this activity can start a workflow (its `CanStartWorkflow` input is a literal true). */
   canStartWorkflow?: boolean;
+  /** Authored HTTP Endpoint response behavior, surfaced as a canvas badge. */
+  httpEndpointResponseMode?: HttpEndpointResponseMode;
   // Set by the Executable Inspector for activity-catalog misses: the node renders as an honest
   // ghost ("not available in this environment") instead of pretending the activity resolves.
   ghost?: boolean;
@@ -873,7 +876,8 @@ function createWorkflowNode(
       sourcePorts: options.suppressFlowPorts ? [] : getActivitySourcePorts(activity, catalogItem),
       suppressFlowPorts: options.suppressFlowPorts,
       isStartNode: options.isStartNode,
-      canStartWorkflow: activityCanStartWorkflow(activity)
+      canStartWorkflow: activityCanStartWorkflow(activity),
+      httpEndpointResponseMode: getHttpEndpointResponseMode(activity, catalogItem) ?? undefined
     }
   };
 }

@@ -26,6 +26,19 @@ describe("JavaScript expression editor module", () => {
     expect(contribution.sourceRenderer?.expanded).toBe(JavaScriptSourceRenderer);
   });
 
+  it.each(["unavailable", "unauthorized", "incompatible"] as const)("uses IntelliSense wording for %s tooling", state => {
+    const editor = findStudioCodeEditor(<JavaScriptInlineEditor
+      descriptor={descriptor()}
+      syntax="JavaScript"
+      value=""
+      context={{ ...context("JavaScript"), authoringContext: { state, contractVersion: 1, expressionType: "JavaScript" } }}
+      onChange={vi.fn()}
+    />);
+
+    expect(editor.props.status).toContain("JavaScript IntelliSense");
+    expect(editor.props.status).not.toContain("this Studio version");
+  });
+
   it("renders authorized authored JavaScript without evaluating it", () => {
     const rendered = JavaScriptSourceRenderer({
       context: {
@@ -171,6 +184,7 @@ describe("JavaScript expression editor module", () => {
 
 interface StudioCodeEditorElementProps {
   ariaLabel: string;
+  status?: string;
   document: {
     uri: string;
     language: string;

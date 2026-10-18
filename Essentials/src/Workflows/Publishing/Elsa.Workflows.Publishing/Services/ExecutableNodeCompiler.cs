@@ -310,7 +310,8 @@ public sealed class ExecutableNodeCompiler(
                 input.DefaultValue.HasValue,
                 input.DefaultValue,
                 RuntimeInputBindingCompiler.EffectivePolicy(activity.NodeId, input, state),
-                isCredential: input.IsCredential == true);
+                isCredential: input.IsCredential == true,
+                connectionType: input.ConnectionType);
         });
         var outputDefinitions = activityVersion.Outputs.ToDictionary(output => output.ReferenceKey, StringComparer.Ordinal);
         var outputStates = activity.Outputs.ToDictionary(output => output.ReferenceKey, StringComparer.Ordinal);

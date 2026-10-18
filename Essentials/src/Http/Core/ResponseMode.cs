@@ -11,9 +11,10 @@ namespace Elsa.Http.Core;
 public enum ResponseMode
 {
     /// <summary>
-    /// The async/202 baseline (the default): the endpoint replies <c>202 Accepted</c> the moment it
+    /// The async/202 compatibility mode: the endpoint replies <c>202 Accepted</c> the moment it
     /// starts (or resumes) the workflow, and a <c>WriteHttpResponse</c> records a durable artifact rather than
-    /// writing a live response. Bit-for-bit today's contract; the default so an unauthored endpoint is unchanged.
+    /// writing a live response. Existing persisted endpoint metadata without a response mode continues to use this
+    /// behavior; newly published endpoints default to <see cref="Sync"/>.
     /// </summary>
     Async = 0,
 
@@ -21,7 +22,7 @@ public enum ResponseMode
     /// The synchronous response mode: the middleware holds the request open on the caller's async flow
     /// while the dispatch drains inline, so a <c>WriteHttpResponse</c> the run reaches can write the live
     /// response in the same exchange. Degrades to <c>202 Accepted</c> when the workflow suspends before writing
-    /// a response, writes no response, or dispatches non-locally.
+    /// a response, writes no response, or dispatches non-locally. This is the default for newly published endpoints.
     /// </summary>
-    Sync
+    Sync = 1
 }

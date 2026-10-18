@@ -125,6 +125,12 @@ public sealed class RotateSecretRequest
     public string? ConfigurationKey { get; set; }
     public DateTimeOffset? ExpiresAt { get; set; }
     public IDictionary<string, string> Metadata { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// When set, rotate only if the secret's current version still matches. A mismatch throws
+    /// <c>SecretVersionConflictException</c>.
+    /// </summary>
+    public int? ExpectedVersion { get; set; }
 }
 
 public sealed class SecretQuery

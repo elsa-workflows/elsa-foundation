@@ -29,6 +29,7 @@ COPY Studio/src/ ./Studio/src/
 # Copy only the optional Studio modules consumed by the host, not every Foundation extension.
 COPY Extensions/Attention/studio/ ./Extensions/Attention/studio/
 COPY Extensions/ConsoleStream/studio/ ./Extensions/ConsoleStream/studio/
+COPY Extensions/Connections/studio/ ./Extensions/Connections/studio/
 COPY Extensions/Diagnostics.OpenTelemetry/studio/ ./Extensions/Diagnostics.OpenTelemetry/studio/
 COPY Extensions/Diagnostics.StructuredLogs/studio/ ./Extensions/Diagnostics.StructuredLogs/studio/
 COPY Extensions/ExpressionEditors.JavaScript/studio/ ./Extensions/ExpressionEditors.JavaScript/studio/

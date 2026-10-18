@@ -36,12 +36,17 @@ internal static class ReferenceWorkflows
         Executable(artifactId, Sequence("sequence", WriteLines(lines)));
 
     /// <summary>
-    /// A Sequence of a synchronous POST HttpEndpoint at <paramref name="path"/> that starts the workflow,
-    /// <paramref name="lines"/> WriteLine activities, and a WriteHttpResponse that answers the request after them.
+    /// A Sequence of a POST HttpEndpoint at <paramref name="path"/> that starts the workflow,
+    /// <paramref name="lines"/> WriteLine activities, and a WriteHttpResponse that answers after them when the
+    /// endpoint is synchronous.
     /// </summary>
-    public static WorkflowExecutable HttpTriggeredWriteLineSequence(string artifactId, string path, int lines)
+    public static WorkflowExecutable HttpTriggeredWriteLineSequence(
+        string artifactId,
+        string path,
+        int lines,
+        ResponseMode responseMode = ResponseMode.Sync)
     {
-        var endpoint = SyncPostEndpoint("http-in", path);
+        var endpoint = PostEndpoint("http-in", path, responseMode);
 
         return Executable(
             artifactId,
@@ -142,6 +147,14 @@ internal static class ReferenceWorkflows
 
     /// <summary>A synchronous POST HttpEndpoint that can start its workflow, open to anonymous requests.</summary>
     internal static ExecutableNode SyncPostEndpoint(string nodeId, string path, RuntimeOutputCapture[]? outputCaptures = null) =>
+        PostEndpoint(nodeId, path, ResponseMode.Sync, outputCaptures);
+
+    /// <summary>A POST HttpEndpoint that can start its workflow, open to anonymous requests.</summary>
+    internal static ExecutableNode PostEndpoint(
+        string nodeId,
+        string path,
+        ResponseMode responseMode,
+        RuntimeOutputCapture[]? outputCaptures = null) =>
         Clr(
             nodeId,
             typeof(HttpEndpoint),
@@ -150,7 +163,7 @@ internal static class ReferenceWorkflows
                 (nameof(HttpEndpoint.CanStartWorkflow), true),
                 (nameof(HttpEndpoint.SupportedMethods), new[] { "POST" }),
                 (nameof(HttpEndpoint.Authorize), false),
-                (nameof(HttpEndpoint.ResponseMode), ResponseMode.Sync)
+                (nameof(HttpEndpoint.ResponseMode), responseMode)
             ],
             outputCaptures: outputCaptures);
 

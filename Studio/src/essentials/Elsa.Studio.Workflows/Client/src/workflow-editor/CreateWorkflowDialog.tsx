@@ -5,6 +5,7 @@ import type { ActivityCatalogItem } from "../workflowTypes";
 import { type CreateWorkflowDraft, type WorkflowMetadataSuggestion } from "./editorTypes";
 import { parseWorkflowMetadataSuggestion } from "./editorHelpers";
 import { WorkflowRootRadioCards } from "./WorkflowRootCards";
+import { httpStarterActivities } from "./httpWorkflowStarter";
 
 export function CreateWorkflowDialog({ draft, catalog, creating, ai, suggestMetadataAction, onChange, onClose, onSubmit }: {
   draft: CreateWorkflowDraft;
@@ -17,6 +18,7 @@ export function CreateWorkflowDialog({ draft, catalog, creating, ai, suggestMeta
   onSubmit(): void;
 }) {
   const [intentOpen, setIntentOpen] = useState(false);
+  const httpStarterAvailable = httpStarterActivities(catalog).every(Boolean);
   const [intent, setIntent] = useState("");
   const [suggesting, setSuggesting] = useState(false);
   const [suggestion, setSuggestion] = useState<WorkflowMetadataSuggestion | null>(null);
@@ -151,14 +153,27 @@ export function CreateWorkflowDialog({ draft, catalog, creating, ai, suggestMeta
               onChange={event => onChange({ ...draft, description: event.target.value })}
             />
           </label>
-          <fieldset className="wf-form-field wf-root-field">
+          <label className="wf-form-field">
+            <span>Starting point</span>
+            <select
+              aria-label="Starting point"
+              value={draft.starter ?? "blank"}
+              disabled={creating}
+              onChange={event => onChange({ ...draft, starter: event.target.value === "http" ? "http" : undefined })}
+            >
+              <option value="blank">Blank workflow</option>
+              <option value="http" disabled={!httpStarterAvailable}>HTTP request and response</option>
+            </select>
+            {draft.starter === "http" ? <small className="wf-muted">POST /hello returns 200 with JSON. Publish it, then use Send HTTP test request to try it.</small> : null}
+          </label>
+          {draft.starter !== "http" ? <fieldset className="wf-form-field wf-root-field">
             <legend>Root activity</legend>
             <WorkflowRootRadioCards
               catalog={catalog}
               value={draft.rootActivityVersionId}
               onChange={rootActivityVersionId => onChange({ ...draft, rootActivityVersionId })}
             />
-          </fieldset>
+          </fieldset> : null}
           <div className="wf-dialog-actions">
             <button type="button" onClick={onClose} disabled={creating}>Cancel</button>
             <button type="submit" disabled={creating || !draft.name.trim()}>{creating ? "Creating..." : "Create"}</button>

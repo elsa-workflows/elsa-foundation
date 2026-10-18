@@ -346,7 +346,7 @@ export function ActivityGraphImplementationEditor({
   });
   const { nodes, edges, setNodes, setEdges, commitCanvas, commitDocument, undo, redo, canUndo, canRedo } = canvas;
   const payload = normalizePayload(value.payload);
-  const root = payload.rootActivity;
+  const root = activityGraphDocumentAdapter.readRoot(value);
   const owner = findNodeByPath(root, scopePath, catalogByVersion) ?? root;
   const ownerCatalogItem = catalogByVersion.get(owner.activityVersionId);
   const ownerSupported = supportsActivityNode(owner, ownerCatalogItem);
@@ -448,10 +448,7 @@ export function ActivityGraphImplementationEditor({
       const nextRoot = createActivityNode(activity, root.nodeId || "root");
       setScopePath([]);
       setSelectedNodeId(null);
-      commitDocument({
-        ...activityGraphDocumentAdapter.replaceGraph(value, nextRoot, []),
-        payload: { ...(isRecord(value.payload) ? value.payload : {}), ...payload, rootActivity: nextRoot, outcomeMappings: [] }
-      });
+      commitDocument(replaceGraphRootAndClearOutcomes(value, nextRoot));
       return null;
     }
     if (!slot) return null;
@@ -463,7 +460,7 @@ export function ActivityGraphImplementationEditor({
     );
     setSelectedNodeId(next.nodeId);
     return next;
-  }, [activities, commitDocument, isBpmnSlot, payload, placeBpmnActivity, readOnly, root.activityVersionId, root.nodeId, slot, updateOwnerActivities, value]);
+  }, [activities, commitDocument, isBpmnSlot, placeBpmnActivity, readOnly, root.activityVersionId, root.nodeId, slot, updateOwnerActivities, value]);
 
   // BPMN canvas nodes are elements, so a delete must expand to the activity the element binds, that
   // activity's nested activities, and the element ids of any BPMN scope inside it.
@@ -614,10 +611,7 @@ export function ActivityGraphImplementationEditor({
     setScopePath([]);
     setSelectedNodeId(null);
     const nextRoot = createActivityNode(activity, root.nodeId || "root");
-    commitDocument({
-      ...activityGraphDocumentAdapter.replaceGraph(value, nextRoot, []),
-      payload: { ...(isRecord(value.payload) ? value.payload : {}), ...payload, rootActivity: nextRoot, outcomeMappings: [] }
-    });
+    commitDocument(replaceGraphRootAndClearOutcomes(value, nextRoot));
   };
   const deleteSelected = () => {
     if (isBpmnSlot) {
@@ -847,6 +841,7 @@ export function ActivityGraphImplementationEditor({
             nodes: accessibleNodes,
             edges: interactions.accessibleEdges,
             onInit: interactions.setReactFlowInstance,
+            onMoveEnd: interactions.onMoveEnd,
             onNodesChange: interactions.onNodesChange,
             onEdgesChange: interactions.onEdgesChange,
             onNodesDelete: interactions.onNodesDelete,
@@ -1251,6 +1246,21 @@ export function canAddActivityGraphOutcomeMapping(
 
 function normalizePayload(value: unknown) {
   return normalizeActivityGraphPayload(value);
+}
+
+function replaceGraphRootAndClearOutcomes(
+  document: StudioActivityDefinitionImplementationEditorProps["value"],
+  rootActivity: ActivityNode
+) {
+  const replaced = activityGraphDocumentAdapter.replaceGraph(document, rootActivity, []);
+  return {
+    ...replaced,
+    payload: {
+      ...(isRecord(document.payload) ? document.payload : {}),
+      ...normalizePayload(replaced.payload),
+      outcomeMappings: []
+    }
+  };
 }
 
 export function getActivityGraphOutcomeMappingOptions(
