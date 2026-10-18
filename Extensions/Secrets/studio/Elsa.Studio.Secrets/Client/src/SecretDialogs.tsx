@@ -36,6 +36,7 @@ export function CreateSecretDialog({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const dialogRef = useRef<HTMLDivElement>(null);
+  const descriptionInputId = useId();
   const normalizedName = normalizeTechnicalName(name);
   const nameInvalid = normalizedName.length > 0 && !technicalNamePattern.test(normalizedName);
   const selectedType = descriptors.types.find(type => type.name === typeName);
@@ -87,7 +88,7 @@ export function CreateSecretDialog({
         <Field label="Technical name" value={name} onChange={setName} onBlur={() => setName(normalizedName)} autoComplete="off" />
         <p className={nameInvalid ? "secrets-field-error" : "secrets-field-hint"}>Trimmed and lowercased. Use letters, numbers, dot, dash, underscore, or colon.</p>
         <Field label="Display name" value={displayName} onChange={setDisplayName} />
-        <label>Description<textarea value={description} onChange={event => setDescription(event.target.value)} rows={3} /></label>
+        <div className="secrets-description-field"><label htmlFor={descriptionInputId}>Description</label><textarea id={descriptionInputId} value={description} onChange={event => setDescription(event.target.value)} rows={3} /></div>
         <label>Type<select value={typeName} onChange={event => changeType(event.target.value)}>{descriptors.types.map(type => <option key={type.name} value={type.name}>{type.displayName || type.name}</option>)}</select></label>
         {selectedType?.description ? <p className="secrets-field-hint">{selectedType.description}</p> : null}
         <label>Store<select value={storeName} onChange={event => setStoreName(event.target.value)}>{supportedStores.map(store => <option key={store.name} value={store.name}>{store.displayName || store.name}</option>)}</select></label>

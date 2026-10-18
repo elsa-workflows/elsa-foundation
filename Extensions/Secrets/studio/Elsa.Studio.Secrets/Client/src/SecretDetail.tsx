@@ -24,6 +24,7 @@ export function SecretDetail({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const titleId = useId();
+  const descriptionInputId = useId();
   const scopeInputId = useId();
   const scopeHelpId = useId();
   const cannotClose = busy || saving;
@@ -90,10 +91,10 @@ export function SecretDetail({
             <span>Display name</span>
             <input data-dialog-initial-focus value={displayName} readOnly={cannotClose} onChange={event => setDisplayName(event.target.value)} />
           </label>
-          <label>
-            <span>Description</span>
-            <textarea value={description} readOnly={cannotClose} onChange={event => setDescription(event.target.value)} rows={4} />
-          </label>
+          <div className="secrets-description-field">
+            <label htmlFor={descriptionInputId}>Description</label>
+            <textarea id={descriptionInputId} value={description} readOnly={cannotClose} onChange={event => setDescription(event.target.value)} rows={4} />
+          </div>
           <div className="secrets-editor-scope">
             <label htmlFor={scopeInputId}>Scope</label>
             <input id={scopeInputId} value={secret.scope || "No scope"} readOnly aria-describedby={scopeHelpId} />

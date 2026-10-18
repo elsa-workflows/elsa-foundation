@@ -30,6 +30,15 @@ afterEach(() => {
 });
 
 describe("entered secret visibility", () => {
+  it("explicitly associates the create description label with its textarea", () => {
+    const { container } = renderDialog("create");
+    const description = container.querySelector<HTMLTextAreaElement>(".secrets-modal textarea")!;
+    expect(description.id).toBeTruthy();
+    expect(description.labels?.[0]?.htmlFor).toBe(description.id);
+    expect(description.labels?.[0]?.textContent).toBe("Description");
+    expect(description.labels?.[0]?.contains(description)).toBe(false);
+  });
+
   it("submits a custom scope without changing the authored value", async () => {
     const { container, onSave } = renderDialog("create");
     const scopeSelect = container.querySelectorAll<HTMLSelectElement>("select")[2];

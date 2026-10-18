@@ -83,6 +83,11 @@ describe("secrets page", () => {
     expect(dialog.querySelector("h3")?.textContent).toBe("Edit secret");
     expect(dialog.querySelector<HTMLInputElement>("[data-dialog-initial-focus]")?.value).toBe("Payments API");
     expect(document.activeElement?.getAttribute("data-dialog-initial-focus")).not.toBeNull();
+    const description = dialog.querySelector<HTMLTextAreaElement>(".secrets-edit-form textarea")!;
+    expect(description.id).toBeTruthy();
+    expect(description.labels?.[0]?.htmlFor).toBe(description.id);
+    expect(description.labels?.[0]?.textContent).toBe("Description");
+    expect(description.labels?.[0]?.contains(description)).toBe(false);
     const scopeInput = dialog.querySelector<HTMLInputElement>(".secrets-editor-scope input")!;
     expect(scopeInput.labels?.[0]?.textContent).toBe("Scope");
     expect(scopeInput.readOnly).toBe(true);
@@ -206,6 +211,7 @@ describe("secrets page", () => {
     await waitFor(() => !!container.querySelector("[aria-label='Create secret']"));
     const dialog = container.querySelector<HTMLElement>("[aria-label='Create secret']")!;
     change(dialog.querySelector<HTMLInputElement>("input")!, "kept-secret");
+    change(dialog.querySelector<HTMLTextAreaElement>("textarea")!, "Keep this description during refresh.");
     change(dialog.querySelector<HTMLInputElement>(".secrets-value-input input")!, "kept-value");
     selectValue(dialog.querySelector<HTMLSelectElement>("select[id^='scope-select-']")!, "module.payments");
 
@@ -213,6 +219,7 @@ describe("secrets page", () => {
     await waitForText(container, "Scope suggestions could not be refreshed.");
     expect(container.textContent).toContain("Payments API");
     expect(dialog.querySelector<HTMLInputElement>("input")?.value).toBe("kept-secret");
+    expect(dialog.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Keep this description during refresh.");
     expect(dialog.querySelector<HTMLInputElement>(".secrets-value-input input")?.value).toBe("kept-value");
     expect(dialog.querySelector<HTMLSelectElement>("select[id^='scope-select-']")?.value).toBe("module.payments");
     expect(container.textContent).not.toContain("private catalog failure");
@@ -220,6 +227,7 @@ describe("secrets page", () => {
     clickButton(dialog, "Retry scope suggestions");
     await waitFor(() => descriptorRequests === 3 && !dialog.querySelector("[role='alert']"));
     expect(dialog.querySelector<HTMLInputElement>("input")?.value).toBe("kept-secret");
+    expect(dialog.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Keep this description during refresh.");
     expect(dialog.querySelector<HTMLInputElement>(".secrets-value-input input")?.value).toBe("kept-value");
     expect(dialog.querySelector<HTMLSelectElement>("select[id^='scope-select-']")?.value).toBe("module.payments");
   });
