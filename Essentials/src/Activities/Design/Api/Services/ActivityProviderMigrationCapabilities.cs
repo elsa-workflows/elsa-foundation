@@ -1,16 +1,16 @@
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
 
-namespace Elsa.Activities.Design.Core.Services;
+namespace Elsa.Activities.Design.Api.Services;
 
 /// <summary>Matches a target provider schema's declarations against an exact source manifest identity.</summary>
-public static class ActivityProviderMigrationCapabilities
+internal static class ActivityProviderMigrationCapabilities
 {
     /// <summary>
     /// Returns whether the target schema declares this exact source. Legacy schema-only declarations
     /// apply only when source and target provider keys are the same.
     /// </summary>
-    public static bool SupportsMigrationFrom(
+    internal static bool SupportsMigrationFrom(
         string targetProviderKey,
         ActivityProviderManifestSchemaCapabilities targetSchema,
         string? sourceProviderKey,
@@ -27,7 +27,7 @@ public static class ActivityProviderMigrationCapabilities
     }
 
     /// <summary>Returns whether an exact registered target schema is authorable and declares this source manifest.</summary>
-    public static bool SupportsAuthorableMigrationFrom(
+    internal static bool SupportsAuthorableMigrationFrom(
         IActivityProvider targetProvider,
         string targetSchemaVersion,
         ActivityProviderManifest source)
