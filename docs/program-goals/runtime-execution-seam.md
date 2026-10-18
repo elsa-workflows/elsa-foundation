@@ -1,12 +1,16 @@
 # Runtime Execution Seam
 
-> **Parked until 2026-11-21** by [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus). No new child work until it is reactivated.
+> **Historical objectives parked until 2026-11-21** by [ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus). The owner-authorized [unified execution continuation](unified-execution.md) is active within its named scope.
 
-Status: Parked until 2026-11-21 (ADR 0080 D0).
+Status: Historical objectives parked until 2026-11-21; Program #2892 continuation active by owner authorization.
 
 Area: Workflows Runtime architecture / executable artifact seam.
 
 Steward(s): Joey plus the incoming runtime architect.
+
+## Unified execution continuation (18 October 2026)
+
+The owner approved [Program #2892](unified-execution.md) for end-to-end delivery. Its lifecycle compatibility and BPMN integration work is active under #2905, reusing the completed native proof below. This supersedes the earlier research-only boundary for that named program; unrelated historical objectives in this bucket remain parked.
 
 ## Native background activity proof (2026-10-17)
 

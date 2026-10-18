@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using CShells.Lifecycle;
+using Elsa.Activities.Bpmn;
+using Elsa.Activities.Bpmn.Internal;
+using Elsa.Activities.Bpmn.Models;
 using Elsa.Activities.Flowchart;
 using Elsa.Activities.Flowchart.Internal.Policies;
 using Elsa.Activities.Flowchart.Models;
@@ -23,6 +26,7 @@ using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Services.Values;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using BpmnProcessActivity = Elsa.Activities.Bpmn.Activities.BpmnProcess;
 using FlowchartActivity = Elsa.Activities.Flowchart.Activities.Flowchart;
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 
@@ -43,9 +47,18 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
     private const string LeftNodeId = "background-left";
     private const string RightNodeId = "background-right";
     private const string JoinNodeId = "join";
+    private const string JoinElementId = "join";
     private const string FinalNodeId = "final";
+    private const string BpmnNodeId = "bpmn-process";
+    private const string BpmnStartElementId = "bpmn-start";
+    private const string BpmnForkElementId = "bpmn-fork";
+    private const string BpmnLeftElementId = "bpmn-left";
+    private const string BpmnRightElementId = "bpmn-right";
+    private const string BpmnEndElementId = "bpmn-end";
+    private const string OuterSiblingNodeId = "background-outer-sibling";
     private const string LeftVariableKey = "var-left-result";
     private const string RightVariableKey = "var-right-result";
+    private const string OuterVariableKey = "var-outer-result";
     private const string RecoverySigningKey = "native-background-ef-recovery-signing-key-32";
     private const string HierarchySigningKey = "native-background-ef-hierarchy-signing-key-32";
 
@@ -176,6 +189,353 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
                 Assert.Equal(BackgroundActivityWorkStatus.Accepted,
                     (await store.FindAsync(executionId, item.Request.WorkId))!.Status);
         }
+    }
+
+    [Theory]
+    [InlineData(BpmnParentKind.Sequence, LeftNodeId, false)]
+    [InlineData(BpmnParentKind.Sequence, RightNodeId, false)]
+    [InlineData(BpmnParentKind.Flowchart, LeftNodeId, false)]
+    [InlineData(BpmnParentKind.Flowchart, LeftNodeId, true)]
+    [InlineData(BpmnParentKind.Flowchart, RightNodeId, false)]
+    [InlineData(BpmnParentKind.Flowchart, RightNodeId, true)]
+    public async Task Published_bpmn_process_waits_for_internal_and_outer_joins_across_host_restart(
+        BpmnParentKind parentKind,
+        string firstNodeId,
+        bool outerSiblingCompletesFirst)
+    {
+        var executionId = ExecutionIdPrefix + Guid.NewGuid().ToString("N");
+        var barrier = new BackgroundBodyBarrier();
+        var finalCounter = new FinalStepCounter();
+        var harness = await StartHarnessAsync(executionId, barrier, finalCounter, includeBpmnFeature: true);
+        WorkflowExecutionHarness? restartedHarness = null;
+        var firstHarnessDisposed = false;
+        try
+        {
+            var reference = await PublishAsync(harness, NewBpmnExecutable(parentKind: parentKind));
+            await CopyPublicationIntoPartitionAsync(harness, reference);
+
+            var started = await harness.StartPublishedAsync(reference, executionId);
+            Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, started.CommandDispatch.Status);
+            Assert.Equal(WorkflowExecutionStatus.Running, await WorkflowStatusAsync(harness, executionId));
+            var pinnedExecutable = (await WorkflowStateAsync(harness, executionId))!.PinnedExecutable;
+
+            var workers = await ClaimWorkersAsync(harness, executionId, parentKind == BpmnParentKind.Flowchart ? 3 : 2);
+            Assert.Equal(
+                parentKind == BpmnParentKind.Flowchart
+                    ? new[] { LeftNodeId, OuterSiblingNodeId, RightNodeId }.Order().ToArray()
+                    : new[] { LeftNodeId, RightNodeId }.Order().ToArray(),
+                workers.Select(item => item.Request.ExecutableNodeId).Order().ToArray());
+            var first = workers.Single(item => item.Request.ExecutableNodeId == firstNodeId);
+            var second = workers.Single(item => item.Request.ExecutableNodeId is (LeftNodeId or RightNodeId) && item.Request.ExecutableNodeId != firstNodeId);
+            var outerSibling = parentKind == BpmnParentKind.Flowchart
+                ? workers.Single(item => item.Request.ExecutableNodeId == OuterSiblingNodeId)
+                : null;
+
+            var worker = harness.Services.GetRequiredService<BackgroundActivityWorker>();
+            var firstRun = worker.ExecuteClaimAsync(
+                new PersistenceScope(WorkflowExecutionHarness.Partition.Value), first.Claim);
+            await barrier.WaitUntilEnteredAsync(firstNodeId == LeftNodeId ? "left" : "right", TimeSpan.FromSeconds(10));
+            barrier.Release(firstNodeId == LeftNodeId ? "left" : "right");
+            await firstRun.WaitAsync(TimeSpan.FromSeconds(10));
+
+            // The worker receipt is durable, but BPMN has not yet accepted the coordinator result.
+            await using (var resultScope = await CreatePartitionScopeAsync(harness))
+            {
+                var work = await resultScope.ServiceProvider.GetRequiredService<IBackgroundActivityWorkStore>()
+                    .FindAsync(executionId, first.Request.WorkId);
+                Assert.Equal(BackgroundActivityWorkStatus.ResultReady, work!.Status);
+            }
+            Assert.Equal(WorkflowExecutionStatus.Running, await WorkflowStatusAsync(harness, executionId));
+            Assert.Equal(ActivityExecutionStatus.Running, await ActivityStatusAsync(harness, executionId, first.Request.ExecutableNodeId));
+            Assert.Equal(0, finalCounter.Count);
+
+            // Drop the original host and reopen the same durable store. The run must keep its pinned artifact and
+            // accept the already-recorded receipt exactly once when the saved coordinator pointer is drained.
+            await harness.DisposeAsync();
+            firstHarnessDisposed = true;
+            restartedHarness = await StartHarnessAsync(
+                executionId,
+                barrier,
+                finalCounter,
+                includeBpmnFeature: true,
+                activityIdNamespace: "restart-activity");
+            var persistedWorkflow = await WorkflowStateAsync(restartedHarness, executionId);
+            Assert.Equal(pinnedExecutable, persistedWorkflow!.PinnedExecutable);
+            Assert.Equal(reference.ArtifactId, persistedWorkflow.PinnedExecutable.ArtifactId);
+            Assert.Equal(WorkflowExecutionStatus.Running, persistedWorkflow.Status);
+            var parentNodeId = parentKind == BpmnParentKind.Sequence ? SequenceNodeId : FlowchartNodeId;
+            await using (var artifactScope = await CreatePartitionScopeAsync(restartedHarness))
+                Assert.NotNull(await artifactScope.ServiceProvider.GetRequiredService<IWorkflowExecutableStore>()
+                    .FindAsync(reference.ArtifactId));
+            Assert.Equal(BackgroundActivityWorkStatus.ResultReady,
+                (await BackgroundWorkAsync(restartedHarness, executionId, first.Request.WorkId))!.Status);
+
+            await DrivePartitionAsync(restartedHarness, executionId);
+
+            Assert.Equal(WorkflowExecutionStatus.Running, await WorkflowStatusAsync(restartedHarness, executionId));
+            Assert.Equal(ActivityExecutionStatus.Completed, await ActivityStatusAsync(restartedHarness, executionId, first.Request.ExecutableNodeId));
+            Assert.Equal(ActivityExecutionStatus.Running, await ActivityStatusAsync(restartedHarness, executionId, second.Request.ExecutableNodeId));
+            Assert.Equal(ActivityExecutionStatus.Running, await ActivityStatusAsync(restartedHarness, executionId, BpmnNodeId));
+            Assert.Equal(ActivityExecutionStatus.Running, await ActivityStatusAsync(restartedHarness, executionId, parentNodeId));
+            Assert.Equal(0, finalCounter.Count);
+            Assert.Equal(1, barrier.ExecutionCount(firstNodeId == LeftNodeId ? "left" : "right"));
+            Assert.Equal(BackgroundActivityWorkStatus.Accepted,
+                (await BackgroundWorkAsync(restartedHarness, executionId, first.Request.WorkId))!.Status);
+
+            // A duplicate of the now-accepted pointer must not repeat the child or cross either join.
+            await EnqueueCoordinatorPointerAsync(restartedHarness, first.Request.CoordinatorWorkItem);
+            await DrivePartitionAsync(restartedHarness, executionId);
+            Assert.Equal(ActivityExecutionStatus.Running, await ActivityStatusAsync(restartedHarness, executionId, second.Request.ExecutableNodeId));
+            Assert.Equal(0, finalCounter.Count);
+            Assert.Equal(1, barrier.ExecutionCount(firstNodeId == LeftNodeId ? "left" : "right"));
+            Assert.Equal(ActivityExecutionStatus.Running, await ActivityStatusAsync(restartedHarness, executionId, parentNodeId));
+            Assert.Equal(BackgroundActivityWorkStatus.Accepted,
+                (await BackgroundWorkAsync(restartedHarness, executionId, first.Request.WorkId))!.Status);
+
+            var waitingState = await BpmnStateAsync(restartedHarness, executionId);
+            Assert.Single(waitingState.ActiveChildren, child => child.NodeId == second.Request.ExecutableNodeId);
+            Assert.Contains(waitingState.Tokens, token => token.AtElementId == JoinElementId && token.Status == BpmnTokenStatus.WaitingAtJoin);
+
+            if (outerSibling is not null && outerSiblingCompletesFirst)
+            {
+                await ExecuteBackgroundAsync(restartedHarness, barrier, outerSibling);
+                await DrivePartitionAsync(restartedHarness, executionId);
+                Assert.Equal(ActivityExecutionStatus.Completed, await ActivityStatusAsync(restartedHarness, executionId, OuterSiblingNodeId));
+                Assert.Equal(ActivityExecutionStatus.Running, await ActivityStatusAsync(restartedHarness, executionId, BpmnNodeId));
+                Assert.Equal(ActivityExecutionStatus.Running, await ActivityStatusAsync(restartedHarness, executionId, FlowchartNodeId));
+                Assert.Equal(0, finalCounter.Count);
+            }
+
+            await ExecuteBackgroundAsync(restartedHarness, barrier, second);
+            await DrivePartitionAsync(restartedHarness, executionId);
+            if (outerSibling is not null && !outerSiblingCompletesFirst)
+            {
+                Assert.Equal(ActivityExecutionStatus.Completed, await ActivityStatusAsync(restartedHarness, executionId, BpmnNodeId));
+                Assert.Equal(ActivityExecutionStatus.Completed, await ActivityStatusAsync(restartedHarness, executionId, second.Request.ExecutableNodeId));
+                Assert.Equal(ActivityExecutionStatus.Running, await ActivityStatusAsync(restartedHarness, executionId, OuterSiblingNodeId));
+                Assert.Equal(ActivityExecutionStatus.Running, await ActivityStatusAsync(restartedHarness, executionId, FlowchartNodeId));
+                Assert.Equal(0, finalCounter.Count);
+                await ExecuteBackgroundAsync(restartedHarness, barrier, outerSibling);
+                await DrivePartitionAsync(restartedHarness, executionId);
+            }
+
+            var workflowStatus = await WorkflowStatusAsync(restartedHarness, executionId);
+            var activityStatuses = await ActivityStatesAsync(restartedHarness, executionId);
+            Assert.True(workflowStatus == WorkflowExecutionStatus.Completed,
+                $"Expected the BPMN composite workflow to complete; status was {workflowStatus}; activities: " +
+                string.Join(", ", activityStatuses.Select(state => $"{state.Execution.ExecutableNodeId}={state.Status}")));
+            Assert.Equal(ActivityExecutionStatus.Completed, await ActivityStatusAsync(restartedHarness, executionId, BpmnNodeId));
+            Assert.Equal(ActivityExecutionStatus.Completed, await ActivityStatusAsync(restartedHarness, executionId, parentNodeId));
+            Assert.Equal(ActivityExecutionStatus.Completed, await ActivityStatusAsync(restartedHarness, executionId, FinalNodeId));
+            Assert.Equal(1, finalCounter.Count);
+            Assert.Equal(1, barrier.ExecutionCount(second.Request.ExecutableNodeId == LeftNodeId ? "left" : "right"));
+            if (outerSibling is not null)
+                Assert.Equal(1, barrier.ExecutionCount("outer-sibling"));
+            await EnqueueCoordinatorPointerAsync(restartedHarness, first.Request.CoordinatorWorkItem);
+            await DrivePartitionAsync(restartedHarness, executionId);
+            Assert.Equal(WorkflowExecutionStatus.Completed, await WorkflowStatusAsync(restartedHarness, executionId));
+            Assert.Equal(1, finalCounter.Count);
+            Assert.Equal(1, barrier.ExecutionCount(firstNodeId == LeftNodeId ? "left" : "right"));
+
+            await using var scope = await CreatePartitionScopeAsync(restartedHarness);
+            foreach (var item in workers)
+                Assert.Equal(BackgroundActivityWorkStatus.Accepted,
+                    (await scope.ServiceProvider.GetRequiredService<IBackgroundActivityWorkStore>()
+                        .FindAsync(executionId, item.Request.WorkId))!.Status);
+        }
+        finally
+        {
+            if (restartedHarness is not null)
+                await restartedHarness.DisposeAsync();
+            else if (!firstHarnessDisposed)
+                await harness.DisposeAsync();
+        }
+    }
+
+    [Theory]
+    [InlineData(BpmnParentKind.Sequence)]
+    [InlineData(BpmnParentKind.Flowchart)]
+    public async Task Cancelling_bpmn_process_before_background_claims_prevents_child_execution(BpmnParentKind parentKind)
+    {
+        var executionId = ExecutionIdPrefix + Guid.NewGuid().ToString("N");
+        var barrier = new BackgroundBodyBarrier();
+        var finalCounter = new FinalStepCounter();
+        await using var harness = await StartHarnessAsync(executionId, barrier, finalCounter, includeBpmnFeature: true);
+        var reference = await PublishAsync(harness, NewBpmnExecutable(parentKind: parentKind));
+        await CopyPublicationIntoPartitionAsync(harness, reference);
+        await harness.StartPublishedAsync(reference, executionId);
+
+        Assert.Equal(WorkflowExecutionStatus.Running, await WorkflowStatusAsync(harness, executionId));
+        Assert.Equal(ActivityExecutionStatus.Running, await ActivityStatusAsync(harness, executionId, LeftNodeId));
+        Assert.Equal(ActivityExecutionStatus.Running, await ActivityStatusAsync(harness, executionId, RightNodeId));
+        if (parentKind == BpmnParentKind.Flowchart)
+            Assert.Equal(ActivityExecutionStatus.Running, await ActivityStatusAsync(harness, executionId, OuterSiblingNodeId));
+
+        await harness.CancelAsync(executionId);
+
+        Assert.Equal(WorkflowExecutionStatus.Cancelled, await WorkflowStatusAsync(harness, executionId));
+        Assert.Equal(ActivityExecutionStatus.Cancelled, await ActivityStatusAsync(harness, executionId, BpmnNodeId));
+        Assert.Equal(ActivityExecutionStatus.Cancelled, await ActivityStatusAsync(
+            harness, executionId, parentKind == BpmnParentKind.Sequence ? SequenceNodeId : FlowchartNodeId));
+        Assert.Equal(ActivityExecutionStatus.Cancelled, await ActivityStatusAsync(harness, executionId, LeftNodeId));
+        Assert.Equal(ActivityExecutionStatus.Cancelled, await ActivityStatusAsync(harness, executionId, RightNodeId));
+        if (parentKind == BpmnParentKind.Flowchart)
+            Assert.Equal(ActivityExecutionStatus.Cancelled, await ActivityStatusAsync(harness, executionId, OuterSiblingNodeId));
+        Assert.Equal(0, barrier.ExecutionCount("left"));
+        Assert.Equal(0, barrier.ExecutionCount("right"));
+        Assert.Equal(0, finalCounter.Count);
+
+        await using var scope = await CreatePartitionScopeAsync(harness);
+        Assert.Null(await scope.ServiceProvider.GetRequiredService<IBackgroundActivityWorkStore>()
+            .ClaimNextAsync("cancelled-bpmn-test-worker", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(1)));
+    }
+
+    [Theory]
+    [InlineData(BpmnParentKind.Sequence)]
+    [InlineData(BpmnParentKind.Flowchart)]
+    public async Task Cancelling_bpmn_process_between_background_results_rejects_late_result_and_keeps_join_closed(
+        BpmnParentKind parentKind)
+    {
+        var executionId = ExecutionIdPrefix + Guid.NewGuid().ToString("N");
+        var barrier = new BackgroundBodyBarrier();
+        var finalCounter = new FinalStepCounter();
+        await using var harness = await StartHarnessAsync(executionId, barrier, finalCounter, includeBpmnFeature: true);
+        var reference = await PublishAsync(harness, NewBpmnExecutable(parentKind: parentKind));
+        await CopyPublicationIntoPartitionAsync(harness, reference);
+        await harness.StartPublishedAsync(reference, executionId);
+
+        var workers = await ClaimWorkersAsync(harness, executionId, parentKind == BpmnParentKind.Flowchart ? 3 : 2);
+        var left = workers.Single(item => item.Request.ExecutableNodeId == LeftNodeId);
+        var right = workers.Single(item => item.Request.ExecutableNodeId == RightNodeId);
+        var worker = harness.Services.GetRequiredService<BackgroundActivityWorker>();
+        var workerScope = new PersistenceScope(WorkflowExecutionHarness.Partition.Value);
+        var leftRun = worker.ExecuteClaimAsync(workerScope, left.Claim);
+        var rightRun = worker.ExecuteClaimAsync(workerScope, right.Claim);
+        await Task.WhenAll(
+            barrier.WaitUntilEnteredAsync("left", TimeSpan.FromSeconds(10)),
+            barrier.WaitUntilEnteredAsync("right", TimeSpan.FromSeconds(10)));
+
+        barrier.Release("left");
+        await leftRun.WaitAsync(TimeSpan.FromSeconds(10));
+        await DrivePartitionAsync(harness, executionId);
+        Assert.Equal(ActivityExecutionStatus.Completed, await ActivityStatusAsync(harness, executionId, LeftNodeId));
+        Assert.Equal(ActivityExecutionStatus.Running, await ActivityStatusAsync(harness, executionId, RightNodeId));
+        Assert.Equal(0, finalCounter.Count);
+        if (parentKind == BpmnParentKind.Flowchart)
+            Assert.Equal(ActivityExecutionStatus.Running, await ActivityStatusAsync(harness, executionId, OuterSiblingNodeId));
+
+        await harness.CancelAsync(executionId);
+        barrier.Release("right");
+        await rightRun.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(WorkflowExecutionStatus.Cancelled, await WorkflowStatusAsync(harness, executionId));
+        Assert.Equal(ActivityExecutionStatus.Cancelled, await ActivityStatusAsync(harness, executionId, BpmnNodeId));
+        Assert.Equal(ActivityExecutionStatus.Cancelled, await ActivityStatusAsync(
+            harness, executionId, parentKind == BpmnParentKind.Sequence ? SequenceNodeId : FlowchartNodeId));
+        Assert.Equal(ActivityExecutionStatus.Completed, await ActivityStatusAsync(harness, executionId, LeftNodeId));
+        Assert.Equal(ActivityExecutionStatus.Cancelled, await ActivityStatusAsync(harness, executionId, RightNodeId));
+        if (parentKind == BpmnParentKind.Flowchart)
+            Assert.Equal(ActivityExecutionStatus.Cancelled, await ActivityStatusAsync(harness, executionId, OuterSiblingNodeId));
+        Assert.Equal(0, finalCounter.Count);
+
+        await using (var scope = await CreatePartitionScopeAsync(harness))
+        {
+            var store = scope.ServiceProvider.GetRequiredService<IBackgroundActivityWorkStore>();
+            Assert.Equal(BackgroundActivityWorkStatus.Accepted,
+                (await store.FindAsync(executionId, left.Request.WorkId))!.Status);
+            Assert.Equal(BackgroundActivityWorkStatus.Cancelled,
+                (await store.FindAsync(executionId, right.Request.WorkId))!.Status);
+            if (parentKind == BpmnParentKind.Flowchart)
+            {
+                var outer = workers.Single(item => item.Request.ExecutableNodeId == OuterSiblingNodeId);
+                Assert.Equal(BackgroundActivityWorkStatus.Cancelled,
+                    (await store.FindAsync(executionId, outer.Request.WorkId))!.Status);
+                Assert.Equal(0, barrier.ExecutionCount("outer-sibling"));
+            }
+            await Assert.ThrowsAsync<BackgroundActivityWorkConflictException>(async () =>
+                await store.RecordResultAsync(
+                    right.Claim,
+                    new BackgroundActivityWorkTerminalResult(
+                        BackgroundActivityWorkResultKind.Complete,
+                        resultJson: JsonSerializer.Serialize(new BackgroundLeafResult("right-result"))),
+                    DateTimeOffset.UtcNow));
+
+            // Redeliver the saved result pointer after cancellation; it cannot reopen the BPMN child or join.
+            await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
+                .EnqueueAsync(right.Request.CoordinatorWorkItem);
+        }
+
+        await DrivePartitionAsync(harness, executionId);
+        Assert.Equal(WorkflowExecutionStatus.Cancelled, await WorkflowStatusAsync(harness, executionId));
+        Assert.Equal(0, finalCounter.Count);
+        Assert.Equal(ActivityExecutionStatus.Completed, await ActivityStatusAsync(harness, executionId, LeftNodeId));
+        Assert.Equal(ActivityExecutionStatus.Cancelled, await ActivityStatusAsync(harness, executionId, RightNodeId));
+        Assert.Equal(ActivityExecutionStatus.Cancelled, await ActivityStatusAsync(harness, executionId, BpmnNodeId));
+        Assert.Equal(ActivityExecutionStatus.Cancelled, await ActivityStatusAsync(
+            harness, executionId, parentKind == BpmnParentKind.Sequence ? SequenceNodeId : FlowchartNodeId));
+        if (parentKind == BpmnParentKind.Flowchart)
+            Assert.Equal(ActivityExecutionStatus.Cancelled, await ActivityStatusAsync(harness, executionId, OuterSiblingNodeId));
+    }
+
+    [Theory]
+    [InlineData(BpmnParentKind.Sequence)]
+    [InlineData(BpmnParentKind.Flowchart)]
+    public async Task Background_fault_receipt_faults_bpmn_process_and_records_typed_incident(BpmnParentKind parentKind)
+    {
+        var executionId = ExecutionIdPrefix + Guid.NewGuid().ToString("N");
+        var barrier = new BackgroundBodyBarrier();
+        var finalCounter = new FinalStepCounter();
+        await using var harness = await StartHarnessAsync(executionId, barrier, finalCounter, includeBpmnFeature: true);
+        var reference = await PublishAsync(harness, NewBpmnExecutable(faultingNodeId: LeftNodeId, parentKind: parentKind));
+        await CopyPublicationIntoPartitionAsync(harness, reference);
+        await harness.StartPublishedAsync(reference, executionId);
+
+        var workers = await ClaimWorkersAsync(harness, executionId, parentKind == BpmnParentKind.Flowchart ? 3 : 2);
+        var faulting = workers.Single(item => item.Request.ExecutableNodeId == LeftNodeId);
+        var worker = harness.Services.GetRequiredService<BackgroundActivityWorker>();
+        var faultingRun = worker.ExecuteClaimAsync(
+            new PersistenceScope(WorkflowExecutionHarness.Partition.Value), faulting.Claim);
+        await barrier.WaitUntilEnteredAsync("left", TimeSpan.FromSeconds(10));
+        barrier.Release("left");
+        await faultingRun.WaitAsync(TimeSpan.FromSeconds(10));
+        await DrivePartitionAsync(harness, executionId);
+
+        Assert.Equal(WorkflowExecutionStatus.Faulted, await WorkflowStatusAsync(harness, executionId));
+        Assert.Equal(ActivityExecutionStatus.Faulted, await ActivityStatusAsync(harness, executionId, LeftNodeId));
+        Assert.Equal(ActivityExecutionStatus.Faulted, await ActivityStatusAsync(harness, executionId, BpmnNodeId));
+        // The current runtime propagates the nested fault through Flowchart, while Sequence remains Running even
+        // though the workflow itself is Faulted. Keep this legacy difference explicit; this test covers the durable
+        // fault receipt and incident protocol without normalizing composite fault propagation.
+        Assert.Equal(
+            parentKind == BpmnParentKind.Sequence ? ActivityExecutionStatus.Running : ActivityExecutionStatus.Faulted,
+            await ActivityStatusAsync(
+                harness, executionId, parentKind == BpmnParentKind.Sequence ? SequenceNodeId : FlowchartNodeId));
+        Assert.Equal(0, finalCounter.Count);
+        var faultedChild = Assert.Single(await ActivityStatesAsync(harness, executionId), state => state.Execution.ExecutableNodeId == LeftNodeId);
+        Assert.Equal("background.business-fault", faultedChild.Fault!.Code);
+        Assert.Contains((await BpmnStateAsync(harness, executionId)).Diagnostics,
+            diagnostic => diagnostic.Kind == BpmnDiagnosticKind.Faulted);
+
+        await using var scope = await CreatePartitionScopeAsync(harness);
+        var store = scope.ServiceProvider.GetRequiredService<IBackgroundActivityWorkStore>();
+        var acceptedFault = await store.FindAsync(executionId, faulting.Request.WorkId);
+        Assert.Equal(BackgroundActivityWorkStatus.Accepted, acceptedFault!.Status);
+        Assert.Equal(BackgroundActivityWorkResultKind.Fault, acceptedFault.Result!.Kind);
+        foreach (var sibling in workers.Where(item => item.Request.ExecutableNodeId != LeftNodeId))
+            Assert.Equal(BackgroundActivityWorkStatus.Cancelled,
+                (await store.FindAsync(executionId, sibling.Request.WorkId))!.Status);
+        Assert.Null(await store.ClaimNextAsync(
+            "faulted-bpmn-test-worker", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(1)));
+        Assert.Equal(0, barrier.ExecutionCount("right"));
+        if (parentKind == BpmnParentKind.Flowchart)
+            Assert.Equal(0, barrier.ExecutionCount("outer-sibling"));
+        var incident = Assert.Single(
+            await scope.ServiceProvider.GetRequiredService<IIncidentStateStore>().ListAsync(executionId),
+            candidate => candidate.ExecutableNodeId == LeftNodeId);
+        Assert.Equal(IncidentStatus.Blocking, incident.Status);
+        Assert.Equal("ActivityReturnedFault", incident.FailureType);
+        Assert.Equal(LeftNodeId, incident.ExecutableNodeId);
+        Assert.Contains("business fault", incident.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -332,9 +692,11 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
         string executionId,
         BackgroundBodyBarrier barrier,
         FinalStepCounter finalCounter,
-        PersistenceMode persistenceMode = PersistenceMode.Durable)
+        PersistenceMode persistenceMode = PersistenceMode.Durable,
+        bool includeBpmnFeature = false,
+        string activityIdNamespace = "activity")
     {
-        var harness = WorkflowExecutionHarness.Create()
+        var builder = WorkflowExecutionHarness.Create()
             .WithFeature(services => new WorkflowsRuntimeResumptionFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
             .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
@@ -344,8 +706,12 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
                 MaxConcurrency = 2,
                 LeaseDurationSeconds = 60,
                 RenewalIntervalSeconds = 0.1
-            }.ConfigureServices(services))
-            .ConfigureServices(services =>
+            }.ConfigureServices(services));
+
+        if (includeBpmnFeature)
+            builder = builder.WithFeature(services => new ActivitiesBpmnFeature().ConfigureServices(services));
+
+        var harness = builder.ConfigureServices(services =>
             {
                 services.AddLogging();
                 services.AddSingleton(barrier);
@@ -363,7 +729,7 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
             .Build(
                 WorkflowExecutionHarness.Identity,
                 executionId,
-                Enumerable.Range(1, 32).Select(index => $"{executionId}-activity-{index}"));
+                Enumerable.Range(1, 32).Select(index => $"{executionId}-{activityIdNamespace}-{index}"));
 
         foreach (var initializer in harness.Services.GetServices<IShellInitializer>())
             await initializer.InitializeAsync();
@@ -372,7 +738,10 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
     }
 
     private static Task<WorkflowExecutableSourceReference> PublishAsync(WorkflowExecutionHarness harness) =>
-        harness.PublishAsync(NewExecutable(), SourceReferenceId);
+        PublishAsync(harness, NewExecutable());
+
+    private static Task<WorkflowExecutableSourceReference> PublishAsync(WorkflowExecutionHarness harness, WorkflowExecutable executable) =>
+        harness.PublishAsync(executable, SourceReferenceId);
 
     private static async Task CopyPublicationIntoPartitionAsync(
         WorkflowExecutionHarness harness,
@@ -391,11 +760,17 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
     }
 
     private static async Task<IReadOnlyList<ClaimedWorker>> ClaimTwoAsync(WorkflowExecutionHarness harness, string executionId)
+        => await ClaimWorkersAsync(harness, executionId, 2);
+
+    private static async Task<IReadOnlyList<ClaimedWorker>> ClaimWorkersAsync(
+        WorkflowExecutionHarness harness,
+        string executionId,
+        int count)
     {
         await using var scope = await CreatePartitionScopeAsync(harness);
         var store = scope.ServiceProvider.GetRequiredService<IBackgroundActivityWorkStore>();
         var result = new List<ClaimedWorker>();
-        for (var index = 0; index < 2; index++)
+        for (var index = 0; index < count; index++)
         {
             var claim = await store.ClaimNextAsync($"native-test-worker-{index}", DateTimeOffset.UtcNow, TimeSpan.FromMinutes(1));
             Assert.NotNull(claim);
@@ -405,6 +780,25 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
         }
 
         return result;
+    }
+
+    private static async Task ExecuteBackgroundAsync(
+        WorkflowExecutionHarness harness,
+        BackgroundBodyBarrier barrier,
+        ClaimedWorker item)
+    {
+        var name = item.Request.ExecutableNodeId switch
+        {
+            LeftNodeId => "left",
+            RightNodeId => "right",
+            OuterSiblingNodeId => "outer-sibling",
+            _ => throw new InvalidOperationException($"Unexpected background node '{item.Request.ExecutableNodeId}'.")
+        };
+        var worker = harness.Services.GetRequiredService<BackgroundActivityWorker>();
+        var run = worker.ExecuteClaimAsync(new PersistenceScope(WorkflowExecutionHarness.Partition.Value), item.Claim);
+        await barrier.WaitUntilEnteredAsync(name, TimeSpan.FromSeconds(10));
+        barrier.Release(name);
+        await run.WaitAsync(TimeSpan.FromSeconds(10));
     }
 
     private static async Task DrivePartitionAsync(WorkflowExecutionHarness harness, string executionId)
@@ -450,6 +844,31 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
     {
         await using var scope = await CreatePartitionScopeAsync(harness);
         return await scope.ServiceProvider.GetRequiredService<IActivityExecutionStateStore>().ListAllAsync(executionId);
+    }
+
+    private static async Task<BpmnExecutionState> BpmnStateAsync(WorkflowExecutionHarness harness, string executionId)
+    {
+        var processState = Assert.Single(await ActivityStatesAsync(harness, executionId), state => state.Execution.ExecutableNodeId == BpmnNodeId);
+        return Assert.IsType<BpmnExecutionState>(BpmnStatePersister.LoadState(processState));
+    }
+
+    private static async Task<BackgroundActivityWorkItem?> BackgroundWorkAsync(
+        WorkflowExecutionHarness harness,
+        string executionId,
+        string workId)
+    {
+        await using var scope = await CreatePartitionScopeAsync(harness);
+        return await scope.ServiceProvider.GetRequiredService<IBackgroundActivityWorkStore>()
+            .FindAsync(executionId, workId);
+    }
+
+    private static async Task EnqueueCoordinatorPointerAsync(
+        WorkflowExecutionHarness harness,
+        RuntimeSchedulerWorkItem coordinatorWorkItem)
+    {
+        await using var scope = await CreatePartitionScopeAsync(harness);
+        await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
+            .EnqueueAsync(coordinatorWorkItem);
     }
 
     private static async Task<WorkflowExecutionState?> WorkflowStateAsync(WorkflowExecutionHarness harness, string executionId)
@@ -520,9 +939,136 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
             new RuntimeVariableDeclaration(RightVariableKey, "right", new ValueTypeDescriptor("String"), ValueProtectionPolicy.InstanceInline));
     }
 
-    private static ExecutableNode BackgroundNode(string nodeId, string inputName, string variableKey, string captureName)
+    private static WorkflowExecutable NewBpmnExecutable(
+        string? faultingNodeId = null,
+        BpmnParentKind parentKind = BpmnParentKind.Sequence)
     {
-        var contract = ClrActivityContractTestBuilder.BuildContract(typeof(GatedBackgroundActivity));
+        var left = BackgroundNode(
+            LeftNodeId, "left", LeftVariableKey, "left",
+            faultingNodeId == LeftNodeId ? typeof(FaultingGatedBackgroundActivity) : null);
+        var right = BackgroundNode(
+            RightNodeId, "right", RightVariableKey, "right",
+            faultingNodeId == RightNodeId ? typeof(FaultingGatedBackgroundActivity) : null);
+        var processContract = ClrActivityContractTestBuilder.BuildContract(typeof(BpmnProcessActivity));
+        var structure = new BpmnStructure(
+            [
+                new BpmnElement(BpmnStartElementId, BpmnElementTypes.StartEvent),
+                new BpmnElement(BpmnForkElementId, BpmnElementTypes.ParallelGateway),
+                new BpmnElement(BpmnLeftElementId, BpmnElementTypes.Task, childNodeId: LeftNodeId),
+                new BpmnElement(BpmnRightElementId, BpmnElementTypes.Task, childNodeId: RightNodeId),
+                new BpmnElement(JoinElementId, BpmnElementTypes.ParallelGateway),
+                new BpmnElement(BpmnEndElementId, BpmnElementTypes.EndEvent)
+            ],
+            [
+                new BpmnSequenceFlow("bpmn-flow-1", BpmnStartElementId, BpmnForkElementId),
+                new BpmnSequenceFlow("bpmn-flow-2", BpmnForkElementId, BpmnLeftElementId),
+                new BpmnSequenceFlow("bpmn-flow-3", BpmnForkElementId, BpmnRightElementId),
+                new BpmnSequenceFlow("bpmn-flow-4", BpmnLeftElementId, JoinElementId),
+                new BpmnSequenceFlow("bpmn-flow-5", BpmnRightElementId, JoinElementId),
+                new BpmnSequenceFlow("bpmn-flow-6", JoinElementId, BpmnEndElementId)
+            ]);
+        var canStartInput = processContract.Inputs[nameof(BpmnProcessActivity.CanStartWorkflow)];
+        var canStartBinding = new RuntimeInputBinding(
+            canStartInput.Key,
+            canStartInput.Type,
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Literal,
+            literal: ValueEnvelope.Inline(
+                canStartInput.Type,
+                JsonSerializer.SerializeToElement(false),
+                ValueProtectionPolicy.InstanceInline));
+        var process = new ExecutableNode(
+            executableNodeId: BpmnNodeId,
+            authoredActivityId: $"authored-{BpmnNodeId}",
+            activityType: typeof(BpmnProcessActivity).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptorType: typeof(BpmnProcessDescriptor).FullName!,
+            descriptorPayload: JsonSerializer.SerializeToElement(new BpmnProcessDescriptor()),
+            inputBindings: new Dictionary<string, RuntimeInputBinding> { [canStartBinding.InputName] = canStartBinding },
+            metadata: new Dictionary<string, string>(),
+            childSlots: [new ExecutableChildSlot(BpmnProcessActivity.ActivitiesSlotName, [left, right])],
+            structure: new ExecutableActivityStructure(
+                BpmnProcessActivity.StructureKind,
+                BpmnProcessActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(structure)),
+            activityContract: processContract);
+
+        var final = InlineNode<FinalStepActivity>(FinalNodeId, new Dictionary<string, string>());
+        ExecutableNode root;
+        var declarations = new List<RuntimeVariableDeclaration>
+        {
+            new(LeftVariableKey, "left", new ValueTypeDescriptor("String"), ValueProtectionPolicy.InstanceInline),
+            new(RightVariableKey, "right", new ValueTypeDescriptor("String"), ValueProtectionPolicy.InstanceInline)
+        };
+
+        if (parentKind == BpmnParentKind.Sequence)
+        {
+            var sequenceContract = ClrActivityContractTestBuilder.BuildContract(typeof(SequenceActivity));
+            root = new ExecutableNode(
+                executableNodeId: SequenceNodeId,
+                authoredActivityId: $"authored-{SequenceNodeId}",
+                activityType: typeof(SequenceActivity).FullName!,
+                activityTypeVersion: "1.0.0",
+                descriptorType: sequenceContract.DescriptorKind,
+                descriptorPayload: sequenceContract.DescriptorPayload,
+                inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+                metadata: new Dictionary<string, string>(),
+                childSlots: [new ExecutableChildSlot(SequenceActivity.ActivitiesSlotName, [process, final])],
+                structure: new ExecutableActivityStructure(
+                    SequenceActivity.StructureKind,
+                    SequenceActivity.StructureSchemaVersion,
+                    JsonSerializer.SerializeToElement(new SequenceExecutableStructure([BpmnNodeId, FinalNodeId]))),
+                activityContract: sequenceContract);
+        }
+        else
+        {
+            var fork = InlineNode<ForkOrFinalPassActivity>(ForkNodeId, new Dictionary<string, string>());
+            var join = InlineNode<ForkOrFinalPassActivity>(JoinNodeId, new Dictionary<string, string>());
+            var outerSibling = BackgroundNode(OuterSiblingNodeId, "outer-sibling", OuterVariableKey, "outer-sibling");
+            var flowchartContract = ClrActivityContractTestBuilder.BuildContract(typeof(FlowchartActivity));
+            root = new ExecutableNode(
+                executableNodeId: FlowchartNodeId,
+                authoredActivityId: $"authored-{FlowchartNodeId}",
+                activityType: typeof(FlowchartActivity).FullName!,
+                activityTypeVersion: "1.0.0",
+                descriptorType: flowchartContract.DescriptorKind,
+                descriptorPayload: flowchartContract.DescriptorPayload,
+                inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+                metadata: new Dictionary<string, string>(),
+                childSlots: [new ExecutableChildSlot(FlowchartActivity.ActivitiesSlotName, [fork, process, outerSibling, join, final])],
+                structure: new ExecutableActivityStructure(
+                    FlowchartActivity.StructureKind,
+                    FlowchartActivity.StructureSchemaVersion,
+                    JsonSerializer.SerializeToElement(new FlowchartStructure(
+                        [
+                            Connection(ForkNodeId, BpmnNodeId),
+                            Connection(ForkNodeId, OuterSiblingNodeId),
+                            Connection(BpmnNodeId, JoinNodeId),
+                            Connection(OuterSiblingNodeId, JoinNodeId),
+                            Connection(JoinNodeId, FinalNodeId)
+                        ],
+                        ForkNodeId,
+                        new Dictionary<string, FlowchartNodeMetadata>
+                        {
+                            [ForkNodeId] = new(FlowchartPolicyKinds.ParallelFork)
+                        }))),
+                activityContract: flowchartContract);
+            declarations.Add(new RuntimeVariableDeclaration(
+                OuterVariableKey, "outer", new ValueTypeDescriptor("String"), ValueProtectionPolicy.InstanceInline));
+        }
+
+        return WorkflowExecutionHarness.NewExecutable(root, WorkflowExecutionHarness.Identity, declarations.ToArray());
+    }
+
+    private static ExecutableNode BackgroundNode(
+        string nodeId,
+        string inputName,
+        string variableKey,
+        string captureName,
+        Type? activityType = null)
+    {
+        activityType ??= typeof(GatedBackgroundActivity);
+        var contract = ClrActivityContractTestBuilder.BuildContract(activityType);
         var input = contract.Inputs[nameof(GatedBackgroundActivity.Name)];
         var binding = new RuntimeInputBinding(
             input.Key,
@@ -547,7 +1093,7 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
         return new ExecutableNode(
             executableNodeId: nodeId,
             authoredActivityId: $"authored-{nodeId}",
-            activityType: typeof(GatedBackgroundActivity).FullName!,
+            activityType: activityType.FullName!,
             activityTypeVersion: "1.0.0",
             descriptorType: contract.DescriptorKind,
             descriptorPayload: contract.DescriptorPayload,
@@ -580,14 +1126,23 @@ public sealed class NativeBackgroundActivityFlowchartEfTests : IDisposable
         new(new FlowchartEndpoint(source), new FlowchartEndpoint(target));
 
     private sealed record ClaimedWorker(BackgroundActivityWorkClaim Claim, BackgroundActivityWorkRequest Request);
+    private sealed record BpmnProcessDescriptor;
+
+    public enum BpmnParentKind
+    {
+        Sequence,
+        Flowchart
+    }
 }
 
 public sealed class BackgroundBodyBarrier
 {
     private readonly ConcurrentDictionary<string, TaskCompletionSource> _entered = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, TaskCompletionSource> _released = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, int> _executionCounts = new(StringComparer.Ordinal);
 
     public int EntryCount => _entered.Values.Count(signal => signal.Task.IsCompleted);
+    public int ExecutionCount(string name) => _executionCounts.GetValueOrDefault(name);
 
     public Task WaitUntilEnteredAsync(string name, TimeSpan timeout) =>
         _entered.GetOrAdd(name, _ => NewSignal()).Task.WaitAsync(timeout);
@@ -596,6 +1151,7 @@ public sealed class BackgroundBodyBarrier
 
     public async Task ExecuteAsync(string name, CancellationToken cancellationToken)
     {
+        _executionCounts.AddOrUpdate(name, 1, static (_, count) => count + 1);
         _entered.GetOrAdd(name, _ => NewSignal()).TrySetResult();
         await _released.GetOrAdd(name, _ => NewSignal()).Task.WaitAsync(cancellationToken);
     }
@@ -620,6 +1176,19 @@ public sealed class GatedBackgroundActivity(BackgroundBodyBarrier barrier) : Act
     {
         await barrier.ExecuteAsync(Name, context.CancellationToken);
         return ActivityTransition.Complete(new BackgroundLeafResult($"{Name}-result"));
+    }
+}
+
+[BackgroundExecutionSafe]
+public sealed class FaultingGatedBackgroundActivity(BackgroundBodyBarrier barrier) : Activity<BackgroundLeafResult>
+{
+    [ActivityInput]
+    public string Name { get; set; } = string.Empty;
+
+    protected override async ValueTask<ActivityTransition<BackgroundLeafResult>> ExecuteAsync(ActivityExecutionContext context)
+    {
+        await barrier.ExecuteAsync(Name, context.CancellationToken);
+        return ActivityTransition.Fault<BackgroundLeafResult>(new ActivityFault("background.business-fault", "Background activity returned a business fault."));
     }
 }
 
