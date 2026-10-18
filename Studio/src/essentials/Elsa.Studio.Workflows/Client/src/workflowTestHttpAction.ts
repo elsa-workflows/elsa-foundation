@@ -1,5 +1,7 @@
 import type { StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
 import { asRecord } from "./workflowTestStimulusEditorUtils";
+import { toHttpTestRequestHeaderValues } from "./httpTestHeaderPolicy";
+import { HttpTestRequestHeaderPolicyError, makeValidatedHttpTestRequestHeaders } from "./workflow-editor/httpTestRequestHeaders";
 
 export async function sendHttpRequest({ backend, action, data }: Parameters<NonNullable<StudioTestStimulusEditorContribution["executeAction"]>>[0]) {
   const relativeUrl = action.relativeUrl;
@@ -16,11 +18,7 @@ export async function sendHttpRequest({ backend, action, data }: Parameters<NonN
     const values = Array.isArray(raw) ? raw : [raw];
     for (const value of values) if (typeof value === "string") url.searchParams.append(key, value);
   }
-  const headers = new Headers();
-  for (const [key, raw] of Object.entries(asRecord(body.headers) ?? {})) {
-    const values = Array.isArray(raw) ? raw : [raw];
-    for (const value of values) if (typeof value === "string") headers.append(key, value);
-  }
+  const headerValues = toHttpTestRequestHeaderValues(asRecord(body.headers) ?? {});
   const method = (action.method || "POST").toUpperCase();
   const textBody = typeof body.body === "string" ? body.body : undefined;
   const startedAt = performance.now();
@@ -30,6 +28,7 @@ export async function sendHttpRequest({ backend, action, data }: Parameters<NonN
     : 30000;
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
+    const headers = makeValidatedHttpTestRequestHeaders(headerValues, { configuredHeaders: backend.headers });
     const response = await backend.http.requestResponse(url.href, {
       method,
       headers,
@@ -48,11 +47,13 @@ export async function sendHttpRequest({ backend, action, data }: Parameters<NonN
       body: responseText,
       durationMs: Math.round(performance.now() - startedAt)
     };
-  } catch {
+  } catch (error) {
     return {
       kind: "http-exchange",
       method,
-      error: controller.signal.aborted ? `Request timed out after ${timeoutMs} ms.` : "The HTTP request failed.",
+      error: error instanceof HttpTestRequestHeaderPolicyError
+        ? error.message
+        : controller.signal.aborted ? `Request timed out after ${timeoutMs} ms.` : "The HTTP request failed.",
       durationMs: Math.round(performance.now() - startedAt)
     };
   } finally {

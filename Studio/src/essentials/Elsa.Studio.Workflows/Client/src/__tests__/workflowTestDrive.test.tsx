@@ -274,6 +274,58 @@ describe("workflow Test Run setup", () => {
     expect(failedExchange.error).toBe("The HTTP request failed.");
     expect(JSON.stringify(failedExchange)).not.toContain("secret");
   });
+
+  it("validates malformed Test Drive header values before send and returns a safe action error", async () => {
+    const malformedDraft = JSON.stringify({
+      routeValues: {},
+      query: {},
+      headers: { "X-Note": ["safe\r\nInjected: secret-value"] },
+      body: ""
+    });
+    const httpOption = { ...customOption, driverId: "Elsa.HttpEndpoint" };
+    expect(httpWorkflowTestStimulusEditor.validate({
+      option: httpOption,
+      mode: customOption.modes[0],
+      draft: malformedDraft
+    })).toBe("Header 1 has an invalid name or value.");
+
+    const requestResponse = vi.fn();
+    const execute = httpWorkflowTestStimulusEditor.executeAction!;
+    const result = await execute({
+      backend: { baseUrl: "https://studio.example/", http: { requestResponse } } as unknown as StudioEndpointContext,
+      option: httpOption,
+      mode: customOption.modes[0],
+      action: { kind: "http-request", relativeUrl: "/elsa/workflows/test-runs/run-1/http/orders/42", method: "POST" },
+      data: { headers: { "X-Note": ["safe\r\nInjected: secret-value"] } },
+      editorDraft: malformedDraft
+    });
+
+    expect(result.error).toBe("Header 1 has an invalid name or value.");
+    expect(JSON.stringify(result)).not.toContain("secret-value");
+    expect(requestResponse).not.toHaveBeenCalled();
+  });
+
+  it("prevents Test Drive headers from overriding host-configured values without exposing them", async () => {
+    const requestResponse = vi.fn();
+    const execute = httpWorkflowTestStimulusEditor.executeAction!;
+    const result = await execute({
+      backend: {
+        baseUrl: "https://studio.example/",
+        headers: { "X-Studio-Scope": "host-secret" },
+        http: { requestResponse }
+      } as unknown as StudioEndpointContext,
+      option: { ...customOption, driverId: "Elsa.HttpEndpoint" },
+      mode: customOption.modes[0],
+      action: { kind: "http-request", relativeUrl: "/elsa/workflows/test-runs/run-1/http/orders/42", method: "POST" },
+      data: { headers: { "x-studio-scope": ["caller-secret"] } },
+      editorDraft: "{}"
+    });
+
+    expect(result.error).toBe("Header 1 is configured by Studio and cannot be overridden.");
+    expect(JSON.stringify(result)).not.toContain("host-secret");
+    expect(JSON.stringify(result)).not.toContain("caller-secret");
+    expect(requestResponse).not.toHaveBeenCalled();
+  });
 });
 
 const customOption = {
