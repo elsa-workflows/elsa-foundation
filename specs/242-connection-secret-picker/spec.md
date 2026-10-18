@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/2959-connection-secret-picker`
 **Created**: 2026-10-18
-**Status**: In progress
+**Status**: Implemented
 **Input**: Owner requests a proper Connections UI Secret picker, then complete demo-v3 design and rehearsal. Tracking: #2959.
 
 ## User Scenarios & Testing

@@ -39,6 +39,7 @@ import {
   describeDictionaryForInput,
   getLiteralDefaultValue,
   isRepeaterOptOut,
+  readPortableExpressionDefinition,
   readWrappedInput,
   secretSyntax,
   withConversion,
@@ -483,7 +484,9 @@ function PropertyRow({
   // inputs, a subset of masked inputs, take their own branch below, and their documents carry nothing either.
   const valueMasked = !secretOnly && isMaskedInput(input) && !showsMaskedValue(editingMode);
   const value = getLiteralEditorValue(activity, input);
-  const expressionSource = valueMasked || secretOnly || value == null ? "" : String(value);
+  const portableDefinition = wrapped ? readPortableExpressionDefinition(value, syntax) : null;
+  const editorValue = portableDefinition?.source ?? value;
+  const expressionSource = valueMasked || secretOnly || editorValue == null ? "" : String(editorValue);
   const documentVersions = useRef(new Map<string, { source: string; version: number }>());
   const propertyKey = input.referenceKey?.trim() || input.name;
   const toolingPropertyKey = `${activity.nodeId}\u001f${propertyKey}`;
@@ -562,7 +565,7 @@ function PropertyRow({
     ? resolveExpressionDiagnosticProvider(expressionEditors, inlineExpressionContext)
     : null;
   const inlineDiagnostics = inlineDiagnosticProvider && inlineExpressionContext
-    ? getExpressionEditorDiagnostics(inlineDiagnosticProvider, inlineExpressionContext, value)
+    ? getExpressionEditorDiagnostics(inlineDiagnosticProvider, inlineExpressionContext, editorValue)
     : [];
   // A collection repeater renders multiple rows, not a single-line field, so the inline text chrome (the
   // overlaid syntax picker + expand button, positioned top:4/bottom:4 of the field) must not wrap it —
@@ -664,7 +667,14 @@ function PropertyRow({
       current.onChange(cleared, current.input);
       return;
     }
-    const next = currentWrapped ? withLiteralValue(currentWrapped, nextValue) : nextValue;
+    const portableDefinition = currentWrapped
+      ? readPortableExpressionDefinition(currentWrapped.expression.value, currentWrapped.expression.type)
+      : null;
+    const next = currentWrapped
+      ? withLiteralValue(currentWrapped, portableDefinition && typeof nextValue === "string"
+        ? { ...portableDefinition, source: nextValue }
+        : nextValue)
+      : nextValue;
     current.onChange(writeInputValue(current.activity, current.input, next), current.input);
   }, []);
 
@@ -762,7 +772,7 @@ function PropertyRow({
     <InlineExpressionEditorComponent
       descriptor={effectiveInput}
       syntax={syntax}
-      value={value}
+      value={editorValue}
       disabled={editingMode === "structured" ? editorDisabled : readOnly}
       initialFocus={focusRequested && !expanded}
       context={inlineExpressionContext}
@@ -792,7 +802,7 @@ function PropertyRow({
       <GenericTextExpressionEditor
         descriptor={effectiveInput}
         syntax={syntax}
-        value={value}
+        value={editorValue}
         disabled={readOnly}
         initialFocus={focusRequested && !expanded}
         context={inlineExpressionContext}
@@ -980,7 +990,7 @@ function PropertyRow({
         <ExpandedPropertyEditor
           input={input}
           dictionarySessionScope={dictionarySessionScope}
-          value={value}
+          value={editorValue}
           syntax={syntax}
           editingMode={editingMode}
           descriptors={expressionDescriptors}

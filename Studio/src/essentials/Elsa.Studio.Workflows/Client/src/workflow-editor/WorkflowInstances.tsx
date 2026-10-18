@@ -9,6 +9,7 @@ import { getActivityExecutionInspection, getExecutable, getExecutableInputSource
 import { formatNamedIdentityTitle, loadDefinitionDisplayNames, resolveNamedIdentity } from "./definitionDisplayNames";
 import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import { formatActivitySummary } from "../activitySummary";
+import { readPortableExpressionDefinition } from "../activityProperties";
 import { isMaskedInput, readSecretReference } from "../maskedInput";
 import { resolveActivityLabel } from "../activityPresentation";
 import {
@@ -2367,12 +2368,16 @@ function AuthoredInputSource({
   }
 
   const expressionType = source?.expressionType || "Unknown";
-  const fallback = source ? <GenericExpressionSource expressionType={expressionType} value={source.value} expanded /> : null;
+  const portableDefinition = source
+    ? readPortableExpressionDefinition(source.value, expressionType)
+    : null;
+  const sourceValue = portableDefinition?.source ?? source?.value;
+  const fallback = source ? <GenericExpressionSource expressionType={expressionType} value={sourceValue} expanded /> : null;
   const renderer = source ? resolveExpressionSourceRenderer(expressionEditors, row, expressionType) : undefined;
   const Renderer = renderer?.sourceRenderer?.expanded;
   const rendererContext: StudioExpressionSourceRendererContext | undefined = source ? {
     expressionType,
-    value: source.value,
+    value: sourceValue,
     metadata: {},
     isSensitive: !!source.isSensitive,
     surface: "expanded"

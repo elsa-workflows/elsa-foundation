@@ -782,6 +782,80 @@ describe("WorkflowActivityExecutionDetails", () => {
       .toEqual(expect.arrayContaining(["Inputs", "Outputs"]));
   });
 
+  it("shows only the source of a canonical portable expression in runtime evidence", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
+    const definition = {
+      language: "JavaScript",
+      source: "args.response.status",
+      resultType: { alias: "String", collectionKind: "Single" },
+      parameters: {
+        response: {
+          kind: "ActivityResult",
+          isOptional: true,
+          producerNodeId: "customer-lookup",
+          projectionKey: "status"
+        }
+      },
+      options: { strict: true },
+      capabilityProfile: "binding-pure-v1"
+    };
+    const executableNodeFacts: ExecutableGraphNodeFacts = {
+      executableNodeId: "node-1",
+      authoredActivityId: "write-line",
+      activityType: activity.activityType,
+      activityTypeVersion: activity.activityTypeVersion,
+      structureKind: null,
+      available: true,
+      outputCaptures: [],
+      authoredInputsAccess: "visible",
+      authoredInputs: [{ executableNodeId: "node-1", inputKey: "message-key", expressionType: "JavaScript", value: definition }],
+      inputBindings: []
+    };
+    const props = {
+      context,
+      activity,
+      activityCatalog: [{ ...catalog[0]!, inputs: [{ referenceKey: "message-key", name: "Message", typeName: "System.String" }] }],
+      executableNodeFacts
+    };
+    const container = render(<WorkflowActivityExecutionDetails {...props} />);
+
+    await waitFor(() => expect(container.querySelector(".wf-input-inspection-expression code")?.textContent).toBe(definition.source));
+    expect(container.textContent).not.toContain("[object Object]");
+
+    const rendererValue = vi.fn();
+    const sourceRenderer: StudioExpressionEditorContribution = {
+      id: "test.portable-javascript-source",
+      supports: source => source.syntax === "JavaScript",
+      surfaces: {},
+      sourceRenderer: {
+        compact: () => null,
+        expanded: ({ context: source }) => {
+          rendererValue(source.value);
+          return <output>Portable source: {String(source.value)}</output>;
+        }
+      }
+    };
+    rerender(<WorkflowActivityExecutionDetails {...props} expressionEditors={[sourceRenderer]} />);
+
+    await waitFor(() => expect(container.textContent).toContain(`Portable source: ${definition.source}`));
+    expect(rendererValue).toHaveBeenCalledWith(definition.source);
+    expect(container.textContent).not.toContain("[object Object]");
+  });
+
+  it("labels an unavailable executable type without parsing its version as part of the name", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
+    const unavailableActivity = {
+      ...activity,
+      activityType: "executable-missing:Elsa.HttpEndpoint@1.1.0"
+    };
+    const container = render(
+      <WorkflowActivityExecutionDetails context={context} activity={unavailableActivity} activityCatalog={[]} />
+    );
+
+    expect(container.querySelector(".wf-activity-overview-heading h4")?.textContent).toBe("HttpEndpoint");
+    expect(container.querySelector(".wf-activity-overview-type > span")?.textContent).toBe(`HttpEndpoint ${activity.activityTypeVersion}`);
+  });
+
   it("keeps authored source hidden when source access is denied while runtime evidence remains visible", async () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([{
       name: "Message",
@@ -801,10 +875,26 @@ describe("WorkflowActivityExecutionDetails", () => {
       metadata: {}
     }]));
 
+    const sourceCanary = "permission-hidden-portable-source";
+    const metadataCanary = "permission-hidden-portable-metadata";
+    const renderedValues: unknown[] = [];
+    const sourceRenderer: StudioExpressionEditorContribution = {
+      id: "test.permission-hidden-portable-source",
+      supports: source => source.syntax === "JavaScript",
+      surfaces: {},
+      sourceRenderer: {
+        compact: () => null,
+        expanded: ({ context: source }) => {
+          renderedValues.push(source.value);
+          return <output>{String(source.value)}</output>;
+        }
+      }
+    };
     const container = render(
       <WorkflowActivityExecutionDetails
         context={context}
         activity={activity}
+        expressionEditors={[sourceRenderer]}
         activityCatalog={[{ ...catalog[0]!, inputs: [{ referenceKey: "message-key", name: "Message", typeName: "System.String" }] }]}
         executableNodeFacts={{
           executableNodeId: "node-1",
@@ -815,7 +905,19 @@ describe("WorkflowActivityExecutionDetails", () => {
           available: true,
           outputCaptures: [],
           authoredInputsAccess: "permissionHidden",
-          authoredInputs: [],
+          authoredInputs: [{
+            executableNodeId: "node-1",
+            inputKey: "message-key",
+            expressionType: "JavaScript",
+            value: {
+              language: "JavaScript",
+              source: sourceCanary,
+              resultType: { alias: "String", collectionKind: "Single" },
+              parameters: { response: { kind: "ActivityResult", projectionKey: metadataCanary } },
+              options: { strict: true },
+              capabilityProfile: "binding-pure-v1"
+            }
+          }],
           inputBindings: []
         }}
       />
@@ -823,6 +925,9 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     await waitFor(() => expect(container.textContent).toContain("Allowed runtime evidence"));
     expect(container.textContent).toContain("Authored source is hidden by source permissions.");
+    expect(container.innerHTML).not.toContain(sourceCanary);
+    expect(container.innerHTML).not.toContain(metadataCanary);
+    expect(renderedValues).toEqual([]);
   });
 
   describe("a declared sensitive or secret-only input", () => {

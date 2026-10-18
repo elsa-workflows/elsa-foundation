@@ -23,3 +23,5 @@ Preserve v2. Complete v3 story, speaker notes, preparation/reset instructions an
 ## Rehearsal blocker discovered during acceptance
 
 The real consumer submitted canonical portable JavaScript expression JSON through the authoring API, but publication read its nested `TypeReference` with default serializer settings and lost the alias. Reuse the existing publication payload serializer options for this reader and cover the canonical `IPayloadSerializer` output with a failing-then-passing regression. This is required for the authenticated consumer acceptance path; do not change the demo to a noncanonical payload.
+
+The UI rehearsal also reproduced loss of structured Connection and portable-expression values on save, source editing that discarded the portable definition, and runtime source rendering as `[object Object]`. Preserve these structured definitions through the wire adapter; show and update only their source in editors and source-permitted runtime evidence. Cover both editor surfaces and protected evidence.

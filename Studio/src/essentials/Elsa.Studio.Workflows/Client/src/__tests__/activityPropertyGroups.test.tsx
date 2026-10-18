@@ -376,6 +376,45 @@ describe("activity property organization", () => {
     expect(expandedContext.document?.source).toBe(inlineContext.document?.source);
   });
 
+  it("edits only the source of a portable expression on inline and expanded surfaces", () => {
+    const definition = {
+      language: "JavaScript",
+      source: "args.response.status",
+      resultType: { alias: "String", collectionKind: "Single" },
+      parameters: {
+        response: {
+          kind: "ActivityResult",
+          isOptional: true,
+          producerNodeId: "customer-lookup",
+          projectionKey: "status"
+        }
+      },
+      options: { strict: true },
+      capabilityProfile: "binding-pure-v1",
+      metadata: { origin: "seeded-workflow" }
+    };
+    const changes: ActivityNode[] = [];
+    const container = renderPanel([input("Template", { isWrapped: true })], {
+      onChange: next => changes.push(next),
+      activity: activity({
+        template: { typeName: "System.String", expression: { type: "JavaScript", value: definition } }
+      })
+    });
+
+    const inline = container.querySelector<HTMLInputElement>("input[aria-label='Template expression']")!;
+    expect(inline.value).toBe(definition.source);
+    changeTextInput(inline, "args.response.message");
+    expect((changes.at(-1)?.template as { expression: { value: unknown } }).expression.value)
+      .toEqual({ ...definition, source: "args.response.message" });
+
+    clickButton(container, "Open expanded Template editor");
+    const expanded = container.querySelector<HTMLTextAreaElement>("textarea[aria-label='Template expanded value']")!;
+    expect(expanded.value).toBe("args.response.message");
+    changeTextArea(expanded, "args.response.code");
+    expect((changes.at(-1)?.template as { expression: { value: unknown } }).expression.value)
+      .toEqual({ ...definition, source: "args.response.code" });
+  });
+
   // Regression: ticking a checklist box saved fine, but autosave promoted the structured Literal to an
   // "Object" expression on the wire and nothing reversed it, so the row reopened with the picker reading
   // "Object" and the checklist replaced by the raw JSON summary.
