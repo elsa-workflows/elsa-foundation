@@ -45,8 +45,8 @@ describe("Activity Definition authoring", () => {
       postJson
     });
 
-    await waitForText(rendered.container, "No Activity Definitions yet");
-    click(buttonByText(rendered.container, "Create Activity Definition"));
+    await waitForText(rendered.container, "No designed activities yet");
+    click(buttonByText(rendered.container, "Create activity"));
     await waitForText(rendered.container, "Graph composition");
     expect(rendered.container.querySelector("select[name='provider']")).toBeNull();
     expect(rendered.container.querySelector<HTMLInputElement>("input[name='wf-root-kind'][value='flowchart-v1']")?.checked).toBe(true);
@@ -67,8 +67,8 @@ describe("Activity Definition authoring", () => {
           rootActivity: {
             nodeId: "root",
             activityVersionId: "flowchart-v1",
-            inputs: {},
-            outputs: {},
+            inputs: [],
+            outputs: [],
             structure: {
               kind: "elsa.flowchart.structure",
               schemaVersion: "1.0.0",
@@ -95,11 +95,13 @@ describe("Activity Definition authoring", () => {
     });
     await waitForText(rendered.container, "Saved revision 1");
     expect(rendered.container.querySelector(".ad-draft-editor")?.classList.contains("is-graph-designer")).toBe(true);
-    expect(rendered.container.querySelector<HTMLDetailsElement>(".ad-draft-lifecycle")?.open).toBe(false);
+    const advanced = rendered.container.querySelector<HTMLDetailsElement>(".ad-authoring-advanced")!;
+    expect(advanced.open).toBe(false);
+    expect(rendered.container.querySelector(".ad-publication-toolbar-trigger")).not.toBeNull();
     expect(rendered.container.querySelector(".ad-designer-view")?.textContent).toContain("Graph implementation editor");
     click(buttonByText(rendered.container, "Public Interface"));
     expect(rendered.container.querySelector(".ad-draft-editor")?.classList.contains("is-graph-designer")).toBe(false);
-    expect(rendered.container.querySelector<HTMLDetailsElement>(".ad-draft-lifecycle")?.open).toBe(true);
+    expect(advanced.open).toBe(false);
     await rendered.unmount();
   }, 10_000);
 
@@ -113,8 +115,8 @@ describe("Activity Definition authoring", () => {
       }
     });
 
-    await waitForText(rendered.container, "No Activity Definitions yet");
-    click(buttonByText(rendered.container, "Create Activity Definition"));
+    await waitForText(rendered.container, "No designed activities yet");
+    click(buttonByText(rendered.container, "Create activity"));
     await waitForText(rendered.container, "Graph composition");
 
     const displayName = rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!;
@@ -126,6 +128,9 @@ describe("Activity Definition authoring", () => {
     expect(category.getAttribute("placeholder")).toBeTruthy();
     expect(description.getAttribute("aria-label")).toBe("Description");
     expect(description.getAttribute("placeholder")).toBeTruthy();
+    const advanced = rendered.container.querySelector<HTMLDetailsElement>(".ad-create-advanced")!;
+    expect(advanced.open).toBe(false);
+    expect(rendered.container.querySelector<HTMLInputElement>("input[name='activityTypeKey']")?.closest("details")?.open).toBe(false);
     await rendered.unmount();
   });
 
@@ -150,15 +155,17 @@ describe("Activity Definition authoring", () => {
       }
     });
 
-    await waitForText(rendered.container, "No Activity Definitions yet");
-    click(buttonByText(rendered.container, "Create Activity Definition"));
+    await waitForText(rendered.container, "No designed activities yet");
+    click(buttonByText(rendered.container, "Create activity"));
     await waitForText(rendered.container, "Script");
     const provider = rendered.container.querySelector<HTMLSelectElement>("select[name='provider']")!;
     expect(provider.value).toBe("");
     expect([...provider.options].map(option => option.textContent)).toEqual(["Select an implementation type", "Activity Graph", "Script"]);
     change(provider, "elsa.activity-graph|2");
     change(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!, "Invoice evaluator");
-    click(buttonByText(rendered.container, "Set an exact key"));
+    const advanced = rendered.container.querySelector<HTMLDetailsElement>(".ad-create-advanced")!;
+    expect(advanced.open).toBe(false);
+    openDetails(advanced);
     change(rendered.container.querySelector<HTMLInputElement>("input[name='activityTypeKey']")!, "elsa.user.finance.invoice-evaluator");
     click(buttonByText(rendered.container, "Create definition"));
 
@@ -166,7 +173,7 @@ describe("Activity Definition authoring", () => {
     await rendered.unmount();
   });
 
-  it("does not preselect a sole non-graph provider", async () => {
+  it("preselects the sole usable non-graph provider without showing an implementation selector", async () => {
     const response = authoringCapabilities();
     response.providers = [{
       providerKey: "contoso.script",
@@ -180,15 +187,18 @@ describe("Activity Definition authoring", () => {
         if (url === "/capabilities") return capabilities();
         if (url.startsWith("/design/activities/definitions?")) return page([]);
         if (url === "/design/activities/authoring-capabilities") return response;
+        if (url === "/design/activities/catalog") return { activities: [] };
         throw new Error(`Unexpected GET ${url}`);
       }
     });
 
-    await waitForText(rendered.container, "No Activity Definitions yet");
-    click(buttonByText(rendered.container, "Create Activity Definition"));
-    await waitForText(rendered.container, "Script");
-    expect(rendered.container.textContent).toContain("Implementation type");
-    expect(rendered.container.querySelector<HTMLSelectElement>("select[name='provider']")?.value).toBe("");
+    await waitForText(rendered.container, "No designed activities yet");
+    click(buttonByText(rendered.container, "Create activity"));
+    await waitForText(rendered.container, "Display name");
+    expect(rendered.container.querySelector<HTMLSelectElement>("select[name='provider']")).toBeNull();
+    expect(buttonByText(rendered.container, "Create definition").hasAttribute("disabled")).toBe(true);
+    change(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!, "Run a script");
+    expect(buttonByText(rendered.container, "Create definition").hasAttribute("disabled")).toBe(false);
     await rendered.unmount();
   });
 
@@ -205,14 +215,18 @@ describe("Activity Definition authoring", () => {
       }
     });
 
-    await waitForText(rendered.container, "No Activity Definitions yet");
-    click(buttonByText(rendered.container, "Create Activity Definition"));
+    await waitForText(rendered.container, "No designed activities yet");
+    click(buttonByText(rendered.container, "Create activity"));
     await waitForText(rendered.container, "Graph composition");
     await waitFor(() => expect(rendered.container.querySelector<HTMLInputElement>("input[name='wf-root-kind'][value='flowchart-v1']")?.checked).toBe(true));
     change(rendered.container.querySelector<HTMLInputElement>("input[name='displayName']")!, "Generated identity");
-    click(buttonByText(rendered.container, "Set an exact key"));
+    const advanced = rendered.container.querySelector<HTMLDetailsElement>(".ad-create-advanced")!;
+    openDetails(advanced);
     change(rendered.container.querySelector<HTMLInputElement>("input[name='activityTypeKey']")!, "elsa.user.hidden.override");
-    click(buttonByText(rendered.container, "Use generated key"));
+    flushSync(() => {
+      advanced.open = false;
+      advanced.dispatchEvent(new Event("toggle", { bubbles: true }));
+    });
     click(buttonByText(rendered.container, "Create definition"));
 
     await waitFor(() => expect(postJson).toHaveBeenCalledTimes(1));
@@ -728,7 +742,7 @@ describe("Activity Definition authoring", () => {
 
     await waitForText(recovered.container, "Unsaved local recovery available");
     expect(recovered.container.textContent).toContain("revision 3");
-    expect(recovered.container.textContent).toContain("elsa.activity-graph schema 1");
+    expect(recovered.container.querySelector(".ad-authoring-identity")?.textContent).toContain("elsa.activity-graph");
     expect(recovered.container.textContent).toContain("never restores it silently");
     expect(recovered.container.textContent).toContain("Review recovered content");
     expect((buttonByText(recovered.container, "Review content before recovery") as HTMLButtonElement).disabled).toBe(true);
@@ -776,7 +790,7 @@ describe("Activity Definition authoring", () => {
     expect((buttonByText(rendered.container, "Test Run") as HTMLButtonElement).disabled).toBe(true);
     expect((buttonByText(rendered.container, "Validate saved revision") as HTMLButtonElement).disabled).toBe(true);
     expect((buttonByText(rendered.container, "Save now") as HTMLButtonElement).disabled).toBe(true);
-    expect((buttonByText(rendered.container, "Prepare publication") as HTMLButtonElement).disabled).toBe(true);
+    expect((buttonByText(rendered.container, "Review & publish") as HTMLButtonElement).disabled).toBe(true);
     expect(rendered.container.querySelector<HTMLInputElement>(".ad-draft-label input")?.disabled).toBe(true);
 
     click(buttonByText(rendered.container, "Code"));
@@ -1491,7 +1505,7 @@ describe("Activity Definition publication", () => {
 
     await waitForText(rendered.container, "Saved revision 3");
     click(buttonByText(rendered.container, "Edit implementation 0"));
-    click(buttonByText(rendered.container, "Prepare publication"));
+    click(buttonByText(rendered.container, "Review & publish"));
     await waitFor(() => expect(postJson).toHaveBeenCalledWith(
       "/design/activities/drafts/activity-draft-1/publication-preflight",
       { expectedDraftRevision: 4, expectedDefinitionHeadVersionId: "version-head" }
@@ -1502,7 +1516,7 @@ describe("Activity Definition publication", () => {
     click(buttonByText(rendered.container, "Publish 3.2.1"));
     await waitForText(rendered.container, "Published immutable version 3.2.1");
     await waitForText(rendered.container, "Published revision 4 is read-only.");
-    expect(rendered.container.textContent).toContain("existing recommended version was not moved");
+    expect(rendered.container.textContent).toContain("recommendation stayed unchanged");
     expect(postJson.mock.calls.filter(([url]) => String(url).endsWith("/publish"))).toHaveLength(1);
     expect(postJson).toHaveBeenCalledWith("/design/activities/drafts/activity-draft-1/publish", expect.objectContaining({
       expectedDraftRevision: 4,
@@ -1545,13 +1559,13 @@ describe("Activity Definition publication", () => {
     });
 
     await waitForText(rendered.container, "Saved revision 3");
-    click(buttonByText(rendered.container, "Prepare publication"));
+    click(buttonByText(rendered.container, "Review & publish"));
     await waitForText(rendered.container, "No published head");
     click(buttonByText(rendered.container, "Publish 1.0.0"));
 
     await waitForText(rendered.container, "Published immutable version 1.0.0");
     // The published-head summary refreshes in place (no manual reload) and no longer shows the stale head.
-    const summary = rendered.container.querySelector<HTMLElement>(".ad-publication-summary")!;
+    const summary = [...rendered.container.querySelectorAll<HTMLElement>(".ad-publication-summary")].find(element => element.textContent?.includes("version-published"))!;
     expect(summary.textContent).toContain("version-published");
     expect(summary.textContent).not.toContain("No published head");
     // The action affordance no longer invites a repeat publish of the same version.
@@ -1606,7 +1620,7 @@ describe("Activity Definition publication", () => {
 
     await waitForText(rendered.container, "Saved revision 3");
     click(buttonByText(rendered.container, "Edit implementation 0"));
-    click(buttonByText(rendered.container, "Prepare publication"));
+    click(buttonByText(rendered.container, "Review & publish"));
     await waitFor(() => expect(postJson).toHaveBeenCalledWith(
       "/design/activities/drafts/activity-draft-1/publication-preflight",
       { expectedDraftRevision: 4, expectedDefinitionHeadVersionId: null }
@@ -1662,7 +1676,7 @@ describe("Activity Definition publication", () => {
     });
 
     await waitForText(rendered.container, "Saved revision 3");
-    await waitFor(() => expect(rendered.container.querySelector("#activity-draft-title")?.textContent).toBe("Invoice evaluator — Draft activity-draft-1"));
+    await waitFor(() => expect(rendered.container.querySelector("#activity-draft-title")?.textContent).toBe("Invoice evaluator"));
     await rendered.unmount();
   });
 
@@ -1698,8 +1712,8 @@ describe("Activity Definition publication", () => {
     });
 
     await waitForText(rendered.container, "Saved revision 3");
-    click(buttonByText(rendered.container, "Prepare publication"));
-    await waitForText(rendered.container, "First publication · no published baseline exists");
+    click(buttonByText(rendered.container, "Review & publish"));
+    await waitForText(rendered.container, "No published baseline exists");
     expect(rendered.container.textContent).toContain("Protected value redacted");
     expect(rendered.container.textContent).not.toContain("raw-secret");
     expect(rendered.container.textContent).toContain("Provider-specific change");
@@ -1730,7 +1744,7 @@ describe("Activity Definition publication", () => {
     });
 
     await waitForText(rendered.container, "Saved revision 3");
-    click(buttonByText(rendered.container, "Prepare publication"));
+    click(buttonByText(rendered.container, "Review & publish"));
     await waitForText(rendered.container, "Minimum valid version: 1.0.0");
     click(buttonByText(rendered.container, "Publish 1.0.0"));
     await waitForText(rendered.container, "reopened preflight without publishing");
@@ -1774,7 +1788,7 @@ describe("Activity Definition publication", () => {
     });
 
     await waitForText(rendered.container, "Saved revision 3");
-    click(buttonByText(rendered.container, "Prepare publication"));
+    click(buttonByText(rendered.container, "Review & publish"));
     await waitForText(rendered.container, "Minimum valid version: 1.0.0");
     click(buttonByText(rendered.container, "Publish 1.0.0"));
     await waitForText(rendered.container, "Published immutable version 1.0.0");
@@ -1832,7 +1846,7 @@ describe("Activity Definition publication", () => {
     });
 
     await waitForText(rendered.container, "Saved revision 3");
-    click(buttonByText(rendered.container, "Prepare publication"));
+    click(buttonByText(rendered.container, "Review & publish"));
     await waitForText(rendered.container, "Minimum valid version: 1.0.0");
     click(buttonByText(rendered.container, "Publish 1.0.0"));
     await waitForText(rendered.container, expectedMessage);

@@ -1,0 +1,112 @@
+.ad-authoring-toolbar-actions {
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.ad-draft-heading { min-width: 0; }
+.ad-authoring-toolbar-actions > button,
+.ad-publication-toolbar-trigger,
+.ad-authoring-advanced > summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  min-height: 2.4rem;
+  padding: .45rem .75rem;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  color: var(--studio-text);
+  background: var(--studio-surface);
+  cursor: pointer;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.ad-publication-toolbar-trigger {
+  border-color: var(--studio-accent);
+  color: var(--studio-accent-text);
+  background: var(--studio-accent);
+}
+
+.ad-publication-toolbar-status {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size);
+  white-space: nowrap;
+}
+
+.ad-authoring-advanced { position: relative; }
+.ad-authoring-advanced > summary { list-style: none; }
+.ad-authoring-advanced > summary::-webkit-details-marker { display: none; }
+.ad-authoring-advanced > summary::after { content: "⌄"; color: var(--studio-text-muted); }
+.ad-authoring-advanced[open] > summary { border-color: var(--studio-accent); background: var(--studio-accent-soft); }
+.ad-authoring-advanced[open] > summary::after { content: "⌃"; }
+
+.ad-authoring-advanced-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + .4rem);
+  right: 0;
+  display: grid;
+  gap: .8rem;
+  width: min(34rem, calc(100vw - 2rem));
+  max-height: min(70vh, 40rem);
+  overflow: auto;
+  padding: 1rem;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-md);
+  background: var(--studio-surface);
+  box-shadow: var(--studio-shadow-sm);
+}
+
+.ad-authoring-identity {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .65rem;
+  margin: 0;
+}
+
+.ad-authoring-identity > div { display: grid; gap: .2rem; min-width: 0; }
+.ad-authoring-identity dt { color: var(--studio-text-muted); font-size: var(--studio-label-size); }
+.ad-authoring-identity dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.ad-authoring-identity code { font-family: var(--studio-font-mono); font-size: .88em; }
+.ad-authoring-advanced-panel .ad-draft-label { margin: 0; }
+.ad-authoring-advanced-panel .ad-save-state { margin: 0; }
+.ad-authoring-advanced-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.ad-authoring-advanced-actions > button { display: inline-flex; align-items: center; gap: .4rem; min-height: 2.4rem; padding: .45rem .75rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); color: var(--studio-text); background: var(--studio-surface); cursor: pointer; }
+
+.ad-publication-dialog-backdrop { z-index: 1100; }
+.ad-publication-dialog {
+  display: block;
+  width: min(58rem, 100%);
+  padding: 0;
+}
+
+.ad-publication-dialog .ad-publication-review { display: grid; gap: 1rem; padding: 1.15rem; }
+.ad-publication-dialog .ad-publication-header { align-items: flex-start; }
+.ad-publication-dialog .ad-publication-header h2 { margin: .2rem 0 .35rem; }
+.ad-publication-dialog .ad-publication-header p { max-width: 52rem; }
+.ad-publication-dialog-close { display: inline-grid; flex: 0 0 auto; place-items: center; width: 2.4rem; min-height: 2.4rem; padding: 0; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); color: var(--studio-text); background: var(--studio-surface); cursor: pointer; }
+.ad-publication-prepare-row { display: flex; justify-content: flex-start; }
+.ad-publication-technical-details { margin-top: .75rem; }
+.ad-publication-technical-details > summary { color: var(--studio-text-muted); cursor: pointer; }
+.ad-publication-technical-details .ad-publication-summary { margin-top: .5rem; }
+.ad-publication-dialog .ad-publication-impact details > summary,
+.ad-publication-dialog .ad-readiness-grid details > summary { color: var(--studio-text-muted); cursor: pointer; font-size: var(--studio-label-size); }
+.ad-publication-dialog .ad-readiness-grid details code { display: block; margin-top: .3rem; overflow-wrap: anywhere; }
+
+@media (max-width: 850px) {
+  .ad-workbench-header { flex-direction: column; }
+  .ad-authoring-toolbar-actions { justify-content: flex-start; }
+}
+
+@media (max-width: 560px) {
+  .ad-authoring-identity { grid-template-columns: 1fr; }
+  .ad-publication-dialog-backdrop { padding: .5rem; }
+  .ad-publication-dialog { max-height: calc(100vh - 1rem); }
+}
+.ad-publication-dialog .ad-primary-action { border-color: var(--studio-accent); color: var(--studio-accent-text); background: var(--studio-accent); }
+.ad-interface-suggestions { margin: 1rem 0; padding: 1rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); }
+.ad-interface-suggestions > summary { color: var(--studio-text-muted); cursor: pointer; font-weight: 600; }
+.ad-interface-suggestions[open] > summary { margin-bottom: 1rem; }
+.ad-draft-editor .ad-publication-toolbar-trigger { color: var(--studio-accent-text); }

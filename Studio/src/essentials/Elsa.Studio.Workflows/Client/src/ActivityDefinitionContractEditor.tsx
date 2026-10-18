@@ -154,12 +154,12 @@ export function ActivityDefinitionContractEditor({
 
   return <section className="ad-contract-editor" aria-labelledby="activity-contract-title">
     <header className="ad-contract-header">
-      <div><span className="ad-kicker">Provider-neutral public surface</span><h2 id="activity-contract-title">Contract</h2><p>Inputs, outputs, and outcomes are saved through the same exact-revision draft queue as the implementation.</p></div>
+      <div><span className="ad-kicker">Public interface</span><h2 id="activity-contract-title">Contract</h2><p>Choose the inputs this activity accepts, the outputs it returns, and the outcomes workflows can connect to.</p></div>
       <span className="ad-badge" data-contract-schema tabIndex={-1}>Schema {contract.contractSchemaVersion}</span>
     </header>
     {capabilitiesUnavailable ? <div className="ad-inline-error" role="alert"><strong>Contract authoring unavailable</strong><span>The authorized capability catalog could not be confirmed. Stored contract members remain visible, but Studio will not offer raw aliases, CLR types, or guessed storage drivers.</span></div> : null}
     {!capabilitiesUnavailable && capabilities && authorableTypes.length === 0 ? <div className="ad-inline-error" role="alert">No capability-catalog type has an activated durable storage driver. Input and output creation is unavailable.</div> : null}
-    {sourceVersionId ? <BaselineSummary sourceVersionId={sourceVersionId} contract={contract} baseline={baselineContract} unavailable={baselineUnavailable} /> : <div className="ad-inline-status" role="status">This draft has no published baseline. New member identities become stable when the first version is published.</div>}
+    {sourceVersionId ? <BaselineSummary sourceVersionId={sourceVersionId} contract={contract} baseline={baselineContract} unavailable={baselineUnavailable} /> : <div className="ad-inline-status" role="status">Add the values and outcomes other workflows will use. Changes save automatically.</div>}
     <div className="ad-contract-add" role="group" aria-label="Add public contract member">
       <label><span>Member name</span><input value={newName} onChange={event => setNewName(event.target.value)} disabled={readOnly || capabilitiesUnavailable} /></label>
       <button type="button" onClick={() => addMember("input")} disabled={!newName.trim() || readOnly || !capabilities || authorableTypes.length === 0}><Plus size={15} aria-hidden /> Add input</button>
