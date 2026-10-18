@@ -238,15 +238,6 @@ export function formatExecutableRoot(executable: WorkflowExecutableSummary) {
   return rootName || executable.rootActivityType;
 }
 
-export function executableMatchesDefinitionFilter(executable: WorkflowExecutableSummary, normalizedFilter: string) {
-  return [
-    executable.definitionId,
-    executable.definitionVersionId,
-    executable.sourceId,
-    executable.sourceVersion
-  ].some(value => value?.toLowerCase().includes(normalizedFilter));
-}
-
 export function executableBelongsToDefinition(executable: WorkflowExecutableSummary, definitionId: string) {
   return executable.definitionId === definitionId || executable.sourceId === definitionId;
 }
