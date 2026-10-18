@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 112
+- Discovered feature classes: 113
 
 ## Features
 
@@ -97,6 +97,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | WorkflowsPublishingFeature | direct IShellFeature | Elsa.Workflows.Publishing | IShellFeature | [WorkflowsPublishingFeature.cs](../../Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/WorkflowsPublishingFeature.cs) |
 | WorkflowsPublishingApiFeature | direct IWebShellFeature | Elsa.Workflows.Publishing.Api | IWebShellFeature | [WorkflowsPublishingApiFeature.cs](../../Essentials/src/Workflows/Publishing/Api/WorkflowsPublishingApiFeature.cs) |
 | PublishingEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore | IShellFeature | [PublishingEntityFrameworkCoreFeature.cs](../../Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/PublishingEntityFrameworkCoreFeature.cs) |
+| WorkflowsActivationChannelsFeature | direct IShellFeature | Elsa.Workflows.Runtime | IShellFeature | [WorkflowsActivationChannelsFeature.cs](../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/ActivationChannels/WorkflowsActivationChannelsFeature.cs) |
 | WorkflowsRuntimeAttentionFeature | direct IShellFeature | Elsa.Workflows.Runtime | IShellFeature | [WorkflowsRuntimeAttentionFeature.cs](../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Attention/WorkflowsRuntimeAttentionFeature.cs) |
 | WorkflowsRuntimeTracingFeature | direct IShellFeature | Elsa.Workflows.Runtime | IShellFeature | [WorkflowsRuntimeTracingFeature.cs](../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Tracing/WorkflowsRuntimeTracingFeature.cs) |
 | WorkflowsRuntimeApiFeature | direct IWebShellFeature | Elsa.Workflows.Runtime.Api | IWebShellFeature, IPostConfigureShellServices | [WorkflowsRuntimeApiFeature.cs](../../Essentials/src/Workflows/Runtime/Api/WorkflowsRuntimeApiFeature.cs) |

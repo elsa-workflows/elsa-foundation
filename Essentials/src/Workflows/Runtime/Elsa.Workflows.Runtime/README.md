@@ -4,6 +4,36 @@
 checkpointing, durable runtime state, scheduling, recovery, and runtime alterations. It does not load Design
 definitions at execution time.
 
+## Activation channels
+
+An activation slot belongs to one `(definitionId, slotName)` pair. A declared channel gives the same slot name
+shared display metadata across a shell. Compose the optional `WorkflowsActivationChannels` feature to configure it:
+
+```json
+{
+  "WorkflowsActivationChannels": {
+    "AllowAdHocChannels": false,
+    "Channels": [
+      { "Name": "default", "DisplayName": "Production", "Description": "Normal traffic" },
+      { "Name": "canary", "DisplayName": "Canary", "Description": "Separate endpoint routes" }
+    ]
+  }
+}
+```
+
+Place this entry under the shell's `Features` configuration. Code-only hosts can configure
+`ActivationChannelOptions` with `services.Configure<ActivationChannelOptions>(...)` before composing the Runtime.
+The feature registers options and startup validation; it registers no events, contributors or recurring tasks.
+Channel names match exactly with ordinal case-sensitive comparison. Declarations do not create slots, rewrite
+HTTP routes, or select a transport; concurrent HTTP activations still need nonconflicting endpoints.
+
+The default is an empty declaration list with `AllowAdHocChannels = true`, preserving existing compositions.
+With it disabled, every activation request must name a declared channel, including artifact-reconciliation and
+restore requests. Runtime refuses before it writes references or serving projections. Existing slots stay readable;
+configuration changes do not deactivate them or interrupt executions pinned to their artifacts. Declare their names
+before replacing or restoring them. The Runtime slot-list API includes declarations even before a definition has a
+slot, and the publishing preflight rejects an undeclared channel before publication writes.
+
 ## Runtime alterations
 
 A runtime alteration is a durable, authenticated plan over a sealed set of workflow executions. Plans capture all
