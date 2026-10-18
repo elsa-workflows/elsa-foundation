@@ -166,10 +166,11 @@ public static class RuntimeEntityFrameworkCoreRegistration
             // purged atomically.
             // The Runtime default is the coherent in-memory deletion implementation. Replace it only at this
             // complete provider-composition boundary; individual EF store extensions must not advertise a partial purge.
-            services.RemoveAll<IWorkflowExecutionDeletionStore>();
-            services.AddScoped<EfWorkflowExecutionDeletionStore>();
-            services.AddScoped<IWorkflowExecutionDeletionStore>(provider =>
-                provider.GetRequiredService<EfWorkflowExecutionDeletionStore>());
+            if (services.LastOrDefault(descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionDeletionStore))?.ImplementationType != typeof(EfWorkflowExecutionDeletionStore))
+            {
+                services.RemoveAll<IWorkflowExecutionDeletionStore>();
+                services.AddScoped<IWorkflowExecutionDeletionStore, EfWorkflowExecutionDeletionStore>();
+            }
 
             return services;
         }
