@@ -46,15 +46,78 @@ describe("top navigation More tools overlay", () => {
     expect(localStorage.getItem(moreToolsStorageKey)).toBe("true");
   });
 
-  it("closes after a panel link navigates", async () => {
+  it("closes and clears search after a panel link navigates", async () => {
     const onNavigate = vi.fn();
     await renderShell(onNavigate);
-    await act(() => moreToolsButton().click());
+    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search modules"]')!;
+    setSearch(search, "e");
+    expect(moreToolsPanel()).not.toBeNull();
 
     await act(() => moreToolsPanel()!.querySelector<HTMLAnchorElement>('a[href="/reports"]')!.click());
 
     expect(onNavigate).toHaveBeenCalledWith("/reports");
     expect(moreToolsPanel()).toBeNull();
+    expect(search.value).toBe("");
+  });
+
+  it("closes on path changes and keeps unchanged query results dismissed", async () => {
+    await renderShell();
+    await act(() => moreToolsButton().click());
+    expect(moreToolsPanel()).not.toBeNull();
+
+    await renderShell(vi.fn(), "/reports");
+    expect(moreToolsPanel()).toBeNull();
+
+    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search modules"]')!;
+    setSearch(search, "e");
+    expect(moreToolsPanel()).not.toBeNull();
+
+    await renderShell(vi.fn(), "/home");
+
+    expect(moreToolsPanel()).toBeNull();
+    expect(search.value).toBe("e");
+
+    setSearch(search, "ec");
+    expect(moreToolsPanel()).not.toBeNull();
+  });
+
+  it("keeps focus within More tools open, then closes when focus leaves without swallowing navigation", async () => {
+    const onNavigate = vi.fn();
+    await renderShell(onNavigate);
+    await act(() => moreToolsButton().click());
+
+    const panelLink = moreToolsPanel()!.querySelector<HTMLAnchorElement>('a[href="/reports"]')!;
+    const moreButton = moreToolsButton();
+    const mainLink = container.querySelector<HTMLAnchorElement>('a[href="/home"]')!;
+    await act(() => panelLink.focus());
+    await act(() => moreButton.focus());
+    expect(moreToolsPanel()).not.toBeNull();
+
+    await act(() => mainLink.focus());
+    expect(moreToolsPanel()).toBeNull();
+    expect(document.activeElement).toBe(mainLink);
+    await act(() => mainLink.click());
+
+    expect(onNavigate).toHaveBeenCalledWith("/home");
+  });
+
+  it("clears search when a main-section link navigates after focus leaves the overlay", async () => {
+    const onNavigate = vi.fn();
+    await renderShell(onNavigate);
+    const search = container.querySelector<HTMLInputElement>('input[aria-label="Search modules"]')!;
+    setSearch(search, "e");
+    expect(moreToolsPanel()).not.toBeNull();
+
+    const panelLink = moreToolsPanel()!.querySelector<HTMLAnchorElement>('a[href="/reports"]')!;
+    const mainLink = container.querySelector<HTMLAnchorElement>('a[href="/home"]')!;
+    await act(() => panelLink.focus());
+    await act(() => mainLink.focus());
+    expect(moreToolsPanel()).toBeNull();
+
+    await act(() => mainLink.click());
+
+    expect(onNavigate).toHaveBeenCalledWith("/home");
+    expect(search.value).toBe("");
   });
 
   it("closes on Escape and returns focus to the More tools button", async () => {
@@ -88,14 +151,14 @@ describe("top navigation More tools overlay", () => {
   });
 });
 
-async function renderShell(onNavigate = vi.fn()) {
+async function renderShell(onNavigate = vi.fn(), path = "/home") {
   await act(() => root.render(
     <ThemeProvider>
       <ShellFrame
         navigation={navigation}
         panels={[]}
-        path="/home"
-        title="Home"
+        path={path}
+        title={path === "/home" ? "Home" : "Reports"}
         backendBaseUrl="https://backend.example/"
         onNavigate={onNavigate}
       >

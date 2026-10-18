@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   Blocks,
@@ -537,6 +537,21 @@ export function ShellFrame({
   }
 
   const query = navQuery.trim().toLowerCase();
+  const previousPathRef = useRef(path);
+  useLayoutEffect(() => {
+    if (previousPathRef.current === path) return;
+    previousPathRef.current = path;
+    setTopMoreToolsOpen(false);
+    setDismissedMoreToolsQuery(query || null);
+  }, [path, query]);
+
+  const navigateFromTopNavigation = (destination: string) => {
+    setTopMoreToolsOpen(false);
+    setDismissedMoreToolsQuery(null);
+    setNavQuery("");
+    onNavigate(destination);
+  };
+  const navigateFromMainNavigation = topNav ? navigateFromTopNavigation : onNavigate;
   const matchesQuery = (item: StudioNavigationContribution) => item.label.toLowerCase().includes(query);
   // A parent stays visible when it matches directly or when any of its children match, so a filtered
   // child never becomes orphaned. Children are filtered independently in the render below.
@@ -586,7 +601,7 @@ export function ShellFrame({
     <div className={navCollapsed && !topNav ? "studio-shell sidebar-collapsed" : "studio-shell"}>
       <aside className="sidebar">
         <div className="sidebar-top">
-          <a className="brand" href="/" onClick={event => { event.preventDefault(); onNavigate("/"); }}>
+          <a className="brand" href="/" onClick={event => { event.preventDefault(); navigateFromMainNavigation("/"); }}>
             <span className="brand-mark" aria-hidden="true">
               <img src={elsaLogo} alt="" />
             </span>
@@ -645,14 +660,24 @@ export function ShellFrame({
                 items={visibleNavigation}
                 path={path}
                 collapsed={navCollapsed}
-                onNavigate={onNavigate}
+                onNavigate={navigateFromMainNavigation}
               />
             ))}
           </nav>
         ) : null}
 
         {moreItems.length > 0 ? (
-          <nav ref={moreToolsSectionRef} className="nav-section nav-section-more" aria-label="More tools">
+          <nav
+            ref={moreToolsSectionRef}
+            className="nav-section nav-section-more"
+            aria-label="More tools"
+            onBlur={event => {
+              if (!topNav) return;
+              const nextTarget = event.relatedTarget;
+              if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+              dismissTopMoreTools();
+            }}
+          >
             <button
               ref={moreToolsButtonRef}
               type="button"
@@ -688,14 +713,7 @@ export function ShellFrame({
                     items={visibleNavigation}
                     path={path}
                     collapsed={navCollapsed}
-                    onNavigate={destination => {
-                      if (topNav) {
-                        setTopMoreToolsOpen(false);
-                        setDismissedMoreToolsQuery(null);
-                        setNavQuery("");
-                      }
-                      onNavigate(destination);
-                    }}
+                    onNavigate={topNav ? navigateFromTopNavigation : onNavigate}
                   />
                 ))}
               </div>
@@ -714,7 +732,7 @@ export function ShellFrame({
                 items={visibleNavigation}
                 path={path}
                 collapsed={navCollapsed}
-                onNavigate={onNavigate}
+                onNavigate={navigateFromMainNavigation}
               />
             ))}
           </nav>
@@ -728,7 +746,7 @@ export function ShellFrame({
               title={navCollapsed ? "Settings" : undefined}
               onClick={event => {
                 event.preventDefault();
-                onNavigate("/settings");
+                navigateFromMainNavigation("/settings");
               }}
             >
               <span className="nav-icon-tile" style={{ "--nav-icon-color": navIconColors.themes } as NavIconTileStyle} aria-hidden="true">
