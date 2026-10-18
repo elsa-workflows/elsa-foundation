@@ -701,6 +701,47 @@ describe("Activity Definitions experience", () => {
     await rendered.unmount();
   });
 
+  it("scopes draft and version privacy failures to their definition when navigating", async () => {
+    const nextDraft = {
+      ...draft({ draftId: "draft-2", definitionId: "definition-2", presentationLabel: "Second evaluator draft" }),
+      actions: [{ action: "edit-draft", allowed: true }]
+    };
+    const nextVersion = version({
+      version: { ...version().version, versionId: "version-2", definitionId: "definition-2", version: "2.0.0" }
+    });
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url === "/design/activities/definitions/definition-1") return definition();
+      if (url === "/design/activities/definitions/definition-2") return definition({ definitionId: "definition-2", displayName: "Second evaluator" });
+      if (url.startsWith("/design/activities/definitions/definition-1/drafts?")) throw new StudioHttpError(403, "hidden draft identity", null);
+      if (url.startsWith("/design/activities/definitions/definition-1/versions?")) throw new StudioHttpError(403, "hidden version identity", null);
+      if (url.startsWith("/design/activities/definitions/definition-2/drafts?")) return page([nextDraft]);
+      if (url.startsWith("/design/activities/definitions/definition-2/versions?")) return page([nextVersion]);
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = renderPage(getJson, undefined, "/workflows/activity-definitions?definition=definition-1");
+
+    await waitForText(rendered.container, "Invoice evaluator");
+    click(buttonByText(rendered.container, "Drafts"));
+    await waitForText(rendered.container, "This account cannot open this collection");
+    click(buttonByText(rendered.container, "Versions"));
+    await waitForText(rendered.container, "This account cannot open this collection");
+
+    flushSync(() => {
+      window.history.replaceState({}, "", "/workflows/activity-definitions?definition=definition-2");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await waitForText(rendered.container, "Second evaluator");
+    await waitFor(() => expect(buttonByText(rendered.container, "Edit activity").disabled).toBe(false));
+
+    click(buttonByText(rendered.container, "Drafts"));
+    await waitForText(rendered.container, "Second evaluator draft");
+    click(buttonByText(rendered.container, "Versions"));
+    await waitForText(rendered.container, "2.0.0");
+    expect(rendered.container.textContent).not.toContain("cannot open this collection");
+    await rendered.unmount();
+  });
+
   it("uses bounded paging and sends Designed, Built-in, All, search, and advanced filters to the server", async () => {
     const getJson = vi.fn(async (url: string) => {
       if (url === "/capabilities") return capabilities();

@@ -30,6 +30,7 @@ const ActivityDefinitionDependencyExplorer = lazy(async () => {
 
 type Section = "overview" | "drafts" | "versions" | "relationships";
 type RouteState = { definitionId: string | null; section: string | null; draftId: string | null; versionId: string | null; draftActionVersionId?: string | null };
+type ChildCollectionPrivacyFailure = { definitionId: string; kind: "unavailable" | "forbidden" | "not-found" };
 
 export function ActivityDefinitionWorkbench({ context, definitionId, section, selectedDraftId, selectedVersionId, requestedDraftActionVersionId, activityEditors, onNavigate, onPlanUpgrade, onOpenWorkflows }: {
   context: StudioEndpointContext;
@@ -50,8 +51,8 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   const [versionCursorStack, setVersionCursorStack] = useState<(string | null)[]>([null]);
   const [versionCursorIndex, setVersionCursorIndex] = useState(0);
   const [privacyFailure, setPrivacyFailure] = useState<"unavailable" | "forbidden" | "not-found" | null>(null);
-  const [draftPrivacyFailure, setDraftPrivacyFailure] = useState<"unavailable" | "forbidden" | "not-found" | null>(null);
-  const [versionPrivacyFailure, setVersionPrivacyFailure] = useState<"unavailable" | "forbidden" | "not-found" | null>(null);
+  const [draftPrivacyFailure, setDraftPrivacyFailure] = useState<ChildCollectionPrivacyFailure | null>(null);
+  const [versionPrivacyFailure, setVersionPrivacyFailure] = useState<ChildCollectionPrivacyFailure | null>(null);
   const [draftSelectionFailure, setDraftSelectionFailure] = useState<{ id: string; kind: "unavailable" | "forbidden" | "not-found" } | null>(null);
   const [versionSelectionFailure, setVersionSelectionFailure] = useState<{ id: string; kind: "unavailable" | "forbidden" | "not-found" } | null>(null);
   const [draftDialogSource, setDraftDialogSource] = useState<string | null | false>(false);
@@ -84,8 +85,10 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   const exactVersionQuery = useActivityDefinitionVersion(context, definitionId, selectedVersionId ?? overviewVersionId, childEnabled && (activeSection === "versions" || Boolean(overviewVersionId)));
   const draftDirectFailure = draftsQuery.error ? classifyActivityDefinitionReadFailure(draftsQuery.error) : null;
   const versionDirectFailure = versionsQuery.error ? classifyActivityDefinitionReadFailure(versionsQuery.error) : null;
-  const effectiveDraftPrivacyFailure = draftPrivacyFailure ?? (draftDirectFailure === "forbidden" || draftDirectFailure === "unavailable" || draftDirectFailure === "not-found" ? draftDirectFailure : null);
-  const effectiveVersionPrivacyFailure = versionPrivacyFailure ?? (versionDirectFailure === "forbidden" || versionDirectFailure === "unavailable" || versionDirectFailure === "not-found" ? versionDirectFailure : null);
+  const effectiveDraftPrivacyFailure = (draftPrivacyFailure?.definitionId === definitionId ? draftPrivacyFailure.kind : null)
+    ?? (draftDirectFailure === "forbidden" || draftDirectFailure === "unavailable" || draftDirectFailure === "not-found" ? draftDirectFailure : null);
+  const effectiveVersionPrivacyFailure = (versionPrivacyFailure?.definitionId === definitionId ? versionPrivacyFailure.kind : null)
+    ?? (versionDirectFailure === "forbidden" || versionDirectFailure === "unavailable" || versionDirectFailure === "not-found" ? versionDirectFailure : null);
   const exactDraftFailure = exactDraftQuery.error ? classifyActivityDefinitionReadFailure(exactDraftQuery.error) : null;
   const exactVersionFailure = exactVersionQuery.error ? classifyActivityDefinitionReadFailure(exactVersionQuery.error) : null;
   const effectiveDraftSelectionFailure = draftSelectionFailure?.id === selectedDraftId ? draftSelectionFailure.kind : exactDraftFailure;
@@ -103,13 +106,13 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
 
   useEffect(() => {
     if (draftDirectFailure !== "forbidden" && draftDirectFailure !== "unavailable" && draftDirectFailure !== "not-found") return;
-    setDraftPrivacyFailure(draftDirectFailure);
+    setDraftPrivacyFailure({ definitionId, kind: draftDirectFailure });
     void redactActivityDefinitionChildCache(queryClient, definitionId, "draft");
   }, [definitionId, draftDirectFailure, queryClient]);
 
   useEffect(() => {
     if (versionDirectFailure !== "forbidden" && versionDirectFailure !== "unavailable" && versionDirectFailure !== "not-found") return;
-    setVersionPrivacyFailure(versionDirectFailure);
+    setVersionPrivacyFailure({ definitionId, kind: versionDirectFailure });
     void redactActivityDefinitionChildCache(queryClient, definitionId, "version");
   }, [definitionId, queryClient, versionDirectFailure]);
 
@@ -203,8 +206,8 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
     </div>
     <section className="ad-tab-panel" role="tabpanel" aria-label={tabs.find(tab => tab.id === activeSection)?.label}>
       {activeSection === "overview" ? designOwned ? <DesignedOverview detail={detail} activeDrafts={activeDrafts?.length ?? null} onOpen={navigateSection} onOpenWorkflows={onOpenWorkflows} /> : <Overview detail={detail} provider={provider} designOwned={false} versionQuery={exactVersionQuery} onOpen={navigateSection} /> : null}
-      {activeSection === "drafts" ? <DraftsSection query={draftsQuery} exactQuery={exactDraftQuery} exactFailure={effectiveDraftSelectionFailure} privacyFailure={effectiveDraftPrivacyFailure} selectedDraftId={selectedDraftId} page={draftCursorIndex + 1} designOwned={designOwned} canCreateDraft={canCreateDraft} onCreate={() => setDraftDialogSource(null)} onPrevious={() => setDraftCursorIndex(current => Math.max(0, current - 1))} onNext={() => { const continuation = draftsQuery.data?.continuation; if (!continuation) return; setDraftCursorStack(current => [...current.slice(0, draftCursorIndex + 1), continuation]); setDraftCursorIndex(current => current + 1); }} onRetry={() => { setDraftPrivacyFailure(null); void draftsQuery.refetch(); }} onSelect={draftId => navigateSection("drafts", draftId, null)} onEdit={draftId => onNavigate({ definitionId, section: "editor", draftId, versionId: null })} onPlanUpgrade={draftId => onPlanUpgrade("ActivityDraft", draftId)} /> : null}
-      {activeSection === "versions" ? <VersionsSection query={versionsQuery} exactQuery={exactVersionQuery} exactFailure={effectiveVersionSelectionFailure} privacyFailure={effectiveVersionPrivacyFailure} selectedVersionId={selectedVersionId} page={versionCursorIndex + 1} designOwned={designOwned} onCreateFromVersion={versionId => setDraftDialogSource(versionId)} onManage={(action, version) => setLifecycleDialog({ action, version })} onPrevious={() => setVersionCursorIndex(current => Math.max(0, current - 1))} onNext={() => { const continuation = versionsQuery.data?.continuation; if (!continuation) return; setVersionCursorStack(current => [...current.slice(0, versionCursorIndex + 1), continuation]); setVersionCursorIndex(current => current + 1); }} onRetry={() => { setVersionPrivacyFailure(null); void versionsQuery.refetch(); }} onSelect={versionId => navigateSection("versions", null, versionId)} onPlanUpgrade={versionId => onPlanUpgrade("ActivityVersion", versionId)} /> : null}
+      {activeSection === "drafts" ? <DraftsSection query={draftsQuery} exactQuery={exactDraftQuery} exactFailure={effectiveDraftSelectionFailure} privacyFailure={effectiveDraftPrivacyFailure} selectedDraftId={selectedDraftId} page={draftCursorIndex + 1} designOwned={designOwned} canCreateDraft={canCreateDraft} onCreate={() => setDraftDialogSource(null)} onPrevious={() => setDraftCursorIndex(current => Math.max(0, current - 1))} onNext={() => { const continuation = draftsQuery.data?.continuation; if (!continuation) return; setDraftCursorStack(current => [...current.slice(0, draftCursorIndex + 1), continuation]); setDraftCursorIndex(current => current + 1); }} onRetry={() => { setDraftPrivacyFailure(current => current?.definitionId === definitionId ? null : current); void draftsQuery.refetch(); }} onSelect={draftId => navigateSection("drafts", draftId, null)} onEdit={draftId => onNavigate({ definitionId, section: "editor", draftId, versionId: null })} onPlanUpgrade={draftId => onPlanUpgrade("ActivityDraft", draftId)} /> : null}
+      {activeSection === "versions" ? <VersionsSection query={versionsQuery} exactQuery={exactVersionQuery} exactFailure={effectiveVersionSelectionFailure} privacyFailure={effectiveVersionPrivacyFailure} selectedVersionId={selectedVersionId} page={versionCursorIndex + 1} designOwned={designOwned} onCreateFromVersion={versionId => setDraftDialogSource(versionId)} onManage={(action, version) => setLifecycleDialog({ action, version })} onPrevious={() => setVersionCursorIndex(current => Math.max(0, current - 1))} onNext={() => { const continuation = versionsQuery.data?.continuation; if (!continuation) return; setVersionCursorStack(current => [...current.slice(0, versionCursorIndex + 1), continuation]); setVersionCursorIndex(current => current + 1); }} onRetry={() => { setVersionPrivacyFailure(current => current?.definitionId === definitionId ? null : current); void versionsQuery.refetch(); }} onSelect={versionId => navigateSection("versions", null, versionId)} onPlanUpgrade={versionId => onPlanUpgrade("ActivityVersion", versionId)} /> : null}
       {activeSection === "relationships" ? <Suspense fallback={<div className="ad-inline-status" role="status">Loading dependency explorer…</div>}><ActivityDefinitionDependencyExplorer context={context} definitionId={definitionId} initialVersionId={!designOwned ? detail.lifecycle.recommendation?.versionId : undefined} initialDirection={!designOwned ? "inbound" : undefined} /></Suspense> : null}
     </section>
     {designOwned ? <details className="ad-technical-disclosure"><summary>Advanced</summary><IdentityDetails detail={detail} provider={provider} />{canCreateDraft ? <button type="button" onClick={() => setDraftDialogSource(null)}>Create parallel draft</button> : null}</details> : null}
