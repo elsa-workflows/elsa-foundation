@@ -1,6 +1,6 @@
 import type { Node } from "@xyflow/react";
 import { createHttpStarterState } from "./httpWorkflowStarter";
-import type { StudioActivityDescriptor, StudioAiContributionApi, StudioAiPromptActionContribution } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityDescriptor } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, ActivityPresentationRecord, WorkflowDefinitionSummary, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowExecutableReference, WorkflowExecutableRunResponse, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
 import type { ChildSlot } from "../workflowAdapter";
 import { createActivityNode, flowchartEdges, getActivityDesignerSupport, getActivityDisplay, getChildSlots, resolveScope } from "../workflowAdapter";
@@ -10,25 +10,7 @@ import { workflowSidePanelMaximizedStorageKey } from "./constants";
 import type { ActivityPaletteGroup, CreateWorkflowDraft, CreateWorkflowKind, WorkflowEditorError, WorkflowErrorInput, WorkflowGraphConnection, WorkflowMetadataSuggestion, WorkflowSidePanel } from "./editorTypes";
 import { resolveActivityLabel } from "../activityPresentation";
 
-export function pageItems<T>(items: T[], page: number, pageSize: number) {
-  return items.slice((page - 1) * pageSize, page * pageSize);
-}
-
-export function getTotalPages(totalCount: number, pageSize: number) {
-  return Math.max(1, Math.ceil(totalCount / pageSize));
-}
-
-export function findAiAction(ai: StudioAiContributionApi, id: string) {
-  return ai.promptActions.list().find(action => action.id === id) ?? null;
-}
-
-export function dispatchAiAction<TContext>(ai: StudioAiContributionApi, action: StudioAiPromptActionContribution<TContext>, context: TContext) {
-  const prompt = action.createPrompt(context);
-  if (!prompt) return false;
-
-  ai.dispatchPrompt(prompt);
-  return true;
-}
+export { dispatchAiAction, findAiAction, getTotalPages, pageItems } from "./editorListHelpers";
 
 function readStringField(source: Record<string, unknown>, key: string): string | undefined {
   const value = source[key];

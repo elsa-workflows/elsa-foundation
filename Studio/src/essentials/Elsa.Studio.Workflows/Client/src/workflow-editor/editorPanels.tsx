@@ -13,7 +13,7 @@ import type { ValidationActivityLabels } from "../validationActivityLabels";
 import { formatDate } from "../workflowFormatting";
 import { isRejectedTestRun } from "./editorHelpers";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
-import { WorkflowTestRunControls } from "./WorkflowTestRunControls";
+import { LazyWorkflowTestRunControls } from "./lazyTestDriveUi";
 
 /**
  * Renders the unified draft-validation surface (issue #453). `errors` (server-derived + reconciled +
@@ -211,7 +211,15 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
             <ActionResult action={view.driverAction ?? { kind: runState.driverActionResult.value.kind }} result={runState.driverActionResult.value} />
           </Suspense>
         ) : null}
-        {context && onRunViewUpdated && "view" in testRun ? <WorkflowTestRunControls context={context} testRun={runState} stimulusEditors={stimulusEditors ?? []} onRunViewUpdated={onRunViewUpdated} onWaitDraftUpdated={onWaitDraftUpdated} /> : null}
+        {context && onRunViewUpdated && "view" in testRun ? (
+          <LazyWorkflowTestRunControls
+            context={context}
+            testRun={runState}
+            stimulusEditors={stimulusEditors ?? []}
+            onRunViewUpdated={onRunViewUpdated}
+            onWaitDraftUpdated={onWaitDraftUpdated}
+          />
+        ) : null}
       </section>
     </div>
   );
