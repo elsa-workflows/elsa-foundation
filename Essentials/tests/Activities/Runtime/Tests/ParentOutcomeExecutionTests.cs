@@ -6,6 +6,7 @@ using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -306,7 +307,7 @@ public sealed class ParentOutcomeExecutionTests
     {
         public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
         {
-            var child = context.ExecutableNode.ChildSlots.Single().Activities[0];
+            var child = context.ExecutableNode.ChildSlots.Single().Activities.First();
             context.ScheduleChildActivity(child.ExecutableNodeId, context.ActivityExecutionState.InvocationId);
             return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
         }

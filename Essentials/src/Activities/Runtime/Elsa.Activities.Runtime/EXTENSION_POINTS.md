@@ -91,7 +91,11 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 - **Usage:** receives an intentional child fault and its ordered parent notifications in one callback. The runtime persists the masked fault, exact incident id and notifications in one versioned `RuntimeParentOutcome`, delivered as `CompleteActivity` / `ParentOutcomeEvaluation`. It does not invoke the legacy notification and fault callbacks sequentially. A fault-only parent retains its legacy fault callback; a parent with neither capability leaves the original blocking incident. A legacy notification consumer without this combined capability records `runtime.parent-outcome.handler-required` without invoking either callback.
 - **Recovery:** a `Defer` or `Complete` callback may absorb the exact incident and reclaim descendants in the same checkpoint as its continuation and the exact processed-work marker. The child remains historically `Faulted`. A pending outcome holds automatic incident resolution while its committed parent remains `Running`; late delivery to a non-running parent is acknowledged. Exceptions, invalid staging and disposal failures discard the staged notifications. Upgrade readers before producers; see [spec 126 D6](../../../../../specs/126-runtime-child-parent-notification/spec.md) for the wire, retry and rollout contract.
 
-**Existing structural implementations (these do not yet implement the combined callback):**
+### Existing structural consumers
+
+These consumers do not yet implement the combined callback.
+
+**Known implementations (shipped):**
 - `Elsa.Activities.Flowchart` — `Flowchart` *(routes completed children through Flowchart-owned structure and child projection)*
 - `Elsa.Activities.Sequence` — `Sequence` *(schedules child executable nodes in Sequence-owned slot order)*
 - `Elsa.Activities.ControlFlow` — `Parallel` *(fork/join: counts branch completions toward the join threshold)* and the `If`/`Switch`/`For`/`ForEach`/`While`/`Do` control-flow composites
