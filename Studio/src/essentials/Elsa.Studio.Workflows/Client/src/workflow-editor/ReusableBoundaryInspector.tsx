@@ -399,7 +399,7 @@ export function ReusableBoundaryInspector({
                 context={context}
                 inspection={activeFrame.inspection}
                 heading="Technical identity"
-                includeStatus={frames.length > 1}
+                includeStatus={false}
                 includeSource={false}
               />
             </details>

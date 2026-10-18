@@ -1232,7 +1232,10 @@ describe("WorkflowActivityExecutionDetails", () => {
 
     expect(overview.querySelector("h4")?.textContent).toBe("Write Line");
     expect(overview.querySelectorAll(".wf-activity-summary-grid .wf-activity-meta-item")).toHaveLength(3);
-    expect(container.querySelector(".wf-activity-execution-details")?.hasAttribute("open")).toBe(false);
+    const executionDetails = container.querySelector<HTMLElement>(".wf-activity-execution-details")!;
+    expect(executionDetails.hasAttribute("open")).toBe(false);
+    expect(executionDetails.querySelector("summary small")?.textContent).toBe("5 values");
+    expect(executionDetails.querySelectorAll(".wf-activity-meta-item")).toHaveLength(5);
     expect(metadataValue(container, "Activity type")).toBe(`${activity.activityType}@${activity.activityTypeVersion}`);
     expect(container.querySelectorAll(".wf-copy-button")).toHaveLength(10);
 
@@ -1243,6 +1246,24 @@ describe("WorkflowActivityExecutionDetails", () => {
       expect(writeText).toHaveBeenCalledWith("ae-1");
       expect(overview.querySelector("[role=status]")?.textContent).toBe("Copied activity execution ID.");
     });
+  });
+
+  it("keeps the execution detail value count in sync when an attempt row is present", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue({
+      ...inspection([]),
+      attempt: {
+        attemptNumber: 2,
+        firstAttemptActivityExecutionId: "ae-first",
+        totalAttempts: 3
+      }
+    });
+
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
+    const executionDetails = container.querySelector<HTMLElement>(".wf-activity-execution-details")!;
+
+    await waitFor(() => expect(executionDetails.querySelector("summary small")?.textContent).toBe("6 values"));
+    expect(executionDetails.querySelectorAll(".wf-activity-meta-item")).toHaveLength(6);
+    expect(metadataValue(container, "Attempt")).toBe("2 of 3");
   });
 
   it("renders redaction, truncation, permission-hidden, and payload reference markers", async () => {
