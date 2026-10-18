@@ -1979,6 +1979,20 @@ export function WorkflowActivityExecutionDetails({
   const durationLabel = formatDuration(activity.startedAt, activity.completedAt) || "Unknown";
   const bookmarkCount = resolveReportedCount(activity.bookmarkCount, activity.bookmarkIds);
   const incidentCount = resolveReportedCount(activity.incidentCount, activity.incidentIds);
+  const executionAttempt = currentInspectionState.status === "ready" ? currentInspectionState.inspection?.attempt : null;
+  const executionDetailRows = [
+    { label: "Activity Execution ID", value: activity.activityExecutionId, copiedLabel: "activity execution ID", code: true },
+    { label: "Authored Activity ID", value: activity.authoredActivityId, copiedLabel: "authored activity ID", code: true },
+    { label: "Activity type", value: `${activity.activityType}@${activity.activityTypeVersion}`, copiedLabel: "activity type", code: true },
+    { label: "Completed", value: completedLabel, copiedLabel: "completion time" },
+    { label: "Bookmarks", value: bookmarkCount == null ? "Unavailable" : String(bookmarkCount), copiedLabel: "bookmark count" },
+    ...(executionAttempt ? [{
+      label: "Attempt",
+      value: `${executionAttempt.attemptNumber} of ${executionAttempt.totalAttempts ?? "?"}`,
+      copiedLabel: "attempt",
+      code: true
+    }] : [])
+  ];
   const markCopied = (label: string) => setCopyStatus(`Copied ${label}.`);
   const markCopyFailed = (label: string) => setCopyStatus(`Could not copy ${label}.`);
 
@@ -2059,24 +2073,12 @@ export function WorkflowActivityExecutionDetails({
         <details className="wf-activity-execution-details">
           <summary>
             <span>Execution details</span>
-            <small>{currentInspectionState.status === "ready" && currentInspectionState.inspection?.attempt ? "6 values" : "5 values"}</small>
+            <small>{executionDetailRows.length} values</small>
           </summary>
           <dl className="wf-activity-detail-list">
-            <ActivityMetadataValue label="Activity Execution ID" value={activity.activityExecutionId} copiedLabel="activity execution ID" code onCopied={markCopied} onCopyFailed={markCopyFailed} />
-            <ActivityMetadataValue label="Authored Activity ID" value={activity.authoredActivityId} copiedLabel="authored activity ID" code onCopied={markCopied} onCopyFailed={markCopyFailed} />
-            <ActivityMetadataValue label="Activity type" value={`${activity.activityType}@${activity.activityTypeVersion}`} copiedLabel="activity type" code onCopied={markCopied} onCopyFailed={markCopyFailed} />
-            <ActivityMetadataValue label="Completed" value={completedLabel} copiedLabel="completion time" onCopied={markCopied} onCopyFailed={markCopyFailed} />
-            <ActivityMetadataValue label="Bookmarks" value={bookmarkCount == null ? "Unavailable" : String(bookmarkCount)} copiedLabel="bookmark count" onCopied={markCopied} onCopyFailed={markCopyFailed} />
-            {currentInspectionState.status === "ready" && currentInspectionState.inspection?.attempt ? (
-              <ActivityMetadataValue
-                label="Attempt"
-                value={`${currentInspectionState.inspection.attempt.attemptNumber} of ${currentInspectionState.inspection.attempt.totalAttempts ?? "?"}`}
-                copiedLabel="attempt"
-                code
-                onCopied={markCopied}
-                onCopyFailed={markCopyFailed}
-              />
-            ) : null}
+            {executionDetailRows.map(row => (
+              <ActivityMetadataValue key={row.label} {...row} onCopied={markCopied} onCopyFailed={markCopyFailed} />
+            ))}
           </dl>
         </details>
       </section>

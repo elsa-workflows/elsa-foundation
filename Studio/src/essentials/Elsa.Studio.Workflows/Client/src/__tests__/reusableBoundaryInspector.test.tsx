@@ -96,6 +96,9 @@ describe("ReusableBoundaryInspector", () => {
     expect(container.querySelector(".wf-boundary-inspector-heading")?.textContent).toContain("Retryable");
     expect(boundarySummary()?.textContent).toContain("Completed");
     expect(boundarySummary()?.textContent).not.toContain("Faulted");
+    const technicalIdentity = container.querySelector(".wf-boundary-technical-identity");
+    expect(technicalIdentity?.textContent).not.toContain("Faulted");
+    expect(technicalIdentity?.textContent).not.toContain("Retryable");
   });
 
   it("links to the exact inspected Activity Definition version only after authorized source resolution", async () => {
