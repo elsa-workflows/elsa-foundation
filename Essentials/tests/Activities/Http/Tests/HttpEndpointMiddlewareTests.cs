@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Models;
@@ -1309,25 +1310,49 @@ public sealed class HttpEndpointMiddlewareTests
     }
 
     [Theory]
+    [InlineData(0, 20, 20)]
+    [InlineData(5000, 20, 20)]
+    [InlineData(20, 5000, 20)]
+    public void Sync_SelectsTheShorterHostAndEndpointDeadline(int endpointMilliseconds, int hostMilliseconds, int expectedMilliseconds) =>
+        Assert.Equal(expectedMilliseconds, ShorterSyncDeadlineMilliseconds(endpointMilliseconds, hostMilliseconds));
+
+    [Theory]
     [InlineData(0, 20)]
     [InlineData(5000, 20)]
     [InlineData(20, 5000)]
     public async Task Sync_UsesTheShorterHostAndEndpointDeadline(int endpointMilliseconds, int hostMilliseconds)
     {
-        var router = BehaviourStimulusRouter.Delaying(TimeSpan.FromSeconds(1));
+        // The dispatch must not complete on its own. BehaviourStimulusRouter.Delaying returns an empty
+        // routing result after the delay, and the middleware maps that to 404. A 1s delay racing a 20ms
+        // CancelAfter under thread-pool starvation is how this case returned 404 on CI.
+        var router = BehaviourStimulusRouter.Delaying(Timeout.InfiniteTimeSpan);
         var store = await StoreWith(Binding("artifact-1", "slow", "POST",
             requestTimeout: endpointMilliseconds == 0 ? null : TimeSpan.FromMilliseconds(endpointMilliseconds),
             responseMode: ResponseMode.Sync));
         var middleware = Middleware(router, store, "slow", syncRequestTimeout: TimeSpan.FromMilliseconds(hostMilliseconds));
         var context = NewContext("/workflows/http/slow", "POST", body: "{}");
         var clientToken = context.RequestAborted;
+        var shorter = TimeSpan.FromMilliseconds(ShorterSyncDeadlineMilliseconds(endpointMilliseconds, hostMilliseconds));
+        var longer = TimeSpan.FromMilliseconds(Math.Max(endpointMilliseconds, hostMilliseconds));
 
+        var elapsed = Stopwatch.StartNew();
         await middleware.InvokeAsync(context, _ => Task.CompletedTask);
+        elapsed.Stop();
 
         Assert.Equal(StatusCodes.Status408RequestTimeout, context.Response.StatusCode);
         Assert.Equal(clientToken, context.RequestAborted);
         Assert.False(context.RequestAborted.IsCancellationRequested);
+        if (longer > shorter)
+        {
+            Assert.True(
+                elapsed.Elapsed < TimeSpan.FromMilliseconds(longer.TotalMilliseconds * 0.6),
+                $"Elapsed {elapsed.Elapsed.TotalMilliseconds:0.0}ms is too close to the discarded {longer.TotalMilliseconds:0}ms deadline; the shorter {shorter.TotalMilliseconds:0}ms deadline was not the one that fired.");
+        }
     }
+
+    /// <summary>Mirrors the middleware's Sync rule: a missing endpoint timeout is the host timeout; otherwise the min.</summary>
+    internal static int ShorterSyncDeadlineMilliseconds(int endpointMilliseconds, int hostMilliseconds) =>
+        endpointMilliseconds > 0 ? Math.Min(endpointMilliseconds, hostMilliseconds) : hostMilliseconds;
 
     [Fact]
     public async Task Sync_HostDeadlineAlsoCancelsBodyReadingBeforeDispatch()

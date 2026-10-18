@@ -9,11 +9,24 @@ using Xunit;
 namespace Elsa.Workbench.Tests;
 
 /// <summary>Publishes through REST and kills the real Workbench while two ordinary background bodies are live.</summary>
+/// <remarks>
+/// Lease reclaim is wall-clock plus a live child poller. Sibling Workbench hosts on the same machine starve
+/// that poller the same way parallel HTTP TestServers starved <c>DurableDrainCycleTests</c>, so this class
+/// runs in its own non-parallel collection. After the kill, the test waits until the authored lease must
+/// have expired and only then polls for a new process line, so a late reclaim is "expired but not claimed"
+/// rather than a 90-second blur of lease time plus starvation.
+/// </remarks>
+[Collection(Name)]
 public sealed class WorkbenchBackgroundActivityRecoveryTests
 {
+    public const string Name = nameof(WorkbenchBackgroundActivityRecoveryTests);
+
     private const string PackageId = "Elsa.Workbench.Tests.BackgroundActivities";
     private const string ProbeType = PackageId + ".BackgroundProbe";
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(90);
+    private static readonly TimeSpan WorkerLeaseDuration = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan WorkerPollInterval = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan WorkerRenewalInterval = TimeSpan.FromSeconds(1);
 
     [Theory]
     [InlineData("left", "right")]
@@ -36,11 +49,13 @@ public sealed class WorkbenchBackgroundActivityRecoveryTests
         var initialLeft = File.ReadAllLines(Path.Combine(journal, "left.started"))[0];
         var initialRight = File.ReadAllLines(Path.Combine(journal, "right.started"))[0];
 
+        var killedAt = DateTimeOffset.UtcNow;
         await using var restarted = await admitted.CrashAndRestartAsync();
         Assert.Equal(original.ContentRoot, restarted.ContentRoot);
         await LoginAsync(restarted);
+        await WaitUntilWorkerLeasesMustHaveExpiredAsync(killedAt);
         await WaitForAsync(restarted, () => StartedCount(journal, "left") >= 2 && StartedCount(journal, "right") >= 2,
-            "a new process to reclaim both expired worker leases");
+            "a new process to reclaim both expired worker leases", () => DescribeJournal(journal));
         AssertRestartedWithSameLogicalIdentity(initialLeft, File.ReadAllLines(Path.Combine(journal, "left.started"))[1]);
         AssertRestartedWithSameLogicalIdentity(initialRight, File.ReadAllLines(Path.Combine(journal, "right.started"))[1]);
 
@@ -266,6 +281,40 @@ public sealed class WorkbenchBackgroundActivityRecoveryTests
         }
     }
 
+    [Fact]
+    public void Remaining_lease_wait_is_zero_only_after_the_authored_lease_plus_one_poll()
+    {
+        var killedAt = new DateTimeOffset(2026, 10, 18, 8, 0, 0, TimeSpan.Zero);
+        Assert.Equal(WorkerLeaseDuration + WorkerPollInterval - TimeSpan.FromSeconds(5), RemainingWaitAfterKill(killedAt, killedAt + TimeSpan.FromSeconds(5), WorkerLeaseDuration, WorkerPollInterval));
+        Assert.Equal(WorkerPollInterval, RemainingWaitAfterKill(killedAt, killedAt + WorkerLeaseDuration, WorkerLeaseDuration, WorkerPollInterval));
+        Assert.Equal(TimeSpan.Zero, RemainingWaitAfterKill(killedAt, killedAt + WorkerLeaseDuration + WorkerPollInterval, WorkerLeaseDuration, WorkerPollInterval));
+        Assert.Equal(TimeSpan.Zero, RemainingWaitAfterKill(killedAt, killedAt + TimeSpan.FromSeconds(45), WorkerLeaseDuration, WorkerPollInterval));
+    }
+
+    /// <summary>
+    /// Wall time still owed after a kill before the replacement process can treat the dead worker's fence as
+    /// expired. Restart time already spent is subtracted; a slow restart does not wait again.
+    /// </summary>
+    internal static TimeSpan RemainingWaitAfterKill(
+        DateTimeOffset killedAt,
+        DateTimeOffset now,
+        TimeSpan leaseDuration,
+        TimeSpan pollInterval)
+    {
+        var remaining = leaseDuration + pollInterval - (now - killedAt);
+        return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
+    }
+
+    private static async Task WaitUntilWorkerLeasesMustHaveExpiredAsync(DateTimeOffset killedAt)
+    {
+        var remaining = RemainingWaitAfterKill(killedAt, DateTimeOffset.UtcNow, WorkerLeaseDuration, WorkerPollInterval);
+        if (remaining > TimeSpan.Zero)
+            await Task.Delay(remaining);
+        Assert.True(
+            DateTimeOffset.UtcNow >= killedAt + WorkerLeaseDuration,
+            "The reclaim poll started before the authored worker lease could have expired.");
+    }
+
     private static string DescribeJournal(string journal)
     {
         const int maximumFiles = 32;
@@ -325,7 +374,11 @@ public sealed class WorkbenchBackgroundActivityRecoveryTests
         var features = shells["CShells"]!["Shells"]!["default"]!["Features"]!.AsObject();
         features["BackgroundActivities"] = new JsonObject
         {
-            ["RunWorkers"] = false, ["MaxConcurrency"] = 2, ["PollIntervalSeconds"] = .1, ["LeaseDurationSeconds"] = 20, ["RenewalIntervalSeconds"] = 1
+            ["RunWorkers"] = false,
+            ["MaxConcurrency"] = 2,
+            ["PollIntervalSeconds"] = WorkerPollInterval.TotalSeconds,
+            ["LeaseDurationSeconds"] = WorkerLeaseDuration.TotalSeconds,
+            ["RenewalIntervalSeconds"] = WorkerRenewalInterval.TotalSeconds
         };
         features["BackgroundActivityWitness"] = new JsonObject();
         File.WriteAllText(path, shells.ToJsonString());
@@ -351,3 +404,6 @@ public sealed class WorkbenchBackgroundActivityRecoveryTests
         stream.Write(Encoding.UTF8.GetBytes(value));
     }
 }
+
+[CollectionDefinition(WorkbenchBackgroundActivityRecoveryTests.Name, DisableParallelization = true)]
+public sealed class WorkbenchBackgroundActivityRecoveryTestCollection;
