@@ -42,9 +42,9 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     private readonly IPersistenceAccessContextAccessor? _persistenceAccessContextAccessor;
 
     /// <summary>
-    /// Creates the in-memory commit store. Every backing store is optional and defaults to <c>null</c>, so terse test
-    /// constructions and the DI activation (which injects every registered backing store) share this one constructor,
-    /// and the coalescing decorators keep wrapping this registration without modification.
+    /// Creates the in-memory commit store. Backing stores are optional for direct test construction. The runtime DI
+    /// composition requires the workflow execution store for child-start evidence and injects the other registered
+    /// backing stores. Coalescing decorators keep wrapping that registration without modification.
     /// </summary>
     public InMemoryRuntimeCheckpointCommitStore(
         IWorkflowExecutionStateStore? workflowExecutionStateStore = null,

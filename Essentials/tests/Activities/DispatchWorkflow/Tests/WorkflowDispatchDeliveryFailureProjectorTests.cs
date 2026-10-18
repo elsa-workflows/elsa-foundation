@@ -7,6 +7,8 @@ using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Extensions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
 using Microsoft.Extensions.Time.Testing;
@@ -137,13 +139,14 @@ public sealed class WorkflowDispatchDeliveryFailureProjectorTests
     [Fact]
     public async Task InMemoryClaimedFailure_AcknowledgesVisibleChildInsteadOfProjectingDispatchFailed()
     {
-        var state = new InMemoryRuntimeCheckpointStoreState();
-        var workflowExecutions = new InMemoryWorkflowExecutionStateStore();
-        var dispatchStore = new InMemoryWorkflowDispatchStore(state);
-        var outbox = new InMemoryRuntimeCheckpointCommitStore(
-            workflowExecutionStateStore: workflowExecutions,
-            state: state,
-            workflowDispatchStore: dispatchStore);
+        using var provider = new ServiceCollection()
+            .AddWorkflowRuntime()
+            .BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var scope = provider.CreateScope();
+        var services = scope.ServiceProvider;
+        var workflowExecutions = services.GetRequiredService<IWorkflowExecutionStateStore>();
+        var dispatchStore = services.GetRequiredService<IWorkflowDispatchStore>();
+        var outbox = services.GetRequiredService<InMemoryRuntimeCheckpointCommitStore>();
         var dispatch = NewDispatch(WorkflowDispatchMode.WaitForCompletion);
         var pending = StartItem(dispatch, "secret");
         await dispatchStore.SaveAsync(dispatch);
