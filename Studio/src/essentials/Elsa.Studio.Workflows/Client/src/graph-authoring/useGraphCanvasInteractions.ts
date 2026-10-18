@@ -14,7 +14,6 @@ import {
   type OnNodeDrag,
   type OnReconnect,
   type ReactFlowInstance,
-  type Viewport,
   type XYPosition
 } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityNode } from "../workflowTypes";
@@ -28,6 +27,7 @@ import {
   type WorkflowNodeData
 } from "../workflowAdapter";
 import { resolveActivityIcon, resolveActivityIconTone } from "../activityIcons";
+import { useGraphViewport } from "./useGraphViewport";
 import { computeAutoLayout } from "../workflowLayout";
 import { activityDragDataType, pointerDragThreshold } from "../workflow-editor/constants";
 import {
@@ -156,10 +156,7 @@ export function useGraphCanvasInteractions({
   const [highlightedEdgeId, setHighlightedEdgeId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const connectSourceRef = useRef<WorkflowConnectSource | null>(null);
-  const viewportSnapshotsRef = useRef(new Map<string, Viewport>());
-  const visitedViewportScopesRef = useRef(new Set<string>());
-  const settledViewportScopeKeyRef = useRef<string | null>(null);
-  const staleScopeNodesRef = useRef<Node<WorkflowNodeData>[] | null>(null);
+  const { onMoveEnd } = useGraphViewport({ nodes, scopeKey, instance: reactFlowInstance });
   const pointerDragRef = useRef<{
     activity: ActivityCatalogItem;
     startX: number;
@@ -206,39 +203,6 @@ export function useGraphCanvasInteractions({
       }
     };
   }, [createPlacement]);
-
-  useEffect(() => () => {
-    if (!reactFlowInstance) return;
-    viewportSnapshotsRef.current.set(scopeKey, reactFlowInstance.getViewport());
-  }, [reactFlowInstance, scopeKey]);
-
-  // Restore (or first-time fit) the viewport once the host has rebuilt `nodes` for the new scope.
-  // The rebuild is asynchronous relative to the scope change — the host sees the new scope, then
-  // pushes a fresh node array on a later commit — so acting on the scope change alone would restore
-  // against the *previous* scope's nodes. Waiting for the node array's identity to change is the one
-  // signal available here that does not require the host to announce its rebuild.
-  useEffect(() => {
-    if (settledViewportScopeKeyRef.current !== scopeKey) {
-      settledViewportScopeKeyRef.current = scopeKey;
-      staleScopeNodesRef.current = nodes;
-      return;
-    }
-    if (staleScopeNodesRef.current === null || staleScopeNodesRef.current === nodes) return;
-    staleScopeNodesRef.current = null;
-
-    if (!reactFlowInstance) return;
-    const savedViewport = viewportSnapshotsRef.current.get(scopeKey);
-    const hasVisitedScope = visitedViewportScopesRef.current.has(scopeKey);
-    visitedViewportScopesRef.current.add(scopeKey);
-
-    window.requestAnimationFrame(() => {
-      if (savedViewport) {
-        reactFlowInstance.setViewport(savedViewport);
-      } else if (!hasVisitedScope && nodes.length > 0) {
-        reactFlowInstance.fitView({ padding: 0.2 });
-      }
-    });
-  }, [nodes, reactFlowInstance, scopeKey]);
 
   // React Flow's keyboard selection is emitted as a node change, while the inspector is driven by the
   // host's selected node id. Keep both projections aligned so Enter/Space has the same result as a
@@ -747,6 +711,7 @@ export function useGraphCanvasInteractions({
     canvasRef,
     reactFlowInstance,
     setReactFlowInstance,
+    onMoveEnd,
     canCreateActivityFromPort,
     connectMenu,
     setConnectMenu,

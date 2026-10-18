@@ -412,7 +412,7 @@ public sealed class WorkflowExecutableCompilerTests
                 "local-child", "local-child", "test.child", "1",
                 new("test.child", "1", JsonSerializer.SerializeToElement(new { plan = 2 })),
                 new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>())])],
-            activityContract: BoundaryRuntimeContract(hasValueInput: true));
+            activityContract: BoundaryRuntimeContract(hasValueInput: true, outputProjectionKey: "result"));
         var template = new ExecutableActivityTemplate(
             "template-reusable", "hash-reusable", root, new Dictionary<string, WorkflowExecutableResumeTarget>(),
             [], [], [], "fingerprint", new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
@@ -467,7 +467,7 @@ public sealed class WorkflowExecutableCompilerTests
         Assert.Equal(RuntimeInputBindingSource.Expression, binding.Source);
         Assert.Equal("JavaScript", binding.Expression!.Language);
         Assert.Equal("40 + 2", binding.Expression.Expression);
-        var capture = executable.RootActivity.OutputCaptures["Result"];
+        var capture = executable.RootActivity.OutputCaptures["result"];
         Assert.Equal("variable:CallerResult", capture.ValueId);
         Assert.Equal("CallerResult", capture.Metadata[RuntimeMetadataKeys.VariableName]);
         Assert.True(capture.CaptureOnSuccessfulCompletion);
@@ -496,6 +496,50 @@ public sealed class WorkflowExecutableCompilerTests
         var binding = executable.RootActivity.InputBindings["value"];
         Assert.Equal(RuntimeInputBindingSource.Literal, binding.Source);
         Assert.Equal(42, binding.LiteralValue!.Value.GetInt32());
+    }
+
+    [Fact]
+    public async Task Placed_reusable_activity_materializes_codec_backed_inputs_inline_without_an_external_payload_store()
+    {
+        var compiler = PlacedReusableCompiler(
+            new WorkflowArgumentState("A", new ArgumentValue(JsonSerializer.SerializeToElement(19), "Literal"), null, null, null, null),
+            extraInputs:
+            [
+                ("Int32", new WorkflowArgumentState("B", new ArgumentValue(JsonSerializer.SerializeToElement(23), "Literal"), null, null, null, null))
+            ]);
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+        var boundary = executable.RootActivity;
+        var materializer = new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), TestWellKnownTypeRegistry.Create());
+
+        var snapshot = await materializer.MaterializeSnapshotAsync(
+            boundary,
+            "consumer-execution",
+            new RuntimeInputBindingResolutionContext("workflow-execution", "consumer-execution", executable: executable),
+            DateTimeOffset.UnixEpoch);
+
+        Assert.Equal(19, snapshot.Values["A"].InlineValue!.Value.GetInt32());
+        Assert.Equal(23, snapshot.Values["B"].InlineValue!.Value.GetInt32());
+        Assert.Equal(DurableValueStorage.Inline, boundary.InputBindings["A"].EffectivePolicy.Storage);
+        Assert.Equal(DurableValueStorage.Inline, boundary.InputBindings["B"].EffectivePolicy.Storage);
+    }
+
+    [Fact]
+    public async Task Placed_reusable_activity_preserves_an_explicit_external_input_profile()
+    {
+        var authoredInput = new WorkflowArgumentState(
+            "value",
+            new ArgumentValue(JsonSerializer.SerializeToElement(19), "Literal"),
+            null,
+            null,
+            "external-input-profile",
+            null);
+        var executable = await PlacedReusableCompiler(authoredInput).CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+        var binding = executable.RootActivity.InputBindings["value"];
+
+        Assert.Equal(DurableValueStorage.External, binding.EffectivePolicy.Storage);
+        Assert.Equal(
+            "external-input-profile",
+            binding.EffectivePolicy.Metadata[ValuePolicyCombiner.StorageProfileMetadataKey]);
     }
 
     [Fact]
@@ -605,8 +649,11 @@ public sealed class WorkflowExecutableCompilerTests
         Elsa.Activities.Runtime.Core.Models.SideEffectProfile templateRootProfile = Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
         params (string TypeAlias, WorkflowArgumentState State)[] extraInputs)
     {
+        var primaryInputName = StringComparer.Ordinal.Equals(authoredInput.ReferenceKey, "value")
+            ? "Value"
+            : authoredInput.ReferenceKey;
         var contract = new DesignActivityContract("1", [new DesignActivityInputContract(
-            "value", "Value", new TypeReference(valueTypeAlias), true,
+            authoredInput.ReferenceKey, primaryInputName, new TypeReference(valueTypeAlias), true,
             false, null, "elsa.json"), ..extraInputs.Select(extra => new DesignActivityInputContract(
             extra.State.ReferenceKey, extra.State.ReferenceKey, new TypeReference(extra.TypeAlias), true,
             false, null, "elsa.json"))], [new ActivityOutputContract(
@@ -622,7 +669,18 @@ public sealed class WorkflowExecutableCompilerTests
             activityContract: BoundaryRuntimeContract(
                 hasValueInput: true,
                 valueTypeAlias: valueTypeAlias,
-                sideEffectProfile: templateRootProfile));
+                sideEffectProfile: templateRootProfile,
+                inputKey: authoredInput.ReferenceKey,
+                inputName: primaryInputName,
+                additionalInputs: extraInputs.Select(extra => new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(
+                    extra.State.ReferenceKey,
+                    extra.State.ReferenceKey,
+                    new ValueTypeDescriptor(extra.TypeAlias),
+                    isRequired: true,
+                    isNullable: false,
+                    hasDefault: false,
+                    defaultValue: null,
+                    policy: ActivityValuePolicy.Default)).ToArray()));
         var template = new ExecutableActivityTemplate(
             "template-greet", "hash-greet", root, new Dictionary<string, WorkflowExecutableResumeTarget>(),
             [], [], [], "fingerprint", new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
@@ -1012,10 +1070,10 @@ public sealed class WorkflowExecutableCompilerTests
         var contract = new DesignActivityContract(
             "1",
             [],
-            [new("result", "Result", new TypeReference("Object"), true, false, driver.DriverKey)],
+            [new("sum", "Sum", new TypeReference("Object"), true, false, driver.DriverKey)],
             []);
         var outputTarget = new WorkflowArgumentState(
-            "result",
+            "sum",
             new ArgumentValue(JsonSerializer.SerializeToElement(new { referenceKey = "caller-result" }), "Variable"),
             null, null, null, null);
         var captures = new RuntimeOutputCaptureCompiler(storageDrivers).CompileBoundaryOutputs(
@@ -1031,7 +1089,7 @@ public sealed class WorkflowExecutableCompilerTests
                 "local-child", "local-child", "test.child", "1",
                 new("test.child", "1", JsonSerializer.SerializeToElement(new { plan = 2 })),
                 new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, RuntimeOutputCapture>(), new Dictionary<string, string>())])],
-            activityContract: BoundaryRuntimeContract(hasValueInput: false));
+            activityContract: BoundaryRuntimeContract(hasValueInput: false, outputProjectionKey: "sum"));
         var template = new ExecutableActivityTemplate(
             "template-custom", "hash-custom", root, new Dictionary<string, WorkflowExecutableResumeTarget>(),
             [], [], [], "fingerprint", new Dictionary<string, string>(), DateTimeOffset.UnixEpoch);
@@ -1087,7 +1145,7 @@ public sealed class WorkflowExecutableCompilerTests
 
         // #972: the externalized payload lands in the root variable frame as an External envelope — the
         // custom driver's encoding (storage profile + locator) is preserved end-to-end.
-        Assert.Equal(driver.DriverKey, placed.Root.OutputCaptures["Result"].StorageDriverKey);
+        Assert.Equal(driver.DriverKey, placed.Root.OutputCaptures["sum"].StorageDriverKey);
         Assert.NotNull(captured.ExternalReference);
         Assert.Equal(driver.DriverKey, captured.ExternalReference!.StorageProfile);
         Assert.Equal(DurableValueStorage.External, captured.Policy.Storage);
@@ -2799,24 +2857,30 @@ public sealed class WorkflowExecutableCompilerTests
     private static Elsa.Activities.Runtime.Core.Models.ActivityContract BoundaryRuntimeContract(
         bool hasValueInput,
         string valueTypeAlias = "Int32",
-        Elsa.Activities.Runtime.Core.Models.SideEffectProfile sideEffectProfile = Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External)
+        Elsa.Activities.Runtime.Core.Models.SideEffectProfile sideEffectProfile = Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
+        string outputProjectionKey = "Result",
+        string inputKey = "value",
+        string? inputName = null,
+        IReadOnlyCollection<Elsa.Activities.Runtime.Core.Models.ActivityInputContract>? additionalInputs = null)
     {
         var descriptor = JsonSerializer.SerializeToElement(new { plan = 1 });
         var valueType = new ValueTypeDescriptor("Object");
-        var inputs = hasValueInput
-            ? new[]
-            {
-                new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(
-                    "value",
-                    "Value",
-                    new ValueTypeDescriptor(valueTypeAlias),
-                    isRequired: true,
-                    isNullable: false,
-                    hasDefault: false,
-                    defaultValue: null,
-                    policy: ActivityValuePolicy.Default)
-            }
-            : [];
+        var inputs = (hasValueInput
+                ? new[]
+                {
+                    new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(
+                        inputKey,
+                        inputName ?? "Value",
+                        new ValueTypeDescriptor(valueTypeAlias),
+                        isRequired: true,
+                        isNullable: false,
+                        hasDefault: false,
+                        defaultValue: null,
+                        policy: ActivityValuePolicy.Default)
+                }
+                : [])
+            .Concat(additionalInputs ?? [])
+            .ToArray();
         return new Elsa.Activities.Runtime.Core.Models.ActivityContract(
             "test.boundary",
             "1",
@@ -2828,7 +2892,7 @@ public sealed class WorkflowExecutableCompilerTests
                 isRequired: true,
                 policy: ActivityValuePolicy.Default with { Lifecycle = ActivityValueLifecycle.Result },
                 projections: [new ActivityResultProjectionContract(
-                    "Result",
+                    outputProjectionKey,
                     "$",
                     valueType,
                     isRequired: true,

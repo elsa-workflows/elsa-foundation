@@ -13,8 +13,8 @@ import {
 
 vi.mock("../workflow-editor/WorkflowInstances", () => ({
   WorkflowInstances: () => <div>Runs list</div>,
-  WorkflowInstanceDetailsWorkbench: ({ initialInspectorTab }: { initialInspectorTab?: string }) =>
-    <div data-initial-inspector-tab={initialInspectorTab}>Run workbench</div>
+  WorkflowInstanceDetailsWorkbench: ({ initialInspectorTab, initialActivityExecutionId }: { initialInspectorTab?: string; initialActivityExecutionId?: string | null }) =>
+    <div data-initial-inspector-tab={initialInspectorTab} data-initial-activity-execution-id={initialActivityExecutionId ?? ""}>Run workbench</div>
 }));
 
 let container: HTMLDivElement;
@@ -143,6 +143,20 @@ describe("Run detail page layout", () => {
       />
     ));
     await vi.waitFor(() => expect(container.querySelector("[data-initial-inspector-tab]")?.getAttribute("data-initial-inspector-tab")).toBe("timeline"));
+  });
+
+  it("opens the exact Activity tab for a run deep link with an activity execution", async () => {
+    window.history.replaceState({}, "", "/workflows/instances/run-1?activityExecutionId=outer-execution");
+    flushSync(() => root.render(
+      <WorkflowInstanceDetailsPage
+        context={{} as StudioEndpointContext}
+        ai={{} as StudioAiContributionApi}
+        navigate={() => {}}
+      />
+    ));
+
+    await vi.waitFor(() => expect(container.querySelector("[data-initial-inspector-tab]")?.getAttribute("data-initial-inspector-tab")).toBe("activity"));
+    expect(container.querySelector("[data-initial-activity-execution-id]")?.getAttribute("data-initial-activity-execution-id")).toBe("outer-execution");
   });
 });
 

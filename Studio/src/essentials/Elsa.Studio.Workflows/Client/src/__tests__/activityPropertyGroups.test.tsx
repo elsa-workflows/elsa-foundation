@@ -49,6 +49,7 @@ function renderPanel(
     draftId?: string;
     onRetryDescriptors?(): void;
     onChange?(activity: ActivityNode): void;
+    updateActivity?: boolean;
   } = {}
 ) {
   const container = document.createElement("div");
@@ -68,7 +69,7 @@ function renderPanel(
     replaceActivity = setCurrentActivity;
     const handleChange = (nextActivity: ActivityNode) => {
       options.onChange?.(nextActivity);
-      setCurrentActivity(nextActivity);
+      if (options.updateActivity !== false) setCurrentActivity(nextActivity);
     };
     return (
       <ActivityPropertiesPanel
@@ -440,6 +441,25 @@ describe("activity property organization", () => {
       typeName: "System.Int32",
       expression: { type: "JavaScript", value: "42" }
     });
+  });
+
+  it("preserves rapid edits to separate inputs while the parent draft update is pending", () => {
+    const changes: ActivityNode[] = [];
+    const container = renderPanel([
+      input("A", { referenceKey: "a", typeName: "System.Int32" }),
+      input("B", { referenceKey: "b", typeName: "System.Int32" })
+    ], {
+      activity: activity({ a: "", b: "" }),
+      onChange: next => changes.push(next),
+      updateActivity: false
+    });
+    const [inputA, inputB] = container.querySelectorAll<HTMLInputElement>(".wf-property-row input");
+
+    changeTextInput(inputA!, "7");
+    changeTextInput(inputB!, "5");
+
+    expect(changes).toHaveLength(2);
+    expect(changes[1]).toMatchObject({ a: "7", b: "5" });
   });
 
   it("prompts before replacing an incompatible value and mutates syntax and value atomically", async () => {
@@ -1184,6 +1204,13 @@ async function nextFrame() {
 function changeTextArea(input: HTMLTextAreaElement, value: string) {
   flushSync(() => {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+function changeTextInput(input: HTMLInputElement, value: string) {
+  flushSync(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }

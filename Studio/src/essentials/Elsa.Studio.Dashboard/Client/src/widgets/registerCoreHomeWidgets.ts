@@ -80,7 +80,7 @@ export function registerCoreHomeWidgets(api: ElsaStudioModuleApi) {
     id: homeWidgetIds.needsAttention,
     moduleId: "Elsa.Studio.Dashboard",
     title: "Needs attention",
-    description: "Failed, faulted, incident-bearing and long-waiting runs.",
+    description: "Runs with active incidents that need your attention.",
     core: true,
     requiresFeature: "workflows",
     defaultVisible: true,

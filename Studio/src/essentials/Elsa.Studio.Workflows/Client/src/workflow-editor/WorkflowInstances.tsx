@@ -38,6 +38,7 @@ import { nodeTypes, edgeTypes } from "./graph";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { buildBpmnCanvas, type BpmnNodeData } from "../bpmn/bpmnAdapter";
 import { CopyValueButton } from "./executableShared";
+import { useDialogFocus } from "./useDialogFocus";
 import {
   formatCaptureMode,
   formatSnapshotPayload,
@@ -481,6 +482,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
   const [incidentAssociationMessage, setIncidentAssociationMessage] = useState<string | null>(null);
   const [frames, setFrames] = useState<ScopeFrame[]>([]);
   const appliedInitialInspectorTab = useRef<InstanceInspectorTab | null>(null);
+  const appliedInitialActivityExecutionId = useRef<string | null>(null);
   const incidentNavigationRequest = useRef(0);
   const loadGeneration = useRef(0);
   const incidentActivityLookupSequence = useRef(0);
@@ -512,7 +514,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
     appliedInitialInspectorTab.current = initialInspectorTab;
     incidentNavigationRequest.current += 1;
     setActiveInspectorTab(initialInspectorTab);
-    if (initialInspectorTab === "issues") openInspector();
+    if (initialInspectorTab === "issues" || initialInspectorTab === "activity") openInspector();
   }, [initialInspectorTab, openInspector]);
   const instanceAction = findAiAction(ai, "weaver.workflows.explain-instance");
 
@@ -545,12 +547,33 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
               error => ({ sources: null, access: sourceAccessFromError(error) }))
           : Promise.resolve({ sources: null, access: "unavailable" }),
         supportsActivityExecutionInspection(context).then(
-          async supported => ({
-            supported,
-            ...await loadActiveIncidentActivitySummaries(
-              details,
-              supported ? activityExecutionId => getActivityExecutionInspection(context, workflowExecutionId, activityExecutionId) : null)
-          }),
+          async supported => {
+            const fetchInspection = supported
+              ? (activityExecutionId: string) => getActivityExecutionInspection(context, workflowExecutionId, activityExecutionId)
+              : null;
+            const summaries = await loadActiveIncidentActivitySummaries(details, fetchInspection);
+            const requestedActivityId = initialActivityExecutionId?.trim();
+            const alreadyLoaded = requestedActivityId && (
+              details.activities.some(activity => activity.activityExecutionId === requestedActivityId) ||
+              summaries.activities.some(activity => activity.activityExecutionId === requestedActivityId));
+            const incidentLookupAlreadyCoversRequest = requestedActivityId && (details.incidents ?? []).some(incident =>
+              isActiveIncident(incident) && readIncidentActivityExecutionId(incident) === requestedActivityId);
+            if (!fetchInspection || !requestedActivityId || alreadyLoaded || incidentLookupAlreadyCoversRequest) {
+              return { supported, ...summaries };
+            }
+
+            const requestedActivity = await loadExactIncidentActivitySummary(
+              workflowExecutionId,
+              requestedActivityId,
+              fetchInspection);
+            return {
+              supported,
+              ...summaries,
+              activities: requestedActivity.status === "found"
+                ? [...summaries.activities, requestedActivity.summary]
+                : summaries.activities
+            };
+          },
           async () => ({ supported: false, ...await loadActiveIncidentActivitySummaries(details, null) }))
       ]);
       if (generation !== loadGeneration.current) return;
@@ -629,7 +652,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
     setFrames(nextFrames);
   };
 
-  const focusNodePath = (nodeId: string | null) => {
+  const focusNodePath = useCallback((nodeId: string | null) => {
     if (!nodeId || !data?.definitionVersion?.state.rootActivity) return;
     const path = findNodeScopePath(
       data.definitionVersion.state.rootActivity,
@@ -641,7 +664,20 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
       data.activityCatalog
     );
     if (path) setFrames(path);
-  };
+  }, [data]);
+
+  useEffect(() => {
+    const requestedActivityExecutionId = initialActivityExecutionId?.trim();
+    if (!data || !requestedActivityExecutionId || appliedInitialActivityExecutionId.current === requestedActivityExecutionId) return;
+
+    const activity = associationActivities.find(item => item.activityExecutionId === requestedActivityExecutionId);
+    if (!activity) return;
+    appliedInitialActivityExecutionId.current = requestedActivityExecutionId;
+
+    const nodeId = findExecutableGraphNodeId(data.executableGraph, activity) ?? activity.authoredActivityId ?? activity.executableNodeId;
+    requestCanvasFocus(nodeId);
+    focusNodePath(nodeId);
+  }, [associationActivities, data, focusNodePath, initialActivityExecutionId]);
 
   const ensureIncidentActivityAssociation = useCallback(async (incident: IncidentStateSummary, isCurrent: () => boolean = () => true) => {
     const generation = loadGeneration.current;
@@ -2009,6 +2045,7 @@ export function WorkflowActivityExecutionDetails({
           expressionEditors={expressionEditors}
           focusInputKey={focusInputKey}
         />
+        <WorkflowActivityOutcomeEvidence state={currentInspectionState} />
         <WorkflowActivityValueEvidence
           state={currentInspectionState}
           subject="ActivityOutput"
@@ -2033,6 +2070,60 @@ export function WorkflowActivityExecutionDetails({
         </details>
       </section>
     </>
+  );
+}
+
+function WorkflowActivityOutcomeEvidence({ state }: { state: ActivityExecutionInspectionState }) {
+  if (state.status === "idle") return null;
+
+  if (state.status === "loading") {
+    return (
+      <section className="wf-instance-section">
+        <h4>Outcomes</h4>
+        <p>Loading runtime outcomes...</p>
+      </section>
+    );
+  }
+
+  if (state.status === "failed") {
+    return (
+      <section className="wf-instance-section">
+        <h4>Outcomes</h4>
+        <p>Runtime outcomes are unavailable.</p>
+        {state.error ? <p className="wf-instance-note">{state.error}</p> : null}
+      </section>
+    );
+  }
+
+  const outcomeNames = state.inspection?.outcomeNames ?? [];
+  if (outcomeNames.length === 0) {
+    return (
+      <section className="wf-instance-section">
+        <h4>Outcomes</h4>
+        <p>No runtime outcomes were recorded for this execution.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="wf-instance-section">
+      <header className="wf-runtime-evidence-heading">
+        <h4>
+          Outcomes
+          <span className="wf-runtime-evidence-count" aria-label={`${outcomeNames.length} outcomes`}>
+            {outcomeNames.length}
+          </span>
+        </h4>
+      </header>
+      <div className="wf-runtime-input-list" role="list">
+        {outcomeNames.map((outcomeName, index) => (
+          <div className="wf-runtime-input" role="listitem" key={`${outcomeName}:${index}`}>
+            <header><span><strong>{outcomeName}</strong></span></header>
+            <span className="wf-runtime-capture-mode">Outcome</span>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -2503,8 +2594,10 @@ export function WorkflowIncidentList({
 }) {
   const [copyStatus, setCopyStatus] = useState("");
   const [loadingAssociations, setLoadingAssociations] = useState(false);
+  const [incidentDetailsId, setIncidentDetailsId] = useState<string | null>(null);
   const incidentEvidenceAvailable = Array.isArray(incidents);
   const incidentRows = incidents ?? [];
+  const incidentDetails = incidentRows.find(incident => incident.incidentId === incidentDetailsId) ?? null;
   const permissionDeniedCount = unavailableActivityFailures.filter(failure => failure.reason === "permission-denied").length;
   const identityMismatchCount = unavailableActivityFailures.filter(failure => failure.reason === "identity-mismatch").length;
 
@@ -2549,10 +2642,7 @@ export function WorkflowIncidentList({
         (() => {
           const association = resolveIncidentActivityAssociation(incident, activities, executableGraph);
           const inputKey = readIncidentInputKey(incident);
-          const inputFailureCode = incident.metadata?.["runtime.inputFailureCode"];
           const expressionLanguage = incident.metadata?.["runtime.expressionLanguage"];
-          const inputPhase = incident.metadata?.["runtime.inputEvaluationPhase"];
-          const innerType = incident.metadata?.["runtime.faultInnerType"];
           const activityFacts = findExecutableNodeFacts(executableGraph, association?.activityExecution) ??
             (association?.nodeId ? executableGraph?.factsByNodeId.get(association.nodeId) : undefined);
           const labelActivity = association?.activityExecution ?? activityFacts;
@@ -2575,7 +2665,7 @@ export function WorkflowIncidentList({
               >
                 <strong>{activityLabel ? `${activityLabel}${inputLabel ? ` · ${inputLabel}` : ""}` : inputLabel ? `Input · ${inputLabel}` : incident.failureType}</strong>
                 <p className="wf-instance-incident-cause">{getIncidentRootCause(incident)}</p>
-                <span>{incidentHealthLabel} · {incident.status}</span>
+                <span className="wf-instance-incident-status" data-health={incident.isBlocking && isActiveIncident(incident) ? "blocking" : "neutral"}>{incidentHealthLabel} · {incident.status}</span>
                 {expressionLanguage ? <small>Expression language · {expressionLanguage}</small> : null}
               </button>
               <div className="wf-instance-incident-actions">
@@ -2587,30 +2677,26 @@ export function WorkflowIncidentList({
                 ) : inputKey ? (
                   <span className="wf-instance-note">Input key is recorded, but its exact activity execution is unavailable.</span>
                 ) : null}
+                <button type="button" onClick={() => setIncidentDetailsId(incident.incidentId)}>Open incident details</button>
+                <CopyValueButton
+                  value={formatIncidentForClipboard(incident)}
+                  ariaLabel={`Copy incident ${incident.failureType}`}
+                  copiedLabel="incident"
+                  textLabel="Copy incident details"
+                  onCopied={label => setCopyStatus(`Copied ${label}`)}
+                  onCopyFailed={label => setCopyStatus(`Could not copy ${label}.`)}
+                />
               </div>
-              <CopyValueButton
-                value={formatIncidentForClipboard(incident)}
-                ariaLabel={`Copy incident ${incident.failureType}`}
-                copiedLabel="incident"
-                onCopied={label => setCopyStatus(`Copied ${label}`)}
-                onCopyFailed={label => setCopyStatus(`Could not copy ${label}.`)}
-              />
               <details className="wf-incident-technical-details">
-                <summary>Full incident details</summary>
-                <p>Failure type: <code>{incident.failureType}</code></p>
-                <p>{incident.message}</p>
-                {innerType ? <p>Root cause type: <code>{innerType}</code></p> : null}
-                {inputKey ? <p>Input key: <code>{inputKey}</code></p> : null}
-                {inputFailureCode ? <p>Input failure code: <code>{inputFailureCode}</code></p> : null}
-                {inputPhase ? <p>Input evaluation phase: <code>{inputPhase}</code></p> : null}
-                {expressionLanguage ? <p>Expression language: <code>{expressionLanguage}</code></p> : null}
+                <summary>Technical details</summary>
+                <IncidentTechnicalContent incident={incident} />
               </details>
-              <IncidentStackTrace incident={incident} />
             </article>
           );
         })()
       ))}
       {copyStatus ? <p className="wf-copy-status" role="status">{copyStatus}</p> : null}
+      {incidentDetails ? <IncidentDetailsDialog incident={incidentDetails} onClose={() => setIncidentDetailsId(null)} /> : null}
     </section>
   );
 }
@@ -2662,9 +2748,104 @@ function IncidentStackTrace({ incident }: { incident: IncidentStateSummary }) {
 
   return (
     <details className="wf-incident-stacktrace">
-      <summary>{previewStackTrace(stackTrace)}</summary>
+      <summary>Stack trace</summary>
       <pre>{stackTrace}</pre>
     </details>
+  );
+}
+
+function IncidentTechnicalContent({ incident }: { incident: IncidentStateSummary }) {
+  const activityExecutionId = readIncidentActivityExecutionId(incident);
+  const inputKey = readIncidentInputKey(incident);
+  const inputFailureCode = incident.metadata?.["runtime.inputFailureCode"];
+  const expressionLanguage = incident.metadata?.["runtime.expressionLanguage"];
+  const inputPhase = incident.metadata?.["runtime.inputEvaluationPhase"];
+  const innerType = incident.metadata?.["runtime.faultInnerType"];
+  const hasMetadata = Boolean(incident.metadata && Object.keys(incident.metadata).length > 0);
+
+  return (
+    <div className="wf-incident-technical-content">
+      <section className="wf-incident-message-section" aria-label="Incident message">
+        <h5>Message</h5>
+        <p className="wf-incident-message">{incident.message}</p>
+      </section>
+      <dl className="wf-incident-metadata">
+        <dt>Failure type</dt><dd><code>{incident.failureType}</code></dd>
+        <dt>Incident ID</dt><dd><code>{incident.incidentId}</code></dd>
+        <dt>Workflow execution ID</dt><dd><code>{incident.workflowExecutionId}</code></dd>
+        {activityExecutionId ? <><dt>Activity execution ID</dt><dd><code>{activityExecutionId}</code></dd></> : null}
+        {incident.executableNodeId ? <><dt>Executable node ID</dt><dd><code>{incident.executableNodeId}</code></dd></> : null}
+        <dt>Status</dt><dd>{incident.status}</dd>
+        <dt>Severity</dt><dd>{incident.severity}</dd>
+        <dt>Blocking</dt><dd>{incident.isBlocking ? "Yes" : "No"}</dd>
+        {incident.resolutionAction ? <><dt>Resolution action</dt><dd>{incident.resolutionAction}</dd></> : null}
+        <dt>Created</dt><dd>{formatDate(incident.createdAt)}</dd>
+        {incident.resolvedAt ? <><dt>Resolved</dt><dd>{formatDate(incident.resolvedAt)}</dd></> : null}
+        {innerType ? <><dt>Root cause type</dt><dd><code>{innerType}</code></dd></> : null}
+        {inputKey ? <><dt>Input key</dt><dd><code>{inputKey}</code></dd></> : null}
+        {inputFailureCode ? <><dt>Input failure code</dt><dd><code>{inputFailureCode}</code></dd></> : null}
+        {inputPhase ? <><dt>Input evaluation phase</dt><dd>{inputPhase}</dd></> : null}
+        {expressionLanguage ? <><dt>Expression language</dt><dd>{expressionLanguage}</dd></> : null}
+      </dl>
+      <IncidentStackTrace incident={incident} />
+      {hasMetadata ? (
+        <details className="wf-incident-raw-metadata">
+          <summary>View complete runtime metadata</summary>
+          <pre>{JSON.stringify(incident.metadata, null, 2)}</pre>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+function IncidentDetailsDialog({ incident, onClose }: { incident: IncidentStateSummary; onClose(): void }) {
+  const dialogRef = useRef<HTMLElement | null>(null);
+  const titleId = useId();
+  const [copyStatus, setCopyStatus] = useState("");
+  useDialogFocus(dialogRef, onClose);
+
+  return (
+    <div className="wf-dialog-backdrop" role="presentation" onMouseDown={event => {
+      if (event.target === event.currentTarget) onClose();
+    }}>
+      <section
+        ref={dialogRef}
+        className="wf-dialog wf-incident-details-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={event => {
+          if (event.key !== "Escape") return;
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+        }}
+      >
+        <header className="wf-dialog-heading wf-incident-details-heading">
+          <div>
+            <span>Workflow incident</span>
+            <h3 id={titleId}>Incident details</h3>
+            <p>{getIncidentRootCause(incident)}</p>
+          </div>
+          <button type="button" className="wf-incident-details-close" aria-label="Close incident details" onClick={onClose}>Close</button>
+        </header>
+        <div className="wf-incident-details-body">
+          <div className="wf-incident-details-actions">
+            <CopyValueButton
+              value={formatIncidentForClipboard(incident)}
+              ariaLabel={`Copy incident ${incident.failureType}`}
+              copiedLabel="incident"
+              textLabel="Copy incident details"
+              onCopied={() => setCopyStatus("Copied incident")}
+              onCopyFailed={() => setCopyStatus("Could not copy incident.")}
+            />
+            {copyStatus ? <p className="wf-copy-status" role="status">{copyStatus}</p> : null}
+          </div>
+          <IncidentTechnicalContent incident={incident} />
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -2682,12 +2863,6 @@ export function getIncidentStackTrace(incident: IncidentStateSummary) {
 
 function firstNonBlank(...values: Array<string | null | undefined>) {
   return values.find(value => value?.trim()) ?? null;
-}
-
-function previewStackTrace(stackTrace: string) {
-  const firstMeaningfulLine = stackTrace.split("\n").find(line => line.trim()) ?? stackTrace;
-  const preview = firstMeaningfulLine.trim();
-  return preview.length > 120 ? `${preview.slice(0, 117)}...` : preview;
 }
 
 function NamedIdentity({
@@ -2756,6 +2931,9 @@ function formatIncidentForClipboard(incident: IncidentStateSummary) {
     "",
     incident.message
   ].filter(Boolean);
+
+  const stackTrace = getIncidentStackTrace(incident);
+  if (stackTrace) lines.push("", "Stack trace:", stackTrace);
 
   if (incident.metadata && Object.keys(incident.metadata).length > 0) {
     lines.push("", "Metadata:", JSON.stringify(incident.metadata, null, 2));

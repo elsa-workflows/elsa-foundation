@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import type { ActivityCatalogItem, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutionInputs, WorkflowInput } from "../workflowTypes";
+import type { ActivityCatalogItem, WorkflowDefinitionDetails, WorkflowDraft, WorkflowExecutionInputs, WorkflowTestRunStart, WorkflowTestRunView } from "../workflowTypes";
 import {
   getWorkflowDefinitionVersion,
   getWorkflowPromotionVersionCapabilities,
@@ -18,7 +18,6 @@ import {
 } from "../api/publishing";
 import { decorateConversionDiagnostic } from "../conversionSettings";
 import { buildExportPayload, downloadWorkflowJson } from "../workflowSerialization";
-import { readWorkflowInputs } from "../workflowReferenceAuthoring";
 import {
   createDraftSnapshotId,
   describeWorkflowError,
@@ -59,7 +58,6 @@ interface WorkflowOperationsParams {
   flushPendingSave(): Promise<void>;
   reload(): Promise<void>;
   startTestRun(testRun: WorkflowTestRunState): void;
-  clearTestRun(): void;
   setPublishedArtifact(id: string | null): void;
   setOperation(operation: WorkflowEditorOperation): void;
   setStatus(value: string): void;
@@ -82,7 +80,6 @@ export function useWorkflowOperations({
   flushPendingSave,
   reload,
   startTestRun,
-  clearTestRun,
   setPublishedArtifact,
   setOperation,
   setStatus,
@@ -94,13 +91,13 @@ export function useWorkflowOperations({
   const [publicationReview, setPublicationReview] = useState<PublicationReviewState | null>(null);
   const publicationReviewRequest = useRef(0);
   const publicationMutationInFlight = useRef(false);
-  const [runInputPrompt, setRunInputPrompt] = useState<{
-    draft: WorkflowDraft;
-    inputs: WorkflowInput[];
-  } | null>(null);
   const [expressionValidationWarning, setExpressionValidationWarning] = useState<{
     draft: WorkflowDraft;
     inputs: WorkflowExecutionInputs;
+    start: WorkflowTestRunStart;
+    startLabel: string;
+    workflowInputNames: string[];
+    onStarted?: (view: WorkflowTestRunView) => Promise<void>;
   } | null>(null);
   const exportJson = useCallback(() => {
     if (!draft) return;
@@ -467,10 +464,13 @@ export function useWorkflowOperations({
   const dispatchTestRun = useCallback(async (
     draftSnapshot: WorkflowDraft,
     inputs: WorkflowExecutionInputs,
+    start: WorkflowTestRunStart = { kind: "direct" },
+    startLabel = "Direct start",
+    workflowInputNames: string[] = [],
+    onStarted?: (view: WorkflowTestRunView) => Promise<void>,
     acknowledgeUnavailableExpressionValidation = false
-  ) => {
+  ): Promise<WorkflowTestRunView | null> => {
     const draftSignature = getDraftSignature(draftSnapshot);
-    clearTestRun();
     setStatus("Preparing test run...");
     try {
       setOperation("testRunPreparing");
@@ -485,48 +485,60 @@ export function useWorkflowOperations({
         state: draftSnapshot.state,
         activityPresentation: draftSnapshot.activityPresentation,
         inputs,
+        start,
         acknowledgeUnavailableExpressionValidation
       });
       if (isExpressionValidationUnavailable(nextTestRun) && !acknowledgeUnavailableExpressionValidation) {
-        setExpressionValidationWarning({ draft: draftSnapshot, inputs });
+        setExpressionValidationWarning({ draft: draftSnapshot, inputs, start, startLabel, workflowInputNames, onStarted });
         setStatus("Expression validation is unavailable. Confirmation is required before this Test Run can proceed.");
-        return;
+        return null;
       }
-      startTestRun({ draftSignature, view: nextTestRun });
+      startTestRun({ draftSignature, view: nextTestRun, startLabel, workflowInputNames });
       setActiveRightPanelId("runtime");
       setInspectorCollapsed(false);
       setStatus(isRejectedTestRun(nextTestRun) ? "Test run rejected" : "Test run dispatched");
+      if (onStarted && !isRejectedTestRun(nextTestRun)) await onStarted(nextTestRun);
+      return nextTestRun;
     } catch (e) {
       setStatus("");
       setError(describeWorkflowError(e, "The test run could not be dispatched."));
+      return null;
     } finally {
       setOperation("idle");
     }
-  }, [context, clearTestRun, startTestRun, setActiveRightPanelId, setInspectorCollapsed, setOperation, setStatus, setError]);
+  }, [context, startTestRun, setActiveRightPanelId, setInspectorCollapsed, setOperation, setStatus, setError]);
 
-  const run = useCallback(async () => {
+  const run = useCallback(() => {
     if (!draft?.state.rootActivity || busy) return;
-    const inputs = readWorkflowInputs(draft.state.inputs);
-    if (inputs.length > 0) {
-      setRunInputPrompt({ draft, inputs });
-      return;
-    }
-    await dispatchTestRun(draft, {});
-  }, [draft, busy, dispatchTestRun]);
+    setActiveRightPanelId("test-drive");
+    setInspectorCollapsed(false);
+  }, [draft?.state.rootActivity, busy, setActiveRightPanelId, setInspectorCollapsed]);
 
-  const confirmRunInputs = useCallback(async (inputs: WorkflowExecutionInputs) => {
-    const pending = runInputPrompt;
-    if (!pending) return;
-    setRunInputPrompt(null);
-    await dispatchTestRun(pending.draft, inputs);
-  }, [dispatchTestRun, runInputPrompt]);
+  const runTestDrive = useCallback(async (
+    draftSnapshot: WorkflowDraft,
+    inputs: WorkflowExecutionInputs,
+    start: WorkflowTestRunStart,
+    startLabel: string,
+    workflowInputNames: string[],
+    onStarted?: (view: WorkflowTestRunView) => Promise<void>
+  ) => dispatchTestRun(draftSnapshot, inputs, start, startLabel, workflowInputNames, onStarted), [dispatchTestRun]);
 
-  const cancelRunInputs = useCallback(() => setRunInputPrompt(null), []);
+  const updateTestDriveResult = useCallback((draftSignature: string, view: WorkflowTestRunView, startLabel: string, workflowInputNames: string[], driverActionResult?: WorkflowTestRunState["driverActionResult"], driverActionError?: string) => {
+    startTestRun({
+      draftSignature,
+      view,
+      startLabel,
+      workflowInputNames,
+      ...(driverActionResult ? { driverActionResult } : {}),
+      ...(driverActionError ? { driverActionError } : {})
+    });
+  }, [startTestRun]);
+
   const confirmUnavailableExpressionValidation = useCallback(async () => {
     const pending = expressionValidationWarning;
     if (!pending) return;
     setExpressionValidationWarning(null);
-    await dispatchTestRun(pending.draft, pending.inputs, true);
+    await dispatchTestRun(pending.draft, pending.inputs, pending.start, pending.startLabel, pending.workflowInputNames, pending.onStarted, true);
   }, [dispatchTestRun, expressionValidationWarning]);
   const cancelUnavailableExpressionValidation = useCallback(() => {
     setExpressionValidationWarning(null);
@@ -543,13 +555,12 @@ export function useWorkflowOperations({
     confirmPublication,
     cancelPublication,
     openPublishedExecutable,
-    runInputPrompt,
-    confirmRunInputs,
-    cancelRunInputs,
     expressionValidationWarning,
     confirmUnavailableExpressionValidation,
     cancelUnavailableExpressionValidation,
-    run
+    run,
+    runTestDrive,
+    updateTestDriveResult
   };
 }
 

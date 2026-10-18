@@ -98,7 +98,7 @@ public sealed class ClrAssemblyScannerTests
     public static TheoryData<Type, string> StableTriggerCatalogHashes => new()
     {
         { typeof(TriggerFixtureActivity), "10C41B96E22D85F9A598D30A6AE51D2FAA0F4EF5AA9909D23932EBC3CD00D80E" },
-        { typeof(HttpEndpoint), "D081CBE360E49EDF9CA622EAFC6DA5B0029B400DA02538B2C6FC178285B665DD" }
+        { typeof(HttpEndpoint), "3432C91C232D91852818ED02A289497FD4DD17112199328DC65BBE1239FA84DA" }
     };
 
     [Theory]
@@ -784,12 +784,12 @@ public sealed class ClrAssemblyScannerTests
     public static TheoryData<Type, string> BuiltInCatalogHashesUnchangedFromMain => new()
     {
         // WriteLine and Parallel still declare no tier, so they keep the origin/main snapshot at
-        // 14dd6f6e7 (#2716). HttpEndpoint and SendHttpRequest declare tiers, which are hashed, so
-        // their snapshots move with this PR. Icon facets stay excluded from the hash.
-        { typeof(HttpEndpoint), "D081CBE360E49EDF9CA622EAFC6DA5B0029B400DA02538B2C6FC178285B665DD" },
+        // 14dd6f6e7 (#2716). HttpEndpoint's version and ResponseMode default changed; SendHttpRequest
+        // declares tiers. Those catalog changes move their snapshots with this PR. Icon facets stay excluded.
+        { typeof(HttpEndpoint), "3432C91C232D91852818ED02A289497FD4DD17112199328DC65BBE1239FA84DA" },
         { typeof(WriteLine), "618BB61870A3FADC2551123EA520F7F5852CB0D00CD4AE5E6DB8A80D7677EF2C" },
         { typeof(ParallelActivity), "A466AC1D4873108D85B6BA08D2058ACD9FD51A60571E8BA043043A17B20CCC82" },
-        { typeof(SendHttpRequest), "3198C060D839A973424ED9347FB5468B13B2849B9D8FCCDE597C1D34FCE87DF9" }
+        { typeof(SendHttpRequest), "814577E3C1A0BFA2C780181584463ACC1ECE7BD74382D106EC80B2AFC8A8B8E6" }
     };
 
     [Theory]
@@ -816,7 +816,7 @@ public sealed class ClrAssemblyScannerTests
         Assert.Equal(ActivityInputTiers.Essential, sendInputs[nameof(SendHttpRequest.Content)].Tier);
         Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.ContentType)].Tier);
         Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.RequestHeaders)].Tier);
-        Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.Authorization)].Tier);
+        Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.Connection)].Tier);
         Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.ExpectedStatusCodes)].Tier);
         Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.Timeout)].Tier);
 
@@ -889,29 +889,22 @@ public sealed class ClrAssemblyScannerTests
     }
 
     [Fact]
-    public void SendHttpRequest_DeclaresOnlyAuthorizationAsASensitiveCredential_WithNoDefault()
+    public void SendHttpRequest_DeclaresConnectionAsAnHttpActivityConnection_AndNoCredentialInput()
     {
-        // The one built-in credential input. A credential is also sensitive, accepts
-        // only a secret reference, and never carries a default; every other SendHttpRequest input stays undeclared.
         using var folder = TempAssemblyFolder.WithCopyOf(typeof(SendHttpRequest).Assembly);
         var inputs = CreateScanner().Scan(folder.Path)
             .Single(model => model.ActivityTypeKey == typeof(SendHttpRequest).FullName)
             .Inputs;
 
-        var authorization = Assert.Single(inputs, input => input.Name == nameof(SendHttpRequest.Authorization));
-        Assert.Equal("String", authorization.Type.Alias);
-        Assert.True(authorization.IsSensitive);
-        Assert.True(authorization.IsCredential);
-        Assert.Null(authorization.DefaultValue);
-        Assert.Null(authorization.DefaultSyntax);
-
-        var others = inputs.Where(input => input.Name != nameof(SendHttpRequest.Authorization)).ToList();
-        Assert.NotEmpty(others);
-        Assert.All(others, input =>
-        {
-            Assert.Null(input.IsSensitive);
-            Assert.Null(input.IsCredential);
-        });
+        var connection = Assert.Single(inputs, input => input.Name == nameof(SendHttpRequest.Connection));
+        Assert.Equal(typeof(ConnectionReference).FullName, connection.Type.Alias);
+        Assert.Equal("http", connection.ConnectionType);
+        Assert.Equal("connection-picker", connection.UiHint);
+        Assert.Equal("Connection", connection.DefaultSyntax);
+        Assert.Null(connection.IsCredential);
+        Assert.Null(connection.IsSensitive);
+        Assert.DoesNotContain(inputs, input => input.Name == "Authorization");
+        Assert.All(inputs, input => Assert.Null(input.IsCredential));
     }
 
     [Fact]

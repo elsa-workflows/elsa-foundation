@@ -1,19 +1,21 @@
 import { useEffect, useRef, type RefObject } from "react";
 
 const focusableSelector = [
-  "button:not(:disabled)",
-  "input:not(:disabled)",
-  "textarea:not(:disabled)",
-  "select:not(:disabled)",
+  "button",
+  "input:not([type='hidden'])",
+  "textarea",
+  "select",
   "summary",
   "[href]",
-  "[tabindex]:not([tabindex='-1'])"
-].join(",");
+  "[contenteditable='true']",
+  "[tabindex]"
+].map(selector => `${selector}:not(:disabled)`).join(",");
 
 function getFocusableElements(dialog: HTMLElement | null) {
   return [...(dialog?.querySelectorAll<HTMLElement>(focusableSelector) ?? [])]
+    .filter(element => (!element.hasAttribute("tabindex") || element.tabIndex >= 0)
+      && !element.closest("[hidden], [aria-hidden='true']"))
     .filter(element => {
-      if (element.closest("[hidden], [aria-hidden='true']")) return false;
       for (let ancestor = element.parentElement; ancestor && ancestor !== dialog; ancestor = ancestor.parentElement) {
         if (ancestor.tagName === "DETAILS" && !ancestor.hasAttribute("open")
           && !ancestor.querySelector(":scope > summary")?.contains(element)) return false;
@@ -41,6 +43,7 @@ export function useDialogFocus(
       else dialog?.focus();
     }) : null;
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (event.key === "Escape" && onEscapeRef.current) {
         event.preventDefault();
         onEscapeRef.current();

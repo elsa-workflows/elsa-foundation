@@ -174,7 +174,7 @@ const incident: IncidentStateSummary = {
   metadata: {}
 };
 
-function inspection(valueSnapshots: ActivityExecutionInspection["valueSnapshots"]): ActivityExecutionInspection {
+function inspection(valueSnapshots: ActivityExecutionInspection["valueSnapshots"], outcomeNames: string[] = []): ActivityExecutionInspection {
   return {
     activityExecutionId: activity.activityExecutionId,
     workflowExecutionId: activity.workflowExecutionId,
@@ -202,7 +202,7 @@ function inspection(valueSnapshots: ActivityExecutionInspection["valueSnapshots"
       schedulingCause: null,
       metadata: {}
     },
-    outcomeNames: [],
+    outcomeNames,
     bookmarks: [],
     incidents: [],
     valueSnapshots,
@@ -380,6 +380,27 @@ describe("WorkflowActivityExecutionDetails", () => {
     expect(inputSection?.querySelector(".wf-runtime-evidence-count")?.textContent).toBe("1");
     expect(inputSection?.querySelector(".wf-input-inspection-caption")?.textContent).toBe("Evaluated at runtime");
     expect(inputSection?.querySelector(".wf-runtime-input .wf-runtime-capture-mode")).toBeNull();
+  });
+
+  it("renders the outcome names recorded by runtime inspection", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([], ["Approved", "Completed"]));
+
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
+
+    await waitFor(() => expect(container.textContent).toContain("Approved"));
+    const outcomes = [...container.querySelectorAll<HTMLElement>(".wf-instance-section")]
+      .find(section => section.querySelector("h4")?.textContent?.includes("Outcomes"));
+    expect(outcomes?.querySelectorAll("[role=listitem]")).toHaveLength(2);
+    expect(outcomes?.querySelector(".wf-runtime-evidence-count")?.textContent).toBe("2");
+    expect(outcomes?.textContent).toContain("Completed");
+  });
+
+  it("explains when runtime inspection recorded no outcomes", async () => {
+    vi.mocked(getActivityExecutionInspection).mockResolvedValue(inspection([]));
+
+    const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
+
+    await waitFor(() => expect(container.textContent).toContain("No runtime outcomes were recorded for this execution."));
   });
 
   it("resolves metadata-only detail evidence through the payload capability and renders its diagnostic tree", async () => {

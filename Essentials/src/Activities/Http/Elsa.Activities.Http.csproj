@@ -1,6 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Activities.Http.Tests" />
+    <InternalsVisibleTo Include="Elsa.Activities.Http.IntegrationTests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- HttpContext and friends come from the shared framework, matching Elsa.Http.Core, which this project
          exchanges those types with. A standalone Microsoft.AspNetCore.* package here would declare the same
          type names as the framework's and break that exchange at load time. -->
@@ -13,6 +18,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
+    <ProjectReference Include="..\..\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\Http\Core\Elsa.Http.Core.csproj" />
     <ProjectReference Include="..\..\Primitives\Primitives\Elsa.Primitives.csproj" />

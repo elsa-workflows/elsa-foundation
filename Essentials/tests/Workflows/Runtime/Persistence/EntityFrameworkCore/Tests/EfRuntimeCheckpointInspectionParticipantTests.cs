@@ -40,6 +40,49 @@ public sealed class EfRuntimeCheckpointInspectionParticipantTests
     }
 
     [Fact]
+    public async Task Nested_boundary_is_projected_into_its_parent_scope_and_keeps_its_own_descendants()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using (var fixture = database.Open("tenant-a"))
+        {
+            var outer = Projection("workflow-a", "outer", 1, "outer", boundary: true);
+            var nested = Projection("workflow-a", "nested", 2, "nested", parent: "outer", boundary: true, enclosingExecutionScope: "outer");
+            var child = Projection("workflow-a", "nested-child", 3, "nested", parent: "nested");
+            await using var transaction = await fixture.Context.Database.BeginTransactionAsync();
+            await StageAsync(fixture.Context, Change(RuntimeStateChangeOperation.Upsert, outer), "tenant-a", "workflow-a");
+            await StageAsync(fixture.Context, Change(RuntimeStateChangeOperation.Upsert, nested), "tenant-a", "workflow-a");
+            await StageAsync(fixture.Context, Change(RuntimeStateChangeOperation.Upsert, child), "tenant-a", "workflow-a");
+            await fixture.Context.SaveChangesAsync();
+            await transaction.CommitAsync();
+        }
+
+        await using var verification = database.Open("tenant-a");
+        var nestedInspection = await verification.Inspection.FindAsync("workflow-a", "nested");
+        Assert.Equal("nested", nestedInspection!.ExecutionScopeId);
+        Assert.Equal("outer", nestedInspection.EnclosingExecutionScopeId);
+
+        var outerBoundary = await verification.Hierarchy.FindBoundaryAsync("workflow-a", "outer");
+        Assert.NotNull(outerBoundary);
+        Assert.Equal(1, outerBoundary!.CommittedDescendantCount);
+        Assert.Equal(1, outerBoundary.Aggregate.Total);
+
+        var nestedBoundary = await verification.Hierarchy.FindBoundaryAsync("workflow-a", "nested");
+        Assert.NotNull(nestedBoundary);
+        Assert.Equal(1, nestedBoundary!.CommittedDescendantCount);
+        Assert.Equal(1, nestedBoundary.Aggregate.Total);
+
+        var page = await verification.Hierarchy.ReadPageAsync(new ActivityExecutionHierarchyQuery(
+            "workflow-a",
+            "outer",
+            null,
+            10,
+            new HashSet<ActivityExecutionHierarchyInclude>(),
+            "test-profile",
+            "tenant:tenant-a"));
+        Assert.Equal("nested", Assert.Single(page!.Items).ActivityExecutionId);
+    }
+
+    [Fact]
     public async Task Rollback_discards_inspection_hierarchy_and_sibling_without_independent_save()
     {
         await using var database = await TestDatabase.CreateAsync();
@@ -190,7 +233,8 @@ public sealed class EfRuntimeCheckpointInspectionParticipantTests
         long sequence,
         string executionScope,
         string? parent = null,
-        bool boundary = false) =>
+        bool boundary = false,
+        string? enclosingExecutionScope = null) =>
         new(
             activity,
             workflow,
@@ -219,7 +263,10 @@ public sealed class EfRuntimeCheckpointInspectionParticipantTests
                 ["activity.version"] = "1",
                 ["activity.templateHash"] = "template"
             } : new Dictionary<string, string>(),
-            executionScope);
+            executionScope)
+        {
+            EnclosingExecutionScopeId = enclosingExecutionScope
+        };
 
     private static SchedulerStateEntity SchedulerRow(string scope, string workflowExecutionId) => new()
     {

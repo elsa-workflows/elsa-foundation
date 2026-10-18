@@ -83,16 +83,25 @@ public sealed class WorkflowExecutableInspector(
         var now = _timeProvider.GetUtcNow();
         var references = await referenceStore.ListAllByArtifactAsync(artifactId, cancellationToken);
         var ordered = OrderReferences(references).ToArray();
+        var executions = await executionStore.ListAsync(cancellationToken);
+        var retained = executions.Count(execution =>
+            StringComparer.Ordinal.Equals(execution.PinnedExecutable.ArtifactId, artifactId));
         var requested = sourceReferenceId is null
             ? null
             : ordered.FirstOrDefault(reference => StringComparer.Ordinal.Equals(reference.SourceReferenceId, sourceReferenceId));
-        if (sourceReferenceId is not null && (requested is null || !requested.IsLive(now)))
+        var requestedReferencePinnedByExecution = requested is not null &&
+            requested.Scope == WorkflowExecutableReferenceScope.TestRun &&
+            executions.Any(execution =>
+                StringComparer.Ordinal.Equals(execution.PinnedExecutable.ArtifactId, artifactId) &&
+                StringComparer.Ordinal.Equals(execution.PinnedSource?.SourceReferenceId, requested.SourceReferenceId));
+        if (sourceReferenceId is not null &&
+            (requested is null || requested.DeletedAt is not null ||
+             requested.IsExpired(now) && !requestedReferencePinnedByExecution))
             throw EntityNotFoundException.ForEntity(typeof(WorkflowExecutableSourceReference), sourceReferenceId);
         var chosen = requested
             ?? ordered.FirstOrDefault(reference => reference.Scope == WorkflowExecutableReferenceScope.Published && reference.IsLive(now))
             ?? ordered.FirstOrDefault(reference => reference.IsLive(now))
             ?? ordered.FirstOrDefault();
-        var retained = (await RetainedCountsAsync(cancellationToken)).GetValueOrDefault(artifactId);
         return new WorkflowExecutableDetailsView(
             artifactId,
             executable.Identity.ArtifactHash,

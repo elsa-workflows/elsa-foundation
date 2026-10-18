@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Boxes, Code2, Download, ListTree, Package, PackageOpen, Play, Plus, SlidersHorizontal, Sparkles, Upload, Workflow as WorkflowIcon } from "lucide-react";
-import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, type StudioActivityPropertyEditorContribution, type StudioAiContributionApi, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution } from "@elsa-workflows/studio-sdk";
+import { authSessionEndedEvent, authSessionStartedEvent, expressionEditorSessionEndedEvent, useStudioThemeLayout, type StudioActivityPropertyEditorContribution, type StudioAiContributionApi, type StudioEndpointContext, type StudioExpressionEditorContribution, type StudioExpressionToolingClient, type StudioWorkflowDesignerPanelContribution, type StudioWorkflowRunInputEditorContribution, type StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem, ActivityNode, WorkflowDraft } from "../workflowTypes";
 import {
   collectActivityNodeIds,
@@ -30,7 +30,7 @@ import { loadActivityIconRegistry } from "../activityIconView";
 import { weaverUnavailableTitle } from "./constants";
 
 void loadActivityIconRegistry().catch(() => undefined);
-import type { CanvasView, WorkflowDesignerPanelContext, WorkflowEditorError, WorkflowEditorOperation, WorkflowEditorPanelTab, WorkflowErrorInput } from "./editorTypes";
+import type { CanvasView, WorkflowDesignerPanelContext, WorkflowEditorError, WorkflowEditorOperation, WorkflowEditorPanelTab, WorkflowErrorInput, WorkflowTestDriveSetupState } from "./editorTypes";
 import type { WorkflowSlotNavigation } from "./contexts";
 import {
   createNodeId,
@@ -59,7 +59,7 @@ import { useExecutableArtifactExport } from "./useExecutableArtifactExport";
 import { combineValidationErrors, detectStructuralValidationErrors } from "../draftValidation";
 import { createValidationActivityLabels, humanizeValidationErrors } from "../validationActivityLabels";
 import { WorkflowArtifactsPanel } from "./WorkflowExecutables";
-import { WorkflowRunInputDialog } from "./WorkflowRunInputDialog";
+import { WorkflowTestDrivePanel } from "./WorkflowTestDrivePanel";
 import { useSidePanelLayout } from "./useSidePanelLayout";
 import { useDraftHistory } from "./useDraftHistory";
 import { forgetRemovedNodes, useWorkflowDocument } from "./workflowDocument";
@@ -92,6 +92,7 @@ import { PublicationReviewDialog } from "./PublicationReviewDialog";
 import { useAiProviderAvailability } from "./useAiProviderAvailability";
 import { useFullActivityDefinitionVersion } from "../api/activityDesign";
 import type { ActivityDefinitionVersionView, RecommendedActivityDefinition } from "../activityDefinitionTypes";
+import { isHttpEndpointType } from "./httpTestRequest";
 import type { ActivityVersionChangeApplyRequest } from "./ActivityVersionChangeDialog";
 import {
   applyActivityVersionChange,
@@ -103,6 +104,8 @@ import type { ExpressionToolingCacheIdentity } from "../expression-tooling/expre
 
 const ActivityVersionChangeDialog = React.lazy(() =>
   import("./ActivityVersionChangeDialog").then(module => ({ default: module.ActivityVersionChangeDialog })));
+const HttpTestRequestDialog = React.lazy(() =>
+  import("./HttpTestRequestDialog").then(module => ({ default: module.HttpTestRequestDialog })));
 
 export { PublicationReviewDialog } from "./PublicationReviewDialog";
 
@@ -115,6 +118,7 @@ export function WorkflowEditor({
   expressionTooling,
   expressionToolingIdentity,
   runInputEditors,
+  testStimulusEditors,
   workflowDesignerPanels,
   autosaveEnabledByDefault,
   onBack
@@ -127,6 +131,7 @@ export function WorkflowEditor({
   expressionTooling?: StudioExpressionToolingClient;
   expressionToolingIdentity?: ExpressionToolingCacheIdentity;
   runInputEditors: StudioWorkflowRunInputEditorContribution[];
+  testStimulusEditors: StudioTestStimulusEditorContribution[];
   workflowDesignerPanels: StudioWorkflowDesignerPanelContribution[];
   autosaveEnabledByDefault?: boolean;
   onBack(): void;
@@ -170,7 +175,6 @@ export function WorkflowEditor({
     navigateToScope,
     resetToRoot,
     startTestRun,
-    clearTestRun,
     setPublishedArtifact
   } = editorDoc;
   const [error, setErrorState] = useState<WorkflowEditorError | null>(null);
@@ -182,8 +186,10 @@ export function WorkflowEditor({
   const [activeLeftPanelId, setActiveLeftPanelId] = useState("activities");
   const themeLayout = useStudioThemeLayout();
   const [activeRightPanelId, setActiveRightPanelId] = useState("inspector");
+  const [testDriveSetup, setTestDriveSetup] = useState<WorkflowTestDriveSetupState | null>(null);
   const [activeInspectorTabId, setActiveInspectorTabId] = useState<ActivityInspectorTabId>("inputs");
   const [canvasView, setCanvasView] = useState<CanvasView>("designer");
+  const [httpTestRequestActivityId, setHttpTestRequestActivityId] = useState<string | null>(null);
   const [versionChange, setVersionChange] = useState<{
     occurrence: ActivityNode;
     current: ActivityDefinitionVersionView;
@@ -273,6 +279,8 @@ export function WorkflowEditor({
       resolveActivityInspectorTabId(current, inspectedSupportsScopedVariables, inspectedSlots.length > 0));
   }, [inspectedSlots.length, inspectedSupportsScopedVariables]);
   const inspectedCatalogItem = inspectedNode ? catalogByVersion.get(inspectedNode.activityVersionId) : null;
+  const inspectedIsHttpEndpoint = !!inspectedNode && isHttpEndpointType(
+    inspectedDescriptor?.typeName ?? inspectedCatalogItem?.activityTypeKey);
   const inspectedReusableDefinitionId = inspectedCatalogItem?.activityDefinitionId ?? null;
   const inspectedReusableVersion = useFullActivityDefinitionVersion(
     context,
@@ -309,6 +317,8 @@ export function WorkflowEditor({
   // simply renders no button.
   const executableArtifactExport = useExecutableArtifactExport({ context, definitionId, publishedArtifactId });
   const publishedExecutable = executableArtifactExport.target;
+  // Live HTTP requests need only the published runtime artifact; they do not depend on export support.
+  const publishedRuntimeExecutable = executableArtifactExport.publishedTarget;
   const activityLabels = useMemo(
     () => createValidationActivityLabels({
       root: draft?.state.rootActivity,
@@ -355,6 +365,7 @@ export function WorkflowEditor({
     edges,
     canvasRef,
     setReactFlowInstance,
+    onMoveEnd,
     canCreateActivityFromPort,
     connectMenu,
     setConnectMenu,
@@ -509,13 +520,12 @@ export function WorkflowEditor({
     confirmPublication,
     cancelPublication,
     openPublishedExecutable,
-    runInputPrompt,
-    confirmRunInputs,
-    cancelRunInputs,
     expressionValidationWarning,
     confirmUnavailableExpressionValidation,
     cancelUnavailableExpressionValidation,
-    run
+    run,
+    runTestDrive,
+    updateTestDriveResult
   } = useWorkflowOperations({
     context,
     draft,
@@ -527,7 +537,6 @@ export function WorkflowEditor({
     flushPendingSave,
     reload,
     startTestRun,
-    clearTestRun,
     setPublishedArtifact,
     setOperation,
     setStatus,
@@ -849,13 +858,12 @@ export function WorkflowEditor({
     });
   };
 
-  const renderedTestRun = draft && testRun?.draftSignature === getDraftSignature(draft)
-    ? testRun.view
-    : null;
+  const currentTestRun = draft && testRun?.draftSignature === getDraftSignature(draft) ? testRun.view : null;
+  const renderedTestRun = testRun?.view ?? null;
   // ADR 0040's equivalence signal: a test run resolving to a published artifact id proves the current
   // draft is behaviorally identical to that published version. Above the loading return — hooks must
   // run on every render.
-  const publishedEquivalent = useDraftEquivalence(context, definitionId, renderedTestRun);
+  const publishedEquivalent = useDraftEquivalence(context, definitionId, currentTestRun);
 
   if (!details || !draft) {
     return <div className="wf-empty">{error?.message || "Loading workflow editor..."}</div>;
@@ -998,6 +1006,10 @@ export function WorkflowEditor({
           onReplaceSlotActivity={replaceSlotActivity}
           isStartNode={isFlowchartScope && inspectedNode ? inspectedNode.nodeId === flowchartStartNodeId : undefined}
           onSetAsStartNode={isFlowchartScope ? setStartNode : undefined}
+          httpTestRequest={inspectedIsHttpEndpoint ? {
+            available: !!publishedRuntimeExecutable?.artifactId,
+            onOpen: () => { if (inspectedNode) setHttpTestRequestActivityId(inspectedNode.nodeId); }
+          } : undefined}
         />
       )
     },
@@ -1006,7 +1018,26 @@ export function WorkflowEditor({
       title: "Runtime",
       order: 5,
       icon: <Play size={15} />,
-      render: () => <WorkflowRuntimePanel testRun={renderedTestRun} publishedEquivalent={publishedEquivalent} onOpenRun={openWorkflowRun} activityLabels={activityLabels} />
+      render: () => <WorkflowRuntimePanel testRun={testRun} context={context} currentDraftSignature={draft ? getDraftSignature(draft) : ""} stimulusEditors={testStimulusEditors} publishedEquivalent={publishedEquivalent} onOpenRun={openWorkflowRun} activityLabels={activityLabels} onRunViewUpdated={editorDoc.updateTestRunView} onWaitDraftUpdated={editorDoc.updateTestRunWaitDraft} />
+    },
+    {
+      id: "test-drive",
+      title: "Test Run",
+      order: 6,
+      icon: <Play size={15} />,
+      render: () => (
+        <WorkflowTestDrivePanel
+          context={context}
+          draft={draft}
+          runInputEditors={runInputEditors}
+          stimulusEditors={testStimulusEditors}
+          setupState={testDriveSetup}
+          onSetupStateChange={setTestDriveSetup}
+          busy={busy}
+          onStart={runTestDrive}
+          onUpdateRun={updateTestDriveResult}
+        />
+      )
     },
     {
       id: "artifacts",
@@ -1057,6 +1088,7 @@ export function WorkflowEditor({
         runStatus={renderedTestRun ? (
           <TestRunStatus
             testRun={renderedTestRun}
+            stale={Boolean(testRun && draft && testRun.draftSignature !== getDraftSignature(draft))}
             onOpenDetails={() => {
               setActiveRightPanelId("runtime");
               setInspectorCollapsed(false);
@@ -1164,13 +1196,16 @@ export function WorkflowEditor({
         />
       ) : null}
 
-      {runInputPrompt ? (
-        <WorkflowRunInputDialog
-          inputs={runInputPrompt.inputs}
-          editors={runInputEditors}
-          onSubmit={values => { void confirmRunInputs(values); }}
-          onCancel={cancelRunInputs}
-        />
+      {httpTestRequestActivityId ? (
+        <React.Suspense fallback={<p role="status">Loading HTTP request tool…</p>}>
+          <HttpTestRequestDialog
+            context={context}
+            open
+            artifactId={publishedRuntimeExecutable?.artifactId ?? null}
+            authoredActivityId={httpTestRequestActivityId}
+            onClose={() => setHttpTestRequestActivityId(null)}
+          />
+        </React.Suspense>
       ) : null}
 
       {expressionValidationWarning ? (
@@ -1237,6 +1272,7 @@ export function WorkflowEditor({
               nodes,
               edges,
               onInit: setReactFlowInstance,
+              onMoveEnd,
               onNodesChange,
               onEdgesChange,
               onNodesDelete,

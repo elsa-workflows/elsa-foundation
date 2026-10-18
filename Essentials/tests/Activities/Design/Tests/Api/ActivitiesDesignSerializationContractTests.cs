@@ -69,6 +69,8 @@ public sealed class ActivitiesDesignSerializationContractTests
         typeof(ListReusableActivityVersions),
         typeof(ActivityManagementPageView<ReusableActivityVersionManagementView>),
         typeof(CreateReusableActivityDraft),
+        typeof(CreateReusableActivityDraftRequest),
+        typeof(ActivityLayoutRecordsPayload),
         typeof(ReusableActivityDraftView),
 
         // Draft, fork, and contract operations.
@@ -138,6 +140,30 @@ public sealed class ActivitiesDesignSerializationContractTests
             .ToArray();
 
         Assert.Empty(missing);
+    }
+
+    [Fact]
+    public void Add_draft_transport_request_preserves_the_existing_command_json_shape()
+    {
+        using var layoutData = JsonDocument.Parse("{\"x\":1}");
+        var layout = new[]
+        {
+            new ActivityLayoutRecord("node-1", layoutData.RootElement.Clone())
+        };
+        var command = new CreateReusableActivityDraft("definition-1", "version-1", null, null, layout, "Clone");
+        var request = new CreateReusableActivityDraftRequest(
+            "definition-1",
+            "version-1",
+            null,
+            null,
+            new ActivityLayoutRecordsPayload(layout),
+            "Clone");
+
+        Assert.Equal(Serialize(command), Serialize(request));
+
+        var commandWithoutLayout = new CreateReusableActivityDraft("definition-1", "version-1");
+        var requestWithoutLayout = new CreateReusableActivityDraftRequest("definition-1", "version-1");
+        Assert.Equal(Serialize(commandWithoutLayout), Serialize(requestWithoutLayout));
     }
 
     [Fact]

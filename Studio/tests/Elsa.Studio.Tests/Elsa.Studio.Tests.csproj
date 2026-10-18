@@ -30,6 +30,7 @@
     <ProjectReference Include="..\..\..\Extensions\ExtensionBuilder\studio\Elsa.Studio.ExtensionBuilder\Elsa.Studio.ExtensionBuilder.csproj" />
     <ProjectReference Include="..\..\..\Extensions\FeatureManagement\studio\Elsa.Studio.FeatureManagement\Elsa.Studio.FeatureManagement.csproj" />
     <ProjectReference Include="..\..\..\Extensions\Secrets\studio\Elsa.Studio.Secrets\Elsa.Studio.Secrets.csproj" />
+    <ProjectReference Include="..\..\..\Extensions\Connections\studio\Elsa.Studio.Connections\Elsa.Studio.Connections.csproj" />
     <ProjectReference Include="..\..\..\Extensions\Weaver\studio\Elsa.Studio.Weaver.Core\Elsa.Studio.Weaver.Core.csproj" />
     <ProjectReference Include="..\..\..\Extensions\Weaver\studio\Elsa.Studio.Weaver.Workflows\Elsa.Studio.Weaver.Workflows.csproj" />
     <ProjectReference Include="..\..\src\essentials\Elsa.Studio.Workflows\Elsa.Studio.Workflows.csproj" />
