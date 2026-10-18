@@ -9,10 +9,9 @@ test("Activity Definitions supports keyboard collection-to-workbench navigation 
   await row.focus();
   await page.keyboard.press("Enter");
 
-  await expect(page.getByText("Stable Activity Definition")).toBeVisible();
-  const technicalDetails = page.locator("details.ad-technical-details").first();
-  await expect(technicalDetails.locator("summary")).toHaveText("Technical details");
-  await technicalDetails.locator("summary").click();
+  await expect(page.getByRole("heading", { name: "Invoice evaluator" })).toBeVisible();
+  await openAdvancedDetails(page);
+  await expect(page.getByText("Finance", { exact: true })).toBeVisible();
   await expect(page.getByText("Contoso.InvoiceEvaluator")).toBeVisible();
   const overview = page.getByRole("tab", { name: "Overview" });
   await overview.focus();
@@ -232,7 +231,7 @@ test("Activity Definition Test Run preserves exact input presence and opens focu
   await page.reload();
   await page.setViewportSize({ width: 360, height: 900 });
   // The reload resets the collapsed graph-designer lifecycle section that holds the draft label.
-  await openDraftDetails(page);
+  await openAdvancedDetails(page);
   await page.evaluate(() => {
     const observations: unknown[] = [];
     window.addEventListener("elsa:activity-definitions:observation", event => {
@@ -510,9 +509,9 @@ test("Activity Definition dependency explorer keeps exact snapshot pages, repeat
 test("Activity Definition create, graph autosave, reload, conflict preservation, and recovery", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
   await page.goto("/?mode=activity-definitions");
-  await expect(page.getByText("No Activity Definitions yet")).toBeVisible();
+  await expect(page.getByText("No designed activities yet")).toBeVisible();
 
-  await page.getByRole("button", { name: "Create Activity Definition" }).click();
+  await page.locator(".ad-page-header").getByRole("button", { name: "Create activity" }).click();
   await expect(page.getByText("Implementation type")).toHaveCount(0);
   await page.getByRole("textbox", { name: "Display name" }).fill("Browser graph activity");
   await page.getByRole("combobox", { name: "Category" }).fill("Browser tests");
@@ -575,6 +574,7 @@ test("Activity Definition provider contract proposals require review and apply a
   await createBrowserActivity(page);
 
   await page.getByRole("tab", { name: "Public Interface" }).click();
+  await page.locator("details.ad-interface-suggestions summary").click();
   await expect(page.getByText("Add input currency")).toBeVisible();
   await expect(page.getByText("1 of 1 changes selected")).toBeVisible();
   expect(state.proposalApplies).toBe(0);
@@ -597,10 +597,11 @@ test("Activity Definition provider contract proposals require review and apply a
 test("Activity Definition validation distinguishes valid, invalid, unavailable, forbidden, missing, unknown, and stale outcomes", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
   await page.goto("/?mode=activity-definitions");
-  await page.getByRole("button", { name: "Create Activity Definition" }).click();
+  await page.locator(".ad-page-header").getByRole("button", { name: "Create activity" }).click();
   await page.getByRole("textbox", { name: "Display name" }).fill("Diagnostic browser activity");
   await page.getByRole("button", { name: "Create definition" }).click();
   await expectSavedRevision(page, 1);
+  await openAdvancedDetails(page);
 
   state.validationMode = "invalid";
   await page.getByRole("button", { name: "Validate saved revision" }).click();
@@ -672,6 +673,7 @@ test("Activity Graph diagnostics focus accessible root context while the exact c
   state.catalogBlocked = true;
   await page.reload();
   state.validationMode = "invalid";
+  await openAdvancedDetails(page);
   await page.getByRole("button", { name: "Validate saved revision" }).click();
   await page.getByRole("button", { name: "Focus activity.graph.root-required" }).click();
   await expect(page.locator("[data-graph-root-location]")).toBeFocused();
@@ -683,17 +685,22 @@ test("Activity Definition publication keeps first and later recommendation seman
   const state = await mockActivityDefinitionAuthoring(page);
   await createBrowserActivity(page);
 
-  await page.getByRole("button", { name: "Prepare publication" }).click();
-  await expect(page.getByText("First publication · no published baseline exists")).toBeVisible();
+  await page.getByRole("button", { name: "Review & publish" }).click();
+  await expect(page.getByText("First publication", { exact: true })).toBeVisible();
+  await expect(page.getByText("No published baseline exists", { exact: true })).toBeVisible();
+  await page.locator(".ad-impact-group details summary").first().click();
   await expect(page.getByText("Protected value redacted")).toBeVisible();
   await expect(page.getByText("raw-protected-provider-value")).toHaveCount(0);
   await page.getByRole("textbox", { name: "Publication version" }).fill("2.0.0");
   await page.getByRole("button", { name: "Publish 2.0.0" }).click();
   await expect(page.getByText("Published immutable version 2.0.0")).toBeVisible();
-  await expect(page.getByText("first published version became recommended automatically", { exact: false })).toBeVisible();
+  await expect(page.getByText("The server now recommends this first published version.", { exact: true })).toBeVisible();
   expect(state.recommendedVersionId).toBe("published-version-1");
 
-  await expect(page.getByRole("button", { name: "Reopen preflight" })).toBeDisabled();
+  const publicationDialog = page.getByRole("dialog", { name: "Review & publish" });
+  await expect(publicationDialog.getByText("Published immutable version 2.0.0")).toBeVisible();
+  await publicationDialog.getByText("Publication review details", { exact: true }).click();
+  await expect(publicationDialog.getByRole("button", { name: "Published 2.0.0" })).toBeDisabled();
   await page.goto("/workflows/activity-definitions?definition=activity-def-browser&section=versions&version=published-version-1");
   await expect(page.getByRole("button", { name: "Create draft from this exact version" })).toBeEnabled();
   await page.getByRole("button", { name: "Create draft from this exact version" }).click();
@@ -702,16 +709,15 @@ test("Activity Definition publication keeps first and later recommendation seman
   await cloneDialog.getByRole("button", { name: "Clone exact version" }).click();
   await expect(page).toHaveURL(/definition=activity-def-browser.*section=editor.*draft=activity-draft-browser-follow-up/);
   await expectSavedRevision(page, 1);
-  await openDraftDetails(page);
   expect(state.draftCreationRequests).toEqual([{ sourceVersionId: "published-version-1", presentationLabel: null }]);
 
-  await page.getByRole("button", { name: "Prepare publication" }).click();
+  await page.getByRole("button", { name: "Review & publish" }).click();
   await expect(page.getByText("Compared with published head")).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Publication version" })).toHaveValue("2.1.0");
   await page.getByRole("textbox", { name: "Publication version" }).fill("3.4.5");
   await page.getByRole("button", { name: "Publish 3.4.5" }).click();
   await expect(page.getByText("Published immutable version 3.4.5")).toBeVisible();
-  await expect(page.getByText("existing recommended version was not moved", { exact: false })).toBeVisible();
+  await expect(page.getByText("The recommendation stayed unchanged. Publishing did not move it.", { exact: true })).toBeVisible();
   expect(state.recommendedVersionId).toBe("published-version-1");
   expect(state.requestedVersions).toEqual(["2.0.0", "3.4.5"]);
   expect(state.publicationWrites).toBe(2);
@@ -728,7 +734,7 @@ test("published recommendation is placed exactly, dispatched once, and inspected
   await page.getByRole("button", { name: "Validate saved revision" }).click();
   await page.locator(".ad-diagnostics-panel summary").click();
   await expect(page.getByText("Valid draft")).toBeVisible();
-  await page.getByRole("button", { name: "Prepare publication" }).click();
+  await page.getByRole("button", { name: "Review & publish" }).click();
   await page.getByRole("textbox", { name: "Publication version" }).fill("2.0.0");
   await page.getByRole("button", { name: "Publish 2.0.0" }).click();
   await expect(page.getByText("Published immutable version 2.0.0")).toBeVisible();
@@ -840,7 +846,7 @@ test("Activity Definition publication reconciles an ambiguous response without d
   state.publishMode = "ambiguous";
   await createBrowserActivity(page);
 
-  await page.getByRole("button", { name: "Prepare publication" }).click();
+  await page.getByRole("button", { name: "Review & publish" }).click();
   await expect(page.getByText("Minimum valid version: 1.0.0")).toBeVisible();
   await page.getByRole("button", { name: "Publish 1.0.0" }).click();
   await expect(page.getByText("Published immutable version 1.0.0")).toBeVisible();
@@ -853,7 +859,7 @@ test("Activity Definition publication blocks invalid preflight and reopens stale
   await createBrowserActivity(page);
   state.preflightMode = "invalid";
 
-  await page.getByRole("button", { name: "Prepare publication" }).click();
+  await page.getByRole("button", { name: "Review & publish" }).click();
   await expect(page.getByText("Publication blocked")).toBeVisible();
   await expect(page.getByRole("button", { name: "Publish 1.0.0" })).toBeDisabled();
   expect(state.publicationWrites).toBe(0);
@@ -861,7 +867,7 @@ test("Activity Definition publication blocks invalid preflight and reopens stale
   state.preflightMode = "valid";
   state.publishMode = "stale";
   await page.getByRole("button", { name: "Reopen preflight" }).click();
-  await expect(page.getByText("Ready to publish")).toBeVisible();
+  await expect(page.getByLabel("Readiness").getByText("Ready to publish")).toBeVisible();
   await page.getByRole("button", { name: "Publish 1.0.0" }).click();
   await expect(page.getByText("reopened preflight without publishing", { exact: false })).toBeVisible();
   expect(state.publicationWrites).toBe(1);
@@ -2495,31 +2501,33 @@ function browserPublicationReceipt(idempotencyKey: string, version: string, revi
 
 async function createBrowserActivity(page: Page) {
   await page.goto("/?mode=activity-definitions");
-  await page.getByRole("button", { name: "Create Activity Definition" }).click();
+  await page.locator(".ad-page-header").getByRole("button", { name: "Create activity" }).click();
   await page.getByRole("textbox", { name: "Display name" }).fill("Published browser activity");
   await selectSequenceComposition(page);
   await page.getByRole("button", { name: "Create definition" }).click();
   await expectSavedRevision(page, 1, 15_000);
-  await openDraftDetails(page);
+  await openAdvancedDetails(page);
 }
 
-// #482 made "Draft details & publication" collapse by default in the graph designer view, hiding the
-// lifecycle and publication controls. Tests that drive those controls open the section first; before
-// that change it was always expanded.
-async function openDraftDetails(page: Page) {
-  const details = page.locator("details.ad-draft-lifecycle");
+async function openAdvancedDetails(page: Page) {
+  const details = page.locator("details.ad-authoring-advanced, details.ad-technical-disclosure").first();
+  await expect(details).toBeVisible();
   if (await details.evaluate(element => (element as HTMLDetailsElement).open)) return;
   await details.locator("summary").click();
   await expect(details).toHaveJSProperty("open", true);
 }
 
-// The draft header chip and the "Draft details & publication" status block both render the same
-// "Saved revision N" copy, so a bare getByText is a strict-mode violation. The chip is the canonical
-// always-visible save signal, so assert against it directly.
 async function expectSavedRevision(page: Page, revision: number, timeout = 15_000) {
-  // Autosave is a real round-trip through the mocked API, so the chip settles well after the action
-  // that triggered it; the default expect timeout is too tight under a loaded parallel run.
-  await expect(page.locator(".ad-save-chip")).toHaveText(`Saved revision ${revision}`, { timeout });
+  await expect(page.locator(".ad-save-chip")).toHaveText("Saved", { timeout });
+  const details = page.locator("details.ad-authoring-advanced");
+  const wasOpen = await details.evaluate(element => (element as HTMLDetailsElement).open);
+  if (!wasOpen) await openAdvancedDetails(page);
+  const savedRevision = page.locator(".ad-authoring-identity dt").filter({ hasText: "Saved revision" }).locator("..").locator("dd");
+  await expect(savedRevision).toHaveText(String(revision), { timeout });
+  if (!wasOpen) {
+    await details.locator("summary").click();
+    await expect(details).toHaveJSProperty("open", false);
+  }
 }
 
 async function selectSequenceComposition(page: Page) {
