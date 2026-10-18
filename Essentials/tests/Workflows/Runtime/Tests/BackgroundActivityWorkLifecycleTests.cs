@@ -199,25 +199,25 @@ public sealed class BackgroundActivityWorkLifecycleTests
         };
         await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(() => checkpoint.CommitAsync(staleAdmission, Immediate).AsTask());
 
-        var replacement = await ownership.AcquireAsync("workflow-a");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => ownership.AcquireAsync("workflow-a").AsTask());
         var bareAdmission = Commit("admit-after-delete-bare") with
         {
-            ExpectedFence = replacement.ToFence(),
+            ExpectedFence = oldOwner.ToFence(),
             StateChanges = Commit("admit-after-delete-bare").StateChanges.WithBackgroundActivityWork(
                 new BackgroundActivityWorkCheckpointChanges(admissions: [Request("work-bare")]))
         };
-        await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() => checkpoint.CommitAsync(bareAdmission, Immediate).AsTask());
+        await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(() => checkpoint.CommitAsync(bareAdmission, Immediate).AsTask());
 
         var orphanAdmission = Commit("admit-after-delete-new-owner") with
         {
-            ExpectedFence = replacement.ToFence(),
+            ExpectedFence = oldOwner.ToFence(),
             StateChanges = new RuntimeCheckpointStateChangeSet(
                 new RuntimeStateChange<WorkflowExecutionState>(
                     "workflow-a", RuntimeStateChangeOperation.Upsert, ExecutionState(), new Dictionary<string, string>()),
                 null, [], [], [], [], []).WithBackgroundActivityWork(
                 new BackgroundActivityWorkCheckpointChanges(admissions: [Request("work-orphan")]))
         };
-        await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() => checkpoint.CommitAsync(orphanAdmission, Immediate).AsTask());
+        await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(() => checkpoint.CommitAsync(orphanAdmission, Immediate).AsTask());
         Assert.Null(await worker.FindAsync("workflow-a", "work-stale"));
         Assert.Null(await worker.FindAsync("workflow-a", "work-orphan"));
     }
@@ -231,7 +231,8 @@ public sealed class BackgroundActivityWorkLifecycleTests
         await executions.SaveAsync(ExecutionState());
         Assert.True(await executions.DeleteAsync("workflow-a"));
 
-        var owner = await NewOwnership(operational, "owner-after-ownerless-delete").AcquireAsync("workflow-a");
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            NewOwnership(operational, "owner-after-ownerless-delete").AcquireAsync("workflow-a").AsTask());
         var accessor = new FixedAccessor("tenant-a");
         var checkpoint = new InMemoryRuntimeCheckpointCommitStore(
             workflowExecutionStateStore: executions,
@@ -241,7 +242,7 @@ public sealed class BackgroundActivityWorkLifecycleTests
             persistenceAccessContextAccessor: accessor);
         var recreateAndAdmit = Commit("admit-after-ownerless-delete") with
         {
-            ExpectedFence = owner.ToFence(),
+            ExpectedFence = new RuntimeExecutionFence("unissued-lease", "unissued-owner", 1),
             StateChanges = new RuntimeCheckpointStateChangeSet(
                 new RuntimeStateChange<WorkflowExecutionState>(
                     "workflow-a", RuntimeStateChangeOperation.Upsert, ExecutionState(), new Dictionary<string, string>()),
@@ -249,7 +250,7 @@ public sealed class BackgroundActivityWorkLifecycleTests
                 new BackgroundActivityWorkCheckpointChanges(admissions: [Request("work-ownerless-delete")]))
         };
 
-        await Assert.ThrowsAsync<RuntimeCheckpointCommitValidationException>(() => checkpoint.CommitAsync(recreateAndAdmit, Immediate).AsTask());
+        await Assert.ThrowsAsync<RuntimeStaleFencingTokenException>(() => checkpoint.CommitAsync(recreateAndAdmit, Immediate).AsTask());
         Assert.Null(await executions.FindAsync("workflow-a"));
         Assert.Null(await new InMemoryBackgroundActivityWorkStore(state, accessor).FindAsync("workflow-a", "work-ownerless-delete"));
     }
