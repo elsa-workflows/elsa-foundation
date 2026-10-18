@@ -72,6 +72,41 @@ describe("activity input wire adapter", () => {
     expect(expanded.text.expression).toEqual({ type: "Input", value: reference });
   });
 
+  it("round-trips a Connection expression as a structured reference payload", () => {
+    const reference = { connection: "customer-api", type: "http" };
+    const seeded = stateOf({
+      ...writeLine("send-request", {}),
+      inputs: [{ referenceKey: "Connection", value: { value: reference, expressionType: "Connection" } }]
+    });
+
+    const resaved = canonicalizeStateForWire(expandStateFromWire(seeded));
+
+    expect(resaved.rootActivity?.inputs).toEqual([
+      { referenceKey: "Connection", value: { value: reference, expressionType: "Connection" } }
+    ]);
+  });
+
+  it("round-trips a portable expression definition as a structured value", () => {
+    const definition = {
+      language: "JavaScript",
+      source: "args.status",
+      resultType: { alias: "String", collectionKind: "Single" },
+      parameters: { status: { kind: "Literal", value: "ok" } },
+      options: { strict: true },
+      capabilityProfile: "binding-pure-v1"
+    };
+    const seeded = stateOf({
+      ...writeLine("write-result", {}),
+      inputs: [{ referenceKey: "text", value: { value: definition, expressionType: "JavaScript" } }]
+    });
+
+    const resaved = canonicalizeStateForWire(expandStateFromWire(seeded));
+
+    expect(resaved.rootActivity?.inputs).toEqual([
+      { referenceKey: "text", value: { value: definition, expressionType: "JavaScript" } }
+    ]);
+  });
+
   it("serializes non-string literal values for the string-typed backend contract", () => {
     const state = stateOf(writeLine("write-one", { count: wrapped(42, "Literal"), enabled: wrapped(true, "Literal") }));
 

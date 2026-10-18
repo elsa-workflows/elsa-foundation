@@ -46,11 +46,58 @@ public sealed class ConnectionsApiTests
         }));
         Assert.Equal(HttpStatusCode.BadRequest, badOwner.StatusCode);
 
+        using var missingSecret = await client.SendAsync(Authed(HttpMethod.Post, "/connections", new
+        {
+            name = "missing-secret",
+            typeName = "http",
+            authScheme = "bearer",
+            settings = new { allowedHosts = "api.example" },
+            secretFields = new { token = new { sourceKind = "secret", existingSecretName = "missing-token" } }
+        }));
+        Assert.Equal(HttpStatusCode.BadRequest, missingSecret.StatusCode);
+        Assert.DoesNotContain("value", await missingSecret.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+
         using var created = await client.SendAsync(Authed(HttpMethod.Post, "/connections", BearerBody("dup")));
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
         using var duplicate = await client.SendAsync(Authed(HttpMethod.Post, "/connections", BearerBody("dup")));
         Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateNullCollectionAndCreateOrUpdateNullEntries_Return400()
+    {
+        await using var host = await StartHostAsync();
+        using var client = host.GetTestClient();
+
+        using var nullSecretFields = await client.SendAsync(Authed(HttpMethod.Post, "/connections", new
+        {
+            name = "null-secret-fields",
+            typeName = "http",
+            authScheme = "bearer",
+            settings = new { allowedHosts = "api.example" },
+            secretFields = (object?)null
+        }));
+        Assert.Equal(HttpStatusCode.BadRequest, nullSecretFields.StatusCode);
+
+        using var nullCreateField = await client.SendAsync(Authed(HttpMethod.Post, "/connections", new
+        {
+            name = "null-create-field",
+            typeName = "http",
+            authScheme = "bearer",
+            settings = new { allowedHosts = "api.example" },
+            secretFields = new { token = (object?)null }
+        }));
+        Assert.Equal(HttpStatusCode.BadRequest, nullCreateField.StatusCode);
+
+        using var created = await client.SendAsync(Authed(HttpMethod.Post, "/connections", BearerBody("null-update-field")));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        using var nullUpdateField = await client.SendAsync(Authed(HttpMethod.Put, "/connections/null-update-field", new
+        {
+            secretFields = new { token = (object?)null }
+        }));
+        Assert.Equal(HttpStatusCode.BadRequest, nullUpdateField.StatusCode);
     }
 
     [Fact]

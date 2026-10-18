@@ -906,7 +906,7 @@ public sealed class RuntimeInputBindingCompiler(
             return true;
         }
 
-        var element = value as JsonElement? ?? (value is null ? null : JsonSerializer.SerializeToElement(value));
+        var element = value as JsonElement? ?? (value is null ? null : JsonSerializer.SerializeToElement(value, DescriptorPayloadSerializer.Options));
         if (element is not { ValueKind: JsonValueKind.Object } payload ||
             !payload.TryGetProperty("language", out _) ||
             !payload.TryGetProperty("source", out _) ||
@@ -916,7 +916,7 @@ public sealed class RuntimeInputBindingCompiler(
             return false;
         }
 
-        definition = payload.Deserialize<ExpressionDefinition>()
+        definition = payload.Deserialize<ExpressionDefinition>(DescriptorPayloadSerializer.Options)
             ?? throw new ArgumentException("Portable expression definition payload could not be deserialized.");
         return true;
     }

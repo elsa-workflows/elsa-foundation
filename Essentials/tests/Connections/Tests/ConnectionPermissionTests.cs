@@ -173,6 +173,36 @@ public sealed class ConnectionPermissionTests
     }
 
     [Fact]
+    public async Task UpdatingHostsOnAnExistingSecretWithOwnedNamePrefix_RequiresBindSecretPermission()
+    {
+        var gate = new RecordingGate();
+        await using var provider = CreateProvider(gate);
+        await using var scope = provider.CreateAsyncScope();
+        var secrets = scope.ServiceProvider.GetRequiredService<ISecretManager>();
+        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
+        const string secretName = "connection:prefix-retarget:token";
+
+        await secrets.CreateAsync(Tenant, new CreateSecretRequest { Name = secretName, Value = "tok" });
+        await manager.CreateAsync(Tenant, new CreateConnectionRequest
+        {
+            Name = "prefix-retarget",
+            AuthScheme = HttpAuthSchemes.Bearer,
+            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new() { ExistingSecretName = secretName }
+            }
+        });
+
+        gate.DenyBindSecret = true;
+        var refused = await Assert.ThrowsAsync<ConnectionUnavailableException>(() => manager.UpdateAsync(Tenant, "prefix-retarget", new UpdateConnectionRequest
+        {
+            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "other.example" }
+        }).AsTask());
+        Assert.Equal(ConnectionFaultCodes.Forbidden, refused.Code);
+    }
+
+    [Fact]
     public async Task UpdatingOnlyThePortOnABoundConnection_RequiresBindSecretPermission()
     {
         var gate = new RecordingGate();

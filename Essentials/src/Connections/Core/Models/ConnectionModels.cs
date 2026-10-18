@@ -83,6 +83,7 @@ public sealed class ConnectionSecretField
     public string FieldName { get; set; } = "";
     public string SourceKind { get; set; } = ConnectionCredentialSourceKinds.Secret;
     public string? SecretName { get; set; }
+    public bool IsOwnedSecret { get; set; }
     public string? NamedCredentialName { get; set; }
 }
 
@@ -156,7 +157,7 @@ public sealed class CreateConnectionRequest
 
 public sealed class ConnectionSecretFieldInput
 {
-    public string SourceKind { get; set; } = ConnectionCredentialSourceKinds.Secret;
+    public string? SourceKind { get; set; }
     public string? ExistingSecretName { get; set; }
     public string? Value { get; set; }
     public string? NamedCredentialName { get; set; }

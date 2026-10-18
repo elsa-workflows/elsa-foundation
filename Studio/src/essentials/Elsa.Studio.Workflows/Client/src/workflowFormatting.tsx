@@ -26,7 +26,14 @@ export function formatDuration(start?: string | null, end?: string | null) {
 }
 
 export function shortTypeName(key: string | null | undefined) {
-  return key?.split(".").filter(Boolean).at(-1);
+  if (!key) return undefined;
+
+  // Executable graph placeholders carry a type key and version in one token. Strip the
+  // placeholder prefix/version before applying the normal CLR type-key formatter.
+  const typeKey = key.startsWith("executable-missing:")
+    ? key.slice("executable-missing:".length).replace(/@[^@]*$/, "")
+    : key;
+  return typeKey.split(".").filter(Boolean).at(-1);
 }
 
 /**

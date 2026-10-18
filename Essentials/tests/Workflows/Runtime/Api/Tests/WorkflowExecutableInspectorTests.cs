@@ -198,6 +198,112 @@ public sealed class WorkflowExecutableInspectorTests
     }
 
     [Fact]
+    public async Task Detail_and_input_sources_keep_retired_published_reference_inspectable_when_exact_run_pins_it()
+    {
+        var oldLayout = new WorkflowExecutableLayoutRecord("root", 12, 34, 200, 80);
+        var oldReference = Reference(
+            "published-replaced",
+            WorkflowExecutableReferenceScope.Published,
+            _now.AddMinutes(-20),
+            "1.0.0") with
+        {
+            DeletedAt = _now.AddMinutes(-5),
+            DeletedReason = "activation-replaced",
+            Layout = [oldLayout],
+            AuthoredInputs =
+            [
+                new WorkflowExecutableAuthoredInputRecord(
+                    "root", "message", "JavaScript", JsonSerializer.SerializeToElement("old publication source"))
+            ]
+        };
+        var currentReference = Reference(
+            "published-current",
+            WorkflowExecutableReferenceScope.Published,
+            _now.AddMinutes(-1),
+            "2.0.0") with
+        {
+            Layout = [new WorkflowExecutableLayoutRecord("root", 90, 80, 30, 20)],
+            AuthoredInputs =
+            [
+                new WorkflowExecutableAuthoredInputRecord(
+                    "root", "message", "JavaScript", JsonSerializer.SerializeToElement("current publication source"))
+            ]
+        };
+        var binding = new RuntimeInputBinding(
+            "message",
+            new ValueTypeDescriptor("String"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding(
+                "JavaScript",
+                "return variables.message;",
+                new RuntimeValueTypeDescriptor("clr", "System.String, System.Private.CoreLib", null)));
+        var executable = Executable(_now, inputBindings: new Dictionary<string, RuntimeInputBinding> { ["message"] = binding });
+        await _executableStore.SaveAsync(executable);
+        await _referenceStore.SaveAsync(oldReference);
+        await _referenceStore.SaveAsync(currentReference);
+        await SaveCompletedExecutionAsync(
+            "execution-pins-replaced-publication",
+            executable.Identity,
+            oldReference,
+            WorkflowRunKind.PublishedRun);
+
+        var detail = await _inspector.GetAsync("artifact-1", oldReference.SourceReferenceId);
+        var source = await _inspector.GetInputSourcesAsync("artifact-1", oldReference.SourceReferenceId);
+
+        Assert.Equal(oldReference.SourceReferenceId, detail!.ChosenReference!.SourceReferenceId);
+        Assert.Equal("requested", detail.ChosenReference.Selection);
+        Assert.Equal(oldLayout, Assert.Single(detail.ChosenReference.Layout));
+        Assert.Equal("published-current", Assert.Single(detail.References, reference => reference.Live).SourceReferenceId);
+        Assert.Equal("old publication source", Assert.Single(source!.AuthoredInputs).Value!.Value.GetString());
+    }
+
+    [Fact]
+    public async Task Retired_published_reference_requires_an_exact_retained_source_reference()
+    {
+        var retired = Reference(
+            "published-replaced",
+            WorkflowExecutableReferenceScope.Published,
+            _now.AddMinutes(-20),
+            "1.0.0")
+            .Retire(_now.AddMinutes(-5), "activation-replaced");
+        var current = Reference(
+            "published-current",
+            WorkflowExecutableReferenceScope.Published,
+            _now.AddMinutes(-1),
+            "2.0.0");
+        var executable = await ActivateAsync(retired, current);
+        await SaveCompletedExecutionAsync(
+            "execution-pins-current-publication",
+            executable.Identity,
+            current,
+            WorkflowRunKind.PublishedRun);
+
+        var exception = await Assert.ThrowsAsync<EntityNotFoundException>(() =>
+            _inspector.GetAsync("artifact-1", retired.SourceReferenceId).AsTask());
+        var sources = await _inspector.GetInputSourcesAsync("artifact-1", retired.SourceReferenceId);
+
+        Assert.Contains(retired.SourceReferenceId, exception.Message, StringComparison.Ordinal);
+        Assert.Null(sources);
+    }
+
+    [Fact]
+    public async Task Input_sources_reject_expired_test_run_reference_without_an_exact_retained_run()
+    {
+        var expired = Reference(
+            "test-expired",
+            WorkflowExecutableReferenceScope.TestRun,
+            _now.AddMinutes(-31),
+            "draft",
+            _now.AddMinutes(-1));
+        await ActivateAsync(expired);
+
+        var sources = await _inspector.GetInputSourcesAsync("artifact-1", expired.SourceReferenceId);
+
+        Assert.Null(sources);
+    }
+
+    [Fact]
     public async Task Detail_rejects_expired_reference_without_a_retained_execution()
     {
         var reference = Reference(
@@ -242,7 +348,7 @@ public sealed class WorkflowExecutableInspectorTests
     }
 
     [Fact]
-    public async Task Detail_rejects_expired_reference_when_execution_pins_same_source_for_another_artifact()
+    public async Task Detail_and_input_sources_reject_expired_reference_when_execution_pins_same_source_for_another_artifact()
     {
         var reference = Reference(
             "test-expired",
@@ -260,12 +366,14 @@ public sealed class WorkflowExecutableInspectorTests
 
         var exception = await Assert.ThrowsAsync<EntityNotFoundException>(() =>
             _inspector.GetAsync("artifact-1", reference.SourceReferenceId).AsTask());
+        var sources = await _inspector.GetInputSourcesAsync("artifact-1", reference.SourceReferenceId);
 
         Assert.Contains(reference.SourceReferenceId, exception.Message, StringComparison.Ordinal);
+        Assert.Null(sources);
     }
 
     [Fact]
-    public async Task Detail_rejects_retired_reference_even_when_retained_execution_pins_it()
+    public async Task Detail_and_input_sources_reject_retired_test_run_reference_even_when_retained_execution_pins_it()
     {
         var reference = Reference(
             "test-retired",
@@ -282,8 +390,10 @@ public sealed class WorkflowExecutableInspectorTests
 
         var exception = await Assert.ThrowsAsync<EntityNotFoundException>(() =>
             _inspector.GetAsync("artifact-1", reference.SourceReferenceId).AsTask());
+        var sources = await _inspector.GetInputSourcesAsync("artifact-1", reference.SourceReferenceId);
 
         Assert.Contains(reference.SourceReferenceId, exception.Message, StringComparison.Ordinal);
+        Assert.Null(sources);
     }
 
     [Fact]
@@ -969,7 +1079,8 @@ public sealed class WorkflowExecutableInspectorTests
     private ValueTask<WorkflowExecutionState> SaveCompletedExecutionAsync(
         string executionId,
         WorkflowExecutableIdentity executable,
-        WorkflowExecutableSourceReference sourceReference) =>
+        WorkflowExecutableSourceReference sourceReference,
+        WorkflowRunKind runKind = WorkflowRunKind.TestRun) =>
         _executionStore.SaveAsync(new WorkflowExecutionState(
             executionId,
             executable,
@@ -984,7 +1095,7 @@ public sealed class WorkflowExecutableInspectorTests
             null,
             new Dictionary<string, string>())
         {
-            RunKind = WorkflowRunKind.TestRun,
+            RunKind = runKind,
             PinnedSource = WorkflowExecutableSourceProvenance.From(sourceReference)
         });
 

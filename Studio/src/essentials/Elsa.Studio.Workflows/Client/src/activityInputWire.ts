@@ -1,4 +1,5 @@
 import { generateId, readArgumentType, readStringField, referenceKeyKeys } from "./workflowProperties";
+import { readPortableExpressionDefinition } from "./activityProperties";
 import type { ActivityNode, VariableDefinition, WorkflowDefinitionState } from "./workflowTypes";
 import { normalizeFlowchartStartNode } from "./flowchartStartNode";
 
@@ -304,16 +305,20 @@ function toOutputCaptureValue(argument: unknown): OutputCaptureValue | null {
 // their authored syntax and serialize the value to a string. Two exceptions:
 //  - Variable and Input expressions keep their structured reference objects (the backend's
 //    VariableReference.TryParse reads `{ referenceKey, declaringScopeId }` from an ArgumentValue.Value
-//    object) so stable identities and declaring scope survive the trip.
+//    object), as do Connection expressions (whose `{ connection, type }` payload is object-shaped) and
+//    portable expression definitions (whose `language`, `source`, and related fields form an object
+//    contract), so their structured payloads survive the trip.
 //  - A Literal whose value is structured (an array or object, e.g. a collection repeater's list) is sent
 //    as an "Object" expression. The backend's literal converter only handles scalars, so it can't turn
 //    the JSON-string form of a list into ICollection<T>; the Object handler JSON-deserializes it into the
 //    target type. isRecord covers both arrays and plain objects.
 function toWireArgument(expression: { type: string; value: unknown }): { value: unknown; expressionType: string } {
   const expressionType = expression.type || "Literal";
-  if ((expressionType === "Variable" || expressionType === "Input") && isRecord(expression.value)) {
+  if ((expressionType === "Variable" || expressionType === "Input" || expressionType === "Connection") && isRecord(expression.value)) {
     return { value: expression.value, expressionType };
   }
+  const portableDefinition = readPortableExpressionDefinition(expression.value, expressionType);
+  if (portableDefinition) return { value: portableDefinition, expressionType };
   if (expressionType === "Literal" && isRecord(expression.value)) {
     return { value: toWireValue(expression.value), expressionType: "Object" };
   }

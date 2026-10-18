@@ -22,6 +22,34 @@ export interface WrappedActivityInputValue {
 /** The expression syntax whose value is a Secret Reference. */
 export const secretSyntax = "Secret";
 
+export interface PortableExpressionDefinitionValue extends Record<string, unknown> {
+  language: string;
+  source: string;
+  resultType: Record<string, unknown>;
+  parameters: Record<string, unknown>;
+  options: Record<string, unknown>;
+  capabilityProfile: string;
+}
+
+/** Reads a canonical portable-expression value only when its language matches the authored syntax. */
+export function readPortableExpressionDefinition(
+  value: unknown,
+  expressionType: string
+): PortableExpressionDefinitionValue | null {
+  if (!isObjectRecord(value) ||
+      typeof value.language !== "string" ||
+      typeof value.source !== "string" ||
+      !isObjectRecord(value.resultType) ||
+      !isObjectRecord(value.parameters) ||
+      !isObjectRecord(value.options) ||
+      typeof value.capabilityProfile !== "string" ||
+      expressionType.toLowerCase() !== value.language.toLowerCase()) {
+    return null;
+  }
+
+  return value as PortableExpressionDefinitionValue;
+}
+
 /**
  * Whether the input is secret-only: the activity declares that it accepts only a Secret Reference (the
  * backend's `isCredential`). Such an input is authored with the secret picker alone: it has no literal
@@ -461,6 +489,10 @@ function isWrappedInputValue(value: unknown): value is WrappedActivityInputValue
     !!expression &&
     typeof expression === "object" &&
     typeof (expression as Record<string, unknown>).type === "string";
+}
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 // --- friendly type-name formatting (type badge) ----------------------------
