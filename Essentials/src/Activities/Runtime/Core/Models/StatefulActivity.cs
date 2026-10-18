@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Primitives.Models;
@@ -99,7 +100,8 @@ public abstract class StatefulActivity<TResult, TState, TTrigger> :
                 state,
                 trigger,
                 request.RegistrationId,
-                request.DeliveryId));
+                request.DeliveryId,
+                alreadyMaterialized: true));
     }
 
     private void BeginAttempt()
@@ -202,10 +204,8 @@ public sealed class ActivityStartContext<TTrigger>
         {
             var trigger = payload.Deserialize<TTrigger>()
                 ?? throw new JsonException("The targeted start trigger payload resolved to null.");
-            return new ActivityStartContext<TTrigger>(
-                attempt,
-                true,
-                PersistableActivityValue.SnapshotAndMaterialize(trigger, "start trigger"));
+            PersistableActivityValue.ValidateType(typeof(TTrigger), "start trigger");
+            return new ActivityStartContext<TTrigger>(attempt, true, trigger);
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {
@@ -272,6 +272,18 @@ public sealed class ActivityResumeContext<TState, TTrigger>
         TTrigger trigger,
         string registrationId,
         string deliveryId)
+        : this(attempt, state, trigger, registrationId, deliveryId, alreadyMaterialized: false)
+    {
+    }
+
+    // Only the engine's JSON-deserialization path owns fresh values already; public callers still need snapshots.
+    internal ActivityResumeContext(
+        ActivityExecutionContext attempt,
+        TState state,
+        TTrigger trigger,
+        string registrationId,
+        string deliveryId,
+        bool alreadyMaterialized)
     {
         ArgumentNullException.ThrowIfNull(attempt);
         ArgumentException.ThrowIfNullOrWhiteSpace(registrationId);
@@ -282,8 +294,8 @@ public sealed class ActivityResumeContext<TState, TTrigger>
         AttemptId = attempt.AttemptId;
         ExecutableNodeId = attempt.ExecutableNodeId;
         CancellationToken = attempt.CancellationToken;
-        State = PersistableActivityValue.SnapshotAndMaterialize(state, "private state");
-        Trigger = PersistableActivityValue.SnapshotAndMaterialize(trigger, "trigger");
+        State = alreadyMaterialized ? state : PersistableActivityValue.SnapshotAndMaterialize(state, "private state");
+        Trigger = alreadyMaterialized ? trigger : PersistableActivityValue.SnapshotAndMaterialize(trigger, "trigger");
         RegistrationId = registrationId;
         DeliveryId = deliveryId;
     }
@@ -353,21 +365,25 @@ public enum ActivityTriggerDeduplicationMode
 
 internal static class PersistableActivityValue
 {
+    // Package-owned types may be collectible. A process-wide dictionary would keep their load contexts alive.
+    private static readonly ConditionalWeakTable<Type, TypeValidation> TypeChecks = new();
+
     public static ValueTypeDescriptor Descriptor(Type type, int schemaVersion = 1) =>
         new(TypeAliasConvention.CanonicalAlias(type), schemaVersion: schemaVersion);
 
-    public static T SnapshotAndMaterialize<T>(T value, string role)
-    {
-        var payload = Snapshot(value, role);
+    public static T SnapshotAndMaterialize<T>(T value, string role) =>
+        Materialize<T>(Snapshot(value, role), role);
 
+    public static T Materialize<T>(JsonElement payload, string role)
+    {
         try
         {
             return payload.Deserialize<T>()
-                   ?? throw new ArgumentException($"The activity {role} must be a non-null persistable value.", nameof(value));
+                   ?? throw new ArgumentException($"The activity {role} must be a non-null persistable value.", "value");
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException)
         {
-            throw new ArgumentException($"The activity {role} must be a persistable typed document.", nameof(value), exception);
+            throw new ArgumentException($"The activity {role} must be a persistable typed document.", "value", exception);
         }
     }
 
@@ -386,13 +402,23 @@ internal static class PersistableActivityValue
         }
     }
 
-    public static void ValidateType(Type type, string role) => ValidateType(type, role, new HashSet<Type>());
+    public static void ValidateType(Type type, string role)
+    {
+        var validation = TypeChecks.GetValue(type, static candidate =>
+            new TypeValidation(FindRejectedType(candidate, new HashSet<Type>())?.ToString()));
+        if (validation.RejectedType is { } rejectedType)
+        {
+            throw new ArgumentException(
+                $"The activity {role} type '{rejectedType}' is not a persistable typed document.",
+                nameof(type));
+        }
+    }
 
-    private static void ValidateType(Type type, string role, ISet<Type> visited)
+    private static Type? FindRejectedType(Type type, ISet<Type> visited)
     {
         type = Nullable.GetUnderlyingType(type) ?? type;
         if (!visited.Add(type) || IsScalar(type))
-            return;
+            return null;
 
         if (type == typeof(object) ||
             type.ContainsGenericParameters ||
@@ -405,29 +431,37 @@ internal static class PersistableActivityValue
             typeof(IDictionary).IsAssignableFrom(type) ||
             ImplementsGenericDictionary(type))
         {
-            throw new ArgumentException(
-                $"The activity {role} type '{type}' is not a persistable typed document.",
-                nameof(type));
+            return type;
         }
 
         if (type.IsArray)
         {
-            ValidateType(type.GetElementType()!, role, visited);
-            return;
+            return FindRejectedType(type.GetElementType()!, visited);
         }
 
         foreach (var argument in type.GetGenericArguments())
-            ValidateType(argument, role, visited);
+        {
+            if (FindRejectedType(argument, visited) is { } rejectedArgument)
+                return rejectedArgument;
+        }
 
         foreach (var property in type.GetProperties(BindingFlags.Instance | BindingFlags.Public))
         {
-            if (property.GetMethod is not null && property.GetIndexParameters().Length == 0)
-                ValidateType(property.PropertyType, role, visited);
+            if (property.GetMethod is not null && property.GetIndexParameters().Length == 0 &&
+                FindRejectedType(property.PropertyType, visited) is { } rejectedProperty)
+                return rejectedProperty;
         }
 
         foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.Public))
-            ValidateType(field.FieldType, role, visited);
+        {
+            if (FindRejectedType(field.FieldType, visited) is { } rejectedField)
+                return rejectedField;
+        }
+
+        return null;
     }
+
+    private sealed record TypeValidation(string? RejectedType);
 
     private static bool ImplementsGenericDictionary(Type type) =>
         type.GetInterfaces().Any(candidate =>
