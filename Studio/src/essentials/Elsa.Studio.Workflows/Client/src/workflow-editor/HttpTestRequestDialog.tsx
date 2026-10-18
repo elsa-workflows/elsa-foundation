@@ -12,6 +12,7 @@ import {
   makeInitialHttpTestEndpointPath,
   publishedHttpEndpointInputsUnavailableMessage,
   readHttpEndpointResponseMetadata,
+  readHttpEndpointExecutionId,
   resolveHttpTestEndpointPath,
   type PublishedHttpEndpoint
 } from "./httpTestRequest";
@@ -187,6 +188,8 @@ export function HttpTestRequestDialog({
         contentType: response.headers.get("content-type") || "",
         headers: [...response.headers.entries()],
         body,
+        responseReason: responseMetadata?.reason,
+        workflowExecutionId: responseMetadata ? readHttpEndpointExecutionId(body) : null,
         acceptedMessage: response.status === 202
           ? describeHttpEndpointAcceptedResponse(responseMetadata)
           : null
@@ -229,7 +232,7 @@ export function HttpTestRequestDialog({
           <div>
             <span>Published workflow</span>
             <h3 id="http-test-title">Send an HTTP test request</h3>
-            <p id="http-test-description">Send a real request to this workflow’s published endpoint.</p>
+            <p id="http-test-description">Uses the published endpoint’s methods and settings. Publish draft changes before testing them.</p>
           </div>
           <button type="button" className="wf-icon-button" aria-label="Close test request" onClick={close}>
             <X size={18} aria-hidden="true" />
@@ -304,7 +307,7 @@ export function HttpTestRequestDialog({
           ) : null}
 
           {requestError ? <p className="wf-http-test-error" role="alert">{requestError}</p> : null}
-          {result ? <HttpTestResponse result={result} /> : null}
+          {result ? <HttpTestResponse result={result} context={context} /> : null}
         </div>
       </section>
     </div>

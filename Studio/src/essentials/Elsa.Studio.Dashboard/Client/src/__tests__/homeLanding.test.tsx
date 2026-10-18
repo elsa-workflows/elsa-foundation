@@ -89,7 +89,7 @@ describe("Home default landing", () => {
     expect(host.textContent).toContain("No workflows yet");
     expect(host.textContent).toContain("Orders");
     expect(host.textContent).toContain("Completed");
-    expect(host.querySelector('[data-tone="success"]')?.textContent).toBe("Completed");
+    expect(host.querySelector('.home-record-trailing [data-tone="success"]')?.textContent).toBe("Completed");
     expect(host.textContent).toContain("Assigned work lives in Tasks.");
     expect(host.textContent).toContain("Open tasks");
     host.unmount();

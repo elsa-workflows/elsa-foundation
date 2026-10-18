@@ -1,5 +1,8 @@
+import { Suspense } from "react";
 import { AlertCircle, Check, Flag, MapPin, Wrench } from "lucide-react";
+import type { StudioEndpointContext, StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
 import type { ValidationError, WorkflowDraft, WorkflowExecutableSummary, WorkflowTestRunView } from "../workflowTypes";
+import type { WorkflowTestRunState, WorkflowTestRunWaitDraftState } from "./editorTypes";
 import {
   STRUCTURAL_NO_START_TYPE,
   STRUCTURAL_START_TRIGGER_TYPE,
@@ -10,6 +13,7 @@ import type { ValidationActivityLabels } from "../validationActivityLabels";
 import { formatDate } from "../workflowFormatting";
 import { isRejectedTestRun } from "./editorHelpers";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
+import { WorkflowTestRunControls } from "./WorkflowTestRunControls";
 
 /**
  * Renders the unified draft-validation surface (issue #453). `errors` (server-derived + reconciled +
@@ -72,11 +76,11 @@ export function ValidationPanel({
                 </button>
               ) : null}
               {repair?.path.nodeId ? (
-                <button type="button" className="wf-validation-repair" onClick={() => onRepair(repair.path.nodeId)}>
+                <button type="button" className="wf-validation-repair wf-validation-node-action" onClick={() => onRepair(repair.path.nodeId)}>
                   <Wrench size={12} /> Repair
                 </button>
               ) : nodeId && onSelectNode ? (
-                <button type="button" className="wf-validation-repair" onClick={() => onSelectNode(nodeId)}>
+                <button type="button" className="wf-validation-repair wf-validation-node-action" onClick={() => onSelectNode(nodeId)}>
                   <MapPin size={12} /> Go to
                 </button>
               ) : null}
@@ -95,9 +99,11 @@ function isStartNodeError(error: ValidationError) {
 
 export function TestRunStatus({
   testRun,
+  stale = false,
   onOpenDetails
 }: {
   testRun: WorkflowTestRunView;
+  stale?: boolean;
   onOpenDetails(): void;
 }) {
   const rejected = isRejectedTestRun(testRun);
@@ -110,17 +116,22 @@ export function TestRunStatus({
         onClick={onOpenDetails}
       >
         {rejected || acceptedWithIncidents ? <AlertCircle size={16} /> : <Check size={16} />}
-        {rejected ? "Test run rejected" : acceptedWithIncidents ? acceptedRuntimeIssueLabel(testRun) : "Test run dispatched"}
+        {stale ? "Earlier draft · " : ""}{rejected ? "Test run rejected" : acceptedWithIncidents ? acceptedRuntimeIssueLabel(testRun) : "Test run dispatched"}
       </button>
     </div>
   );
 }
 
-export function WorkflowRuntimePanel({ testRun, publishedEquivalent, onOpenRun, activityLabels }: {
-  testRun: WorkflowTestRunView | null;
+export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, stimulusEditors, publishedEquivalent, onOpenRun, activityLabels, onRunViewUpdated, onWaitDraftUpdated }: {
+  testRun: WorkflowTestRunState | WorkflowTestRunView | null;
+  context?: StudioEndpointContext;
+  currentDraftSignature?: string;
+  stimulusEditors?: StudioTestStimulusEditorContribution[];
   publishedEquivalent?: WorkflowExecutableSummary | null;
   onOpenRun(workflowExecutionId: string, initialTab?: "issues"): void;
   activityLabels?: ValidationActivityLabels;
+  onRunViewUpdated?(view: WorkflowTestRunView): void;
+  onWaitDraftUpdated?(waitId: string, draftState: WorkflowTestRunWaitDraftState): void;
 }) {
   if (!testRun) {
     return (
@@ -130,13 +141,23 @@ export function WorkflowRuntimePanel({ testRun, publishedEquivalent, onOpenRun, 
     );
   }
 
-  const rejected = isRejectedTestRun(testRun);
-  const workflowExecutionId = testRun.workflowExecutionId;
-  const acceptedWithIncidents = !rejected && hasAcceptedRuntimeIssue(testRun);
+  const runState: WorkflowTestRunState = "view" in testRun
+    ? testRun
+    : { draftSignature: "", view: testRun, startLabel: "Direct start", workflowInputNames: [] };
+  const view = runState.view;
+  const stale = Boolean(currentDraftSignature && runState.draftSignature && runState.draftSignature !== currentDraftSignature);
+  const actionEditor = runState.driverActionResult
+    ? stimulusEditors?.find(editor => editor.id === runState.driverActionResult?.contributionId)
+    : undefined;
+  const ActionResult = actionEditor?.actionResultComponent;
+  const rejected = isRejectedTestRun(view);
+  const workflowExecutionId = view.workflowExecutionId;
+  const triggerPrepared = view.status === "Prepared" && !workflowExecutionId;
+  const acceptedWithIncidents = !rejected && hasAcceptedRuntimeIssue(view);
   // The equivalence signal resolves asynchronously; re-check the artifact id so a match computed for an
   // earlier test run never captions a newer one. A rejected dispatch can still mint a valid artifact id,
   // but pairing a green "identical" banner with a rejection reason reads as contradictory — suppress it.
-  const equivalent = !rejected && publishedEquivalent && publishedEquivalent.artifactId === testRun.artifactId
+  const equivalent = !stale && !rejected && publishedEquivalent && publishedEquivalent.artifactId === view.artifactId
     ? publishedEquivalent
     : null;
   return (
@@ -144,18 +165,22 @@ export function WorkflowRuntimePanel({ testRun, publishedEquivalent, onOpenRun, 
       <section className="wf-runtime-card" data-state={rejected ? "rejected" : acceptedWithIncidents ? "accepted-with-incidents" : "accepted"}>
         <header>
           <div>
-            <span>Latest Test Run</span>
-            <h3>{rejected ? "Rejected by the server" : "Transient run accepted"}</h3>
+            <span>{stale ? "Earlier draft" : "Latest Test Run"}</span>
+            <h3>{rejected ? "Rejected by the server" : triggerPrepared ? "Trigger prepared" : "Transient run accepted"}</h3>
           </div>
-          <WorkflowStatusBadge status={testRun.status} subStatus={testRun.commandDispatchStatus ?? undefined} />
+          <WorkflowStatusBadge status={view.status} subStatus={view.commandDispatchStatus ?? undefined} />
         </header>
         <p>Ephemeral - not saved, promoted, or published.</p>
-        {rejected && testRun.reason ? <RejectedReason reason={testRun.reason} activityLabels={activityLabels} /> : null}
+        {stale ? <div className="wf-test-drive-stale" role="status">This result belongs to an earlier draft snapshot.</div> : null}
+        {runState.driverActionError ? <div className="wf-test-drive-error" role="alert">{runState.driverActionError}</div> : null}
+        <p>Start: {runState.startLabel ?? "Direct start"}</p>
+        {runState.workflowInputNames?.length ? <p>Inputs: {runState.workflowInputNames.join(", ")}</p> : null}
+        {rejected && view.reason ? <RejectedReason reason={view.reason} activityLabels={activityLabels} /> : null}
         {acceptedWithIncidents ? (
           <div className="wf-runtime-incident-warning" role="status">
             <AlertCircle size={14} aria-hidden="true" />
-            <span>{testRun.incidentCount != null && testRun.incidentCount > 0
-              ? `The test run was accepted and recorded ${testRun.incidentCount} incident${testRun.incidentCount === 1 ? "" : "s"}. Review the incident details on the linked Run.`
+            <span>{view.incidentCount != null && view.incidentCount > 0
+              ? `The test run was accepted and recorded ${view.incidentCount} incident${view.incidentCount === 1 ? "" : "s"}. Review the incident details on the linked Run.`
               : "The test run was accepted with a runtime issue. Incident details may be unavailable in this response; review the linked Run."}</span>
             {workflowExecutionId ? <button type="button" onClick={() => onOpenRun(workflowExecutionId, "issues")}>Review incidents</button> : null}
           </div>
@@ -166,9 +191,9 @@ export function WorkflowRuntimePanel({ testRun, publishedEquivalent, onOpenRun, 
           </div>
         ) : null}
         <dl className="wf-runtime-meta">
-          <div><dt>Dispatch</dt><dd title={testRun.commandDispatchStatus ?? testRun.status}>{testRun.commandDispatchStatus ?? testRun.status}</dd></div>
-          <div><dt>Test Run</dt><dd title={testRun.testRunId}>{testRun.testRunId}</dd></div>
-          <div><dt>Artifact</dt><dd title={testRun.artifactId ?? "None"}>{testRun.artifactId ?? "None"}</dd></div>
+          <div><dt>Dispatch</dt><dd title={view.commandDispatchStatus ?? view.status}>{view.commandDispatchStatus ?? view.status}</dd></div>
+          <div><dt>Test Run</dt><dd title={view.testRunId}>{view.testRunId}</dd></div>
+          <div><dt>Artifact</dt><dd title={view.artifactId ?? "None"}>{view.artifactId ?? "None"}</dd></div>
           <div>
             <dt>Run / Instance</dt>
             <dd title={workflowExecutionId ?? "None"}>
@@ -177,10 +202,16 @@ export function WorkflowRuntimePanel({ testRun, publishedEquivalent, onOpenRun, 
               ) : "None"}
             </dd>
           </div>
-          <div><dt>Activities</dt><dd>{formatEvidenceCount(testRun.activityCount, "activity")}</dd></div>
-          <div><dt>Incidents</dt><dd>{formatEvidenceCount(testRun.incidentCount, "incident")}</dd></div>
-          <div><dt>Expires</dt><dd title={testRun.expiresAt ? formatDate(testRun.expiresAt) : "None"}>{testRun.expiresAt ? formatDate(testRun.expiresAt) : "None"}</dd></div>
+          <div><dt>Activities</dt><dd>{formatEvidenceCount(view.activityCount, "activity")}</dd></div>
+          <div><dt>Incidents</dt><dd>{formatEvidenceCount(view.incidentCount, "incident")}</dd></div>
+          <div><dt>Expires</dt><dd title={view.expiresAt ? formatDate(view.expiresAt) : "None"}>{view.expiresAt ? formatDate(view.expiresAt) : "None"}</dd></div>
         </dl>
+        {ActionResult && runState.driverActionResult ? (
+          <Suspense fallback={<p role="status">Loading Test Drive response…</p>}>
+            <ActionResult action={view.driverAction ?? { kind: runState.driverActionResult.value.kind }} result={runState.driverActionResult.value} />
+          </Suspense>
+        ) : null}
+        {context && onRunViewUpdated && "view" in testRun ? <WorkflowTestRunControls context={context} testRun={runState} stimulusEditors={stimulusEditors ?? []} onRunViewUpdated={onRunViewUpdated} onWaitDraftUpdated={onWaitDraftUpdated} /> : null}
       </section>
     </div>
   );

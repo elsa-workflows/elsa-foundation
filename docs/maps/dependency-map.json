@@ -1919,6 +1919,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Foundation.Identity.Core",
+          "path": "Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Http.Core",
           "path": "Essentials/src/Http/Core/Elsa.Http.Core.csproj"
         },

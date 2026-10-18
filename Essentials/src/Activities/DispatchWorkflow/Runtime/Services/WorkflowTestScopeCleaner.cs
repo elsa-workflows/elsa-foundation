@@ -7,7 +7,8 @@ namespace Elsa.Activities.DispatchWorkflow.Runtime.Services;
 public sealed class WorkflowTestScopeCleaner(
     IWorkflowTestScopeStore scopeStore,
     IWorkflowTestScopeCleanupStore cleanupStore,
-    IWorkflowDispatchQueryStore dispatchStore) : IWorkflowTestScopeCleaner
+    IWorkflowDispatchQueryStore dispatchStore,
+    ITestRunTargetCleaner? targetCleaner = null) : IWorkflowTestScopeCleaner
 {
     private const int PageSize = WorkflowDispatchQuery.MaximumTake;
 
@@ -27,6 +28,11 @@ public sealed class WorkflowTestScopeCleaner(
             return new WorkflowTestScopeCleanupResult(0, 0, 0, 0, 0);
 
         var scope = close.Record.Scope;
+        // CloseAsync transitions the scope to Closing before module cleanup, fencing all target dispatches.
+        // Keep the projection if a driver's StopAsync fails so a later scope sweep can retry cleanup.
+        if (targetCleaner is not null)
+            await targetCleaner.StopAsync(scopeId, cancellationToken);
+
         var responsibilityAt = close.Record.ClosingAt
             ?? throw new InvalidOperationException("A closing workflow test scope requires a stable close timestamp.");
         var pending = await QueryActionableAsync(scope, WorkflowDispatchStatus.Pending, cancellationToken);

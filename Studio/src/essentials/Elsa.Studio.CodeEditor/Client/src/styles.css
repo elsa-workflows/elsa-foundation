@@ -31,6 +31,29 @@
   inline-size: 100%;
 }
 
+/* CodeMirror defaults to light popovers; resolve both colours from the host theme. */
+.studio-code-editor .studio-code-editor-rich .cm-tooltip {
+  background-color: var(--studio-surface-raised);
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+  color: var(--studio-text);
+  box-shadow: var(--studio-shadow-sm);
+}
+
+.studio-code-editor .studio-code-editor-rich .cm-tooltip-section:not(:first-child) {
+  border-top-color: var(--studio-border);
+}
+
+.studio-code-editor .studio-code-editor-rich .cm-tooltip .cm-tooltip-arrow::before {
+  border-top-color: var(--studio-border);
+  border-bottom-color: var(--studio-border);
+}
+
+.studio-code-editor .studio-code-editor-rich .cm-tooltip .cm-tooltip-arrow::after {
+  border-top-color: var(--studio-surface-raised);
+  border-bottom-color: var(--studio-surface-raised);
+}
+
 .studio-code-editor-rich .cm-editor:focus-within,
 .studio-code-editor-input:focus,
 .studio-code-editor-preview:focus-visible {

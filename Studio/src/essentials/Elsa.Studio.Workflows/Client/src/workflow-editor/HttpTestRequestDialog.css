@@ -196,6 +196,7 @@
 
 .wf-http-test-result {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   padding-top: 14px;
   border-top: 1px solid var(--studio-border);
@@ -218,6 +219,15 @@
   align-items: flex-start;
   border-color: var(--studio-warning);
   color: var(--studio-warning-fg);
+}
+
+.wf-http-test-accepted[data-error] {
+  border-color: var(--studio-danger);
+  color: var(--studio-danger-fg);
+}
+
+.wf-http-test-accepted p {
+  margin: 0 0 4px;
 }
 
 .wf-http-test-accepted svg {

@@ -1,8 +1,9 @@
 import type React from "react";
 import type { Edge } from "@xyflow/react";
-import type { StudioActivityDescriptor, StudioWorkflowContextConnection } from "@elsa-workflows/studio-sdk";
+import type { StudioActivityDescriptor, StudioWorkflowContextConnection, StudioTestStimulusActionResult } from "@elsa-workflows/studio-sdk";
 import type { ActivityAvailabilityDiagnosticEntry, ActivityCatalogItem, ActivityNode, WorkflowDefinitionDetails, WorkflowDefinitionVersionDetails, WorkflowDraft, WorkflowInstanceDetails, WorkflowTestRunView } from "../workflowTypes";
 import type { getChildSlots, ScopeFrame, WorkflowEdgeData } from "../workflowAdapter";
+import type { WorkflowRunInputDrafts } from "../workflowRunInputs";
 
 export type CreateWorkflowKind = "sequence" | "flowchart" | "bpmn";
 
@@ -48,6 +49,28 @@ export type WorkflowEditorOperation = "idle" | "saving" | "promoting" | "publica
 export interface WorkflowTestRunState {
   draftSignature: string;
   view: WorkflowTestRunView;
+  startLabel?: string;
+  workflowInputNames?: string[];
+  driverActionError?: string;
+  waitDrafts?: Record<string, WorkflowTestRunWaitDraftState>;
+  driverActionResult?: {
+    contributionId: string;
+    value: StudioTestStimulusActionResult;
+  };
+}
+
+export interface WorkflowTestRunWaitDraftState {
+  modeId: string;
+  draft: string;
+  attempt?: { signature: string; deliveryId: string };
+}
+
+export interface WorkflowTestDriveSetupState {
+  snapshot: { draft: WorkflowDraft; signature: string; snapshotId: string };
+  selectedOptionId: string;
+  selectedModeId: string;
+  inputDrafts: WorkflowRunInputDrafts;
+  stimulusDraft: string;
 }
 
 export interface ExecutableRunState {

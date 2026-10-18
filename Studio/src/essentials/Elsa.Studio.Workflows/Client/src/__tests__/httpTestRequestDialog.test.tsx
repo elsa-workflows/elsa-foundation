@@ -85,6 +85,28 @@ describe("HTTP test request dialog", () => {
     expect(getExecutableInputSources).toHaveBeenCalledWith(context, "artifact-1", "reference-1");
   });
 
+  it("offers every published method and sends the selected method", async () => {
+    advertiseWorkflowHttpBasePath();
+    vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
+    const methods = ["GET", "POST", "PUT", "HEAD", "DELETE", "OPTIONS", "PATCH"];
+    vi.mocked(getExecutableInputSources).mockResolvedValue(publishedEndpointInputs(methods));
+    requestResponse.mockImplementation(async () => new Response("", { status: 200 }));
+    const container = await renderDialog();
+    await waitFor(() => expect(container.querySelector("select[aria-label='HTTP method']")).not.toBeNull());
+    const select = container.querySelector<HTMLSelectElement>("select[aria-label='HTTP method']")!;
+    expect([...select.options].map(option => option.value)).toEqual(methods);
+    expect(container.textContent).toContain("Publish draft changes before testing them.");
+    for (const [index, method] of methods.entries()) {
+      flushSync(() => { select.value = method; select.dispatchEvent(new Event("change", { bubbles: true })); });
+      await click(container.querySelector("button[type='submit']")!);
+      await waitFor(() => expect(requestResponse).toHaveBeenCalledTimes(index + 1));
+      expect(requestResponse.mock.calls[index][1]?.method).toBe(method);
+      const carriesBody = method !== "GET" && method !== "HEAD";
+      expect(requestResponse.mock.calls[index][1]?.body !== undefined).toBe(carriesBody);
+      await waitFor(() => expect(container.querySelector<HTMLButtonElement>("button[type='submit']")!.disabled).toBe(false));
+    }
+  });
+
   it("offers common content types and sends a custom type unchanged", async () => {
     advertiseWorkflowHttpBasePath();
     vi.mocked(getExecutable).mockResolvedValue(publishedExecutable());
@@ -438,7 +460,7 @@ function publishedExecutable(): WorkflowExecutableDetails {
   };
 }
 
-function publishedEndpointInputs(method = "POST"): WorkflowExecutableInputSources {
+function publishedEndpointInputs(method: string | string[] = "POST"): WorkflowExecutableInputSources {
   return {
     artifactId: "artifact-1",
     sourceReferenceId: "reference-1",
@@ -446,7 +468,7 @@ function publishedEndpointInputs(method = "POST"): WorkflowExecutableInputSource
     authoredInputs: [],
     compiledInputs: [
       { executableNodeId: "endpoint-exec", accessState: "allowed", binding: { inputName: "Path", inputKey: "Path", source: "Literal", literalValue: "orders/{id:int}" } },
-      { executableNodeId: "endpoint-exec", accessState: "allowed", binding: { inputName: "SupportedMethods", inputKey: "SupportedMethods", source: "Literal", literalValue: [method] } },
+      { executableNodeId: "endpoint-exec", accessState: "allowed", binding: { inputName: "SupportedMethods", inputKey: "SupportedMethods", source: "Literal", literalValue: Array.isArray(method) ? method : [method] } },
       { executableNodeId: "endpoint-exec", accessState: "allowed", binding: { inputName: "ResponseMode", inputKey: "ResponseMode", source: "Literal", literalValue: 0 } }
     ]
   };
