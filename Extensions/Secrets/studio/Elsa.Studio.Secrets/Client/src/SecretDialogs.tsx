@@ -2,15 +2,22 @@ import React, { useId, useMemo, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useDialogFocus } from "@elsa-workflows/studio-sdk";
 import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata } from "./secretTypes";
+import { SecretScopePicker } from "./SecretScopePicker";
 
 const technicalNamePattern = /^[a-z0-9._:-]+$/;
 
 export function CreateSecretDialog({
   descriptors,
+  scopeCatalogLoading = false,
+  scopeCatalogError = false,
+  onRetryScopeCatalog,
   onCancel,
   onSave
 }: {
   descriptors: SecretDescriptorsResponse;
+  scopeCatalogLoading?: boolean;
+  scopeCatalogError?: boolean;
+  onRetryScopeCatalog?(): void;
   onCancel(): void;
   onSave(request: CreateSecretRequest): Promise<void>;
 }) {
@@ -50,7 +57,7 @@ export function CreateSecretDialog({
         description: description.trim() || undefined,
         typeName,
         storeName,
-        scope: scope.trim() || undefined,
+        scope: scope.length > 0 ? scope : undefined,
         tags: parseTags(tags),
         value: usesConfigurationKey ? undefined : value,
         configurationKey: usesConfigurationKey ? configurationKey.trim() : undefined,
@@ -85,7 +92,14 @@ export function CreateSecretDialog({
         {selectedType?.description ? <p className="secrets-field-hint">{selectedType.description}</p> : null}
         <label>Store<select value={storeName} onChange={event => setStoreName(event.target.value)}>{supportedStores.map(store => <option key={store.name} value={store.name}>{store.displayName || store.name}</option>)}</select></label>
         {selectedStore?.description ? <p className="secrets-field-hint">{selectedStore.description}</p> : null}
-        <Field label="Scope" value={scope} onChange={setScope} />
+        <SecretScopePicker
+          value={scope}
+          options={descriptors.scopes}
+          loading={scopeCatalogLoading}
+          error={scopeCatalogError}
+          onChange={setScope}
+          onRetry={onRetryScopeCatalog}
+        />
         <Field label="Tags" value={tags} onChange={setTags} placeholder="comma-separated" />
         {usesConfigurationKey ? (
           <Field label="Configuration key" value={configurationKey} onChange={setConfigurationKey} autoComplete="off" />

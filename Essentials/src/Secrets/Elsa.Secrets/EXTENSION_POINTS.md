@@ -32,6 +32,13 @@ Use `services.AddSecrets()` to register defaults, then replace these services as
 - `ISecretAuditSink` for audit export. The default `LoggingSecretAuditSink` emits every audit record and warns once when auditing is unconfigured; register `NullSecretAuditSink` to opt out.
 - `ISecretStore` implementations for external providers such as Azure Key Vault, HashiCorp Vault, AWS Secrets Manager, or Kubernetes secrets.
 - `ISecretTypeProvider` implementations for domain-specific secret types.
+- `ISecretScopeProvider` implementations for static, advisory scope suggestions shown by the Secrets picker. Register each provider once with `TryAddEnumerable` in the host or module service configuration:
+
+  ```csharp
+  services.TryAddEnumerable(ServiceDescriptor.Singleton<ISecretScopeProvider, BillingSecretScopeProvider>());
+  ```
+
+  Providers should be singleton because the registry is a singleton and reads their metadata once when first resolved; register them during service configuration and return stable metadata. Set `Source` only when you have a friendly contributor label. Suggestions do not restrict secret creation or runtime resolution. `AddSecrets()` registers an empty catalog when no providers contribute scopes.
 
 ## Master-Key Rotation
 

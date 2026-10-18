@@ -30,6 +30,18 @@ afterEach(() => {
 });
 
 describe("entered secret visibility", () => {
+  it("submits a custom scope without changing the authored value", async () => {
+    const { container, onSave } = renderDialog("create");
+    const scopeSelect = container.querySelectorAll<HTMLSelectElement>("select")[2];
+    selectOption(scopeSelect, "Custom…");
+    change(container.querySelector<HTMLInputElement>("input[id^='scope-custom-']")!, " Payments:Production ");
+    change(container.querySelector<HTMLInputElement>(".secrets-value-input input")!, "replacement-value");
+
+    flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ scope: " Payments:Production " }));
+  });
+
   it.each(["create", "rotate"] as const)("masks by default, toggles without submitting, and resets when reopening %s", mode => {
     const { container, onSave, render } = renderDialog(mode);
     const input = container.querySelector<HTMLInputElement>(".secrets-value-input input")!;
@@ -179,5 +191,14 @@ function change(input: HTMLInputElement, value: string) {
   flushSync(() => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+function selectOption(select: HTMLSelectElement, label: string) {
+  const option = [...select.options].find(item => item.textContent === label);
+  if (!option) throw new Error(`Option not found: ${label}`);
+  flushSync(() => {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, option.value);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
   });
 }

@@ -66,9 +66,13 @@ public sealed class SecretsCanaryHost : IAsyncDisposable
     public static int PermissionEvaluatorCallsFor(string path) =>
         RecordingPermissionEvaluator.CallsFor(path);
 
-    public static Task<SecretsCanaryHost> StartMigratedAsync(ITestOutputHelper? output = null) => StartAsync(output);
+    public static Task<SecretsCanaryHost> StartMigratedAsync(
+        ITestOutputHelper? output = null,
+        Action<IServiceCollection>? configureServices = null) => StartAsync(output, configureServices);
 
-    private static async Task<SecretsCanaryHost> StartAsync(ITestOutputHelper? output)
+    private static async Task<SecretsCanaryHost> StartAsync(
+        ITestOutputHelper? output,
+        Action<IServiceCollection>? configureServices)
     {
         IReadOnlyList<EndpointDataSource>? endpointDataSources = null;
         var host = new HostBuilder()
@@ -97,6 +101,7 @@ public sealed class SecretsCanaryHost : IAsyncDisposable
                     services.AddSingleton<TimeProvider>(new FakeTimeProvider(FixedUtcNow));
                     services.AddScoped<IPermissionResourceHandler, CanaryPermissionResourceHandler>();
 
+                    configureServices?.Invoke(services);
                     new SecretsApiFeature().ConfigureServices(services);
                 });
                 webHost.Configure(app =>

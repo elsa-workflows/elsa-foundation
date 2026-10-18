@@ -43,9 +43,17 @@ export interface SecretStoreDescriptor {
   isReadOnly: boolean;
 }
 
+export interface SecretScopeDescriptor {
+  name: string;
+  displayName: string;
+  description?: string | null;
+  source?: string | null;
+}
+
 export interface SecretDescriptorsResponse {
   types: SecretTypeDescriptor[];
   stores: SecretStoreDescriptor[];
+  scopes?: SecretScopeDescriptor[];
 }
 
 export interface CreateSecretRequest {

@@ -1,7 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Elsa.Secrets.Core.Contracts;
+using Elsa.Secrets.Core.Models;
+using Elsa.Secrets.Services;
 using Elsa.Secrets.Tests.Support;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -109,6 +113,91 @@ public sealed class SecretsApiReadContractTests(ITestOutputHelper output)
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.NotEmpty(document.RootElement.GetProperty("types").EnumerateArray());
         Assert.NotEmpty(document.RootElement.GetProperty("stores").EnumerateArray());
+        Assert.Empty(document.RootElement.GetProperty("scopes").EnumerateArray());
+
+        using var forbidden = await host.Client.SendAsync(Request(HttpMethod.Get, "/secrets/descriptors", "write|no-tenant"));
+        Assert.Equal(HttpStatusCode.Forbidden, forbidden.StatusCode);
+    }
+
+    [Fact]
+    public async Task Descriptors_include_sorted_module_scope_suggestions_and_contributor_context()
+    {
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output, services =>
+        {
+            services.AddSingleton<ISecretScopeProvider, WorkflowScopeProvider>();
+            services.AddSingleton<ISecretScopeProvider, ConnectionsScopeProvider>();
+        });
+
+        using var response = await host.Client.SendAsync(Request(HttpMethod.Get, "/secrets/descriptors", "read|no-tenant"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var scopes = document.RootElement.GetProperty("scopes").EnumerateArray().ToArray();
+        Assert.Equal(["connections", "Workflow"], scopes.Select(scope => scope.GetProperty("name").GetString()));
+        Assert.Equal("Connections", scopes[0].GetProperty("displayName").GetString());
+        Assert.Equal(JsonValueKind.Null, scopes[0].GetProperty("source").ValueKind);
+        Assert.Equal("Workflow secrets", scopes[1].GetProperty("description").GetString());
+        Assert.Equal("Workflows", scopes[1].GetProperty("source").GetString());
+    }
+
+    [Fact]
+    public async Task Create_preserves_an_unregistered_custom_scope_when_the_catalog_is_empty()
+    {
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
+        const string scope = "My.CustomScope";
+
+        using var create = await host.Client.SendAsync(JsonRequest(
+            HttpMethod.Post,
+            "/secrets",
+            "write",
+            JsonSerializer.Serialize(new { name = "custom-scope-secret", value = "custom-scope-value", scope })));
+
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        using var document = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
+        Assert.Equal(scope, document.RootElement.GetProperty("scope").GetString());
+    }
+
+    [Fact]
+    public async Task Scope_catalog_does_not_change_runtime_matching_or_existing_custom_and_unset_scopes()
+    {
+        var repository = new InMemorySecretRepository();
+
+        await using (var contributedHost = await SecretsCanaryHost.StartMigratedAsync(output, services =>
+                     {
+                         services.AddSingleton<ISecretRepository>(repository);
+                         services.AddSingleton<ISecretScopeProvider, ConnectionsScopeProvider>();
+                     }))
+        {
+            await CreateSecretAsync(contributedHost, "contributed-scope-secret", "contributed-value", "connections");
+            await CreateSecretAsync(contributedHost, "custom-scope-secret", "custom-value", "Legacy.TaskRunner");
+            await CreateSecretAsync(contributedHost, "unset-scope-secret", "unset-value", scope: null);
+
+            var matching = await ResolveAsync(contributedHost, "contributed-scope-secret", "CONNECTIONS");
+            Assert.True(matching.Succeeded);
+            Assert.Equal("contributed-value", matching.Value);
+
+            var mismatch = await ResolveAsync(contributedHost, "contributed-scope-secret", "different-scope");
+            Assert.False(mismatch.Succeeded);
+            Assert.Equal(SecretResolutionFailureCode.ScopeMismatch, mismatch.FailureCode);
+        }
+
+        await using var providerRemovedHost = await SecretsCanaryHost.StartMigratedAsync(
+            output,
+            services => services.AddSingleton<ISecretRepository>(repository));
+
+        Assert.Empty(providerRemovedHost.Services.GetRequiredService<ISecretScopeRegistry>().List());
+
+        var contributedScopeStillResolves = await ResolveAsync(providerRemovedHost, "contributed-scope-secret", "connections");
+        Assert.True(contributedScopeStillResolves.Succeeded);
+        Assert.Equal("contributed-value", contributedScopeStillResolves.Value);
+
+        var customScopeStillResolves = await ResolveAsync(providerRemovedHost, "custom-scope-secret", "Legacy.TaskRunner");
+        Assert.True(customScopeStillResolves.Succeeded);
+        Assert.Equal("custom-value", customScopeStillResolves.Value);
+
+        var unsetScopeStillResolves = await ResolveAsync(providerRemovedHost, "unset-scope-secret", scope: null);
+        Assert.True(unsetScopeStillResolves.Succeeded);
+        Assert.Equal("unset-value", unsetScopeStillResolves.Value);
     }
 
     [Fact]
@@ -142,6 +231,34 @@ public sealed class SecretsApiReadContractTests(ITestOutputHelper output)
         Assert.Equal(HttpStatusCode.NotFound, deleted.StatusCode);
     }
 
+    private static async Task CreateSecretAsync(SecretsCanaryHost host, string name, string value, string? scope)
+    {
+        var request = new Dictionary<string, object?>
+        {
+            ["name"] = name,
+            ["value"] = value
+        };
+        if (scope is not null)
+            request["scope"] = scope;
+
+        using var response = await host.Client.SendAsync(JsonRequest(
+            HttpMethod.Post,
+            "/secrets",
+            "write",
+            JsonSerializer.Serialize(request)));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    private static async Task<ResolvedSecret> ResolveAsync(SecretsCanaryHost host, string name, string? scope)
+    {
+        await using var requestScope = host.Services.CreateAsyncScope();
+        var resolver = requestScope.ServiceProvider.GetRequiredService<ISecretValueResolver>();
+        return await resolver.ResolveAsync(
+            SecretsCanaryHost.AlphaTenant,
+            new SecretReference(name, SecretTypeNames.Text, scope));
+    }
+
     private static HttpRequestMessage Request(HttpMethod method, string path, string? identity)
     {
         var request = new HttpRequestMessage(method, path);
@@ -164,5 +281,21 @@ public sealed class SecretsApiReadContractTests(ITestOutputHelper output)
         Assert.DoesNotContain(
             response.Headers.Concat(response.Content.Headers).SelectMany(header => header.Value),
             value => value.Contains(marker, StringComparison.Ordinal));
+    }
+
+    private sealed class ConnectionsScopeProvider : ISecretScopeProvider
+    {
+        public IEnumerable<SecretScopeDescriptor> GetScopes() =>
+        [
+            new("connections", "Connections", "Connection credentials")
+        ];
+    }
+
+    private sealed class WorkflowScopeProvider : ISecretScopeProvider
+    {
+        public IEnumerable<SecretScopeDescriptor> GetScopes() =>
+        [
+            new("Workflow", "Workflow", "Workflow secrets", "Workflows")
+        ];
     }
 }
