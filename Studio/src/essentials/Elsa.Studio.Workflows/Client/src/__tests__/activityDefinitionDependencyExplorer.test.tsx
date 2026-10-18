@@ -74,9 +74,9 @@ describe("Activity Definition dependency explorer", () => {
     const rendered = renderExplorer(getJson, { initialVersionId: "version-1", initialDirection: "inbound" });
 
     await waitForText(rendered.container, "1.0.0 · Active");
+    await waitForText(rendered.container, "source-occurrence");
     expect((rendered.container.querySelector("select") as HTMLSelectElement).value).toBe("version-1");
     expect(rendered.container.querySelector<HTMLOptionElement>('option[value="version-1"]')?.title).toBe("1.0.0+build-sha");
-    await waitForText(rendered.container, "source-occurrence");
     expect(rendered.container.textContent).toContain("Used by");
     expect(dependencyRequests[0]).toContain("direction=inbound&transitive=false&include=versions%2Cdrafts");
     expect(dependencyRequests[0]).toContain("/versions/version-1/dependencies?");
@@ -116,9 +116,9 @@ describe("Activity Definition dependency explorer", () => {
     const rendered = renderExplorer(getJson, { initialVersionId: "version-51", initialDirection: "inbound" });
 
     await waitForText(rendered.container, "51.0.0 · Active");
+    await waitForText(rendered.container, "late-version-use");
     expect((rendered.container.querySelector("select") as HTMLSelectElement).value).toBe("version-51");
     expect(rendered.container.querySelector<HTMLOptionElement>('option[value="version-51"]')?.title).toBe("51.0.0+build-sha");
-    await waitForText(rendered.container, "late-version-use");
     expect(exactVersionReads).toEqual(["/design/activities/versions/version-51"]);
     expect(dependencyRequests[0]).toContain("/versions/version-51/dependencies?");
     expect(dependencyRequests[0]).toContain("direction=inbound&transitive=false&include=versions%2Cdrafts");
