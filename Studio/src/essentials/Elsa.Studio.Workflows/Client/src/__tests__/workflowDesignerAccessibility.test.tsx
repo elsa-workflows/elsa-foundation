@@ -32,6 +32,28 @@ afterEach(() => {
 });
 
 describe("workflow designer keyboard accessibility", () => {
+  it("shows behavioral hash prefixes when activity choices share a short version", () => {
+    const first = {
+      ...activity("send-email-a", "Send Email"),
+      activityDefinitionId: "send-email",
+      activityDefinitionVersion: "1.0.0+aaaabbbbcccc"
+    };
+    const second = {
+      ...activity("send-email-b", "Send Email"),
+      activityDefinitionId: "send-email",
+      activityDefinitionVersion: "1.0.0+bbbbccccdddd"
+    };
+
+    flushSync(() => root.render(<PaletteHarness activities={[first, second]} onInsert={() => {}} />));
+
+    const chips = [...container.querySelectorAll<HTMLElement>(".wf-palette-version")];
+    expect(chips.map(chip => chip.textContent)).toEqual(["v1.0.0+aaaabbb", "v1.0.0+bbbbccc"]);
+    expect(chips.map(chip => chip.title)).toEqual([
+      "Exact version 1.0.0+aaaabbbbcccc",
+      "Exact version 1.0.0+bbbbccccdddd"
+    ]);
+  });
+
   it("moves from palette search through the tree and inserts the focused activity", () => {
     const onInsert = vi.fn();
     const writeLine = activity("write-line", "Write Line");
@@ -130,16 +152,21 @@ describe("workflow designer keyboard accessibility", () => {
 });
 
 describe("activity palette version chip", () => {
-  it("hides an unambiguous version while retaining the exact version for assistive text", () => {
-    const exactVersion = "1.0.0+892535311ec55c1b9930041e93cee112b2494283";
+  it.each(["1.0.0", "1.0.0-rc.1"])("keeps the %s tooltip concise while retaining exact insertion identity", shortVersion => {
+    const exactVersion = `${shortVersion}+892535311ec55c1b9930041e93cee112b2494283`;
+    const onInsert = vi.fn();
     const writeLine = { ...activity("write-line", "Write Line"), activityDefinitionVersion: exactVersion };
 
-    flushSync(() => root.render(<PaletteHarness activities={[writeLine]} onInsert={() => {}} />));
+    flushSync(() => root.render(<PaletteHarness activities={[writeLine]} onInsert={onInsert} />));
 
     expect(container.querySelector(".wf-palette-version")).toBeNull();
     const row = container.querySelector<HTMLElement>(".wf-palette-activity")!;
-    expect(row.title).toContain(`Exact version ${exactVersion}`);
+    expect(row.title).toBe(`Write Line activity — Version ${shortVersion}`);
+    expect(row.title).not.toContain("+");
     expect(row.getAttribute("aria-label")).toContain(`Exact version ${exactVersion}`);
+    flushSync(() => row.click());
+    expect(onInsert).toHaveBeenCalledWith(writeLine);
+    expect(writeLine.activityDefinitionVersion).toBe(exactVersion);
   });
 
   it("shows compact versions when multiple selectable versions would otherwise be ambiguous", () => {
@@ -160,7 +187,7 @@ describe("activity palette version chip", () => {
     const chip = container.querySelector<HTMLElement>(".wf-palette-version")!;
     expect(chip.textContent).toBe("v1.0.0");
     expect(chip.textContent).not.toContain("+");
-    expect(chip.getAttribute("title")).toBe(`Exact version ${exactVersion}`);
+    expect(chip.getAttribute("title")).toBe("Version 1.0.0");
     expect(chip.getAttribute("aria-label")).toBe(`Exact version ${exactVersion}`);
     // The activity name must remain visible alongside the compact chip.
     expect(container.querySelector(".wf-palette-activity-text strong")?.textContent).toBe("Write Line");
