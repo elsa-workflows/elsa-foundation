@@ -29,6 +29,7 @@ afterEach(async () => {
   vi.mocked(getExecutableInputSources).mockReset();
   requestResponse.mockReset();
   getJson.mockReset();
+  context.headers = undefined;
   clearApiCapabilityCache();
 });
 
@@ -180,6 +181,45 @@ describe("HTTP test request dialog", () => {
     expect(requestResponse).not.toHaveBeenCalled();
   });
 
+  it("shows invalid header values without exposing them or sending the request", async () => {
+    const container = await renderHeaderDialog();
+    await click(container.querySelector<HTMLButtonElement>("button.wf-http-test-add-header")!);
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 name']")!, "X-Note");
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 value']")!, "secret-😀");
+    await click(container.querySelector<HTMLButtonElement>("button[type='submit']")!);
+
+    await waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent)
+      .toContain("Header 1 has an invalid name or value."));
+    expect(container.querySelector('[role="alert"]')?.textContent).not.toContain("secret-😀");
+    expect(requestResponse).not.toHaveBeenCalled();
+  });
+
+  it("does not let a custom header override a host-configured value or expose either value", async () => {
+    context.headers = { "X-Studio-Scope": "host-secret" };
+    const container = await renderHeaderDialog();
+    await click(container.querySelector<HTMLButtonElement>("button.wf-http-test-add-header")!);
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 name']")!, "x-studio-scope");
+    await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 value']")!, "caller-secret");
+    await click(container.querySelector<HTMLButtonElement>("button[type='submit']")!);
+
+    await waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent)
+      .toContain("Header 1 is configured by Studio and cannot be overridden."));
+    expect(container.querySelector('[role="alert"]')?.textContent).not.toContain("host-secret");
+    expect(container.querySelector('[role="alert"]')?.textContent).not.toContain("caller-secret");
+    expect(requestResponse).not.toHaveBeenCalled();
+  });
+
+  it("does not let the request content type override a host-configured value", async () => {
+    context.headers = { "Content-Type": "application/vnd.host+json" };
+    const container = await renderHeaderDialog();
+    await waitFor(() => expect(container.querySelector("textarea[aria-label='Request body']")).not.toBeNull());
+    await click(container.querySelector<HTMLButtonElement>("button[type='submit']")!);
+
+    await waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent)
+      .toContain("Request Content-Type is configured by Studio and cannot be overridden."));
+    expect(requestResponse).not.toHaveBeenCalled();
+  });
+
   it.each(["Authorization", "Cookie", "Proxy-Authorization"])("rejects the %s header before sending", async name => {
     const container = await renderHeaderDialog();
     await click(container.querySelector<HTMLButtonElement>("button.wf-http-test-add-header")!);
@@ -187,7 +227,7 @@ describe("HTTP test request dialog", () => {
     await changeInput(container.querySelector<HTMLInputElement>("input[aria-label='Header 1 value']")!, "caller-value");
     await click(container.querySelector<HTMLButtonElement>("button[type='submit']")!);
 
-    await waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent).toContain("Authentication headers are supplied by the authenticated API transport."));
+    await waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent).toContain("Authentication headers are managed by the browser or Studio transport."));
     expect(requestResponse).not.toHaveBeenCalled();
   });
 

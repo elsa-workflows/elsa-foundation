@@ -1,5 +1,5 @@
 import { lazy } from "react";
-import { validateHttpTestRequestHeaderNames } from "./httpTestHeaderPolicy";
+import { parseHttpTestRequestHeaders, toHttpTestRequestHeaderValues } from "./httpTestHeaderPolicy";
 import type { StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
 import { asRecord, isJsonValue, isRecord, isStringMap, readObject } from "./workflowTestStimulusEditorUtils";
 
@@ -23,7 +23,7 @@ export const httpWorkflowTestStimulusEditor: StudioTestStimulusEditorContributio
     }
     if (value.body !== undefined && value.body !== null && typeof value.body !== "string") return "body must be text or null.";
     const headers = asRecord(value.headers) ?? {};
-    return validateHttpTestRequestHeaderNames(Object.keys(headers));
+    return parseHttpTestRequestHeaders(toHttpTestRequestHeaderValues(headers)).error;
   },
   serialize: ({ draft }) => readObject(draft) ?? {},
   executeAction: async context => (await import("./workflowTestHttpAction")).sendHttpRequest(context),

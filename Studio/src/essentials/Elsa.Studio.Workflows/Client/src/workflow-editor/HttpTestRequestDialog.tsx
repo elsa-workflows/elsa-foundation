@@ -148,7 +148,7 @@ export function HttpTestRequestDialog({
     let headers: Headers;
     try {
       requestPath = resolveHttpTestEndpointPath(context.baseUrl, path, workflowHttpBasePath);
-      headers = makeHttpTestRequestHeaders(requestHeaders, carriesBody ? contentType : null);
+      headers = makeHttpTestRequestHeaders(requestHeaders, carriesBody ? contentType : null, context.headers);
     } catch (error) {
       setRequestError(error instanceof Error ? error.message : "Enter a valid path on the configured backend.");
       return;
