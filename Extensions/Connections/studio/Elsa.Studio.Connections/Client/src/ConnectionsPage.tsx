@@ -35,6 +35,12 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
     const requestContext = context;
     const wasContextLoaded = loadedContextRef.current === requestContext;
     const requestId = ++loadRequestRef.current;
+    if (!wasContextLoaded) {
+      setItems([]);
+      setDescriptors(null);
+      setSelectedName(null);
+      setStatus(null);
+    }
     setLoading(true);
     setError(null);
     try {
@@ -54,6 +60,9 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
     } catch (e) {
       if (requestId === loadRequestRef.current && currentContextRef.current === requestContext) {
         setError(e instanceof Error ? e.message : "Connections could not be loaded.");
+        setItems([]);
+        setDescriptors(null);
+        setSelectedName(null);
         loadedContextRef.current = requestContext;
         setLoadedContext(requestContext);
       }

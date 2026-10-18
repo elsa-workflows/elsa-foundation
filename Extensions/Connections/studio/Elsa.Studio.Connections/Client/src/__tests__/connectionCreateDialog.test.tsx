@@ -269,15 +269,7 @@ describe("connection credential creation", () => {
     const postJson = vi.fn(async (url: string) => url === "/secrets/picker" ? pickerResponse() : createdConnection());
     const context = endpointContext(postJson);
     (context.http as unknown as { getJson: (url: string) => Promise<unknown> }).getJson = getJson;
-    const host = document.createElement("div");
-    document.body.appendChild(host);
-    const root = createRoot(host);
-    const dialogs = { confirm: vi.fn(), prompt: vi.fn(), alert: vi.fn() } as unknown as StudioDialogApi;
-    cleanups.push(() => {
-      flushSync(() => root.unmount());
-      host.remove();
-    });
-    flushSync(() => root.render(<ConnectionsPage context={context} dialogs={dialogs} />));
+    const { container: host } = renderConnectionsPage(context);
 
     await waitFor(() => !button(host, "New connection").disabled);
     const opener = button(host, "New connection");
@@ -294,6 +286,45 @@ describe("connection credential creation", () => {
     expect(opener.disabled).toBe(false);
     expect(document.activeElement).toBe(opener);
     refresh.resolve({ items: [createdConnection()] });
+  });
+
+  it("clears endpoint A rows and descriptors when endpoint B fails, then recovers B", async () => {
+    const endpointAConnection = createdConnection({ name: "a.connection", displayName: "Endpoint A Connection" });
+    const endpointBConnection = createdConnection({ name: "b.connection", displayName: "Endpoint B Connection" });
+    let endpointBUnavailable = true;
+    const endpointA = endpointContext(vi.fn());
+    const endpointB = endpointContext(vi.fn());
+    (endpointA.http as unknown as { getJson: (url: string) => Promise<unknown> }).getJson = vi.fn(async url => {
+      if (url.startsWith("/connections?")) return { items: [endpointAConnection] };
+      if (url === "/connections/descriptors") return testDescriptors;
+      throw new Error(`Unexpected endpoint A GET: ${url}`);
+    });
+    (endpointB.http as unknown as { getJson: (url: string) => Promise<unknown> }).getJson = vi.fn(async url => {
+      if (url.startsWith("/connections?")) {
+        if (endpointBUnavailable) throw new Error("Endpoint B is unavailable.");
+        return { items: [endpointBConnection] };
+      }
+      if (url === "/connections/descriptors") return endpointBDescriptors;
+      throw new Error(`Unexpected endpoint B GET: ${url}`);
+    });
+    const { container: host, rerender } = renderConnectionsPage(endpointA);
+
+    await waitFor(() => host.textContent?.includes("Endpoint A Connection") === true);
+    expect(button(host, "New connection").disabled).toBe(false);
+    rerender(endpointB);
+    await waitFor(() => host.textContent?.includes("Endpoint B is unavailable.") === true);
+
+    expect(host.textContent).not.toContain("Endpoint A Connection");
+    expect(button(host, "New connection").disabled).toBe(true);
+
+    endpointBUnavailable = false;
+    clickButton(host, "Search");
+    await waitFor(() => host.textContent?.includes("Endpoint B Connection") === true);
+    expect(host.textContent).not.toContain("Endpoint A Connection");
+    expect(button(host, "New connection").disabled).toBe(false);
+    clickButton(host, "New connection");
+    await waitFor(() => host.querySelector('[role="dialog"]') !== null);
+    expect(control<HTMLSelectElement>(host, "Type").value).toBe("endpoint-b");
   });
 
   it("blocks an unresolved required credential and prevents cancel or duplicate submit while saving", async () => {
@@ -369,6 +400,27 @@ const testDescriptors: ConnectionDescriptorsResponse = {
     ], hasInteractiveAuthorization: false }
   ]
 };
+
+const endpointBDescriptors: ConnectionDescriptorsResponse = {
+  types: [{ name: "endpoint-b", displayName: "Endpoint B type", supportedSchemes: ["endpoint-b-scheme"], settings: [] }],
+  schemes: [{ name: "endpoint-b-scheme", displayName: "Endpoint B scheme", fields: [], hasInteractiveAuthorization: false }]
+};
+
+function renderConnectionsPage(initialContext: StudioEndpointContext) {
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  const root = createRoot(host);
+  const dialogs = { confirm: vi.fn(), prompt: vi.fn(), alert: vi.fn() } as unknown as StudioDialogApi;
+  const render = (context = initialContext) => {
+    flushSync(() => root.render(<ConnectionsPage context={context} dialogs={dialogs} />));
+  };
+  render();
+  cleanups.push(() => {
+    flushSync(() => root.unmount());
+    host.remove();
+  });
+  return { container: host, rerender: render };
+}
 
 function renderDialog(options: {
   context?: StudioEndpointContext;
