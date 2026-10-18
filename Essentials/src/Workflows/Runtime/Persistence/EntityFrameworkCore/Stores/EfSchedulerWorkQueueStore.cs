@@ -112,27 +112,42 @@ public sealed class EfSchedulerWorkQueueStore(
             scope,
             workflowExecutionId,
             cancellationToken);
-        if (lockedRows > 0)
+        if (lockedRows == 0)
         {
-            // Standalone queue stores historically accept work before an execution root exists. When one does exist,
-            // validate its tenant before honoring a workflow-scoped enqueue.
-            var root = await context.WorkflowExecutionStates.AsNoTracking().SingleAsync(
-                row => row.ScopeKeyHash == EfRuntimeOperationalStoreSupport.Hash(scope) &&
-                       row.ScopeKey == EfRuntimeOperationalStoreSupport.Encode(scope) &&
-                       row.WorkflowExecutionIdHash == EfRuntimeOperationalStoreSupport.Hash(workflowExecutionId) &&
-                       row.WorkflowExecutionId == EfRuntimeOperationalStoreSupport.Encode(workflowExecutionId),
+            // Standalone queue stores historically accept work before an execution root exists. The ownership query
+            // still matters here: a previously deleted execution can have a sticky tombstone after its root is gone.
+            return await EfExecutionLivenessStateStore.IsWorkflowExecutionDeletionTombstonedAsync(
+                context,
+                scope,
+                workflowExecutionId,
                 cancellationToken);
-            var state = EfWorkflowExecutionStateStore.ReadChecked(root, scope, workflowExecutionId);
-            accessContextAccessor.Current.EnsureTenantScope(state.TenantId);
         }
 
-        // DeleteCoreAsync takes the same root-row lock before writing the tombstone. This read is therefore ordered
-        // with deletion even for the legacy case where no execution root is present.
-        return await EfExecutionLivenessStateStore.IsWorkflowExecutionDeletionTombstonedAsync(
+        // Keep tenant validation and the sticky deletion-tombstone read in one query. DeleteCoreAsync takes the same
+        // root-row lock before writing the tombstone, so this combined read remains ordered with deletion.
+        var ownershipRows = EfExecutionLivenessStateStore.WorkflowExecutionDeletionOwnershipRows(
             context,
             scope,
-            workflowExecutionId,
-            cancellationToken);
+            workflowExecutionId);
+        var execution = await (
+            from root in context.WorkflowExecutionStates.AsNoTracking()
+            where root.ScopeKeyHash == EfRuntimeOperationalStoreSupport.Hash(scope) &&
+                  root.ScopeKey == EfRuntimeOperationalStoreSupport.Encode(scope) &&
+                  root.WorkflowExecutionIdHash == EfRuntimeOperationalStoreSupport.Hash(workflowExecutionId) &&
+                  root.WorkflowExecutionId == EfRuntimeOperationalStoreSupport.Encode(workflowExecutionId)
+            join ownership in ownershipRows
+                on new { root.ScopeKeyHash, root.ScopeKey, root.WorkflowExecutionIdHash, root.WorkflowExecutionId }
+                equals new { ownership.ScopeKeyHash, ownership.ScopeKey, ownership.WorkflowExecutionIdHash, ownership.WorkflowExecutionId }
+                into matchingOwnershipRows
+            from ownership in matchingOwnershipRows.DefaultIfEmpty()
+            select new { Root = root, Ownership = ownership })
+            .SingleAsync(cancellationToken);
+        var state = EfWorkflowExecutionStateStore.ReadChecked(execution.Root, scope, workflowExecutionId);
+        accessContextAccessor.Current.EnsureTenantScope(state.TenantId);
+        return EfExecutionLivenessStateStore.IsWorkflowExecutionDeletionTombstone(
+            execution.Ownership,
+            scope,
+            workflowExecutionId);
     }
 
     public async ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(

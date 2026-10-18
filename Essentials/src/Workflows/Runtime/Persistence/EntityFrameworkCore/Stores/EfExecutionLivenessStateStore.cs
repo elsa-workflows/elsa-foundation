@@ -553,6 +553,16 @@ public sealed class EfExecutionLivenessStateStore(
         string workflowExecutionId,
         CancellationToken cancellationToken)
     {
+        var row = await WorkflowExecutionDeletionOwnershipRows(context, scope, workflowExecutionId)
+            .SingleOrDefaultAsync(cancellationToken);
+        return IsWorkflowExecutionDeletionTombstone(row, scope, workflowExecutionId);
+    }
+
+    internal static IQueryable<ExecutionLivenessStateEntity> WorkflowExecutionDeletionOwnershipRows(
+        RuntimeDbContext context,
+        string scope,
+        string workflowExecutionId)
+    {
         var stateId = RuntimeExecutionOwnershipStateId.For(workflowExecutionId);
         var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
         var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
@@ -560,15 +570,22 @@ public sealed class EfExecutionLivenessStateStore(
         var workflowKey = EfRuntimeOperationalStoreSupport.Encode(workflowExecutionId);
         var stateIdHash = EfRuntimeOperationalStoreSupport.Hash(stateId);
         var stateIdKey = EfRuntimeOperationalStoreSupport.Encode(stateId);
-        var row = await context.ExecutionLivenessStates.AsNoTracking().SingleOrDefaultAsync(candidate =>
+        return context.ExecutionLivenessStates.AsNoTracking().Where(candidate =>
             candidate.Id == EfRuntimeOperationalStoreSupport.CompositeId(scope, workflowExecutionId, stateId) &&
             candidate.ScopeKeyHash == scopeHash && candidate.ScopeKey == scopeKey &&
             candidate.WorkflowExecutionIdHash == workflowHash && candidate.WorkflowExecutionId == workflowKey &&
-            candidate.OperationalStateIdHash == stateIdHash && candidate.OperationalStateId == stateIdKey,
-            cancellationToken);
+            candidate.OperationalStateIdHash == stateIdHash && candidate.OperationalStateId == stateIdKey);
+    }
+
+    internal static bool IsWorkflowExecutionDeletionTombstone(
+        ExecutionLivenessStateEntity? row,
+        string scope,
+        string workflowExecutionId)
+    {
         if (row is null)
             return false;
 
+        var stateId = RuntimeExecutionOwnershipStateId.For(workflowExecutionId);
         var state = Read(row, scope, workflowExecutionId, stateId);
         if (!state.Metadata.TryGetValue(RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone, out var value))
             return false;
