@@ -23,9 +23,15 @@ public interface IPublicationRecordStore
     ValueTask<IReadOnlyCollection<PublicationRecord>> ListBySlotAsync(string slotId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Bounded batch of publication records for the supplied definition ids. The default is empty:
-    /// providers without a definition-keyed index must not scan the journal. The in-memory store
-    /// overrides this; the EF ledger does not, because it has no definition-id hash.
+    /// Whether <see cref="ListByDefinitionIdsAsync"/> can completely resolve journal records for a bounded set
+    /// of definition ids. A false value means an empty result cannot establish that no retired record exists.
+    /// </summary>
+    bool SupportsDefinitionIdLookup => false;
+
+    /// <summary>
+    /// Bounded, complete batch of publication records for the supplied definition ids when
+    /// <see cref="SupportsDefinitionIdLookup"/> is true. The default is empty: providers without a
+    /// definition-keyed index must not scan the journal, and callers must treat absent results as unknown.
     /// </summary>
     ValueTask<IReadOnlyCollection<PublicationRecord>> ListByDefinitionIdsAsync(
         IReadOnlyCollection<string> workflowDefinitionIds,

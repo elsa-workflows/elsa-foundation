@@ -118,8 +118,35 @@ public sealed class WorkflowDefinitionPublicationStateLookupTests
 
         var states = await fixture.Lookup.ListByDefinitionIdsAsync(["legacy"]);
 
+        Assert.True(fixture.Publications.SupportsDefinitionIdLookup);
         Assert.Equal(WorkflowDefinitionPublicationState.Retired, states["legacy"].State);
         Assert.Null(states["legacy"].PublishedVersionId);
+    }
+
+    [Fact]
+    public async Task No_definition_id_journal_lookup_leaves_no_slot_states_unavailable()
+    {
+        var fixture = await Fixture.CreateAsync();
+        await fixture.SaveRetiredAsync("legacy");
+        await fixture.ActivateAsync("live");
+        var publicationStore = new CountingPublicationRecordStore(fixture.Publications, supportsDefinitionIdLookup: false);
+        var lookup = new WorkflowDefinitionPublicationStateLookup(fixture.Authority, publicationStore, fixture.Policies);
+
+        var states = await lookup.ListByDefinitionIdsAsync(["legacy", "never-published", "live"]);
+
+        Assert.False(publicationStore.SupportsDefinitionIdLookup);
+        Assert.Equal(0, publicationStore.DefinitionLookupCalls);
+        Assert.DoesNotContain("legacy", states.Keys);
+        Assert.DoesNotContain("never-published", states.Keys);
+        Assert.Equal(WorkflowDefinitionPublicationState.Published, states["live"].State);
+    }
+
+    [Fact]
+    public void Legacy_record_stores_default_to_no_definition_id_lookup_support()
+    {
+        IPublicationRecordStore store = new LegacyPublicationRecordStore();
+
+        Assert.False(store.SupportsDefinitionIdLookup);
     }
 
     [Fact]
@@ -328,10 +355,14 @@ public sealed class WorkflowDefinitionPublicationStateLookupTests
                 slotName);
     }
 
-    private sealed class CountingPublicationRecordStore(IPublicationRecordStore inner) : IPublicationRecordStore
+    private sealed class CountingPublicationRecordStore(
+        IPublicationRecordStore inner,
+        bool? supportsDefinitionIdLookup = null) : IPublicationRecordStore
     {
         public int IdentityBatchCalls { get; private set; }
         public List<int> IdentityBatchSizes { get; } = [];
+        public int DefinitionLookupCalls { get; private set; }
+        public bool SupportsDefinitionIdLookup => supportsDefinitionIdLookup ?? inner.SupportsDefinitionIdLookup;
 
         public ValueTask SaveAsync(PublicationRecord publication, CancellationToken cancellationToken = default) =>
             inner.SaveAsync(publication, cancellationToken);
@@ -353,14 +384,35 @@ public sealed class WorkflowDefinitionPublicationStateLookupTests
 
         public ValueTask<IReadOnlyCollection<PublicationRecord>> ListByDefinitionIdsAsync(
             IReadOnlyCollection<string> workflowDefinitionIds,
-            CancellationToken cancellationToken = default) =>
-            inner.ListByDefinitionIdsAsync(workflowDefinitionIds, cancellationToken);
+            CancellationToken cancellationToken = default)
+        {
+            DefinitionLookupCalls++;
+            return inner.ListByDefinitionIdsAsync(workflowDefinitionIds, cancellationToken);
+        }
 
         public ValueTask<bool> TryTransitionAsync(
             PublicationRecord publication,
             PublicationStatus expectedStatus,
             CancellationToken cancellationToken = default) =>
             inner.TryTransitionAsync(publication, expectedStatus, cancellationToken);
+    }
+
+    private sealed class LegacyPublicationRecordStore : IPublicationRecordStore
+    {
+        public ValueTask SaveAsync(PublicationRecord publication, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
+
+        public ValueTask<PublicationRecord?> FindAsync(string publicationId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<PublicationRecord?>(null);
+
+        public ValueTask<IReadOnlyCollection<PublicationRecord>> ListBySlotAsync(string slotId, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult<IReadOnlyCollection<PublicationRecord>>([]);
+
+        public ValueTask<bool> TryTransitionAsync(
+            PublicationRecord publication,
+            PublicationStatus expectedStatus,
+            CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(false);
     }
 
     private sealed class CountingPublicationPolicyStore(IPublicationPolicyStore inner) : IPublicationPolicyStore

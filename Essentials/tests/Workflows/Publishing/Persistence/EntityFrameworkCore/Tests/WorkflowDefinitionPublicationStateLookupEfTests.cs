@@ -1,4 +1,7 @@
 using Elsa.Workflows.Design.Persistence.Core.Contracts;
+using Elsa.Workflows.Publishing.Core.Models;
+using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
+using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
@@ -36,6 +39,31 @@ public sealed class WorkflowDefinitionPublicationStateLookupEfTests
         var states = await fixture.Lookup.ListByDefinitionIdsAsync(["orders"]);
 
         Assert.Equal(WorkflowDefinitionPublicationState.Published, states["orders"].State);
+    }
+
+    [Fact]
+    public async Task SQLite_retired_record_without_a_slot_is_unavailable_when_the_ledger_has_no_definition_index()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        await using var publicationDatabase = await SqliteTestDatabase.CreateAsync<PublishingSnapshotReviewSqliteDbContext>(
+            options => new PublishingSnapshotReviewSqliteDbContext(options));
+        await using var publicationContext = publicationDatabase.Open<PublishingSnapshotReviewSqliteDbContext>(
+            options => new PublishingSnapshotReviewSqliteDbContext(options));
+        var publicationStore = new EfPublicationRecordStore(publicationContext, TestAccess.Scoped("tenant-a"));
+        var retired = EfPublicationRecordStoreTests.Record("retired-without-slot", "retired-slot") with
+        {
+            WorkflowDefinitionId = "orders",
+            Status = PublicationStatus.Retired,
+            RetiredAt = Now
+        };
+        await publicationStore.SaveAsync(retired);
+
+        var states = await new WorkflowDefinitionPublicationStateLookup(fixture.Authority, publicationStore)
+            .ListByDefinitionIdsAsync(["orders"]);
+
+        Assert.False(publicationStore.SupportsDefinitionIdLookup);
+        Assert.Equal(retired, await publicationStore.FindAsync(retired.PublicationId));
+        Assert.DoesNotContain("orders", states.Keys);
     }
 
     private sealed class Fixture : IAsyncDisposable

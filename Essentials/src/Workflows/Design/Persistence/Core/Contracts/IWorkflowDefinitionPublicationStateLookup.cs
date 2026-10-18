@@ -8,9 +8,10 @@ namespace Elsa.Workflows.Design.Persistence.Core.Contracts;
 public interface IWorkflowDefinitionPublicationStateLookup
 {
     /// <summary>
-    /// Resolves publication state and the active publication's immutable source version id per
-    /// supplied definition id. Every id is present in the result. A source version is absent when
-    /// no publication is active or the active publication record is unavailable.
+    /// Resolves publication state and the active publication's immutable source version id for
+    /// supplied definition ids when the available stores provide enough evidence. An id omitted
+    /// from the result has an unknown publication state. A source version is absent when no
+    /// publication is active or the active publication record is unavailable.
     /// </summary>
     Task<IReadOnlyDictionary<string, WorkflowDefinitionPublicationSummary>> ListByDefinitionIdsAsync(
         IReadOnlyCollection<string> workflowDefinitionIds,

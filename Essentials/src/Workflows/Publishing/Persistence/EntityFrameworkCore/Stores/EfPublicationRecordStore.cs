@@ -21,6 +21,8 @@ public sealed class EfPublicationRecordStore(
 {
     private const int PublicationIdBatchSize = 200;
 
+    public bool SupportsDefinitionIdLookup => false;
+
     public async ValueTask SaveAsync(PublicationRecord publication, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(publication);

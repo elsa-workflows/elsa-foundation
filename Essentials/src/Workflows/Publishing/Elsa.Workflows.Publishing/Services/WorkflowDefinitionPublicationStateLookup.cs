@@ -13,8 +13,8 @@ namespace Elsa.Workflows.Publishing.Services;
 /// <remarks>
 /// Live and empty slots are the authority for Published and Retracted. The active version is taken
 /// from the configured default slot only when its policy is available through a complete batch read.
-/// Retired is journal-only, and only when the record store can answer by definition id; the EF
-/// ledger's default is empty because it has no definition-keyed index.
+/// Retired is journal-only, and only when the record store can answer by definition id. Providers
+/// without that capability leave no-slot definitions unresolved rather than guessing Draft.
 /// </remarks>
 public sealed class WorkflowDefinitionPublicationStateLookup(
     IWorkflowActivationAuthority activationAuthority,
@@ -92,7 +92,7 @@ public sealed class WorkflowDefinitionPublicationStateLookup(
             result[id] = new(WorkflowDefinitionPublicationState.Published, selected?.WorkflowDefinitionVersionId);
         }
 
-        if (unresolved.Count == 0)
+        if (unresolved.Count == 0 || !publicationStore.SupportsDefinitionIdLookup)
             return result;
 
         var records = await publicationStore.ListByDefinitionIdsAsync(unresolved, cancellationToken);

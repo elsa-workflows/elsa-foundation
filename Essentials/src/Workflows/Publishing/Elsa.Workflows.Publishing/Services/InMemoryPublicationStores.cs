@@ -8,6 +8,8 @@ public sealed class InMemoryPublicationRecordStore : IPublicationRecordStore
     private readonly Lock _gate = new();
     private readonly Dictionary<string, PublicationRecord> _records = new(StringComparer.Ordinal);
 
+    public bool SupportsDefinitionIdLookup => true;
+
     public ValueTask SaveAsync(PublicationRecord publication, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(publication);

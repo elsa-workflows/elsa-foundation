@@ -58,6 +58,14 @@ public sealed class EfPublicationRecordStoreTests : IAsyncLifetime
     }
 
     [Fact]
+    public void Ef_store_does_not_claim_definition_id_journal_lookup_support()
+    {
+        using var context = Open();
+
+        Assert.False(Store(context, "tenant-a").SupportsDefinitionIdLookup);
+    }
+
+    [Fact]
     public async Task A_transition_is_a_compare_and_swap_on_the_observed_status_and_never_changes_identity()
     {
         var candidate = Record("publication-cas", "slot-1");
