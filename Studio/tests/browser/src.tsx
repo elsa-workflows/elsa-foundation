@@ -1674,6 +1674,11 @@ if (activityIconsFixture && searchParams.get("host-override") === "1") {
 const root = createRoot(document.getElementById("root")!);
 
 async function renderRequestedFixture() {
+  if (searchParams.get("mode") === "connections") {
+    const { ConnectionsFixture } = await import("./connectionsFixture");
+    root.render(<ConnectionsFixture />);
+    return;
+  }
   if (searchParams.get("mode") === "incident-diagnostics") {
     const { IncidentDiagnosticsFixture } = await import("./incidentDiagnosticsFixture");
     root.render(<IncidentDiagnosticsFixture />);
