@@ -67,6 +67,8 @@ for (const theme of ["light", "dark"]) {
       await expect(total.locator(".wf-runtime-input-value")).toHaveText("42");
       await expect(total.locator("header strong")).toHaveCSS("text-transform", "none");
       await expect(total.locator("header span small")).toHaveCSS("text-transform", "none");
+      await expect(total.locator("header")).toHaveCSS("border-bottom-width", "0px");
+      await expect(total.locator("header")).toHaveCSS("padding-bottom", "0px");
       await expect(outputs.locator(".wf-runtime-evidence-heading .wf-runtime-capture-mode")).toHaveText("Diagnostic Snapshot");
       await expect(outputs.locator(".wf-runtime-capture-mode")).toHaveCount(1);
 
