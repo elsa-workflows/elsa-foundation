@@ -103,7 +103,12 @@ ID, the child's processed marker and the parent's execution status establish thi
 a separate pending store. The whole batch waits, because a bubbling ancestor may still decide an
 earlier descendant incident. Once the evaluation commits or the parent is no longer `Running`,
 ordinary incident policy resumes for any unabsorbed incidents. Poisoned work remains visible for
-intervention; this guard does not acknowledge or retry poison records.
+intervention; this guard does not acknowledge or retry poison records. The hold also survives
+exhausted enqueue retries (`FailedFinal`): the original incident stays blocking until a parent
+decision commits or the parent ceases to be eligible. Automatic recovery is then exhausted; the
+retained failed outbox row and event 68103 are diagnostic evidence, not a generic redrive API.
+The [existing final-delivery limitation](runtime-durable-resumption.md#when-the-sweep-takes-a-live-drains-continuation)
+still applies.
 
 The executor resolves the incident strategy pinned on the executable (`WorkflowExecutable.IncidentStrategy`,
 fixed at publish, not read from live configuration), asks it for an action, and applies the whole batch

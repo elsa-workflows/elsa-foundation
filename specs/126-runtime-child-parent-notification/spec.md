@@ -61,11 +61,14 @@ discipline the completion path already uses.
   load + `Running` guard, activation claim (`ClaimStructuralCallbackAsync`), marker-gated
   projections — live children for `IRuntimeLiveChildActivityConsumer` (spec 119), scoped variables
   for `IRuntimeScopedVariableReader` (spec 123).
-- **Rejected shapes** (recorded for the record): overloading `CompleteActivity` with a new
+- **Original alternatives for ordinary notifications**: overloading `CompleteActivity` with a new
   `SchedulerCompletionKind` touches the load-bearing, wire-serialized
   `RuntimeCompleteActivityCommandPayload` invariants and risks the two `CompleteActivity` handlers'
   `CanHandle` predicates disagreeing; `DeliverSignal` (kind 9) exists but has zero
-  payload/handler/test machinery — as much work as a new kind with less clarity.
+  payload/handler/test machinery — as much work as a new kind with less clarity. Ordinary
+  notifications keep the separate route chosen here. D6 deliberately revisits the completion-kind
+  choice for an indivisible fault-plus-notifications outcome, with coordinated payload, routing,
+  pipeline, fusion and poison discriminators; the original rejection is not a constraint on D6.
 
 ## Design decisions
 
@@ -214,6 +217,12 @@ the parent evaluation commits its processed marker or the parent is no longer el
 the event (the existing handler requires `Running`). Missing/corrupt parentage follows the normal
 validation/incident path. A poisoned item retains its visible intervention incident. No new store
 or mutable pending flag is introduced; existing durable state determines whether evaluation is pending.
+The hold also survives exhausted enqueue retries: a `FailedFinal` outbox row does not count as a
+committed parent decision. The original child incident stays blocking and the workflow stays
+`Running`; no notifications are silently discarded to make it terminal. This is an intervention
+boundary, not automatic recovery. The existing enqueue-delivery limitation remains: the failed
+row is retained and logged as event 68103, but has no dedicated failure incident or generic redrive
+API. See [durable resumption](../../docs/runtime-durable-resumption.md#when-the-sweep-takes-a-live-drains-continuation).
 
 **Rollout and rollback:** deploy the readers to every host that can drain the execution provider
 before admitting producers of v1 outcomes; stop admission/drain as necessary during the upgrade.

@@ -2,9 +2,11 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Runtime.Core.Abstractions;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -30,6 +32,7 @@ internal static class CombinedChildOutcomeEfFixture
     public const string FirstNotificationCode = "test.signal.first";
     public const string SecondNotificationCode = "test.signal.second";
     public const string Secret = "private-outcome-detail";
+    public const string SecretReference = "combined-outcome";
     public const string SecretMarker = "[secret:combined-outcome]";
     public const string FaultCode = "test.intentional-composite-fault";
     public const string ChildSlotName = "CombinedOutcome.Children";
@@ -78,7 +81,18 @@ internal static class CombinedChildOutcomeEfFixture
             activityTypeVersion: "1.0.0",
             descriptorType: "test/structural",
             descriptorPayload: JsonSerializer.SerializeToElement(new { type = "structural" }),
-            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            inputBindings: activityType == typeof(FaultingNotifyingCompositeActivity)
+                ? new Dictionary<string, RuntimeInputBinding>
+                {
+                    [nameof(FaultingNotifyingCompositeActivity.Token)] = new(
+                        nameof(FaultingNotifyingCompositeActivity.Token),
+                        new ValueTypeDescriptor("String"),
+                        SecretBindingTestSupport.SecretPolicy,
+                        RuntimeInputBindingSource.SecretRead,
+                        conversionPlan: ValueConversionPlan.Identity(new ValueTypeDescriptor("String"), ValueRepresentation.TextValue),
+                        secret: new RuntimeSecretReference(SecretReference, "text"))
+                }
+                : new Dictionary<string, RuntimeInputBinding>(),
             metadata: new Dictionary<string, string>(),
             childSlots: [new ExecutableChildSlot(ChildSlotName, children)]);
 
@@ -212,10 +226,13 @@ public sealed class CombinedOutcomeParentActivity(CombinedOutcomeObservation obs
         ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
 }
 
-public sealed class FaultingNotifyingCompositeActivity(IRuntimeSecretMask secretMask) : StructuralActivity,
+public sealed class FaultingNotifyingCompositeActivity : StructuralActivity,
     IRuntimeStructuralActivity,
     IRuntimeActivityChildFaultHandler
 {
+    [ActivityInput]
+    public string Token { get; set; } = null!;
+
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
     {
         foreach (var child in context.ExecutableNode.ChildSlots.Single().Activities)
@@ -226,8 +243,6 @@ public sealed class FaultingNotifyingCompositeActivity(IRuntimeSecretMask secret
     public ValueTask<RuntimeStructuralContinuation> OnChildFaultedAsync(ActivityChildFaultedContext context)
     {
         var runtimeContext = (IRuntimeActivityExecutionContext)context.ParentContext;
-        var executionId = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId;
-        secretMask.Register(executionId, "combined-outcome", CombinedChildOutcomeEfFixture.Secret);
         runtimeContext.RequestParentNotification(
             CombinedChildOutcomeEfFixture.FirstNotificationCode,
             JsonSerializer.SerializeToElement(new { ordinal = 1, value = "first" }));
@@ -236,7 +251,7 @@ public sealed class FaultingNotifyingCompositeActivity(IRuntimeSecretMask secret
             JsonSerializer.SerializeToElement(new { ordinal = 2, value = "second" }));
         return ValueTask.FromResult(RuntimeStructuralContinuation.Faulted(new ActivityFault(
             CombinedChildOutcomeEfFixture.FaultCode,
-            $"refused {CombinedChildOutcomeEfFixture.Secret}")));
+            $"refused {Token}")));
     }
 }
 

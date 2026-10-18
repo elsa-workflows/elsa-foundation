@@ -78,6 +78,53 @@ public sealed class ParentOutcomeExecutionTests
     }
 
     [Fact]
+    public async Task CombinedOutcomeCallback_CanBubbleItsFaultAndOrderedNotificationsToGrandparent()
+    {
+        var recorder = new ParentOutcomeRecorder();
+        await using var harness = NewHarness(recorder, "actexec-grandparent", "actexec-parent", "actexec-child", "actexec-leaf");
+
+        var run = await harness.RunAsync(NewBubblingGraph());
+
+        run.AssertWorkflowCompleted();
+        run.AssertCompleted("node-grandparent");
+        Assert.Equal(ActivityExecutionStatus.Faulted, run.State("node-parent").Status);
+        Assert.Equal("test.parent-outcome.bubbled", run.State("node-parent").Fault!.Code);
+        Assert.Equal(ActivityExecutionStatus.Faulted, run.State("node-child").Status);
+        Assert.Equal("test.parent-outcome.child", run.State("node-child").Fault!.Code);
+
+        Assert.Equal(2, recorder.Outcomes.Count);
+        var innerOutcome = recorder.Outcomes[0];
+        Assert.Equal("actexec-child", innerOutcome.FaultedChildActivityExecutionId);
+        Assert.Equal("node-child", innerOutcome.FaultedChildExecutableNodeId);
+        Assert.Equal("test.parent-outcome.child", innerOutcome.Fault.Code);
+        Assert.Equal(["first", "second"], innerOutcome.Notifications.Select(notification => notification.Code));
+
+        var bubbledOutcome = recorder.Outcomes[1];
+        Assert.Equal("actexec-parent", bubbledOutcome.FaultedChildActivityExecutionId);
+        Assert.Equal("node-parent", bubbledOutcome.FaultedChildExecutableNodeId);
+        Assert.Equal("test.parent-outcome.bubbled", bubbledOutcome.Fault.Code);
+        Assert.NotEqual(innerOutcome.IncidentId, bubbledOutcome.IncidentId);
+        Assert.Equal(["bubble-first", "bubble-second"], bubbledOutcome.Notifications.Select(notification => notification.Code));
+        Assert.All(bubbledOutcome.Notifications, notification =>
+        {
+            Assert.Equal("actexec-parent", notification.NotifyingChildActivityExecutionId);
+            Assert.Equal("node-parent", notification.NotifyingChildExecutableNodeId);
+        });
+        Assert.Equal(0, recorder.LegacyFaultCalls);
+        Assert.Equal(0, recorder.LegacyNotificationCalls);
+
+        var incidents = await harness.Services.GetRequiredService<IIncidentStateStore>()
+            .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+        var originalIncident = Assert.Single(incidents, incident => incident.IncidentId == innerOutcome.IncidentId);
+        Assert.Equal("actexec-child", originalIncident.ActivityExecutionId);
+        Assert.Equal(IncidentStatus.Suppressed, originalIncident.Status);
+        var bubbledIncident = Assert.Single(incidents, incident => incident.IncidentId == bubbledOutcome.IncidentId);
+        Assert.Equal("actexec-parent", bubbledIncident.ActivityExecutionId);
+        Assert.Equal(IncidentStatus.Resolved, bubbledIncident.Status);
+        Assert.Equal("actexec-grandparent", bubbledIncident.Metadata[RuntimeMetadataKeys.FaultAbsorbedBy]);
+    }
+
+    [Fact]
     public async Task CombinedOutcome_DeferCanAbsorbAndScheduleTheNextChild()
     {
         var recorder = new ParentOutcomeRecorder { OutcomeBehavior = OutcomeBehavior.DeferAndScheduleFollowup };
@@ -258,10 +305,12 @@ public sealed class ParentOutcomeExecutionTests
         CancelWithAbsorption
     }
 
-    private static WorkflowExecutionHarness NewHarness(ParentOutcomeRecorder recorder) =>
+    private static WorkflowExecutionHarness NewHarness(ParentOutcomeRecorder recorder, params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
             .ConfigureServices(services => services.AddSingleton(recorder))
-            .Build("actexec-parent", "actexec-child", "actexec-leaf", "actexec-followup");
+            .Build(activityExecutionIds.Length == 0
+                ? new[] { "actexec-parent", "actexec-child", "actexec-leaf", "actexec-followup" }
+                : activityExecutionIds);
 
     private static WorkflowExecutable NewGraph(Type parentType, bool includeFollowup = false)
     {
@@ -278,6 +327,12 @@ public sealed class ParentOutcomeExecutionTests
         return StructuralExecutionTestSupport.NewExecutable(
             StructuralExecutionTestSupport.NewStructuralNode("node-parent", parentType, children.ToArray()));
     }
+
+    private static WorkflowExecutable NewBubblingGraph() => StructuralExecutionTestSupport.NewExecutable(
+        StructuralExecutionTestSupport.NewStructuralNode("node-grandparent", typeof(BubblingOutcomeParentActivity),
+            StructuralExecutionTestSupport.NewStructuralNode("node-parent", typeof(BubblingOutcomeParentActivity),
+                StructuralExecutionTestSupport.NewStructuralNode("node-child", typeof(FaultingNotifyingChildActivity),
+                    WorkflowExecutionHarness.NewProbeNode("node-leaf")))));
 
     private sealed class FaultingNotifyingChildActivity(ParentOutcomeRecorder recorder) : StructuralActivity, IRuntimeStructuralActivity, IDisposable
     {
@@ -356,6 +411,42 @@ public sealed class ParentOutcomeExecutionTests
                 OutcomeBehavior.CancelWithAbsorption => RuntimeStructuralContinuation.Cancel("cancel cannot absorb"),
                 _ => RuntimeStructuralContinuation.Complete()
             });
+        }
+    }
+
+    private sealed class BubblingOutcomeParentActivity(ParentOutcomeRecorder recorder) : ChildParentActivityBase,
+        IRuntimeActivityChildFaultHandler,
+        IRuntimeActivityChildNotificationHandler,
+        IRuntimeActivityChildOutcomeHandler
+    {
+        public ValueTask<RuntimeStructuralContinuation> OnChildFaultedAsync(ActivityChildFaultedContext context)
+        {
+            recorder.LegacyFaultCalls++;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+        }
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildNotifiedAsync(
+            IRuntimeActivityExecutionContext context,
+            ActivityChildNotifiedContext notification)
+        {
+            recorder.LegacyNotificationCalls++;
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+        }
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildOutcomeAsync(ActivityChildOutcomeContext context)
+        {
+            recorder.Outcomes.Add(context);
+            var runtimeContext = (IRuntimeActivityExecutionContext)context.ParentContext;
+            if (context.FaultedChildExecutableNodeId == "node-child")
+            {
+                runtimeContext.RequestParentNotification("bubble-first");
+                runtimeContext.RequestParentNotification("bubble-second");
+                return ValueTask.FromResult(RuntimeStructuralContinuation.Faulted(
+                    new ActivityFault("test.parent-outcome.bubbled", "parent bubbled the child outcome")));
+            }
+
+            runtimeContext.RequestChildFaultAbsorption(context.IncidentId, "grandparent absorbed the bubbled child outcome");
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
     }
 

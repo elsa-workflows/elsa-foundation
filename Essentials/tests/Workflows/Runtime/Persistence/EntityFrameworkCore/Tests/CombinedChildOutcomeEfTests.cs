@@ -37,7 +37,7 @@ public sealed class CombinedChildOutcomeEfTests : IDisposable
         RuntimePostCommitOutboxItem failedOutcome;
         RuntimeSchedulerWorkItem parentOutcomeWorkItem;
 
-        await using (var first = await StartGenerationAsync(failFirstCombinedOutcome: true))
+        await using (var first = await StartGenerationAsync(CombinedChildOutcomeEfFixture.ActivityExecutionIds[..4], failFirstCombinedOutcome: true))
         {
             var run = await first.RunAsync(
                 CombinedChildOutcomeEfFixture.CreateExecutable(),
@@ -67,19 +67,20 @@ public sealed class CombinedChildOutcomeEfTests : IDisposable
             Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, failedOutcome.Status);
             Assert.Equal(1, failedOutcome.DeliveryAttemptCount);
             parentOutcomeWorkItem = ReadParentOutcomeWorkItem(failedOutcome);
-            var payload = Assert.IsType<RuntimeCompleteActivityCommandPayload>(parentOutcomeWorkItem.Payload.Deserialize<RuntimeCompleteActivityCommandPayload>());
+            var payload = ReadCompletionPayload(parentOutcomeWorkItem);
+            var outcome = Assert.IsType<RuntimeParentOutcome>(payload.ParentOutcome);
             Assert.Equal(SchedulerCompletionKind.ParentOutcomeEvaluation, payload.CompletionKind);
             Assert.Equal(CombinedChildOutcomeEfFixture.ParentNodeId, payload.ExecutableNodeId);
             Assert.Equal(CombinedChildOutcomeEfFixture.ParentActivityExecutionId, payload.ActivityExecutionId);
             Assert.Equal(CombinedChildOutcomeEfFixture.CompositeActivityExecutionId, payload.CompletedChildActivityExecutionId);
-            Assert.Equal(pendingOutcomeIncident.IncidentId, payload.ParentOutcome?.IncidentId);
+            Assert.Equal(pendingOutcomeIncident.IncidentId, outcome.IncidentId);
             Assert.Equal(parentOutcomeWorkItem.WorkItemId,
                 pendingOutcomeIncident.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ParentOutcomeWorkItemId));
-            Assert.Equal(CombinedChildOutcomeEfFixture.FaultCode, payload.ParentOutcome?.Fault.Code);
-            Assert.Equal($"refused {CombinedChildOutcomeEfFixture.SecretMarker}", payload.ParentOutcome?.Fault.Message);
+            Assert.Equal(CombinedChildOutcomeEfFixture.FaultCode, outcome.Fault.Code);
+            Assert.Equal($"refused {CombinedChildOutcomeEfFixture.SecretMarker}", outcome.Fault.Message);
             Assert.Equal(
                 [CombinedChildOutcomeEfFixture.FirstNotificationCode, CombinedChildOutcomeEfFixture.SecondNotificationCode],
-                payload.ParentOutcome?.Notifications.Select(notification => notification.Code).ToArray());
+                outcome.Notifications.Select(notification => notification.Code).ToArray());
 
             var firstOutcomeDispatch = Assert.Single(
                 _outboxProbe.Attempts,
@@ -91,7 +92,7 @@ public sealed class CombinedChildOutcomeEfTests : IDisposable
         // A new provider reloads the failed durable row and enqueues its persisted intent directly. A real resumption
         // sweep re-drives it under normal execution ownership. The fixed clock keeps the source row before its retry time,
         // so the callback checkpoint can commit while the original outbox delivery remains unacknowledged.
-        await using (var second = await StartGenerationAsync())
+        await using (var second = await StartGenerationAsync([CombinedChildOutcomeEfFixture.AfterActivityExecutionId]))
         {
             var persistedBeforeReplay = await FindOutboxItemAsync(second, failedOutcome.OutboxItemId);
             Assert.Equal(RuntimePostCommitOutboxStatus.FailedRetryable, persistedBeforeReplay?.Status);
@@ -115,21 +116,22 @@ public sealed class CombinedChildOutcomeEfTests : IDisposable
             Assert.Null(parentOutcome.ChildIterationId);
             Assert.Equal(CombinedChildOutcomeEfFixture.FaultCode, parentOutcome.FaultCode);
             Assert.Equal($"refused {CombinedChildOutcomeEfFixture.SecretMarker}", parentOutcome.FaultMessage);
-            Assert.Equal(failedOutcome.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>()!
-                .Payload.Deserialize<RuntimeCompleteActivityCommandPayload>()!.ParentOutcome!.IncidentId, parentOutcome.IncidentId);
+            Assert.Equal(ReadCompletionPayload(parentOutcomeWorkItem).ParentOutcome!.IncidentId, parentOutcome.IncidentId);
             Assert.Equal(
                 [CombinedChildOutcomeEfFixture.FirstNotificationCode, CombinedChildOutcomeEfFixture.SecondNotificationCode],
                 parentOutcome.Notifications.Select(notification => notification.Code).ToArray());
             Assert.Equal(
                 ["{\"ordinal\":1,\"value\":\"first\"}", "{\"ordinal\":2,\"value\":\"second\"}"],
-                parentOutcome.Notifications.Select(notification => notification.Payload).ToArray());
+                parentOutcome.Notifications.Select(notification => notification.Payload));
 
             var afterParentCommit = await second.ReadRunAsync(CombinedChildOutcomeEfFixture.WorkflowExecutionId);
+            Assert.Equal(ActivityExecutionStatus.Running, afterParentCommit.State(CombinedChildOutcomeEfFixture.ParentNodeId).Status);
             var committedFaultedChild = afterParentCommit.State(CombinedChildOutcomeEfFixture.CompositeNodeId);
             Assert.Equal(ActivityExecutionStatus.Faulted, committedFaultedChild.Status);
             Assert.Equal(parentOutcomeWorkItem.WorkItemId,
                 committedFaultedChild.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId));
             Assert.Equal(ActivityExecutionStatus.Cancelled, afterParentCommit.State(CombinedChildOutcomeEfFixture.WaitingNodeId).Status);
+            Assert.Equal(ActivityExecutionStatus.Suspended, afterParentCommit.State(CombinedChildOutcomeEfFixture.AfterNodeId).Status);
             var afterBookmark = Assert.Single(await BookmarksAsync(second));
             Assert.Equal(CombinedChildOutcomeEfFixture.AfterActivityExecutionId, afterBookmark.ActivityExecutionId);
             var absorbedIncident = Assert.Single(
@@ -140,16 +142,16 @@ public sealed class CombinedChildOutcomeEfTests : IDisposable
             Assert.Equal(IncidentResolutionSystemSources.StructuralFaultAbsorption, absorbedIncident.ResolutionOutcome?.SystemSource);
             Assert.Equal("ef-combined-outcome-accepted",
                 absorbedIncident.Metadata.GetValueOrDefault(RuntimeMetadataKeys.FaultAbsorptionReason));
-            Assert.Equal(ActivityExecutionStatus.Suspended, afterParentCommit.State(CombinedChildOutcomeEfFixture.AfterNodeId).Status);
         }
 
         _clock.Advance(RuntimeSchedulerPostCommitIntentDispatcher.RetryPolicy.Delay!.Value);
         var claimBarrier = new CombinedOutcomeRetryClaimBarrier();
-        await using (var third = await StartGenerationAsync(claimBarrier: claimBarrier))
+        await using (var third = await StartGenerationAsync([], claimBarrier: claimBarrier))
         {
             // Two fresh scopes race the same failed source row. A barrier at ClaimAsync makes both durable claims
             // contend, while EF's claim transition grants the combined row to only one delivery pass.
             var concurrentSweeps = await Task.WhenAll(third.SweepAsync(), third.SweepAsync());
+            Assert.Single(_observation.Outcomes);
             Assert.Equal(2, claimBarrier.Arrivals);
             Assert.Equal(1, concurrentSweeps.Count(result => result.OutboxAttemptedCount > 0));
             Assert.Equal(1, concurrentSweeps.Sum(result => result.OutboxDeliveredCount));
@@ -161,7 +163,6 @@ public sealed class CombinedChildOutcomeEfTests : IDisposable
                 Assert.Empty(await scope.ServiceProvider.GetRequiredService<IWorkflowSchedulerWorkQueue>()
                     .ListAllAsync(new RuntimeSchedulerWorkQuery(CombinedChildOutcomeEfFixture.WorkflowExecutionId)));
 
-            Assert.Single(_observation.Outcomes);
             var replayedRun = await third.ReadRunAsync(CombinedChildOutcomeEfFixture.WorkflowExecutionId);
             Assert.Equal(WorkflowExecutionStatus.Running, replayedRun.WorkflowState?.Status);
             Assert.Equal(ActivityExecutionStatus.Faulted, replayedRun.State(CombinedChildOutcomeEfFixture.CompositeNodeId).Status);
@@ -174,10 +175,10 @@ public sealed class CombinedChildOutcomeEfTests : IDisposable
             Assert.Equal(2, retriedOutcome?.DeliveryAttemptCount);
             var retriedWorkItem = ReadParentOutcomeWorkItem(retriedOutcome!);
             Assert.Equal(parentOutcomeWorkItem.WorkItemId, retriedWorkItem.WorkItemId);
-            var retriedPayload = retriedWorkItem.Payload.Deserialize<RuntimeCompleteActivityCommandPayload>();
-            Assert.Equal(SchedulerCompletionKind.ParentOutcomeEvaluation, retriedPayload?.CompletionKind);
-            Assert.Equal(CombinedChildOutcomeEfFixture.ParentActivityExecutionId, retriedPayload?.ActivityExecutionId);
-            Assert.Equal(CombinedChildOutcomeEfFixture.CompositeActivityExecutionId, retriedPayload?.CompletedChildActivityExecutionId);
+            var retriedPayload = ReadCompletionPayload(retriedWorkItem);
+            Assert.Equal(SchedulerCompletionKind.ParentOutcomeEvaluation, retriedPayload.CompletionKind);
+            Assert.Equal(CombinedChildOutcomeEfFixture.ParentActivityExecutionId, retriedPayload.ActivityExecutionId);
+            Assert.Equal(CombinedChildOutcomeEfFixture.CompositeActivityExecutionId, retriedPayload.CompletedChildActivityExecutionId);
             Assert.DoesNotContain(_outboxProbe.Attempts, attempt => attempt.CommandKind == WorkflowExecutionCommandKind.NotifyParentActivity);
 
             var incidents = await ListIncidentsAsync(third);
@@ -203,6 +204,55 @@ public sealed class CombinedChildOutcomeEfTests : IDisposable
         }
     }
 
+    [Fact]
+    public async Task Exhausted_outcome_delivery_remains_durable_and_blocking_without_claiming_automatic_recovery()
+    {
+        RuntimePostCommitOutboxItem pending;
+        var retryPolicy = RuntimeSchedulerPostCommitIntentDispatcher.RetryPolicy;
+        await using (var first = await StartGenerationAsync(CombinedChildOutcomeEfFixture.ActivityExecutionIds[..4], failFirstCombinedOutcome: true))
+        {
+            await first.RunAsync(CombinedChildOutcomeEfFixture.CreateExecutable(),
+                allowPendingWorkOnTerminalCompletion: false, allowAcceptedButFaulted: true);
+            pending = await FindFailedParentOutcomeAsync(first);
+
+            for (var attempt = 2; attempt <= retryPolicy.MaxAttempts; attempt++)
+            {
+                _outboxProbe.FailNextParentOutcome();
+                _clock.Advance(retryPolicy.Delay!.Value);
+                var sweep = await first.SweepAsync();
+                Assert.Equal(1, sweep.OutboxFailedCount);
+                Assert.Empty(_observation.Outcomes);
+            }
+        }
+
+        // The generic enqueue outbox has no automatic redrive after FailedFinal. A fresh reader must retain
+        // both the undelivered outcome and its original blocking incident, rather than pretend a parent decided it.
+        _clock.Advance(TimeSpan.FromDays(1));
+        await using var restarted = await StartGenerationAsync([]);
+        var final = Assert.IsType<RuntimePostCommitOutboxItem>(await FindOutboxItemAsync(restarted, pending.OutboxItemId));
+        Assert.Equal(RuntimePostCommitOutboxStatus.FailedFinal, final.Status);
+        Assert.Equal(retryPolicy.MaxAttempts, final.DeliveryAttemptCount);
+        Assert.Equal(ReadParentOutcomeWorkItem(pending).WorkItemId, ReadParentOutcomeWorkItem(final).WorkItemId);
+        Assert.Equal(SchedulerCompletionKind.ParentOutcomeEvaluation, ReadCompletionPayload(ReadParentOutcomeWorkItem(final)).CompletionKind);
+
+        var attemptsBeforeSweep = _outboxProbe.Attempts.Count;
+        await restarted.SweepAsync();
+        Assert.Equal(attemptsBeforeSweep, _outboxProbe.Attempts.Count);
+        Assert.Empty(_observation.Outcomes);
+        Assert.Equal(WorkflowExecutionStatus.Running, await WorkflowStatusAsync(restarted));
+        var run = await restarted.ReadRunAsync(CombinedChildOutcomeEfFixture.WorkflowExecutionId);
+        Assert.Equal(ActivityExecutionStatus.Running, run.State(CombinedChildOutcomeEfFixture.ParentNodeId).Status);
+        var child = run.State(CombinedChildOutcomeEfFixture.CompositeNodeId);
+        Assert.Equal(ActivityExecutionStatus.Faulted, child.Status);
+        Assert.DoesNotContain(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId, child.Metadata.Keys);
+        var incident = Assert.Single(await ListIncidentsAsync(restarted),
+            item => item.ExecutableNodeId == CombinedChildOutcomeEfFixture.CompositeNodeId);
+        Assert.Equal(IncidentStatus.Blocking, incident.Status);
+        Assert.Null(incident.ResolutionOutcome);
+        Assert.Equal(ReadParentOutcomeWorkItem(final).WorkItemId,
+            incident.Metadata.GetValueOrDefault(RuntimeMetadataKeys.ParentOutcomeWorkItemId));
+    }
+
     public void Dispose()
     {
         foreach (var file in new[] { _databasePath, $"{_databasePath}-wal", $"{_databasePath}-shm" })
@@ -210,6 +260,7 @@ public sealed class CombinedChildOutcomeEfTests : IDisposable
     }
 
     private async Task<WorkflowExecutionHarness> StartGenerationAsync(
+        IEnumerable<string> activityExecutionIds,
         bool failFirstCombinedOutcome = false,
         CombinedOutcomeRetryClaimBarrier? claimBarrier = null)
     {
@@ -220,6 +271,7 @@ public sealed class CombinedChildOutcomeEfTests : IDisposable
                 services.AddLogging();
                 services.AddSingleton<TimeProvider>(_clock);
                 services.AddSingleton(_observation);
+                services.AddSingleton<IRuntimeSecretResolver, CombinedOutcomeSecretResolver>();
                 services.AddSingleton(_outboxProbe);
                 services.Replace(ServiceDescriptor.Scoped<IRuntimePostCommitIntentDispatcher>(provider =>
                     new FailFirstCombinedOutcomeDispatcher(
@@ -249,7 +301,7 @@ public sealed class CombinedChildOutcomeEfTests : IDisposable
             .Build(
                 WorkflowExecutionHarness.Identity,
                 CombinedChildOutcomeEfFixture.WorkflowExecutionId,
-                CombinedChildOutcomeEfFixture.ActivityExecutionIds);
+                activityExecutionIds);
 
         foreach (var initializer in harness.Services.GetServices<IShellInitializer>())
             await initializer.InitializeAsync();
@@ -257,6 +309,16 @@ public sealed class CombinedChildOutcomeEfTests : IDisposable
         if (failFirstCombinedOutcome)
             _outboxProbe.FailNextParentOutcome();
         return harness;
+    }
+
+    private sealed class CombinedOutcomeSecretResolver : IRuntimeSecretResolver
+    {
+        public ValueTask<RuntimeSecretResolution> ResolveAsync(RuntimeSecretResolutionRequest request, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Assert.Equal(CombinedChildOutcomeEfFixture.SecretReference, request.Reference.Name);
+            return ValueTask.FromResult(RuntimeSecretResolution.Success(CombinedChildOutcomeEfFixture.Secret));
+        }
     }
 
     private sealed class CombinedOutcomeClock(DateTimeOffset now) : TimeProvider
@@ -312,6 +374,10 @@ public sealed class CombinedChildOutcomeEfTests : IDisposable
         Assert.True(IsParentOutcome(item.Intent));
         return Assert.IsType<RuntimeSchedulerWorkItem>(item.Intent.Payload!.Value.Deserialize<RuntimeSchedulerWorkItem>());
     }
+
+    private static RuntimeCompleteActivityCommandPayload ReadCompletionPayload(RuntimeSchedulerWorkItem workItem) =>
+        Assert.IsType<RuntimeCompleteActivityCommandPayload>(
+            workItem.Payload!.Value.Deserialize<RuntimeCompleteActivityCommandPayload>());
 
     private static bool IsParentOutcome(RuntimePostCommitIntent intent) =>
         intent.Kind == RuntimePostCommitIntentKinds.EnqueueSchedulerWork &&
