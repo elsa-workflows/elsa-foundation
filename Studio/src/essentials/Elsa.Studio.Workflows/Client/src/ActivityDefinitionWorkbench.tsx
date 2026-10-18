@@ -30,7 +30,7 @@ const ActivityDefinitionDependencyExplorer = lazy(async () => {
 
 type Section = "overview" | "drafts" | "versions" | "relationships";
 type RouteState = { definitionId: string | null; section: string | null; draftId: string | null; versionId: string | null; draftActionVersionId?: string | null };
-type ChildCollectionPrivacyFailure = { definitionId: string; kind: "unavailable" | "forbidden" | "not-found" };
+type DefinitionPrivacyFailure = { definitionId: string; kind: "unavailable" | "forbidden" | "not-found" };
 
 export function ActivityDefinitionWorkbench({ context, definitionId, section, selectedDraftId, selectedVersionId, requestedDraftActionVersionId, activityEditors, onNavigate, onPlanUpgrade, onOpenWorkflows }: {
   context: StudioEndpointContext;
@@ -50,9 +50,9 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   const [draftCursorIndex, setDraftCursorIndex] = useState(0);
   const [versionCursorStack, setVersionCursorStack] = useState<(string | null)[]>([null]);
   const [versionCursorIndex, setVersionCursorIndex] = useState(0);
-  const [privacyFailure, setPrivacyFailure] = useState<"unavailable" | "forbidden" | "not-found" | null>(null);
-  const [draftPrivacyFailure, setDraftPrivacyFailure] = useState<ChildCollectionPrivacyFailure | null>(null);
-  const [versionPrivacyFailure, setVersionPrivacyFailure] = useState<ChildCollectionPrivacyFailure | null>(null);
+  const [privacyFailure, setPrivacyFailure] = useState<DefinitionPrivacyFailure | null>(null);
+  const [draftPrivacyFailure, setDraftPrivacyFailure] = useState<DefinitionPrivacyFailure | null>(null);
+  const [versionPrivacyFailure, setVersionPrivacyFailure] = useState<DefinitionPrivacyFailure | null>(null);
   const [draftSelectionFailure, setDraftSelectionFailure] = useState<{ id: string; kind: "unavailable" | "forbidden" | "not-found" } | null>(null);
   const [versionSelectionFailure, setVersionSelectionFailure] = useState<{ id: string; kind: "unavailable" | "forbidden" | "not-found" } | null>(null);
   const [draftDialogSource, setDraftDialogSource] = useState<string | null | false>(false);
@@ -65,7 +65,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   const requestedActionHandled = useRef(false);
   const detailQuery = useActivityDefinition(context, definitionId);
   const directFailure = detailQuery.error ? classifyActivityDefinitionReadFailure(detailQuery.error) : null;
-  const detailFailure = privacyFailure ?? directFailure;
+  const detailFailure = (privacyFailure?.definitionId === definitionId ? privacyFailure.kind : null) ?? directFailure;
   const mustDiscardData = detailFailure === "forbidden" || detailFailure === "unavailable" || detailFailure === "not-found";
   const detail = mustDiscardData ? undefined : detailQuery.data;
   const designOwned = isActivityDefinitionEnumValue(detail?.definition.contentAuthority.kind, "Design");
@@ -101,8 +101,8 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   }, [mustDiscardData, queryClient]);
 
   useEffect(() => {
-    if (directFailure === "forbidden" || directFailure === "unavailable" || directFailure === "not-found") setPrivacyFailure(directFailure);
-  }, [directFailure]);
+    if (directFailure === "forbidden" || directFailure === "unavailable" || directFailure === "not-found") setPrivacyFailure({ definitionId, kind: directFailure });
+  }, [definitionId, directFailure]);
 
   useEffect(() => {
     if (draftDirectFailure !== "forbidden" && draftDirectFailure !== "unavailable" && draftDirectFailure !== "not-found") return;
@@ -145,7 +145,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   if (!detail && detailFailure) {
     return <main className="ad-page ad-workbench">
       <button type="button" className="ad-back" onClick={() => onNavigate({ definitionId: null, section: null, draftId: null, versionId: null })}><ArrowLeft size={16} aria-hidden /> Activity Definitions</button>
-      <section className="ad-failure" role="alert"><AlertTriangle size={22} aria-hidden /><h1>{detailFailure === "unavailable" ? "Unavailable contribution" : "Activity Definition unavailable"}</h1><p>{detailFailure === "unavailable" ? "This backend does not advertise the supported Activity Definition management capability. No legacy fallback is used." : "Studio could not confirm an authorized Activity Definition for this address. No identity or count is shown."}</p><button type="button" onClick={() => { setPrivacyFailure(null); void detailQuery.refetch(); }}>Try again</button></section>
+      <section className="ad-failure" role="alert"><AlertTriangle size={22} aria-hidden /><h1>{detailFailure === "unavailable" ? "Unavailable contribution" : "Activity Definition unavailable"}</h1><p>{detailFailure === "unavailable" ? "This backend does not advertise the supported Activity Definition management capability. No legacy fallback is used." : "Studio could not confirm an authorized Activity Definition for this address. No identity or count is shown."}</p><button type="button" onClick={() => { setPrivacyFailure(current => current?.definitionId === definitionId ? null : current); void detailQuery.refetch(); }}>Try again</button></section>
     </main>;
   }
   if (!detail) return null;
@@ -196,7 +196,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   return <>
   <main className="ad-page ad-workbench" aria-labelledby="activity-definition-title">
     <button type="button" className="ad-back" onClick={() => onNavigate({ definitionId: null, section: null, draftId: null, versionId: null })}><ArrowLeft size={16} aria-hidden /> Activity Definitions</button>
-    <header className="ad-workbench-header"><div><span className="ad-kicker">{designOwned ? detail.definition.category || "Designed activity" : "Module activity"}</span><h1 id="activity-definition-title">{detail.definition.displayName}</h1>{detail.definition.description ? <p>{detail.definition.description}</p> : null}</div><div className="ad-header-actions">{designOwned ? <button type="button" className="ad-primary-action" disabled={startingDraft || Boolean(detailQuery.error) || (overview && draftsQuery.isPending)} onClick={() => void startEditing()}><Pencil size={16} aria-hidden />{startingDraft ? "Opening draft…" : editLabel}</button> : null}{canFork ? <button type="button" onClick={() => setForkDialogOpen(true)}>Fork recommended version</button> : null}<button type="button" onClick={() => { setPrivacyFailure(null); observeActivityDefinitions({ event: "refresh", surface: "workbench" }); void detailQuery.refetch(); }} disabled={detailQuery.isFetching}><RefreshCw size={16} aria-hidden /> {detailQuery.isFetching ? "Refreshing" : "Refresh"}</button></div></header>
+    <header className="ad-workbench-header"><div><span className="ad-kicker">{designOwned ? detail.definition.category || "Designed activity" : "Module activity"}</span><h1 id="activity-definition-title">{detail.definition.displayName}</h1>{detail.definition.description ? <p>{detail.definition.description}</p> : null}</div><div className="ad-header-actions">{designOwned ? <button type="button" className="ad-primary-action" disabled={startingDraft || Boolean(detailQuery.error) || (overview && draftsQuery.isPending)} onClick={() => void startEditing()}><Pencil size={16} aria-hidden />{startingDraft ? "Opening draft…" : editLabel}</button> : null}{canFork ? <button type="button" onClick={() => setForkDialogOpen(true)}>Fork recommended version</button> : null}<button type="button" onClick={() => { setPrivacyFailure(current => current?.definitionId === definitionId ? null : current); observeActivityDefinitions({ event: "refresh", surface: "workbench" }); void detailQuery.refetch(); }} disabled={detailQuery.isFetching}><RefreshCw size={16} aria-hidden /> {detailQuery.isFetching ? "Refreshing" : "Refresh"}</button></div></header>
     {detailQuery.isError ? <div className="ad-stale-warning" role="alert"><AlertTriangle size={18} aria-hidden /><div><strong>Refresh failed; showing retained definition evidence</strong><span>Retry before relying on lifecycle changes.</span></div></div> : null}
     {!designOwned ? <p className="ad-source-note">Provided by an installed module. Read-only in Studio.</p> : null}
     {startError ? <div className="ad-inline-error" role="alert">{startError}</div> : null}

@@ -742,6 +742,49 @@ describe("Activity Definitions experience", () => {
     await rendered.unmount();
   });
 
+  it("scopes detail privacy failures to their definition and retries the denied identity explicitly", async () => {
+    await import("../ActivityDefinitionWorkbench");
+    let definitionOneReads = 0;
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url === "/design/activities/definitions/definition-2") return definition({ definitionId: "definition-2", displayName: "Second evaluator" });
+      if (url === "/design/activities/definitions/definition-1") {
+        definitionOneReads += 1;
+        if (definitionOneReads === 1) throw new StudioHttpError(403, "hidden definition identity", null);
+        return definition({ definitionId: "definition-1", displayName: "First evaluator" });
+      }
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = renderPage(getJson, undefined, "/workflows/activity-definitions?definition=definition-2");
+
+    await vi.dynamicImportSettled();
+    await waitForText(rendered.container, "Second evaluator");
+    flushSync(() => {
+      window.history.pushState({}, "", "/workflows/activity-definitions?definition=definition-1");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await waitForText(rendered.container, "Studio could not confirm an authorized Activity Definition");
+    expect(rendered.container.textContent).not.toContain("hidden definition identity");
+
+    flushSync(() => {
+      // jsdom does not traverse browser history entries, so restore the back destination and fire its popstate event.
+      window.history.replaceState({}, "", "/workflows/activity-definitions?definition=definition-2");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await waitForText(rendered.container, "Second evaluator");
+    expect(rendered.container.textContent).not.toContain("Activity Definition unavailable");
+
+    flushSync(() => {
+      window.history.pushState({}, "", "/workflows/activity-definitions?definition=definition-1");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await waitForText(rendered.container, "Activity Definition unavailable");
+    expect(rendered.container.textContent).not.toContain("First evaluator");
+    click(buttonByText(rendered.container, "Try again"));
+    await waitForText(rendered.container, "First evaluator");
+    await rendered.unmount();
+  }, 15000);
+
   it("uses bounded paging and sends Designed, Built-in, All, search, and advanced filters to the server", async () => {
     const getJson = vi.fn(async (url: string) => {
       if (url === "/capabilities") return capabilities();
