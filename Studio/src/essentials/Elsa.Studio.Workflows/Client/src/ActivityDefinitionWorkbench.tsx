@@ -13,7 +13,7 @@ import { activityDesignKeys, classifyActivityDefinitionReadFailure, redactActivi
 import { observeActivityDefinitions } from "./activityDefinitionObservability";
 import { ActivityDefinitionDraftDialog, isActionAllowed } from "./ActivityDefinitionDraftManagementDialogs";
 import { ActivityDefinitionForkDialog } from "./ActivityDefinitionForkDialog";
-import { hasMigrationProviderChoice } from "./activityDefinitionDraftManagementShared";
+import { displayActivityDefinitionVersion, hasMigrationProviderChoice } from "./activityDefinitionDraftManagementShared";
 import { formatActivityDefinitionDate as formatDate } from "./workflowFormatting";
 
 const ActivityDefinitionVersionLifecycleDialog = lazy(async () => {
@@ -186,7 +186,7 @@ function Overview({ detail, provider, designOwned, versionQuery, onOpen }: { det
   if (!designOwned) return <div className="ad-source-overview">
     <dl className="ad-source-summary">
       <div><dt>Category</dt><dd>{detail.definition.category}</dd></div>
-      <div><dt>Recommended version</dt><dd>{detail.lifecycle.recommendation ? displayVersion(detail.lifecycle.recommendation.version) : "None"}</dd></div>
+      <div><dt>Recommended version</dt><dd>{detail.lifecycle.recommendation ? displayActivityDefinitionVersion(detail.lifecycle.recommendation.version) : "None"}</dd></div>
     </dl>
     {isActivityDefinitionEnumValue(detail.lifecycle.recommendation?.lifecycle, "Active") ? versionQuery.isError
       ? <div className="ad-inline-error" role="alert">Activity details could not be loaded. <button type="button" onClick={() => void versionQuery.refetch()}>Try again</button></div>
@@ -218,7 +218,7 @@ function VersionsSection({ query, exactQuery, exactFailure, privacyFailure, sele
       ? { ...exactQuery.data, actions: listedSelection?.actions ?? exactQuery.data.actions }
       : listedSelection;
   const actionAllowed = Boolean(designOwned && listedSelection && isActionAllowed(listedSelection.actions, "clone-draft"));
-  return <div><SectionHeading icon={<Layers3 size={18} />} title="Versions" description={designOwned ? "Every row is an immutable semantic version. Recommendation and lifecycle are reviewed exact-version decisions." : "Versions supplied by the module."} />{selected ? <SelectedVersion item={selected} compact={!designOwned} actionLabel="Create draft from this exact version" actionAllowed={actionAllowed} onCreate={() => onCreateFromVersion(selected.version.versionId)} onPlanUpgrade={() => onPlanUpgrade(selected.version.versionId)} onManage={action => onManage(action, selected)} /> : <ExactSelectionState kind="version" selected={Boolean(selectedVersionId)} query={exactQuery} failure={exactFailure} />}<ChildCollectionState query={query} privacyFailure={privacyFailure} empty="No authorized versions are available for this definition." onRetry={onRetry} />{data?.items.length ? <div className="ad-child-list" role="group" aria-label="Activity Definition versions">{data.items.map(item => <button key={item.version.versionId} type="button" className={item.version.versionId === selectedVersionId ? "is-selected" : ""} onClick={() => onSelect(item.version.versionId)}><span><strong>{designOwned ? item.version.version : displayVersion(item.version.version)}{item.isRecommended ? " · Recommended" : ""}</strong><small>{item.version.lifecycle} · {formatDate(item.version.publishedAt)}</small></span>{designOwned ? <span><strong>{item.providerKey}</strong><small>Schema {item.providerSchemaVersion}</small></span> : null}</button>)}</div> : null}<CursorPager page={page} data={data} onPrevious={onPrevious} onNext={onNext} /></div>;
+  return <div><SectionHeading icon={<Layers3 size={18} />} title="Versions" description={designOwned ? "Every row is an immutable semantic version. Recommendation and lifecycle are reviewed exact-version decisions." : "Versions supplied by the module."} />{selected ? <SelectedVersion item={selected} compact={!designOwned} actionLabel="Create draft from this exact version" actionAllowed={actionAllowed} onCreate={() => onCreateFromVersion(selected.version.versionId)} onPlanUpgrade={() => onPlanUpgrade(selected.version.versionId)} onManage={action => onManage(action, selected)} /> : <ExactSelectionState kind="version" selected={Boolean(selectedVersionId)} query={exactQuery} failure={exactFailure} />}<ChildCollectionState query={query} privacyFailure={privacyFailure} empty="No authorized versions are available for this definition." onRetry={onRetry} />{data?.items.length ? <div className="ad-child-list" role="group" aria-label="Activity Definition versions">{data.items.map(item => <button key={item.version.versionId} type="button" className={item.version.versionId === selectedVersionId ? "is-selected" : ""} onClick={() => onSelect(item.version.versionId)}><span><strong>{designOwned ? item.version.version : displayActivityDefinitionVersion(item.version.version)}{item.isRecommended ? " · Recommended" : ""}</strong><small>{item.version.lifecycle} · {formatDate(item.version.publishedAt)}</small></span>{designOwned ? <span><strong>{item.providerKey}</strong><small>Schema {item.providerSchemaVersion}</small></span> : null}</button>)}</div> : null}<CursorPager page={page} data={data} onPrevious={onPrevious} onNext={onNext} /></div>;
 }
 
 function ChildCollectionState({ query, privacyFailure, empty, onRetry }: { query: ReturnType<typeof useActivityDefinitionDrafts> | ReturnType<typeof useActivityDefinitionVersions>; privacyFailure: "unavailable" | "forbidden" | "not-found" | null; empty: string; onRetry(): void }) {
@@ -258,7 +258,7 @@ function SelectedVersion({ item, compact, actionLabel, actionAllowed, onCreate, 
   const actions = actionAllowed || available.length ? <div className="ad-header-actions">{actionAllowed ? <button type="button" onClick={onCreate}>{actionLabel}</button> : null}{available.map(action => <button key={action.action} type="button" className={action.action === "revoke" ? "ad-danger-action" : ""} onClick={() => onManage(action.action)}>{action.label}</button>)}</div> : null;
   return <div className="ad-selected-version">
     <div className="ad-selected-record" aria-label="Selected exact version">
-      <strong>Version {compact ? displayVersion(item.version.version) : item.version.version}{item.isRecommended ? " · Recommended" : ""}</strong>
+      <strong>Version {compact ? displayActivityDefinitionVersion(item.version.version) : item.version.version}{item.isRecommended ? " · Recommended" : ""}</strong>
       {!compact ? <span><code>{item.version.versionId}</code> · {item.version.lifecycle} · {item.providerKey} · schema {item.providerSchemaVersion}</span> : <span>{item.version.lifecycle}</span>}
       {!compact ? actions : null}
       <details className="ad-technical-details"><summary>Version details</summary>
@@ -275,17 +275,36 @@ function SelectedVersion({ item, compact, actionLabel, actionAllowed, onCreate, 
 function HistoricalContract({ contract, compact = false }: { contract: NonNullable<ActivityDefinitionVersionManagementView["contract"]>; compact?: boolean }) {
   return <section className="ad-historical-contract" aria-labelledby="historical-contract-title"><header>{compact ? <h2 id="historical-contract-title">Inputs, outputs &amp; outcomes</h2> : <h3 id="historical-contract-title">Immutable public contract</h3>}{!compact ? <span>Schema {contract.contractSchemaVersion}</span> : null}</header>{!compact ? <p>Stored aliases remain visible even when they are no longer available in the current authoring catalog.</p> : null}
     <div className="ad-historical-contract-groups">
-      <HistoricalMembers compact={compact} title="Inputs" members={contract.inputs.map(member => ({ key: member.referenceKey, name: member.displayName || member.name, detail: `${member.type.alias} · ${member.type.collectionKind} · ${member.isRequired ? "Required effective value" : "Optional effective value"} · ${member.isNullable ? "Allows null" : "Non-null"}` }))} />
-      <HistoricalMembers compact={compact} title="Outputs" members={contract.outputs.map(member => ({ key: member.referenceKey, name: member.displayName || member.name, detail: `${member.type.alias} · ${member.type.collectionKind} · ${member.isRequired ? "Must be produced" : "Optional production"} · ${member.isNullable ? "Allows null" : "Non-null"}` }))} />
-      <HistoricalMembers compact={compact} title="Outcomes" members={contract.outcomes.map(member => ({ key: member.referenceKey, name: member.name, detail: member.isEmitted ? "Emitted" : "Not emitted" }))} />
+      <HistoricalMembers compact={compact} title="Inputs" members={contract.inputs.map(member => ({
+        key: member.referenceKey,
+        name: member.displayName || member.name,
+        detail: `${member.type.alias} · ${member.type.collectionKind} · ${member.isRequired ? "Required effective value" : "Optional effective value"} · ${member.isNullable ? "Allows null" : "Non-null"}`,
+        compactDetail: compactContractType(member.type.alias, member.type.collectionKind, member.isRequired ? "Required" : "Optional", member.isNullable)
+      }))} />
+      <HistoricalMembers compact={compact} title="Outputs" members={contract.outputs.map(member => ({
+        key: member.referenceKey,
+        name: member.displayName || member.name,
+        detail: `${member.type.alias} · ${member.type.collectionKind} · ${member.isRequired ? "Must be produced" : "Optional production"} · ${member.isNullable ? "Allows null" : "Non-null"}`,
+        compactDetail: compactContractType(member.type.alias, member.type.collectionKind, member.isRequired ? "Must be produced" : "Optional", member.isNullable)
+      }))} />
+      <HistoricalMembers compact={compact} title="Outcomes" members={contract.outcomes.map(member => ({
+        key: member.referenceKey,
+        name: member.name,
+        detail: member.isEmitted ? "Emitted" : "Not emitted",
+        compactDetail: member.isEmitted ? "Emitted" : "Not emitted"
+      }))} />
     </div>
   </section>;
 }
 
-function HistoricalMembers({ title, members, compact }: { title: string; compact: boolean; members: Array<{ key: string; name: string; detail: string }> }) {
-  return <section>{compact ? <h3>{title}</h3> : <h4>{title}</h4>}{members.length ? <ul>{members.map(member => <li key={member.key}><strong>{member.name}</strong>{compact ? <span>{member.detail.replace("Required effective value", "Required").replace("Optional effective value", "Optional").replace("Optional production", "Optional").replace(" · Scalar", "")}</span> : <><code>{member.key}</code><span>{member.detail}</span></>}</li>)}</ul> : <p>None</p>}</section>;
+function HistoricalMembers({ title, members, compact }: { title: string; compact: boolean; members: Array<{ key: string; name: string; detail: string; compactDetail: string }> }) {
+  return <section>{compact ? <h3>{title}</h3> : <h4>{title}</h4>}{members.length ? <ul>{members.map(member => <li key={member.key}><strong>{member.name}</strong>{compact ? <span>{member.compactDetail}</span> : <><code>{member.key}</code><span>{member.detail}</span></>}</li>)}</ul> : <p>None</p>}</section>;
 }
-function displayVersion(version: string) { return version.split("+")[0]; }
+function compactContractType(alias: string, collectionKind: string, requirement: string, isNullable: boolean) {
+  return [alias, collectionKind === "Scalar" ? null : collectionKind, requirement, isNullable ? "Allows null" : "Non-null"]
+    .filter(Boolean)
+    .join(" · ");
+}
 function draftLabel(item: ActivityDefinitionDraftManagementView) { return item.draft.presentationLabel?.trim() || `Draft ${item.draft.draftId}`; }
 function normalizeSection(value: string | null): Section { return value === "drafts" || value === "versions" || value === "relationships" ? value : "overview"; }
 

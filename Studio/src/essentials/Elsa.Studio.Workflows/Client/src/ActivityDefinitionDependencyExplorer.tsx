@@ -7,7 +7,8 @@ import type {
   ActivityDefinitionDependencyReference,
   ActivityDefinitionUsageEvidence
 } from "./activityDefinitionTypes";
-import { activityDesignKeys, useActivityDefinitionVersions } from "./api/activityDesign";
+import { activityDesignKeys, useActivityDefinitionVersion, useActivityDefinitionVersions } from "./api/activityDesign";
+import { displayActivityDefinitionVersion } from "./activityDefinitionDraftManagementShared";
 import { getActivityDefinitionDependencyPage } from "./api/activityDefinitionDependencies";
 import { StudioLink } from "./StudioLink";
 import dependencyExplorerStylesUrl from "./activityDefinitionDependencyExplorer.css?url&no-inline";
@@ -49,19 +50,27 @@ export function ActivityDefinitionDependencyExplorer({
     cursor: versionCursors[versionPage]
   };
   const versionsQuery = useActivityDefinitionVersions(context, versionRequest, true);
-  const rootVersion = !versionsQuery.isError
+  const initialVersionQuery = useActivityDefinitionVersion(context, definitionId, initialVersionId ?? null, Boolean(initialVersionId));
+  const listedRootVersion = !versionsQuery.isError
     ? versionsQuery.data?.items.find(item => item.version.definitionId === definitionId && item.version.versionId === rootVersionId) ?? null
     : null;
+  const exactInitialVersion = initialVersionQuery.data;
+  const confirmedInitialVersion = !initialVersionQuery.isError &&
+    exactInitialVersion?.version?.definitionId === definitionId &&
+    exactInitialVersion?.version?.versionId === initialVersionId
+    ? exactInitialVersion
+    : null;
+  const rootVersion = listedRootVersion ?? (rootVersionId === initialVersionId ? confirmedInitialVersion : null);
+  const versionOptions = !versionsQuery.isError ? versionsQuery.data?.items ?? [] : [];
+  const showConfirmedInitialVersion = confirmedInitialVersion && !versionOptions.some(item => item.version.versionId === confirmedInitialVersion.version.versionId);
   const includeKey = [...included].sort().join(",");
 
   useEffect(() => {
-    if (!initialVersionId || versionsQuery.isError || initializedVersionId.current === initialVersionId) return;
-    const isAuthorized = versionsQuery.data?.items.some(item => item.version.definitionId === definitionId && item.version.versionId === initialVersionId);
-    if (!isAuthorized) return;
+    if (!initialVersionId || initialVersionQuery.isPending || initialVersionQuery.isError || !confirmedInitialVersion || initializedVersionId.current === initialVersionId) return;
 
     initializedVersionId.current = initialVersionId;
     setRootVersionId(current => current || initialVersionId);
-  }, [definitionId, initialVersionId, versionsQuery.data, versionsQuery.isError]);
+  }, [confirmedInitialVersion, initialVersionId, initialVersionQuery.isError, initialVersionQuery.isPending]);
 
   const dependenciesQuery = useInfiniteQuery({
     queryKey: [
@@ -100,7 +109,7 @@ export function ActivityDefinitionDependencyExplorer({
   const responseBindingMismatch = validPages.length !== pages.length;
   const privacyFailure = isPrivateFailure(dependenciesQuery.error);
   const cursorFailure = dependencyCursorFailure(dependenciesQuery.error);
-  const rows = privacyFailure ? [] : validPages.flatMap(page => page.items);
+  const rows = !rootVersion || privacyFailure ? [] : validPages.flatMap(page => page.items);
   const selected = rows.find(item => item.relationshipId === selectedRelationshipId) ?? null;
   const snapshot = validPages[0]?.consistency ?? null;
   const start = Math.max(0, Math.floor(scrollTop / dependencyRowHeight) - 2);
@@ -143,9 +152,12 @@ export function ActivityDefinitionDependencyExplorer({
         <span>Version</span>
         <select value={rootVersionId} onChange={event => setRootVersionId(event.target.value)}>
           <option value="">Choose a version</option>
-          {(versionsQuery.data?.items ?? []).map(item =>
+          {showConfirmedInitialVersion ? <option value={confirmedInitialVersion.version.versionId} title={confirmedInitialVersion.version.version}>
+            {displayActivityDefinitionVersion(confirmedInitialVersion.version.version)} · {confirmedInitialVersion.version.lifecycle}
+          </option> : null}
+          {versionOptions.map(item =>
             <option key={item.version.versionId} value={item.version.versionId} title={item.version.version}>
-              {versionOptionLabel(item.version.version)} · {item.version.lifecycle}
+              {displayActivityDefinitionVersion(item.version.version)} · {item.version.lifecycle}
             </option>)}
         </select>
       </label>
@@ -189,7 +201,7 @@ export function ActivityDefinitionDependencyExplorer({
     {versionsQuery.isPending ? <div className="ad-inline-status" role="status">Loading versions…</div> : null}
     {versionsQuery.isError ? <div className="ad-inline-error" role="alert">Versions could not be confirmed. No identities or counts are shown.</div> : null}
     {!rootVersionId ? <div className="ad-inline-status" role="status">Choose a version to see matching evidence.</div> : null}
-    {rootVersionId && !rootVersion ? <div className="ad-inline-error" role="alert">This version is not confirmed on the current authorized page. Choose a listed version.</div> : null}
+    {rootVersionId && !rootVersion ? <div className="ad-inline-error" role="alert">This version is not confirmed by an authorized read. Choose a listed version.</div> : null}
     {included.length === 0 ? <div className="ad-inline-error" role="alert">Select versions or drafts to continue.</div> : null}
     {rootVersion && included.length > 0 && dependenciesQuery.isPending ? <div className="ad-inline-status" role="status">Loading evidence…</div> : null}
     {privacyFailure ? <div className="ad-inline-error" role="alert">Evidence is unavailable for this account or version. No identities or counts are shown.</div> : null}
@@ -207,7 +219,7 @@ export function ActivityDefinitionDependencyExplorer({
       </section>
     </details> : null}
 
-    {dependenciesQuery.isSuccess && rows.length === 0 ? <div className="ad-inline-status" role="status">No evidence matches this version and filters.</div> : null}
+    {dependenciesQuery.isSuccess && rootVersion && rows.length === 0 ? <div className="ad-inline-status" role="status">No evidence matches this version and filters.</div> : null}
     {rows.length ? <div className="ad-dependency-table-scroll" onScroll={onScroll}>
       <table className="ad-dependency-table" aria-label={direction === "outbound" ? "Dependency evidence" : "Used by evidence"}>
         <thead><tr><th>{direction === "inbound" ? "Used in" : "Version"}</th><th>Where</th><th>{direction === "inbound" ? "Activity" : "Uses"}</th><th>Evidence</th><th>Path</th></tr></thead>
@@ -225,7 +237,7 @@ export function ActivityDefinitionDependencyExplorer({
       </table>
     </div> : null}
 
-    {dependenciesQuery.hasNextPage && !isStale && !privacyFailure ? <div className="ad-child-pager">
+    {dependenciesQuery.hasNextPage && rootVersion && !isStale && !privacyFailure ? <div className="ad-child-pager">
       <span>Pages remain bound to this exact snapshot.</span>
       <button type="button" onClick={() => void dependenciesQuery.fetchNextPage()} disabled={dependenciesQuery.isFetchingNextPage}>
         {dependenciesQuery.isFetchingNextPage ? "Loading next page…" : "Load next page"}
@@ -331,8 +343,4 @@ function exactOwnerHref(item: ActivityDefinitionDependencyItem) {
 function formatTimestamp(value: string) {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
-}
-
-function versionOptionLabel(version: string) {
-  return version.split("+", 1)[0];
 }

@@ -2,6 +2,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { activityDesignKeys } from "../api/activityDesign";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ActivityDefinitionDependencyExplorer } from "../ActivityDefinitionDependencyExplorer";
 import type { ActivityDefinitionUsageEvidence } from "../activityDefinitionTypes";
@@ -63,6 +64,7 @@ describe("Activity Definition dependency explorer", () => {
     const getJson = vi.fn(async (url: string) => {
       if (url === "/capabilities") return capabilities();
       if (url.startsWith("/design/activities/definitions/definition-1/versions?")) return versionPage();
+      if (url === "/design/activities/versions/version-1") return exactVersionSummary();
       if (url.includes("/dependencies?")) {
         dependencyRequests.push(url);
         return dependencyPage("source-occurrence", null, false, "Inbound");
@@ -84,6 +86,7 @@ describe("Activity Definition dependency explorer", () => {
     const unconfirmed = renderExplorer(vi.fn(async (url: string) => {
       if (url === "/capabilities") return capabilities();
       if (url.startsWith("/design/activities/definitions/definition-1/versions?")) return versionPage();
+      if (url === "/design/activities/versions/unconfirmed-version") throw new StudioHttpError(404, "hidden-version", null);
       if (url.includes("/dependencies?")) unconfirmedRequests.push(url);
       throw new Error(`Unexpected GET ${url}`);
     }), { initialVersionId: "unconfirmed-version", initialDirection: "inbound" });
@@ -92,6 +95,78 @@ describe("Activity Definition dependency explorer", () => {
     expect((unconfirmed.container.querySelector("select") as HTMLSelectElement).value).toBe("");
     expect(unconfirmedRequests).toHaveLength(0);
     await unconfirmed.unmount();
+  });
+
+  it("confirms a recommended version outside the loaded page before starting inbound usage", async () => {
+    const exactVersionReads: string[] = [];
+    const dependencyRequests: string[] = [];
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url.startsWith("/design/activities/definitions/definition-1/versions?")) return { ...versionPage(), items: [] };
+      if (url === "/design/activities/versions/version-51") {
+        exactVersionReads.push(url);
+        return exactVersionSummary("version-51", "51.0.0+build-sha");
+      }
+      if (url.includes("/dependencies?")) {
+        dependencyRequests.push(url);
+        return dependencyPage("late-version-use", null, false, "Inbound", false, ["Drafts", "Versions"], "version-51");
+      }
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = renderExplorer(getJson, { initialVersionId: "version-51", initialDirection: "inbound" });
+
+    await waitForText(rendered.container, "51.0.0 · Active");
+    expect((rendered.container.querySelector("select") as HTMLSelectElement).value).toBe("version-51");
+    expect(rendered.container.querySelector<HTMLOptionElement>('option[value="version-51"]')?.title).toBe("51.0.0+build-sha");
+    await waitForText(rendered.container, "late-version-use");
+    expect(exactVersionReads).toEqual(["/design/activities/versions/version-51"]);
+    expect(dependencyRequests[0]).toContain("/versions/version-51/dependencies?");
+    expect(dependencyRequests[0]).toContain("direction=inbound&transitive=false&include=versions%2Cdrafts");
+    await rendered.unmount();
+  });
+
+  it("drops stale exact-version evidence after a denied refresh and rejects a version from another definition", async () => {
+    const deniedDependencies: string[] = [];
+    let exactReads = 0;
+    const denied = renderExplorer(vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url.startsWith("/design/activities/definitions/definition-1/versions?")) return { ...versionPage(), items: [] };
+      if (url === "/design/activities/versions/version-51") {
+        exactReads += 1;
+        if (exactReads === 1) return exactVersionSummary("version-51", "51.0.0+build-sha");
+        throw new StudioHttpError(403, "hidden-version-owner", null);
+      }
+      if (url.includes("/dependencies?")) {
+        deniedDependencies.push(url);
+        return dependencyPage("previously-confirmed-use", null, false, "Inbound", false, ["Drafts", "Versions"], "version-51");
+      }
+      throw new Error(`Unexpected GET ${url}`);
+    }), { initialVersionId: "version-51", initialDirection: "inbound" });
+
+    await waitForText(denied.container, "previously-confirmed-use");
+    expect((denied.container.querySelector("select") as HTMLSelectElement).value).toBe("version-51");
+    await denied.queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionVersion("definition-1", "version-51") });
+    await waitForText(denied.container, "This version is not confirmed by an authorized read");
+    expect(denied.container.textContent).not.toContain("previously-confirmed-use");
+    expect(deniedDependencies).toHaveLength(1);
+    expect(exactReads).toBe(2);
+    await denied.unmount();
+
+    const wrongDefinitionDependencies: string[] = [];
+    const wrongDefinition = renderExplorer(vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url.startsWith("/design/activities/definitions/definition-1/versions?")) return { ...versionPage(), items: [] };
+      if (url === "/design/activities/versions/version-51") {
+        return { ...exactVersionSummary("version-51", "51.0.0+build-sha"), definition: { ...exactVersionSummary().definition, definitionId: "another-definition" } };
+      }
+      if (url.includes("/dependencies?")) wrongDefinitionDependencies.push(url);
+      throw new Error(`Unexpected GET ${url}`);
+    }), { initialVersionId: "version-51", initialDirection: "inbound" });
+
+    await waitForText(wrongDefinition.container, "Choose a version to see matching evidence.");
+    expect((wrongDefinition.container.querySelector("select") as HTMLSelectElement).value).toBe("");
+    expect(wrongDefinitionDependencies).toHaveLength(0);
+    await wrongDefinition.unmount();
   });
 
   it("keeps traversal and evidence filters in accessible advanced options", async () => {
@@ -198,6 +273,7 @@ function renderExplorer(
   flushSync(() => root.render(<QueryClientProvider client={queryClient}><ActivityDefinitionDependencyExplorer context={context} definitionId="definition-1" {...options} /></QueryClientProvider>));
   return {
     container,
+    queryClient,
     unmount: async () => {
       flushSync(() => {
       root.unmount();
@@ -252,15 +328,39 @@ function versionPage() {
   };
 }
 
+function exactVersionSummary(versionId = "version-1", version = "1.0.0+build-sha") {
+  return {
+    definition: {
+      definitionId: "definition-1",
+      activityTypeKey: "elsa.activity-graph.invoice-evaluator",
+      tenantId: "tenant-1",
+      category: "Examples",
+      displayName: "Invoice evaluator",
+      description: null,
+      contentAuthority: { kind: "ProviderSource", authorityKey: "contoso.catalog", sourceId: "invoice-source" },
+      forkedFrom: null,
+      headVersionId: versionId,
+      recommendedVersionId: versionId
+    },
+    versionId,
+    version,
+    provider: { providerKey: "elsa.activity-graph", schemaVersion: "1", manifestFingerprint: "sha256:graph" },
+    lifecycle: "Active",
+    publishedAt: "2026-07-18T12:00:00Z",
+    contract: { contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [] }
+  };
+}
+
 function dependencyPage(
   occurrenceId: string,
   nextCursor: string | null,
   cycle = false,
   direction: "Inbound" | "Outbound" = "Outbound",
   transitive = false,
-  include: Array<"Drafts" | "Versions"> = ["Drafts", "Versions"]
+  include: Array<"Drafts" | "Versions"> = ["Drafts", "Versions"],
+  rootVersionId = "version-1"
 ): ActivityDefinitionUsageEvidence {
-  const root = reference("version-1");
+  const root = reference(rootVersionId);
   const owner = {
     kind: "WorkflowDraft",
     definitionId: "workflow-1",

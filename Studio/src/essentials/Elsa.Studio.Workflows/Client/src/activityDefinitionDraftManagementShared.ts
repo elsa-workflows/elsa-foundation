@@ -96,6 +96,10 @@ export function contractSummary(contract: { inputs: unknown[]; outputs: unknown[
   return `${contract.inputs.length} inputs · ${contract.outputs.length} outputs · ${contract.outcomes.length} outcomes`;
 }
 
+export function displayActivityDefinitionVersion(version: string) {
+  return version.split("+", 1)[0];
+}
+
 export function draftMutationError(error: unknown, fallback: string) {
   if (error instanceof StudioHttpError) {
     const payload = error.payload as { errorCode?: string } | null;
