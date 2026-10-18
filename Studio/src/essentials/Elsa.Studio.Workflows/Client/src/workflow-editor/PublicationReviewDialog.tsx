@@ -119,7 +119,16 @@ export function PublicationReviewDialog({
     || !reviewedPreflight.canActivate
     || review.versionPreflightSupported && !versionEvidenceMatches
     || matchingVersionPreflight?.isReady === false;
-  const statusMessage = publicationStatusMessage(review, blocked, causeNeutralBlockMessage);
+  const checkingVersionEvidence = Boolean(onReview)
+    && editableReview
+    && channelIsValid
+    && review.validationErrors.length === 0
+    && !review.reviewFailed
+    && !review.failureMessage
+    && review.versionPreflightSupported
+    && !versionEvidenceMatches
+    && reviewedPreflight?.canActivate !== false;
+  const statusMessage = publicationStatusMessage(review, blocked, causeNeutralBlockMessage, checkingVersionEvidence);
   const submitDisabled = busy || (review.phase === "partialFailure"
     ? Boolean(review.reviewPending)
     : review.phase === "savedFailure"
@@ -536,7 +545,12 @@ function compactChangeSummary(changes: PublicationReviewState["changes"]) {
   }).join(" · ") || "No structural changes.";
 }
 
-function publicationStatusMessage(review: PublicationReviewState, blocked: boolean, causeNeutralBlockMessage?: string) {
+function publicationStatusMessage(
+  review: PublicationReviewState,
+  blocked: boolean,
+  causeNeutralBlockMessage?: string,
+  checkingVersionEvidence = false
+) {
   if (review.phase === "success" || review.phase === "partialFailure" || review.phase === "savedFailure") return "";
   if (review.phase === "validationBlocked") return "Fix the highlighted issues before publishing.";
   if (review.phase === "publishing") {
@@ -548,7 +562,7 @@ function publicationStatusMessage(review: PublicationReviewState, blocked: boole
     };
     return review.progressStep ? messages[review.progressStep] : "Publishing…";
   }
-  if (review.reviewPending) return "Checking workflow…";
+  if (review.reviewPending || checkingVersionEvidence) return "Checking workflow…";
   if (blocked) return causeNeutralBlockMessage ?? "Review the highlighted issue before publishing.";
   return "Ready to publish.";
 }

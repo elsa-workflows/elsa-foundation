@@ -46,6 +46,12 @@ describe("publication channel UX", () => {
     expect(text(container)).not.toContain("captured editor state");
   });
 
+  it("uses occupancy when an authoritative preflight is not available", () => {
+    const container = render(review({ slots: [], preflight: undefined }));
+
+    expect(container.querySelector(".wf-publication-header p")?.textContent).toBe("Make your latest changes available to run.");
+  });
+
   it("keeps technical evidence in progressive disclosures", () => {
     const container = render(review({
       preflight: preflight({
@@ -146,16 +152,18 @@ describe("publication channel UX", () => {
 
   it("keeps the trigger-conflicts blocker unchanged when there is no foreign owner", () => {
     const container = render(review({
+      versionPreflightSupported: true,
       preflight: preflight({
         canActivate: false,
         conflicts: [{ key: "http:orders", cardinality: "exclusive", publicationId: "publication-9", slotName: "default" }]
       })
-    }));
+    }), { onReview: vi.fn(async () => undefined) });
 
     expect(text(container)).toContain("These triggers are already in use");
     expect(text(container)).toContain("Conflict with default: http:orders");
     expect(text(container)).not.toContain("owned by another activation source");
     expect(text(container)).toContain("Review the highlighted issue before publishing.");
+    expect(container.querySelector("#publication-review-status")?.textContent).toBe("Review the highlighted issue before publishing.");
     expect(button(container, "Publish").disabled).toBe(true);
   });
 
@@ -190,6 +198,16 @@ describe("publication channel UX", () => {
 
     expect(text(container)).not.toContain("Checking your version choice");
     expect(container.querySelector("[role='alert']")?.textContent).toContain("An HTTP endpoint needs a path.");
+    expect(container.querySelector("#publication-review-status")?.textContent).toBe("Fix the highlighted issues before publishing.");
+  });
+
+  it("says it is checking the workflow while selected-version evidence is missing", () => {
+    const container = render(review({ versionPreflightSupported: true }), {
+      onReview: vi.fn(async () => undefined)
+    });
+
+    expect(container.querySelector("#publication-review-status")?.textContent).toBe("Checking workflow…");
+    expect(text(container)).not.toContain("Review the highlighted issue before publishing.");
   });
 
   it("does not announce a version check for an exact version with an empty new channel", () => {
@@ -202,6 +220,7 @@ describe("publication channel UX", () => {
 
     expect(text(container)).toContain("Enter a channel name before publishing.");
     expect(text(container)).not.toContain("Checking your version choice");
+    expect(container.querySelector("#publication-review-status")?.textContent).not.toBe("Checking workflow…");
   });
 
   it("uses the preflight replacement action when slot occupancy is unavailable", () => {
@@ -230,7 +249,7 @@ describe("publication channel UX", () => {
   });
 
   it("states that the current publication is unknown when the backend cannot provide publication slots", () => {
-    const visible = render(review());
+    const visible = render(review({ slots: [] }));
     expect(text(visible)).toContain("New channel · default · no previous publication");
     expect(visible.querySelector("[role='note']")).toBeNull();
     unmount();
@@ -287,7 +306,7 @@ describe("publication channel UX", () => {
 
     expect(onReview).toHaveBeenLastCalledWith(
       expect.anything(),
-      { action: "replace", slotName: "default" },
+      { action: "replace", slotName: "default", expectedPublicationId: "publication-default" },
       { mode: "exact", requestedVersion: "2.1.0-rc.1" });
     expect(text(container)).toContain("2.1.0-rc.1");
     const selectedVersion = container.querySelector(".wf-publication-body > .wf-publication-selection")!;
@@ -295,7 +314,7 @@ describe("publication channel UX", () => {
     expect(selectedVersion.closest("details")).toBeNull();
     expect(text(container)).not.toContain("Next version: 2.0.0");
     expect(button(container, "Publish").disabled).toBe(true);
-    expect(text(container)).toContain("Review the highlighted issue before publishing.");
+    expect(container.querySelector("#publication-review-status")?.textContent).toBe("Checking workflow…");
   });
 
   it("keeps a failed authoritative review stable until the author retries or changes the selection", () => {
@@ -421,14 +440,19 @@ function review(overrides: Partial<PublicationReviewState> = {}): PublicationRev
     details: null,
     slotVersions: {},
     policy: { defaultAction: "replace", defaultSlotName: "default", source: "host" },
-    slots: [],
+    slots: [publishedSlot("default")],
     catalog: []
   });
-  return {
+  const state = {
     ...value,
     preflight: preflight(),
     ...overrides
   };
+  const publicationId = state.intent.action === "replace"
+    ? state.slots.find(slot => slot.slotName === state.intent.slotName)?.publication?.publicationId
+    : undefined;
+  if (publicationId) state.intent = { ...state.intent, expectedPublicationId: publicationId };
+  return state;
 }
 
 function draft(): WorkflowDraft {
