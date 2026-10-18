@@ -694,7 +694,7 @@ describe("workflows module", () => {
       .find(button => button.textContent?.includes("Write Line"));
     expect(writeLine?.getAttribute("role")).toBe("treeitem");
     expect(writeLine?.getAttribute("title")).toBe(
-      "Writes a line to the console. — Exact version 1.0.0");
+      "Writes a line to the console. — Version 1.0.0");
     expect(writeLine?.textContent).toContain("Writes a line to the console.");
     expect(writeLine?.querySelector(".wf-activity-icon")).toBeTruthy();
     expect(writeLine?.querySelector(".wf-palette-activity-grip")).toBeTruthy();
@@ -1882,7 +1882,7 @@ describe("workflows module", () => {
     expect(container.textContent).toContain("Executables");
     expect(container.querySelector("nav[aria-label='Workflow views']")).toBeNull();
     expect(container.textContent).toContain("Flowchart");
-    expect(container.textContent).toContain("Definition version");
+    expect(container.querySelector(".wf-artifact-cell [title^='Definition version']")).not.toBeNull();
     expect(container.textContent).not.toContain("WorkflowDefinitionVersion / version-1 / 1.0.0");
     expect(container.textContent).not.toContain("Elsa.Activities.Flowchart.Activities.Flowchart");
 
@@ -1919,6 +1919,62 @@ describe("workflows module", () => {
     await unmount();
   });
 
+  it("shows every originating workflow name, filters by name or reference ID, and labels definition choices", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes("/runtime/workflows/executables")) return response({ executables: [
+        executable({ references: [executableReference({ definitionId: "definition-2", sourceReferenceId: "invoice-reference" })] }),
+        executable({ artifactId: "artifact-2", definitionId: "definition-3", sourceId: "definition-3" })
+      ] });
+      return response({ items: [
+        definition({ name: "Order processing" }),
+        definition({ id: "definition-2", name: "Invoice archive" }),
+        definition({ id: "definition-3", name: "Order processing" })
+      ] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
+    await waitForText(container, "Invoice archive");
+
+    const table = container.querySelector('table[aria-label="Workflow executables"]')!;
+    expect(Array.from(table.querySelectorAll("thead th"), cell => cell.textContent)).toEqual(["Workflow", "Artifact", "Version", "Root", "Published", "Actions"]);
+    expect(Array.from(table.querySelectorAll("tbody tr"), row => row.children.length)).toEqual([6, 6]);
+    expect(table.querySelector("tbody tr td")?.textContent).toContain("Order processing");
+    expect(table.querySelector("tbody tr td")?.textContent).toContain("Invoice archive");
+    expect(Array.from(container.querySelectorAll("datalist option"), option => [option.getAttribute("value"), option.getAttribute("label")])).toEqual([
+      ["definition-2", "Invoice archive · definition-2"],
+      ["definition-1", "Order processing · definition-1"],
+      ["definition-3", "Order processing · definition-3"]
+    ]);
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/design/workflows/definitions"))).toHaveLength(1);
+
+    await fill(inputByLabel(container, "Filter executables by workflow definition"), "INVOICE");
+    expect(container.textContent).toContain("artifact-1");
+    expect(container.textContent).not.toContain("artifact-2");
+    await fill(inputByLabel(container, "Filter executables by workflow definition"), "invoice-reference");
+    expect(container.textContent).toContain("artifact-1");
+    await click(buttonByLabel(container, "Show references of artifact-1"));
+    expect(container.querySelector(".wf-reference-list")?.textContent).toContain("Invoice archive");
+    expect(container.querySelector(".wf-reference-list")?.textContent).toContain("invoice-reference");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(table.querySelector(".wf-executable-reference-row td")?.getAttribute("colspan")).toBe("6");
+    await unmount();
+  });
+
+  it("keeps runtime artifacts usable when workflow names cannot be read", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => String(input).includes("/runtime/workflows/executables")
+      ? response({ executables: [executable({ sourceId: null })] })
+      : response(null, 403)));
+    const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
+    await waitForText(container, "artifact-1");
+    expect(buttonByLabel(container, "Open source definition definition-1: Workflow definition")).not.toBeNull();
+    expect(buttonByLabel(container, "Inspect executable artifact-1")).not.toBeNull();
+    expect(buttonByLabel(container, "Copy source ID version-1")).not.toBeNull();
+    expect(container.textContent).not.toContain("Something went wrong");
+    await fill(inputByLabel(container, "Filter executables by workflow definition"), "version-1");
+    expect(container.textContent).toContain("artifact-1");
+    await unmount();
+  });
+
   it("opens the source definition from the executables grid", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -1929,7 +1985,7 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/executables");
 
     await waitForText(container, "artifact-1");
-    await click(buttonByLabel(container, "Open source definition definition-1"));
+    await click(buttonByLabel(container, "Open source definition definition-1: Hello World"));
 
     expect(window.location.pathname).toBe("/workflows/definitions");
     expect(window.location.search).toBe("?definition=definition-1");
@@ -2005,11 +2061,11 @@ describe("workflows module", () => {
 
     await select(selectByLabel(container, "Executable reference scope"), "test-runs");
     await waitForText(container, "artifact-1");
-    expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain("/executables?scope=TestRuns");
+    expect(String(fetchMock.mock.calls.filter(([url]) => String(url).includes("/runtime/workflows/executables?")).at(-1)?.[0])).toContain("/executables?scope=TestRuns");
 
     await click(checkboxByLabel(container, "Include retired references"));
     await waitForText(container, "Retired");
-    expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain("/executables?scope=TestRuns&includeRetired=true");
+    expect(String(fetchMock.mock.calls.filter(([url]) => String(url).includes("/runtime/workflows/executables?")).at(-1)?.[0])).toContain("/executables?scope=TestRuns&includeRetired=true");
 
     // Runtime artifacts are read-only; lifecycle actions belong to Publishing slots.
     expect(container.textContent).toContain("Retained for inspection");

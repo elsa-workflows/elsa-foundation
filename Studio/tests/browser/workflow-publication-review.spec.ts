@@ -4,12 +4,12 @@ test("keeps the publication decision calm and actions visible at constrained hei
   await page.setViewportSize({ width: 1100, height: 620 });
   await page.goto("/?mode=publication-review&theme=dark");
 
-  const dialog = page.getByRole("dialog", { name: "Review and publish" });
-  await expect(dialog).toContainText("Publication channel");
-  await expect(dialog).toContainText("Replace the current publication in default");
-  await expect(dialog).toContainText("2.0.0 · assigned automatically by version policy");
+  const dialog = page.getByRole("dialog", { name: "Publish workflow" });
+  await expect(dialog.getByText("Update the published workflow with your latest changes.")).toBeVisible();
+  await expect(dialog.getByText("Review changes")).toBeVisible();
+  await expect(dialog.getByText("Publishing options")).toBeVisible();
   await expect(dialog).toContainText("Ready to publish");
-  await expect(dialog.getByText("Advanced details")).toBeVisible();
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
   await expect(dialog.getByRole("button", { name: "Publish" })).toBeVisible();
 
   const dialogBox = await dialog.boundingBox();
@@ -22,22 +22,23 @@ test("keeps the publication decision calm and actions visible at constrained hei
 
 test("creates a named Publication channel and refreshes review automatically", async ({ page }) => {
   await page.goto("/?mode=publication-review");
-  const dialog = page.getByRole("dialog", { name: "Review and publish" });
+  const dialog = page.getByRole("dialog", { name: "Publish workflow" });
+  await dialog.getByText("Publishing options").click();
 
   await dialog.getByLabel("Publication channel").selectOption("__create-publication-channel__");
   await dialog.getByLabel("New publication channel").fill("canary");
 
-  await expect(dialog).toContainText("Create a separate publication channel named canary");
+  await expect(dialog.getByText("Publish your changes to canary.")).toBeVisible();
   await expect(dialog).toContainText("Ready to publish");
   await expect(dialog.getByRole("button", { name: "Publish" })).toBeEnabled();
 });
 
 test("offers exact version editing only when the server advertises support", async ({ page }) => {
   await page.goto("/?mode=publication-review");
-  const dialog = page.getByRole("dialog", { name: "Review and publish" });
+  const dialog = page.getByRole("dialog", { name: "Publish workflow" });
+  await dialog.getByText("Publishing options").click();
 
-  await dialog.getByText("Edit version").click();
-  await dialog.getByRole("radio", { name: /Exact semantic version/ }).check();
+  await dialog.getByRole("radio", { name: /Exact version/ }).check();
   await dialog.getByRole("textbox", { name: "Exact semantic version" }).fill("2.3.0-rc.1");
 
   await expect(dialog).toContainText("2.3.0-rc.1");
@@ -45,7 +46,9 @@ test("offers exact version editing only when the server advertises support", asy
   await expect(dialog.getByRole("button", { name: "Publish" })).toBeEnabled();
 
   await page.goto("/?mode=publication-review&exact=unsupported");
-  await expect(page.getByRole("dialog", { name: "Review and publish" }).getByText("Edit version")).toHaveCount(0);
+  const unsupportedDialog = page.getByRole("dialog", { name: "Publish workflow" });
+  await unsupportedDialog.getByText("Publishing options").click();
+  await expect(unsupportedDialog.getByRole("radio", { name: /Exact version/ })).toHaveCount(0);
 });
 
 test("success and retained-promotion recovery keep their actions in the fixed footer", async ({ page }) => {
@@ -53,15 +56,15 @@ test("success and retained-promotion recovery keep their actions in the fixed fo
   await page.goto("/?mode=publication-review&theme=dark");
   await page.getByRole("button", { name: "Publish" }).click();
 
-  const success = page.getByRole("dialog", { name: "Publication complete" });
-  await expect(success).toContainText("Workflow is published");
+  const success = page.getByRole("dialog", { name: "Published" });
+  await expect(success).toContainText("Version 2.0.0 is active in default.");
   await expect(success.getByRole("button", { name: "Close" })).toBeVisible();
-  await expect(success.getByRole("button", { name: "Open published executable" })).toBeVisible();
+  await expect(success.getByRole("button", { name: "View published workflow" })).toBeVisible();
 
   await page.goto("/?mode=publication-review&outcome=recovery&theme=dark");
   await page.getByRole("button", { name: "Publish" }).click();
-  const recovery = page.getByRole("dialog", { name: "Publication needs attention" });
-  await expect(recovery).toContainText("version was retained, but the channel was not activated");
+  const recovery = page.getByRole("dialog", { name: "Couldn’t publish" });
+  await expect(recovery).toContainText("Version 2.0.0 was retained. Channel default was not activated.");
   await expect(recovery.getByRole("button", { name: "Close" })).toBeVisible();
   await expect(recovery.getByRole("button", { name: "Retry publication" })).toBeVisible();
 });

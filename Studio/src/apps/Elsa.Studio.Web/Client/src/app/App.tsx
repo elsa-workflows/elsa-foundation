@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   Blocks,
@@ -488,6 +488,10 @@ export function ShellFrame({
   const [navQuery, setNavQuery] = useState("");
   const [navCollapsed, setNavCollapsed] = useState(() => getInitialBoolean(sidebarCollapsedStorageKey, false));
   const [moreToolsOpen, setMoreToolsOpen] = useState(() => readMoreToolsOpen());
+  const [topMoreToolsOpen, setTopMoreToolsOpen] = useState(false);
+  const [dismissedMoreToolsQuery, setDismissedMoreToolsQuery] = useState<string | null>(null);
+  const moreToolsSectionRef = useRef<HTMLElement>(null);
+  const moreToolsButtonRef = useRef<HTMLButtonElement>(null);
   // The top navigation mode turns the sidebar into a menubar and moves backend status into a
   // status bar; the icon-rail collapse has no meaning there, so it is ignored (not forgotten).
   const topNav = useNavMode() === "top";
@@ -533,6 +537,21 @@ export function ShellFrame({
   }
 
   const query = navQuery.trim().toLowerCase();
+  const previousPathRef = useRef(path);
+  useLayoutEffect(() => {
+    if (previousPathRef.current === path) return;
+    previousPathRef.current = path;
+    setTopMoreToolsOpen(false);
+    setDismissedMoreToolsQuery(query || null);
+  }, [path, query]);
+
+  const navigateFromTopNavigation = (destination: string) => {
+    setTopMoreToolsOpen(false);
+    setDismissedMoreToolsQuery(null);
+    setNavQuery("");
+    onNavigate(destination);
+  };
+  const navigateFromMainNavigation = topNav ? navigateFromTopNavigation : onNavigate;
   const matchesQuery = (item: StudioNavigationContribution) => item.label.toLowerCase().includes(query);
   // A parent stays visible when it matches directly or when any of its children match, so a filtered
   // child never becomes orphaned. Children are filtered independently in the render below.
@@ -547,14 +566,42 @@ export function ShellFrame({
   const searchableSettingsItems = [...settingsItems, ...adminItems];
   const showSettingsEntry = hasSettingsSections(settingsGroups) && (!query || "settings".includes(query));
   const settingsActive = isSettingsSurfacePath(path, navigation);
-  const moreToolsExpanded = moreToolsOpen || Boolean(query);
+  const moreToolsExpanded = topNav
+    ? topMoreToolsOpen || Boolean(query && query !== dismissedMoreToolsQuery)
+    : moreToolsOpen || Boolean(query);
+  const dismissTopMoreTools = useCallback((returnFocus = false) => {
+    setTopMoreToolsOpen(false);
+    if (query) setDismissedMoreToolsQuery(query);
+    if (returnFocus) moreToolsButtonRef.current?.focus();
+  }, [query]);
   const hasNavResults = mainItems.length + moreItems.length + searchableSettingsItems.length + (showSettingsEntry ? 1 : 0) > 0;
+
+  useEffect(() => {
+    if (!topNav || !moreToolsExpanded) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.key !== "Escape") return;
+      event.preventDefault();
+      dismissTopMoreTools(true);
+    };
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && moreToolsSectionRef.current?.contains(event.target)) return;
+      dismissTopMoreTools();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [dismissTopMoreTools, moreToolsExpanded, topNav]);
 
   return (
     <div className={navCollapsed && !topNav ? "studio-shell sidebar-collapsed" : "studio-shell"}>
       <aside className="sidebar">
         <div className="sidebar-top">
-          <a className="brand" href="/" onClick={event => { event.preventDefault(); onNavigate("/"); }}>
+          <a className="brand" href="/" onClick={event => { event.preventDefault(); navigateFromMainNavigation("/"); }}>
             <span className="brand-mark" aria-hidden="true">
               <img src={elsaLogo} alt="" />
             </span>
@@ -582,9 +629,16 @@ export function ShellFrame({
             aria-label="Search modules"
             placeholder="Search modules"
             value={navQuery}
-            onChange={event => setNavQuery(event.target.value)}
+            onChange={event => {
+              setDismissedMoreToolsQuery(null);
+              setNavQuery(event.target.value);
+            }}
             onKeyDown={event => {
-              if (event.key === "Escape" && navQuery) {
+              if (event.key !== "Escape") return;
+              if (topNav && moreToolsExpanded) {
+                event.preventDefault();
+                dismissTopMoreTools(true);
+              } else if (navQuery) {
                 event.preventDefault();
                 setNavQuery("");
               }
@@ -606,21 +660,42 @@ export function ShellFrame({
                 items={visibleNavigation}
                 path={path}
                 collapsed={navCollapsed}
-                onNavigate={onNavigate}
+                onNavigate={navigateFromMainNavigation}
               />
             ))}
           </nav>
         ) : null}
 
         {moreItems.length > 0 ? (
-          <nav className="nav-section nav-section-more" aria-label="More tools">
+          <nav
+            ref={moreToolsSectionRef}
+            className="nav-section nav-section-more"
+            aria-label="More tools"
+            onBlur={event => {
+              if (!topNav) return;
+              const nextTarget = event.relatedTarget;
+              if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+              dismissTopMoreTools();
+            }}
+          >
             <button
+              ref={moreToolsButtonRef}
               type="button"
               className={["nav-disclosure", moreToolsExpanded ? "open" : ""].filter(Boolean).join(" ")}
               aria-expanded={moreToolsExpanded}
               aria-controls="studio-nav-more-tools"
               title={navCollapsed ? "More tools" : undefined}
-              onClick={() => setMoreToolsOpen(current => !current)}
+              onClick={() => {
+                if (!topNav) {
+                  setMoreToolsOpen(current => !current);
+                  return;
+                }
+                if (moreToolsExpanded) dismissTopMoreTools();
+                else {
+                  setTopMoreToolsOpen(true);
+                  setDismissedMoreToolsQuery(null);
+                }
+              }}
             >
               <span className="nav-icon-tile" aria-hidden="true">
                 <Ellipsis size={18} />
@@ -638,7 +713,7 @@ export function ShellFrame({
                     items={visibleNavigation}
                     path={path}
                     collapsed={navCollapsed}
-                    onNavigate={onNavigate}
+                    onNavigate={topNav ? navigateFromTopNavigation : onNavigate}
                   />
                 ))}
               </div>
@@ -657,7 +732,7 @@ export function ShellFrame({
                 items={visibleNavigation}
                 path={path}
                 collapsed={navCollapsed}
-                onNavigate={onNavigate}
+                onNavigate={navigateFromMainNavigation}
               />
             ))}
           </nav>
@@ -671,7 +746,7 @@ export function ShellFrame({
               title={navCollapsed ? "Settings" : undefined}
               onClick={event => {
                 event.preventDefault();
-                onNavigate("/settings");
+                navigateFromMainNavigation("/settings");
               }}
             >
               <span className="nav-icon-tile" style={{ "--nav-icon-color": navIconColors.themes } as NavIconTileStyle} aria-hidden="true">

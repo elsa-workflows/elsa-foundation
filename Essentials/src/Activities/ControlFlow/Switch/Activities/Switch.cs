@@ -24,6 +24,7 @@ namespace Elsa.Activities.Switch.Activities;
 /// non-nullable strings and selection compares them ordinally against the value, so a null value never
 /// equals any declared case.
 /// </remarks>
+[Activity(Icon = "Split")]
 [ActivityStructure("elsa.switch.structure", "1.0.0")]
 [ActivityOutcome(ActivityOutcomes.Default)]
 [ActivityOutcome(ActivityOutcomes.Break)]

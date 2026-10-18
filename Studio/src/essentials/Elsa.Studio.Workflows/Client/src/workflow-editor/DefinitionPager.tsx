@@ -1,6 +1,6 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { definitionPageSizes } from "./constants";
-import { getTotalPages } from "./editorHelpers";
+import { getTotalPages } from "./editorListHelpers";
 
 export function DefinitionPager({ page, pageSize, totalCount, itemCount, hasNextPage, onPageChange, onPageSizeChange }: {
   page: number;
