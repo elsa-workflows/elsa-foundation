@@ -297,10 +297,12 @@ describe("activity property organization", () => {
     });
 
     const fields = [...container.querySelectorAll(".wf-expression-field")];
-    expect(fields).toHaveLength(2);
+    expect(fields).toHaveLength(1);
     expect(fields.every(field => !field.classList.contains("wf-expression-field--toggle"))).toBe(true);
     expect(fields[0]?.querySelector("textarea[aria-label='JavaScript expression']")).not.toBeNull();
-    expect(fields[1]?.textContent).toContain("current value is preserved and read-only");
+    const referenceRow = container.querySelector("[aria-label='VariableValue expression syntax']")?.closest(".wf-property-row");
+    expect(referenceRow?.querySelector(".wf-expression-field")).toBeNull();
+    expect(referenceRow?.textContent).toContain("current value is preserved and read-only");
   });
 
   it("does not steal focus for pre-existing text expressions and still expands regardless of property type", () => {
@@ -801,7 +803,8 @@ describe("secret-only inputs", () => {
   // Each layout has its own syntax picker. A dictionary layout is reached only when the Secret descriptor
   // reports literal mode, since a secret-only input's syntax is always Secret.
   const layouts: Array<[string, string, Partial<StudioActivityInputDescriptor>, StudioExpressionDescriptor["editingMode"]]> = [
-    ["inline", ".wf-expression-field .wf-syntax-picker-trigger", {}, "reference"],
+    ["reference", ".wf-syntax-picker-trigger:not(.inline)", {}, "reference"],
+    ["inline", ".wf-expression-field .wf-syntax-picker-trigger", {}, "literal"],
     ["block", ".wf-syntax-picker-trigger:not(.inline)", { uiHint: "multiline" }, "reference"],
     ["dictionary", ".wf-dictionary-expression-toolbar .wf-syntax-picker-trigger", { typeName: "System.Collections.Generic.IDictionary`2[System.String,System.String]" }, "literal"]
   ];

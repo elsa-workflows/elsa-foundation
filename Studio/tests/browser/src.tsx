@@ -56,6 +56,7 @@ import { createPublicationReview, type PublicationReviewState, type PublicationV
 import type { PublicationIntent } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/publishing";
 import { JavaScriptExpandedEditor, JavaScriptInlineEditor } from "../../../Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/module";
 import { LiquidExpandedEditor, LiquidInlineEditor } from "../../../Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Client/src/module";
+import { SecretPickerEditor } from "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretPickerEditor";
 import {
   applyActivityVersionChange,
   findActivityOccurrence,
@@ -69,12 +70,14 @@ import type {
 import { getTheme, themeTokenNames } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/presets";
 import "../../src/apps/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
+import "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/styles.css";
 import "./fixture.css";
 
 const searchParams = new URLSearchParams(window.location.search);
 const scrollingFixture = searchParams.get("mode") === "scroll";
 const dictionaryFixture = searchParams.get("mode") === "dictionary";
 const scalarInputsFixture = searchParams.get("mode") === "scalar-inputs";
+const secretReferenceFixture = searchParams.get("mode") === "secret-reference";
 const lazyBoundaryFixture = searchParams.get("mode") === "lazy-boundary";
 const inputEvidenceFixture = searchParams.get("mode") === "input-evidence";
 const runDetailFixture = searchParams.get("mode") === "run-detail" || inputEvidenceFixture;
@@ -579,20 +582,41 @@ const scalarInputDescriptor: StudioActivityDescriptor = {
   ports: []
 };
 
+const secretReferenceDescriptor: StudioActivityDescriptor = {
+  ...scalarInputDescriptor,
+  inputs: [
+    ...scalarInputDescriptor.inputs,
+    { name: "ApiToken", displayName: "API token", typeName: "System.String", uiHint: "singleline", isWrapped: true, defaultSyntax: "Literal", isBrowsable: true }
+  ]
+};
+
 const scalarInputValues: Record<string, unknown> = {
   PolicyReference: "abc", ProposedPremium: 100.5, RenewalCount: 1, Rate: 0.5,
   Duration: "00:00:30", Priority: "normal", Identifier: "", Notes: "", References: []
 };
 
+const secretPickerExpressionEditor: StudioExpressionEditorContribution = {
+  id: "browser.secret-reference-editor",
+  order: 100,
+  supports: context => context.syntax === "Secret",
+  surfaces: {
+    inline: props => <SecretPickerEditor {...props} endpointContext={endpointContext} />
+  },
+  createDefaultValue: () => null
+};
+
 function Fixture() {
+  const activeScalarDescriptor = secretReferenceFixture ? secretReferenceDescriptor : scalarInputDescriptor;
   const [activity, setActivity] = useState<ActivityNode>({
     nodeId: "http-endpoint-1",
     activityVersionId: "http-endpoint-v1",
-    ...(scalarInputsFixture ? Object.fromEntries(scalarInputDescriptor.inputs.map(input => [
+    ...(scalarInputsFixture || secretReferenceFixture ? Object.fromEntries(activeScalarDescriptor.inputs.map(input => [
       input.name[0]!.toLowerCase() + input.name.slice(1),
-      { typeName: input.typeName, expression: { type: "Literal", value: scalarInputValues[input.name] } }
+      { typeName: input.typeName, expression: input.name === "ApiToken"
+        ? { type: "Secret", value: null }
+        : { type: "Literal", value: scalarInputValues[input.name] } }
     ])) : {}),
-    inputs: scalarInputsFixture ? [] : [{ referenceKey: "Path", value: { value: "/orders", expressionType: "Literal" } }],
+    inputs: scalarInputsFixture || secretReferenceFixture ? [] : [{ referenceKey: "Path", value: { value: "/orders", expressionType: "Literal" } }],
     outputs: [],
     structure: null,
     ...(dictionaryFixture ? {
@@ -613,7 +637,13 @@ function Fixture() {
     } : {})
   });
 
-  const activeDescriptor = scalarInputsFixture ? scalarInputDescriptor : dictionaryFixture ? dictionaryDescriptor : descriptor;
+  const activeDescriptor = scalarInputsFixture
+    ? scalarInputDescriptor
+    : secretReferenceFixture
+      ? secretReferenceDescriptor
+      : dictionaryFixture
+        ? dictionaryDescriptor
+        : descriptor;
 
   return (
     <main className="wf-editor browser-fixture">
@@ -621,14 +651,14 @@ function Fixture() {
         <h1>Workflow designer</h1>
         <p>The inspector intentionally clips its own content to reproduce the original stacking defect.</p>
       </div>
-      <aside className={`wf-inspector browser-inspector${scalarInputsFixture ? " browser-inspector--scalar" : ""}${scrollingFixture ? " browser-inspector--scroll" : ""}`} aria-label="Activity inspector">
+      <aside className={`wf-inspector browser-inspector${scalarInputsFixture || secretReferenceFixture ? " browser-inspector--scalar" : ""}${scrollingFixture ? " browser-inspector--scroll" : ""}`} aria-label="Activity inspector">
         <h2>{activeDescriptor.displayName}</h2>
         {scalarInputsFixture ? null : <div className="browser-inspector-spacer" aria-hidden="true" />}
         <ActivityPropertiesPanel
           activity={activity}
           descriptor={activeDescriptor}
-          editors={scalarInputsFixture ? builtInPropertyEditors : []}
-          expressionEditors={[]}
+          editors={scalarInputsFixture || secretReferenceFixture ? builtInPropertyEditors : []}
+          expressionEditors={secretReferenceFixture ? [secretPickerExpressionEditor] : []}
           expressionDescriptors={expressionDescriptors}
           expressionDescriptorStatus="ready"
           descriptorStatus="ready"
