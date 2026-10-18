@@ -20351,6 +20351,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Activities.Bpmn",
+          "path": "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.ControlFlow",
           "path": "Essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj"
         },

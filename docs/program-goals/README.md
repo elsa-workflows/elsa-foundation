@@ -30,6 +30,7 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 | [Elsa 4 Website and Documentation](https://github.com/elsa-workflows/elsa-foundation/issues/2495) | Active in parallel | Foundation-owned documentation and GitBook | Sipke | #2498 source setup and hosted qualification; preserve Elsa 3 publishing |
 | [Elsa 4 Simplification](elsa-4-simplification.md) | Active | Whole product: tests, API, language, structure, docs | Sipke | Program #2559, ADR 0080 |
 | [Runtime Efficiency](runtime-efficiency.md) | Active | Runtime database access, persistence modes, concurrent correctness | Sipke | Program #2531; persistence-mode epic #2564 |
+| [Unified Execution](unified-execution.md) | Active; owner authorization, 18 October | Native workflows, BPMN, ETL, hosting and agent collaboration | Sipke | Program #2892; lifecycle compatibility under #2905, released BPMN adoption under #2735 |
 | [BPMN Engine](bpmn-engine.md) | Active; owner exception, 14 October | BPMN composite, interchange, shared `valence-works/bpmn` core | Sipke | #2735 switch to `Bpmn.Semantics`; #2736 refuse degraded imports |
 | [Elsa 3.8/3.9 Parity](elsa3-parity.md) | Active; owner exception, 15 October | Identity administration, then tenancy, Elsa 3 import, operations, modules | Sipke | Program #2771, ADR 0085; Phase 1 users and roles |
 
@@ -38,14 +39,15 @@ reactivates existing #2501 and #2495 as named exceptions to parking and the two-
 Their linked issues are the current charters and decision records; reuse their existing queues.
 The [14 October owner amendment](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) adds BPMN Engine as a third named exception.
 The [15 October owner amendment](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) adds Elsa 3.8/3.9 Parity as a fourth.
-None of these amendments reactivates any other parked goal or authorizes programs beyond the ones they name. The remaining goals below retain
+The [18 October unified-execution authorization](unified-execution.md) adds Program #2892 within its explicit scope.
+None of these authorizations reactivates unrelated parked goals or authorizes programs beyond the ones they name. The remaining goals below retain
 their own status and decisions, including the 2026-11-21 review for parked work unless separately superseded.
 
 | Goal | Status |
 |---|---|
 | [Elsa 4 Contributor Experience](workspace-launch-readiness.md) | Parked |
 | [Elsa Foundation Operating Model](elsa-foundation-operating-model.md) | Parked |
-| [Runtime Execution Seam](runtime-execution-seam.md) | Parked |
+| [Runtime Execution Seam](runtime-execution-seam.md) | Historical objectives parked; named #2892 continuation active |
 | [Runtime Database Access](runtime-db-access.md) | Merged into Runtime Efficiency |
 | [Runtime Throughput](runtime-throughput.md) | Merged into Runtime Efficiency |
 | [Runtime Execution Evidence](runtime-execution-evidence.md) | Parked |

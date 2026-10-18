@@ -75,6 +75,15 @@ exceptions, by [owner decision on valence-works/strategy#8](https://github.com/v
 (maintainers only). Its decisions are recorded in [ADR 0085](0085-elsa-3-parity-identity-administration-and-scope.md);
 its first units are Phase 1, users and roles. The remaining decisions in this ADR apply to that work as to any other.
 
+**Owner amendment, 18 October 2026:** [Unified Execution #2892](../program-goals/unified-execution.md)
+is authorized for end-to-end implementation as a named exception to D0's parking and two-program cap.
+The [approved continuation](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6249319967)
+and [BPMN authority amendment](https://github.com/elsa-workflows/elsa-foundation/issues/2892#issuecomment-6249325156)
+record the scope: native/BPMN lifecycle integration, extensible hosting, ETL, agent collaboration and shared tooling,
+including necessary BPMN-library changes and releases. Reuse the existing #2892 hierarchy and #2735 adoption work;
+keep one active implementation leaf and do not reactivate unrelated parked objectives. The remaining decisions
+in this ADR continue to apply within the current owner-authorized scope.
+
 ### D1 — Risk-based testing
 
 - Test observable behaviour at the cheapest level that proves it; unit-test logic that carries real risk.
