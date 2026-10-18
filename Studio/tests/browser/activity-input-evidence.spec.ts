@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import axe from "axe-core";
 
-async function mockInputEvidence(page: Page, longText = "", includeOutputEvidence = false) {
+async function mockInputEvidence(page: Page, longText = "", outputEvidence: "none" | "uniform" | "mixed" = "none") {
   await page.route("**/capabilities", route => route.fulfill({ json: { capabilities: [{
     id: "elsa.api.runtime", contractVersion: "1", links: [
       { rel: "activity-execution", href: "/evidence-inspection/{workflowExecutionId}/{activityExecutionId}" },
@@ -14,10 +14,12 @@ async function mockInputEvidence(page: Page, longText = "", includeOutputEvidenc
     phase: "invoke", sequence: 1, evaluationId: `${inputKey}-1`,
     capturedAt: "2026-10-04T10:00:00Z", isSensitive: false, metadata: {}, ...extra
   });
-  const outputSnapshots = includeOutputEvidence ? [
+  const outputSnapshots = outputEvidence !== "none" ? [
     snapshot("total", "Total", {
       subject: "ActivityOutput", type: { typeName: "System.Decimal" },
-      snapshot: { kind: "number", value: 42 }
+      ...(outputEvidence === "mixed"
+        ? { captureMode: "Payload", captureState: "payloadCaptured", payload: 42, snapshot: null }
+        : { snapshot: { kind: "number", value: 42 } })
     }),
     snapshot("response", "Response", {
       subject: "ActivityOutput", type: { typeName: "System.Object" },
@@ -29,7 +31,7 @@ async function mockInputEvidence(page: Page, longText = "", includeOutputEvidenc
   ] : [];
   await page.route("**/evidence-inspection/**", route => route.fulfill({ json: {
     activityExecutionId: "renewal-execution", workflowExecutionId: "renewal-run",
-    outcomeNames: includeOutputEvidence ? ["Succeeded", "NeedsReview"] : [],
+    outcomeNames: outputEvidence !== "none" ? ["Succeeded", "NeedsReview"] : [],
     valueSnapshots: [
       snapshot("policy", "PolicyReference", { accessState: "resolutionAvailable", snapshot: null }),
       snapshot("premium", "Premium", { snapshot: { kind: "number", value: 1250.75 } }),
@@ -48,9 +50,30 @@ async function mockInputEvidence(page: Page, longText = "", includeOutputEvidenc
   } }));
 }
 
+test("mixed output provenance keeps names readable in a narrow inspector", async ({ page }) => {
+  await mockInputEvidence(page, "", "mixed");
+  await page.setViewportSize({ width: 360, height: 1000 });
+  await page.goto("/?mode=input-evidence&theme=dark");
+  await page.getByRole("button", { name: "Select activity" }).click();
+
+  const outputs = page.locator(".wf-instance-section").filter({ has: page.getByRole("heading", { name: /Outputs/ }) });
+  await expect(outputs.locator(".wf-runtime-evidence-heading .wf-runtime-capture-mode")).toHaveText("Mixed evidence");
+  for (const name of ["Total", "Response"]) {
+    const row = outputs.locator(".wf-runtime-input").filter({ hasText: name });
+    const label = row.locator("header strong");
+    await expect(label).toBeVisible();
+    const size = await label.evaluate(element => ({ width: element.clientWidth, contentWidth: element.scrollWidth }));
+    expect(size.width).toBeGreaterThan(0);
+    expect(size.width).toBeGreaterThanOrEqual(size.contentWidth);
+    await expect(row.locator("header .wf-runtime-capture-mode")).toHaveCount(1);
+  }
+  const inspector = page.getByRole("complementary", { name: "Run details" });
+  expect(await inspector.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+});
+
 for (const theme of ["light", "dark"]) {
   test(`outputs and outcomes stay compact and keyboard-disclosable in ${theme} theme`, async ({ page }) => {
-    await mockInputEvidence(page, "", true);
+    await mockInputEvidence(page, "", "uniform");
 
     for (const width of [1440, 360]) {
       await page.setViewportSize({ width, height: 1000 });

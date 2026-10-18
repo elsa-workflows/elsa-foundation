@@ -1547,9 +1547,8 @@
 }
 
 .wf-activity-output-list .wf-runtime-input header {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
+  display: grid;
+  gap: 4px;
   margin: 0;
   border: 0;
   background: transparent;
