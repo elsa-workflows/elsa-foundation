@@ -11,6 +11,7 @@ import { createActivityNode } from "./workflowAdapter";
 import { canonicalizeStateForWire } from "./activityInputWire";
 import { WorkflowRootRadioCards } from "./workflow-editor/WorkflowRootCards";
 import { useDialogFocus } from "./workflow-editor/useDialogFocus";
+import { getCreateRootActivity } from "./workflow-editor/editorHelpers";
 import { defaultActivityGraphOutcomeChoice, getActivityGraphOutcomeMappingOptions } from "./activityGraphOutcomeMappingOptions";
 
 export interface ProviderChoice {
@@ -60,12 +61,11 @@ export function ActivityDefinitionCreateDialog({ context, activityEditors, onClo
       setRootActivityVersionId(null);
       return;
     }
-    setRootActivityVersionId(current => current && catalog.some(activity => activity.activityVersionId === current)
-      ? current
-      : catalog.find(activity => activity.activityTypeKey.endsWith(".Flowchart") || activity.displayName === "Flowchart")?.activityVersionId ?? null);
+    setRootActivityVersionId(current => (getCreateRootActivity(current, catalog)
+      ?? getCreateRootActivity(null, catalog))?.activityVersionId ?? null);
   }, [catalog, isGraphCreation]);
   const rules = capabilitiesQuery.data?.activityTypeKeyRules;
-  const canSubmit = Boolean(choice?.contribution && displayName.trim() && category.trim() && !submitting && (!isGraphCreation || rootActivityVersionId));
+  const canSubmit = Boolean(choice?.contribution && displayName.trim() && category.trim() && !submitting && (!isGraphCreation || (rootActivityVersionId && getCreateRootActivity(rootActivityVersionId, catalog))));
 
   const submit = async () => {
     if (!choice?.contribution || !capabilitiesQuery.data || !canSubmit) return;
@@ -184,7 +184,7 @@ export function createGraphInitialState(
 ): { implementation: StudioActivityDefinitionImplementationState; outcomes: ActivityOutcomeContract[] } | null {
   if (!rootActivityVersionId) return null;
   const rootDescriptor = catalog.find(item => item.activityVersionId === rootActivityVersionId);
-  if (!rootDescriptor?.authoringTemplate) return null;
+  if (rootDescriptor?.available === false || !rootDescriptor?.authoringTemplate) return null;
   const rootActivity = canonicalizeStateForWire({ rootActivity: createActivityNode(rootDescriptor, "root") }).rootActivity!;
   const payload = implementation.payload && typeof implementation.payload === "object" && !Array.isArray(implementation.payload)
     ? implementation.payload as Record<string, unknown>

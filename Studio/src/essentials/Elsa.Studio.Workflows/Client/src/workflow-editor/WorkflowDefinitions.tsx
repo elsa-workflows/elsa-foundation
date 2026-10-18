@@ -45,6 +45,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
   const [creating, setCreating] = useState(false);
   const [catalog, setCatalog] = useState<ActivityCatalogItem[]>([]);
   const [catalogState, setCatalogState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
+  const [catalogError, setCatalogError] = useState("");
   const [folderCapability, setFolderCapability] = useState<"unknown" | "available" | "unavailable">("unknown");
   const [moveCapabilityAvailable, setMoveCapabilityAvailable] = useState(false);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
@@ -191,6 +192,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
   const loadCatalog = useCallback(async () => {
     if (catalogState === "loading" || catalogState === "ready") return;
     setCatalogState("loading");
+    setCatalogError("");
     try {
       const { listActivities } = await import("../api/activityDesign");
       const response = await listActivities(context);
@@ -198,7 +200,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
       setCatalogState("ready");
     } catch (e) {
       setCatalogState("failed");
-      setError(e instanceof Error ? e.message : String(e));
+      setCatalogError(e instanceof Error ? e.message : String(e));
     }
   }, [catalogState, context]);
 
@@ -210,17 +212,21 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
   };
 
   const submitCreate = async () => {
-    if (!createDraft?.name.trim()) return;
+    if (!createDraft?.name.trim() || catalogState !== "ready") return;
     setCreating(true);
     setError("");
     setStatus("");
     try {
       const folderId = folderCapability === "available" ? selectedFolderId(folderSelection) : null;
       const { getCreateInitialState } = await import("./editorHelpers");
+      const initialState = getCreateInitialState(createDraft, catalog);
+      if (!initialState?.rootActivity) {
+        throw new Error("Choose a starting activity that has an authoring template before creating this workflow.");
+      }
       const details = await createDefinition(context, {
         name: createDraft.name.trim(),
         description: createDraft.description.trim() || null,
-        initialState: getCreateInitialState(createDraft, catalog),
+        initialState,
         ...(folderId ? { folderId } : {})
       });
       setCreateDraft(null);
@@ -519,11 +525,14 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
           <CreateWorkflowDialog
             draft={createDraft}
             catalog={catalog}
+            catalogState={catalogState}
+            catalogError={catalogError}
             creating={creating}
             ai={ai}
             suggestMetadataAction={suggestMetadataAction}
             onChange={nextDraft => setCreateDraft(nextDraft)}
             onClose={() => setCreateDraft(null)}
+            onRetryCatalog={() => void loadCatalog()}
             onSubmit={submitCreate}
           />
         </Suspense>

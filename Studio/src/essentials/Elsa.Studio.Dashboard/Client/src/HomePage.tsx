@@ -121,9 +121,14 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
     update(value => ({ widgets: value.widgets.map(entry => entry.id === id ? { ...entry, ...patch } : entry) }));
   const move = (id: string, delta: -1 | 1) => update(value => {
     const widgets = [...value.widgets];
-    const from = widgets.findIndex(entry => entry.id === id);
-    const to = Math.max(0, Math.min(widgets.length - 1, from + delta));
-    if (from >= 0 && from !== to) widgets.splice(to, 0, widgets.splice(from, 1)[0]);
+    const visibleIndexes = widgets.flatMap((entry, index) => entry.visible && known.has(entry.id) ? [index] : []);
+    const fromIndex = widgets.findIndex(entry => entry.id === id);
+    const from = visibleIndexes.indexOf(fromIndex);
+    const to = Math.max(0, Math.min(visibleIndexes.length - 1, from + delta));
+    if (from >= 0 && from !== to) {
+      const toIndex = visibleIndexes[to];
+      [widgets[fromIndex], widgets[toIndex]] = [widgets[toIndex], widgets[fromIndex]];
+    }
     const title = known.get(id)?.title ?? id;
     const visibleAfter = widgets.filter(entry => entry.visible && known.has(entry.id));
     const position = visibleAfter.findIndex(entry => entry.id === id) + 1;

@@ -51,6 +51,24 @@ describe("HomePage", () => {
     flushSync(() => root.unmount());
   });
 
+  it("reorders visible widgets past hidden entries", async () => {
+    const api = stubApi();
+    api.dashboardWidgets.add(widget({ id: "first", title: "First" }));
+    api.dashboardWidgets.add(widget({ id: "second", title: "Second" }));
+    api.dashboardWidgets.add(widget({ id: "third", title: "Third" }));
+    seedHomeLayout(api, ["first", "second", "third"]);
+    const { container, root } = render(api);
+    await waitUntil(() => container.querySelectorAll("article").length === 3);
+
+    clickText(container, "Edit home");
+    click(container, "Hide Second");
+    click(container, "Move First later");
+
+    expect([...container.querySelectorAll("article h3")].map(value => value.textContent?.replace("⠿", ""))).toEqual(["Third", "First"]);
+    expect(container.querySelector("[aria-live='polite']")?.textContent).toBe("First moved to position 2 of 2");
+    flushSync(() => root.unmount());
+  });
+
   it("isolates loader failure and retries only the failed widget", async () => {
     const api = stubApi();
     const load = vi.fn()

@@ -203,6 +203,16 @@ public sealed class RuntimeInputBindingCompiler(
             ActivityValuePolicy.Default);
     }
 
+    /// <summary>Compiles a published boundary input that has no authored state or declared default.</summary>
+    internal RuntimeInputBinding CompileUnboundPublishedBoundaryInput(
+        string nodeId,
+        ActivityInputContract contract)
+    {
+        ArgumentNullException.ThrowIfNull(contract);
+
+        return CompileUnbound(nodeId, ToInputDefinition(contract), ActivityValuePolicy.Default);
+    }
+
     public RuntimeInputBinding Compile(string nodeId, InputDefinition inputDefinition, ArgumentValue value) =>
         CompileBound(nodeId, inputDefinition, value, DeclaredPolicy(inputDefinition), conversion: null);
 

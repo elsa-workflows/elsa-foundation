@@ -3056,6 +3056,13 @@ textarea:focus {
     align-items: center;
   }
 
+  .nav-disclosure-panel {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 4px;
+  }
+
   .nav-children {
     display: flex;
     flex: 0 0 auto;

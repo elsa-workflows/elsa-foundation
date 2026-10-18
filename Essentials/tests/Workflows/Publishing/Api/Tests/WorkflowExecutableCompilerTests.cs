@@ -725,6 +725,86 @@ public sealed class WorkflowExecutableCompilerTests
     }
 
     [Fact]
+    public async Task Placed_reusable_activity_rejects_an_omitted_optional_nonnullable_reference_input_during_compile()
+    {
+        var compiler = PlacedReusableCompiler(
+            authoredInput: null,
+            valueTypeAlias: "String",
+            primaryInputIsRequired: false);
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains(
+            "VF-ACT-003: Optional input 'value' with non-nullable type alias 'String' requires an authored binding or pinned default.",
+            exception.Message,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Placed_reusable_activity_accepts_an_authored_value_for_an_optional_nonnullable_reference_input()
+    {
+        var compiler = PlacedReusableCompiler(
+            new WorkflowArgumentState("value", new ArgumentValue(JsonSerializer.SerializeToElement("hello"), "Literal"), null, null, null, null),
+            valueTypeAlias: "String",
+            primaryInputIsRequired: false);
+
+        var executable = await compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+
+        Assert.Equal("hello", executable.RootActivity.InputBindings["value"].LiteralValue!.Value.GetString());
+    }
+
+    [Fact]
+    public async Task Placed_reusable_activity_materializes_an_omitted_optional_nullable_reference_input_as_absent()
+    {
+        var executable = await PlacedReusableCompiler(
+                authoredInput: null,
+                valueTypeAlias: "String",
+                primaryInputIsRequired: false,
+                primaryInputIsNullable: true)
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+        var materializer = new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), TestWellKnownTypeRegistry.Create());
+
+        var snapshot = await materializer.MaterializeSnapshotAsync(
+            executable.RootActivity,
+            "consumer-execution",
+            new RuntimeInputBindingResolutionContext("workflow-execution", "consumer-execution", executable: executable),
+            DateTimeOffset.UnixEpoch);
+
+        Assert.Equal(ValuePresence.Absent, snapshot.Values["value"].Presence);
+    }
+
+    [Fact]
+    public async Task Placed_reusable_activity_pins_the_clr_default_for_an_omitted_optional_nonnullable_value_input()
+    {
+        var executable = await PlacedReusableCompiler(
+                authoredInput: null,
+                valueTypeAlias: "Int32",
+                primaryInputIsRequired: false)
+            .CompileAsync(NewRequest(DateTimeOffset.UtcNow));
+        var materializer = new RuntimeActivityInputMaterializer(new RuntimeInputBindingResolver(), TestWellKnownTypeRegistry.Create());
+
+        var snapshot = await materializer.MaterializeSnapshotAsync(
+            executable.RootActivity,
+            "consumer-execution",
+            new RuntimeInputBindingResolutionContext("workflow-execution", "consumer-execution", executable: executable),
+            DateTimeOffset.UnixEpoch);
+
+        Assert.Equal(0, snapshot.Values["value"].InlineValue!.Value.GetInt32());
+    }
+
+    [Fact]
+    public async Task Placed_reusable_activity_still_rejects_an_omitted_required_input()
+    {
+        var compiler = PlacedReusableCompiler(authoredInput: null, valueTypeAlias: "String");
+
+        var exception = await Assert.ThrowsAsync<WorkflowExecutableCompilationException>(
+            () => compiler.CompileAsync(NewRequest(DateTimeOffset.UtcNow)).AsTask());
+
+        Assert.Contains("missing required input 'value'", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Background_placement_refuses_a_reusable_activity_boundary()
     {
         var compiler = PlacedReusableCompiler(
@@ -882,26 +962,32 @@ public sealed class WorkflowExecutableCompilerTests
         null, null, null, null);
 
     /// <summary>
-    /// A workflow that places one design-owned reusable activity whose boundary has a contract input <c>value</c>
-    /// (Int32 unless <paramref name="valueTypeAlias"/> says otherwise), authored as <paramref name="authoredInput"/>, plus
-    /// one contract input per <paramref name="extraInputs"/> entry, authored as its state and typed by its alias.
+    /// A workflow that places one design-owned reusable activity with a primary boundary contract input <c>value</c>
+    /// (Int32 unless <paramref name="valueTypeAlias"/> says otherwise), optionally authored as <paramref name="authoredInput"/>,
+    /// plus one required contract input per <paramref name="extraInputs"/> entry, authored as its state and typed by its alias.
     /// </summary>
     private WorkflowExecutableCompiler PlacedReusableCompiler(
-        WorkflowArgumentState authoredInput,
+        WorkflowArgumentState? authoredInput,
         string valueTypeAlias = "Int32",
         Elsa.Activities.Runtime.Core.Models.SideEffectProfile templateRootProfile = Elsa.Activities.Runtime.Core.Models.SideEffectProfile.External,
         ActivityExecutionPlacement executionPlacement = ActivityExecutionPlacement.Inline,
+        bool primaryInputIsRequired = true,
+        bool primaryInputIsNullable = false,
         params (string TypeAlias, WorkflowArgumentState State)[] extraInputs)
     {
-        var primaryInputName = StringComparer.Ordinal.Equals(authoredInput.ReferenceKey, "value")
+        var primaryInputKey = authoredInput?.ReferenceKey ?? "value";
+        var primaryInputName = StringComparer.Ordinal.Equals(primaryInputKey, "value")
             ? "Value"
-            : authoredInput.ReferenceKey;
+            : primaryInputKey;
         var contract = new DesignActivityContract("1", [new DesignActivityInputContract(
-            authoredInput.ReferenceKey, primaryInputName, new TypeReference(valueTypeAlias), true,
-            false, null, "elsa.json"), ..extraInputs.Select(extra => new DesignActivityInputContract(
+            primaryInputKey, primaryInputName, new TypeReference(valueTypeAlias), primaryInputIsRequired,
+            primaryInputIsNullable, null, "elsa.json"), ..extraInputs.Select(extra => new DesignActivityInputContract(
             extra.State.ReferenceKey, extra.State.ReferenceKey, new TypeReference(extra.TypeAlias), true,
             false, null, "elsa.json"))], [new ActivityOutputContract(
             "result", "Result", new TypeReference("Int32"), true, false, "elsa.json")], []);
+        var authoredInputs = extraInputs.Select(extra => extra.State).ToList();
+        if (authoredInput is not null)
+            authoredInputs.Insert(0, authoredInput);
         var root = new ExecutableNode(
             "local-root", "local-root", "test.boundary", "1",
             new("test.boundary", "1", JsonSerializer.SerializeToElement(new { plan = 1 })),
@@ -914,8 +1000,10 @@ public sealed class WorkflowExecutableCompilerTests
                 hasValueInput: true,
                 valueTypeAlias: valueTypeAlias,
                 sideEffectProfile: templateRootProfile,
-                inputKey: authoredInput.ReferenceKey,
+                inputKey: primaryInputKey,
                 inputName: primaryInputName,
+                inputIsRequired: primaryInputIsRequired,
+                inputIsNullable: primaryInputIsNullable,
                 additionalInputs: extraInputs.Select(extra => new Elsa.Activities.Runtime.Core.Models.ActivityInputContract(
                     extra.State.ReferenceKey,
                     extra.State.ReferenceKey,
@@ -960,7 +1048,7 @@ public sealed class WorkflowExecutableCompilerTests
             null, null, null, null);
         return TestCompiler.Create(
             new FakeVersionStore(WorkflowVersion(
-            new ActivityNode("use-greet", publication.DefinitionVersionId, [authoredInput, ..extraInputs.Select(extra => extra.State)], [outputTarget])
+            new ActivityNode("use-greet", publication.DefinitionVersionId, authoredInputs, [outputTarget])
             {
                 ExecutionPlacement = executionPlacement
             },
@@ -3152,6 +3240,8 @@ public sealed class WorkflowExecutableCompilerTests
         string outputProjectionKey = "Result",
         string inputKey = "value",
         string? inputName = null,
+        bool inputIsRequired = true,
+        bool inputIsNullable = false,
         IReadOnlyCollection<Elsa.Activities.Runtime.Core.Models.ActivityInputContract>? additionalInputs = null)
     {
         var descriptor = JsonSerializer.SerializeToElement(new { plan = 1 });
@@ -3163,8 +3253,8 @@ public sealed class WorkflowExecutableCompilerTests
                         inputKey,
                         inputName ?? "Value",
                         new ValueTypeDescriptor(valueTypeAlias),
-                        isRequired: true,
-                        isNullable: false,
+                        isRequired: inputIsRequired,
+                        isNullable: inputIsNullable,
                         hasDefault: false,
                         defaultValue: null,
                         policy: ActivityValuePolicy.Default)

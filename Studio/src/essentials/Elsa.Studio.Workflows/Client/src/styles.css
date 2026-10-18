@@ -3151,7 +3151,8 @@
   font-weight: 700;
 }
 
-.wf-dialog-actions button:disabled {
+.wf-dialog-actions button:disabled,
+.wf-dialog-actions button[aria-disabled="true"] {
   cursor: not-allowed;
   opacity: 0.7;
 }

@@ -187,7 +187,7 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
         ) : null}
         {equivalent ? (
           <div className="wf-runtime-equivalence">
-            <Check size={14} /> Current draft is behaviorally identical to published v{equivalent.artifactVersion}.
+            <Check size={14} /> Current draft has the same behavior as a published version.
           </div>
         ) : null}
         <dl className="wf-runtime-meta">

@@ -525,9 +525,9 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   await page.getByRole("button", { name: "Add input" }).click();
   const contractInput = page.getByRole("group", { name: "Input 1: Customer note" });
   await expect(contractInput).toBeVisible();
-  await contractInput.getByRole("checkbox", { name: /Allows null/ }).check();
-  await contractInput.getByRole("combobox", { name: "Default" }).selectOption("literal");
-  await contractInput.getByRole("textbox", { name: "Literal JSON value" }).fill("null");
+  await contractInput.getByRole("checkbox", { name: /Allow null/ }).check();
+  await contractInput.getByRole("combobox", { name: "Default value" }).selectOption("literal");
+  await contractInput.getByRole("textbox", { name: "Value (JSON)" }).fill("null");
   await contractInput.getByRole("button", { name: "Apply default" }).click();
   await expectSavedRevision(page, 2);
   await page.getByRole("tab", { name: "Designer" }).click();
@@ -542,7 +542,7 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   await page.reload();
   await expectSavedRevision(page, 4);
   await page.getByRole("tab", { name: "Public Interface" }).click();
-  await expect(page.getByRole("group", { name: "Input 1: Customer note" }).getByRole("textbox", { name: "Literal JSON value" })).toHaveValue("null");
+  await expect(page.getByRole("group", { name: "Input 1: Customer note" }).getByRole("textbox", { name: "Value (JSON)" })).toHaveValue("null");
   await page.getByRole("tab", { name: "Designer" }).click();
   await expect(page.locator(".wf-node").getByText("Write line", { exact: true })).toHaveCount(1);
   await expect(page.locator(".wf-node").getByText("Delay", { exact: true })).toHaveCount(1);
@@ -688,6 +688,9 @@ test("Activity Definition publication keeps first and later recommendation seman
   await page.getByRole("button", { name: "Review & publish" }).click();
   await expect(page.getByText("First publication", { exact: true })).toBeVisible();
   await expect(page.getByText("No published baseline exists", { exact: true })).toBeVisible();
+  await expect(page.locator(".ad-publication-impact")).not.toBeVisible();
+  await expect(page.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeVisible();
+  await page.getByText("Review initial activity contents", { exact: true }).click();
   await page.locator(".ad-impact-group details summary").first().click();
   await expect(page.getByText("Protected value redacted")).toBeVisible();
   await expect(page.getByText("raw-protected-provider-value")).toHaveCount(0);
@@ -866,8 +869,8 @@ test("Activity Definition publication blocks invalid preflight and reopens stale
 
   state.preflightMode = "valid";
   state.publishMode = "stale";
-  await page.getByRole("button", { name: "Reopen preflight" }).click();
-  await expect(page.getByLabel("Readiness").getByText("Ready to publish")).toBeVisible();
+  await page.getByRole("button", { name: "Refresh review" }).click();
+  await expect(page.locator(".ad-publication-summary").first().getByText("Ready to publish", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Publish 1.0.0" }).click();
   await expect(page.getByText("reopened preflight without publishing", { exact: false })).toBeVisible();
   expect(state.publicationWrites).toBe(1);

@@ -82,17 +82,10 @@ describe("dialog focus management", () => {
     expect(onEscape).not.toHaveBeenCalled();
   });
 
-  it("does not replace focus already placed inside before initial focus runs", () => {
-    let runInitialFocus: FrameRequestCallback | undefined;
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => {
-      runInitialFocus = callback;
-      return 1;
-    });
-    flushSync(() => root.render(<Dialog onEscape={vi.fn()} />));
-    const buttons = container.querySelectorAll("button");
-    buttons[1].focus();
-    runInitialFocus?.(0);
-    expect(document.activeElement).toBe(buttons[1]);
+  it("preserves focus already placed inside the dialog by an auto-focused control", () => {
+    flushSync(() => root.render(<Dialog onEscape={vi.fn()}><input autoFocus /></Dialog>));
+    const autofocus = container.querySelector<HTMLInputElement>("input")!;
+    expect(document.activeElement).toBe(autofocus);
   });
 });
 

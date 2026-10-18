@@ -1,5 +1,5 @@
 import type { ActivityCatalogItem } from "../workflowTypes";
-import { findCompositionActivity } from "./editorHelpers";
+import { findCompositionActivity, getCreateRootActivity } from "./editorHelpers";
 import { createWorkflowRootOptions, type CreateWorkflowKind } from "./editorTypes";
 
 // The Flowchart / Sequence title + hint block shared by the two "choose a container" surfaces:
@@ -20,13 +20,13 @@ export function WorkflowRootRadioCards({ catalog, value, onChange }: {
   value: string | null;
   onChange(value: string): void;
 }) {
+  const available = catalog.filter(activity => activity.available !== false && activity.authoringTemplate);
+  const selected = getCreateRootActivity(value, catalog);
   return (
     <div className="wf-root-cards" role="radiogroup" aria-label="Root activity">
       {createWorkflowRootOptions.map(option => {
-        const activity = findCompositionActivity(catalog, option.value);
-        const checked = value
-          ? value === activity?.activityVersionId
-          : option.value === "flowchart";
+        const activity = findCompositionActivity(available, option.value);
+        const checked = Boolean(activity && selected?.activityVersionId === activity.activityVersionId);
         return (
           <label key={option.value} className="wf-root-card" data-checked={checked || undefined} aria-disabled={!activity || undefined}>
             <input
