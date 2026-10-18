@@ -34,7 +34,7 @@
   margin-top: 4px;
 }
 
-.wf-definition-grid > .wf-grid-row > .wf-row-actions {
+.wf-definition-table-scroll .wf-definition-grid > .wf-grid-row > .wf-row-actions {
   display: flex;
 }
 

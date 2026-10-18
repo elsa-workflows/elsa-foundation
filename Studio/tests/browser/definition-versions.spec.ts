@@ -20,6 +20,15 @@ async function expectColumnsAligned(headerRow: Locator, row: Locator) {
     expect(Math.abs(headerBoxes[index].x - cellBoxes[index].x), `column ${index + 1} starts in the same place`).toBeLessThanOrEqual(1);
     expect(Math.abs(headerBoxes[index].width - cellBoxes[index].width), `column ${index + 1} has the same width`).toBeLessThanOrEqual(1);
   }
+  const actions = row.getByRole("cell").last();
+  const [actionsBox, lastButtonBox] = await Promise.all([
+    actions.boundingBox(),
+    actions.getByRole("button").last().boundingBox()
+  ]);
+  expect(actionsBox).not.toBeNull();
+  expect(lastButtonBox).not.toBeNull();
+  expect(Math.abs(actionsBox!.x + actionsBox!.width - lastButtonBox!.x - lastButtonBox!.width),
+    "actions end at the right-aligned column edge").toBeLessThanOrEqual(1);
 }
 
 async function scrollColumnIntoView(scrollArea: Locator, column: Locator) {
