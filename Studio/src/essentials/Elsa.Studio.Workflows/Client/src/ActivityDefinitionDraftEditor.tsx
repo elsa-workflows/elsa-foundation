@@ -671,7 +671,7 @@ function LoadedActivityDefinitionDraftEditor({ context, initialDraft, definition
     />
     </details>
     {PublicInterfaceEditor && (boundaryMappingsRequested || hasBoundaryMappings(draft.provider.payload) || draft.contract.outputs.length > 0 || draft.contract.outcomes.some(outcome => outcome.isEmitted)) ? <section ref={providerPublicInterfaceRef} className="ad-provider-public-interface" aria-label="Provider boundary mappings">
-      <Suspense fallback={<div className="ad-inline-status" role="status">Loading provider boundary mappings…</div>}>
+      <Suspense fallback={<div className="ad-inline-status" role="status" data-boundary-mappings-loading>Loading provider boundary mappings…</div>}>
         <PublicInterfaceEditor
           context={context}
           definitionId={draft.definitionId}
@@ -858,18 +858,21 @@ function focusBoundaryMappingDiagnostic(
   root: HTMLElement | null,
   pointer?: string | null
 ): StudioActivityDiagnosticFocusResult {
-  const target = root?.querySelector<HTMLElement>(
+  const exactTarget = root?.querySelector<HTMLElement>(
     pointer?.startsWith("/outputMappings")
       ? ".ad-graph-output-mappings"
       : ".ad-graph-outcome-mappings"
   );
+  const target = exactTarget ?? (root?.querySelector("[data-boundary-mappings-loading]") ? root : null);
   if (!target) return unsupportedDiagnosticFocus();
   target.tabIndex = -1;
   target.focus();
   target.scrollIntoView?.({ block: "center" });
   return {
     kind: "focused",
-    announcement: pointer?.startsWith("/outputMappings")
+    announcement: !exactTarget
+      ? "Focused the boundary mappings editor while its controls load. Use Focus location again when loading finishes."
+      : pointer?.startsWith("/outputMappings")
       ? "Focused the boundary output mappings."
       : "Focused the boundary outcome mappings."
   };

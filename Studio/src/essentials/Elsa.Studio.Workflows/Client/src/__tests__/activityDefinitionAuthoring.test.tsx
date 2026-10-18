@@ -1081,14 +1081,17 @@ describe("Activity Definition authoring", () => {
     await rendered.unmount();
   });
 
-  it.each([true, false])("keeps empty-contract boundary mappings reachable (existing mappings: %s)", async existingMappings => {
+  it.each([[true, false], [false, false], [false, true]])("keeps empty-contract boundary mappings reachable (existing: %s, lazy: %s)", async (existingMappings, lazyMappings) => {
     const draft = fullDraft({ revision: 3 });
     draft.contract.outputs = [];
     draft.contract.outcomes = [];
     draft.provider.payload = { outcomeMappings: existingMappings ? [{ sourceOutcomeReferenceKey: "Done", boundaryOutcomeReferenceKey: "removed" }] : [] };
+    const MappingEditor = () => <section className="ad-graph-outcome-mappings">Outcome mappings</section>;
+    let resolveMapping!: (module: { default: typeof MappingEditor }) => void;
+    const LazyMappingEditor = React.lazy(() => new Promise<{ default: typeof MappingEditor }>(resolve => { resolveMapping = resolve; }));
     const contribution: StudioActivityDefinitionImplementationEditorContribution = {
       ...graphContribution(),
-      publicInterfaceComponent: () => <section className="ad-graph-outcome-mappings">Outcome mappings</section>
+      publicInterfaceComponent: lazyMappings ? LazyMappingEditor : MappingEditor
     };
     const rendered = renderPage({
       path: "/workflows/activity-definitions?definition=activity-def-1&section=editor&draft=activity-draft-1",
@@ -1111,6 +1114,13 @@ describe("Activity Definition authoring", () => {
     click(buttonByText(rendered.container, "Validate saved revision"));
     await waitForText(rendered.container, "activity.graph.mapping");
     click(rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.graph.mapping']")!);
+    if (lazyMappings) {
+      await waitFor(() => expect(document.activeElement?.getAttribute("aria-label")).toBe("Provider boundary mappings"));
+      expect(rendered.container.textContent).toContain("while its controls load");
+      resolveMapping({ default: MappingEditor });
+      await waitForText(rendered.container, "Outcome mappings");
+      click(rendered.container.querySelector<HTMLButtonElement>("[aria-label='Focus activity.graph.mapping']")!);
+    }
     await waitFor(() => expect(document.activeElement?.classList.contains("ad-graph-outcome-mappings")).toBe(true));
     expect(rendered.container.querySelector<HTMLElement>("[aria-label='Public Interface']")?.hidden).toBe(false);
     await rendered.unmount();
