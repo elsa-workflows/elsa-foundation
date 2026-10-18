@@ -59,7 +59,7 @@ import { useExecutableArtifactExport } from "./useExecutableArtifactExport";
 import { combineValidationErrors, detectStructuralValidationErrors } from "../draftValidation";
 import { createValidationActivityLabels, humanizeValidationErrors } from "../validationActivityLabels";
 import { WorkflowArtifactsPanel } from "./WorkflowExecutables";
-import { WorkflowTestDrivePanel } from "./WorkflowTestDrivePanel";
+import { LazyWorkflowTestDrivePanel } from "./lazyTestDriveUi";
 import { useSidePanelLayout } from "./useSidePanelLayout";
 import { useDraftHistory } from "./useDraftHistory";
 import { forgetRemovedNodes, useWorkflowDocument } from "./workflowDocument";
@@ -1026,7 +1026,7 @@ export function WorkflowEditor({
       order: 6,
       icon: <Play size={15} />,
       render: () => (
-        <WorkflowTestDrivePanel
+        <LazyWorkflowTestDrivePanel
           context={context}
           draft={draft}
           runInputEditors={runInputEditors}

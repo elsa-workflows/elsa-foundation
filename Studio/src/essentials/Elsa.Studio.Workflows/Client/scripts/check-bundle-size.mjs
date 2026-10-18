@@ -84,12 +84,21 @@ const deferredHeavySurfaces = [
   "WorkflowEditor",
   "WorkflowExecutableInspector",
   "WorkflowExecutables",
-  "WorkflowInstances"
+  "WorkflowInstances",
+  "WorkflowTestDrivePanel",
+  "WorkflowTestRunControls",
+  "CreateWorkflowDialog",
+  "workflowTestHttpAction"
 ];
 
 const excludedFromDefinitionsLanding = deferredHeavySurfaces.filter(name => name !== "WorkflowDefinitions");
 const deferredInspectorSharedChunks = ["conversionSettings"];
 const variableTargetPickerMarker = "Loading visible variables… The current target is preserved.";
+const testDriveSetupMarker = "Test the captured draft with workflow inputs and one selected start.";
+const testDriveControlsMarker = "No supported waits are active on this Test Run.";
+const testDriveHttpActionMarker = "The prepared HTTP action did not contain a safe server-relative URL.";
+const createWorkflowDialogMarker = "What should this workflow do?";
+const httpStarterMarker = "The HTTP starter needs Flowchart, HTTP Endpoint and Write HTTP Response activities on this server.";
 
 function collectStaticFiles(entryKey, files = new Set(), visitedEntries = new Set()) {
   if (visitedEntries.has(entryKey)) return files;
@@ -187,6 +196,21 @@ if (!workflowEditorJavaScript.includes(variableTargetPickerMarker)) {
 if (authenticatedLandingJavaScript.includes(variableTargetPickerMarker)) {
   throw new Error("The variable-target picker leaked into an eager Workflows landing closure.");
 }
+if (authenticatedLandingJavaScript.includes(testDriveSetupMarker)) {
+  throw new Error("The Test Drive setup panel leaked into an eager Workflows landing closure.");
+}
+if (authenticatedLandingJavaScript.includes(testDriveControlsMarker)) {
+  throw new Error("The Test Drive controls leaked into an eager Workflows landing closure.");
+}
+if (authenticatedLandingJavaScript.includes(testDriveHttpActionMarker)) {
+  throw new Error("The Test Drive HTTP action leaked into an eager Workflows landing closure.");
+}
+if (authenticatedLandingJavaScript.includes(createWorkflowDialogMarker)) {
+  throw new Error("The create-workflow dialog leaked into an eager Workflows landing closure.");
+}
+if (authenticatedLandingJavaScript.includes(httpStarterMarker)) {
+  throw new Error("The HTTP workflow starter leaked into an eager Workflows landing closure.");
+}
 
 const activityIconTableMarker = "FlagTriangleRight";
 if (await readJavaScript(entryJavaScriptFiles).then(source => source.includes(activityIconTableMarker))) {
@@ -220,6 +244,22 @@ const [entrySize, stylesheetSize, definitionsLandingSize, definitionsLandingTota
 ]);
 
 const jsFiles = [...new Set(Object.values(manifest).map(entry => entry.file).filter(file => file.endsWith(".js")))];
+const allJavaScript = await readJavaScript(jsFiles);
+if (!allJavaScript.includes(testDriveSetupMarker)) {
+  throw new Error("The Test Drive setup panel is missing from the Workflows bundle.");
+}
+if (!allJavaScript.includes(testDriveControlsMarker)) {
+  throw new Error("The Test Drive controls are missing from the Workflows bundle.");
+}
+if (!allJavaScript.includes(testDriveHttpActionMarker)) {
+  throw new Error("The Test Drive HTTP action is missing from the Workflows bundle.");
+}
+if (!allJavaScript.includes(createWorkflowDialogMarker)) {
+  throw new Error("The create-workflow dialog is missing from the Workflows bundle.");
+}
+if (!allJavaScript.includes(httpStarterMarker)) {
+  throw new Error("The HTTP workflow starter is missing from the Workflows bundle.");
+}
 const jsSizes = await Promise.all(jsFiles.map(async file => ({ file, bytes: (await stat(resolve(outputRoot, file))).size })));
 const largestChunk = jsSizes.reduce((largest, candidate) => candidate.bytes > largest.bytes ? candidate : largest);
 
