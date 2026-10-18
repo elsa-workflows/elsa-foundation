@@ -1,9 +1,8 @@
 import React, { useLayoutEffect, useRef, useState } from "react";
 import { Save, X } from "lucide-react";
+import { useDialogFocus } from "@elsa-workflows/studio-sdk";
 import { CopySecretNameButton } from "./CopySecretNameButton";
 import type { SecretDescriptorsResponse, SecretMetadata } from "./secretTypes";
-
-const focusableSelector = "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])";
 
 export function SecretDetail({
   secret,
@@ -19,68 +18,18 @@ export function SecretDetail({
   onClose(): void;
 }) {
   const dialogRef = useRef<HTMLElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
   const [displayName, setDisplayName] = useState(secret.displayName ?? "");
   const [description, setDescription] = useState(secret.description ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const cannotClose = busy || saving;
-  const cannotCloseRef = useRef(cannotClose);
-  const onCloseRef = useRef(onClose);
-  cannotCloseRef.current = cannotClose;
-  onCloseRef.current = onClose;
-
+  useDialogFocus(dialogRef, cannotClose ? null : onClose, false, () => {
+    const fallback = Array.from(document.querySelectorAll<HTMLElement>("[data-secret-open]"))
+      .find(element => element.dataset.secretOpen === secret.name);
+    fallback?.focus();
+  });
   useLayoutEffect(() => {
-    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const previousBodyOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     dialogRef.current?.querySelector<HTMLElement>("[data-dialog-initial-focus]")?.focus();
-
-    function trapKeyboard(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        if (!cannotCloseRef.current) onCloseRef.current();
-        return;
-      }
-
-      if (event.key !== "Tab") return;
-      const dialogElement = dialogRef.current;
-      if (!dialogElement) return;
-      const focusable = Array.from(dialogElement.querySelectorAll<HTMLElement>(focusableSelector))
-        .filter(element => element.tabIndex >= 0);
-      if (focusable.length === 0) {
-        event.preventDefault();
-        dialogElement.focus();
-        return;
-      }
-
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const activeElement = document.activeElement;
-      if (event.shiftKey && (activeElement === first || !dialogElement.contains(activeElement))) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (activeElement === last || !dialogElement.contains(activeElement))) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-
-    document.addEventListener("keydown", trapKeyboard);
-
-    return () => {
-      document.removeEventListener("keydown", trapKeyboard);
-      document.body.style.overflow = previousBodyOverflow;
-      const previousFocus = previousFocusRef.current;
-      if (previousFocus?.isConnected) {
-        previousFocus.focus();
-        return;
-      }
-
-      const fallback = Array.from(document.querySelectorAll<HTMLElement>("[data-secret-open]"))
-        .find(element => element.dataset.secretOpen === secret.name);
-      fallback?.focus();
-    };
   }, [secret.name]);
 
   const store = descriptors?.stores.find(item => item.name === secret.storeName);

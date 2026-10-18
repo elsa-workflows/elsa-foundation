@@ -44,6 +44,28 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     await harness.unmount();
   });
 
+  it("keeps first-publication contents and successful technical checks behind disclosure", async () => {
+    const harness = renderReview({ postJson: async () => publicationPreflight() });
+    click(buttonByText(harness.container, "Review & publish"));
+    await waitFor(() => expect(buttonByText(harness.container, "Publish 1.0.0")).toBeTruthy());
+    const impact = harness.container.querySelector(".ad-publication-impact")!;
+    expect(impact.closest("details")?.open).toBe(false);
+    const readiness = harness.container.querySelector(".ad-publication-readiness")!;
+    expect(readiness.closest("details")?.open).toBe(false);
+    expect(harness.container.textContent).toContain("Publish the first version for use in workflows.");
+    expect(buttonByText(harness.container, "Publish 1.0.0").closest("details")).toBeNull();
+  });
+
+  it("keeps changes to an existing version and failed readiness checks visible", async () => {
+    const preflight = publicationPreflight();
+    const harness = renderReview({ postJson: async () => ({ ...preflight, hasBaseline: true, isPublishable: false }) });
+    click(buttonByText(harness.container, "Review & publish"));
+    await waitFor(() => expect(harness.container.querySelector(".ad-publication-impact")).not.toBeNull());
+    expect(harness.container.querySelector(".ad-publication-impact")?.closest("details")).toBeNull();
+    expect(harness.container.querySelector(".ad-publication-readiness")?.closest("details")).toBeNull();
+    expect((buttonByText(harness.container, "Publish 1.0.0") as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("cannot close or leave focus while publication is pending", async () => {
     let resolvePublish!: (value: unknown) => void;
     let publishRequest: Record<string, unknown> | null = null;
@@ -77,6 +99,8 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     await waitFor(() => expect(publishRequest).not.toBeNull());
     resolvePublish(publicationReceipt(publishRequest));
     await waitFor(() => expect(harness.container.textContent).toContain("Published immutable version 1.0.0"));
+    expect(harness.container.textContent).toContain("First version published. Existing workflows are unaffected.");
+    expect(harness.container.textContent).not.toContain("Publish the first version for use in workflows.");
     await harness.unmount();
   });
 

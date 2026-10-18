@@ -240,8 +240,15 @@ export function ActivityDefinitionPublicationReview({
 
   const reviewDetails = preflight ? <>
       <PublicationSummary preflight={preflight} publishedOutcome={phase === "success" ? receipt?.outcome ?? null : null} compact={mode === "toolbar"} />
-      <ImpactReview changes={preflight.impactFirstChanges} diagnostics={preflight.diagnostics} compact={mode === "toolbar"} />
-      <ReadinessReview preflight={preflight} compact={mode === "toolbar"} />
+      {mode === "toolbar" && !preflight.hasBaseline ? <>
+        <p>{phase === "success" ? "First version published. Existing workflows are unaffected." : "Publish the first version for use in workflows."}</p>
+        <details className="ad-publication-technical-details"><summary>Review initial activity contents</summary>
+          <ImpactReview changes={preflight.impactFirstChanges} diagnostics={[]} compact />
+        </details>
+      </> : <ImpactReview changes={preflight.impactFirstChanges} diagnostics={preflight.diagnostics} compact={mode === "toolbar"} />}
+      {mode === "toolbar" && preflight.isPublishable ? <details className="ad-publication-technical-details"><summary>Technical readiness checks</summary>
+        <ReadinessReview preflight={preflight} compact />
+      </details> : <ReadinessReview preflight={preflight} compact={mode === "toolbar"} />}
       {diagnosticSource.length ? <PublicationDiagnostics diagnostics={diagnosticSource} onFocus={focusDiagnostic} disabled={phase === "publishing" || phase === "unknown"} /> : null}
       <div className="ad-publication-version">
         <label><span>Publication version</span><input value={version} onChange={event => setVersion(event.target.value.trim())} aria-invalid={Boolean(versionError)} disabled={phase === "publishing" || phase === "unknown" || phase === "success"} /></label>
@@ -264,7 +271,7 @@ export function ActivityDefinitionPublicationReview({
       </button> : null}
       {mode === "toolbar" ? <button type="button" className="ad-publication-dialog-close" aria-label="Close publication review" onClick={() => closeAllowed && setDialogOpen(false)} disabled={!closeAllowed}><X size={18} aria-hidden /></button> : null}
     </header>
-    {mode === "toolbar" && phase !== "success" ? <div className="ad-publication-prepare-row"><button type="button" className="ad-primary-action" onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}><GitCompareArrows size={16} aria-hidden /> {phase === "preparing" ? "Saving & reviewing…" : preflight ? "Reopen preflight" : "Prepare publication"}</button></div> : null}
+    {mode === "toolbar" && phase !== "success" ? <div className="ad-publication-prepare-row"><button type="button" onClick={() => void prepare()} disabled={disabled || phase === "preparing" || phase === "publishing" || phase === "unknown"}><GitCompareArrows size={16} aria-hidden /> {phase === "preparing" ? "Saving & reviewing…" : preflight ? "Refresh review" : "Prepare publication"}</button></div> : null}
     {phase === "idle" ? <p className="ad-publication-empty">No publication review is active. Preparing a review never writes an immutable version.</p> : null}
     {phase === "stale" || phase === "failed" || phase === "unknown" ? <div className="ad-publication-status is-warning" role="alert"><AlertTriangle size={18} aria-hidden /><span>{failure}</span>{phase === "unknown" ? <button type="button" onClick={() => void reconcile()}><RefreshCw size={15} aria-hidden /> Reconcile authoritative status</button> : null}</div> : null}
     {phase === "success" && receipt?.outcome ? <div className="ad-publication-success" role="status">

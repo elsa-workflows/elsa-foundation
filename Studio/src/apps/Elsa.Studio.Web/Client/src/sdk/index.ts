@@ -4,6 +4,7 @@ import type { StudioActivityIconComponent } from "./activityIcons";
 export * from "../auth";
 export * from "./themeLayout";
 export * from "./activityIcons";
+export * from "./useDialogFocus";
 
 export type StudioModuleStatus = "available" | "loaded" | "disabled" | "incompatible" | "failed";
 

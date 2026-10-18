@@ -1,9 +1,11 @@
-import React from "react";
+import React, { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CreateSecretDialog, RotateSecretDialog } from "../SecretDialogs";
-import type { SecretDescriptorsResponse, SecretMetadata } from "../secretTypes";
+import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata } from "../secretTypes";
+
+type SecretSaveRequest = CreateSecretRequest | RotateSecretRequest;
 
 const descriptors: SecretDescriptorsResponse = {
   types: ["text", "json"].map(name => ({ name, displayName: name, supportedStoreNames: ["encrypted"] })),
@@ -14,9 +16,17 @@ const secret: SecretMetadata = {
   tags: [], status: "Active", createdAt: "2026-10-17T00:00:00Z"
 };
 const cleanup = new Set<() => void>();
+beforeEach(() => {
+  vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => {
+    callback(0);
+    return 1;
+  });
+  vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+});
 afterEach(() => {
   for (const dispose of cleanup) dispose();
   cleanup.clear();
+  vi.restoreAllMocks();
 });
 
 describe("entered secret visibility", () => {
@@ -61,6 +71,62 @@ describe("entered secret visibility", () => {
   });
 });
 
+describe("secret dialog keyboard focus", () => {
+  it.each(["create", "rotate"] as const)("focuses, contains, and restores focus for %s", mode => {
+    const { container, opener } = renderDialogWithTrigger(mode);
+    flushSync(() => {
+      opener.focus();
+      opener.click();
+    });
+
+    const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
+    const focusable = [...dialog.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled)")];
+    expect(document.activeElement).toBe(dialog.querySelector("[data-dialog-initial-focus]") ?? focusable[0]);
+
+    focusable[0].focus();
+    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true })));
+    expect(document.activeElement).toBe(focusable.at(-1));
+
+    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(container.querySelector("[role='dialog']")).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
+  it.each(["create", "rotate"] as const)("does not dismiss %s while saving", async mode => {
+    let finishSave!: () => void;
+    const onSave = vi.fn<(request: SecretSaveRequest) => Promise<void>>(() => new Promise<void>(resolve => { finishSave = resolve; }));
+    const { container, opener } = renderDialogWithTrigger(mode, onSave);
+    flushSync(() => {
+      opener.focus();
+      opener.click();
+    });
+    const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
+    const input = dialog.querySelector<HTMLInputElement>(mode === "create" ? "input" : ".secrets-value-input input")!;
+    change(input, mode === "create" ? "test-key" : "replacement-value");
+    if (mode === "create") change(dialog.querySelectorAll<HTMLInputElement>(".secrets-value-input input")[0], "replacement-value");
+    flushSync(() => dialog.querySelector<HTMLButtonElement>("button[type='submit']")!.click());
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+
+    const cancel = [...dialog.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Cancel")!;
+    expect(cancel.disabled).toBe(true);
+    flushSync(() => cancel.click());
+    expect(container.querySelector("[role='dialog']")).toBe(dialog);
+    flushSync(() => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(onSave).toHaveBeenCalledTimes(1);
+
+    const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    window.dispatchEvent(escape);
+    expect(escape.defaultPrevented).toBe(true);
+    expect(container.querySelector("[role='dialog']")).toBe(dialog);
+
+    finishSave();
+    await waitFor(() => {
+      expect(container.querySelector("[role='dialog']")).toBeNull();
+      expect(document.activeElement).toBe(opener);
+    });
+  });
+});
+
 function renderDialog(mode: "create" | "rotate") {
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -74,6 +140,39 @@ function renderDialog(mode: "create" | "rotate") {
   render(mode);
   if (mode === "create") change(container.querySelector<HTMLInputElement>("input")!, "test-key");
   return { container, onSave, render };
+}
+
+function renderDialogWithTrigger(mode: "create" | "rotate", onSave: (request: SecretSaveRequest) => Promise<void> = vi.fn(async () => undefined)) {
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  flushSync(() => root.render(<DialogHarness mode={mode} onSave={onSave} />));
+  cleanup.add(() => { flushSync(() => root.unmount()); container.remove(); });
+  const opener = container.querySelector<HTMLButtonElement>("button")!;
+  return { container, opener };
+}
+
+function DialogHarness({ mode, onSave }: { mode: "create" | "rotate"; onSave(request: SecretSaveRequest): Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  return <>
+    <button type="button" onClick={() => setOpen(true)}>Open dialog</button>
+    {open ? mode === "create"
+      ? <CreateSecretDialog descriptors={descriptors} onSave={onSave} onCancel={() => setOpen(false)} />
+      : <RotateSecretDialog secret={secret} descriptors={descriptors} onSave={onSave} onCancel={() => setOpen(false)} />
+      : null}
+  </>;
+}
+
+async function waitFor(assertion: () => void) {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      assertion();
+      return;
+    } catch {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+  }
+  assertion();
 }
 
 function change(input: HTMLInputElement, value: string) {

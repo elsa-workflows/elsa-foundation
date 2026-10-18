@@ -459,6 +459,52 @@ describe("module management page", () => {
     await unmount();
   });
 
+  it.each(["add", "edit"] as const)("focuses, contains, and restores focus for the %s feed dialog", async mode => {
+    const { container, unmount } = await renderPackageFeedsPage(stubApi());
+    const opener = mode === "add"
+      ? Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.trim() === "Add feed")!
+      : container.querySelector<HTMLButtonElement>("[aria-label='Edit studio-local-packages']")!;
+    opener.focus();
+    flushSync(() => opener.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    await flushPromises();
+    await flushAnimationFrame();
+
+    const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
+    const name = dialog.querySelector<HTMLInputElement>("[data-dialog-initial-focus]")!;
+    expect(document.activeElement).toBe(name);
+    const focusable = [...dialog.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled)")];
+    focusable[0]!.focus();
+    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true })));
+    expect(document.activeElement).toBe(focusable.at(-1));
+    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(container.querySelector("[role='dialog']")).toBeNull();
+    expect(document.activeElement).toBe(opener);
+
+    await unmount();
+  });
+
+  it("submits a new package feed through the form when Enter requests submission", async () => {
+    const fetchMock = mockFetch();
+    const { container, unmount } = await renderPackageFeedsPage(stubApi());
+    const addFeedButton = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(button => button.textContent?.trim() === "Add feed")!;
+    flushSync(() => addFeedButton.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    await flushPromises();
+    await flushAnimationFrame();
+
+    const form = container.querySelector<HTMLFormElement>("#package-feed-form")!;
+    const name = form.querySelector<HTMLInputElement>("[aria-label='Feed name']")!;
+    setInputValue(name, "test-feed");
+    flushSync(() => form.requestSubmit());
+    await flushPromises();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://studio.example/_elsa/module-management/feeds",
+      expect.objectContaining({ method: "POST", body: expect.stringContaining('"name":"test-feed"') })
+    );
+    expect(container.querySelector("[role='dialog']")).toBeNull();
+    await unmount();
+  });
+
   it("confirms before deleting a package feed and calls the delete API when confirmed", async () => {
     const fetchMock = mockFetch();
     const confirm = vi.fn(async () => true);
@@ -839,6 +885,13 @@ function stagedUploads(container: Element) {
   return container.querySelector("[aria-label='Studio staged uploads'], [aria-label='Server staged uploads']");
 }
 
+function setInputValue(input: HTMLInputElement, value: string) {
+  flushSync(() => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
 function mockFetch() {
   const fetchMock = vi.fn(async () => ({
     ok: true,
@@ -1141,6 +1194,10 @@ async function renderPackageFeedsPage(api: ElsaStudioModuleApi) {
       container.remove();
     }
   };
+}
+
+async function flushAnimationFrame() {
+  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 }
 
 async function flushPromises() {

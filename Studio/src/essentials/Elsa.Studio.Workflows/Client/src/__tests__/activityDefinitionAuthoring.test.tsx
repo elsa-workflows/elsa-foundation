@@ -365,12 +365,12 @@ describe("Activity Definition authoring", () => {
     expect([...doneOutcome.querySelectorAll("button")].some(button => button.textContent?.includes("Remove outcome"))).toBe(false);
     expect(controlByLabel<HTMLInputElement>(doneOutcome, "Emitted by this activity").disabled).toBe(true);
     expect(controlByLabel<HTMLSelectElement>(rendered.container, "Durable storage driver").value).toBe("elsa.json");
-    const required = controlByLabel<HTMLInputElement>(rendered.container, "Required effective value");
-    const nullable = controlByLabel<HTMLInputElement>(rendered.container, "Allows null");
+    const required = controlByLabel<HTMLInputElement>(rendered.container, "Required");
+    const nullable = controlByLabel<HTMLInputElement>(rendered.container, "Allow null");
     expect(required.checked).toBe(false);
     expect(nullable.checked).toBe(true);
     expect(nullable.disabled).toBe(true);
-    expect(rendered.container.textContent).toContain("Remove or change the literal null default before tightening nullability");
+    expect(rendered.container.textContent).toContain("Remove or change the default value of null before turning this off");
     click(required);
     expect(nullable.checked).toBe(true);
 
@@ -388,25 +388,25 @@ describe("Activity Definition authoring", () => {
       })
     })));
 
-    change(controlByLabel<HTMLTextAreaElement>(rendered.container, "Literal JSON value"), "\"present\"");
+    change(controlByLabel<HTMLTextAreaElement>(rendered.container, "Value (JSON)"), "\"present\"");
     click(buttonByText(rendered.container, "Apply default"));
     await waitFor(() => expect(putJson.mock.calls.some(([, body]) =>
       JSON.stringify((body as { contract: { inputs: Array<{ default: unknown }> } }).contract.inputs[0]?.default) === JSON.stringify({ syntax: "Literal", value: "present", futureDefaultField: "retained" })
     )).toBe(true));
 
-    change(controlByLabel<HTMLSelectElement>(rendered.container, "Default"), "none");
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Default value"), "none");
     click(buttonByText(rendered.container, "Apply default"));
     await waitFor(() => expect(putJson.mock.calls.some(([, body]) =>
       (body as { contract: { inputs: Array<{ default: unknown }> } }).contract.inputs[0]?.default === null
     )).toBe(true));
 
-    change(controlByLabel<HTMLSelectElement>(rendered.container, "Default"), "literal");
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Default value"), "literal");
     click(buttonByText(rendered.container, "Apply default"));
     await waitFor(() => expect(putJson.mock.calls.some(([, body]) =>
       JSON.stringify((body as { contract: { inputs: Array<{ default: unknown }> } }).contract.inputs[0]?.default) === JSON.stringify({ syntax: "Literal", value: null })
     )).toBe(true));
 
-    change(controlByLabel<HTMLSelectElement>(rendered.container, "Default"), "expression");
+    change(controlByLabel<HTMLSelectElement>(rendered.container, "Default value"), "expression");
     change(controlByLabel<HTMLTextAreaElement>(rendered.container, "Expression source"), "customer.note");
     click(buttonByText(rendered.container, "Apply default"));
     await waitFor(() => expect(putJson.mock.calls.some(([, body]) => {
@@ -418,8 +418,8 @@ describe("Activity Definition authoring", () => {
     click(buttonByText(rendered.container, "Add output"));
     await waitForText(rendered.container, "Output 1: Result");
     const output = [...rendered.container.querySelectorAll("fieldset")].find(fieldset => fieldset.textContent?.includes("Output 1: Result"))!;
-    click(controlByLabel<HTMLInputElement>(output, "Must be produced"));
-    click(controlByLabel<HTMLInputElement>(output, "Allows null"));
+    click(controlByLabel<HTMLInputElement>(output, "Required"));
+    click(controlByLabel<HTMLInputElement>(output, "Allow null"));
     await waitFor(() => expect(putJson.mock.calls.some(([, body]) => {
       const value = (body as { contract: { outputs: Array<Record<string, unknown>> } }).contract.outputs[0];
       return JSON.stringify(value) === JSON.stringify({
@@ -454,8 +454,8 @@ describe("Activity Definition authoring", () => {
       }
     });
 
-    await waitForText(rendered.container, "Contract authoring unavailable");
-    expect(rendered.container.textContent).toContain("Stored contract members remain visible");
+    await waitForText(rendered.container, "Contract options unavailable");
+    expect(rendered.container.textContent).toContain("Existing members remain visible");
     expect(rendered.container.textContent).toContain("Graph implementation editor");
     expect((buttonByText(rendered.container, "Add input") as HTMLButtonElement).disabled).toBe(true);
     expect([...rendered.container.querySelectorAll("option")].some(option => option.textContent?.includes("System.String"))).toBe(false);
@@ -529,8 +529,8 @@ describe("Activity Definition authoring", () => {
       }
     });
 
-    await waitForText(rendered.container, "Literal JSON value");
-    change(controlByLabel<HTMLTextAreaElement>(rendered.container, "Literal JSON value"), "{");
+    await waitForText(rendered.container, "Value (JSON)");
+    change(controlByLabel<HTMLTextAreaElement>(rendered.container, "Value (JSON)"), "{");
     await waitForText(rendered.container, "The visible text is not saved");
     await waitForText(rendered.container, "Contract correction required");
     expect((buttonByText(rendered.container, "Validate saved revision") as HTMLButtonElement).disabled).toBe(true);
@@ -1895,7 +1895,7 @@ describe("Activity Definition publication", () => {
     await waitForText(rendered.container, "Minimum valid version: 1.0.0");
     click(buttonByText(rendered.container, "Publish 1.0.0"));
     await waitForText(rendered.container, expectedMessage);
-    const reopen = buttonByText(rendered.container, "Reopen preflight") as HTMLButtonElement;
+    const reopen = buttonByText(rendered.container, "Refresh review") as HTMLButtonElement;
     expect(reopen.disabled).toBe(true);
     click(reopen);
     expect(preflightCalls).toBe(1);

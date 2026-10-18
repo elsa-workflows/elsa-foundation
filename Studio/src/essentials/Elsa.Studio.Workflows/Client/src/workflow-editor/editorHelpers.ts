@@ -137,11 +137,17 @@ function unquote(value: string) {
   return value.trim().replace(/,$/, "").trim().replace(/^["']/, "").replace(/["']$/, "").trim();
 }
 
+export function getCreateRootActivity(selectedVersionId: string | null, activities: ActivityCatalogItem[]) {
+  const available = activities.filter(activity => activity.available !== false && activity.authoringTemplate);
+  if (selectedVersionId) return available.find(activity => activity.activityVersionId === selectedVersionId);
+  return findCompositionActivity(available, "flowchart")
+    ?? findCompositionActivity(available, "sequence")
+    ?? findCompositionActivity(available, "bpmn");
+}
+
 export function getCreateInitialState(draft: CreateWorkflowDraft, activities: ActivityCatalogItem[]) {
   if (draft.starter === "http") return createHttpStarterState(activities);
-  const activity = activities.find(candidate => candidate.activityVersionId === draft.rootActivityVersionId)
-    ?? findCompositionActivity(activities, "flowchart")
-    ?? findCompositionActivity(activities, "sequence");
+  const activity = getCreateRootActivity(draft.rootActivityVersionId, activities);
   if (!activity?.authoringTemplate) return null;
 
   const rootActivity = createActivityNode(activity, createNodeId(activity));

@@ -3,22 +3,33 @@ import { Sparkles } from "lucide-react";
 import type { StudioAiContributionApi, StudioAiPromptActionContribution } from "@elsa-workflows/studio-sdk";
 import type { ActivityCatalogItem } from "../workflowTypes";
 import { type CreateWorkflowDraft, type WorkflowMetadataSuggestion } from "./editorTypes";
-import { parseWorkflowMetadataSuggestion } from "./editorHelpers";
+import { getCreateRootActivity, parseWorkflowMetadataSuggestion } from "./editorHelpers";
 import { WorkflowRootRadioCards } from "./WorkflowRootCards";
 import { httpStarterActivities } from "./httpWorkflowStarter";
+import { useDialogFocus } from "./useDialogFocus";
 
-export function CreateWorkflowDialog({ draft, catalog, creating, ai, suggestMetadataAction, onChange, onClose, onSubmit }: {
+export function CreateWorkflowDialog({ draft, catalog, catalogState = "ready", catalogError = "", creating, ai, suggestMetadataAction, onChange, onClose, onRetryCatalog = () => {}, onSubmit }: {
   draft: CreateWorkflowDraft;
   catalog: ActivityCatalogItem[];
+  catalogState?: "idle" | "loading" | "ready" | "failed";
+  catalogError?: string;
   creating: boolean;
   ai: StudioAiContributionApi;
   suggestMetadataAction?: StudioAiPromptActionContribution | null;
   onChange(draft: CreateWorkflowDraft): void;
   onClose(): void;
+  onRetryCatalog?(): void;
   onSubmit(): void;
 }) {
+  const dialogRef = useRef<HTMLElement>(null);
+  useDialogFocus(dialogRef, creating ? null : onClose);
   const [intentOpen, setIntentOpen] = useState(false);
   const httpStarterAvailable = httpStarterActivities(catalog).every(Boolean);
+  const rootActivity = getCreateRootActivity(draft.rootActivityVersionId, catalog);
+  const starterReady = draft.starter === "http"
+    ? httpStarterAvailable
+    : Boolean(rootActivity?.authoringTemplate);
+  const canCreate = catalogState === "ready" && starterReady && !creating && Boolean(draft.name.trim());
   const [intent, setIntent] = useState("");
   const [suggesting, setSuggesting] = useState(false);
   const [suggestion, setSuggestion] = useState<WorkflowMetadataSuggestion | null>(null);
@@ -76,11 +87,11 @@ export function CreateWorkflowDialog({ draft, catalog, creating, ai, suggestMeta
 
   return (
     <div className="wf-dialog-backdrop" role="presentation">
-      <section className="wf-dialog" role="dialog" aria-modal="true" aria-labelledby="workflow-create-title">
+      <section ref={dialogRef} tabIndex={-1} className="wf-dialog" role="dialog" aria-modal="true" aria-labelledby="workflow-create-title">
         <form
           onSubmit={event => {
             event.preventDefault();
-            onSubmit();
+            if (canCreate) onSubmit();
           }}
         >
           <div className="wf-dialog-heading">
@@ -166,6 +177,20 @@ export function CreateWorkflowDialog({ draft, catalog, creating, ai, suggestMeta
             </select>
             {draft.starter === "http" ? <small className="wf-muted">POST /hello returns 200 with JSON. Publish it, then use Send HTTP test request to try it.</small> : null}
           </label>
+          {catalogState === "failed" ? (
+            <div className="wf-alert" role="alert">
+              <span>{catalogError || "Couldn't load starting activities."}</span>
+              <button type="button" onClick={onRetryCatalog}>Retry</button>
+            </div>
+          ) : catalogState !== "ready" ? (
+            <p className="wf-muted" role="status">Loading available starting activities…</p>
+          ) : !starterReady ? (
+            <p className="wf-muted" role="status">
+              {draft.starter === "http"
+                ? "The HTTP starter needs Flowchart, HTTP Endpoint and Write HTTP Response activities available on this server."
+                : "This server has no compatible starting activity with an authoring template."}
+            </p>
+          ) : null}
           {draft.starter !== "http" ? <fieldset className="wf-form-field wf-root-field">
             <legend>Root activity</legend>
             <WorkflowRootRadioCards
@@ -176,7 +201,7 @@ export function CreateWorkflowDialog({ draft, catalog, creating, ai, suggestMeta
           </fieldset> : null}
           <div className="wf-dialog-actions">
             <button type="button" onClick={onClose} disabled={creating}>Cancel</button>
-            <button type="submit" disabled={creating || !draft.name.trim()}>{creating ? "Creating..." : "Create"}</button>
+            <button type="submit" disabled={creating || !draft.name.trim()} aria-disabled={!canCreate}>{creating ? "Creating..." : "Create"}</button>
           </div>
         </form>
       </section>

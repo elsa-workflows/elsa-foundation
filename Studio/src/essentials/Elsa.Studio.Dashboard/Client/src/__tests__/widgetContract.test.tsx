@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AnonymousAuthProvider, AuthProvider, homeWidgetIds, registerHomeWidget, type AuthProviderManager, type AuthSession } from "@elsa-workflows/studio-sdk";
 import { HomePage } from "../HomePage";
 import { DashboardPreferenceStore, reconcileDashboardPreferences } from "../dashboardPreferences";
-import { HomeLayoutStore, reconcileHomeLayout } from "../homeLayout";
+import { HomeLayoutStore, homeLayoutDefaultRoute, homeLayoutRoute, reconcileHomeLayout } from "../homeLayout";
 import { register } from "../module";
 import { flush, seedHomeLayout, stubApi, waitUntil, widget } from "./testSupport";
 
@@ -289,6 +289,72 @@ describe("dashboard widget contract", () => {
     await first.reset();
     expect((await first.load()).source).toBe("builtin");
     vi.unstubAllGlobals();
+  });
+
+  it("updates the current server default with compare-and-swap without advancing the personal revision", async () => {
+    const api = stubApi();
+    const personalDocument = {
+      source: "user" as const,
+      namespace: "home-layout",
+      schemaVersion: 1,
+      revision: "user-r1",
+      value: { widgets: [{ id: "home.recent-runs", size: "full" as const, visible: true }] }
+    };
+    let defaultRevision = "default-r1";
+    let nextDefaultRevision = 2;
+    let conflictNextDefaultWrite = false;
+    const defaultReads: string[] = [];
+    const writes: Array<{ url: string; body: unknown; headers: Record<string, string> }> = [];
+    const getJson = vi.fn(async (url: string) => {
+      if (url === homeLayoutRoute) return personalDocument;
+      if (url === homeLayoutDefaultRoute) {
+        defaultReads.push(defaultRevision);
+        return { ...personalDocument, source: "default" as const, revision: defaultRevision };
+      }
+      throw new Error(`Unexpected route: ${url}`);
+    });
+    const putJson = vi.fn(async (url: string, body: unknown, options?: unknown) => {
+      const headers = (options as { headers: Record<string, string> }).headers;
+      writes.push({ url, body, headers });
+      if (url === homeLayoutDefaultRoute) {
+        if (conflictNextDefaultWrite || headers["If-Match"] !== `"${defaultRevision}"`) {
+          conflictNextDefaultWrite = false;
+          throw Object.assign(new Error("The default changed."), { status: 412 });
+        }
+        defaultRevision = `default-r${nextDefaultRevision++}`;
+        return { ...personalDocument, source: "default" as const, revision: defaultRevision, value: (body as { value: unknown }).value };
+      }
+      return { ...personalDocument, revision: "user-r2", value: (body as { value: unknown }).value };
+    });
+    const http = api.backend.http as unknown as { getJson: typeof getJson; putJson: typeof putJson };
+    http.getJson = getJson;
+    http.putJson = putJson;
+    const store = new HomeLayoutStore(api, {
+      studioHostId: "studio",
+      backendBaseUrl: "https://backend.example",
+      subjectId: "alice",
+      tenantId: "tenant-a"
+    });
+
+    const loaded = await store.load();
+    await store.saveDefault({ ...loaded, value: { widgets: [{ ...loaded.value.widgets[0], size: "wide" }] } });
+    await store.saveDefault({ ...loaded, value: { widgets: [{ ...loaded.value.widgets[0], visible: false }] } });
+
+    expect(defaultReads).toEqual(["default-r1", "default-r2"]);
+    expect(writes.filter(write => write.url === homeLayoutDefaultRoute).map(write => write.headers["If-Match"])).toEqual([
+      '"default-r1"',
+      '"default-r2"'
+    ]);
+
+    conflictNextDefaultWrite = true;
+    await expect(store.saveDefault(loaded)).rejects.toMatchObject({ status: 412 });
+    expect(defaultReads).toEqual(["default-r1", "default-r2", "default-r3"]);
+    expect(writes.filter(write => write.url === homeLayoutDefaultRoute)).toHaveLength(3);
+
+    await store.save({ ...loaded, value: { widgets: [{ ...loaded.value.widgets[0], size: "medium" }] } });
+    const personalWrite = writes.find(write => write.url === homeLayoutRoute);
+    expect(personalWrite?.headers["If-Match"]).toBe('"user-r1"');
+    expect(personalWrite?.headers["If-None-Match"]).toBeUndefined();
   });
 });
 

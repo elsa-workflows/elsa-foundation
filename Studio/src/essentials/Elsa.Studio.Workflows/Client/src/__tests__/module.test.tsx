@@ -2,6 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
+import { flowchartActivity } from "./fixtures/workflowCatalog";
 import { authSessionEndedEvent, type StudioRuntimeIdentity } from "@elsa-workflows/studio-sdk";
 import { register, type WorkflowDesignerPanelContext } from "../module";
 import { activationSlotReadsUnavailableReason, type Publication } from "../api/publishing";
@@ -4065,7 +4066,7 @@ describe("workflows module", () => {
       if (init?.method === "POST" && url.endsWith("/definitions")) { definitionPost = JSON.parse(String(init.body)); return response({ definition: definition({ id: "new-definition" }), draft: null, versions: [] }); }
       if (url.includes("/folders/folder-root")) return response({ folder, ancestors: [] });
       if (url.includes("/folders?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
-      if (url.includes("/activities")) return response({ activities: [] });
+      if (url.includes("/activities")) return response({ activities: [flowchartActivity()] });
       if (url.includes("definition-pages")) return response({ items: [definition()], nextContinuationToken: null });
       throw new Error(`Unexpected request ${url}`);
     });

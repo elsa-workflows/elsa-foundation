@@ -1,5 +1,6 @@
-import React, { useId, useMemo, useState } from "react";
+import React, { useId, useMemo, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
+import { useDialogFocus } from "@elsa-workflows/studio-sdk";
 import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata } from "./secretTypes";
 
 const technicalNamePattern = /^[a-z0-9._:-]+$/;
@@ -27,6 +28,7 @@ export function CreateSecretDialog({
   const [expiresAt, setExpiresAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const dialogRef = useRef<HTMLDivElement>(null);
   const normalizedName = normalizeTechnicalName(name);
   const nameInvalid = normalizedName.length > 0 && !technicalNamePattern.test(normalizedName);
   const selectedType = descriptors.types.find(type => type.name === typeName);
@@ -34,10 +36,11 @@ export function CreateSecretDialog({
   const selectedStore = descriptors.stores.find(store => store.name === storeName);
   const usesConfigurationKey = storeName === "configuration";
   const canSubmit = normalizedName.length > 0 && !nameInvalid && typeName.length > 0 && storeName.length > 0 && (usesConfigurationKey ? configurationKey.trim().length > 0 : value.length > 0);
+  useDialogFocus(dialogRef, submitting ? null : onCancel);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (!canSubmit) return;
+    if (submitting || !canSubmit) return;
     setSubmitting(true);
     setError("");
     try {
@@ -70,7 +73,7 @@ export function CreateSecretDialog({
   }
 
   return (
-    <div className="secrets-modal" role="dialog" aria-modal="true" aria-label="Create secret">
+    <div ref={dialogRef} className="secrets-modal" role="dialog" aria-modal="true" aria-label="Create secret" tabIndex={-1}>
       <form onSubmit={event => void submit(event)}>
         <h3>Create secret</h3>
         {error ? <p className="secrets-alert">{error}</p> : null}
@@ -91,7 +94,7 @@ export function CreateSecretDialog({
         )}
         <label>Expires<input type="datetime-local" value={expiresAt} onChange={event => setExpiresAt(event.target.value)} /></label>
         <div className="secrets-dialog-actions">
-          <button type="button" onClick={onCancel}>Cancel</button>
+          <button type="button" onClick={onCancel} disabled={submitting}>Cancel</button>
           <button type="submit" disabled={!canSubmit || submitting}>{submitting ? "Creating..." : "Create"}</button>
         </div>
       </form>
@@ -115,13 +118,15 @@ export function RotateSecretDialog({
   const [expiresAt, setExpiresAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const dialogRef = useRef<HTMLDivElement>(null);
   const isConfiguration = secret.storeName === "configuration";
   const type = descriptors?.types.find(item => item.name === secret.typeName);
   const canSubmit = isConfiguration ? configurationKey.trim().length > 0 : value.length > 0;
+  useDialogFocus(dialogRef, submitting ? null : onCancel);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (!canSubmit) return;
+    if (submitting || !canSubmit) return;
     setSubmitting(true);
     setError("");
     try {
@@ -141,7 +146,7 @@ export function RotateSecretDialog({
   }
 
   return (
-    <div className="secrets-modal" role="dialog" aria-modal="true" aria-label="Rotate secret">
+    <div ref={dialogRef} className="secrets-modal" role="dialog" aria-modal="true" aria-label="Rotate secret" tabIndex={-1}>
       <form onSubmit={event => void submit(event)}>
         <h3>Rotate {secret.name}</h3>
         {error ? <p className="secrets-alert">{error}</p> : null}
@@ -153,7 +158,7 @@ export function RotateSecretDialog({
         )}
         <label>Expires<input type="datetime-local" value={expiresAt} onChange={event => setExpiresAt(event.target.value)} /></label>
         <div className="secrets-dialog-actions">
-          <button type="button" onClick={onCancel}>Cancel</button>
+          <button type="button" onClick={onCancel} disabled={submitting}>Cancel</button>
           <button type="submit" disabled={!canSubmit || submitting}>{submitting ? "Rotating..." : "Rotate"}</button>
         </div>
       </form>
