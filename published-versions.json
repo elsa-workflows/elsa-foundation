@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "2d73d87cc3ed5545efcaa8510e2b7fa2099f9d59",
+  "last_publish_commit": "73451fd575d0e595a79603568896101184887805",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -549,8 +549,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Design.Api",
-      "version": "4.0.15-preview",
-      "commit": "15feed9e0be709348602e054cca85a33f0f76873"
+      "version": "4.0.16-preview",
+      "commit": "73451fd575d0e595a79603568896101184887805"
     },
     {
       "package_id": "Elsa.Workflows.Design.CodeGeneration",
@@ -569,13 +569,13 @@
     },
     {
       "package_id": "Elsa.Workflows.Design.Persistence.Core",
-      "version": "4.0.9-preview",
-      "commit": "4a1df9773cdc635bfd735f62293e9821d9163c0f"
+      "version": "4.0.10-preview",
+      "commit": "73451fd575d0e595a79603568896101184887805"
     },
     {
       "package_id": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
-      "version": "4.0.21-preview",
-      "commit": "15feed9e0be709348602e054cca85a33f0f76873"
+      "version": "4.0.22-preview",
+      "commit": "73451fd575d0e595a79603568896101184887805"
     },
     {
       "package_id": "Elsa.Workflows.Design.Reconciliation",
@@ -609,8 +609,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Publishing",
-      "version": "4.0.26-preview",
-      "commit": "2d73d87cc3ed5545efcaa8510e2b7fa2099f9d59"
+      "version": "4.0.27-preview",
+      "commit": "73451fd575d0e595a79603568896101184887805"
     },
     {
       "package_id": "Elsa.Workflows.Publishing.Api",
@@ -619,13 +619,13 @@
     },
     {
       "package_id": "Elsa.Workflows.Publishing.Core",
-      "version": "4.0.13-preview",
-      "commit": "e6b652f27ed1d81ff33e15fbff4adc35ff2bbce4"
+      "version": "4.0.14-preview",
+      "commit": "73451fd575d0e595a79603568896101184887805"
     },
     {
       "package_id": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore",
-      "version": "4.0.16-preview",
-      "commit": "c976625675e93fe5724b8cdd02a4125bb21cf08c"
+      "version": "4.0.17-preview",
+      "commit": "73451fd575d0e595a79603568896101184887805"
     },
     {
       "package_id": "Elsa.Workflows.Runtime",
