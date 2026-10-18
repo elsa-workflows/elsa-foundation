@@ -17,10 +17,9 @@ import {
   type WorkflowDefinitionBrowseLocation
 } from "./workflowDefinitionBrowseLocation";
 import "./workflowFolders.css";
+import "./workflowDefinitionTable.css";
+import { LatestDefinitionVersion, PublishedDefinitionVersion } from "./DefinitionVersionCells";
 
-const DefinitionStatusBadge = lazy(() =>
-  import("./DefinitionStatusBadge").then(module => ({ default: module.DefinitionStatusBadge }))
-);
 const CreateWorkflowDialog = lazy(() =>
   import("./CreateWorkflowDialog").then(module => ({ default: module.CreateWorkflowDialog }))
 );
@@ -429,9 +428,9 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
       ) : null}
       {state === "ready" && (definitions.length > 0 || page > 1) ? (
         <>
-          {definitions.length > 0 ? <div className="wf-grid" role="table" aria-label="Workflow definitions">
+          {definitions.length > 0 ? <div className="wf-definition-table-scroll" role="region" aria-label="Workflow definitions table" tabIndex={0}><div className="wf-grid wf-definition-grid" role="table" aria-label="Workflow definitions">
             <div className="wf-grid-head" role="row">
-              <label className="wf-row-select">
+              <div className="wf-row-select" role="columnheader">
                 <input
                   ref={selectVisibleRef}
                   type="checkbox"
@@ -439,12 +438,12 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
                   onChange={event => toggleVisibleSelection(event.target.checked)}
                   aria-label="Select visible workflow definitions"
                 />
-              </label>
-              <span>Name</span>
-              <span>Latest version</span>
-              <span>{listState === "deleted" ? "Deleted" : "Status"}</span>
-              <span>Modified</span>
-              <span>Actions</span>
+              </div>
+              <span role="columnheader">Name</span>
+              <span role="columnheader">Latest version</span>
+              <span role="columnheader">Published version</span>
+              <span role="columnheader">Modified</span>
+              <span className="wf-definition-actions-header" role="columnheader">Actions</span>
             </div>
             {definitions.map(definition => {
               const isDeleted = Boolean(definition.deletedAt);
@@ -464,31 +463,26 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
                 }}
                 key={definition.id}
               >
-                <label className="wf-row-select" onClick={event => event.stopPropagation()}>
+                <div className="wf-row-select" role="cell" onClick={event => event.stopPropagation()}>
                   <input
                     type="checkbox"
                     checked={selectedDefinitionIds.has(definition.id)}
                     onChange={event => toggleDefinitionSelection(definition.id, event.target.checked)}
                     aria-label={`Select workflow definition ${definition.name}`}
                   />
-                </label>
-                <span>
-                  <strong>{definition.name}</strong>
+                </div>
+                <span className="wf-definition-name" role="cell">
+                  <strong title={definition.name}>{definition.name}</strong>
                   <small>{definition.description || definition.id}</small>
+                  {isDeleted ? <><span className="wf-status-badge" data-status="cancelled">Deleted</span><small>{formatDate(definition.deletedAt)}</small></> : null}
                   {effectiveFolderSelection === "all" ? (
                     <ResultFolderBreadcrumb definition={definition} onSelect={changeFolder} />
                   ) : null}
                 </span>
-                <span>{definition.latestVersion ?? "No version"}</span>
-                <span>
-                  {listState === "deleted" ? formatDate(definition.deletedAt) : (
-                    <Suspense fallback={<span className="wf-status-badge" role="status"><span className="wf-visually-hidden">Loading status</span></span>}>
-                      <DefinitionStatusBadge definition={definition} />
-                    </Suspense>
-                  )}
-                </span>
-                <span>{formatDate(definition.lastModifiedAt)}</span>
-                <span className="wf-row-actions" onClick={event => event.stopPropagation()}>
+                <span className="wf-definition-version" role="cell"><LatestDefinitionVersion definition={definition} /></span>
+                <span className="wf-definition-version" role="cell"><PublishedDefinitionVersion definition={definition} /></span>
+                <span role="cell">{formatDate(definition.lastModifiedAt)}</span>
+                <span className="wf-row-actions" role="cell" onClick={event => event.stopPropagation()}>
                   {!isDeleted ? (
                     <>
                       <button type="button" onClick={event => { event.stopPropagation(); onOpen(definition.id); }}>Open</button>
@@ -508,7 +502,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
               </div>
               );
             })}
-          </div> : null}
+          </div></div> : null}
           <DefinitionPager
             page={page}
             pageSize={pageSize}

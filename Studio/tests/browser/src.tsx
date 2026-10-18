@@ -1649,6 +1649,11 @@ async function renderRequestedFixture() {
     root.render(<IncidentDiagnosticsFixture />);
     return;
   }
+  if (searchParams.get("mode") === "definition-versions") {
+    const { DefinitionVersionsFixture } = await import("./definitionVersionsFixture");
+    root.render(<DefinitionVersionsFixture />);
+    return;
+  }
   if (navBeforeFixture) {
     const { NavBeforeFixture } = await import("./navBeforeFixture");
     root.render(<NavBeforeFixture />);

@@ -22,7 +22,7 @@ public sealed class WorkflowDefinitionPublicationStateLookupEfTests
 
         var states = await fixture.Lookup.ListByDefinitionIdsAsync(["orders"]);
 
-        Assert.Equal(WorkflowDefinitionPublicationState.Retracted, states["orders"]);
+        Assert.Equal(WorkflowDefinitionPublicationState.Retracted, states["orders"].State);
     }
 
     [Fact]
@@ -35,7 +35,7 @@ public sealed class WorkflowDefinitionPublicationStateLookupEfTests
 
         var states = await fixture.Lookup.ListByDefinitionIdsAsync(["orders"]);
 
-        Assert.Equal(WorkflowDefinitionPublicationState.Published, states["orders"]);
+        Assert.Equal(WorkflowDefinitionPublicationState.Published, states["orders"].State);
     }
 
     private sealed class Fixture : IAsyncDisposable

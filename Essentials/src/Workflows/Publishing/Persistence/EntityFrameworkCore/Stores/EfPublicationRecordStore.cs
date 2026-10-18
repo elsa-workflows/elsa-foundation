@@ -19,6 +19,8 @@ public sealed class EfPublicationRecordStore(
     PublishingSnapshotReviewDbContext context,
     IPersistenceAccessContextAccessor accessContextAccessor) : IPublicationRecordStore
 {
+    private const int PublicationIdBatchSize = 200;
+
     public async ValueTask SaveAsync(PublicationRecord publication, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(publication);
@@ -63,6 +65,44 @@ public sealed class EfPublicationRecordStore(
         cancellationToken.ThrowIfCancellationRequested();
         var row = await FindEntityAsync(EfPublishingStoreSupport.TenantValue(accessContextAccessor), publicationId, cancellationToken);
         return row is null ? null : ToModel(row);
+    }
+
+    public async ValueTask<IReadOnlyCollection<PublicationRecord>> FindByIdsAsync(
+        IReadOnlyCollection<string> publicationIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(publicationIds);
+        var requested = publicationIds.Distinct(StringComparer.Ordinal).ToArray();
+        foreach (var publicationId in requested)
+            EfPublishingStoreSupport.EnsureIdentity(publicationId, nameof(publicationIds));
+        if (requested.Length == 0)
+            return [];
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var tenantId = EfPublishingStoreSupport.TenantValue(accessContextAccessor);
+        var tenantHash = EfPublishingStoreSupport.TenantHash(tenantId);
+        var encodedTenantId = EfPublishingStoreSupport.EncodeNullable(tenantId);
+        var byHash = requested.ToLookup(EfPublishingStoreSupport.Hash, StringComparer.Ordinal);
+        var publications = new List<PublicationRecord>(requested.Length);
+        foreach (var batch in byHash.Select(group => group.Key).Chunk(PublicationIdBatchSize))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var rows = await context.PublicationRecords.AsNoTracking()
+                .Where(row => row.TenantIdHash == tenantHash && batch.Contains(row.PublicationIdHash))
+                .ToArrayAsync(cancellationToken);
+            foreach (var row in rows)
+            {
+                var publication = ToModel(row);
+                if (!StringComparer.Ordinal.Equals(row.TenantId, encodedTenantId) ||
+                    !byHash[row.PublicationIdHash].Contains(publication.PublicationId, StringComparer.Ordinal))
+                    throw new InvalidOperationException("A publication-record hash candidate did not match its encoded identity residual.");
+                publications.Add(publication);
+            }
+        }
+
+        return publications
+            .OrderBy(publication => publication.PublicationId, StringComparer.Ordinal)
+            .ToArray();
     }
 
     public async ValueTask<IReadOnlyCollection<PublicationRecord>> ListBySlotAsync(string slotId, CancellationToken cancellationToken = default)

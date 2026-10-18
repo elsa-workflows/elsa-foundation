@@ -39,6 +39,25 @@ public sealed class EfPublicationRecordStoreTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Find_by_ids_is_batched_exact_and_tenant_scoped()
+    {
+        var first = Record("publication-a", "slot-1");
+        var second = Record("publication-b", "slot-2");
+        await using (var context = Open())
+        {
+            await Store(context, "tenant-a").SaveAsync(first);
+            await Store(context, "tenant-a").SaveAsync(second);
+            await Store(context, "tenant-b").SaveAsync(first with { ArtifactId = "foreign-artifact" });
+        }
+
+        await using var restarted = Open();
+        var store = Store(restarted, "tenant-a");
+
+        Assert.Equal(new[] { first, second }, await store.FindByIdsAsync([second.PublicationId, "missing", first.PublicationId, first.PublicationId]));
+        Assert.Empty(await Store(restarted, "tenant-c").FindByIdsAsync([first.PublicationId, second.PublicationId]));
+    }
+
+    [Fact]
     public async Task A_transition_is_a_compare_and_swap_on_the_observed_status_and_never_changes_identity()
     {
         var candidate = Record("publication-cas", "slot-1");

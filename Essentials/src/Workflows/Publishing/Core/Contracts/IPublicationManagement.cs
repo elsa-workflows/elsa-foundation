@@ -9,6 +9,17 @@ public interface IPublicationRecordStore
 {
     ValueTask SaveAsync(PublicationRecord publication, CancellationToken cancellationToken = default);
     ValueTask<PublicationRecord?> FindAsync(string publicationId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Finds publication records by their exact identities in a bounded batch. Providers without a
+    /// batch identity lookup may return an empty collection; publication lifecycle state remains
+    /// available while the summary omits the source version.
+    /// </summary>
+    ValueTask<IReadOnlyCollection<PublicationRecord>> FindByIdsAsync(
+        IReadOnlyCollection<string> publicationIds,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult<IReadOnlyCollection<PublicationRecord>>([]);
+
     ValueTask<IReadOnlyCollection<PublicationRecord>> ListBySlotAsync(string slotId, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -32,6 +43,20 @@ public sealed record PublicationPolicyWriteResult(bool Succeeded, PublicationPol
 public interface IPublicationPolicyStore
 {
     ValueTask<PublicationPolicy?> FindAsync(string? workflowDefinitionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Whether this store can answer <see cref="FindByDefinitionIdsAsync"/> completely in a bounded batch.
+    /// Readers must treat the default slot as unknown when this is false.
+    /// </summary>
+    bool SupportsBatchDefinitionLookup => false;
+
+    /// <summary>Finds the workflow-scoped policies for a bounded set of definition ids.</summary>
+    ValueTask<IReadOnlyDictionary<string, PublicationPolicy>> FindByDefinitionIdsAsync(
+        IReadOnlyCollection<string> workflowDefinitionIds,
+        CancellationToken cancellationToken = default) =>
+        ValueTask.FromResult<IReadOnlyDictionary<string, PublicationPolicy>>(
+            new Dictionary<string, PublicationPolicy>(StringComparer.Ordinal));
+
     ValueTask<PublicationPolicyWriteResult> TrySaveAsync(
         PublicationPolicy policy,
         long expectedRevision,

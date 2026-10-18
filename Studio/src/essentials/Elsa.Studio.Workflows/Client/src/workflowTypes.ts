@@ -35,6 +35,12 @@ export interface WorkflowDefinitionSummary {
   draftId?: string | null;
   latestVersionId?: string | null;
   latestVersion?: string | null;
+  /** Exact source of the mutable draft; a draft has no assigned version of its own. */
+  draftSourceVersionId?: string | null;
+  draftSourceVersion?: string | null;
+  /** Version currently published by the host, independent of the latest saved version. */
+  publishedVersionId?: string | null;
+  publishedVersion?: string | null;
   versionCount: number;
   /** Server publication lifecycle. Omitted on design-only hosts. */
   publicationState?: WorkflowDefinitionPublicationState | null;
