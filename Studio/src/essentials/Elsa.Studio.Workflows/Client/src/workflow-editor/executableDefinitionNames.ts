@@ -4,6 +4,7 @@ import type { WorkflowDefinitionsResponse, WorkflowExecutableSummary } from "../
 type ListDefinitionsPage = (request: DefinitionListRequest) => Promise<WorkflowDefinitionsResponse>;
 
 const definitionPageSize = 100;
+const maximumDefinitionNamePages = 5;
 
 function uniqueDefinitionIds(ids: Iterable<string | null | undefined>) {
   const result: string[] = [];
@@ -26,7 +27,7 @@ export function getExecutableDefinitionIds(executable: WorkflowExecutableSummary
   ]);
 }
 
-/** Loads names through bounded Design list pages, stopping when every requested ID is found. */
+/** Loads names through a bounded number of Design pages; unresolved IDs remain usable as ID labels. */
 export async function loadDefinitionNames(
   ids: Iterable<string | null | undefined>,
   listPage: ListDefinitionsPage
@@ -38,41 +39,34 @@ export async function loadDefinitionNames(
   const unresolved = new Set(wanted);
   const seenContinuationTokens = new Set<string>();
   let continuationToken: string | undefined;
-  let page = 1;
 
   try {
-    while (unresolved.size > 0) {
+    for (let page = 1; unresolved.size > 0 && page <= maximumDefinitionNamePages; page += 1) {
       const response = await listPage({
         search: "",
         state: "all",
         page,
         pageSize: definitionPageSize,
+        includeAllWhenUnpaged: true,
         ...(continuationToken ? { continuationToken } : {})
       });
 
       for (const definition of response.definitions) {
         if (!unresolved.has(definition.id)) continue;
-        const name = definition.name?.trim();
-        if (!name) continue;
-        names.set(definition.id, name);
         unresolved.delete(definition.id);
+        const name = definition.name?.trim();
+        if (name) names.set(definition.id, name);
       }
 
-      if (unresolved.size === 0) break;
+      if (!response.isPaged || unresolved.size === 0) break;
 
       const nextContinuationToken = response.nextContinuationToken;
-      if (response.isPaged) {
-        if (!nextContinuationToken || seenContinuationTokens.has(nextContinuationToken)) break;
-        seenContinuationTokens.add(nextContinuationToken);
-        continuationToken = nextContinuationToken;
-      } else if (page * definitionPageSize >= (response.totalCount ?? response.definitions.length)) {
-        break;
-      }
-      page += 1;
+      if (!nextContinuationToken || seenContinuationTokens.has(nextContinuationToken)) break;
+      seenContinuationTokens.add(nextContinuationToken);
+      continuationToken = nextContinuationToken;
     }
   } catch {
-    // A denied or unavailable Design lookup must not make runtime artifacts unusable.
-    return new Map<string, string>();
+    // A denied or unavailable Design lookup must not make runtime artifacts unusable; keep names already found.
   }
 
   return names;

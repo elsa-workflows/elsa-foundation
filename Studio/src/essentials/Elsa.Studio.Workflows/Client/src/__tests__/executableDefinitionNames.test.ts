@@ -98,18 +98,19 @@ describe("executable definition names", () => {
       ["definition-root", "Order workflow"],
       ["definition-reference", "Order workflow"]
     ]);
-    expect(listPage).toHaveBeenNthCalledWith(1, { search: "", state: "all", page: 1, pageSize: 100 });
+    expect(listPage).toHaveBeenNthCalledWith(1, { search: "", state: "all", page: 1, pageSize: 100, includeAllWhenUnpaged: true });
     expect(listPage).toHaveBeenNthCalledWith(2, {
       search: "",
       state: "all",
       page: 2,
       pageSize: 100,
+      includeAllWhenUnpaged: true,
       continuationToken: "opaque-next-page"
     });
     expect(listPage).toHaveBeenCalledTimes(2);
   });
 
-  it("keeps names found before exhaustion and returns an empty map when lookup is denied", async () => {
+  it("keeps names found before exhaustion or a later page failure", async () => {
     const pagedLookup = vi.fn(async (request: DefinitionListRequest): Promise<WorkflowDefinitionsResponse> =>
       request.continuationToken === undefined
         ? page([definition("definition-root", "Order workflow")], 1, "missing-page")
@@ -119,6 +120,15 @@ describe("executable definition names", () => {
     expect([...partialNames]).toEqual([["definition-root", "Order workflow"]]);
     expect(pagedLookup).toHaveBeenCalledTimes(2);
 
+    const laterFailure = vi.fn(async (request: DefinitionListRequest): Promise<WorkflowDefinitionsResponse> => {
+      if (request.continuationToken) throw new Error("Temporary failure");
+      return page([definition("definition-root", "Order workflow")], 1, "next-page");
+    });
+    expect([...await loadDefinitionNames(["definition-root", "missing-definition"], laterFailure)]).toEqual([
+      ["definition-root", "Order workflow"]
+    ]);
+    expect(laterFailure).toHaveBeenCalledTimes(2);
+
     const deniedLookup = vi.fn(async (): Promise<WorkflowDefinitionsResponse> => {
       throw new Error("Forbidden");
     });
@@ -126,13 +136,30 @@ describe("executable definition names", () => {
     expect(deniedLookup).toHaveBeenCalledTimes(1);
   });
 
-  it("reads later legacy list pages and stops on repeated continuation tokens", async () => {
-    const legacy = vi.fn(async (request: DefinitionListRequest): Promise<WorkflowDefinitionsResponse> => ({
-      definitions: request.page === 1 ? [] : [definition("definition-root", "Legacy workflow")],
-      page: request.page, pageSize: 100, totalCount: 101
+  it("uses the single full legacy response and treats blank names as resolved IDs", async () => {
+    const legacy = vi.fn(async (): Promise<WorkflowDefinitionsResponse> => ({
+      definitions: [definition("definition-first", "First workflow"), definition("definition-root", "Legacy workflow")],
+      page: 1, pageSize: 100, totalCount: 2
     }));
     expect([...await loadDefinitionNames(["definition-root"], legacy)]).toEqual([["definition-root", "Legacy workflow"]]);
-    expect(legacy).toHaveBeenCalledTimes(2);
+    expect(legacy).toHaveBeenCalledTimes(1);
+
+    const blankName = vi.fn(async (): Promise<WorkflowDefinitionsResponse> => ({
+      ...page([definition("definition-blank", "   ")], 1, "next-page")
+    }));
+    expect([...await loadDefinitionNames(["definition-blank"], blankName)]).toEqual([]);
+    expect(blankName).toHaveBeenCalledTimes(1);
+  });
+
+  it("caps unresolved paged name lookups", async () => {
+    const bounded = vi.fn(async (request: DefinitionListRequest): Promise<WorkflowDefinitionsResponse> =>
+      page([], request.page, `next-${request.page}`));
+
+    expect([...await loadDefinitionNames(["missing-definition"], bounded)]).toEqual([]);
+    expect(bounded).toHaveBeenCalledTimes(5);
+  });
+
+  it("stops on repeated continuation tokens", async () => {
     const repeated = vi.fn(async (): Promise<WorkflowDefinitionsResponse> => page([], 1, "same-token"));
     expect([...await loadDefinitionNames(["missing"], repeated)]).toEqual([]);
     expect(repeated).toHaveBeenCalledTimes(2);

@@ -32,6 +32,8 @@ export interface DefinitionListRequest {
   state?: DefinitionListState;
   page: number;
   pageSize: number;
+  /** Name enrichment on legacy hosts can reuse their single full-list response instead of paging it again. */
+  includeAllWhenUnpaged?: boolean;
   continuationToken?: string;
   folderId?: string | null;
   unfiled?: boolean;
@@ -237,11 +239,12 @@ export async function listDefinitions(context: StudioEndpointContext, request: D
   const response = await context.http.getJson<{ items: WorkflowDefinitionsResponse["definitions"] }>(
     `${await definitionsPath(context)}?${parameters.toString()}`);
   const offset = Math.max(0, request.page - 1) * request.pageSize;
+  const definitions = response.items ?? [];
   return {
-    definitions: (response.items ?? []).slice(offset, offset + request.pageSize),
+    definitions: request.includeAllWhenUnpaged ? definitions : definitions.slice(offset, offset + request.pageSize),
     page: request.page,
     pageSize: request.pageSize,
-    totalCount: response.items?.length ?? 0
+    totalCount: definitions.length
   } satisfies WorkflowDefinitionsResponse;
 }
 

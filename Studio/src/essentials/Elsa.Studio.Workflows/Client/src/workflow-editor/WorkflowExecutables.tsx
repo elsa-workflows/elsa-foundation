@@ -43,6 +43,7 @@ export function openExecutableInspector(artifactId: string, sourceReferenceId?: 
 
 export function WorkflowExecutables({ context, ai, runInputEditors, definitionFilter, onDefinitionFilterChange }: { context: StudioEndpointContext; ai: StudioAiContributionApi; runInputEditors: StudioWorkflowRunInputEditorContribution[]; definitionFilter: string | null; onDefinitionFilterChange(filter: string | null): void }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
+  const [definitionNamesLoading, setDefinitionNamesLoading] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [lastRun, setLastRun] = useState<ExecutableRunState | null>(null);
@@ -79,6 +80,7 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
   const load = useCallback(async () => {
     const generation = ++loadGeneration.current;
     setState("loading");
+    setDefinitionNamesLoading(false);
     setError("");
     try {
       const items = await listExecutables(context, { scope, includeRetired });
@@ -86,10 +88,16 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
       setExecutables(items);
       setDefinitionNames(new Map());
       setState("ready");
-      const names = await loadDefinitionNames(items.flatMap(getExecutableDefinitionIds), request => listDefinitions(context, request));
-      if (generation === loadGeneration.current) setDefinitionNames(names);
+      const definitionIds = items.flatMap(getExecutableDefinitionIds);
+      setDefinitionNamesLoading(definitionIds.length > 0);
+      const names = await loadDefinitionNames(definitionIds, request => listDefinitions(context, request));
+      if (generation === loadGeneration.current) {
+        setDefinitionNames(names);
+        setDefinitionNamesLoading(false);
+      }
     } catch (e) {
       if (generation !== loadGeneration.current) return;
+      setDefinitionNamesLoading(false);
       setError(e instanceof Error ? e.message : String(e));
       setState("failed");
     }
@@ -182,11 +190,15 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
       {status ? <ExecutableRunStatusLine status={status} run={lastRun} /> : null}
       {state === "loading" ? <WfListSkeleton /> : null}
       {state === "ready" && visibleExecutables.length === 0 ? (
-        <WfEmptyState
-          icon={<Play size={22} />}
-          title="No workflow executables"
-          description={definitionFilter ? "No executables match this definition filter." : "Publish a workflow definition to make it executable."}
-        />
+        definitionNamesLoading ? (
+          <WfEmptyState icon={<Search size={22} />} title="Loading workflow names" description="Checking definition names for matching executables." />
+        ) : (
+          <WfEmptyState
+            icon={<Play size={22} />}
+            title="No workflow executables"
+            description={definitionFilter ? "No executables match this definition filter." : "Publish a workflow definition to make it executable."}
+          />
+        )
       ) : null}
       {state === "ready" && visibleExecutables.length > 0 ? (
         <div className="wf-executable-table-wrap">
@@ -221,9 +233,12 @@ export function WorkflowExecutables({ context, ai, runInputEditors, definitionFi
                           <small title={executable.artifactHash}>{executable.artifactHash}</small>
                           <CopyValueButton value={executable.artifactHash} ariaLabel={`Copy artifact hash ${executable.artifactHash}`} copiedLabel="artifact hash" onCopied={markCopied} onCopyFailed={markCopyFailed} />
                         </span>
-                        {sourceId ? <span className="wf-cell-line wf-cell-line-muted" title={`${formatExecutableSourceKind(executable.sourceKind)}${executable.sourceVersion ? ` · ${executable.sourceVersion}` : ""}`}>
-                          <small>Source</small><code title={sourceId}>{sourceId}</code>
+                        {sourceId ? <span className="wf-cell-line wf-cell-line-muted">
+                          <small>Source ID</small><code title={sourceId}>{sourceId}</code>
                           <CopyValueButton value={sourceId} ariaLabel={`Copy source ID ${sourceId}`} copiedLabel="source ID" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+                        </span> : null}
+                        {executable.sourceKind || executable.sourceVersion ? <span className="wf-cell-line wf-cell-line-muted" title={`${formatExecutableSourceKind(executable.sourceKind)}${executable.sourceVersion ? ` · ${executable.sourceVersion}` : ""}`}>
+                          <small>Source</small><small>{[executable.sourceKind ? formatExecutableSourceKind(executable.sourceKind) : null, executable.sourceVersion ? `Version ${executable.sourceVersion}` : null].filter(Boolean).join(" · ")}</small>
                         </span> : null}
                       </span></td>
                       <td><span className="wf-version-cell wf-executable-version-cell">
