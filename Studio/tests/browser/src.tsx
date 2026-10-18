@@ -1101,7 +1101,18 @@ function RunDetailFixture() {
             </section>
             <div className="wf-side-resize-spacer" />
             <aside className="wf-instance-inspector" aria-label="Run details">
-              <header><h3>Activity details</h3></header>
+              <header>
+                <h3>Activity details</h3>
+                {layout.mode === "desktop" ? (
+                  <button
+                    type="button"
+                    aria-label={layout.inspectorMaximized ? "Restore run details panel" : "Maximize run details panel"}
+                    onClick={layout.toggleInspectorMaximized}
+                  >
+                    {layout.inspectorMaximized ? "Restore" : "Maximize"}
+                  </button>
+                ) : null}
+              </header>
               {inputEvidenceFixture ? <div className="wf-instance-tab-content"><ActivityInputEvidenceFixture context={endpointContext} /></div> : <div className="wf-instance-section">Evaluated inputs</div>}
             </aside>
           </div>

@@ -11,11 +11,13 @@ import {
 } from "../api/runtime";
 import { getActivityExecutionValuePayload } from "../api/activityExecutionValuePayload";
 import { ReusableBoundaryInspector } from "../workflow-editor/ReusableBoundaryInspector";
+import { WorkflowActivityExecutionDetails } from "../workflow-editor/WorkflowInstances";
 import type {
   ActivityExecutionHierarchyItem,
   ActivityExecutionHierarchyPage,
   ActivityExecutionInspection,
-  ActivityExecutionLayout
+  ActivityExecutionLayout,
+  ActivityExecutionStateSummary
 } from "../workflowTypes";
 
 vi.mock("../api/runtime", async importOriginal => ({
@@ -49,6 +51,53 @@ afterEach(() => {
 });
 
 describe("ReusableBoundaryInspector", () => {
+  it("shows the nested frame status in compact mode without replacing the selected Activity status", async () => {
+    const nestedInspection = {
+      ...boundaryInspection("nested"),
+      status: "Faulted",
+      subStatus: "Retryable"
+    };
+    vi.mocked(getActivityExecutionInspection).mockImplementation(async (_context, _run, activityExecutionId) =>
+      activityExecutionId === "nested" ? nestedInspection : boundaryInspection("outer"));
+    vi.mocked(getActivityExecutionLayout).mockImplementation(async (_context, _run, activityExecutionId) =>
+      layout(activityExecutionId, []));
+    vi.mocked(getActivityExecutionDescendants).mockResolvedValue(page(1, [hierarchyItem("nested", 1, {
+      activityType: "Example.NestedReusable",
+      status: "Faulted",
+      subStatus: "Retryable",
+      boundary: nestedInspection.boundary
+    })]));
+    vi.mocked(getActivityDefinitionVersion).mockResolvedValue({
+      definition: { definitionId: "definition-outer" },
+      versionId: "definition-version-outer"
+    } as Awaited<ReturnType<typeof getActivityDefinitionVersion>>);
+
+    const rootActivity = activitySummary("outer");
+    const container = render(
+      <WorkflowActivityExecutionDetails context={context} activity={rootActivity} activityCatalog={[]} />
+    );
+    const boundarySummary = () => container.querySelector<HTMLElement>(".wf-activity-boundary-details summary");
+    await waitFor(() => expect(boundarySummary()?.textContent).toContain("Completed"));
+    click(boundarySummary()!);
+    await waitFor(() => expect((boundarySummary()!.parentElement as HTMLDetailsElement).open).toBe(true));
+    await waitFor(() => expect(
+      container.querySelector(".wf-boundary-inspector") || container.textContent?.includes("Loading boundary details...")
+    ).toBeTruthy());
+    await import("../workflow-editor/ReusableBoundaryInspector");
+    rerender(<WorkflowActivityExecutionDetails context={context} activity={rootActivity} activityCatalog={[]} />);
+    await waitFor(() => expect(container.querySelector(".wf-boundary-inspector")).not.toBeNull());
+
+    click(button(container, "Runtime Evidence"));
+    await waitFor(() => expect(container.textContent).toContain("nested"));
+    click(treeItem(container, "nested"));
+    click(button(container, "Open boundary"));
+    await waitFor(() => expect(container.querySelector(".wf-boundary-inspector-heading")?.textContent).toContain("Faulted"));
+
+    expect(container.querySelector(".wf-boundary-inspector-heading")?.textContent).toContain("Retryable");
+    expect(boundarySummary()?.textContent).toContain("Completed");
+    expect(boundarySummary()?.textContent).not.toContain("Faulted");
+  });
+
   it("links to the exact inspected Activity Definition version only after authorized source resolution", async () => {
     vi.mocked(getActivityExecutionLayout).mockResolvedValue(layout("outer", []));
     vi.mocked(getActivityExecutionDescendants).mockResolvedValue(page(1, []));
@@ -418,6 +467,12 @@ function render(ui: React.ReactElement) {
   return container;
 }
 
+function rerender(ui: React.ReactElement) {
+  if (!active) throw new Error("No active render to update.");
+  flushSync(() => active!.root.render(ui));
+  return active.container;
+}
+
 async function waitFor(assertion: () => void) {
   let lastError: unknown;
   for (let attempt = 0; attempt < 80; attempt++) {
@@ -481,6 +536,30 @@ function boundaryInspection(activityExecutionId: string): ActivityExecutionInspe
       },
       layoutAvailable: true
     }
+  };
+}
+
+function activitySummary(activityExecutionId: string): ActivityExecutionStateSummary {
+  return {
+    activityExecutionId,
+    workflowExecutionId: "run",
+    executableNodeId: `node-${activityExecutionId}`,
+    authoredActivityId: `authored-${activityExecutionId}`,
+    activityType: "Example.OuterReusable",
+    activityTypeVersion: "2.0.0",
+    status: "Completed",
+    subStatus: null,
+    scheduledAt: "2026-07-19T00:00:00Z",
+    startedAt: "2026-07-19T00:00:01Z",
+    completedAt: "2026-07-19T00:00:02Z",
+    schedulingActivityExecutionId: null,
+    parentActivityExecutionId: null,
+    branchId: null,
+    iterationId: null,
+    callStackDepth: null,
+    bookmarkIds: [],
+    incidentIds: [],
+    metadata: {}
   };
 }
 

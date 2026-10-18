@@ -777,15 +777,38 @@ test("published recommendation is placed exactly, dispatched once, and inspected
   await expect(page.getByText("One Run · workflow-execution-1")).toBeVisible();
   expect(journey.dispatchWrites).toBe(1);
   const runDetails = page.getByRole("complementary", { name: "Run details" });
-  await expect(runDetails).toContainText("Boundary lifecycle");
-  await expect(runDetails).toContainText("Descendant aggregate");
+  const boundaryDetails = runDetails.locator(".wf-activity-boundary-details > details");
+  await expect(boundaryDetails).toBeVisible();
+  await expect(boundaryDetails).not.toHaveAttribute("open");
+  await expect(runDetails.getByRole("region", { name: "Reusable boundary Runtime Evidence" })).toHaveCount(0);
+  expect(journey.boundaryLayoutReads).toBe(0);
+  expect(journey.descendantReads).toBe(0);
+  await boundaryDetails.locator("summary").click();
+  const exactSource = runDetails.getByRole("region", { name: "Exact boundary source" });
+  await expect(exactSource.getByRole("link", { name: "Open exact Activity Definition" })).toBeVisible();
+  const technicalIdentity = runDetails.locator("details.wf-boundary-technical-identity");
+  await expect(technicalIdentity).toBeVisible();
+  await expect(technicalIdentity).not.toHaveAttribute("open");
+  await expect(runDetails.getByRole("region", { name: "Technical identity" })).toBeHidden();
+  const aggregate = runDetails.locator("details.wf-boundary-aggregate-disclosure");
+  await expect(aggregate).toBeVisible();
+  await expect(aggregate).not.toHaveAttribute("open");
+  await expect.poll(() => journey.boundaryLayoutReads).toBe(1);
+  await expect.poll(() => journey.descendantReads).toBe(1);
   await expect(runDetails).toContainText("Pinned historical layout");
   await expect(runDetails).toContainText("workflow-source-1");
+  await technicalIdentity.locator("summary").click();
+  await expect(technicalIdentity.getByRole("region", { name: "Technical identity" })).toBeVisible();
+  await expect(technicalIdentity).toContainText("activity-def-browser");
+  await expect(technicalIdentity).toContainText("published-version-1");
+  await aggregate.locator("summary").click();
+  await expect(aggregate.getByRole("region", { name: "Descendant aggregate" })).toBeVisible();
+  await expect(aggregate).toContainText("Descendant aggregate");
   await expect(runDetails).toContainText("invoice-write");
-  await expect(runDetails.getByText("Boundary lifecycle")).toHaveCount(1);
 
   await runDetails.getByRole("tab", { name: /Runtime Evidence/ }).click();
   await expect(runDetails).toContainText("Committed through sequence 5");
+  expect(journey.descendantReads).toBe(1);
   const descendant = runDetails.getByRole("treeitem", { name: /descendant-execution-1/ });
   await expect(descendant).toBeVisible();
   await descendant.focus();
@@ -1810,13 +1833,18 @@ async function mockReusableBoundaryJourney(page: Page) {
     draftWrites: number;
     draftReads: number;
     submittedRoot: unknown;
+    boundaryLayoutReads: number;
+    descendantReads: number;
+    boundarySnapshotReads: number;
   } = {
     dispatchWrites: 0,
     draftWrites: 0,
     draftReads: 0,
-    submittedRoot: null
+    submittedRoot: null,
+    boundaryLayoutReads: 0,
+    descendantReads: 0,
+    boundarySnapshotReads: 0
   };
-  let boundarySnapshotReads = 0;
   let workflowDraft = {
     id: "workflow-draft-1",
     definitionId: "workflow-definition-1",
@@ -1969,6 +1997,7 @@ async function mockReusableBoundaryJourney(page: Page) {
     body: JSON.stringify(nestedBoundaryInspection())
   }));
   await page.route(/\/runtime\/workflows\/instances\/workflow-execution-1\/activity-executions\/boundary-execution-1\/descendants\?/, route => {
+    state.descendantReads += 1;
     const url = new URL(route.request().url());
     const cursor = url.searchParams.get("cursor");
     expect(url.searchParams.get("limit")).toBe("100");
@@ -1994,8 +2023,8 @@ async function mockReusableBoundaryJourney(page: Page) {
       });
     }
 
-    boundarySnapshotReads += 1;
-    const watermark = boundarySnapshotReads === 1 ? 5 : boundarySnapshotReads === 2 ? 6 : 7;
+    state.boundarySnapshotReads += 1;
+    const watermark = state.boundarySnapshotReads === 1 ? 5 : state.boundarySnapshotReads === 2 ? 6 : 7;
     return route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -2051,34 +2080,37 @@ async function mockReusableBoundaryJourney(page: Page) {
       })
     });
   });
-  await page.route("**/runtime/workflows/instances/workflow-execution-1/activity-executions/boundary-execution-1/layout", route => route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify({
-      workflowExecutionId: "workflow-execution-1",
-      activityExecutionId: "boundary-execution-1",
-      artifactId: "workflow-artifact-1",
-      sourceReferenceId: "workflow-source-1",
-      selection: "ExecutedReference",
-      boundaryOrigin: [{ kind: "TemplateBoundary", id: "published-version-1" }],
-      templateHash: "sha256:invoice-v2",
-      nodes: [{
-        templateNodeId: "template-write",
-        authoredActivityId: "write",
-        executableNodeId: "invoice-write",
-        x: 120,
-        y: 80,
-        hasPinnedGeometry: true
-      }],
-      connections: [],
-      nestedBoundaries: [{
-        activityExecutionId: "nested-boundary-execution-1",
-        executableNodeId: "nested-boundary",
-        templateHash: "sha256:nested-v1",
-        layoutAvailable: true
-      }]
-    })
-  }));
+  await page.route("**/runtime/workflows/instances/workflow-execution-1/activity-executions/boundary-execution-1/layout", route => {
+    state.boundaryLayoutReads += 1;
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        workflowExecutionId: "workflow-execution-1",
+        activityExecutionId: "boundary-execution-1",
+        artifactId: "workflow-artifact-1",
+        sourceReferenceId: "workflow-source-1",
+        selection: "ExecutedReference",
+        boundaryOrigin: [{ kind: "TemplateBoundary", id: "published-version-1" }],
+        templateHash: "sha256:invoice-v2",
+        nodes: [{
+          templateNodeId: "template-write",
+          authoredActivityId: "write",
+          executableNodeId: "invoice-write",
+          x: 120,
+          y: 80,
+          hasPinnedGeometry: true
+        }],
+        connections: [],
+        nestedBoundaries: [{
+          activityExecutionId: "nested-boundary-execution-1",
+          executableNodeId: "nested-boundary",
+          templateHash: "sha256:nested-v1",
+          layoutAvailable: true
+        }]
+      })
+    });
+  });
   await page.route(/\/runtime\/workflows\/instances\/workflow-execution-1\/activity-executions\/nested-boundary-execution-1\/descendants\?limit=100&include=outcomes%2Cbookmarks%2Cincidents$/, route => route.fulfill({
     status: 200,
     contentType: "application/json",
