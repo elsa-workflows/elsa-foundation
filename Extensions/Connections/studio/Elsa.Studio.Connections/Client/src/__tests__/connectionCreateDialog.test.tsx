@@ -327,6 +327,83 @@ describe("connection credential creation", () => {
     expect(control<HTMLSelectElement>(host, "Type").value).toBe("endpoint-b");
   });
 
+  it.each(["Revoke", "Delete"] as const)("does not %s endpoint A after confirmation when the page switches to endpoint B", async action => {
+    const endpointAConnection = createdConnection({ name: "a.connection", displayName: "Endpoint A Connection" });
+    const endpointBConnection = createdConnection({ name: "b.connection", displayName: "Endpoint B Connection" });
+    const endpointA = endpointContext(vi.fn());
+    const endpointB = endpointContext(vi.fn());
+    const getConnections = (connection: ConnectionMetadata) => vi.fn(async url => {
+      if (url.startsWith("/connections?")) return { items: [connection] };
+      if (url === "/connections/descriptors") return testDescriptors;
+      throw new Error(`Unexpected GET: ${url}`);
+    });
+    (endpointA.http as unknown as { getJson: ReturnType<typeof vi.fn> }).getJson = getConnections(endpointAConnection);
+    (endpointB.http as unknown as { getJson: ReturnType<typeof vi.fn> }).getJson = getConnections(endpointBConnection);
+    const confirm = deferred<boolean>();
+    const dialogs = { confirm: vi.fn(() => confirm.promise), prompt: vi.fn(), alert: vi.fn() } as unknown as StudioDialogApi;
+    const postA = endpointA.http.postJson as ReturnType<typeof vi.fn>;
+    const deleteA = vi.fn();
+    (endpointA.http as unknown as { deleteJson: ReturnType<typeof vi.fn> }).deleteJson = deleteA;
+    const { container: host, rerender } = renderConnectionsPage(endpointA, dialogs);
+
+    await waitFor(() => host.textContent?.includes("Endpoint A Connection") === true);
+    clickButton(host, action);
+    expect(dialogs.confirm).toHaveBeenCalledWith({ message: `${action} a.connection?`, tone: "danger" });
+
+    rerender(endpointB);
+    await waitFor(() => host.textContent?.includes("Endpoint B Connection") === true);
+    confirm.resolve(true);
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(postA).not.toHaveBeenCalled();
+    expect(deleteA).not.toHaveBeenCalled();
+  });
+
+  it("ignores a successful test response from the previous endpoint", async () => {
+    const endpointAConnection = createdConnection({ name: "a.connection", displayName: "Endpoint A Connection" });
+    const endpointBConnection = createdConnection({ name: "b.connection", displayName: "Endpoint B Connection" });
+    const testResult = deferred<{ succeeded: boolean; message: string }>();
+    const endpointA = endpointContext(vi.fn(() => testResult.promise));
+    const endpointB = endpointContext(vi.fn());
+    installConnectionList(endpointA, endpointAConnection);
+    installConnectionList(endpointB, endpointBConnection);
+    const { container: host, rerender } = renderConnectionsPage(endpointA);
+
+    await waitFor(() => host.textContent?.includes("Endpoint A Connection") === true);
+    clickButton(host, "Test");
+    expect(endpointA.http.postJson).toHaveBeenCalledWith("/connections/a.connection/test", {});
+
+    rerender(endpointB);
+    await waitFor(() => host.textContent?.includes("Endpoint B Connection") === true);
+    testResult.resolve({ succeeded: true, message: "Endpoint A test succeeded." });
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(host.textContent).not.toContain("Endpoint A test succeeded.");
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("ignores a failed test response from the previous endpoint", async () => {
+    const endpointAConnection = createdConnection({ name: "a.connection", displayName: "Endpoint A Connection" });
+    const endpointBConnection = createdConnection({ name: "b.connection", displayName: "Endpoint B Connection" });
+    const testResult = deferred<{ succeeded: boolean; message?: string }>();
+    const endpointA = endpointContext(vi.fn(() => testResult.promise));
+    const endpointB = endpointContext(vi.fn());
+    installConnectionList(endpointA, endpointAConnection);
+    installConnectionList(endpointB, endpointBConnection);
+    const { container: host, rerender } = renderConnectionsPage(endpointA);
+
+    await waitFor(() => host.textContent?.includes("Endpoint A Connection") === true);
+    clickButton(host, "Test");
+
+    rerender(endpointB);
+    await waitFor(() => host.textContent?.includes("Endpoint B Connection") === true);
+    testResult.reject(new Error("Endpoint A test failed."));
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(host.textContent).not.toContain("Endpoint A test failed.");
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+  });
+
   it("blocks an unresolved required credential and prevents cancel or duplicate submit while saving", async () => {
     const createRequest = deferred<unknown>();
     const calls: string[] = [];
@@ -406,11 +483,10 @@ const endpointBDescriptors: ConnectionDescriptorsResponse = {
   schemes: [{ name: "endpoint-b-scheme", displayName: "Endpoint B scheme", fields: [], hasInteractiveAuthorization: false }]
 };
 
-function renderConnectionsPage(initialContext: StudioEndpointContext) {
+function renderConnectionsPage(initialContext: StudioEndpointContext, dialogs = { confirm: vi.fn(), prompt: vi.fn(), alert: vi.fn() } as unknown as StudioDialogApi) {
   const host = document.createElement("div");
   document.body.appendChild(host);
   const root = createRoot(host);
-  const dialogs = { confirm: vi.fn(), prompt: vi.fn(), alert: vi.fn() } as unknown as StudioDialogApi;
   const render = (context = initialContext) => {
     flushSync(() => root.render(<ConnectionsPage context={context} dialogs={dialogs} />));
   };
@@ -419,7 +495,15 @@ function renderConnectionsPage(initialContext: StudioEndpointContext) {
     flushSync(() => root.unmount());
     host.remove();
   });
-  return { container: host, rerender: render };
+  return { container: host, rerender: render, dialogs };
+}
+
+function installConnectionList(context: StudioEndpointContext, connection: ConnectionMetadata) {
+  (context.http as unknown as { getJson: ReturnType<typeof vi.fn> }).getJson = vi.fn(async url => {
+    if (url.startsWith("/connections?")) return { items: [connection] };
+    if (url === "/connections/descriptors") return testDescriptors;
+    throw new Error(`Unexpected GET: ${url}`);
+  });
 }
 
 function renderDialog(options: {
@@ -550,8 +634,10 @@ async function waitFor(predicate: () => boolean) {
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>(resolvePromise => {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise;
+    reject = rejectPromise;
   });
-  return { promise, resolve };
+  return { promise, resolve, reject };
 }

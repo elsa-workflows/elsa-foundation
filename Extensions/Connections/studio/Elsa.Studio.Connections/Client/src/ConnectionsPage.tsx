@@ -102,8 +102,8 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
         <button type="button" onClick={() => void load()}>Search</button>
         <button type="button" onClick={() => setCreating(true)} disabled={!contextIsLoaded || !visibleDescriptors}><Plus aria-hidden="true" size={14} /> New connection</button>
       </div>
-      {status ? <p role="status">{status}</p> : null}
-      {error ? <p role="alert">{error}</p> : null}
+      {contextIsLoaded && status ? <p role="status">{status}</p> : null}
+      {contextIsLoaded && error ? <p role="alert">{error}</p> : null}
       {loading || !contextIsLoaded ? <p role="status">Loading…</p> : (
         <div className="connections-layout">
           <ul>
@@ -129,28 +129,42 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
               {selected.status === "NeedsAuthorization" ? <p role="status">Needs authorization. Publishing still succeeds; a run faults until this connection is authorized.</p> : null}
               <div className="connections-actions">
                 <button type="button" onClick={async () => {
+                  const requestContext = context;
+                  const connectionName = selected.name;
                   try {
-                    const result = await testConnection(context, selected.name);
+                    const result = await testConnection(requestContext, connectionName);
+                    if (currentContextRef.current !== requestContext) return;
                     setStatus(result.message ?? (result.succeeded ? "Test succeeded." : "Test failed."));
                   } catch (e) {
+                    if (currentContextRef.current !== requestContext) return;
                     setError(e instanceof Error ? e.message : "The connection could not be tested.");
                   }
                 }}><ShieldCheck aria-hidden="true" size={14} /> Test</button>
                 <button type="button" onClick={async () => {
-                  if (!await dialogs.confirm({ message: `Revoke ${selected.name}?`, tone: "danger" })) return;
+                  const requestContext = context;
+                  const connectionName = selected.name;
+                  if (!await dialogs.confirm({ message: `Revoke ${connectionName}?`, tone: "danger" })) return;
+                  if (currentContextRef.current !== requestContext) return;
                   try {
-                    await revokeConnection(context, selected.name);
-                    await load(selected.name);
+                    await revokeConnection(requestContext, connectionName);
+                    if (currentContextRef.current !== requestContext) return;
+                    await load(connectionName);
                   } catch (e) {
+                    if (currentContextRef.current !== requestContext) return;
                     setError(e instanceof Error ? e.message : "The connection could not be revoked.");
                   }
                 }}><Ban aria-hidden="true" size={14} /> Revoke</button>
                 <button type="button" onClick={async () => {
-                  if (!await dialogs.confirm({ message: `Delete ${selected.name}?`, tone: "danger" })) return;
+                  const requestContext = context;
+                  const connectionName = selected.name;
+                  if (!await dialogs.confirm({ message: `Delete ${connectionName}?`, tone: "danger" })) return;
+                  if (currentContextRef.current !== requestContext) return;
                   try {
-                    await deleteConnection(context, selected.name);
+                    await deleteConnection(requestContext, connectionName);
+                    if (currentContextRef.current !== requestContext) return;
                     await load();
                   } catch (e) {
+                    if (currentContextRef.current !== requestContext) return;
                     setError(e instanceof Error ? e.message : "The connection could not be deleted.");
                   }
                 }}><Trash2 aria-hidden="true" size={14} /> Delete</button>
