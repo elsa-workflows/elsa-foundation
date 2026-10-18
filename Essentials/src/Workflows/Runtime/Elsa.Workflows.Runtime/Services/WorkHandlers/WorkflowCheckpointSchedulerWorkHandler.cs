@@ -274,10 +274,9 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         return NewWorkflowExecutionStateChange(workItem, payload, state);
     }
 
-    // Carries the workflow instance name (#260) forward across a checkpoint rebuild. The completion/running
-    // builders rebuild SystemMetadata from scratch, so without this a SetName assignment folded into an
-    // activity-completed checkpoint would be wiped by the subsequent workflow-completed checkpoint — mirroring
-    // how the dedicated CorrelationId field is carried forward via priorWorkflowState.
+    // Carries the durable system metadata that must survive a checkpoint rebuild. The completion/running builders
+    // rebuild SystemMetadata from scratch, so without this a SetName assignment, background cancellation marker
+    // or Test Drive delivery receipt could be wiped by the subsequent workflow-completed checkpoint.
     private static Dictionary<string, string> PreserveSystemMetadata(
         Dictionary<string, string> metadata,
         WorkflowExecutionState? priorWorkflowState,
@@ -298,6 +297,17 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
 
         if (priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.WorkflowHasBackgroundActivityWork, out var hasBackgroundActivityWork) == true)
             metadata[RuntimeMetadataKeys.WorkflowHasBackgroundActivityWork] = hasBackgroundActivityWork;
+
+        // Manual Test Drive receipts are durable retry evidence. Workflow state is rebuilt for the started and
+        // completed checkpoints, so keep those bounded, reserved receipt keys when carrying a TestRun forward.
+        if (priorWorkflowState is { RunKind: WorkflowRunKind.TestRun })
+        {
+            foreach (var (key, value) in priorWorkflowState.SystemMetadata)
+            {
+                if (key.StartsWith(TestRunDeliveryReceipt.ReceiptPrefix, StringComparison.Ordinal))
+                    metadata[key] = value;
+            }
+        }
 
         return metadata;
     }

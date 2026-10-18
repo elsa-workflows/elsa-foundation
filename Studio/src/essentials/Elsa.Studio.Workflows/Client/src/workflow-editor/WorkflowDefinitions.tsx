@@ -2,16 +2,14 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { AlertCircle, Check, Package, Plus, RotateCcw, Search, Sparkles, Trash2 } from "lucide-react";
 import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDefinitions, restoreDefinition, workflowDefinitionFolderMovePath } from "../api/workflowDesign";
-import { listActivities } from "../api/activityDesign";
 import type { ActivityCatalogItem, DefinitionListState, WorkflowDefinitionDetails, WorkflowDefinitionSummary } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
 import { getDialogs } from "./dialogs";
 import { defaultDefinitionPageSize } from "./constants";
 import type { CreateWorkflowDraft } from "./editorTypes";
-import { dispatchAiAction, findAiAction, getCreateInitialState, getTotalPages } from "./editorHelpers";
+import { dispatchAiAction, findAiAction, getTotalPages } from "./editorListHelpers";
 import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { DefinitionPager } from "./DefinitionPager";
-import { CreateWorkflowDialog } from "./CreateWorkflowDialog";
 import { WorkflowFolderNavigation, type WorkflowFolderSelection, selectedFolderId } from "./WorkflowFolderNavigation";
 import {
   parseWorkflowDefinitionBrowseLocation,
@@ -22,6 +20,9 @@ import "./workflowFolders.css";
 
 const DefinitionStatusBadge = lazy(() =>
   import("./DefinitionStatusBadge").then(module => ({ default: module.DefinitionStatusBadge }))
+);
+const CreateWorkflowDialog = lazy(() =>
+  import("./CreateWorkflowDialog").then(module => ({ default: module.CreateWorkflowDialog }))
 );
 const MoveWorkflowDefinitionsDialog = lazy(() =>
   import("./MoveWorkflowDefinitionsDialog").then(module => ({ default: module.MoveWorkflowDefinitionsDialog }))
@@ -191,6 +192,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
     if (catalogState === "loading" || catalogState === "ready") return;
     setCatalogState("loading");
     try {
+      const { listActivities } = await import("../api/activityDesign");
       const response = await listActivities(context);
       setCatalog(response.activities ?? []);
       setCatalogState("ready");
@@ -214,6 +216,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
     setStatus("");
     try {
       const folderId = folderCapability === "available" ? selectedFolderId(folderSelection) : null;
+      const { getCreateInitialState } = await import("./editorHelpers");
       const details = await createDefinition(context, {
         name: createDraft.name.trim(),
         description: createDraft.description.trim() || null,
@@ -512,16 +515,18 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
         </>
       ) : null}
       {createDraft ? (
-        <CreateWorkflowDialog
-          draft={createDraft}
-          catalog={catalog}
-          creating={creating}
-          ai={ai}
-          suggestMetadataAction={suggestMetadataAction}
-          onChange={nextDraft => setCreateDraft(nextDraft)}
-          onClose={() => setCreateDraft(null)}
-          onSubmit={submitCreate}
-        />
+        <Suspense fallback={<div className="wf-dialog-backdrop" role="status">Loading create dialog…</div>}>
+          <CreateWorkflowDialog
+            draft={createDraft}
+            catalog={catalog}
+            creating={creating}
+            ai={ai}
+            suggestMetadataAction={suggestMetadataAction}
+            onChange={nextDraft => setCreateDraft(nextDraft)}
+            onClose={() => setCreateDraft(null)}
+            onSubmit={submitCreate}
+          />
+        </Suspense>
       ) : null}
       {moveDialogOpen ? (
         <Suspense fallback={<div className="wf-dialog-backdrop" role="status">Loading move dialog…</div>}>

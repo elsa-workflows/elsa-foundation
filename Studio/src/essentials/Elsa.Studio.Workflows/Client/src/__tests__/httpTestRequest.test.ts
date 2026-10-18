@@ -10,6 +10,7 @@ import {
   makeInitialHttpTestEndpointPath,
   publishedHttpEndpointInputsUnavailableMessage,
   readHttpEndpointResponseMetadata,
+  readHttpEndpointExecutionId,
   resolveHttpTestEndpointPath,
   resolveHttpTestRequestPath,
   workflowHttpBasePathCapabilityRelation,
@@ -233,9 +234,26 @@ describe("published HTTP test request helpers", () => {
     }));
 
     expect(metadata).toEqual({ mode: "sync", reason: "workflow-response-not-produced", message: "The workflow paused before writing a response." });
-    expect(describeHttpEndpointAcceptedResponse(metadata)).toBe("The workflow paused before writing a response.");
+    expect(describeHttpEndpointAcceptedResponse(metadata)).toContain("It may have paused, failed, continued elsewhere, or finished without a response activity.");
     expect(describeHttpEndpointAcceptedResponse(null)).toContain("may not have written a response");
   });
+  it.each([
+    [{ started: ["run-1"], resumed: [] }, "run-1"],
+    [{ started: [], resumed: ["run-2"] }, "run-2"],
+    [{ started: ["run-1"], resumed: ["run-1"] }, "run-1"],
+    [{ started: ["run-1", "run-2"] }, null],
+    [{ started: [null, 3, ""] }, null],
+    [{ started: "run-1" }, null],
+    [{}, null]
+  ])("links only an unambiguous dispatched run: %j", (payload, expected) => {
+    expect(readHttpEndpointExecutionId(JSON.stringify(payload))).toBe(expected);
+  });
+
+  it("does not infer runs from arbitrary or invalid response bodies", () => {
+    expect(readHttpEndpointExecutionId("not JSON")).toBeNull();
+    expect(readHttpEndpointExecutionId("null")).toBeNull();
+  });
+
 });
 
 function executableWithEndpoint(endpoint: Partial<WorkflowExecutableNode> & Pick<WorkflowExecutableNode, "authoredActivityId" | "inputBindings">): WorkflowExecutableDetails {

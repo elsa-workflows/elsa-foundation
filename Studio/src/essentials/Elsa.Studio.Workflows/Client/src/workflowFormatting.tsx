@@ -44,7 +44,7 @@ export function truncate(text: string, max = 40) {
  * Splits an activity-definition version string into a compact label and its full exact form.
  * CLR activities carry a behavioral-hash build suffix (e.g. `1.0.0+892535311ec5…`); the short form
  * drops that suffix so version chips stay compact and never crowd out the activity name, while the
- * full string is preserved for tooltips / aria labels so the exact version is still discoverable.
+ * full string is preserved for accessible names and for tooltips when short labels collide.
  */
 export function formatActivityVersion(version: string): { short: string; full: string; hasHash: boolean } {
   const full = version.trim();

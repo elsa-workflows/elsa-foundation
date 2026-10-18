@@ -58,6 +58,7 @@ namespace Elsa.Activities.Parallel.Activities;
 /// <c>ParallelStructureHandler</c> references <c>Elsa.Workflows.Design.Core</c>.
 /// </para>
 /// </remarks>
+[Activity(Icon = "GitFork")]
 [ActivityStructure("elsa.parallel.structure", "1.0.0")]
 [ActivityChildSlot(
     "Parallel.Branch",

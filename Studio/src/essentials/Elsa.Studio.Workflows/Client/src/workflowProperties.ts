@@ -75,6 +75,13 @@ export function isCollectionKind(value: unknown): value is CollectionKind {
   return value === "Single" || value === "Array" || value === "List" || value === "HashSet";
 }
 
+export function normalizeCollectionKind(value: unknown): CollectionKind {
+  if (typeof value !== "string") return "Single";
+  const normalized = value.toLowerCase();
+  const kinds: readonly CollectionKind[] = ["Single", "Array", "List", "HashSet"];
+  return kinds.find(kind => kind.toLowerCase() === normalized) ?? "Single";
+}
+
 // Build an ArgumentType from a picker alias; collection kind defaults to a scalar.
 export function makeArgumentType(alias: string | null | undefined, collectionKind: CollectionKind = "Single"): ArgumentType {
   return { alias: (alias ?? "").trim() || defaultArgumentTypeName, collectionKind };
@@ -88,7 +95,7 @@ export function readArgumentType(record: Record<string, unknown>): ArgumentType 
   const raw = record.type ?? record.Type;
   if (isPlainRecord(raw)) {
     const alias = typeof raw.alias === "string" ? raw.alias : typeof raw.typeName === "string" ? raw.typeName : "";
-    return { alias, collectionKind: isCollectionKind(raw.collectionKind) ? raw.collectionKind : "Single" };
+    return { alias, collectionKind: normalizeCollectionKind(raw.collectionKind) };
   }
   const legacy = record.typeInformation ?? record.TypeInformation;
   if (isPlainRecord(legacy)) {

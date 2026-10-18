@@ -5,10 +5,11 @@ import type { ActivityCatalogItem } from "./workflowTypes";
  * timeline. One mapping: catalog metadata first, then type, then category. Do not add a second
  * palette- or node-only table.
  *
- * `icon` is the historical kind token. `iconName` is the descriptor-supplied designer icon: any
+ * `icon` is the historical kind token. `iconName` takes precedence as the module-supplied designer icon: any
  * lucide export or kebab name, `asset:<package>/<path>` for a static web asset, or `ext:<name>`
  * for a component registered through `registerActivityIcons`. An unknown or unsafe value is
- * ignored so type → category → trigger → generic still run; `Boxes` is only the last resort.
+ * ignored so type → category → trigger → reusable/generic still run. A definition identity is
+ * not an icon choice: CLR activities and custom reusable activities both have one.
  */
 
 export const knownWorkflowNodeIcons = [
@@ -166,9 +167,8 @@ export type ActivityIconSource = Pick<ActivityCatalogItem, "activityTypeKey" | "
 
 export function resolveActivityIcon(activity: ActivityIconSource | undefined): WorkflowNodeIcon {
   if (!activity) return "activity";
-  if (activity.activityDefinitionId) return "reusable";
 
-  const configured = normalizeConfiguredIcon(activity.icon) ?? normalizeConfiguredIcon(activity.iconName);
+  const configured = normalizeConfiguredIcon(activity.iconName) ?? normalizeConfiguredIcon(activity.icon);
   if (configured) return configured;
 
   const typeIcon = iconFromTypeKey(activity.activityTypeKey, activity.displayName);
@@ -178,6 +178,7 @@ export function resolveActivityIcon(activity: ActivityIconSource | undefined): W
   if (categoryIcon) return categoryIcon;
 
   if ((activity.executionType ?? "").toLowerCase() === "trigger") return "trigger";
+  if (activity.activityDefinitionId) return "reusable";
   return "activity";
 }
 

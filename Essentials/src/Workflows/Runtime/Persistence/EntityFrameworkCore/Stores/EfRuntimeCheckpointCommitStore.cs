@@ -130,7 +130,7 @@ public sealed class EfRuntimeCheckpointCommitStore(
                         context,
                         workflowChange,
                         scope,
-                        commit.Checkpoint.OccurredAt,
+                        commit.Metadata.ContainsKey(TestRunDeliveryReceipt.MetadataKey) ? _timeProvider.GetUtcNow() : commit.Checkpoint.OccurredAt,
                         touchedTestScopes,
                         writeCancellationToken);
                 }

@@ -249,3 +249,4 @@ Notes come only from explicit `**Notes**:` metadata; see [Spec status metadata](
 | [239-elsa3-flowchart-connections](../../specs/239-elsa3-flowchart-connections/spec.md) | Elsa 3 Flowchart connections — convert Elsa 3 flowcharts to Elsa 4 graphs | Draft | - | 40 | 1 | - |
 | [240-http-usability](../../specs/240-http-usability/spec.md) | HTTP Workflows That Work Out of the Box | Implemented | - | 7 | 0 | - |
 | [241-native-durable-offload](../../specs/241-native-durable-offload/spec.md) | Native durable background activities | Approved | - | 30 | 0 | - |
+| [241-workflow-test-drive](../../specs/241-workflow-test-drive/spec.md) | Workflow Test Drive | In progress — Sipke approved implementation of the reviewed design in the demo session; Foundation #2862. | - | 8 | 3 | - |

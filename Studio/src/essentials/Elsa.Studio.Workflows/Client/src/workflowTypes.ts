@@ -2,6 +2,10 @@ import type {
   StudioActivityDescriptor,
   StudioActivityInputOption,
   StudioExpressionDescriptor,
+  StudioTestRunDriverAction,
+  StudioTestRunOptionDescriptor,
+  StudioTestRunModeDescriptor,
+  StudioTestRunWaitDescriptor,
   StudioWorkflowRunInputDescriptor,
   StudioWorkflowRunInputTypeMetadata
 } from "@elsa-workflows/studio-sdk";
@@ -545,8 +549,63 @@ export interface StartWorkflowDraftTestRunRequest {
   activityPresentation?: ActivityPresentationRecord[];
   artifactVersion?: string | null;
   inputs?: WorkflowExecutionInputs;
+  start?: WorkflowTestRunStart;
   acknowledgeUnavailableExpressionValidation?: boolean;
 }
+
+export interface GetWorkflowDraftTestRunOptionsRequest {
+  definitionId: string;
+  snapshotId: string;
+  state: WorkflowDefinitionState;
+}
+
+export interface WorkflowDraftTestRunOptionsView {
+  artifactHash?: string;
+  inputContract?: WorkflowTestRunInputContract | null;
+  options: WorkflowTestRunOption[];
+  diagnostics?: TestRunOptionsDiagnostic[];
+}
+
+export interface WorkflowTestRunInputContract {
+  version: number;
+  inputs: Array<{
+    name: string;
+    type: ArgumentType;
+    isRequired: boolean;
+    defaultValue?: unknown | null;
+  }>;
+}
+
+export interface TestRunOptionsDiagnostic {
+  code: string;
+  message: string;
+  nodeId?: string | null;
+}
+
+export type WorkflowTestRunWait = StudioTestRunWaitDescriptor;
+
+export interface WorkflowTestRunWaitsView {
+  waits: WorkflowTestRunWait[];
+}
+
+export interface WorkflowTestRunWaitEventRequest {
+  waitId: string;
+  deliveryId: string;
+  modeId: string;
+  data?: unknown;
+}
+
+export interface WorkflowTestRunWaitEventView {
+  status: "Delivered" | "AlreadyDelivered" | "Pending" | "NoLongerWaiting" | "Rejected" | string;
+  reason?: string | null;
+}
+
+export type WorkflowTestRunOption = StudioTestRunOptionDescriptor;
+export type WorkflowTestRunMode = StudioTestRunModeDescriptor;
+
+export type WorkflowTestRunStart =
+  | { kind: "direct" }
+  | { kind: "trigger"; optionId: string; modeId: string; data?: unknown };
 
 export type WorkflowExecutionInputs = Record<string, unknown>;
 
@@ -563,6 +622,7 @@ export interface WorkflowTestRunView {
   reason?: string | null;
   expiresAt?: string | null;
   metadata?: Record<string, string>;
+  driverAction?: StudioTestRunDriverAction | null;
 }
 
 // An artifact row in the executables list (backend WorkflowExecutableRowView, elsa-foundation#598 P1).

@@ -29,6 +29,7 @@ using Elsa.Workflows.Runtime.Services.Recovery;
 using Elsa.Workflows.Runtime.Services.Scheduler;
 using Elsa.Workflows.Runtime.Services.Values;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
+using Elsa.Workflows.Runtime.Services.Triggers;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -238,6 +239,12 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<InMemoryWorkflowTestScopeStore>();
         services.TryAddSingleton<IWorkflowTestScopeStore>(serviceProvider =>
             serviceProvider.GetRequiredService<InMemoryWorkflowTestScopeStore>());
+        services.TryAddSingleton<MemoryTestRunTargetStore>();
+        services.TryAddSingleton<ITestRunTargetStore>(serviceProvider =>
+            serviceProvider.GetRequiredService<MemoryTestRunTargetStore>());
+        services.TryAddScoped<ITestRunTargetDispatcher, TestRunTargetDispatcher>();
+        services.TryAddScoped<ITestRunTargetCleaner, TestRunTargetCleaner>();
+        services.TryAddScoped<ITestRunRootCanceller, TestRunRootCanceller>();
         services.TryAddSingleton<IWorkflowTestScopeAdmissionStore>(serviceProvider =>
             serviceProvider.GetRequiredService<InMemoryWorkflowTestScopeStore>());
         if (WorkflowTestScopeStoreBackend.Find(services)?.Name != WorkflowTestScopeStoreBackend.EntityFramework)

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { LoaderCircle, Send, X } from "lucide-react";
 import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { EditableCombobox } from "../EditableCombobox";
+import { HttpRequestHeadersEditor } from "./HttpRequestHeadersEditor";
+import { makeHttpTestRequestHeaders, type HttpTestRequestHeader } from "./httpTestRequestHeaders";
 import { HttpMessageBodyEditor } from "./HttpMessageBodyEditor";
 import { HttpTestResponse, type HttpTestResult } from "./HttpTestResponse";
 import { getExecutable, getExecutableInputSources } from "../api/runtime";
@@ -12,6 +14,7 @@ import {
   makeInitialHttpTestEndpointPath,
   publishedHttpEndpointInputsUnavailableMessage,
   readHttpEndpointResponseMetadata,
+  readHttpEndpointExecutionId,
   resolveHttpTestEndpointPath,
   type PublishedHttpEndpoint
 } from "./httpTestRequest";
@@ -57,6 +60,7 @@ export function HttpTestRequestDialog({
   const [method, setMethod] = useState("");
   const [requestBody, setRequestBody] = useState(exampleJson);
   const [contentType, setContentType] = useState("application/json");
+  const [requestHeaders, setRequestHeaders] = useState<HttpTestRequestHeader[]>([]);
   const [requestError, setRequestError] = useState("");
   const [result, setResult] = useState<HttpTestResult | null>(null);
   const [isSending, setIsSending] = useState(false);
@@ -65,6 +69,7 @@ export function HttpTestRequestDialog({
     const request = activeRequest.current;
     activeRequest.current = null;
     sending.current = false;
+    setIsSending(false);
     request?.abort();
     onClose();
   }, [onClose]);
@@ -82,6 +87,7 @@ export function HttpTestRequestDialog({
     setLoadError("");
     setRequestError("");
     setResult(null);
+    setRequestHeaders([]);
     if (!artifactId) {
       setLoadError("Publish this workflow before testing its HTTP endpoint.");
       return () => { active = false; };
@@ -137,9 +143,12 @@ export function HttpTestRequestDialog({
       return;
     }
 
+    const carriesBody = method !== "GET" && method !== "HEAD";
     let requestPath: string;
+    let headers: Headers;
     try {
       requestPath = resolveHttpTestEndpointPath(context.baseUrl, path, workflowHttpBasePath);
+      headers = makeHttpTestRequestHeaders(requestHeaders, carriesBody ? contentType : null, context.headers);
     } catch (error) {
       setRequestError(error instanceof Error ? error.message : "Enter a valid path on the configured backend.");
       return;
@@ -157,10 +166,6 @@ export function HttpTestRequestDialog({
     }, requestTimeoutMs);
 
     try {
-      const carriesBody = method !== "GET" && method !== "HEAD";
-      const headers = new Headers({ Accept: "*/*" });
-      if (carriesBody && contentType.trim()) headers.set("Content-Type", contentType.trim());
-
       // `context.http` keeps Studio's configured auth and credentials transport. This endpoint returns
       // workflow output, so retain the raw response instead of passing it through the JSON API parser.
       const response = await send.call(context.http, requestPath, {
@@ -187,6 +192,8 @@ export function HttpTestRequestDialog({
         contentType: response.headers.get("content-type") || "",
         headers: [...response.headers.entries()],
         body,
+        responseReason: responseMetadata?.reason,
+        workflowExecutionId: responseMetadata ? readHttpEndpointExecutionId(body) : null,
         acceptedMessage: response.status === 202
           ? describeHttpEndpointAcceptedResponse(responseMetadata)
           : null
@@ -229,7 +236,7 @@ export function HttpTestRequestDialog({
           <div>
             <span>Published workflow</span>
             <h3 id="http-test-title">Send an HTTP test request</h3>
-            <p id="http-test-description">Send a real request to this workflow’s published endpoint.</p>
+            <p id="http-test-description">Uses the published endpoint’s methods and settings. Publish draft changes before testing them.</p>
           </div>
           <button type="button" className="wf-icon-button" aria-label="Close test request" onClick={close}>
             <X size={18} aria-hidden="true" />
@@ -280,6 +287,8 @@ export function HttpTestRequestDialog({
               </div>
               <p id="http-test-path-hint" className="wf-http-test-hint">Edit the endpoint path. The HTTP mount is fixed by the server.</p>
 
+              <HttpRequestHeadersEditor rows={requestHeaders} disabled={isSending} onChange={setRequestHeaders} />
+
               <EditableCombobox
                   className="wf-form-field wf-http-test-content-type"
                   label="Request content type"
@@ -304,7 +313,7 @@ export function HttpTestRequestDialog({
           ) : null}
 
           {requestError ? <p className="wf-http-test-error" role="alert">{requestError}</p> : null}
-          {result ? <HttpTestResponse result={result} /> : null}
+          {result ? <HttpTestResponse result={result} context={context} /> : null}
         </div>
       </section>
     </div>

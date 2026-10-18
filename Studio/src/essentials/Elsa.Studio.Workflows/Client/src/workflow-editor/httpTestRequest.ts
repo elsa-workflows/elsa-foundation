@@ -166,14 +166,27 @@ export function readHttpEndpointResponseMetadata(body: string): HttpEndpointResp
 }
 
 export function describeHttpEndpointAcceptedResponse(metadata: HttpEndpointResponseMetadata | null): string {
+  if (metadata?.reason === "workflow-response-not-produced") {
+    return "The workflow did not produce a response while this request was waiting. It may have paused, failed, continued elsewhere, or finished without a response activity.";
+  }
   if (metadata?.message?.trim()) return metadata.message.trim();
   if (metadata?.reason === "background-accepted") {
     return "The backend accepted the request and queued the workflow to continue in the background.";
   }
-  if (metadata?.reason === "workflow-response-not-produced") {
-    return "The workflow did not produce an HTTP response during this exchange. It may have accepted work for later, paused while waiting, or completed without writing a response.";
-  }
   return "The backend accepted the request with HTTP 202. Workflow work may continue in the background, or the workflow may not have written a response during this exchange.";
+}
+
+/** A single dispatched run can be inspected directly without guessing which run handled the request. */
+export function readHttpEndpointExecutionId(body: string): string | null {
+  try {
+    const payload: unknown = JSON.parse(body);
+    if (!isRecord(payload)) return null;
+    const ids = new Set([payload.started, payload.resumed].flatMap(value =>
+      Array.isArray(value) ? value.filter((id): id is string => typeof id === "string" && id.trim().length > 0) : []));
+    return ids.size === 1 ? [...ids][0] : null;
+  } catch {
+    return null;
+  }
 }
 
 function findNode(node: WorkflowExecutableNode, authoredActivityId: string): WorkflowExecutableNode | null {

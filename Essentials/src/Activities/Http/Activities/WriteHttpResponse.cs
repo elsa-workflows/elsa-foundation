@@ -13,6 +13,7 @@ namespace Elsa.Activities.Http.Activities;
 /// </remarks>
 [RefusesSecretBinding(nameof(Body), SecretBindingRefusalReason.EchoedToOutput)]
 [RefusesSecretBinding(nameof(ContentType), SecretBindingRefusalReason.EchoedToOutput)]
+[Activity(Icon = "Reply")]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class WriteHttpResponse : Activity<HttpResponseInstruction>
 {

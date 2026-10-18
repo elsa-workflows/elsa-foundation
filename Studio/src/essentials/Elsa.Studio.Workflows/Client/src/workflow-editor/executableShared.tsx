@@ -23,7 +23,7 @@ export function ExecutableRunStatusLine({ status, run, compact = false }: { stat
   );
 }
 
-export function CopyValueButton({ value, ariaLabel, copiedLabel, onCopied, onCopyFailed }: { value: string | null | undefined; ariaLabel: string; copiedLabel: string; onCopied(label: string): void; onCopyFailed(label: string): void }) {
+export function CopyValueButton({ value, ariaLabel, copiedLabel, textLabel, onCopied, onCopyFailed }: { value: string | null | undefined; ariaLabel: string; copiedLabel: string; textLabel?: string; onCopied(label: string): void; onCopyFailed(label: string): void }) {
   if (!value) return null;
 
   const copy = async (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -40,6 +40,7 @@ export function CopyValueButton({ value, ariaLabel, copiedLabel, onCopied, onCop
   return (
     <button type="button" className="wf-copy-button" aria-label={ariaLabel} title={ariaLabel} onClick={event => void copy(event)}>
       <Copy size={12} />
+      {textLabel ? <span>{textLabel}</span> : null}
     </button>
   );
 }
@@ -48,9 +49,10 @@ export function CopyValueButton({ value, ariaLabel, copiedLabel, onCopied, onCop
 // Inspector: per reference the artifact version label, publish time, scope, expiry, and lifecycle
 // status. `activeReferenceId`/`onSelect` are Inspector-only (re-render from another reference's
 // Layout Sidecar); the table renders it read-only.
-export function ExecutableReferenceList({ references, activeReferenceId, onSelect, ariaLabel = "Source references" }: {
+export function ExecutableReferenceList({ references, activeReferenceId, onSelect, definitionNames, ariaLabel = "Source references" }: {
   references: WorkflowExecutableReference[];
   activeReferenceId?: string | null;
+  definitionNames?: ReadonlyMap<string, string>;
   onSelect?(reference: WorkflowExecutableReference): void;
   ariaLabel?: string;
 }) {
@@ -63,6 +65,7 @@ export function ExecutableReferenceList({ references, activeReferenceId, onSelec
         const active = reference.sourceReferenceId === activeReferenceId;
         const body = (
           <>
+            {definitionNames && reference.definitionId ? <strong className="wf-reference-origin">{definitionNames.get(reference.definitionId) ?? reference.definitionId}</strong> : null}
             <span className="wf-reference-heading">
               <strong>Version {reference.artifactVersion}</strong>
               <span className={`wf-chip wf-reference-scope-${reference.scope.toLowerCase()}`}>{formatReferenceScope(reference.scope)}</span>
@@ -70,6 +73,8 @@ export function ExecutableReferenceList({ references, activeReferenceId, onSelec
               {active ? <span className="wf-chip">Shown</span> : null}
             </span>
             <span className="wf-reference-meta">
+              {definitionNames && definitionNames.has(reference.definitionId) ? <small>Definition <code>{reference.definitionId}</code></small> : null}
+              {definitionNames ? <small title={reference.sourceReferenceId}>Reference <code>{reference.sourceReferenceId}</code></small> : null}
               <small>{reference.publishedAt ? `Published ${formatDate(reference.publishedAt)}` : `Created ${formatDate(reference.createdAt)}`}</small>
               {reference.expiresAt ? <small>Expires {formatDate(reference.expiresAt)}</small> : null}
               {reference.deletedReason ? <small>{reference.deletedReason}</small> : null}

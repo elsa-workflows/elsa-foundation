@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 146
 - Test projects: 148
-- Direct project references: 1599
+- Direct project references: 1600
 
 ## Projects
 
@@ -31,7 +31,7 @@ Records direct project references only.
 | [Elsa.Activities.Flowchart](../../Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj) | source | Elsa.Activities | - | true | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Graph.Design](../../Essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj) | source | Elsa.Activities | - | true | Elsa.Activities.Design.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Validations.Core<br>Elsa.Workflows.Publishing.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Graph.Runtime](../../Essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj) | source | Elsa.Activities | - | true | Elsa.Activities.Runtime.Core<br>Elsa.Expressions.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Runtime.Core |
-| [Elsa.Activities.Http](../../Essentials/src/Activities/Http/Elsa.Activities.Http.csproj) | source | Elsa.Activities | - | true | Elsa.Activities.Runtime.Core<br>Elsa.Api.Capabilities<br>Elsa.Http.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Activities.Http](../../Essentials/src/Activities/Http/Elsa.Activities.Http.csproj) | source | Elsa.Activities | - | true | Elsa.Activities.Runtime.Core<br>Elsa.Api.Capabilities<br>Elsa.Foundation.Identity.Core<br>Elsa.Http.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Primitives](../../Essentials/src/Activities/Primitives/Elsa.Activities.Primitives.csproj) | source | Elsa.Activities | - | true | Elsa.Activities.Runtime<br>Elsa.Activities.Runtime.Core<br>Elsa.Primitives<br>Elsa.Serialization.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Runtime.Core](../../Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj) | source | Elsa.Activities | - | true | Elsa.Events.Core<br>Elsa.Expressions.Core<br>Elsa.Primitives |
 | [Elsa.Activities.Runtime](../../Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Elsa.Activities.Runtime.csproj) | source | Elsa.Activities | - | true | Elsa.Activities.Runtime.Core<br>Elsa.Events.Core<br>Elsa.Primitives<br>Elsa.Tasks.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |

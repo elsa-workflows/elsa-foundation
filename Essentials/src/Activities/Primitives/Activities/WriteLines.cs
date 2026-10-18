@@ -18,6 +18,7 @@ namespace Elsa.Activities.Primitives.Activities;
 // The lines are written out of the workflow to the console, so a secret binding is refused there with that reason
 // (the list type would refuse one too, with a less helpful message).
 [RefusesSecretBinding(nameof(Lines), SecretBindingRefusalReason.EchoedToOutput)]
+[Activity(Icon = "Terminal")]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
 public sealed class WriteLines : Activity<ActivityUnit>
 {

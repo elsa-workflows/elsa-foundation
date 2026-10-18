@@ -243,13 +243,24 @@
     opacity: 1;
   }
 
+  /* The More tools disclosure shares the child-menu overlay; neither menu enters the bar's flow. */
+  html[data-nav-mode="top"] .nav-section-more {
+    position: relative;
+    flex: none;
+  }
+
+  html[data-nav-mode="top"] .nav-disclosure {
+    width: auto;
+    min-height: 44px;
+    white-space: nowrap;
+  }
+
   /* Child navigation becomes a dropdown; :focus-within keeps it reachable from the keyboard. */
-  html[data-nav-mode="top"] .nav-children {
+  html[data-nav-mode="top"] :is(.nav-children, .nav-disclosure-panel) {
     position: absolute;
     top: 100%;
     left: 0;
     z-index: 40;
-    display: none;
     min-width: 220px;
     margin: 0;
     padding: 6px;
@@ -259,8 +270,37 @@
     box-shadow: var(--shadow-lg);
   }
 
+  html[data-nav-mode="top"] .nav-children {
+    display: none;
+  }
+
+  html[data-nav-mode="top"] .nav-disclosure-panel {
+    /* 44px menubar + 54px sticky topbar + 12px clearance. */
+    max-height: calc(100dvh - 110px);
+    overflow-y: auto;
+  }
+
+  html[data-nav-mode="top"] .nav-disclosure-panel .nav-item-group {
+    display: block;
+  }
+
+  /* Nested links expand inside the scrollable popover instead of being clipped as flyouts. */
+  html[data-nav-mode="top"] .nav-disclosure-panel .nav-children {
+    position: static;
+    min-width: 0;
+    max-width: 100%;
+    padding: 0 0 0 10px;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
   html[data-nav-mode="top"] .nav-item-group:hover > .nav-children,
   html[data-nav-mode="top"] .nav-item-group:focus-within > .nav-children {
+    display: grid;
+  }
+
+  html[data-nav-mode="top"] .nav-disclosure-panel .nav-item-group > .nav-children {
     display: grid;
   }
 

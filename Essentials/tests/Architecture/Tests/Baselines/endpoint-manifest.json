@@ -2354,6 +2354,201 @@
       "contentTypes": [
         "application/json"
       ],
+      "displayName": "HTTP: GET /publishing/workflow-test-runs/{testRunId}",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.WorkflowTestRunView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflow-test-runs/{param}"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsGetWorkflowTestRun"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /publishing/workflow-test-runs/{testRunId}/events",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.TestRunEventView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflow-test-runs/{param}/events"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsTestRunDeliverEvent"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /publishing/workflow-test-runs/{testRunId}/stop",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.WorkflowTestRunView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflow-test-runs/{param}/stop"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsStopWorkflowTestRun"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: GET /publishing/workflow-test-runs/{testRunId}/waits",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.TestRunWaitsView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflow-test-runs/{param}/waits"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsTestRunWaits"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
+      "displayName": "HTTP: POST /publishing/workflows/drafts/test-run-options",
+      "methods": [
+        "POST"
+      ],
+      "owner": "Elsa.Workflows.Publishing.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Publishing.Api.Models.DraftTestRunOptionsView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/publishing/workflows/drafts/test-run-options"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1BVQkxJU0hJTkc6TUFOQUdF"
+      },
+      "sourceIdentity": "ElsaWorkflowsPublishingApiEndpointsTestRunsDraftOptions"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
       "displayName": "HTTP: POST /publishing/workflows/drafts/test-runs",
       "methods": [
         "POST"

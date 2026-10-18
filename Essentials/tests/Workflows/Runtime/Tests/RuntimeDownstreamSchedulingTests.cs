@@ -390,11 +390,13 @@ public sealed class RuntimeDownstreamSchedulingTests
     }
 
     [Fact]
-    public async Task CheckpointHandler_PreservesPinnedRunKindAndBackgroundAdmissionMarkerThroughCompletion()
+    public async Task CheckpointHandler_PreservesRunKindBackgroundAdmissionAndTestDriveReceiptThroughCompletion()
     {
         var queue = new InMemoryWorkflowSchedulerWorkQueue();
         var activityStateStore = new InMemoryActivityExecutionStateStore();
         var workflowStateStore = new InMemoryWorkflowExecutionStateStore();
+        var receiptKey = TestRunDeliveryReceipt.ReceiptPrefix + Guid.NewGuid().ToString("D");
+        const string receiptValue = "receipt-digest";
         await workflowStateStore.SaveAsync(new WorkflowExecutionState(
             "wfexec-1",
             NewIdentity(),
@@ -409,10 +411,12 @@ public sealed class RuntimeDownstreamSchedulingTests
             null,
             new Dictionary<string, string>
             {
-                [RuntimeMetadataKeys.WorkflowHasBackgroundActivityWork] = "true"
+                [RuntimeMetadataKeys.WorkflowHasBackgroundActivityWork] = "true",
+                [receiptKey] = receiptValue
             })
         {
-            RunKind = WorkflowRunKind.TestRun
+            RunKind = WorkflowRunKind.TestRun,
+            TestScope = new("test-run", _now.AddMinutes(30), null, new("default"))
         });
         await activityStateStore.SaveAsync(NewCompletedActivityState());
         var checkpointWriter = new InMemoryRuntimeCheckpointCommitStore(
@@ -425,6 +429,7 @@ public sealed class RuntimeDownstreamSchedulingTests
         var state = await workflowStateStore.FindAsync("wfexec-1");
         Assert.Equal(WorkflowRunKind.TestRun, state!.RunKind);
         Assert.Equal("true", state.SystemMetadata[RuntimeMetadataKeys.WorkflowHasBackgroundActivityWork]);
+        Assert.Equal(receiptValue, state.SystemMetadata[receiptKey]);
     }
 
     [Fact]

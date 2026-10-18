@@ -5,6 +5,7 @@ const focusableSelector = [
   "input:not([type='hidden'])",
   "textarea",
   "select",
+  "summary",
   "[href]",
   "[contenteditable='true']",
   "[tabindex]"
@@ -13,7 +14,14 @@ const focusableSelector = [
 function getFocusableElements(dialog: HTMLElement | null) {
   return [...(dialog?.querySelectorAll<HTMLElement>(focusableSelector) ?? [])]
     .filter(element => (!element.hasAttribute("tabindex") || element.tabIndex >= 0)
-      && !element.closest("[hidden], [aria-hidden='true']"));
+      && !element.closest("[hidden], [aria-hidden='true']"))
+    .filter(element => {
+      for (let ancestor = element.parentElement; ancestor && ancestor !== dialog; ancestor = ancestor.parentElement) {
+        if (ancestor.tagName === "DETAILS" && !ancestor.hasAttribute("open")
+          && !ancestor.querySelector(":scope > summary")?.contains(element)) return false;
+      }
+      return true;
+    });
 }
 
 export function useDialogFocus(

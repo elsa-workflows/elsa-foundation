@@ -909,8 +909,9 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         lock (_state.SyncRoot)
         {
             if (execution is not null &&
-                WorkflowTestScopeAdmission.ScopeRequiredToStart(execution, executionExists) is { } rootScope)
-                EnsureOpenScope(rootScope, commit.Checkpoint.OccurredAt);
+                (commit.Metadata.ContainsKey(TestRunDeliveryReceipt.MetadataKey) ? execution.TestScope :
+                    WorkflowTestScopeAdmission.ScopeRequiredToStart(execution, executionExists)) is { } rootScope)
+                EnsureOpenScope(rootScope, commit.Metadata.ContainsKey(TestRunDeliveryReceipt.MetadataKey) ? _timeProvider.GetUtcNow() : commit.Checkpoint.OccurredAt);
 
             foreach (var change in commit.StateChanges.WorkflowDispatches)
             {
