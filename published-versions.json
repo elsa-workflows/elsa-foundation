@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "f876c4a829889834931cd4f27fa0fa3b3dd9db2a",
+  "last_publish_commit": "e5151165c4ca1b2f9404a80d9e13cf3b95e1bbec",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -19,13 +19,13 @@
     },
     {
       "package_id": "Elsa.Activities.Design.Api",
-      "version": "4.0.17-preview",
-      "commit": "15feed9e0be709348602e054cca85a33f0f76873"
+      "version": "4.0.18-preview",
+      "commit": "e5151165c4ca1b2f9404a80d9e13cf3b95e1bbec"
     },
     {
       "package_id": "Elsa.Activities.Design.Core",
-      "version": "4.0.9-preview",
-      "commit": "15feed9e0be709348602e054cca85a33f0f76873"
+      "version": "4.0.10-preview",
+      "commit": "e5151165c4ca1b2f9404a80d9e13cf3b95e1bbec"
     },
     {
       "package_id": "Elsa.Activities.Design.Persistence.Core",
