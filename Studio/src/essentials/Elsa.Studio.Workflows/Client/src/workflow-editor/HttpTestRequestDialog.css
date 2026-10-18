@@ -340,3 +340,55 @@
 .wf-http-test-body-editor .cm-content {
   min-height: 180px;
 }
+
+.wf-http-test-request-headers {
+  padding: 10px 12px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm);
+}
+
+.wf-http-test-request-headers summary {
+  width: fit-content;
+  color: var(--studio-text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wf-http-test-request-headers summary:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
+}
+
+.wf-http-test-header-fields {
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.wf-http-test-header-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto;
+  align-items: end;
+  gap: 10px;
+}
+
+.wf-http-test-header-row .wf-icon-button {
+  min-height: 38px;
+}
+
+.wf-http-test-add-header {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+}
+
+@media (max-width: 600px) {
+  .wf-http-test-header-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .wf-http-test-header-row > label:first-child {
+    grid-column: 1 / -1;
+  }
+}
