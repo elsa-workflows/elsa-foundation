@@ -32,6 +32,28 @@ afterEach(() => {
 });
 
 describe("workflow designer keyboard accessibility", () => {
+  it("shows behavioral hash prefixes when activity choices share a short version", () => {
+    const first = {
+      ...activity("send-email-a", "Send Email"),
+      activityDefinitionId: "send-email",
+      activityDefinitionVersion: "1.0.0+aaaabbbbcccc"
+    };
+    const second = {
+      ...activity("send-email-b", "Send Email"),
+      activityDefinitionId: "send-email",
+      activityDefinitionVersion: "1.0.0+bbbbccccdddd"
+    };
+
+    flushSync(() => root.render(<PaletteHarness activities={[first, second]} onInsert={() => {}} />));
+
+    const chips = [...container.querySelectorAll<HTMLElement>(".wf-palette-version")];
+    expect(chips.map(chip => chip.textContent)).toEqual(["v1.0.0+aaaabbb", "v1.0.0+bbbbccc"]);
+    expect(chips.map(chip => chip.title)).toEqual([
+      "Exact version 1.0.0+aaaabbbbcccc",
+      "Exact version 1.0.0+bbbbccccdddd"
+    ]);
+  });
+
   it("moves from palette search through the tree and inserts the focused activity", () => {
     const onInsert = vi.fn();
     const writeLine = activity("write-line", "Write Line");
