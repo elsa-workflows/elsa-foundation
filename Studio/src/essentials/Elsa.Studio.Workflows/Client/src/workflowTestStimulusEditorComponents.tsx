@@ -1,3 +1,4 @@
+import "./workflowTestDrive.css";
 import type { StudioTestStimulusEditorProps, StudioTestStimulusResultProps } from "@elsa-workflows/studio-sdk";
 import { asRecord } from "./workflowTestStimulusEditorUtils";
 
