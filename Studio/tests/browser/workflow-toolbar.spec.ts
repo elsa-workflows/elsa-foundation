@@ -10,6 +10,31 @@ for (const width of [320, 768, 1024, 1440]) {
     const buttons = toolbar.getByRole("button");
     const initial = await readButtonPositions(buttons);
     const initialStatus = await toolbar.getByRole("status").boundingBox();
+    const title = toolbar.locator("strong[title]");
+    const badge = toolbar.getByText("Draft", { exact: true });
+    const titleRow = toolbar.locator(".wf-editor-title");
+    const definitions = toolbar.getByRole("button", { name: "Definitions", exact: true });
+    const breadcrumbChevron = toolbar.locator(".wf-editor-identity > svg");
+    const save = toolbar.getByRole("button", { name: "Save", exact: true });
+    const canvasTools = toolbar.locator(".wf-canvas-tools");
+    const initialTitle = await title.boundingBox();
+    const initialBadge = await badge.boundingBox();
+    const initialTitleRow = await titleRow.boundingBox();
+    const initialDefinitions = await definitions.boundingBox();
+    const initialChevron = await breadcrumbChevron.boundingBox();
+    const initialSave = await save.boundingBox();
+    const initialCanvasTools = await canvasTools.boundingBox();
+    expect(initialTitleRow!.height).toBeGreaterThanOrEqual(32);
+    expect(Math.abs(centerY(initialTitle!) - centerY(initialDefinitions!))).toBeLessThan(1);
+    expect(Math.abs(centerY(initialTitle!) - centerY(initialChevron!))).toBeLessThan(1);
+    expect(initialBadge!.x).toBeGreaterThanOrEqual(initialTitle!.x + initialTitle!.width);
+    expect(Math.abs(initialBadge!.y + initialBadge!.height / 2 - initialTitle!.y - initialTitle!.height / 2)).toBeLessThan(1);
+    expect(initialBadge!.x + initialBadge!.width).toBeLessThanOrEqual(width);
+    if (width >= 768) {
+      expect(Math.abs(initialCanvasTools!.y - initialSave!.y)).toBeLessThan(1);
+      expect(Math.abs(centerY(initialTitle!) - centerY(initialSave!))).toBeLessThan(1);
+    }
+    await expect(title).toHaveAttribute("title", "A long workflow definition name that must not crowd the actions");
     expect(initial.every(box => box.x >= 0 && box.x + box.width <= width)).toBe(true);
 
     for (const value of statusValues) {
@@ -17,6 +42,11 @@ for (const width of [320, 768, 1024, 1440]) {
       await expect(toolbar.getByRole("status")).toHaveText(value);
       expect(await toolbar.getByRole("status").boundingBox()).toEqual(initialStatus);
       expect(await readButtonPositions(buttons)).toEqual(initial);
+      expect(await title.boundingBox()).toEqual(initialTitle);
+      expect(await badge.boundingBox()).toEqual(initialBadge);
+      expect(await titleRow.boundingBox()).toEqual(initialTitleRow);
+      expect(await definitions.boundingBox()).toEqual(initialDefinitions);
+      expect(await breadcrumbChevron.boundingBox()).toEqual(initialChevron);
     }
     await expect(toolbar.getByRole("button", { name: "Review & publish" })).toBeVisible();
   });
@@ -70,6 +100,10 @@ function readButtonPositions(buttons: Locator) {
     const { x, y, width, height } = element.getBoundingClientRect();
     return { x, y, width, height };
   }));
+}
+
+function centerY(box: { y: number; height: number }) {
+  return box.y + box.height / 2;
 }
 
 test("keeps the overflow menu inside a narrow viewport and primary commands direct", async ({ page }) => {
