@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "3c01b8975ebe3a9decf6aa3ace1fb6b8258602c0",
+  "last_publish_commit": "f876c4a829889834931cd4f27fa0fa3b3dd9db2a",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
-      "version": "4.0.11-preview",
-      "commit": "c976625675e93fe5724b8cdd02a4125bb21cf08c"
+      "version": "4.0.12-preview",
+      "commit": "f876c4a829889834931cd4f27fa0fa3b3dd9db2a"
     },
     {
       "package_id": "Elsa.Activities.Bpmn.Interchange",
@@ -14,8 +14,8 @@
     },
     {
       "package_id": "Elsa.Activities.ControlFlow",
-      "version": "4.0.10-preview",
-      "commit": "c976625675e93fe5724b8cdd02a4125bb21cf08c"
+      "version": "4.0.11-preview",
+      "commit": "f876c4a829889834931cd4f27fa0fa3b3dd9db2a"
     },
     {
       "package_id": "Elsa.Activities.Design.Api",
@@ -59,13 +59,13 @@
     },
     {
       "package_id": "Elsa.Activities.DispatchWorkflow.Runtime",
-      "version": "4.0.10-preview",
-      "commit": "3c01b8975ebe3a9decf6aa3ace1fb6b8258602c0"
+      "version": "4.0.11-preview",
+      "commit": "f876c4a829889834931cd4f27fa0fa3b3dd9db2a"
     },
     {
       "package_id": "Elsa.Activities.Flowchart",
-      "version": "4.0.11-preview",
-      "commit": "6b3ad8c3dbee6c4b62f9dcc295c6cf3d5450708b"
+      "version": "4.0.12-preview",
+      "commit": "f876c4a829889834931cd4f27fa0fa3b3dd9db2a"
     },
     {
       "package_id": "Elsa.Activities.Graph.Design",
@@ -74,18 +74,18 @@
     },
     {
       "package_id": "Elsa.Activities.Graph.Runtime",
-      "version": "4.0.10-preview",
-      "commit": "398321e64d0732644fef9d83aa1062576c615671"
+      "version": "4.0.11-preview",
+      "commit": "f876c4a829889834931cd4f27fa0fa3b3dd9db2a"
     },
     {
       "package_id": "Elsa.Activities.Http",
-      "version": "4.0.16-preview",
-      "commit": "3c01b8975ebe3a9decf6aa3ace1fb6b8258602c0"
+      "version": "4.0.17-preview",
+      "commit": "f876c4a829889834931cd4f27fa0fa3b3dd9db2a"
     },
     {
       "package_id": "Elsa.Activities.Primitives",
-      "version": "4.0.14-preview",
-      "commit": "3c01b8975ebe3a9decf6aa3ace1fb6b8258602c0"
+      "version": "4.0.15-preview",
+      "commit": "f876c4a829889834931cd4f27fa0fa3b3dd9db2a"
     },
     {
       "package_id": "Elsa.Activities.Runtime",
@@ -99,8 +99,8 @@
     },
     {
       "package_id": "Elsa.Activities.Scheduling",
-      "version": "4.0.11-preview",
-      "commit": "3c01b8975ebe3a9decf6aa3ace1fb6b8258602c0"
+      "version": "4.0.12-preview",
+      "commit": "f876c4a829889834931cd4f27fa0fa3b3dd9db2a"
     },
     {
       "package_id": "Elsa.Activities.Scripting",
@@ -109,8 +109,8 @@
     },
     {
       "package_id": "Elsa.Activities.Sequence",
-      "version": "4.0.9-preview",
-      "commit": "6b3ad8c3dbee6c4b62f9dcc295c6cf3d5450708b"
+      "version": "4.0.10-preview",
+      "commit": "f876c4a829889834931cd4f27fa0fa3b3dd9db2a"
     },
     {
       "package_id": "Elsa.Agent.Anthropic",
