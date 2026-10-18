@@ -30,7 +30,7 @@ import {
 import { applyRuntimeOverlays, isActiveIncident } from "../workflowRuntimeOverlays";
 import { buildInputInspectionRows, evaluationPhase, evaluationSequence, type InputInspectionRow, type InputInspectionState } from "../inputInspectionRows";
 import { buildExecutableActivityGraph, findExecutableGraphNodeId, findExecutableNodeFacts, type ExecutableActivityGraph, type ExecutableGraphNodeFacts } from "../executableGraph";
-import { formatDate, formatDuration, shortTypeName } from "../workflowFormatting";
+import { formatActivityVersion, formatDate, formatDuration, shortTypeName } from "../workflowFormatting";
 import { WorkflowExecutionTimeline } from "../WorkflowInstanceTimeline";
 import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { PanelTabList } from "./PanelTabList";
@@ -1971,6 +1971,8 @@ export function WorkflowActivityExecutionDetails({
     activity.activityType);
   const activityDescription = executableNodeFacts?.presentation?.description?.trim();
   const activityTypeLabel = shortTypeName(activity.activityType) ?? activity.activityType;
+  const reusableBoundary = currentInspectionState.status === "ready" ? currentInspectionState.inspection?.boundary ?? null : null;
+  const overviewVersion = formatActivityVersion(reusableBoundary?.version ?? activity.activityTypeVersion);
   const statusLabel = [activity.status, activity.subStatus].filter(Boolean).join(" · ");
   const startedLabel = formatDate(activity.startedAt);
   const completedLabel = formatDate(activity.completedAt);
@@ -2003,14 +2005,9 @@ export function WorkflowActivityExecutionDetails({
               ? <p className="wf-activity-overview-description">{activityDescription}</p>
               : null}
             <div className="wf-activity-copy-line wf-activity-overview-type">
-              <span title={activity.activityType}>{activityTypeLabel} <small>{activity.activityTypeVersion}</small></span>
-              <CopyValueButton
-                value={`${activityTypeLabel} ${activity.activityTypeVersion}`}
-                ariaLabel="Copy activity type"
-                copiedLabel="activity type"
-                onCopied={markCopied}
-                onCopyFailed={markCopyFailed}
-              />
+              {reusableBoundary
+                ? <span>Reusable activity <small title={overviewVersion.full}>v{overviewVersion.short}</small></span>
+                : <span title={activity.activityType}>{activityTypeLabel} <small title={overviewVersion.full}>v{overviewVersion.short}</small></span>}
             </div>
           </div>
           <span className="wf-activity-overview-status">
@@ -2033,11 +2030,6 @@ export function WorkflowActivityExecutionDetails({
 
         {copyStatus ? <p className="wf-copy-status" role="status" aria-live="polite">{copyStatus}</p> : null}
       </section>
-      {currentInspectionState.status === "ready" && currentInspectionState.inspection?.boundary ? (
-        <Suspense fallback={<section className="wf-instance-section" role="status">Loading reusable boundary inspector...</section>}>
-          <ReusableBoundaryInspector context={context} inspection={currentInspectionState.inspection} />
-        </Suspense>
-      ) : null}
       <RuntimeValueEvidenceResolutionProvider scope={resolutionScope}>
         <WorkflowActivityInputEvidence
           state={currentInspectionState}
@@ -2046,7 +2038,6 @@ export function WorkflowActivityExecutionDetails({
           expressionEditors={expressionEditors}
           focusInputKey={focusInputKey}
         />
-        <WorkflowActivityOutcomeEvidence state={currentInspectionState} />
         <WorkflowActivityValueEvidence
           state={currentInspectionState}
           subject="ActivityOutput"
@@ -2055,22 +2046,65 @@ export function WorkflowActivityExecutionDetails({
           failureText="Runtime output evidence is unavailable."
           emptyText="No runtime output snapshots were recorded for this execution."
         />
+        <WorkflowActivityOutcomeEvidence state={currentInspectionState} />
       </RuntimeValueEvidenceResolutionProvider>
+      {currentInspectionState.status === "ready" && currentInspectionState.inspection?.boundary ? (
+        <ActivityBoundaryDetails
+          key={JSON.stringify([selectedContextIdentity, selectedWorkflowExecutionId, selectedActivityExecutionId])}
+          context={context}
+          inspection={currentInspectionState.inspection}
+        />
+      ) : null}
       <section className="wf-instance-section">
         <details className="wf-activity-execution-details">
           <summary>
             <span>Execution details</span>
-            <small>4 values</small>
+            <small>{currentInspectionState.status === "ready" && currentInspectionState.inspection?.attempt ? "6 values" : "5 values"}</small>
           </summary>
           <dl className="wf-activity-detail-list">
             <ActivityMetadataValue label="Activity Execution ID" value={activity.activityExecutionId} copiedLabel="activity execution ID" code onCopied={markCopied} onCopyFailed={markCopyFailed} />
             <ActivityMetadataValue label="Authored Activity ID" value={activity.authoredActivityId} copiedLabel="authored activity ID" code onCopied={markCopied} onCopyFailed={markCopyFailed} />
+            <ActivityMetadataValue label="Activity type" value={`${activity.activityType}@${activity.activityTypeVersion}`} copiedLabel="activity type" code onCopied={markCopied} onCopyFailed={markCopyFailed} />
             <ActivityMetadataValue label="Completed" value={completedLabel} copiedLabel="completion time" onCopied={markCopied} onCopyFailed={markCopyFailed} />
             <ActivityMetadataValue label="Bookmarks" value={bookmarkCount == null ? "Unavailable" : String(bookmarkCount)} copiedLabel="bookmark count" onCopied={markCopied} onCopyFailed={markCopyFailed} />
+            {currentInspectionState.status === "ready" && currentInspectionState.inspection?.attempt ? (
+              <ActivityMetadataValue
+                label="Attempt"
+                value={`${currentInspectionState.inspection.attempt.attemptNumber} of ${currentInspectionState.inspection.attempt.totalAttempts ?? "?"}`}
+                copiedLabel="attempt"
+                code
+                onCopied={markCopied}
+                onCopyFailed={markCopyFailed}
+              />
+            ) : null}
           </dl>
         </details>
       </section>
     </>
+  );
+}
+
+function ActivityBoundaryDetails({ context, inspection }: { context: StudioEndpointContext; inspection: ActivityExecutionInspection }) {
+  const [open, setOpen] = useState(false);
+  const boundary = inspection.boundary!;
+  const version = formatActivityVersion(boundary.version);
+
+  return (
+    <section className="wf-instance-section wf-activity-boundary-details">
+      <details onToggle={event => setOpen(event.currentTarget.open)}>
+        <summary>
+          <ChevronRight size={14} aria-hidden="true" />
+          <span>Boundary details</span>
+          <WorkflowStatusBadge status={inspection.status} subStatus={inspection.subStatus} />
+          <small title={version.full}>Version {version.short}</small>
+        </summary>
+        {open ? (
+          <Suspense fallback={<p role="status">Loading boundary details...</p>}>
+            <ReusableBoundaryInspector context={context} inspection={inspection} compactPresentation />
+          </Suspense>
+        ) : null}
+      </details>
+    </section>
   );
 }
 
@@ -2116,12 +2150,9 @@ function WorkflowActivityOutcomeEvidence({ state }: { state: ActivityExecutionIn
           </span>
         </h4>
       </header>
-      <div className="wf-runtime-input-list" role="list">
+      <div className="wf-activity-outcome-list" role="list">
         {outcomeNames.map((outcomeName, index) => (
-          <div className="wf-runtime-input" role="listitem" key={`${outcomeName}:${index}`}>
-            <header><span><strong>{outcomeName}</strong></span></header>
-            <span className="wf-runtime-capture-mode">Outcome</span>
-          </div>
+          <span className="wf-activity-outcome-chip" role="listitem" key={`${outcomeName}:${index}`}>{outcomeName}</span>
         ))}
       </div>
     </section>
@@ -2534,8 +2565,10 @@ function WorkflowActivityValueEvidence({
     );
   }
 
-  const captureModes = [...new Set(snapshots.map(snapshot => snapshot.captureMode))];
-  const captureModeLabel = captureModes.length === 1 ? formatCaptureMode(captureModes[0] ?? "Evidence") : "Mixed evidence";
+  const captureModeByKey = new Map(snapshots.map(snapshot => [formatCaptureMode(snapshot.captureMode).toLowerCase(), snapshot.captureMode]));
+  const captureModes = [...captureModeByKey.values()];
+  const homogeneousCaptureMode = captureModes.length === 1;
+  const captureModeLabel = homogeneousCaptureMode ? formatCaptureMode(captureModes[0] ?? "Evidence") : "Mixed evidence";
 
   return (
     <section className="wf-instance-section">
@@ -2548,9 +2581,14 @@ function WorkflowActivityValueEvidence({
         </h4>
         <span className="wf-runtime-capture-mode">{captureModeLabel}</span>
       </header>
-      <div className="wf-runtime-input-list" role="list">
+      <div className={`wf-runtime-input-list${subject === "ActivityOutput" ? " wf-activity-output-list" : ""}`} role="list">
         {snapshots.map((snapshot, index) => (
-          <RuntimeValueEvidenceCard key={snapshot.evidenceId || `${snapshot.name}:${snapshot.capturedAt}:${snapshot.captureMode}:${index}`} snapshot={snapshot} />
+          <RuntimeValueEvidenceCard
+            key={snapshot.evidenceId || `${snapshot.name}:${snapshot.capturedAt}:${snapshot.captureMode}:${index}`}
+            snapshot={snapshot}
+            compactObjects={subject === "ActivityOutput"}
+            showCaptureMode={!homogeneousCaptureMode}
+          />
         ))}
       </div>
     </section>

@@ -71,10 +71,12 @@ const evidenceSummaryLimit = 25;
 
 export function ReusableBoundaryInspector({
   context,
-  inspection
+  inspection,
+  compactPresentation = false
 }: {
   context: StudioEndpointContext;
   inspection: ActivityExecutionInspection;
+  compactPresentation?: boolean;
 }) {
   const rootKey = frameKey(inspection);
   const [frames, setFrames] = useState<BoundaryFrame[]>(() => [createFrame(inspection)]);
@@ -353,16 +355,22 @@ export function ReusableBoundaryInspector({
 
   const boundary = activeFrame.inspection.boundary!;
   return (
-    <section className="wf-instance-section wf-boundary-evidence wf-boundary-inspector" style={boundaryStyles.inspector} aria-label="Reusable boundary Runtime Evidence">
+    <section
+      className={`wf-boundary-evidence wf-boundary-inspector${compactPresentation ? " wf-boundary-inspector-compact" : " wf-instance-section"}`}
+      style={boundaryStyles.inspector}
+      aria-label="Reusable boundary Runtime Evidence"
+    >
       <header className="wf-boundary-inspector-heading" style={boundaryStyles.splitHeader}>
         <div>
           <span className="wf-boundary-eyebrow">Reusable activity boundary</span>
           <h4>{activeFrame.label}</h4>
         </div>
-        <WorkflowStatusBadge
-          status={activeFrame.inspection.status}
-          subStatus={activeFrame.inspection.subStatus}
-        />
+        {!compactPresentation || frames.length > 1 ? (
+          <WorkflowStatusBadge
+            status={activeFrame.inspection.status}
+            subStatus={activeFrame.inspection.subStatus}
+          />
+        ) : null}
       </header>
 
       <nav className="wf-boundary-breadcrumbs" style={boundaryStyles.breadcrumbs} aria-label="Reusable boundary occurrence breadcrumbs">
@@ -382,8 +390,27 @@ export function ReusableBoundaryInspector({
       </nav>
 
       <div className="wf-boundary-summary" style={boundaryStyles.responsiveGrid}>
-        <BoundaryLifecycle context={context} inspection={activeFrame.inspection} />
-        <DescendantAggregate inspection={activeFrame.inspection} />
+        {compactPresentation ? (
+          <>
+            <BoundaryExactSource context={context} inspection={activeFrame.inspection} />
+            <details className="wf-boundary-technical-identity">
+              <summary>Technical identity</summary>
+              <BoundaryLifecycle
+                context={context}
+                inspection={activeFrame.inspection}
+                heading="Technical identity"
+                includeStatus={frames.length > 1}
+                includeSource={false}
+              />
+            </details>
+          </>
+        ) : <BoundaryLifecycle context={context} inspection={activeFrame.inspection} />}
+        {compactPresentation ? (
+          <details className="wf-boundary-aggregate-disclosure">
+            <summary>Descendant aggregate</summary>
+            <DescendantAggregate inspection={activeFrame.inspection} />
+          </details>
+        ) : <DescendantAggregate inspection={activeFrame.inspection} />}
       </div>
 
       <div className="wf-boundary-pane-tabs" style={boundaryStyles.twoColumnTabs} role="tablist" aria-label="Boundary inspector panes">
@@ -465,26 +492,60 @@ export function ReusableBoundaryInspector({
   );
 }
 
-function BoundaryLifecycle({ context, inspection }: { context: StudioEndpointContext; inspection: ActivityExecutionInspection }) {
+function BoundaryExactSource({ context, inspection }: { context: StudioEndpointContext; inspection: ActivityExecutionInspection }) {
   const boundary = inspection.boundary!;
   return (
-    <section className="wf-boundary-layout wf-boundary-summary-card" aria-label="Boundary lifecycle">
-      <h5>Boundary lifecycle</h5>
+    <section className="wf-boundary-layout wf-boundary-summary-card" aria-label="Exact boundary source">
+      <h5>Exact source</h5>
+      <AuthorizedBoundaryDefinitionLink
+        context={context}
+        definitionId={boundary.definitionId}
+        versionId={boundary.definitionVersionId}
+      />
+    </section>
+  );
+}
+
+function BoundaryLifecycle({
+  context,
+  inspection,
+  heading = "Boundary lifecycle",
+  includeStatus = true,
+  includeSource = true
+}: {
+  context: StudioEndpointContext;
+  inspection: ActivityExecutionInspection;
+  heading?: string;
+  includeStatus?: boolean;
+  includeSource?: boolean;
+}) {
+  const boundary = inspection.boundary!;
+  return (
+    <section className="wf-boundary-layout wf-boundary-summary-card" aria-label={heading}>
+      <h5>{heading}</h5>
       <dl>
-        <dt>Status</dt>
-        <dd>{[inspection.status, inspection.subStatus].filter(Boolean).join(" · ")}</dd>
+        {includeStatus ? (
+          <>
+            <dt>Status</dt>
+            <dd>{[inspection.status, inspection.subStatus].filter(Boolean).join(" · ")}</dd>
+          </>
+        ) : null}
         <dt>Definition</dt>
         <dd>{boundary.definitionId}</dd>
         <dt>Exact version</dt>
         <dd>{boundary.version} <small>{boundary.definitionVersionId}</small></dd>
-        <dt>Source</dt>
-        <dd>
-          <AuthorizedBoundaryDefinitionLink
-            context={context}
-            definitionId={boundary.definitionId}
-            versionId={boundary.definitionVersionId}
-          />
-        </dd>
+        {includeSource ? (
+          <>
+            <dt>Source</dt>
+            <dd>
+              <AuthorizedBoundaryDefinitionLink
+                context={context}
+                definitionId={boundary.definitionId}
+                versionId={boundary.definitionVersionId}
+              />
+            </dd>
+          </>
+        ) : null}
         <dt>Execution scope</dt>
         <dd>{boundary.executionScopeId}</dd>
         <dt>Attempt</dt>
