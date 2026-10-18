@@ -4,6 +4,8 @@ public static class RuntimeMetadataKeys
 {
     public const string WorkflowExecutionOrigin = "runtime.workflowExecutionOrigin";
     public const string WorkflowStartedAt = "runtime.workflowStartedAt";
+    /// <summary>Monotonic workflow marker indicating that native background work was admitted for this execution.</summary>
+    public const string WorkflowHasBackgroundActivityWork = "runtime.hasBackgroundActivityWork";
     public const string CompletionOutcomeNames = "runtime.completionOutcomeNames";
     public const string CheckpointRequirement = "runtime.checkpointRequirement";
     public const string CheckpointRequirementMandatory = "Mandatory";
@@ -108,6 +110,12 @@ public static class RuntimeMetadataKeys
     /// <c>RuntimeExecutionOwnershipService</c> (engine package).
     /// </summary>
     public const string OwnershipFencingToken = "runtime.ownership.fencingToken";
+
+    /// <summary>
+    /// Durable tombstone on execution-ownership metadata. Preserved when ownership is reacquired so a stale
+    /// workflow-execution identity cannot be recreated after its workflow state was deleted.
+    /// </summary>
+    public const string WorkflowExecutionDeletionTombstone = "runtime.workflowExecutionDeletionTombstone";
 
     /// <summary>
     /// System-metadata key on a workflow execution carrying the workflow instance name (#260). The compiled

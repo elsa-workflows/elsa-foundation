@@ -152,6 +152,7 @@ public static class RuntimeEntityFrameworkCoreRegistration
             });
             services.AddRuntimeWorkflowDispatchEntityFrameworkCore();
             services.AddRuntimePostCommitOutboxEntityFrameworkCore();
+            services.AddRuntimeBackgroundActivityWorkEntityFrameworkCore();
             services.AddRuntimeCheckpointCommitEntityFrameworkCore();
             // The trigger-binding and recurring-schedule tables carry their own projection state (R29); selecting both
             // withdraws the publication projection-state unit they replace.

@@ -37,6 +37,7 @@ public sealed class EfSchemaReadabilitySourceTests : IDisposable
         new(RuntimeActivationSlotEfModule.SchemaFamily, Runtime, [RuntimeActivationSlotEfModule.SchemaVersion]),
         new(RuntimeActivityExecutionEfModule.SchemaFamily, Runtime, [RuntimeActivityExecutionEfModule.SchemaVersion]),
         new(RuntimeArtifactEfModule.SchemaFamily, Runtime, [RuntimeArtifactEfModule.SchemaVersion]),
+        new(RuntimeBackgroundActivityWorkEfModule.SchemaFamily, Runtime, [RuntimeBackgroundActivityWorkEfModule.SchemaVersion]),
         new(RuntimeOperationalStateEfModule.SchemaFamily, Runtime, [RuntimeOperationalStateEfModule.SchemaVersion]),
         new(RuntimePostCommitOutboxEfModule.SchemaFamily, Runtime, [RuntimePostCommitOutboxEfModule.SchemaVersion]),
         new(RuntimeSchedulerPoisonEfModule.SchemaFamily, Runtime, [RuntimeSchedulerPoisonEfModule.SchemaVersion]),

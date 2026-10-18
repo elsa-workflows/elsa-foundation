@@ -43,6 +43,7 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Primitives\Elsa.Activities.Primitives.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\src\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Api\Capabilities\Elsa.Api.Capabilities.csproj" />
     <ProjectReference Include="..\..\..\..\..\Activities\Testing\Elsa.Activities.Testing.csproj" />
     <!-- RecordingLogger, for the crash-repair contract's leaked-reference errors (#2251). -->

@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -17,6 +18,7 @@ public sealed class InMemoryRuntimeCheckpointStoreState
     internal Dictionary<string, RuntimePostCommitOutboxItem> OutboxItems { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, WorkflowDispatchRecord> WorkflowDispatches { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, WorkflowTestScopeRecord> WorkflowTestScopes { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<(string Scope, string WorkflowExecutionId, string WorkId), BackgroundActivityWorkItem> BackgroundActivityWorkItems { get; } = [];
 }
 
 public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCommitStore, IRuntimePostCommitOutboxStore, IPostCommitOutboxLookupStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore
@@ -37,6 +39,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
     private readonly IWorkflowExecutableRootWriteLeaseManager? _rootWriteLeaseManager;
     private readonly IWorkflowAlterationStore? _alterationStore;
     private readonly TimeProvider _timeProvider;
+    private readonly IPersistenceAccessContextAccessor? _persistenceAccessContextAccessor;
 
     /// <summary>
     /// Creates the in-memory commit store. Every backing store is optional and defaults to <c>null</c>, so terse test
@@ -59,7 +62,8 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         IActivityExecutionHierarchyWriter? activityExecutionHierarchyWriter = null,
         IWorkflowDispatchStore? workflowDispatchStore = null,
         IWorkflowSchedulerWorkQueue? schedulerWorkQueue = null,
-        IWorkflowAlterationStore? alterationStore = null)
+        IWorkflowAlterationStore? alterationStore = null,
+        IPersistenceAccessContextAccessor? persistenceAccessContextAccessor = null)
     {
         _state = state ?? new InMemoryRuntimeCheckpointStoreState();
         _workflowExecutionStateStore = workflowExecutionStateStore;
@@ -76,6 +80,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         _workflowDispatchStore = workflowDispatchStore;
         _schedulerWorkQueue = schedulerWorkQueue;
         _alterationStore = alterationStore;
+        _persistenceAccessContextAccessor = persistenceAccessContextAccessor;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
@@ -150,6 +155,9 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         CancellationToken cancellationToken)
     {
         await EnsureExpectedFenceAsync(commit, cancellationToken);
+        await EnsureBackgroundActivityAdmissionsAreFencedAndLiveAsync(commit, cancellationToken);
+
+        var stagedBackgroundActivityWork = PrepareBackgroundActivityWorkChanges(commit);
 
         var pendingOutboxItems = commit.StateChanges.PostCommitOutbox.Select(change => change.State).ToArray();
         var consumedSchedulerWorkItemIds = commit.StateChanges.ConsumedSchedulerWorkItems
@@ -193,6 +201,13 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                     foreach (var item in pendingOutboxItems)
                         SavePendingOutboxItem(item);
 
+                    if (stagedBackgroundActivityWork is not null)
+                    {
+                        _state.BackgroundActivityWorkItems.Clear();
+                        foreach (var pair in stagedBackgroundActivityWork)
+                            _state.BackgroundActivityWorkItems.Add(pair.Key, pair.Value);
+                    }
+
                     _state.Commits.Add(commit.CommitId, new RuntimeCheckpointCommitRecord(
                         commit,
                         decision,
@@ -210,6 +225,82 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         {
             ConsumedSchedulerWorkItemIds = consumedSchedulerWorkItemIds
         };
+    }
+
+    private async ValueTask EnsureBackgroundActivityAdmissionsAreFencedAndLiveAsync(
+        RuntimeCheckpointCommit commit,
+        CancellationToken cancellationToken)
+    {
+        if (commit.StateChanges.BackgroundActivityWork.Admissions.Count == 0)
+            return;
+        if (commit.ExpectedFence is null)
+            throw new RuntimeCheckpointCommitValidationException("Background activity work admission requires the current workflow execution fence.");
+
+        var ownership = await _operationalStateStore!.FindAsync(
+            commit.WorkflowExecutionId,
+            RuntimeExecutionOwnershipStateId.For(commit.WorkflowExecutionId),
+            cancellationToken);
+        if (ownership?.Metadata.TryGetValue(RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone, out var tombstone) == true)
+        {
+            if (!StringComparer.Ordinal.Equals(tombstone, "true"))
+                throw new InvalidDataException("The persisted workflow-execution deletion tombstone is corrupt.");
+            throw new RuntimeCheckpointCommitValidationException("Background activity work cannot be admitted for a deleted workflow execution.");
+        }
+
+        if (_workflowExecutionStateStore is null)
+            throw new RuntimeCheckpointCommitValidationException("Background activity work cannot be admitted without a workflow execution state store.");
+
+        var hasLiveExecution = await _workflowExecutionStateStore.FindAsync(commit.WorkflowExecutionId, cancellationToken) is not null;
+        var upsertInThisCommit = commit.StateChanges.WorkflowExecution is { Operation: RuntimeStateChangeOperation.Upsert } workflowChange &&
+                                 StringComparer.Ordinal.Equals(workflowChange.StateId, commit.WorkflowExecutionId);
+        if (!hasLiveExecution && !upsertInThisCommit)
+            throw new RuntimeCheckpointCommitValidationException("Background activity work cannot be admitted without a live workflow execution state.");
+    }
+
+    private Dictionary<(string Scope, string WorkflowExecutionId, string WorkId), BackgroundActivityWorkItem>? PrepareBackgroundActivityWorkChanges(
+        RuntimeCheckpointCommit commit)
+    {
+        var changes = commit.StateChanges.BackgroundActivityWork;
+        if (changes.IsEmpty)
+            return null;
+
+        var scope = _persistenceAccessContextAccessor?.Current.RequireScope().Value ??
+                    throw new InvalidOperationException("A checkpoint carrying background activity work requires a selected persistence scope.");
+        Dictionary<(string Scope, string WorkflowExecutionId, string WorkId), BackgroundActivityWorkItem> staged;
+        lock (_state.SyncRoot)
+            staged = new Dictionary<(string Scope, string WorkflowExecutionId, string WorkId), BackgroundActivityWorkItem>(_state.BackgroundActivityWorkItems);
+
+        foreach (var request in changes.Admissions)
+        {
+            var key = (scope, request.WorkflowExecutionId, request.WorkId);
+            if (staged.ContainsKey(key))
+                throw new InvalidOperationException($"Background activity work '{request.WorkId}' already exists in workflow execution '{request.WorkflowExecutionId}'.");
+            staged.Add(key, BackgroundActivityWorkLifecycle.CreatePending(request, commit.Checkpoint.OccurredAt));
+        }
+
+        foreach (var acceptance in changes.Acceptances)
+        {
+            var key = (scope, acceptance.WorkflowExecutionId, acceptance.WorkId);
+            if (!staged.TryGetValue(key, out var item))
+                throw new InvalidOperationException($"Background activity work '{acceptance.WorkId}' was not found for receipt acceptance.");
+            staged[key] = BackgroundActivityWorkLifecycle.Accept(item, acceptance);
+        }
+
+        // Acceptance and cancellation may be participants of the same terminal checkpoint: acceptance wins so
+        // the subsequent workflow-wide cancellation preserves that durable receipt as Accepted.
+        foreach (var cancellation in changes.Cancellations)
+        {
+            var matching = staged.Where(pair =>
+                    StringComparer.Ordinal.Equals(pair.Key.Scope, scope) &&
+                    StringComparer.Ordinal.Equals(pair.Key.WorkflowExecutionId, cancellation.WorkflowExecutionId) &&
+                    (cancellation.ActivityExecutionIds is null || cancellation.ActivityExecutionIds.Contains(pair.Value.Request.ActivityExecutionId, StringComparer.Ordinal)) &&
+                    pair.Value.Status is BackgroundActivityWorkStatus.Pending or BackgroundActivityWorkStatus.Claimed or BackgroundActivityWorkStatus.ResultReady)
+                .ToArray();
+            foreach (var pair in matching)
+                staged[pair.Key] = BackgroundActivityWorkLifecycle.Cancel(pair.Value, commit.Checkpoint.OccurredAt);
+        }
+
+        return staged;
     }
 
     private async ValueTask ApplyConsumedSchedulerWorkItemsAsync(

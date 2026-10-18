@@ -18,6 +18,7 @@
       operator runs it, so nothing from the host is loaded into the test process.
     -->
     <ProjectReference Include="..\..\..\apps\Elsa.Workbench\Elsa.Workbench.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../Fixtures/BackgroundActivities/BackgroundActivities.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
 </Project>

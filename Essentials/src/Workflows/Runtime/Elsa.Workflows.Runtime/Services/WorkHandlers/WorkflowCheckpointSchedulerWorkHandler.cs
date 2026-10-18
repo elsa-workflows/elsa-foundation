@@ -275,8 +275,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     }
 
     // Carries the durable system metadata that must survive a checkpoint rebuild. The completion/running builders
-    // rebuild SystemMetadata from scratch, so without this a SetName assignment or a Test Drive delivery receipt
-    // could be wiped by the subsequent workflow-completed checkpoint.
+    // rebuild SystemMetadata from scratch, so without this a SetName assignment, background cancellation marker
+    // or Test Drive delivery receipt could be wiped by the subsequent workflow-completed checkpoint.
     private static Dictionary<string, string> PreserveSystemMetadata(
         Dictionary<string, string> metadata,
         WorkflowExecutionState? priorWorkflowState,
@@ -294,6 +294,9 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
         if (!metadata.ContainsKey(RuntimeMetadataKeys.PersistenceMode) &&
             priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.PersistenceMode, out var persistenceMode) == true)
             metadata[RuntimeMetadataKeys.PersistenceMode] = persistenceMode;
+
+        if (priorWorkflowState?.SystemMetadata.TryGetValue(RuntimeMetadataKeys.WorkflowHasBackgroundActivityWork, out var hasBackgroundActivityWork) == true)
+            metadata[RuntimeMetadataKeys.WorkflowHasBackgroundActivityWork] = hasBackgroundActivityWork;
 
         // Manual Test Drive receipts are durable retry evidence. Workflow state is rebuilt for the started and
         // completed checkpoints, so keep those bounded, reserved receipt keys when carrying a TestRun forward.

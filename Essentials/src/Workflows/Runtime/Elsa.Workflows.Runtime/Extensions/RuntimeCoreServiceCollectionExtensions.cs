@@ -171,7 +171,9 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IActivityExecutionHierarchyStore, RuntimeInMemoryActivityExecutionHierarchyStore>();
         services.TryAddSingleton<IActivityExecutionHierarchyReader>(serviceProvider => serviceProvider.GetRequiredService<IActivityExecutionHierarchyStore>());
         services.TryAddSingleton<IActivityExecutionHierarchyWriter>(serviceProvider => serviceProvider.GetRequiredService<IActivityExecutionHierarchyStore>());
-        services.TryAddSingleton<IWorkflowExecutionStateStore, InMemoryWorkflowExecutionStateStore>();
+        services.TryAddSingleton<IWorkflowExecutionStateStore>(serviceProvider => new InMemoryWorkflowExecutionStateStore(
+            serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointStoreState>(),
+            serviceProvider.GetService<IExecutionLivenessStateStore>()));
         services.TryAddSingleton<IActivityExecutionStateStore, InMemoryActivityExecutionStateStore>();
         // Do not resurrect the in-memory concrete when a durable backend already owns
         // the inspection contracts (AddWorkflowRuntime is intentionally reorderable).
@@ -233,6 +235,7 @@ public static class RuntimeCoreServiceCollectionExtensions
                 serviceProvider.GetRequiredService<TimeProvider>(),
                 serviceProvider.GetRequiredService<RuntimeExecutionOwnershipOptions>()));
         services.TryAddSingleton<InMemoryRuntimeCheckpointStoreState>();
+        services.TryAddScoped<IBackgroundActivityWorkStore, InMemoryBackgroundActivityWorkStore>();
         services.TryAddSingleton<InMemoryWorkflowTestScopeStore>();
         services.TryAddSingleton<IWorkflowTestScopeStore>(serviceProvider =>
             serviceProvider.GetRequiredService<InMemoryWorkflowTestScopeStore>());

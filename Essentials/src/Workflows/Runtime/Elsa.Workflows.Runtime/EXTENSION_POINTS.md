@@ -1002,3 +1002,9 @@ serialization, or Runtime's persistence/checkpoint boundary.
 
 The public envelope and persisted plan use only `kind`, `schemaVersion`, and protected JSON. Do not persist a CLR
 type name, assembly-qualified type, service key, or executable payload schema type as an alteration identity.
+
+## Checkpoint-admitted background work
+
+`IBackgroundActivityWorkStore` is the worker-facing contract in Runtime Core: scoped lookup, fenced claim/renew, terminal receipt recording and bounded ready-result discovery. Admission, acceptance and cancellation are `BackgroundActivityWorkCheckpointChanges` participants in `RuntimeCheckpointStateChangeSet`, rather than independent worker writes to native state. Every state-set copy, coalesced fold, fingerprint and validator preserves them; a nonempty participant forces a durable flush. `BackgroundActivityWorkLifecycle` supplies the pure compare-and-set rules shared by in-memory and EF providers.
+
+`AddRuntimeCheckpointCommitEntityFrameworkCore` composes the EF ledger into the shared Runtime context so its participant updates commit with native state and continuation intents. In-memory registration provides development/test parity but not crash durability. The worker fence is independent from `RuntimeExecutionOwnershipFence`; accepting a result still requires the coordinator's fixed current ownership fence. See [operational reference](../../../../../docs/reference/background-activity-execution.md).
