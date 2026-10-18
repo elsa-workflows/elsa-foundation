@@ -1368,7 +1368,7 @@ public sealed class EfWorkflowDesignPersistenceTests
         var tenant = "tenant-a"; var definitions = Enumerable.Range(0, 205).Select(index => new WorkflowDefinition { Id = $"definition-{index:D3}", TenantId = tenant, Name = $"Definition {index:D3}" }).ToArray();
         db.Definitions.AddRange(definitions);
         var oldDraft = new WorkflowDefinitionDraft { Id = "draft-old", TenantId = tenant, WorkflowDefinitionId = definitions[0].Id, CreatedAt = DateTimeOffset.UnixEpoch, LastModifiedAt = DateTimeOffset.UnixEpoch.AddDays(1), StateSource = "{}" };
-        var currentDraft = new WorkflowDefinitionDraft { Id = "draft-current", TenantId = tenant, WorkflowDefinitionId = definitions[0].Id, CreatedAt = DateTimeOffset.UnixEpoch.AddDays(2), LastModifiedAt = DateTimeOffset.UnixEpoch.AddDays(1), StateSource = "{}" };
+        var currentDraft = new WorkflowDefinitionDraft { Id = "draft-current", TenantId = tenant, WorkflowDefinitionId = definitions[0].Id, SourceVersionId = "version-050", CreatedAt = DateTimeOffset.UnixEpoch.AddDays(2), LastModifiedAt = DateTimeOffset.UnixEpoch.AddDays(1), StateSource = "{}" };
         db.Drafts.AddRange([oldDraft, currentDraft]);
         foreach (var definition in definitions.Skip(1))
             db.Drafts.Add(new WorkflowDefinitionDraft { Id = $"draft-{definition.Id}", TenantId = tenant, WorkflowDefinitionId = definition.Id, StateSource = "{}" });
@@ -1386,6 +1386,8 @@ public sealed class EfWorkflowDesignPersistenceTests
         Assert.Equal(requested.GroupBy(WorkflowDefinitionIdentity.Fold, StringComparer.Ordinal).Select(group => group.First()), projections.Select(x => x.WorkflowDefinitionId));
         var first = Assert.Single(projections, x => x.WorkflowDefinitionId == definitions[0].Id);
         Assert.Equal("draft-current", first.DraftId);
+        Assert.Equal("version-050", first.DraftSourceVersionId);
+        Assert.Equal("50.0.0", first.DraftSourceVersion);
         Assert.Equal("version-201", first.LatestVersionId);
         Assert.Equal("201.0.0", first.LatestVersion);
         Assert.Equal(201, first.VersionCount);

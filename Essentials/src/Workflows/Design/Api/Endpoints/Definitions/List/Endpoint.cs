@@ -56,14 +56,19 @@ public sealed class Endpoint(
         var projectionsByDefinitionId = projections.ToDictionary(
             projection => projection.WorkflowDefinitionId,
             StringComparer.Ordinal);
-        var publicationStates = publicationStateLookup is null
+        var publicationSummaries = publicationStateLookup is null
             ? null
             : await publicationStateLookup.ListByDefinitionIdsAsync(definitionIds, cancellationToken);
+        var versionsByDefinitionId = projections.ToDictionary(
+            projection => projection.WorkflowDefinitionId,
+            projection => projection.Versions?.ToDictionary(version => version.Id, version => version.Version, StringComparer.Ordinal)
+                ?? new Dictionary<string, string>(StringComparer.Ordinal),
+            StringComparer.Ordinal);
 
         var items = definitions.Select(definition =>
         {
             projectionsByDefinitionId.TryGetValue(definition.Id, out var projection);
-            return new WorkflowDefinitionView(
+            var view = new WorkflowDefinitionView(
                 definition.Id,
                 definition.Name,
                 definition.Description,
@@ -73,7 +78,13 @@ public sealed class Endpoint(
                 projection?.DraftId,
                 projection?.LatestVersionId,
                 projection?.LatestVersion,
-                projection?.VersionCount ?? 0).WithPublicationState(publicationStates);
+                projection?.VersionCount ?? 0,
+                DraftSourceVersionId: projection?.DraftSourceVersionId,
+                DraftSourceVersion: projection?.DraftSourceVersion)
+                .WithPublicationState(
+                    publicationSummaries,
+                    versionsByDefinitionId.GetValueOrDefault(definition.Id));
+            return view;
         }).ToArray();
         return new WorkflowDefinitionListView(items);
     }

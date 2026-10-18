@@ -10,9 +10,9 @@ namespace Elsa.Workflows.Design.Api.Services;
 /// </summary>
 public sealed class NullWorkflowDefinitionPublicationStateLookup : IWorkflowDefinitionPublicationStateLookup
 {
-    public Task<IReadOnlyDictionary<string, WorkflowDefinitionPublicationState>> ListByDefinitionIdsAsync(
+    public Task<IReadOnlyDictionary<string, WorkflowDefinitionPublicationSummary>> ListByDefinitionIdsAsync(
         IReadOnlyCollection<string> workflowDefinitionIds,
         CancellationToken cancellationToken = default) =>
-        Task.FromResult<IReadOnlyDictionary<string, WorkflowDefinitionPublicationState>>(
-            new Dictionary<string, WorkflowDefinitionPublicationState>(StringComparer.Ordinal));
+        Task.FromResult<IReadOnlyDictionary<string, WorkflowDefinitionPublicationSummary>>(
+            new Dictionary<string, WorkflowDefinitionPublicationSummary>(StringComparer.Ordinal));
 }

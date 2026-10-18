@@ -317,9 +317,9 @@ describe("workflows module", () => {
     expect(deletedRow?.textContent).toContain("Restore");
     expect(deletedRow?.textContent).toContain("Delete permanently");
     expect(deletedRow?.textContent).not.toContain("Artifacts");
-    expect(container.querySelector(".wf-grid-head")?.textContent).toContain("Status");
-    expect(activeRow?.textContent).toContain("Published");
-    expect(activeRow?.textContent).toContain("Newer draft");
+    expect(container.querySelector(".wf-grid-head")?.textContent).toContain("Published version");
+    expect(activeRow?.textContent).toContain("Draft");
+    expect(activeRow?.textContent).toContain("Latest saved 1.0.0");
     await unmount();
   });
 
@@ -343,12 +343,12 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("shows published, published-with-draft, and unpublished draft status from version fields rather than draftId", async () => {
+  it("shows the active published version separately from a mutable draft", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => response({
       items: [
-        definition({ id: "draft-only", name: "Unpublished workflow", draftId: "draft-a", latestVersionId: null, latestVersion: null, versionCount: 0 }),
-        definition({ id: "published-clean", name: "Published workflow", draftId: null, latestVersionId: "version-1", latestVersion: "1.0.0", versionCount: 1 }),
-        definition({ id: "published-dirty", name: "Published with draft", draftId: "draft-b", latestVersionId: "version-2", latestVersion: "2.0.0", versionCount: 2 })
+        definition({ id: "draft-only", name: "Unpublished workflow", draftId: "draft-a", latestVersionId: null, latestVersion: null, versionCount: 0, publicationState: "draft" }),
+        definition({ id: "published-clean", name: "Published workflow", draftId: null, latestVersionId: "version-1", latestVersion: "1.0.0", versionCount: 1, publicationState: "published", publishedVersion: "1.0.0" }),
+        definition({ id: "published-dirty", name: "Published with draft", draftId: "draft-b", latestVersionId: "version-2", latestVersion: "2.0.0", draftSourceVersion: "2.0.0", versionCount: 2, publicationState: "published", publishedVersion: "1.0.0" })
       ]
     })));
     const { container, unmount } = await renderRegisteredRoute();
@@ -358,13 +358,15 @@ describe("workflows module", () => {
     const publishedRow = rowByLabel(container, "Open workflow definition Published workflow");
     const newerDraftRow = rowByLabel(container, "Open workflow definition Published with draft");
 
-    expect(container.querySelector(".wf-grid-head")?.textContent).toContain("Status");
+    expect(container.querySelector(".wf-grid-head")?.textContent).toContain("Published version");
     await waitForStatusBadge(draftRow, "Draft");
     expect(draftRow?.textContent).not.toContain("Published");
-    await waitForStatusBadge(publishedRow, "Published");
+    await waitForStatusBadge(publishedRow, "1.0.0");
     expect(publishedRow?.textContent).not.toContain("Newer draft");
-    await waitForStatusBadge(newerDraftRow, "Published");
-    expect(newerDraftRow?.textContent).toContain("Newer draft");
+    await waitForStatusBadge(newerDraftRow, "Draft");
+    expect(newerDraftRow?.textContent).toContain("Based on 2.0.0");
+    expect(newerDraftRow?.textContent).toContain("1.0.0");
+    expect(newerDraftRow?.textContent).not.toContain("Newer draft");
     await unmount();
   });
 
@@ -5696,7 +5698,7 @@ async function waitForText(container: HTMLElement, text: string) {
 
 async function waitForStatusBadge(row: Element | null, text: string) {
   await vi.waitFor(() => {
-    if (row?.querySelector(".wf-status-badge")?.textContent !== text) {
+    if (!Array.from(row?.querySelectorAll(".wf-status-badge") ?? []).some(badge => badge.textContent === text)) {
       throw new Error(`Timed out waiting for status badge '${text}'.`);
     }
   }, { timeout: 5_000, interval: 20 });
