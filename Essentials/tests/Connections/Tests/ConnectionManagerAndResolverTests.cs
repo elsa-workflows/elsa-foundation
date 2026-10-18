@@ -828,6 +828,123 @@ public sealed class ConnectionManagerAndResolverTests
     }
 
     [Fact]
+    public async Task Update_SelectingTheSameOwnedSecretRetainsProvenanceAndConnectionDeleteCleansIt()
+    {
+        await using var provider = CreateProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
+        var repository = scope.ServiceProvider.GetRequiredService<IConnectionRepository>();
+        var secrets = scope.ServiceProvider.GetRequiredService<ISecretManager>();
+        const string connectionName = "owned-rebind";
+        const string secretName = "connection:owned-rebind:token";
+
+        await manager.CreateAsync(Tenant, new CreateConnectionRequest
+        {
+            Name = connectionName,
+            AuthScheme = HttpAuthSchemes.Bearer,
+            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new() { Value = "owned-value" }
+            }
+        });
+
+        await manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
+        {
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new() { ExistingSecretName = $"  {secretName.ToUpperInvariant()}  " }
+            }
+        });
+
+        var stored = await repository.FindAsync(Tenant, connectionName);
+        var token = stored!.Definition.SecretFields[HttpConnectionSecretFields.Token];
+        Assert.True(token.IsOwnedSecret);
+        Assert.Equal(secretName, token.SecretName?.Trim(), StringComparer.OrdinalIgnoreCase);
+
+        Assert.True(await manager.DeleteAsync(Tenant, connectionName));
+        Assert.Null(await secrets.FindAsync(Tenant, secretName));
+    }
+
+    [Fact]
+    public async Task Create_PreservesRawWhitespaceInNonblankInlineSecretValues()
+    {
+        await using var provider = CreateProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
+        var resolver = scope.ServiceProvider.GetRequiredService<IConnectionResolver>();
+        const string connectionName = "raw-credential";
+        const string inputValue = "  raw value with surrounding spaces  ";
+
+        await manager.CreateAsync(Tenant, new CreateConnectionRequest
+        {
+            Name = connectionName,
+            AuthScheme = HttpAuthSchemes.Bearer,
+            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new() { Value = inputValue }
+            }
+        });
+
+        await using var resolved = await resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = connectionName });
+        Assert.Equal(inputValue, (await resolved.GetSensitiveAsync(HttpConnectionSecretFields.Token)).Reveal());
+    }
+
+    [Fact]
+    public async Task Update_ConflictDuringCredentialRebindKeepsPersistedOwnedSecretActive()
+    {
+        var interceptor = new SaveInterceptor();
+        await using var provider = ConnectionsTestComposition.CreateProvider(configure: services =>
+        {
+            services.RemoveAll<IConnectionRepository>();
+            services.AddSingleton<IConnectionRepository>(_ => new InterceptingConnectionRepository(new InMemoryConnectionRepository(), interceptor));
+        });
+        await using var scope = provider.CreateAsyncScope();
+        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
+        var secrets = scope.ServiceProvider.GetRequiredService<ISecretManager>();
+        var resolver = scope.ServiceProvider.GetRequiredService<IConnectionResolver>();
+        const string connectionName = "rebind-conflict";
+        const string ownedSecretName = "connection:rebind-conflict:token";
+
+        await manager.CreateAsync(Tenant, new CreateConnectionRequest
+        {
+            Name = connectionName,
+            AuthScheme = HttpAuthSchemes.Bearer,
+            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new() { Value = "previous-value" }
+            }
+        });
+        await secrets.CreateAsync(Tenant, new CreateSecretRequest
+        {
+            Name = "replacement-token",
+            Value = "replacement-value",
+            TypeName = SecretTypeNames.Text
+        });
+
+        interceptor.BeforeOuterSave = () => manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
+        {
+            DisplayName = "Concurrent update"
+        }).AsTask();
+
+        await Assert.ThrowsAsync<ConnectionConflictException>(() => manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
+        {
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new() { ExistingSecretName = "replacement-token" }
+            }
+        }).AsTask());
+
+        var oldSecret = await secrets.FindAsync(Tenant, ownedSecretName);
+        Assert.NotNull(oldSecret);
+        Assert.Equal(SecretStatus.Active, oldSecret.Status);
+        await using var resolved = await resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = connectionName });
+        Assert.Equal("previous-value", (await resolved.GetSensitiveAsync(HttpConnectionSecretFields.Token)).Reveal());
+    }
+
+    [Fact]
     public async Task Update_DoesNotOverwriteAConcurrentRevoke()
     {
         var interceptor = new SaveInterceptor();

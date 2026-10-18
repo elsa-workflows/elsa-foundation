@@ -103,6 +103,8 @@ internal sealed class DefaultConnectionManager(
 
         await permissionGate.EnsureManageAsync(tenantId, cancellationToken);
 
+        IDictionary<string, ConnectionSecretField>? previousSecretFields = null;
+        IDictionary<string, ConnectionSecretField>? nextSecretFields = null;
         if (request.DisplayName is not null)
             document.Definition.DisplayName = request.DisplayName.Trim();
         if (request.Settings is not null)
@@ -119,15 +121,17 @@ internal sealed class DefaultConnectionManager(
             ValidateCredentialSources(request.SecretFields);
             await EnsureBindSecretAsync(tenantId, request.SecretFields, cancellationToken);
             await ValidateExistingSecretReferencesAsync(tenantId, request.SecretFields, cancellationToken);
-            var previous = document.Definition.SecretFields;
-            await ValidateOwnedSecretWriteTargetsAsync(tenantId, document.Definition.Name, request.SecretFields, previous, cancellationToken);
-            document.Definition.SecretFields = await MergeSecretFieldsAsync(
-                tenantId, document.Definition.Name, previous, request.SecretFields, cancellationToken);
-            await DeleteReplacedOwnedSecretsAsync(tenantId, document.Definition.Name, previous, document.Definition.SecretFields, cancellationToken);
+            previousSecretFields = document.Definition.SecretFields;
+            await ValidateOwnedSecretWriteTargetsAsync(tenantId, document.Definition.Name, request.SecretFields, previousSecretFields, cancellationToken);
+            nextSecretFields = await MergeSecretFieldsAsync(
+                tenantId, document.Definition.Name, previousSecretFields, request.SecretFields, cancellationToken);
+            document.Definition.SecretFields = nextSecretFields;
         }
 
         document.State.UpdatedAt = timeProvider.GetUtcNow();
         await repository.SaveAsync(document, cancellationToken);
+        if (previousSecretFields is not null && nextSecretFields is not null)
+            await DeleteReplacedOwnedSecretsAsync(tenantId, document.Definition.Name, previousSecretFields, nextSecretFields, cancellationToken);
         return ToMetadata(document);
     }
 
@@ -290,9 +294,7 @@ internal sealed class DefaultConnectionManager(
                 continue;
 
             var canRotateExistingOwnedSecret = previous is not null &&
-                previous.TryGetValue(fieldName, out var previousField) &&
-                previousField.IsOwnedSecret &&
-                string.Equals(previousField.SecretName, ownedSecretName, StringComparison.OrdinalIgnoreCase);
+                WasOwnedSecret(previous, fieldName, ownedSecretName);
             if (!canRotateExistingOwnedSecret)
                 throw OwnedSecretNameConflict();
         }
@@ -310,7 +312,7 @@ internal sealed class DefaultConnectionManager(
     {
         foreach (var (fieldName, input) in inputs)
         {
-            var field = await WriteSecretFieldAsync(tenantId, connectionName, fieldName, input, false, cancellationToken);
+            var field = await WriteSecretFieldAsync(tenantId, connectionName, fieldName, input, false, false, cancellationToken);
             if (field is not null)
                 fields[fieldName] = field;
         }
@@ -330,9 +332,10 @@ internal sealed class DefaultConnectionManager(
                 continue;
 
             var ownedSecretName = ConnectionName.OwnedSecretName(connectionName, fieldName);
-            var canRotateExistingOwnedSecret = CanRotateExistingOwnedSecret(previous, fieldName, ownedSecretName);
+            var canRotateExistingOwnedSecret = WasOwnedSecret(previous, fieldName, ownedSecretName);
+            var retainExistingOwnedSecret = WasOwnedSecret(previous, fieldName, input.ExistingSecretName);
             var field = await WriteSecretFieldAsync(
-                tenantId, connectionName, fieldName, input, canRotateExistingOwnedSecret, cancellationToken);
+                tenantId, connectionName, fieldName, input, canRotateExistingOwnedSecret, retainExistingOwnedSecret, cancellationToken);
             if (field is not null)
                 fields[fieldName] = field;
         }
@@ -340,13 +343,18 @@ internal sealed class DefaultConnectionManager(
         return fields;
     }
 
-    private static bool CanRotateExistingOwnedSecret(
+    private static bool WasOwnedSecret(
         IDictionary<string, ConnectionSecretField> previous,
         string fieldName,
-        string ownedSecretName) =>
+        string? selectedSecretName) =>
         previous.TryGetValue(fieldName, out var previousField) &&
         previousField.IsOwnedSecret &&
-        string.Equals(previousField.SecretName, ownedSecretName, StringComparison.OrdinalIgnoreCase);
+        SameSecretName(previousField.SecretName, selectedSecretName);
+
+    private static bool SameSecretName(string? left, string? right) =>
+        !string.IsNullOrWhiteSpace(left) &&
+        !string.IsNullOrWhiteSpace(right) &&
+        string.Equals(left.Trim(), right.Trim(), StringComparison.OrdinalIgnoreCase);
 
     private async ValueTask<ConnectionSecretField?> WriteSecretFieldAsync(
         string tenantId,
@@ -354,6 +362,7 @@ internal sealed class DefaultConnectionManager(
         string fieldName,
         ConnectionSecretFieldInput input,
         bool canRotateExistingOwnedSecret,
+        bool retainExistingOwnedSecret,
         CancellationToken cancellationToken)
     {
         var field = new ConnectionSecretField
@@ -373,6 +382,7 @@ internal sealed class DefaultConnectionManager(
         if (!string.IsNullOrWhiteSpace(input.ExistingSecretName))
         {
             field.SecretName = input.ExistingSecretName.Trim();
+            field.IsOwnedSecret = retainExistingOwnedSecret;
             return field;
         }
 
@@ -481,7 +491,7 @@ internal sealed class DefaultConnectionManager(
         foreach (var (fieldName, field) in previous)
         {
             if (next.TryGetValue(fieldName, out var current) &&
-                string.Equals(current.SecretName, field.SecretName, StringComparison.Ordinal))
+                SameSecretName(current.SecretName, field.SecretName))
                 continue;
             await DeleteOwnedSecretAsync(tenantId, connectionName, field, next.Values, cancellationToken);
         }
@@ -508,7 +518,7 @@ internal sealed class DefaultConnectionManager(
             return;
 
         if (retainedFields?.Any(retained =>
-                string.Equals(retained.SecretName, field.SecretName, StringComparison.OrdinalIgnoreCase)) == true)
+                SameSecretName(retained.SecretName, field.SecretName)) == true)
             return;
 
         if (await repository.IsSecretReferencedAsync(tenantId, field.SecretName, connectionName, cancellationToken))
