@@ -2,6 +2,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StudioHttpError, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { activityDesignKeys } from "../api/activityDesign";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ActivityDefinitionDependencyExplorer } from "../ActivityDefinitionDependencyExplorer";
 import type { ActivityDefinitionUsageEvidence } from "../activityDefinitionTypes";
@@ -27,8 +28,15 @@ describe("Activity Definition dependency explorer", () => {
     });
     const rendered = renderExplorer(getJson);
 
+    expect(rendered.container.querySelector('[aria-label="Version pages"]')).toBeNull();
+    expect(rendered.container.textContent).not.toContain("Loading evidence…");
+    expect([...rendered.container.querySelectorAll<HTMLInputElement>('input[name="dependency-direction"]')]
+      .find(input => input.parentElement?.textContent?.includes("Dependencies"))?.checked).toBe(true);
     await selectRoot(rendered.container);
+    expect([...rendered.container.querySelectorAll<HTMLInputElement>('input[name="dependency-direction"]')]
+      .find(input => input.parentElement?.textContent?.includes("Dependencies"))?.checked).toBe(true);
     await waitForText(rendered.container, "AuthoritativeDirect");
+    expect(rendered.container.querySelector<HTMLDetailsElement>(".ad-scan-details")?.open).toBe(false);
     expect(rendered.container.textContent).toContain("occurrence-a");
     click(buttonByText(rendered.container, "Load next page"));
     await waitForText(rendered.container, "occurrence-b");
@@ -45,9 +53,151 @@ describe("Activity Definition dependency explorer", () => {
       .toBe("/workflows/definitions?definition=workflow-1&draft=workflow-draft-1&occurrence=occurrence-a");
     window.history.replaceState({}, "", "/");
 
-    click(buttonByText(rendered.container, "Review exact path"));
+    click(buttonByText(rendered.container, "View path"));
     await waitForText(rendered.container, "Complete cycle path");
     expect(rendered.container.querySelectorAll(".ad-dependency-path")).toHaveLength(1);
+    await rendered.unmount();
+  });
+
+  it("starts source-provided activities at the confirmed recommended version and shows inbound usage", async () => {
+    const dependencyRequests: string[] = [];
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url.startsWith("/design/activities/definitions/definition-1/versions?")) return versionPage();
+      if (url === "/design/activities/versions/version-1") return exactVersionSummary();
+      if (url.includes("/dependencies?")) {
+        dependencyRequests.push(url);
+        return dependencyPage("source-occurrence", null, false, "Inbound");
+      }
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = renderExplorer(getJson, { initialVersionId: "version-1", initialDirection: "inbound" });
+
+    await waitForText(rendered.container, "1.0.0 · Active");
+    expect((rendered.container.querySelector("select") as HTMLSelectElement).value).toBe("version-1");
+    expect(rendered.container.querySelector<HTMLOptionElement>('option[value="version-1"]')?.title).toBe("1.0.0+build-sha");
+    await waitForText(rendered.container, "source-occurrence");
+    expect(rendered.container.textContent).toContain("Used by");
+    expect(dependencyRequests[0]).toContain("direction=inbound&transitive=false&include=versions%2Cdrafts");
+    expect(dependencyRequests[0]).toContain("/versions/version-1/dependencies?");
+    await rendered.unmount();
+
+    const unconfirmedRequests: string[] = [];
+    const unconfirmed = renderExplorer(vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url.startsWith("/design/activities/definitions/definition-1/versions?")) return versionPage();
+      if (url === "/design/activities/versions/unconfirmed-version") throw new StudioHttpError(404, "hidden-version", null);
+      if (url.includes("/dependencies?")) unconfirmedRequests.push(url);
+      throw new Error(`Unexpected GET ${url}`);
+    }), { initialVersionId: "unconfirmed-version", initialDirection: "inbound" });
+    await waitForText(unconfirmed.container, "1.0.0 · Active");
+    await waitForText(unconfirmed.container, "Choose a version to see matching evidence.");
+    expect((unconfirmed.container.querySelector("select") as HTMLSelectElement).value).toBe("");
+    expect(unconfirmedRequests).toHaveLength(0);
+    await unconfirmed.unmount();
+  });
+
+  it("confirms a recommended version outside the loaded page before starting inbound usage", async () => {
+    const exactVersionReads: string[] = [];
+    const dependencyRequests: string[] = [];
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url.startsWith("/design/activities/definitions/definition-1/versions?")) return { ...versionPage(), items: [] };
+      if (url === "/design/activities/versions/version-51") {
+        exactVersionReads.push(url);
+        return exactVersionSummary("version-51", "51.0.0+build-sha");
+      }
+      if (url.includes("/dependencies?")) {
+        dependencyRequests.push(url);
+        return dependencyPage("late-version-use", null, false, "Inbound", false, ["Drafts", "Versions"], "version-51");
+      }
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = renderExplorer(getJson, { initialVersionId: "version-51", initialDirection: "inbound" });
+
+    await waitForText(rendered.container, "51.0.0 · Active");
+    expect((rendered.container.querySelector("select") as HTMLSelectElement).value).toBe("version-51");
+    expect(rendered.container.querySelector<HTMLOptionElement>('option[value="version-51"]')?.title).toBe("51.0.0+build-sha");
+    await waitForText(rendered.container, "late-version-use");
+    expect(exactVersionReads).toEqual(["/design/activities/versions/version-51"]);
+    expect(dependencyRequests[0]).toContain("/versions/version-51/dependencies?");
+    expect(dependencyRequests[0]).toContain("direction=inbound&transitive=false&include=versions%2Cdrafts");
+    await rendered.unmount();
+  });
+
+  it("drops stale exact-version evidence after a denied refresh and rejects a version from another definition", async () => {
+    const deniedDependencies: string[] = [];
+    let exactReads = 0;
+    const denied = renderExplorer(vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url.startsWith("/design/activities/definitions/definition-1/versions?")) return { ...versionPage(), items: [] };
+      if (url === "/design/activities/versions/version-51") {
+        exactReads += 1;
+        if (exactReads === 1) return exactVersionSummary("version-51", "51.0.0+build-sha");
+        throw new StudioHttpError(403, "hidden-version-owner", null);
+      }
+      if (url.includes("/dependencies?")) {
+        deniedDependencies.push(url);
+        return dependencyPage("previously-confirmed-use", null, false, "Inbound", false, ["Drafts", "Versions"], "version-51");
+      }
+      throw new Error(`Unexpected GET ${url}`);
+    }), { initialVersionId: "version-51", initialDirection: "inbound" });
+
+    await waitForText(denied.container, "previously-confirmed-use");
+    expect((denied.container.querySelector("select") as HTMLSelectElement).value).toBe("version-51");
+    await denied.queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionVersion("definition-1", "version-51") });
+    await waitForText(denied.container, "This version is not confirmed by an authorized read");
+    expect(denied.container.textContent).not.toContain("previously-confirmed-use");
+    expect(deniedDependencies).toHaveLength(1);
+    expect(exactReads).toBe(2);
+    await denied.unmount();
+
+    const wrongDefinitionDependencies: string[] = [];
+    const wrongDefinition = renderExplorer(vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url.startsWith("/design/activities/definitions/definition-1/versions?")) return { ...versionPage(), items: [] };
+      if (url === "/design/activities/versions/version-51") {
+        return { ...exactVersionSummary("version-51", "51.0.0+build-sha"), definition: { ...exactVersionSummary().definition, definitionId: "another-definition" } };
+      }
+      if (url.includes("/dependencies?")) wrongDefinitionDependencies.push(url);
+      throw new Error(`Unexpected GET ${url}`);
+    }), { initialVersionId: "version-51", initialDirection: "inbound" });
+
+    await waitForText(wrongDefinition.container, "Choose a version to see matching evidence.");
+    expect((wrongDefinition.container.querySelector("select") as HTMLSelectElement).value).toBe("");
+    expect(wrongDefinitionDependencies).toHaveLength(0);
+    await wrongDefinition.unmount();
+  });
+
+  it("keeps traversal and evidence filters in accessible advanced options", async () => {
+    const dependencyRequests: string[] = [];
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url.startsWith("/design/activities/definitions/definition-1/versions?")) return versionPage();
+      if (url.includes("/dependencies?")) {
+        dependencyRequests.push(url);
+        return dependencyPage("filtered-occurrence", null, false, "Outbound", true, ["Versions"]);
+      }
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const rendered = renderExplorer(getJson);
+    const advanced = rendered.container.querySelector("details")!;
+    expect(advanced.open).toBe(false);
+    flushSync(() => advanced.querySelector("summary")?.click());
+    expect(advanced.open).toBe(true);
+    expect(advanced.querySelector("fieldset legend")?.textContent).toBe("Search depth");
+
+    const indirect = [...advanced.querySelectorAll<HTMLInputElement>('input[name="dependency-depth"]')]
+      .find(input => input.parentElement?.textContent?.includes("Include indirect"))!;
+    const drafts = [...advanced.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+      .find(input => input.parentElement?.textContent?.includes("Drafts"))!;
+    flushSync(() => indirect.click());
+    flushSync(() => drafts.click());
+    expect(indirect.checked).toBe(true);
+    expect(drafts.checked).toBe(false);
+    await selectRoot(rendered.container);
+    await waitForText(rendered.container, "filtered-occurrence");
+    expect(dependencyRequests[0]).toContain("transitive=true&include=versions");
     await rendered.unmount();
   });
 
@@ -69,7 +219,7 @@ describe("Activity Definition dependency explorer", () => {
     await selectRoot(rendered.container);
     await waitForText(rendered.container, "confirmed-occurrence");
     click(buttonByText(rendered.container, "Load next page"));
-    await waitForText(rendered.container, "stale completed snapshot");
+    await waitForText(rendered.container, "scan is out of date");
     expect(rendered.container.textContent).toContain("confirmed-occurrence");
     expect(rendered.container.textContent).not.toContain("foreign-occurrence");
     await rendered.unmount();
@@ -92,7 +242,7 @@ describe("Activity Definition dependency explorer", () => {
     await selectRoot(rendered.container);
     await waitForText(rendered.container, "confirmed-before-expiry");
     click(buttonByText(rendered.container, "Load next page"));
-    await waitForText(rendered.container, "no longer retains this projection watermark");
+    await waitForText(rendered.container, "snapshot is no longer available");
     expect(rendered.container.textContent).toContain("confirmed-before-expiry");
     await rendered.unmount();
 
@@ -102,13 +252,16 @@ describe("Activity Definition dependency explorer", () => {
       throw new StudioHttpError(403, "hidden-owner-identity", null);
     }));
     await selectRoot(forbidden.container);
-    await waitForText(forbidden.container, "No hidden identity or count");
+    await waitForText(forbidden.container, "No identities or counts are shown");
     expect(forbidden.container.textContent).not.toContain("hidden-owner-identity");
     await forbidden.unmount();
   });
 });
 
-function renderExplorer(getJson: (url: string) => Promise<unknown>) {
+function renderExplorer(
+  getJson: (url: string) => Promise<unknown>,
+  options: { initialVersionId?: string; initialDirection?: "inbound" | "outbound" } = {}
+) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -117,9 +270,10 @@ function renderExplorer(getJson: (url: string) => Promise<unknown>) {
     baseUrl: `test://dependency-explorer-${Math.random()}`,
     http: { getJson }
   } as unknown as StudioEndpointContext;
-  flushSync(() => root.render(<QueryClientProvider client={queryClient}><ActivityDefinitionDependencyExplorer context={context} definitionId="definition-1" /></QueryClientProvider>));
+  flushSync(() => root.render(<QueryClientProvider client={queryClient}><ActivityDefinitionDependencyExplorer context={context} definitionId="definition-1" {...options} /></QueryClientProvider>));
   return {
     container,
+    queryClient,
     unmount: async () => {
       flushSync(() => {
       root.unmount();
@@ -130,7 +284,7 @@ function renderExplorer(getJson: (url: string) => Promise<unknown>) {
 }
 
 async function selectRoot(container: HTMLElement) {
-  await waitForText(container, "1.0.0 · Active · version-1");
+  await waitForText(container, "1.0.0 · Active");
   const select = container.querySelector('select') as HTMLSelectElement;
   flushSync(() => {
     Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(select, "version-1");
@@ -157,7 +311,7 @@ function versionPage() {
       version: {
         versionId: "version-1",
         definitionId: "definition-1",
-        version: "1.0.0",
+        version: "1.0.0+build-sha",
         lifecycle: "Active",
         publishedAt: "2026-07-18T12:00:00Z"
       },
@@ -174,12 +328,39 @@ function versionPage() {
   };
 }
 
+function exactVersionSummary(versionId = "version-1", version = "1.0.0+build-sha") {
+  return {
+    definition: {
+      definitionId: "definition-1",
+      activityTypeKey: "elsa.activity-graph.invoice-evaluator",
+      tenantId: "tenant-1",
+      category: "Examples",
+      displayName: "Invoice evaluator",
+      description: null,
+      contentAuthority: { kind: "ProviderSource", authorityKey: "contoso.catalog", sourceId: "invoice-source" },
+      forkedFrom: null,
+      headVersionId: versionId,
+      recommendedVersionId: versionId
+    },
+    versionId,
+    version,
+    provider: { providerKey: "elsa.activity-graph", schemaVersion: "1", manifestFingerprint: "sha256:graph" },
+    lifecycle: "Active",
+    publishedAt: "2026-07-18T12:00:00Z",
+    contract: { contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [] }
+  };
+}
+
 function dependencyPage(
   occurrenceId: string,
   nextCursor: string | null,
-  cycle = false
+  cycle = false,
+  direction: "Inbound" | "Outbound" = "Outbound",
+  transitive = false,
+  include: Array<"Drafts" | "Versions"> = ["Drafts", "Versions"],
+  rootVersionId = "version-1"
 ): ActivityDefinitionUsageEvidence {
-  const root = reference("version-1");
+  const root = reference(rootVersionId);
   const owner = {
     kind: "WorkflowDraft",
     definitionId: "workflow-1",
@@ -190,7 +371,7 @@ function dependencyPage(
   const path = cycle ? [root, owner, root] : [owner, root];
   return {
     root,
-    query: { direction: "Outbound", transitive: false, include: ["Drafts", "Versions"] },
+    query: { direction, transitive, include },
     consistency: {
       kind: "AuthoritativeDirect",
       isAuthoritative: true,

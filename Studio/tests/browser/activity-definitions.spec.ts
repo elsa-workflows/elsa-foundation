@@ -86,13 +86,41 @@ test("source-owned Activity Definition history stays exact and offers no denied 
   await mockActivityDraftManagement(page, { sourceOwned: true });
   await page.goto("/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1");
 
-  await expect(page.getByText("Source-owned and read-only")).toBeVisible();
+  await expect(page.getByText("Provided by an installed module. Read-only in Studio.")).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Drafts" })).toHaveCount(0);
+  const technicalDetails = page.locator("details.ad-technical-details").first();
+  await expect(technicalDetails.locator("summary")).toHaveText("Technical details");
+  await expect(page.getByText("contoso.catalog", { exact: true })).not.toBeVisible();
+  await technicalDetails.locator("summary").click();
   await expect(page.getByText("contoso.catalog")).toBeVisible();
   await expect(page.getByText("invoice-source")).toBeVisible();
   await expect(page.getByLabel("Selected exact version")).toContainText("elsa.activity-graph");
-  await expect(page.getByText("Immutable public contract")).toBeVisible();
+  await expect(page.getByText("Inputs, outputs & outcomes")).toBeVisible();
   await expect(page.getByRole("button", { name: /Fork/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Create draft from/ })).toHaveCount(0);
+});
+
+test("source-owned Activity Definition overview shows the recommended contract without draft management", async ({ page }) => {
+  await mockActivityDraftManagement(page, { sourceOwned: true });
+  await page.goto("/workflows/activity-definitions?definition=definition-1");
+
+  await expect(page.locator(".ad-source-overview")).toContainText("Finance");
+  await expect(page.getByText("Inputs, outputs & outcomes")).toBeVisible();
+  await expect(page.getByText("Done", { exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Drafts" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Fork recommended version" })).toHaveCount(0);
+});
+
+test("source-owned Usage starts with inbound evidence for the recommended version", async ({ page }) => {
+  const state = await mockActivityDependencyExplorer(page, { sourceOwned: true });
+  await page.goto("/workflows/activity-definitions?definition=definition-1&section=relationships");
+
+  await expect(page.getByRole("tab", { name: "Usage" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "Drafts" })).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Version" })).toHaveValue("version-1");
+  await expect(page.getByRole("radio", { name: "Used by" })).toBeChecked();
+  await expect(page.getByText("workflow-use-a")).toBeVisible();
+  expect(state.requestedUrls[0]).toContain("/versions/version-1/dependencies?direction=inbound");
 });
 
 test("source-owned Activity Definition fork reviews and applies only the recommended active version", async ({ page }) => {
@@ -127,9 +155,10 @@ test("unsupported fork conversion and atomic collision preserve the source witho
   const unsupported = await mockActivityFork(page, "unsupported");
   await page.goto("/workflows/activity-definitions?definition=definition-1");
   await page.getByRole("button", { name: "Fork recommended version" }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Create fork preview" }).click();
+  const unsupportedDialog = page.getByRole("dialog", { name: "Fork recommended activity version" });
+  await unsupportedDialog.getByRole("button", { name: "Create fork preview" }).click();
 
-  await expect(page.getByRole("alert")).toContainText("exact provider conversion is unsupported");
+  await expect(unsupportedDialog.getByRole("alert")).toContainText("exact provider conversion is unsupported");
   await expect(page).toHaveURL(/definition=definition-1/);
   expect(unsupported.applyRequests).toHaveLength(0);
 
@@ -140,7 +169,7 @@ test("unsupported fork conversion and atomic collision preserve the source witho
   await page.getByRole("dialog").getByRole("button", { name: "Create fork preview" }).click();
   await page.getByRole("dialog", { name: "Review activity fork" }).getByRole("button", { name: "Apply reviewed fork" }).click();
 
-  await expect(page.getByRole("alert")).toContainText("reserved target identity is no longer available");
+  await expect(page.getByRole("dialog").getByRole("alert")).toContainText("reserved target identity is no longer available");
   await expect(page).toHaveURL(/definition=definition-1/);
   expect(collision.applyRequests).toHaveLength(1);
 });
@@ -430,12 +459,14 @@ test("Activity Definition dependency explorer keeps exact snapshot pages, repeat
   const state = await mockActivityDependencyExplorer(page);
   await page.goto("/workflows/activity-definitions?definition=definition-1&section=relationships");
 
-  const root = page.getByRole("combobox", { name: "Exact version root" });
+  const root = page.getByRole("combobox", { name: "Version" });
   await root.selectOption("version-1");
+  const scanDetails = page.locator("details.ad-scan-details");
+  await scanDetails.locator("summary").click();
   await expect(page.getByText("AuthoritativeDirect")).toBeVisible();
   await expect(page.getByText("occurrence-a")).toBeVisible();
   await expect(page.getByText("occurrence-b")).toBeVisible();
-  await page.getByRole("button", { name: "Review exact path" }).first().click();
+  await page.getByRole("button", { name: "View path" }).first().click();
   await expect(page.getByText("Complete cycle path")).toBeVisible();
   await expect(page.locator(".ad-dependency-path")).toHaveCount(1);
 
@@ -444,32 +475,34 @@ test("Activity Definition dependency explorer keeps exact snapshot pages, repeat
   await expect(page.getByText("3 visible rows · 2 server pages")).toBeVisible();
 
   await page.getByRole("radio", { name: "Used by" }).check();
+  await page.locator("details.ad-scan-details summary").click();
   await expect(page.getByText("DerivedProjection")).toBeVisible();
   await expect(page.getByText("7/18/2026")).toBeVisible();
   await expect(page.getByText("workflow-use-a")).toBeVisible();
 
   state.nextFailure = 409;
-  await page.getByRole("radio", { name: "Transitive" }).check();
+  await page.locator("details.ad-dependency-advanced summary").click();
+  await page.getByRole("radio", { name: "Include indirect" }).check();
   await expect(page.getByText("transitive-confirmed")).toBeVisible();
   await page.getByRole("button", { name: "Load next page" }).click();
-  await expect(page.getByText("stale completed snapshot")).toBeVisible();
+  await expect(page.locator(".ad-stale-warning")).toContainText("next page did not match this version, filters, or snapshot");
   await expect(page.getByText("transitive-confirmed")).toBeVisible();
   await expect(page.getByText("hidden-owner-from-conflict")).toHaveCount(0);
-  await page.getByRole("button", { name: "Restart from latest" }).click();
+  await page.getByRole("button", { name: "Restart scan" }).click();
   await expect(page.getByText("transitive-restarted")).toBeVisible();
 
   state.nextFailure = 410;
   await page.getByRole("button", { name: "Load next page" }).click();
-  await expect(page.getByText("no longer retains this projection watermark")).toBeVisible();
+  await expect(page.locator(".ad-stale-warning")).toContainText("The snapshot is no longer available");
   await expect(page.getByText("transitive-restarted")).toBeVisible();
 
   state.privateRootStatus = 403;
   await root.selectOption("version-2");
-  await expect(page.getByText("No hidden identity or count")).toBeVisible();
+  await expect(page.locator(".ad-inline-error")).toContainText("No identities or counts are shown");
   await expect(page.getByText("hidden-private-owner")).toHaveCount(0);
   state.privateRootStatus = 404;
   await root.selectOption("version-3");
-  await expect(page.getByText("No hidden identity or count")).toBeVisible();
+  await expect(page.locator(".ad-inline-error")).toContainText("No identities or counts are shown");
   expect(state.requestedUrls.some(url => url.includes("direction=inbound") && url.includes("transitive=true"))).toBe(true);
 });
 
@@ -1126,7 +1159,7 @@ async function mockActivityVersionLifecycle(page: Page) {
   return state;
 }
 
-async function mockActivityDependencyExplorer(page: Page) {
+async function mockActivityDependencyExplorer(page: Page, options: { sourceOwned?: boolean } = {}) {
   const state = {
     nextFailure: null as 409 | 410 | null,
     privateRootStatus: null as 403 | 404 | null,
@@ -1212,15 +1245,24 @@ async function mockActivityDependencyExplorer(page: Page) {
       { rel: "activity-definition-version", href: "design/activities/versions/{versionId}", templated: true }
     ] }] })
   }));
+  const managementDefinition = options.sourceOwned
+    ? {
+        ...definition(),
+        definition: {
+          ...definition().definition,
+          contentAuthority: { kind: "ProviderSource", authorityKey: "contoso.catalog", sourceId: "invoice-source" }
+        }
+      }
+    : definition();
   await page.route("**/design/activities/definitions/definition-1", route => route.fulfill({
     status: 200,
     contentType: "application/json",
     body: JSON.stringify({
-      ...definition(),
+      ...managementDefinition,
       lifecycle: {
-        ...definition().lifecycle,
+        ...managementDefinition.lifecycle,
         versionCount: 3,
-        head: { ...definition().lifecycle.head, versionId: "version-3", version: "3.0.0" }
+        head: { ...managementDefinition.lifecycle.head, versionId: "version-3", version: "3.0.0" }
       }
     })
   }));
@@ -1228,6 +1270,11 @@ async function mockActivityDependencyExplorer(page: Page) {
     status: 200,
     contentType: "application/json",
     body: JSON.stringify(pageOf(versions))
+  }));
+  await page.route("**/design/activities/versions/version-1", route => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify(sourceVersionDetail(options.sourceOwned))
   }));
   await page.route(/\/design\/activities\/versions\/(version-[123])\/dependencies\?.*/, async route => {
     const url = route.request().url();
@@ -1313,12 +1360,14 @@ async function mockActivityFork(page: Page, outcome: "success" | "unsupported" |
       { rel: "activity-authoring-capabilities", href: "design/activities/authoring-capabilities" },
       { rel: "activity-definition", href: "design/activities/definitions/{definitionId}", templated: true },
       { rel: "activity-definition-draft", href: "design/activities/drafts/{draftId}", templated: true },
+      { rel: "activity-definition-version", href: "design/activities/versions/{versionId}", templated: true },
       { rel: "activity-definition-fork-preview", href: "design/activities/definitions/{definitionId}/fork-previews", templated: true },
       { rel: "activity-definition-fork-apply", href: "design/activities/fork-candidates/{candidateId}/apply", templated: true },
       { rel: "activity-definition-fork-status", href: "design/activities/forks/{idempotencyKey}", templated: true }
     ] }] })
   }));
   await page.route("**/design/activities/definitions/definition-1", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(source) }));
+  await page.route("**/design/activities/versions/version-1", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(sourceVersionDetail(true)) }));
   await page.route("**/design/activities/authoring-capabilities", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(browserAuthoringCapabilities()) }));
   await page.route("**/design/activities/definitions/definition-1/fork-previews", async route => {
     previewRequests.push(route.request().postDataJSON());

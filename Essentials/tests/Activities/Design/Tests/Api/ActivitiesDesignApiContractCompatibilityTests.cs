@@ -67,6 +67,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         typeof(ActivityProblemDetailsView),
         typeof(ActivityProviderAuthoringCapabilityView),
         typeof(ActivityProviderManifestSchemaCapabilityView),
+        typeof(ActivityProviderManifestSourceView),
         typeof(ActivityProviderManifestView),
         typeof(ActivityPublishedTemplateView),
         typeof(ActivityRecoveryView),
@@ -155,7 +156,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
     [Fact]
     public void Every_contract_type_is_publicly_exported_by_the_api_assembly()
     {
-        Assert.Equal(113, ContractTypes.Length);
+        Assert.Equal(114, ContractTypes.Length);
 
         var apiAssembly = typeof(ActivitiesDesignApiFeature).Assembly;
 
@@ -194,6 +195,8 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // JSON wire shape did not. It moved again when ActivityInputDescriptorView gained IsSensitive and IsCredential.
         // It moved again when ActivityAuthoringDescriptorView gained IconName, the catalog field projected
         // from the presentation-only elsa.activity-icon facet (ActivityIconName).
+        // It moved when ActivityProviderManifestSchemaCapabilityView gained an optional exact source-pair
+        // wire property; the existing positional constructor and deconstructor remain unchanged.
         // It moved again when ActivityInputDescriptorView gained Tier, the presentation-only disclosure
         // group (essential / optional / setting) projected from InputDefinition.Tier.
         // It moved again when ActivityInputDescriptorView gained ConnectionType, the required connection
@@ -205,7 +208,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // contracts because NativeEndpoints otherwise binds an omitted optional array as an empty query value.
         // The wrapper serializes to the same nullable layout array, while ActivityOutputDescriptorView now
         // exposes its contract reference key explicitly as a body init property, retaining its prior positional API.
-        Assert.Equal("71c697116b3d4afaf0a38c41d79684d81d3ed11dc652169ff1db2ed3fec7878e", PublicShapeHash(ContractTypes));
+        Assert.Equal("33b3cd367c3c09caa8fabcb895fb66179e03ad24b229055e1edcd9f692405755", PublicShapeHash(ContractTypes));
     }
 
     [Fact]
