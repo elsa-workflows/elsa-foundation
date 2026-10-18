@@ -22,6 +22,15 @@ public interface IRuntimeActivityChildFaultHandler
 }
 
 /// <summary>
+/// Engine-only opt-in for evaluating one intentional child fault together with the ordered notifications raised
+/// during that same child evaluation. The runtime delivers this as one callback and one durable parent checkpoint.
+/// </summary>
+public interface IRuntimeActivityChildOutcomeHandler
+{
+    ValueTask<RuntimeStructuralContinuation> OnChildOutcomeAsync(ActivityChildOutcomeContext context);
+}
+
+/// <summary>
 /// Engine-only protocol for evaluating a structure when one of its still-running children raises a coded
 /// notification to it. The child keeps running; only a parent that implements this
 /// interface receives the callback (opt-in, mirroring the completion/fault handlers) — a non-implementing

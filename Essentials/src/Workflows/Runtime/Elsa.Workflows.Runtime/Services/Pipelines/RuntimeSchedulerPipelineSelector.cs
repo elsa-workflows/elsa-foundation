@@ -26,7 +26,7 @@ public sealed class RuntimeSchedulerPipelineSelector : IRuntimeSchedulerPipeline
             WorkflowExecutionCommandKind.CancelActivityScope or
             WorkflowExecutionCommandKind.RetryActivityBoundary => RuntimePipelineKind.Activity,
 
-            // CompleteActivity is claimed by two handlers; the parent-completion evaluation step is the activity one.
+            // CompleteActivity is claimed by two handlers; parent completion and combined outcome evaluations are activity work.
             WorkflowExecutionCommandKind.CompleteActivity => SelectCompleteActivityPipeline(workItem),
 
             // Workflow-lifecycle kinds (Start, Checkpoint, Cancel) and any other kind reaching the drainer run under
@@ -37,9 +37,9 @@ public sealed class RuntimeSchedulerPipelineSelector : IRuntimeSchedulerPipeline
 
     private static RuntimePipelineKind SelectCompleteActivityPipeline(RuntimeSchedulerWorkItem workItem)
     {
-        // Fast path: if the discriminator is not parent-completion, the item is workflow routing work — decide from the
+        // Fast path: if the discriminator is not a parent evaluation, the item is workflow routing work — decide from the
         // cheap property read without deserializing the whole payload (absent/non-object payload → workflow too).
-        if (!ReadsAsParentCompletionKind(workItem.Payload))
+        if (!ReadsAsParentEvaluationKind(workItem.Payload))
             return RuntimePipelineKind.Workflow;
 
         // The discriminator reads as parent-completion; confirm with the *same* full deserialize the parent-completion
@@ -59,7 +59,8 @@ public sealed class RuntimeSchedulerPipelineSelector : IRuntimeSchedulerPipeline
         try
         {
             // Reuse the single per-work-item parse instead of deserializing the payload again here.
-            return RuntimeCompleteActivityPayloadMemo.Deserialize(workItem)?.CompletionKind == SchedulerCompletionKind.ParentCompletionEvaluation;
+            return RuntimeCompleteActivityPayloadMemo.Deserialize(workItem)?.CompletionKind is
+                SchedulerCompletionKind.ParentCompletionEvaluation or SchedulerCompletionKind.ParentOutcomeEvaluation;
         }
         catch (Exception exception) when (exception is JsonException or NotSupportedException or ArgumentException)
         {
@@ -67,7 +68,7 @@ public sealed class RuntimeSchedulerPipelineSelector : IRuntimeSchedulerPipeline
         }
     }
 
-    private static bool ReadsAsParentCompletionKind(JsonElement? payload)
+    private static bool ReadsAsParentEvaluationKind(JsonElement? payload)
     {
         if (payload is not { ValueKind: JsonValueKind.Object } element)
             return false;
@@ -84,9 +85,9 @@ public sealed class RuntimeSchedulerPipelineSelector : IRuntimeSchedulerPipeline
             return completionKind.ValueKind switch
             {
                 JsonValueKind.Number => completionKind.TryGetInt32(out var ordinal)
-                    && ordinal == (int)SchedulerCompletionKind.ParentCompletionEvaluation,
+                    && (ordinal == (int)SchedulerCompletionKind.ParentCompletionEvaluation || ordinal == (int)SchedulerCompletionKind.ParentOutcomeEvaluation),
                 JsonValueKind.String => Enum.TryParse<SchedulerCompletionKind>(completionKind.GetString(), ignoreCase: true, out var parsed)
-                    && parsed == SchedulerCompletionKind.ParentCompletionEvaluation,
+                    && parsed is SchedulerCompletionKind.ParentCompletionEvaluation or SchedulerCompletionKind.ParentOutcomeEvaluation,
                 _ => false
             };
         }

@@ -117,7 +117,7 @@ public sealed class ChildParentNotificationExecutionTests
     }
 
     [Fact]
-    public async Task FaultContinuationWithStagedNotification_FaultsTheEvaluation()
+    public async Task FaultContinuationWithStagedNotification_PreservesChildFaultAndRefusesLegacyNotificationConsumer()
     {
         var recorder = new ParentNotificationRecorder();
         await using var harness = NewHarness(
@@ -129,7 +129,11 @@ public sealed class ChildParentNotificationExecutionTests
 
         var child = run.State("node-child");
         Assert.Equal(ActivityExecutionStatus.Faulted, child.Status);
-        Assert.Contains("cannot also notify its parent", child.Fault!.Message, StringComparison.Ordinal);
+        Assert.Equal("test.notify.fault", child.Fault!.Code);
+        Assert.Equal("fault with staged notification", child.Fault.Message);
+        var parent = run.State("node-consumer");
+        Assert.Equal(ActivityExecutionStatus.Faulted, parent.Status);
+        Assert.Equal("runtime.parent-outcome.handler-required", parent.Fault!.Code);
         Assert.Empty(recorder.Notifications);
     }
 

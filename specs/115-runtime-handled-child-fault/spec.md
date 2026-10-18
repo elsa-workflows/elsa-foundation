@@ -54,6 +54,10 @@ fault-join composites benefit equally.
 - Rewriting the faulted child's `ActivityExecutionState` (no `Recovered` transitions here).
 - Absorbing incidents of non-child executions or bulk absorption.
 
+## Combined child outcomes (#2967)
+
+[Spec 126 D6](../126-runtime-child-parent-notification/spec.md#d6--one-intentional-fault-and-its-ordered-notifications-2967) extends a child-fault evaluation to include an ordered notification batch. The combined callback may absorb only that event's exact incident under the same rules below. Parent state, resolution, descendant reclaim and processed-event evidence commit together. The historical child stays Faulted. A legacy notification-aware parent that lacks the combined callback refuses durably without replacing the child fault or invoking two legacy callbacks. Pure child faults retain their previous behavior.
+
 ## Functional requirements
 
 **FR-1 — Staging.** During a child-fault evaluation the parent may stage exactly one child-fault
@@ -107,7 +111,8 @@ absorbing parent, the incident, and the reason.
 - Fault-wins drain race unchanged: absorption only helps when the incident's recording and the
   absorbing evaluation land in the same drain; once `BlockingIncidentWorkflowFaultObserver` has
   faulted the workflow, the parent is no longer `Running` and the evaluation is dropped.
-- `ChildFaultParentEvaluation` rider construction and the non-opt-in parent bypass are untouched.
+- Pure-fault rider construction and the non-opt-in bypass remain compatible. Combined outcomes
+  use the explicit versioned route and capability rules in spec 126 D6.
 
 ## Success criteria
 

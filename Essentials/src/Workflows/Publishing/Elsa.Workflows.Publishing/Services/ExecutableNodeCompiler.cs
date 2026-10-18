@@ -179,6 +179,7 @@ public sealed class ExecutableNodeCompiler(
             typeof(IRuntimeStructuralActivity).IsAssignableFrom(clrActivityType) ||
             typeof(IRuntimeActivityChildCompletionHandler).IsAssignableFrom(clrActivityType) ||
             typeof(IRuntimeActivityChildFaultHandler).IsAssignableFrom(clrActivityType) ||
+            typeof(IRuntimeActivityChildOutcomeHandler).IsAssignableFrom(clrActivityType) ||
             typeof(IRuntimeActivityChildNotificationHandler).IsAssignableFrom(clrActivityType))
         {
             throw BackgroundExecutionNotEligible(activity, "structural activities and nodes with children are not supported");

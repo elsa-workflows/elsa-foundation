@@ -305,6 +305,7 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         ActivityFault? returnedFault = null;
         string? returnedCancellationReason = null;
         IReadOnlyCollection<RuntimeSchedulerWorkItem> parentNotificationWorkItems = [];
+        IReadOnlyList<ActivityChildNotifiedContext> parentOutcomeNotifications = [];
         IReadOnlyCollection<RuntimeSchedulerWorkItem> ancestorNotificationWorkItems = [];
         var stagedState = state;
         try
@@ -354,10 +355,10 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 throw new InvalidOperationException("An initial structural execution cannot absorb child faults; absorption requests are only valid during a child-fault evaluation.");
 
             // Seam C: a non-root structural child may notify its own parent during its initial
-            // structural execution. Harvest the staged notifications now so a root staging or a Fault/Cancel
-            // continuation with staged notifications faults the evaluation inside this callback boundary; the
-            // built work items ride the same Defer/Complete commit below.
-            parentNotificationWorkItems = await ParentNotificationEvaluation.BuildAsync(
+            // structural execution. Harvest staged notifications now: root staging and notifications paired with
+            // cancellation fault inside this callback boundary, while returned faults carry the ordered requests
+            // into the same incident commit as their child-fault parent outcome.
+            var parentNotifications = await ParentNotificationEvaluation.BuildAsync(
                 activityExecutionStateStore,
                 TimeProvider,
                 workItem,
@@ -366,6 +367,8 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 context?.GetParentNotificationRequests() ?? [],
                 structuralContinuation ?? RuntimeStructuralContinuation.Defer,
                 cancellationToken);
+            parentNotificationWorkItems = parentNotifications.WorkItems;
+            parentOutcomeNotifications = parentNotifications.FaultOutcomeNotifications;
 
             // An ancestor notification is addressed to the nearest committed ancestor with the requested consumer
             // key and rides ahead of this activity's own completion. No matching ancestor faults the activity with
@@ -624,7 +627,9 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                 new ActivityTransitionFaultException(returnedFault),
                 "ActivityReturnedFault",
                 valueSnapshots,
-                cancellationToken);
+                cancellationToken,
+                parentOutcomeFault: returnedFault,
+                parentOutcomeNotifications: parentOutcomeNotifications);
             return;
         }
 
@@ -757,12 +762,25 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
         Exception maskedException,
         string subStatus,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ActivityFault? parentOutcomeFault = null,
+        IReadOnlyList<ActivityChildNotifiedContext>? parentOutcomeNotifications = null)
     {
         var request = ActivityExecutionInspection.NewFaultIncidentRecordRequest(checkpointCommitter, workItem, invokePayload, state, maskedException, subStatus, valueSnapshots);
         var incidentId = ActivityFaultIncidentRecorder.IncidentId(workItem.WorkItemId, invokePayload.ActivityExecutionId, subStatus);
         var parentEvaluation = await ChildFaultParentEvaluation.TryBuildAsync(
-            activityExecutionStateStore, TimeProvider, workItem, invokePayload.PinnedExecutable, state, incidentId, cancellationToken);
+            activityExecutionStateStore,
+            TimeProvider,
+            workItem,
+            invokePayload.PinnedExecutable,
+            state,
+            incidentId,
+            cancellationToken,
+            parentOutcomeFault,
+            parentOutcomeNotifications);
+
+        if (parentOutcomeNotifications is { Count: > 0 } && parentEvaluation is not null)
+            request = ChildFaultParentEvaluation.MarkPendingOutcome(request, parentEvaluation);
 
         await activityFaultIncidentRecorder.CommitAsync(
             parentEvaluation is null ? request : request with { PostCommitSchedulerWorkItemsOrNull = [parentEvaluation] },

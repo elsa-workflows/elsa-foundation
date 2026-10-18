@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -17,14 +18,22 @@ namespace Elsa.Activities.Runtime.Services;
 /// </summary>
 internal static class ParentNotificationEvaluation
 {
+    internal sealed record Result(
+        IReadOnlyList<RuntimeSchedulerWorkItem> WorkItems,
+        IReadOnlyList<ActivityChildNotifiedContext> FaultOutcomeNotifications)
+    {
+        public static readonly Result Empty = new([], []);
+    }
+
     /// <summary>
     /// Validates the staged notifications against the child's continuation and committed parentage, then builds
-    /// one deterministically-derived work item per notification (ordinal = staging order). Throws — so the
-    /// enclosing evaluation faults deterministically (the seam-A/B precedent) — when a root activity (no committed
-    /// parent) stages a notification or when notifications accompany a <c>Fault</c>/<c>Cancel</c> continuation.
-    /// Returns an empty list when nothing was staged.
+    /// one deterministically-derived work item per notification (ordinal = staging order). A returned fault keeps
+    /// its ordered notifications for the single durable child-outcome work item emitted with that fault's incident;
+    /// notifications are never split into separate scheduler rows from that fault. Throws when a root activity (no
+    /// committed parent) stages a notification or when notifications accompany a <c>Cancel</c> continuation.
+    /// Returns an empty result when nothing was staged.
     /// </summary>
-    public static async ValueTask<IReadOnlyList<RuntimeSchedulerWorkItem>> BuildAsync(
+    public static async ValueTask<Result> BuildAsync(
         IActivityExecutionStateStore activityExecutionStateStore,
         TimeProvider timeProvider,
         RuntimeSchedulerWorkItem sourceWorkItem,
@@ -35,10 +44,10 @@ internal static class ParentNotificationEvaluation
         CancellationToken cancellationToken)
     {
         if (requests.Count == 0)
-            return [];
+            return Result.Empty;
 
-        if (continuation.Kind is RuntimeStructuralContinuationKind.Fault or RuntimeStructuralContinuationKind.Cancel)
-            throw new InvalidOperationException("A faulting or cancelling structural decision cannot also notify its parent in the same evaluation.");
+        if (continuation.Kind == RuntimeStructuralContinuationKind.Cancel)
+            throw new InvalidOperationException("A cancelling structural decision cannot also notify its parent in the same evaluation.");
 
         if (notifyingChildState.ParentActivityExecutionId is not { } parentActivityExecutionId)
             throw new InvalidOperationException("A root activity has no parent to notify.");
@@ -47,6 +56,19 @@ internal static class ParentNotificationEvaluation
             ?? throw new InvalidOperationException($"Parent notification references missing parent activity execution '{parentActivityExecutionId}' for workflow execution '{sourceWorkItem.WorkflowExecutionId}'.");
 
         var notifyingChildActivityExecutionId = notifyingChildState.Execution.ActivityExecutionId;
+        if (continuation.Kind == RuntimeStructuralContinuationKind.Fault)
+        {
+            var outcomeNotifications = requests
+                .Select(request => new ActivityChildNotifiedContext(
+                    notifyingChildActivityExecutionId,
+                    notifyingChildState.Execution.ExecutableNodeId,
+                    request.Code,
+                    notifyingChildState.IterationId,
+                    request.Payload))
+                .ToArray();
+            return new Result([], Array.AsReadOnly(outcomeNotifications));
+        }
+
         var workItems = new List<RuntimeSchedulerWorkItem>(requests.Count);
         var ordinal = 0;
         foreach (var request in requests)
@@ -88,7 +110,7 @@ internal static class ParentNotificationEvaluation
             ordinal++;
         }
 
-        return workItems;
+        return new Result(workItems, []);
     }
 
     /// <summary>

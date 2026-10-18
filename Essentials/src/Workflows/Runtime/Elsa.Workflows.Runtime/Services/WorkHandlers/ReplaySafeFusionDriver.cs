@@ -334,6 +334,10 @@ public sealed class ReplaySafeFusionDriver
                     : PumpDecision.Fallback;
             }
 
+            case SchedulerCompletionKind.ParentOutcomeEvaluation:
+                // Combined fault/notification outcomes must remain a single discrete durable parent evaluation.
+                return PumpDecision.Fallback;
+
             default:
                 // ContinuationScheduling → Checkpoint is the workflow tail: it commits mandatory (possibly terminal)
                 // boundaries, which stay on the discrete drain loop.
