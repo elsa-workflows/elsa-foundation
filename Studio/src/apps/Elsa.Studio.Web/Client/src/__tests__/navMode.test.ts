@@ -93,7 +93,10 @@ describe("navigation mode stylesheet", () => {
     expect(zIndex(overlay)).toBeGreaterThan(0);
     expect(disclosure).toMatch(/max-height:\s*calc\(100dvh - 110px\);/);
     expect(disclosure).toMatch(/overflow-y:\s*auto;/);
-    expect(ruleBody(desktopCss, `${topNav} .nav-disclosure-panel .nav-children`)).toMatch(/position:\s*static;/);
+    const nestedChildren = ruleBody(desktopCss, `${topNav} .nav-disclosure-panel .nav-children`);
+    const nestedChildLayout = ruleBody(desktopCss, `${topNav} .nav-disclosure-panel .nav-item-group > .nav-children`);
+    expect(nestedChildren).toMatch(/position:\s*static;/);
+    expect(nestedChildLayout).toMatch(/display:\s*grid;/);
   });
 
   it("keeps narrow-screen navigation in a compact, horizontally reachable strip", () => {

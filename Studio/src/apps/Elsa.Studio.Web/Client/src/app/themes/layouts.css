@@ -275,6 +275,7 @@
   }
 
   html[data-nav-mode="top"] .nav-disclosure-panel {
+    /* 44px menubar + 54px sticky topbar + 12px clearance. */
     max-height: calc(100dvh - 110px);
     overflow-y: auto;
   }
@@ -296,6 +297,10 @@
 
   html[data-nav-mode="top"] .nav-item-group:hover > .nav-children,
   html[data-nav-mode="top"] .nav-item-group:focus-within > .nav-children {
+    display: grid;
+  }
+
+  html[data-nav-mode="top"] .nav-disclosure-panel .nav-item-group > .nav-children {
     display: grid;
   }
 
