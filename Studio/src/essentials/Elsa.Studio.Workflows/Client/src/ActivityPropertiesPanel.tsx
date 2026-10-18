@@ -577,7 +577,9 @@ function PropertyRow({
     ? describeCollectionForInput(effectiveInput)
     : null;
   const isCollectionEditor = dictionaryType != null || collectionType != null || structuredCollectionType != null;
-  const useInlineSyntaxPicker = Boolean(wrapped && !isCollectionEditor && (
+  // Reference contributions own their picker, labels and feedback. A literal's single-line hint
+  // must not put overlaid text-field chrome across that whole reference editor.
+  const useInlineSyntaxPicker = Boolean(wrapped && editingMode !== "reference" && !isCollectionEditor && (
     editingMode === "text" || editingMode === "structured" || isSingleLineInput(input, editor?.id)
   ));
   const useDictionarySyntaxPicker = Boolean(wrapped && dictionaryType != null);
