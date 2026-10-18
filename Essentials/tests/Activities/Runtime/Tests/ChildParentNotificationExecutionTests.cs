@@ -135,6 +135,14 @@ public sealed class ChildParentNotificationExecutionTests
         Assert.Equal(ActivityExecutionStatus.Faulted, parent.Status);
         Assert.Equal("runtime.parent-outcome.handler-required", parent.Fault!.Code);
         Assert.Empty(recorder.Notifications);
+
+        var incidents = await harness.Services.GetRequiredService<IIncidentStateStore>()
+            .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+        var childIncident = Assert.Single(incidents, incident => incident.ActivityExecutionId == child.Execution.ActivityExecutionId);
+        Assert.Equal(IncidentStatus.Blocking, childIncident.Status);
+        Assert.Equal(IncidentResolutionActionKinds.FaultWorkflow, childIncident.ResolutionOutcome?.ActionKind);
+        Assert.Contains(childIncident.IncidentId, child.IncidentIds);
+        Assert.Equal(WorkflowExecutionStatus.Faulted, run.WorkflowState?.Status);
     }
 
     [Fact]
