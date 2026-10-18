@@ -174,6 +174,7 @@ internal static class ActivitiesDesignJsonOptions
 [JsonSerializable(typeof(ActivityOutputContractView))]
 [JsonSerializable(typeof(ActivityOutcomeContractView))]
 [JsonSerializable(typeof(ActivityProviderManifestView))]
+[JsonSerializable(typeof(ActivityProviderManifestSourceView))]
 [JsonSerializable(typeof(ActivityProviderManifestSchemaCapabilityView))]
 [JsonSerializable(typeof(ActivityProviderAuthoringCapabilityView))]
 [JsonSerializable(typeof(ActivityContractTypeCapabilityView))]

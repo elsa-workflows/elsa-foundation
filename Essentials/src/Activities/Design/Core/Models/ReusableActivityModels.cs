@@ -230,10 +230,21 @@ public sealed record ActivityTypeKeyRules(
     int MaximumLength,
     string CollisionScope);
 
+/// <summary>Identifies an exact source manifest that a provider schema can migrate.</summary>
+public sealed record ActivityProviderManifestSource(string ProviderKey, string SchemaVersion);
+
+/// <summary>
+/// Describes an authorable target schema. <see cref="MigratableFromSchemaVersions"/> remains the
+/// legacy same-provider declaration; cross-provider conversions require exact <see cref="MigratableFrom"/> identities.
+/// </summary>
 public sealed record ActivityProviderManifestSchemaCapabilities(
     string SchemaVersion,
     bool IsAuthorable,
-    IReadOnlySet<string> MigratableFromSchemaVersions);
+    IReadOnlySet<string> MigratableFromSchemaVersions)
+{
+    /// <summary>Exact source manifests this target schema can migrate, including cross-provider sources.</summary>
+    public IReadOnlySet<ActivityProviderManifestSource>? MigratableFrom { get; init; }
+}
 
 public sealed record ActivityProviderContractConstraints(
     IReadOnlyList<ActivityOutcomeContract> RequiredOutcomes);

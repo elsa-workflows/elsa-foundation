@@ -15,6 +15,7 @@ export interface ProviderChoice {
   providerKey: string;
   schemaVersion: string;
   migratableFromSchemaVersions: string[];
+  migratableFrom: Array<{ providerKey: string; schemaVersion: string }>;
   contribution?: StudioActivityDefinitionImplementationEditorContribution;
 }
 
@@ -57,6 +58,7 @@ export function authorableProviderChoices(
       providerKey: capability.providerKey,
       schemaVersion: schema.schemaVersion,
       migratableFromSchemaVersions: schema.migratableFromSchemaVersions,
+      migratableFrom: schema.migratableFrom ?? [],
       contribution: contributions.find(item => item.providerKey === capability.providerKey && item.providerSchemaVersion === schema.schemaVersion)
     })));
 }
@@ -64,11 +66,26 @@ export function authorableProviderChoices(
 export function migrationProviderChoices(
   capabilities: ActivityAuthoringCapabilities | undefined,
   contributions: StudioActivityDefinitionImplementationEditorContribution[],
+  sourceProviderKey: string | undefined,
   sourceSchemaVersion: string | undefined
 ) {
-  if (!sourceSchemaVersion) return [];
+  if (!sourceProviderKey || !sourceSchemaVersion) return [];
   return authorableProviderChoices(capabilities, contributions)
-    .filter(choice => choice.migratableFromSchemaVersions.includes(sourceSchemaVersion));
+    .filter(choice =>
+      choice.migratableFrom.some(source =>
+        source.providerKey === sourceProviderKey && source.schemaVersion === sourceSchemaVersion) ||
+      (choice.providerKey === sourceProviderKey && choice.migratableFromSchemaVersions.includes(sourceSchemaVersion))
+    );
+}
+
+export function hasMigrationProviderChoice(
+  capabilities: ActivityAuthoringCapabilities | undefined,
+  contributions: StudioActivityDefinitionImplementationEditorContribution[],
+  sourceProviderKey: string | undefined,
+  sourceSchemaVersion: string | undefined
+) {
+  return migrationProviderChoices(capabilities, contributions, sourceProviderKey, sourceSchemaVersion)
+    .some(choice => Boolean(choice.contribution));
 }
 
 export function choiceValue(choice: Pick<ProviderChoice, "providerKey" | "schemaVersion">) {
@@ -77,6 +94,10 @@ export function choiceValue(choice: Pick<ProviderChoice, "providerKey" | "schema
 
 export function contractSummary(contract: { inputs: unknown[]; outputs: unknown[]; outcomes: unknown[] }) {
   return `${contract.inputs.length} inputs · ${contract.outputs.length} outputs · ${contract.outcomes.length} outcomes`;
+}
+
+export function displayActivityDefinitionVersion(version: string) {
+  return version.split("+", 1)[0];
 }
 
 export function draftMutationError(error: unknown, fallback: string) {

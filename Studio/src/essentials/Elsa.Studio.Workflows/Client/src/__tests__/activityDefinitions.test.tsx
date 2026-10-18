@@ -261,16 +261,58 @@ describe("Activity Definitions experience", () => {
     });
     const rendered = renderPage(getJson, undefined, "/workflows/activity-definitions?definition=definition-1&section=versions&version=version-1");
 
-    await waitForText(rendered.container, "Source-owned and read-only");
+    await waitForText(rendered.container, "Read-only in Studio.");
     await waitForText(rendered.container, "contoso.source");
     expect(rendered.container.textContent).toContain("contoso.catalog");
     expect(rendered.container.textContent).toContain("invoice-source");
     expect(rendered.container.textContent).toContain("contoso.source");
     expect(rendered.container.textContent).toContain("schema 7");
-    expect(rendered.container.textContent).toContain("Immutable public contract");
+    expect(rendered.container.textContent).toContain("Inputs, outputs & outcomes");
     expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent?.includes("Fork"))).toBe(false);
     await rendered.unmount();
   }, 15_000);
+
+  it("shows source-provided inputs and outputs without draft management, and folds technical identities", async () => {
+    const source = definition({ contentAuthority: { kind: "ProviderSource", authorityKey: "third-party.module", sourceId: "/private/source/path" } });
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities();
+      if (url === "/design/activities/definitions/definition-1") return source;
+      if (url === "/design/activities/versions/version-1") return versionDetail({ definition: source.definition });
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    // Old source-owned draft bookmarks should recover to the useful overview.
+    const rendered = renderPage(getJson, undefined, "/workflows/activity-definitions?definition=definition-1&section=drafts&draft=old-draft");
+    await waitForText(rendered.container, "Inputs, outputs & outcomes");
+    expect([...rendered.container.querySelectorAll("[role=tab]")].map(tab => tab.textContent)).toEqual(["Overview", "Versions", "Usage"]);
+    expect(rendered.container.querySelector("[role=tab][aria-selected=true]")?.textContent).toBe("Overview");
+    expect(rendered.container.textContent).not.toContain("Mutable work");
+    expect(rendered.container.textContent).not.toContain("View drafts");
+    expect(rendered.container.textContent).not.toContain("Fork recommended version");
+    const details = rendered.container.querySelector<HTMLDetailsElement>("details.ad-technical-details")!;
+    expect(details.open).toBe(false);
+    expect(details.textContent).toContain("/private/source/path");
+    expect(details.textContent).toContain("third-party.module");
+    expect(getJson.mock.calls.some(([url]) => String(url).includes("/drafts"))).toBe(false);
+    await rendered.unmount();
+  });
+
+  it("does not offer CLR forks when only another provider advertises the same schema number", async () => {
+    const source = definition({ contentAuthority: { kind: "ProviderSource", authorityKey: "elsa.clr-activity" } }, [{ action: "fork-definition", allowed: true }]);
+    source.lifecycle.recommendation = { ...source.lifecycle.recommendation!, providerKey: "elsa.clr-activity" };
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return capabilities(true, true);
+      if (url === "/design/activities/definitions/definition-1") return source;
+      if (url === "/design/activities/authoring-capabilities") return authoringCapabilities();
+      if (url === "/design/activities/versions/version-1") return versionDetail({ definition: source.definition });
+      throw new Error(`Unexpected GET ${url}`);
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const rendered = renderPage(getJson, queryClient, "/workflows/activity-definitions?definition=definition-1", undefined, [graphContribution()]);
+    await waitForText(rendered.container, "Inputs, outputs & outcomes");
+    await waitFor(() => expect(queryClient.getQueryData(activityDesignKeys.authoringCapabilities)).toBeDefined());
+    expect(rendered.container.textContent).not.toContain("Fork recommended version");
+    await rendered.unmount();
+  });
 
   it("does not offer an explicit fork version override when no recommended active version exists", async () => {
     const source = {
@@ -290,7 +332,7 @@ describe("Activity Definitions experience", () => {
     const rendered = renderPage(getJson, undefined, "/workflows/activity-definitions?definition=definition-1");
 
     await waitForText(rendered.container, "No recommended active version");
-    expect(rendered.container.textContent).toContain("does not offer an explicit version override");
+    expect(rendered.container.textContent).toContain("Choose a version to inspect its inputs and outputs.");
     expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent?.includes("Fork"))).toBe(false);
     await rendered.unmount();
   });
