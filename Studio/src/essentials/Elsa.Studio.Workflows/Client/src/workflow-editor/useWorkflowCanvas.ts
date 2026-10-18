@@ -104,7 +104,9 @@ export function useWorkflowCanvas({
 }: WorkflowCanvasParams) {
   const [nodes, setNodes] = useState<Node<WorkflowNodeData>[]>([]);
   const [edges, setEdges] = useState<WorkflowEdge[]>([]);
-  const scopeViewportKey = useMemo(() => getScopeViewportKey(frames), [frames]);
+  const scopeViewportKey = useMemo(
+    () => `${draft?.definitionId ?? ""}:${getScopeViewportKey(frames)}`,
+    [draft?.definitionId, frames]);
   const mode: GraphCanvasMode = isUnsupportedDesigner
     ? "unsupported"
     : scope?.slot.mode === "bpmn"

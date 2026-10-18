@@ -1,6 +1,7 @@
 import React, { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Activity,
+  Blocks,
   ChevronDown,
   ChevronRight,
   ChevronUp,
@@ -15,6 +16,7 @@ import {
   Maximize2,
   Minimize2,
   Paintbrush,
+  PackageCheck,
   PackagePlus,
   PackageSearch,
   PanelLeftClose,
@@ -22,7 +24,8 @@ import {
   PlayCircle,
   RefreshCw,
   Search,
-  Settings
+  Settings,
+  SlidersHorizontal
 } from "lucide-react";
 import type {
   ElsaStudioModuleApi,
@@ -1187,6 +1190,18 @@ function NavIcon({ id, icon: Icon }: Pick<StudioNavigationContribution, "id" | "
 
   if (id.includes("task")) {
     return <ListChecks size={18} />;
+  }
+
+  if (id === "workflows-executables") {
+    return <PackageCheck size={18} />;
+  }
+
+  if (id === "workflows-activity-definitions") {
+    return <Blocks size={18} />;
+  }
+
+  if (id === "workflows-activity-availability") {
+    return <SlidersHorizontal size={18} />;
   }
 
   if (id.includes("workflow")) {
