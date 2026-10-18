@@ -49,6 +49,26 @@ export interface AuthSchemeDescriptor {
   hasInteractiveAuthorization: boolean;
 }
 
+/** Metadata intentionally exposed by the metadata-only Secret picker route. */
+export interface ConnectionSecretPickerMetadata {
+  name: string;
+  displayName?: string | null;
+  typeName: string;
+  scope?: string | null;
+  status: string;
+  expiresAt?: string | null;
+}
+
+/** Local authoring state. The selected metadata is never part of a create request. */
+export type ConnectionCredentialInput =
+  | { source: "secret"; existingSecretName: string; selectedSecret?: ConnectionSecretPickerMetadata }
+  | { source: "value"; value: string };
+
+/** Exactly one credential source is serialized for a sensitive connection field. */
+export type CreateConnectionSecretField =
+  | { sourceKind: "secret"; existingSecretName: string }
+  | { value: string };
+
 export interface ConnectionDescriptorsResponse {
   types: ConnectionTypeDescriptor[];
   schemes: AuthSchemeDescriptor[];
@@ -60,7 +80,7 @@ export interface CreateConnectionRequest {
   typeName: string;
   authScheme: string;
   settings?: Record<string, string>;
-  secretFields?: Record<string, { sourceKind?: string; existingSecretName?: string; value?: string; namedCredentialName?: string }>;
+  secretFields?: Record<string, CreateConnectionSecretField>;
   tags?: string[];
 }
 

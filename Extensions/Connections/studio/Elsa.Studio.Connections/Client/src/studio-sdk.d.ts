@@ -1,5 +1,12 @@
 declare module "@elsa-workflows/studio-sdk" {
-  import type { ComponentType } from "react";
+  import type { ComponentType, RefObject } from "react";
+
+  export function useDialogFocus(
+    dialogRef: RefObject<HTMLElement | null>,
+    onEscape: (() => void) | null,
+    focusDialogOnOpen?: boolean,
+    restoreFocusFallback?: () => void
+  ): void;
 
   export interface StudioHttpClient {
     requestJson<T>(url: string, init?: RequestInit): Promise<T>;

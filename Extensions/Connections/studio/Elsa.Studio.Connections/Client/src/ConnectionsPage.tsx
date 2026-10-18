@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Ban, Cable, Plus, Search, ShieldCheck, Trash2 } from "lucide-react";
 import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { createConnection, deleteConnection, getConnectionDescriptors, listConnections, revokeConnection, testConnection } from "./connectionsApi";
-import type { AuthSchemeDescriptor, ConnectionDescriptorsResponse, ConnectionMetadata, ConnectionTypeDescriptor, CreateConnectionRequest } from "./connectionTypes";
+import { deleteConnection, getConnectionDescriptors, listConnections, revokeConnection, testConnection } from "./connectionsApi";
+import type { ConnectionDescriptorsResponse, ConnectionMetadata } from "./connectionTypes";
+import { ConnectionCreateDialog } from "./ConnectionCreateDialog";
 
 export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointContext; dialogs: StudioDialogApi }) {
   const [search, setSearch] = useState("");
@@ -10,83 +11,66 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [descriptors, setDescriptors] = useState<ConnectionDescriptorsResponse | null>(null);
   const [creating, setCreating] = useState(false);
-  const [name, setName] = useState("");
-  const [typeName, setTypeName] = useState("http");
-  const [authScheme, setAuthScheme] = useState("bearer");
-  const [settings, setSettings] = useState<Record<string, string>>({});
-  const [secretValues, setSecretValues] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loadedContext, setLoadedContext] = useState(context);
+  const loadedContextRef = useRef(context);
+  const currentContextRef = useRef(context);
+  const loadRequestRef = useRef(0);
+  const invalidateLoadRequest = useCallback(() => {
+    loadRequestRef.current++;
+  }, []);
+  currentContextRef.current = context;
 
+  const contextIsLoaded = loadedContext === context;
+  const visibleItems = useMemo(() => contextIsLoaded ? items : [], [contextIsLoaded, items]);
+  const visibleDescriptors = contextIsLoaded ? descriptors : null;
   const selected = useMemo(
-    () => items.find(item => item.name === selectedName) ?? items[0] ?? null,
-    [items, selectedName]
+    () => visibleItems.find(item => item.name === selectedName) ?? visibleItems[0] ?? null,
+    [visibleItems, selectedName]
   );
 
-  const selectedType: ConnectionTypeDescriptor | undefined = (descriptors?.types ?? []).find(type => type.name === typeName);
-  const selectedScheme: AuthSchemeDescriptor | undefined = (descriptors?.schemes ?? []).find(scheme => scheme.name === authScheme);
-  const supportedSchemes = selectedType?.supportedSchemes ?? descriptors?.schemes.map(scheme => scheme.name) ?? ["bearer"];
-
-  async function load(preferredName?: string) {
+  const load = useCallback(async (preferredName?: string) => {
+    const requestContext = context;
+    const wasContextLoaded = loadedContextRef.current === requestContext;
+    const requestId = ++loadRequestRef.current;
     setLoading(true);
     setError(null);
     try {
       const [list, descriptorResponse] = await Promise.all([
-        listConnections(context, search),
-        getConnectionDescriptors(context)
+        listConnections(requestContext, search),
+        getConnectionDescriptors(requestContext)
       ]);
+      if (requestId !== loadRequestRef.current || currentContextRef.current !== requestContext) return;
       setItems(list.items);
       setDescriptors(descriptorResponse);
       setSelectedName(current => {
-        const candidate = preferredName ?? current;
+        const candidate = preferredName ?? (wasContextLoaded ? current : null);
         return candidate && list.items.some(item => item.name === candidate) ? candidate : list.items[0]?.name ?? null;
       });
+      loadedContextRef.current = requestContext;
+      setLoadedContext(requestContext);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Connections could not be loaded.");
+      if (requestId === loadRequestRef.current && currentContextRef.current === requestContext) {
+        setError(e instanceof Error ? e.message : "Connections could not be loaded.");
+        loadedContextRef.current = requestContext;
+        setLoadedContext(requestContext);
+      }
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestRef.current && currentContextRef.current === requestContext)
+        setLoading(false);
     }
-  }
+  }, [context, search]);
+
+  const currentLoadRef = useRef(load);
+  currentLoadRef.current = load;
 
   useEffect(() => {
-    void load();
-  }, []);
-
-  useEffect(() => {
-    if (!supportedSchemes.includes(authScheme) && supportedSchemes[0])
-      setAuthScheme(supportedSchemes[0]);
-  }, [authScheme, supportedSchemes]);
-
-  async function onCreate(event: React.FormEvent) {
-    event.preventDefault();
-    const secretFields: CreateConnectionRequest["secretFields"] = {};
-    for (const field of selectedScheme?.fields ?? []) {
-      if (!field.sensitive)
-        continue;
-      const value = secretValues[field.name]?.trim();
-      if (value)
-        secretFields[field.name] = { value };
-    }
-    const request: CreateConnectionRequest = {
-      name,
-      typeName,
-      authScheme,
-      settings: Object.fromEntries(Object.entries(settings).filter(([, value]) => value.trim().length > 0)),
-      secretFields
-    };
-    try {
-      const created = await createConnection(context, request);
-      setCreating(false);
-      setName("");
-      setSettings({});
-      setSecretValues({});
-      setStatus(`Connection '${created.name}' created.`);
-      await load(created.name);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "The connection could not be created.");
-    }
-  }
+    void currentLoadRef.current();
+    setCreating(false);
+    return invalidateLoadRequest;
+  }, [context, invalidateLoadRequest]);
 
   return (
     <div className="connections-shell">
@@ -107,14 +91,14 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
           />
         </label>
         <button type="button" onClick={() => void load()}>Search</button>
-        <button type="button" onClick={() => setCreating(true)}><Plus aria-hidden="true" size={14} /> New connection</button>
+        <button type="button" onClick={() => setCreating(true)} disabled={!contextIsLoaded || !visibleDescriptors}><Plus aria-hidden="true" size={14} /> New connection</button>
       </div>
       {status ? <p role="status">{status}</p> : null}
       {error ? <p role="alert">{error}</p> : null}
-      {loading ? <p>Loading…</p> : (
+      {loading || !contextIsLoaded ? <p role="status">Loading…</p> : (
         <div className="connections-layout">
           <ul>
-            {items.map(item => (
+            {visibleItems.map(item => (
               <li key={item.name}>
                 <button type="button" aria-current={selected?.name === item.name} onClick={() => setSelectedName(item.name)}>
                   {item.displayName || item.name}
@@ -166,62 +150,16 @@ export function ConnectionsPage({ context, dialogs }: { context: StudioEndpointC
           ) : <p>No connections yet.</p>}
         </div>
       )}
-      {creating ? (
-        <form className="connections-modal" onSubmit={onCreate}>
-          <h2>New connection</h2>
-          <label>Name <input required value={name} onChange={event => setName(event.target.value)} autoComplete="off" /></label>
-          <label>Type
-            <select value={typeName} onChange={event => setTypeName(event.target.value)}>
-              {(descriptors?.types ?? [{ name: "http", displayName: "HTTP", settings: [], supportedSchemes: ["bearer"] }]).map(type => (
-                <option key={type.name} value={type.name}>{type.displayName}</option>
-              ))}
-            </select>
-          </label>
-          <label>Auth scheme
-            <select value={authScheme} onChange={event => setAuthScheme(event.target.value)}>
-              {(descriptors?.schemes ?? []).filter(scheme => supportedSchemes.includes(scheme.name)).map(scheme => (
-                <option key={scheme.name} value={scheme.name}>{scheme.displayName}</option>
-              ))}
-            </select>
-          </label>
-          {(selectedType?.settings ?? []).map(field => (
-            <label key={field.name}>{field.displayName}
-              <input
-                type={field.editorHint === "checkbox" ? "checkbox" : "text"}
-                checked={field.editorHint === "checkbox" ? settings[field.name] === "true" : undefined}
-                value={field.editorHint === "checkbox" ? undefined : settings[field.name] ?? ""}
-                placeholder={field.name === "allowedHosts" ? "api.example, *.googleapis.com" : undefined}
-                onChange={event => setSettings(current => ({
-                  ...current,
-                  [field.name]: field.editorHint === "checkbox" ? String(event.target.checked) : event.target.value
-                }))}
-              />
-            </label>
-          ))}
-          {(selectedScheme?.fields ?? []).filter(field => !field.sensitive).map(field => (
-            <label key={field.name}>{field.displayName}
-              <input
-                value={settings[field.name] ?? ""}
-                onChange={event => setSettings(current => ({ ...current, [field.name]: event.target.value }))}
-                autoComplete="off"
-              />
-            </label>
-          ))}
-          {(selectedScheme?.fields ?? []).filter(field => field.sensitive).map(field => (
-            <label key={field.name}>{field.displayName}
-              <input
-                type="password"
-                autoComplete="new-password"
-                value={secretValues[field.name] ?? ""}
-                onChange={event => setSecretValues(current => ({ ...current, [field.name]: event.target.value }))}
-              />
-            </label>
-          ))}
-          <div>
-            <button type="submit">Create</button>
-            <button type="button" onClick={() => setCreating(false)}>Cancel</button>
-          </div>
-        </form>
+      {creating && visibleDescriptors ? (
+        <ConnectionCreateDialog
+          context={context}
+          descriptors={visibleDescriptors}
+          onCancel={() => setCreating(false)}
+          onCreated={created => {
+            setStatus(`Connection '${created.name}' created.`);
+            void load(created.name);
+          }}
+        />
       ) : null}
     </div>
   );

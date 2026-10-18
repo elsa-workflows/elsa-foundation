@@ -12,8 +12,28 @@ internal sealed class InMemoryConnectionRepository : IConnectionRepository
     public ValueTask<ConnectionDocument?> FindAsync(string tenantId, string name, CancellationToken cancellationToken = default)
     {
         Validate(tenantId, name);
+        cancellationToken.ThrowIfCancellationRequested();
         _documents.TryGetValue(Key(tenantId, name), out var document);
         return new(Clone(document));
+    }
+
+    public ValueTask<bool> IsSecretReferencedAsync(
+        string tenantId,
+        string secretName,
+        string? excludedConnectionName = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(secretName);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var isReferenced = _documents.Values.Any(document =>
+            string.Equals(document.Definition.TenantId, tenantId, StringComparison.Ordinal) &&
+            !string.Equals(document.Definition.Name, excludedConnectionName, StringComparison.OrdinalIgnoreCase) &&
+            document.Definition.SecretFields.Values.Any(field =>
+                string.Equals(field.SecretName, secretName, StringComparison.OrdinalIgnoreCase)));
+
+        return new(isReferenced);
     }
 
     public ValueTask<IReadOnlyList<ConnectionDocument>> ListAsync(string tenantId, ConnectionQuery? query = null, CancellationToken cancellationToken = default)
@@ -117,6 +137,7 @@ internal sealed class InMemoryConnectionRepository : IConnectionRepository
                         FieldName = pair.Value.FieldName,
                         SourceKind = pair.Value.SourceKind,
                         SecretName = pair.Value.SecretName,
+                        IsOwnedSecret = pair.Value.IsOwnedSecret,
                         NamedCredentialName = pair.Value.NamedCredentialName
                     },
                     StringComparer.Ordinal),

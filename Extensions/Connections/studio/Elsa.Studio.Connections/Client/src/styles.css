@@ -1,15 +1,19 @@
 .connections-shell,
 .connections-modal,
 .connection-picker-editor {
-  --connections-bg: var(--studio-bg, var(--background, #f8fafc));
-  --connections-surface: var(--studio-surface, var(--surface, #fff));
-  --connections-text: var(--studio-text, var(--text, #111827));
-  --connections-text-muted: var(--studio-text-muted, var(--muted, #64748b));
-  --connections-border: var(--studio-border, #cbd5e1);
-  --connections-accent: var(--studio-accent, var(--accent, #0f172a));
-  --connections-accent-text: var(--studio-accent-text, #fff);
-  --connections-radius: var(--studio-radius, 6px);
-  --connections-body-size: var(--studio-body-size, 13px);
+  --connections-bg: var(--studio-bg);
+  --connections-surface: var(--studio-surface);
+  --connections-surface-muted: var(--studio-surface-muted);
+  --connections-text: var(--studio-text);
+  --connections-text-muted: var(--studio-text-muted);
+  --connections-border: var(--studio-border);
+  --connections-accent: var(--studio-accent);
+  --connections-accent-text: var(--studio-accent-text);
+  --connections-focus: var(--studio-focus);
+  --connections-radius: var(--studio-radius);
+  --connections-radius-sm: var(--studio-radius-sm);
+  --connections-shadow: var(--studio-shadow-sm);
+  --connections-body-size: var(--studio-body-size);
 }
 
 .connections-shell {
@@ -22,7 +26,11 @@
 }
 
 .connections-shell header p,
-.connection-picker-editor p {
+.connection-picker-editor p,
+.connections-modal-help,
+.connection-credential-help,
+.connection-secret-picker-status,
+.connection-secret-selection {
   color: var(--connections-text-muted);
 }
 
@@ -31,6 +39,12 @@
 .connections-layout {
   display: flex;
   gap: 0.75rem;
+}
+
+.connections-toolbar,
+.connections-actions {
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .connections-layout ul {
@@ -49,32 +63,203 @@
 .connections-modal select,
 .connection-picker-editor select {
   border: 1px solid var(--connections-border);
-  border-radius: var(--connections-radius);
+  border-radius: var(--connections-radius-sm);
   background: var(--connections-surface);
   color: var(--connections-text);
+  font: inherit;
+  min-height: 2.25rem;
+  padding: 0.4rem 0.6rem;
 }
 
 .connections-toolbar button,
 .connections-actions button,
 .connections-modal button[type="submit"] {
+  border-color: var(--connections-accent);
   background: var(--connections-accent);
   color: var(--connections-accent-text);
 }
 
-.connections-modal {
+.connections-shell :focus-visible,
+.connections-modal :focus-visible {
+  outline: 2px solid var(--connections-focus);
+  outline-offset: 2px;
+}
+
+.connections-modal-backdrop {
   position: fixed;
-  inset: auto 1.5rem 1.5rem auto;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  overflow: auto;
   padding: 1rem;
+  background: color-mix(in srgb, var(--connections-text) 38%, transparent);
+}
+
+.connections-modal {
+  width: min(100%, 44rem);
+  max-height: min(92vh, 60rem);
+  overflow-y: auto;
+  padding: 1.25rem;
+  color: var(--connections-text);
   background: var(--connections-surface);
+  border: 1px solid var(--connections-border);
+  border-radius: var(--studio-radius-md);
+  box-shadow: var(--connections-shadow);
+}
+
+.connections-modal form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.connections-modal h2,
+.connections-modal p {
+  margin: 0;
+}
+
+.connections-modal h2 {
+  font-size: var(--studio-section-title-size);
+}
+
+.connections-modal form > label,
+.connection-setting-field,
+.connection-new-credential,
+.connection-secret-search-row {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--connections-text);
+}
+
+.connections-modal input:not([type="radio"]):not([type="checkbox"]),
+.connections-modal select {
+  width: 100%;
+  min-width: 0;
+}
+
+.connection-setting-field input[type="checkbox"] {
+  justify-self: start;
+  width: 1.1rem;
+  min-height: 1.1rem;
+  accent-color: var(--connections-accent);
+}
+
+.connection-credential-field {
+  display: grid;
+  gap: 0.6rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0.85rem;
   border: 1px solid var(--connections-border);
   border-radius: var(--connections-radius);
 }
 
-.connection-picker-editor {
+.connection-credential-field legend {
+  padding: 0 0.25rem;
+  font-weight: 600;
+}
+
+.connection-credential-help,
+.connection-secret-picker-status,
+.connection-secret-selection {
+  font-size: var(--studio-label-size);
+}
+
+.connection-credential-sources {
   display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.connection-credential-sources label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.connection-credential-sources input[type="radio"] {
+  accent-color: var(--connections-accent);
+}
+
+.connection-secret-picker {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.connection-secret-search-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.connection-secret-search-row label {
+  grid-column: 1 / -1;
+}
+
+.connection-secret-search-row input {
+  grid-column: 1;
+}
+
+.connection-secret-search-row button {
+  grid-column: 2;
+  grid-row: 2;
+  white-space: nowrap;
+}
+
+.connection-secret-picker-status.error,
+.connection-credential-error,
+.connections-create-error {
+  color: var(--studio-danger-text);
+}
+
+.connections-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.25rem;
+}
+
+.connections-dialog-actions button:disabled,
+.connection-secret-search-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+@media (max-width: 40rem) {
+  .connections-layout {
+    flex-direction: column;
+  }
+
+  .connections-layout ul {
+    min-width: 0;
+  }
+
+  .connections-modal-backdrop {
+    place-items: start center;
+    padding: 0.5rem;
+  }
+
+  .connections-modal {
+    width: 100%;
+    max-height: calc(100vh - 1rem);
+    padding: 1rem;
+  }
+
+  .connection-secret-search-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .connection-secret-search-row label,
+  .connection-secret-search-row input,
+  .connection-secret-search-row button {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .connections-dialog-actions {
+    position: sticky;
+    bottom: -1rem;
+    padding: 0.75rem 0;
+    background: var(--connections-surface);
+  }
 }
