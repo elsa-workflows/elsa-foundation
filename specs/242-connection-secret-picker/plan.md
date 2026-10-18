@@ -19,3 +19,7 @@ Run whole Connections frontend suite, affected Secrets or backend Connections/Se
 ## Demo design and rehearsal
 
 Preserve v2. Complete v3 story, speaker notes, preparation/reset instructions and exact workflow/contract wiring. Rehearse authoring, standalone test, publication, composition, HTTP request, fault/diagnosis/repair, rotation and final run inspection. Save receipts/screenshots without credential values; label unverified steps honestly. Recording/upload is not part of this request.
+
+## Rehearsal blocker discovered during acceptance
+
+The real consumer submitted canonical portable JavaScript expression JSON through the authoring API, but publication read its nested `TypeReference` with default serializer settings and lost the alias. Reuse the existing publication payload serializer options for this reader and cover the canonical `IPayloadSerializer` output with a failing-then-passing regression. This is required for the authenticated consumer acceptance path; do not change the demo to a noncanonical payload.

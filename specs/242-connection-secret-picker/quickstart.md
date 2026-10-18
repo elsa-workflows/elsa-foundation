@@ -18,3 +18,5 @@
 This feature preserves existing credentialless/interactive setup through the API. It validates each submitted source/reference rather than introducing a new global requirement that every auth field be supplied at connection creation. Durable connection storage remains tracked separately by #2854; the current in-memory connection repository does not retain definitions across host restart.
 
 Connection-created credentials carry explicit ownership metadata. Selected existing Secrets are never assumed owned from their name. Cleanup retains credentials referenced by other stored connections. This reference check is not an atomic concurrent bind/delete guarantee. Custom durable repositories with older records should migrate proven ownership explicitly; unknown legacy records are conservatively unowned.
+
+Custom `IConnectionRepository` adapters must implement `IsSecretReferencedAsync` as an uncapped, tenant-scoped existence query, excluding the connection being changed or deleted. Do not implement it using a paginated connection listing; use the store's equivalent of `EXISTS`.
