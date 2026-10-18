@@ -10,6 +10,7 @@ using Elsa.Workflows.Runtime.Api.Requests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Options;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
@@ -71,7 +72,15 @@ public sealed class RuntimeMinimalApiBehaviorTests
             DateTimeOffset.UnixEpoch));
         await using var host = await StartAsync(
             _ => DispatchView(WorkflowExecutionCommandDispatchStatus.Accepted),
-            services => services.AddSingleton<IWorkflowActivationAuthority>(authority));
+            services =>
+            {
+                services.AddSingleton<IWorkflowActivationAuthority>(authority);
+                services.Configure<ActivationChannelOptions>(options =>
+                {
+                    options.AllowAdHocChannels = false;
+                    options.Channels = [new() { Name = "default", DisplayName = "Production", Description = "Normal traffic" }];
+                });
+            });
 
         using var list = await host.Client.GetAsync("/runtime/workflows/activation-slots/definition-1");
         using var detail = await host.Client.GetAsync(ActivationSlotPath);
@@ -80,9 +89,14 @@ public sealed class RuntimeMinimalApiBehaviorTests
         Assert.Equal(HttpStatusCode.OK, list.StatusCode);
         Assert.Equal(HttpStatusCode.OK, detail.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+        var listBody = await list.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(listBody.GetProperty("allowAdHocChannels").GetBoolean());
+        Assert.Equal("Production", Assert.Single(listBody.GetProperty("channels").EnumerateArray())
+            .GetProperty("displayName").GetString());
         var detailBody = await detail.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("activation-1", detailBody.GetProperty("activeActivationId").GetString());
         Assert.Equal("artifact-reconciliation", detailBody.GetProperty("sourceKind").GetString());
+        Assert.Equal("Normal traffic", detailBody.GetProperty("channel").GetProperty("description").GetString());
     }
 
     [Theory]

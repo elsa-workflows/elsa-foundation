@@ -49,6 +49,12 @@ Activation slots are the runtime-owned ledger for the live activation of a `(def
 The read-only views expose the slot identity, active activation, source ownership, revision, and update time;
 they do not join to publishing records. Runtime deliberately exposes no deactivation endpoint.
 
+The list response also exposes the shell's declared `channels` (name, display name and description) and
+`allowAdHocChannels`, including when `items` is empty. A slot's optional `channel` carries its matching declaration.
+Declarations are global to the shell; the slot identity remains `(definitionId, slotName)`. Clients can therefore
+offer channels before the first publication without presenting a per-definition slot as a global entity.
+See [channel configuration](../Elsa.Workflows.Runtime/README.md#activation-channels).
+
 ## Withheld and protected values
 
 Workflow secret safety (spec 188) decides what the inspection reads show for a secret-bound input and for any value

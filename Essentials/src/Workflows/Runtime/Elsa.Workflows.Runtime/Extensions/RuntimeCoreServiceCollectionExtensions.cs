@@ -514,6 +514,7 @@ public static class RuntimeCoreServiceCollectionExtensions
     public static IServiceCollection AddWorkflowActivationDefaults(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
+        services.AddActivationChannelOptions();
         services.TryAddSingleton<IWorkflowActivationAuthority, InMemoryWorkflowActivationAuthority>();
         services.TryAddScoped<IWorkflowActivationSwitch, InMemoryWorkflowActivationSwitch>();
         services.TryAddScoped<IWorkflowActivationCoordinator, WorkflowActivationCoordinator>();

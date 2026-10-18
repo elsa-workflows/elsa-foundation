@@ -81,6 +81,16 @@ unpublished, or already publishing-owned. `canActivate` is false when there are 
 activation returned (the `slot_owner_conflict` failure, its detail naming the owner), but before it writes an executable,
 source reference, or publication record: ownership transfer is an operator action (ADR 0043).
 
+Trigger conflicts retain their stable `key` and optionally include a readable `descriptor`, such as
+`GET /orders/{id}`. Display the descriptor when present and retain the key for correlation. Providers supply only
+safe display text; routing metadata such as authorization policy is not exposed. Declaring two channels does not
+isolate their HTTP routes: simultaneous exclusive claims still need distinct route surfaces.
+
+When [activation channel configuration](../../Runtime/Elsa.Workflows.Runtime/README.md#activation-channels)
+disables ad-hoc channels, both workflow preflight routes and publication reject an undeclared channel with
+`400` and `errorCode: channel_not_declared` before publication writes. Read declarations and creation policy from
+the Runtime activation-slot list response; a previously existing undeclared slot remains visible.
+
 ## HTTP endpoint surface
 
 All routes are relative to the host's Elsa API base path.
