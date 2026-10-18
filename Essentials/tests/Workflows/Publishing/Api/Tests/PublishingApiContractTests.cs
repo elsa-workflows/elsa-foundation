@@ -47,7 +47,7 @@ public sealed class PublishingApiContractTests
     private const string Owner = "Elsa.Workflows.Publishing.Api";
 
     [Fact]
-    public void Publishing_mapper_exposes_exactly_the_current_23_operation_manifest()
+    public void Publishing_mapper_exposes_exactly_the_current_28_operation_manifest()
     {
         using var provider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
         var routes = new TestEndpointRouteBuilder(provider);
@@ -55,7 +55,7 @@ public sealed class PublishingApiContractTests
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
 
         var manifest = EndpointManifestBuilder.Capture(routes.DataSources);
-        Assert.Equal(23, manifest.Entries.Count);
+        Assert.Equal(28, manifest.Entries.Count);
         Assert.Equal(
             PublishingCurrentSurface.Manifest
                 .Select(route => route.Endpoint.ToString())
@@ -83,8 +83,8 @@ public sealed class PublishingApiContractTests
         WorkflowsPublishingApi.MapWorkflowsPublishingApi(routes);
 
         var endpoints = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>().ToArray();
-        Assert.Equal(23, endpoints.Length);
-        Assert.Equal(23, endpoints.Select(endpoint => endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName)
+        Assert.Equal(28, endpoints.Length);
+        Assert.Equal(28, endpoints.Select(endpoint => endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName)
             .Where(name => !string.IsNullOrWhiteSpace(name))
             .Distinct(StringComparer.Ordinal)
             .Count());
@@ -143,7 +143,7 @@ public sealed class PublishingApiContractTests
     }
 
     [Fact]
-    public async Task Real_minimal_api_host_publishes_exactly_the_23_publishing_openapi_operations()
+    public async Task Real_minimal_api_host_publishes_exactly_the_28_publishing_openapi_operations()
     {
         await using var host = await PublishingMinimalApiHost.StartAsync();
         var openApi = OpenApiEvidenceCapture.Capture(await host.GetOpenApiAsync(), includeIdentityMetadata: true);
@@ -153,8 +153,8 @@ public sealed class PublishingApiContractTests
             .Select(operation => operation.Endpoint.ToString())
             .ToArray();
 
-        Assert.Equal(23, publishingOperations.Length);
-        Assert.Equal(23, publishingOperations.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(28, publishingOperations.Length);
+        Assert.Equal(28, publishingOperations.Distinct(StringComparer.Ordinal).Count());
     }
 
     private static bool RouteMatches(string expected, string actual) =>
@@ -164,7 +164,7 @@ public sealed class PublishingApiContractTests
         Regex.Replace("/" + value.TrimStart('/'), "\\{[^{}]+\\}", "{param}", RegexOptions.CultureInvariant);
 
     private static bool HasRequestMetadata(PublishingRoute route) => route.Id is not
-        ("IncidentStrategies.List" or
+        ("TestRuns.Get" or "TestRuns.Waits" or "TestRuns.Stop" or "IncidentStrategies.List" or
         "ValueConversionProfiles.List" or
         "WorkflowExecutable.Export" or
         "ActivityPublications.GetReceipt" or

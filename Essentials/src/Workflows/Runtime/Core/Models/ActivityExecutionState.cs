@@ -54,6 +54,11 @@ public sealed record ActivityExecutionState(
     public string InvocationId => Execution.ActivityExecutionId;
 
     /// <summary>
+    /// The enclosing hierarchy scope that contains this activity when the activity opens its own scope.
+    /// </summary>
+    public string? EnclosingExecutionScopeId { get; init; }
+
+    /// <summary>
     /// The container or iteration frame owned by this structural activity activation, when any.
     /// </summary>
     public VariableFrameState? VariableFrame { get; init; }

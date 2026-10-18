@@ -12,7 +12,8 @@ import type {
   UpdateSecretRequest
 } from "./secretTypes";
 
-const basePath = "/_elsa/secrets";
+// Paths match the module-owned routes in Elsa.Secrets.Api.
+const basePath = "/secrets";
 
 export async function listSecrets(context: StudioEndpointContext, request: ListSecretsRequest | string = {}) {
   const normalized = typeof request === "string" ? { search: request } : request;

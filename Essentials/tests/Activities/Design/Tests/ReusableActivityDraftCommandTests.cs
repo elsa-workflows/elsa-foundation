@@ -641,6 +641,22 @@ public sealed class ReusableActivityDraftCommandTests
     }
 
     [Fact]
+    public async Task Clone_rejects_an_explicit_empty_layout_as_extra_request_state()
+    {
+        var harness = new Harness();
+        var source = await harness.SeedDefinitionAsync(ActivityContentAuthorityKind.Design);
+        harness.SeedVersion(source.DefinitionId, "version-1", Harness.Manifest("{\"source\":true}"), Harness.Contract("source"));
+
+        var exception = await Assert.ThrowsAsync<ActivityAuthoringException>(() => harness.Service.CreateDraftAsync(
+            new(source.DefinitionId, "version-1", Layout: []),
+            default));
+
+        Assert.Equal(400, exception.StatusCode);
+        Assert.Equal("activity.request.invalid", exception.ErrorCode);
+        Assert.Single(await ((IActivityDefinitionDraftStore)harness.Stores).ListByDefinitionAsync(source.DefinitionId));
+    }
+
+    [Fact]
     public async Task Source_owned_fork_is_previewed_then_applied_with_exact_reserved_identity_and_replay_receipt()
     {
         var harness = new Harness();

@@ -57,6 +57,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         typeof(ActivityInputContractView),
         typeof(ActivityInputDefaultView),
         typeof(ActivityInputDescriptorView),
+        typeof(ActivityLayoutRecordsPayload),
         typeof(ActivityManagementPageView<>),
         typeof(ActivityManagementSnapshotView),
         typeof(ActivityOutcomeContractView),
@@ -89,6 +90,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         typeof(CreateActivityUpgradePlan),
         typeof(CreateReusableActivityDefinition),
         typeof(CreateReusableActivityDraft),
+        typeof(CreateReusableActivityDraftRequest),
         typeof(CreateReusableActivityDraftConflictCopy),
         typeof(DiscardReusableActivityDraft),
         typeof(GetActivityAuthoringCapabilities),
@@ -154,7 +156,7 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
     [Fact]
     public void Every_contract_type_is_publicly_exported_by_the_api_assembly()
     {
-        Assert.Equal(112, ContractTypes.Length);
+        Assert.Equal(114, ContractTypes.Length);
 
         var apiAssembly = typeof(ActivitiesDesignApiFeature).Assembly;
 
@@ -197,10 +199,16 @@ public sealed class ActivitiesDesignApiContractCompatibilityTests
         // wire property; the existing positional constructor and deconstructor remain unchanged.
         // It moved again when ActivityInputDescriptorView gained Tier, the presentation-only disclosure
         // group (essential / optional / setting) projected from InputDefinition.Tier.
+        // It moved again when ActivityInputDescriptorView gained ConnectionType, the required connection
+        // type projected from [ActivityConnection] (#2729).
         // It moved again when the six legacy mediator requests and commands with no endpoint (GetDefinition,
         // GetVersion, ListDefinitions, ListDefinitionVersions, AddDefinition, AddVersion) and the three views
         // only they returned were deleted (#2785).
-        Assert.Equal("46545a809377929024f2a496921c8e9c37852887fafa52aa3e3cd19486a8e332", PublicShapeHash(ContractTypes));
+        // It moved again for #2886: the AddDraft transport request and its layout wrapper are public JSON
+        // contracts because NativeEndpoints otherwise binds an omitted optional array as an empty query value.
+        // The wrapper serializes to the same nullable layout array, while ActivityOutputDescriptorView now
+        // exposes its contract reference key explicitly as a body init property, retaining its prior positional API.
+        Assert.Equal("33b3cd367c3c09caa8fabcb895fb66179e03ad24b229055e1edcd9f692405755", PublicShapeHash(ContractTypes));
     }
 
     [Fact]

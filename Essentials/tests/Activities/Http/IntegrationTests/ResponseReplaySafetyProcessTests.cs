@@ -20,8 +20,8 @@ namespace Elsa.Activities.Http.IntegrationTests;
 
 public sealed class ResponseReplaySafetyProcessTests
 {
-    private const string ExternalClosureFileName = "current-format-external-closure.json";
-    private const string ExternalManifestFileName = "current-format-external-manifest.json";
+    private const string ExternalClosureFileName = "http-sync-default-external-closure.json";
+    private const string ExternalManifestFileName = "http-sync-default-external-manifest.json";
     private const string ResultPrefix = "RESPONSE_REPLAY_RESULT=";
     private const string PublicationResultPrefix = "RESPONSE_REPLAY_PUBLICATION_RESULT=";
     private const string RecoveryResultPrefix = "RESPONSE_REPLAY_RECOVERY_RESULT=";
@@ -35,14 +35,16 @@ public sealed class ResponseReplaySafetyProcessTests
 
     public ResponseReplaySafetyProcessTests(ITestOutputHelper output) => _output = output;
 
-    [Fact]
-    public async Task CapturedExternalClosure_ImportsAndExecutesThroughChildHttpHost()
+    [Theory]
+    [InlineData("current-format-external")]
+    [InlineData("http-sync-default-external")]
+    public async Task CapturedExternalClosure_ImportsAndExecutesThroughChildHttpHost(string fixturePrefix)
     {
         var repositoryRoot = FindRepositoryRoot();
         var fixtureDirectory = Path.Combine(repositoryRoot,
             "Essentials", "tests", "Activities", "Http", "Fixtures", "ResponseReplayHost", "Fixtures");
-        var closurePath = Path.Combine(fixtureDirectory, ExternalClosureFileName);
-        var manifestPath = Path.Combine(fixtureDirectory, ExternalManifestFileName);
+        var closurePath = Path.Combine(fixtureDirectory, $"{fixturePrefix}-closure.json");
+        var manifestPath = Path.Combine(fixtureDirectory, $"{fixturePrefix}-manifest.json");
         var childProjectDirectory = Path.Combine(repositoryRoot,
             "Essentials", "tests", "Activities", "Http", "Fixtures", "ResponseReplayHost");
 
@@ -182,6 +184,17 @@ public sealed class ResponseReplaySafetyProcessTests
             var candidateClosureHash = Convert.ToHexString(SHA256.HashData(candidateClosureBytes)).ToLowerInvariant();
             Assert.Equal(resultRoot.GetProperty("candidateClosureSha256").GetString(), candidateClosureHash);
             using var candidateClosure = JsonDocument.Parse(candidateClosureBytes);
+            // Resolve the new contract through the real catalog and publisher, while the theory above
+            // still imports and executes the historical contract without rewriting its bytes.
+            var endpoint = candidateClosure.RootElement.GetProperty("artifacts").EnumerateArray()
+                .Single(artifact => artifact.GetProperty("identity").GetProperty("artifactId").GetString() == resultRoot.GetProperty("candidateArtifactId").GetString())
+                .GetProperty("rootActivity").GetProperty("childSlots").EnumerateArray()
+                .SelectMany(slot => slot.GetProperty("activities").EnumerateArray())
+                .Single(node => node.GetProperty("authoredActivityId").GetString() == HttpNodeId);
+            Assert.Equal("1.1.0", endpoint.GetProperty("activityTypeVersion").GetString());
+            var responseMode = endpoint.GetProperty("activityContract").GetProperty("inputs").GetProperty("ResponseMode");
+            Assert.True(responseMode.GetProperty("hasDefault").GetBoolean());
+            Assert.Equal("Sync", responseMode.GetProperty("defaultValue").GetString());
             AssertAuthoredBehaviorMatches(baselineClosure.RootElement, candidateClosure.RootElement,
                 publication.GetProperty("artifactId").GetString()!, resultRoot.GetProperty("candidateArtifactId").GetString()!);
 

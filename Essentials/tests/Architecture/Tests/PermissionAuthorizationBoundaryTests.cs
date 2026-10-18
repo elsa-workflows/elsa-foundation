@@ -72,6 +72,7 @@ public sealed class PermissionAuthorizationBoundaryTests
         Assert.Contains(Elsa.Workflows.Design.Api.Authorization.WorkflowDesignPermissions.Read, scan.ContributedPermissionKeys);
         Assert.Contains(DefaultIdentityPermissionKeys.IdentityUsersRead, scan.ContributedPermissionKeys);
         Assert.Contains(Elsa.Secrets.Core.Permissions.SecretsPermissions.Read, scan.ContributedPermissionKeys);
+        Assert.Contains(Elsa.Connections.Core.Permissions.ConnectionsPermissions.Read, scan.ContributedPermissionKeys);
         foreach (var (assembly, type) in AuthorizationContexts)
         {
             Assert.True(

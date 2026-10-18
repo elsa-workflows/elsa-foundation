@@ -140,6 +140,30 @@ for scalar enums. The registering module supplies the stable type match and
 either a static option catalog or an input-derived option callback. Unsupported
 custom types continue to use JSON entry.
 
+## Workflow Test Run stimulus editor Contributions
+
+Modules register one-off trigger controls through
+`api.workflowTestStimulusEditors`. Match on the backend's stable `driverId` and
+`modeId`; do not inspect activity types or depend on module-private configuration
+fields. The mode's `configurationSchema` describes the user-supplied stimulus
+value. Its `configuration` is readonly context returned by the backend, such as
+a prepared route or authored schedule.
+
+A Contribution owns its editor, validation, serialization, optional prepared
+action, and optional action-result view. Prepared actions use
+`context.backend.http.request` when they need to preserve a non-JSON protocol
+response; this request uses the configured authenticated transport and returns
+the unparsed `Response`, including non-2xx status, headers, and body. Contributions
+must treat the action URL as untrusted and restrict it to the backend origin.
+The workflow designer only resolves Contributions from the selected backend
+driver/mode and never selects editors by activity type.
+
+The Runtime panel reuses the same Contribution for API-reported supported waits
+by adapting each wait to the `option` shape with its wait ID, authored node ID,
+driver ID, and modes. This lets a module own both initial trigger data and later
+logical delivery without adding a workflow-activity switch to Studio. The host
+keeps retry IDs stable when a delivery response is uncertain.
+
 ## Weaver Contributions
 
 Studio modules can enrich Weaver through `api.agent` without calling an external

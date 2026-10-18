@@ -36,7 +36,7 @@ public sealed class ActivitiesDesignApiContractTests
         ["Definitions.Recommendation"] = "Elsa.Activities.Design.Api.Commands.SetRecommendedReusableActivityVersion",
         ["Definitions.Picker"] = "Elsa.Activities.Design.Api.Requests.ListRecommendedActivityDefinitions",
         ["Definitions.ListDrafts"] = "Elsa.Activities.Design.Api.Commands.ListReusableActivityDrafts",
-        ["Definitions.AddDraft"] = "Elsa.Activities.Design.Api.Commands.CreateReusableActivityDraft",
+        ["Definitions.AddDraft"] = "Elsa.Activities.Design.Api.Commands.CreateReusableActivityDraftRequest",
         ["Definitions.ListVersions"] = "Elsa.Activities.Design.Api.Commands.ListReusableActivityVersions",
         ["Drafts.Get"] = "Elsa.Activities.Design.Api.Commands.GetReusableActivityDraft",
         ["Drafts.Replace"] = "Elsa.Activities.Design.Api.Commands.ReplaceReusableActivityDraft",

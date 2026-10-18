@@ -14,6 +14,7 @@ import { NodeSlotBadges } from "./NodeSlotBadges";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { RuntimeIncidentAction } from "./RuntimeIncidentAction";
 import { BpmnElementNode } from "../bpmn/BpmnElementNode";
+import { httpEndpointResponseBadge } from "../httpEndpointResponseMode";
 import type { WorkflowEdge } from "./editorTypes";
 
 export const nodeTypes = { workflowActivity: WorkflowActivityNode, bpmnElement: BpmnElementNode };
@@ -45,6 +46,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
     ? nodeData.sourcePorts.length > 0 ? nodeData.sourcePorts : [{ name: "Done", displayName: "Done" }]
     : [];
   const subtitle = formatNodeSubtitle(nodeData);
+  const httpResponseBadge = httpEndpointResponseBadge(nodeData.httpEndpointResponseMode ?? null);
   const availabilityLookup = React.useContext(WorkflowNodeAvailabilityContext);
   const availability = availabilityLookup?.({ activityVersionId: nodeData.activityVersionId, activityTypeKey: nodeData.activityTypeKey }) ?? null;
   return (
@@ -74,6 +76,16 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
         <span className="wf-node-copy">
           <strong title={nodeData.label}>{nodeData.label}</strong>
           {nodeData.ghost ? <small className="wf-node-ghost-note">Not available in this environment</small> : subtitle.text ? <small title={subtitle.title}>{subtitle.text}</small> : null}
+          {httpResponseBadge ? (
+            <span
+              className="wf-node-http-response-badge"
+              data-mode={nodeData.httpEndpointResponseMode?.toLowerCase()}
+              title={httpResponseBadge}
+              aria-label={`HTTP endpoint behavior: ${httpResponseBadge}`}
+            >
+              {httpResponseBadge}
+            </span>
+          ) : null}
         </span>
       </div>
       <NodeSlotBadges

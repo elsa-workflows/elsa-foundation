@@ -975,7 +975,13 @@ public sealed class WorkflowInvokeActivitySchedulerWorkHandler : RuntimeSchedule
                     Metadata: metadata)
             };
         var childWorkItems = SchedulerWorkItems.NewChildActivityScheduleWorkItems(
-            TimeProvider, idGenerator, invokeWorkItem, invokePayload.PinnedExecutable, invokePayload.ActivityExecutionId, scheduleRequests).ToArray();
+            TimeProvider,
+            idGenerator,
+            invokeWorkItem,
+            invokePayload.PinnedExecutable,
+            invokePayload.ActivityExecutionId,
+            scheduleRequests,
+            childExecutionScopeId: SchedulerWorkItems.ResolveChildExecutionScopeId(state)).ToArray();
         var commit = new RuntimeCheckpointCommit(
             CommitId: $"commit:{invokeWorkItem.WorkItemId}:activity-inspection-captured:{invokePayload.ActivityExecutionId}",
             Checkpoint: new RuntimeCheckpoint(

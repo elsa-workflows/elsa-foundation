@@ -173,6 +173,120 @@ public sealed class WorkflowExecutableInspectorTests
     }
 
     [Fact]
+    public async Task Detail_keeps_expired_reference_inspectable_when_retained_execution_pins_exact_artifact_and_source()
+    {
+        var layout = new WorkflowExecutableLayoutRecord("root", 12, 34, 200, 80);
+        var reference = Reference(
+            "test-expired",
+            WorkflowExecutableReferenceScope.TestRun,
+            _now.AddMinutes(-31),
+            "draft",
+            _now.AddMinutes(-1)) with
+        {
+            Layout = [layout]
+        };
+        var executable = await ActivateAsync(reference);
+        await SaveCompletedExecutionAsync("execution-pins-test-expired", executable.Identity, reference);
+
+        var detail = await _inspector.GetAsync("artifact-1", reference.SourceReferenceId);
+
+        Assert.Equal(reference.SourceReferenceId, detail!.ChosenReference!.SourceReferenceId);
+        Assert.Equal("requested", detail.ChosenReference.Selection);
+        Assert.Equal(layout, Assert.Single(detail.ChosenReference.Layout));
+        Assert.False(Assert.Single(detail.References).Live);
+        Assert.Equal(1, detail.RetainedExecutionCount);
+    }
+
+    [Fact]
+    public async Task Detail_rejects_expired_reference_without_a_retained_execution()
+    {
+        var reference = Reference(
+            "test-expired",
+            WorkflowExecutableReferenceScope.TestRun,
+            _now.AddMinutes(-31),
+            "draft",
+            _now.AddMinutes(-1));
+        await ActivateAsync(reference);
+
+        var exception = await Assert.ThrowsAsync<EntityNotFoundException>(() =>
+            _inspector.GetAsync("artifact-1", reference.SourceReferenceId).AsTask());
+
+        Assert.Contains(reference.SourceReferenceId, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Detail_rejects_expired_reference_when_execution_pins_another_source_reference()
+    {
+        var reference = Reference(
+            "test-expired",
+            WorkflowExecutableReferenceScope.TestRun,
+            _now.AddMinutes(-31),
+            "draft",
+            _now.AddMinutes(-1));
+        var executable = await ActivateAsync(reference);
+        var differentReference = Reference(
+            "different-reference",
+            WorkflowExecutableReferenceScope.TestRun,
+            _now.AddMinutes(-30),
+            "draft",
+            _now.AddMinutes(-1));
+        await SaveCompletedExecutionAsync(
+            "execution-pins-different-reference",
+            executable.Identity,
+            differentReference);
+
+        var exception = await Assert.ThrowsAsync<EntityNotFoundException>(() =>
+            _inspector.GetAsync("artifact-1", reference.SourceReferenceId).AsTask());
+
+        Assert.Contains(reference.SourceReferenceId, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Detail_rejects_expired_reference_when_execution_pins_same_source_for_another_artifact()
+    {
+        var reference = Reference(
+            "test-expired",
+            WorkflowExecutableReferenceScope.TestRun,
+            _now.AddMinutes(-31),
+            "draft",
+            _now.AddMinutes(-1));
+        await ActivateAsync(reference);
+        var otherArtifact = new WorkflowExecutableIdentity(
+            "artifact-2", "definition-1", "version-1", "draft", "sha256:other");
+        await SaveCompletedExecutionAsync(
+            "execution-pins-other-artifact",
+            otherArtifact,
+            reference);
+
+        var exception = await Assert.ThrowsAsync<EntityNotFoundException>(() =>
+            _inspector.GetAsync("artifact-1", reference.SourceReferenceId).AsTask());
+
+        Assert.Contains(reference.SourceReferenceId, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Detail_rejects_retired_reference_even_when_retained_execution_pins_it()
+    {
+        var reference = Reference(
+            "test-retired",
+            WorkflowExecutableReferenceScope.TestRun,
+            _now.AddMinutes(-31),
+            "draft",
+            _now.AddMinutes(-1))
+            .Retire(_now.AddMinutes(-2), "retired");
+        var executable = await ActivateAsync(reference);
+        await SaveCompletedExecutionAsync(
+            "execution-pins-retired-reference",
+            executable.Identity,
+            reference);
+
+        var exception = await Assert.ThrowsAsync<EntityNotFoundException>(() =>
+            _inspector.GetAsync("artifact-1", reference.SourceReferenceId).AsTask());
+
+        Assert.Contains(reference.SourceReferenceId, exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Detail_projects_frozen_activity_presentation_from_the_chosen_reference()
     {
         await ActivateAsync(Reference(
@@ -851,6 +965,28 @@ public sealed class WorkflowExecutableInspectorTests
             inputContract: null,
             dependencies: null,
             IncidentStrategyBuiltIns.FaultReference);
+
+    private ValueTask<WorkflowExecutionState> SaveCompletedExecutionAsync(
+        string executionId,
+        WorkflowExecutableIdentity executable,
+        WorkflowExecutableSourceReference sourceReference) =>
+        _executionStore.SaveAsync(new WorkflowExecutionState(
+            executionId,
+            executable,
+            WorkflowExecutionStatus.Completed,
+            null,
+            _now.AddMinutes(-30),
+            _now.AddMinutes(-30),
+            _now.AddMinutes(-30),
+            _now.AddMinutes(-30),
+            null,
+            null,
+            null,
+            new Dictionary<string, string>())
+        {
+            RunKind = WorkflowRunKind.TestRun,
+            PinnedSource = WorkflowExecutableSourceProvenance.From(sourceReference)
+        });
 
     private static WorkflowExecutable Executable(
         DateTimeOffset now,

@@ -1,10 +1,13 @@
 using CShells.AspNetCore.Features;
 using CShells.Features;
+using Elsa.Activities.Http.Capabilities;
 using Elsa.Activities.Http.Activities;
+using Elsa.Activities.Http.Connections;
 using Elsa.Activities.Http.Constants;
 using Elsa.Activities.Http.Middleware;
 using Elsa.Activities.Http.Options;
 using Elsa.Activities.Http.Services;
+using Elsa.Api.Capabilities.Extensions;
 using Elsa.Http.Core.Options;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -47,9 +50,21 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
     [ManifestSetting(DisplayName = "Base path", Description = "Base HTTP path used by workflow endpoints.", Category = "Routing")]
     public string BasePath { get; set; } = "/workflows/http";
 
+    /// <summary>
+    /// Runs after the identity shell feature (order 0), which installs authentication middleware. Request-handler
+    /// authentication schemes such as OpenIddict must handle the request before this feature's ingress explicitly
+    /// calls AuthenticateAsync, because they initialize request-scoped authentication state in that earlier pass.
+    /// </summary>
+    public int Order => 1;
+
+    [ManifestSetting(DisplayName = "Synchronous request timeout", Description = "Maximum duration of synchronous HTTP requests. An endpoint may select a shorter timeout.", Category = "Routing", UIHint = "duration")]
+    public TimeSpan SyncRequestTimeout { get; set; } = new HttpEndpointOptions().SyncRequestTimeout;
+
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddApiCapabilitySource<HttpWorkflowEndpointsCapabilitySource>();
         services.Configure<HttpEndpointOptions>(options => options.BasePath = BasePath);
+        services.Configure<HttpEndpointOptions>(options => options.SyncRequestTimeout = SyncRequestTimeout);
         services.Configure<HttpRoutePublicationOptions>(options => options.BasePath = BasePath);
 
         services.AddHttpClient(HttpActivityConstants.HttpClientName)
@@ -71,16 +86,19 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
             .RemoveAllLoggers()
             .AddLogger<HttpActivityClientLogger>();
         services.TryAddSingleton<HttpActivityClientLogger>();
+        services.TryAddScoped<IHttpConnectionApplicator, UnboundHttpConnectionApplicator>();
 
         // Contribute the HttpEndpoint start-trigger's stimulus provider so the publish-time trigger
         // extractor can recognize published HttpEndpoint nodes and index them. Enumerable so other activity
         // features add their own providers.
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityTriggerStimulusProvider, HttpEndpointTriggerStimulusProvider>());
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<ITestRunTriggerDriver, HttpTestRunDriver>());
 
         // The inbound request middleware is resolved from DI per request (IMiddleware) so it can take the scoped
         // stimulus router; mounted into the shell pipeline by UseMiddleware below. CShells guarantees an
         // IMiddlewareFactory in the shell container, so only the middleware itself needs registering.
         services.AddScoped<HttpEndpointMiddleware>();
+        services.AddScoped<HttpTestRunIngressMiddleware>();
 
         // Request-owned synchronous response services. The activity returns a typed instruction inside its
         // isolated attempt scope; delivery reads the committed completion only after the inline drain returns.
@@ -95,21 +113,16 @@ public sealed class ActivitiesHttpFeature : IShellFeature, IMiddlewareShellFeatu
     /// is already the shell scope — including shells activated dynamically at runtime. Non-endpoint requests pass
     /// through.
     /// <para>
-    /// <see cref="IMiddlewareShellFeature.Order"/> is left at its default (0). <c>Order</c> only sequences shell
-    /// <em>middleware features</em> relative to one another within the shell branch (CShells sorts them by
-    /// <c>Order</c> before mounting); it does not order this middleware against the root pipeline's
-    /// authentication/authorization middleware. Authentication does not run as a shell middleware feature — in the
-    /// default composition it is mounted on the root pipeline (the host's <c>UseAuthentication</c>, placed after
-    /// <c>MapShells</c> so it authenticates against the shell's schemes) and therefore populates
-    /// <c>HttpContext.User</c> before this shell branch executes. Because there is no shell-pipeline auth
-    /// middleware to order against, an explicit <c>Order</c> would buy nothing here; the authorization handler
-    /// (<c>AuthenticationBasedHttpEndpointAuthorizationHandler</c>) additionally authenticates explicitly rather
-    /// than assuming that ordering. Give this feature an explicit order only if a
-    /// second shell <em>middleware feature</em> is added that must run before or after the endpoint middleware.
+    /// <see cref="IMiddlewareShellFeature.Order"/> places this feature after the identity shell feature (order 0),
+    /// which mounts authentication and authorization middleware in the shell branch. This ordering lets request-
+    /// handler authentication schemes initialize request-scoped state before the TestRun ingress performs its
+    /// explicit authentication fallback. The fallback remains useful for hosts that populate
+    /// <c>HttpContext.User</c> themselves or use handlers that do not require an earlier request-handler pass.
     /// </para>
     /// </summary>
     public void UseMiddleware(IApplicationBuilder app, Microsoft.Extensions.Hosting.IHostEnvironment? environment)
     {
+        app.UseMiddleware<HttpTestRunIngressMiddleware>();
         app.UseMiddleware<HttpEndpointMiddleware>();
     }
 }

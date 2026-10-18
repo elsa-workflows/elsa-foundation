@@ -22,7 +22,7 @@ Upgrade the W16 async/202 `HttpEndpoint` baseline to full elsa-core behavioral p
 
 **Project Type**: Modular .NET workflow-engine feature spanning `Elsa.Activities.Http`, `Elsa.Workflows.Runtime`(+`.Core`), `Elsa.Workflows.Runtime.Http`, `Elsa.Http`
 
-**Performance Goals**: No regression on the drain hot path; route-table lookup O(#templates) per request (elsa-core parity); sync mode bounded by per-endpoint RequestTimeout — no unbounded request hangs
+**Performance Goals**: No regression on the drain hot path; route-table lookup O(#templates) per request (elsa-core parity); sync requests use the server-wide `SyncRequestTimeout` (30 seconds by default), shortened when a positive endpoint `RequestTimeout` is lower. The cooperative deadline covers authorization, body read, inline dispatch, and response delivery after route/settings selection; Async keeps its authored dispatch timeout unchanged.
 
 **Constraints**: Pre-release — no back-compat shims (stimulus-hash change in B regenerates test expectations); ambient services must never enter durable command envelopes (spec-069 FR-001); no new Runtime→Design dependency (§E2.2); single-writer actor semantics preserved (no direct executor)
 

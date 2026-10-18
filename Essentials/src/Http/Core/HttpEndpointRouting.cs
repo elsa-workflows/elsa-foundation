@@ -43,8 +43,8 @@ public static class HttpEndpointRouting
     /// <summary>
     /// Trigger-binding metadata key carrying the endpoint's <see cref="ResponseMode"/> (the <c>Enum.ToString()</c>
     /// name, e.g. <c>"Sync"</c>). NON-IDENTITY: the mode rides the binding metadata but
-    /// does not participate in <c>HttpEndpointStimulus.Hash</c>. Omitted from metadata when the endpoint is
-    /// <see cref="ResponseMode.Async"/> (the default), keeping bindings lean.
+    /// does not participate in <c>HttpEndpointStimulus.Hash</c>. Async may be omitted for legacy compatibility;
+    /// new publications stamp their selected mode explicitly.
     /// </summary>
     public const string ResponseModeMetadataKey = "http:responseMode";
 }

@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, ExternalLink, GitCompareArrows, LocateFixe
 import { useQueryClient } from "@tanstack/react-query";
 import { StudioHttpError, type StudioActivityDiagnostic, type StudioActivityDiagnosticFocusResult, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { activityDesignKeys, getActivityDefinition } from "./api/activityDesign";
+import { compareSemVer, parseSemVer } from "./semver";
 import {
   getActivityPublicationReceipt,
   preflightActivityDraftPublication,
@@ -27,6 +28,8 @@ export function ActivityDefinitionPublicationReview({
   currentSignature,
   disabled,
   flushExactSavedRevision,
+  onPublicationPending,
+  onPublished,
   onFocusDiagnostic,
   onOpenVersion
 }: {
@@ -37,6 +40,8 @@ export function ActivityDefinitionPublicationReview({
   currentSignature: string;
   disabled: boolean;
   flushExactSavedRevision(): Promise<ExactDraftBinding | null>;
+  onPublicationPending(pending: boolean): void;
+  onPublished(): void;
   onFocusDiagnostic(diagnostic: StudioActivityDiagnostic, trigger: HTMLButtonElement): Promise<StudioActivityDiagnosticFocusResult>;
   onOpenVersion(versionId: string): void;
 }) {
@@ -112,6 +117,8 @@ export function ActivityDefinitionPublicationReview({
       }
       setPhase("success");
       setFailure(null);
+      onPublished();
+      onPublicationPending(false);
       // Refresh the definition, drafts, and versions caches so the workbench's published-head and
       // recommendation panels reflect the new immutable version without a manual page reload.
       void queryClient.invalidateQueries({ queryKey: activityDesignKeys.definitionResources });
@@ -124,6 +131,7 @@ export function ActivityDefinitionPublicationReview({
       setPhase("stale");
       setFailure("The reviewed revision or published head is stale. Studio reopened preflight without publishing.");
       operationKeyRef.current = null;
+      onPublicationPending(false);
       return;
     }
     if (next.status === "OutcomeUnknown") {
@@ -136,6 +144,7 @@ export function ActivityDefinitionPublicationReview({
       setFailure(next.status === "Rejected"
         ? "The authoritative publication request was rejected. Review the returned diagnostics before reopening preflight."
         : "The authoritative publication operation failed. No success is assumed.");
+      onPublicationPending(false);
       return;
     }
     setPhase("unknown");
@@ -169,8 +178,17 @@ export function ActivityDefinitionPublicationReview({
 
   const publish = async () => {
     if (!preflight || !binding || phase !== "review" || !preflight.isPublishable || !isExactVersionAtLeast(version, preflight.minimumVersion)) return;
+    if (binding.revision !== currentRevision || binding.signature !== currentSignature) {
+      setPreflight(null);
+      setBinding(null);
+      setPhase("stale");
+      setFailure("The draft changed after review. Studio discarded the review without publishing.");
+      operationKeyRef.current = null;
+      return;
+    }
     const key = operationKeyRef.current ?? createOperationKey();
     operationKeyRef.current = key;
+    onPublicationPending(true);
     setPhase("publishing");
     setFailure(null);
     try {
@@ -188,6 +206,7 @@ export function ActivityDefinitionPublicationReview({
         setPhase("stale");
         setFailure("The reviewed revision or published head is stale. Studio reopened preflight without publishing.");
         operationKeyRef.current = null;
+        onPublicationPending(false);
         return;
       }
       await reconcile(key);
@@ -219,13 +238,13 @@ export function ActivityDefinitionPublicationReview({
       <ReadinessReview preflight={preflight} />
       {diagnosticSource.length ? <PublicationDiagnostics diagnostics={diagnosticSource} onFocus={onFocusDiagnostic} /> : null}
       <div className="ad-publication-version">
-        <label><span>Publication version</span><input value={version} onChange={event => setVersion(event.target.value.trim())} aria-invalid={Boolean(versionError)} disabled={phase === "publishing" || phase === "success"} /></label>
+        <label><span>Publication version</span><input value={version} onChange={event => setVersion(event.target.value.trim())} aria-invalid={Boolean(versionError)} disabled={phase === "publishing" || phase === "unknown" || phase === "success"} /></label>
         <div><strong>Minimum valid version: {preflight.minimumVersion}</strong><span>The minimum is selected by default. Advanced authors may enter any higher unique exact semantic version.</span>{preflight.validVersions.length > 1 ? <span>Server suggestions: {preflight.validVersions.join(", ")}</span> : null}</div>
         {versionError ? <p role="alert">{versionError}</p> : null}
       </div>
       <footer className="ad-publication-actions">
         <span><ShieldCheck size={16} aria-hidden /> Publication is atomic and idempotent for this reviewed revision and head.</span>
-        <button type="button" className="ad-primary-action" onClick={() => void publish()} disabled={phase !== "review" || !preflight.isPublishable || Boolean(versionError)}>
+        <button type="button" className="ad-primary-action" onClick={() => void publish()} disabled={disabled || phase !== "review" || !preflight.isPublishable || Boolean(versionError)}>
           {phase === "publishing" ? "Publishing atomically…" : phase === "success" ? `Published ${receipt?.outcome?.version ?? version}` : `Publish ${version || "exact version"}`}
         </button>
       </footer>
@@ -337,39 +356,6 @@ export function isExactVersionAtLeast(value: string, minimum: string) {
   const floor = parseSemVer(minimum);
   if (!candidate || !floor) return false;
   return compareSemVer(candidate, floor) >= 0;
-}
-
-function parseSemVer(value: string) {
-  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.exec(value);
-  if (!match) return null;
-  const prerelease = match[4]?.split(".") ?? [];
-  if (prerelease.some(segment => /^\d+$/.test(segment) && segment.length > 1 && segment.startsWith("0"))) return null;
-  return { major: BigInt(match[1]!), minor: BigInt(match[2]!), patch: BigInt(match[3]!), prerelease };
-}
-
-function compareSemVer(left: NonNullable<ReturnType<typeof parseSemVer>>, right: NonNullable<ReturnType<typeof parseSemVer>>) {
-  for (const key of ["major", "minor", "patch"] as const) {
-    if (left[key] !== right[key]) return left[key] > right[key] ? 1 : -1;
-  }
-  if (!left.prerelease.length && right.prerelease.length) return 1;
-  if (left.prerelease.length && !right.prerelease.length) return -1;
-  for (let index = 0; index < Math.max(left.prerelease.length, right.prerelease.length); index += 1) {
-    const a = left.prerelease[index];
-    const b = right.prerelease[index];
-    if (a === undefined) return -1;
-    if (b === undefined) return 1;
-    if (a === b) continue;
-    const numericA = /^\d+$/.test(a);
-    const numericB = /^\d+$/.test(b);
-    if (numericA && numericB) {
-      if (a.length !== b.length) return a.length > b.length ? 1 : -1;
-      return a > b ? 1 : -1;
-    }
-    if (numericA) return -1;
-    if (numericB) return 1;
-    return a > b ? 1 : -1;
-  }
-  return 0;
 }
 
 function recommendationMessage(evidence: "first" | "unchanged" | "unconfirmed" | null) {

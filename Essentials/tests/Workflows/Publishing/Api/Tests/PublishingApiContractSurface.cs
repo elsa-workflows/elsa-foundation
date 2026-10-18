@@ -64,6 +64,14 @@ internal static class PublishingApiContractSurface
         typeof(ValueConversionProfileView),
         typeof(ValueConversionProfilesResponse),
         typeof(WorkflowTestRunView),
+        typeof(DraftTestRunOptionsView),
+        typeof(TestRunTriggerOptionView),
+        typeof(TestRunOptionsDiagnostic),
+        typeof(TestRunWaitsRequest),
+        typeof(TestRunWaitsView),
+        typeof(TestRunWaitView),
+        typeof(TestRunEventRequest),
+        typeof(TestRunEventView),
         typeof(ConstructActivity),
         typeof(ListConstructableActivities),
         typeof(ListIncidentStrategies),
@@ -83,7 +91,11 @@ internal static class PublishingApiContractSurface
         typeof(PublishActivityDraft),
         typeof(RunRuntimeRequirementPreflight),
         typeof(StartWorkflowTestRun),
-        typeof(StartWorkflowDraftTestRun)
+        typeof(StartWorkflowDraftTestRun),
+        typeof(WorkflowTestRunStartSelection),
+        typeof(DraftTestRunOptionsRequest),
+        typeof(GetWorkflowTestRun),
+        typeof(StopWorkflowTestRun)
     ];
 
     /// <summary>

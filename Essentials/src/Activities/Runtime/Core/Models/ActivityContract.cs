@@ -141,6 +141,9 @@ public sealed class ActivityContract
         if (input.IsCredential)
             projection[nameof(input.IsCredential)] = true;
 
+        if (!string.IsNullOrWhiteSpace(input.ConnectionType))
+            projection[nameof(input.ConnectionType)] = input.ConnectionType;
+
         return projection;
     }
 
@@ -216,7 +219,8 @@ public sealed class ActivityInputContract
         JsonElement? defaultValue,
         ActivityValuePolicy policy,
         IReadOnlyDictionary<string, string>? editorMetadata = null,
-        bool isCredential = false)
+        bool isCredential = false,
+        string? connectionType = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -238,6 +242,7 @@ public sealed class ActivityInputContract
             ? new Dictionary<string, string>()
             : new Dictionary<string, string>(editorMetadata, StringComparer.Ordinal);
         IsCredential = isCredential;
+        ConnectionType = string.IsNullOrWhiteSpace(connectionType) ? null : connectionType;
     }
 
     public string Key { get; }
@@ -259,6 +264,15 @@ public sealed class ActivityInputContract
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsCredential { get; }
+
+    /// <summary>
+    /// The required connection type when this input is a connection reference
+    /// (<c>[ActivityConnection(ConnectionType = ...)]</c>). Omitted from the serialized shape, and from the
+    /// fingerprint, while null, so a contract whose inputs declare none keeps the document and fingerprint it had
+    /// before the field existed.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ConnectionType { get; }
 }
 
 public sealed class ActivityResultContract
