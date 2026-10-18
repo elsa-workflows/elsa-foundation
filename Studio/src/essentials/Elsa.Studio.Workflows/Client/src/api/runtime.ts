@@ -214,6 +214,44 @@ export interface WorkflowInstanceListPage {
   totalCount: number;
 }
 
+export interface DeleteWorkflowInstanceResponse {
+  workflowExecutionId: string;
+  status: "Deleted";
+}
+
+export function supportsWorkflowInstanceDeletion(context: StudioEndpointContext) {
+  return hasCapabilityLink(context, capabilityIds.runtime, "workflow-instance-delete");
+}
+
+export async function deleteWorkflowInstance(context: StudioEndpointContext, workflowExecutionId: string, signal?: AbortSignal) {
+  const path = await resolveCapabilityLink(
+    context,
+    capabilityIds.runtime,
+    "workflow-instance-delete",
+    { workflowExecutionId });
+
+  try {
+    const response = signal
+      ? await context.http.deleteJson<DeleteWorkflowInstanceResponse>(path, { signal })
+      : await context.http.deleteJson<DeleteWorkflowInstanceResponse>(path);
+    if (response?.workflowExecutionId !== workflowExecutionId || response.status !== "Deleted") {
+      throw new Error("Runtime returned an invalid workflow instance deletion response.");
+    }
+    return response;
+  } catch (error) {
+    // A 404 can also mean resource authorization denied deletion. Keep that distinction private without
+    // claiming success: the run may still be visible to an operator who can inspect but cannot manage it.
+    if (getHttpStatus(error) === 404) throw new Error("The run is unavailable or you do not have permission to delete it. Refresh the list.");
+    throw error;
+  }
+}
+
+function getHttpStatus(error: unknown) {
+  if (typeof error !== "object" || error === null || !("status" in error)) return undefined;
+  const status = error.status;
+  return typeof status === "number" ? status : undefined;
+}
+
 export function workflowInstanceListQuery(request: ListWorkflowInstancesRequest = {}) {
   const parameters = new URLSearchParams();
   if (request.status) parameters.set("status", request.status);

@@ -252,3 +252,4 @@ Notes come only from explicit `**Notes**:` metadata; see [Spec status metadata](
 | [241-workflow-test-drive](../../specs/241-workflow-test-drive/spec.md) | Workflow Test Drive | In progress — Sipke approved implementation of the reviewed design in the demo session; Foundation #2862. | - | 8 | 3 | - |
 | [242-execution-lifecycle](../../specs/242-execution-lifecycle/spec.md) | Execution lifecycle compatibility | In progress | - | 0 | 0 | - |
 | [243-connection-secret-picker](../../specs/243-connection-secret-picker/spec.md) | Connection credential Secret selection | Implemented | - | 7 | 0 | - |
+| [245-workflow-run-deletion](../../specs/245-workflow-run-deletion/spec.md) | Individual and bulk workflow-run deletion | Implemented; PR verification pending | - | 0 | 0 | - |

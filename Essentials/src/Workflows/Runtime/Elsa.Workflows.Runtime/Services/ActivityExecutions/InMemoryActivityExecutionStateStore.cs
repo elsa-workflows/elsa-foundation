@@ -5,6 +5,14 @@ namespace Elsa.Workflows.Runtime.Services.ActivityExecutions;
 
 public sealed class InMemoryActivityExecutionStateStore : InMemoryKeyedStateStore<InMemoryActivityExecutionStateStore.ActivityExecutionStateKey, ActivityExecutionState>, IActivityExecutionStateStore
 {
+    internal void DeleteForWorkflowExecution(string workflowExecutionId)
+    {
+        var states = SnapshotValues(state =>
+            StringComparer.Ordinal.Equals(state.Execution.WorkflowExecutionId, workflowExecutionId));
+        foreach (var state in states)
+            Remove(new ActivityExecutionStateKey(workflowExecutionId, state.Execution.ActivityExecutionId));
+    }
+
     public ValueTask<ActivityExecutionState> SaveAsync(ActivityExecutionState state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);

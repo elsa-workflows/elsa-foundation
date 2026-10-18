@@ -6,6 +6,7 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Stores;
@@ -46,9 +47,26 @@ public sealed class EfSchedulerWorkQueueStore(
         cancellationToken.ThrowIfCancellationRequested();
         var scope = EfRuntimeOperationalStoreSupport.RequireScope(accessContextAccessor);
         var id = EfRuntimeOperationalStoreSupport.CompositeId(scope, workItem.WorkflowExecutionId, workItem.WorkItemId);
+        await using var transaction = context.Database.CurrentTransaction is null
+            ? await context.Database.BeginTransactionAsync(cancellationToken)
+            : null;
+        if (await IsDeletedExecutionAsync(scope, workItem.WorkflowExecutionId, cancellationToken))
+        {
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
+            // The post-commit outbox treats a returned enqueue as delivered. A tombstoned execution must not
+            // create queue work after its deletion transaction has already purged the queue.
+            return workItem;
+        }
+
         var existing = await context.SchedulerWorkItems.AsNoTracking().SingleOrDefaultAsync(row => row.Id == id, cancellationToken);
         if (existing is not null)
-            return ReadChecked(existing, scope, workItem.WorkflowExecutionId, workItem.WorkItemId);
+        {
+            var existingItem = ReadChecked(existing, scope, workItem.WorkflowExecutionId, workItem.WorkItemId);
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
+            return existingItem;
+        }
 
         var entity = ToEntity(workItem, scope, id, 1);
         context.SchedulerWorkItems.Add(entity);
@@ -56,11 +74,18 @@ public sealed class EfSchedulerWorkQueueStore(
         {
             await context.SaveChangesAsync(cancellationToken);
             Detach(entity);
+            if (transaction is not null)
+                await transaction.CommitAsync(cancellationToken);
             return workItem;
         }
         catch (Exception exception) when (EfRelationalExceptionClassifier.IsSaveConflict(exception, EfWriteConflict.UniqueKey))
         {
             Detach(entity);
+            if (transaction is not null)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                await transaction.DisposeAsync();
+            }
             var winner = await context.SchedulerWorkItems.AsNoTracking().SingleOrDefaultAsync(row => row.Id == id, cancellationToken)
                          ?? throw new InvalidOperationException("The scheduler-work enqueue conflicted, but the winning row could not be reloaded.", exception);
             return ReadChecked(winner, scope, workItem.WorkflowExecutionId, workItem.WorkItemId);
@@ -75,6 +100,39 @@ public sealed class EfSchedulerWorkQueueStore(
             Detach(entity);
             throw;
         }
+    }
+
+    private async ValueTask<bool> IsDeletedExecutionAsync(
+        string scope,
+        string workflowExecutionId,
+        CancellationToken cancellationToken)
+    {
+        var lockedRows = await EfWorkflowExecutionStateStore.LockWorkflowExecutionForWriteAsync(
+            context,
+            scope,
+            workflowExecutionId,
+            cancellationToken);
+        if (lockedRows > 0)
+        {
+            // Standalone queue stores historically accept work before an execution root exists. When one does exist,
+            // validate its tenant before honoring a workflow-scoped enqueue.
+            var root = await context.WorkflowExecutionStates.AsNoTracking().SingleAsync(
+                row => row.ScopeKeyHash == EfRuntimeOperationalStoreSupport.Hash(scope) &&
+                       row.ScopeKey == EfRuntimeOperationalStoreSupport.Encode(scope) &&
+                       row.WorkflowExecutionIdHash == EfRuntimeOperationalStoreSupport.Hash(workflowExecutionId) &&
+                       row.WorkflowExecutionId == EfRuntimeOperationalStoreSupport.Encode(workflowExecutionId),
+                cancellationToken);
+            var state = EfWorkflowExecutionStateStore.ReadChecked(root, scope, workflowExecutionId);
+            accessContextAccessor.Current.EnsureTenantScope(state.TenantId);
+        }
+
+        // DeleteCoreAsync takes the same root-row lock before writing the tombstone. This read is therefore ordered
+        // with deletion even for the legacy case where no execution root is present.
+        return await EfExecutionLivenessStateStore.IsWorkflowExecutionDeletionTombstonedAsync(
+            context,
+            scope,
+            workflowExecutionId,
+            cancellationToken);
     }
 
     public async ValueTask<RuntimeStorePage<RuntimeSchedulerWorkItem>> ListAsync(

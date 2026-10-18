@@ -11,6 +11,7 @@ namespace Elsa.Workflows.Runtime.Services.Executions;
 public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStore<InMemoryExecutionLivenessStateStore.ExecutionLivenessStateKey, ExecutionLivenessState>, IExecutionLivenessStateStore, IRuntimeRecoveryLivenessPageSource
 {
     private readonly SemaphoreSlim _ownershipAtomicGate = new(1, 1);
+    private readonly AsyncLocal<int> _ownershipGateDepth = new();
     private readonly Dictionary<ExecutionLivenessStateKey, long> _revisions = new();
 
     public async ValueTask<ExecutionLivenessState> SaveAsync(ExecutionLivenessState state, CancellationToken cancellationToken = default)
@@ -24,7 +25,11 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
             return SaveCore(state);
 
         return await ExecuteOwnershipAtomicAsync(
-            _ => ValueTask.FromResult(SaveCore(state)),
+            _ =>
+            {
+                ThrowIfDeletionTombstoned(Find(Key(state)));
+                return ValueTask.FromResult(SaveCore(state));
+            },
             cancellationToken);
     }
 
@@ -42,7 +47,20 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
             return TrySaveCore(state, expectedRevision);
 
         return await ExecuteOwnershipAtomicAsync(
-            _ => ValueTask.FromResult(TrySaveCore(state, expectedRevision)),
+            _ =>
+            {
+                var key = Key(state);
+                var existing = Find(key);
+                if (IsDeletionTombstoned(existing))
+                {
+                    _revisions.TryGetValue(key, out var currentRevision);
+                    return ValueTask.FromResult(new ExecutionLivenessStateWriteResult(
+                        ExecutionLivenessStateWriteStatus.RevisionConflict,
+                        currentRevision));
+                }
+
+                return ValueTask.FromResult(TrySaveCore(state, expectedRevision));
+            },
             cancellationToken);
     }
 
@@ -51,13 +69,18 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(action);
+        if (_ownershipGateDepth.Value > 0)
+            return await action(cancellationToken);
+
         await _ownershipAtomicGate.WaitAsync(cancellationToken);
+        _ownershipGateDepth.Value++;
         try
         {
             return await action(cancellationToken);
         }
         finally
         {
+            _ownershipGateDepth.Value--;
             _ownershipAtomicGate.Release();
         }
     }
@@ -69,8 +92,7 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentNullException.ThrowIfNull(deleteExecution);
-        await _ownershipAtomicGate.WaitAsync(cancellationToken);
-        try
+        return await ExecuteOwnershipAtomicAsync(async token =>
         {
             var stateId = RuntimeExecutionOwnershipStateId.For(workflowExecutionId);
             var key = new ExecutionLivenessStateKey(workflowExecutionId, stateId);
@@ -93,12 +115,8 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
 
             // Keep acquisitions/renewals behind the delete until the execution and its outstanding work are both
             // removed/tombstoned. A lease acquired between revocation and removal could otherwise survive deletion.
-            return await deleteExecution(cancellationToken);
-        }
-        finally
-        {
-            _ownershipAtomicGate.Release();
-        }
+            return await deleteExecution(token);
+        }, cancellationToken);
     }
 
     private static long ReadHighestIssuedToken(ExecutionLivenessState? state)
@@ -111,6 +129,21 @@ public sealed class InMemoryExecutionLivenessStateStore : InMemoryKeyedStateStor
             state.ExecutionLease is { } lease && lease.FencingToken != token)
             throw new InvalidOperationException("Execution ownership state contains an invalid fencing-token counter.");
         return token;
+    }
+
+    private static void ThrowIfDeletionTombstoned(ExecutionLivenessState? state)
+    {
+        if (IsDeletionTombstoned(state))
+            throw new InvalidOperationException("A deleted workflow execution cannot reacquire ownership.");
+    }
+
+    private static bool IsDeletionTombstoned(ExecutionLivenessState? state)
+    {
+        if (state?.Metadata.TryGetValue(RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone, out var value) != true)
+            return false;
+        if (!StringComparer.Ordinal.Equals(value, "true"))
+            throw new InvalidDataException("The persisted workflow-execution deletion tombstone is corrupt.");
+        return true;
     }
 
     private ExecutionLivenessState SaveCore(ExecutionLivenessState state)

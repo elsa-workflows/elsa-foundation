@@ -12,6 +12,8 @@ namespace Elsa.Workflows.Runtime.Services.Checkpoints;
 /// <summary>Application-wide state shared by scoped in-memory checkpoint-store adapters.</summary>
 public sealed class InMemoryRuntimeCheckpointStoreState
 {
+    private readonly AsyncLocal<int> _writeGateDepth = new();
+
     internal object SyncRoot { get; } = new();
     internal SemaphoreSlim WriteGate { get; } = new(1, 1);
     internal Dictionary<string, RuntimeCheckpointCommitRecord> Commits { get; } = new(StringComparer.Ordinal);
@@ -19,11 +21,33 @@ public sealed class InMemoryRuntimeCheckpointStoreState
     internal Dictionary<string, WorkflowDispatchRecord> WorkflowDispatches { get; } = new(StringComparer.Ordinal);
     internal Dictionary<string, WorkflowTestScopeRecord> WorkflowTestScopes { get; } = new(StringComparer.Ordinal);
     internal Dictionary<(string Scope, string WorkflowExecutionId, string WorkId), BackgroundActivityWorkItem> BackgroundActivityWorkItems { get; } = [];
+
+    internal async ValueTask<TResult> ExecuteWriteGateAsync<TResult>(
+        Func<CancellationToken, ValueTask<TResult>> action,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(action);
+        if (_writeGateDepth.Value > 0)
+            return await action(cancellationToken);
+
+        await WriteGate.WaitAsync(cancellationToken);
+        _writeGateDepth.Value++;
+        try
+        {
+            return await action(cancellationToken);
+        }
+        finally
+        {
+            _writeGateDepth.Value--;
+            WriteGate.Release();
+        }
+    }
 }
 
 public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCommitStore, IRuntimePostCommitOutboxStore, IPostCommitOutboxLookupStore, IRuntimePostCommitOutboxClaimStore, IRuntimePostCommitOutboxClaimCompletionStore
 {
     private readonly InMemoryRuntimeCheckpointStoreState _state;
+    internal InMemoryRuntimeCheckpointStoreState State => _state;
     private readonly IWorkflowExecutionStateStore? _workflowExecutionStateStore;
     private readonly IActivityExecutionStateStore? _activityExecutionStateStore;
     private readonly IActivityExecutionInspectionWriter? _activityExecutionInspectionWriter;
@@ -108,9 +132,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
 
     private async ValueTask<RuntimeCheckpointCommitStoreResult> CommitCoreAsync(RuntimeCheckpointCommit commit, RuntimeCheckpointPersistenceDecision decision, CancellationToken cancellationToken)
     {
-
-        await _state.WriteGate.WaitAsync(cancellationToken);
-        try
+        return await _state.ExecuteWriteGateAsync(async ct =>
         {
             var fingerprint = RuntimeCheckpointCommitFingerprint.Compute(commit);
             lock (_state.SyncRoot)
@@ -131,7 +153,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             }
 
             if (commit.ExpectedFence is null)
-                return await CommitNewAsync(commit, decision, cancellationToken);
+                return await CommitNewAsync(commit, decision, ct);
 
             if (_operationalStateStore is not InMemoryExecutionLivenessStateStore inMemoryOperationalStateStore)
             {
@@ -140,13 +162,9 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
             }
 
             return await inMemoryOperationalStateStore.ExecuteOwnershipAtomicAsync(
-                ct => CommitNewAsync(commit, decision, ct),
-                cancellationToken);
-        }
-        finally
-        {
-            _state.WriteGate.Release();
-        }
+                token => CommitNewAsync(commit, decision, token),
+                ct);
+        }, cancellationToken);
     }
 
     private async ValueTask<RuntimeCheckpointCommitStoreResult> CommitNewAsync(
@@ -575,14 +593,13 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
         ArgumentNullException.ThrowIfNull(completion);
         cancellationToken.ThrowIfCancellationRequested();
 
-        await _state.WriteGate.WaitAsync(cancellationToken);
-        try
+        return await _state.ExecuteWriteGateAsync(async ct =>
         {
             var childExecution = completion.WorkflowDispatch is { } projectedDispatch &&
                                  _workflowExecutionStateStore is not null
                 ? await _workflowExecutionStateStore.FindAsync(
                     projectedDispatch.ChildWorkflowExecutionId,
-                    cancellationToken)
+                    ct)
                 : null;
 
             lock (_state.SyncRoot)
@@ -615,11 +632,7 @@ public sealed class InMemoryRuntimeCheckpointCommitStore : IRuntimeCheckpointCom
                     _state.OutboxItems.TryAdd(followUpOutboxItem.OutboxItemId, followUpOutboxItem);
                 return resolution.Outcome;
             }
-        }
-        finally
-        {
-            _state.WriteGate.Release();
-        }
+        }, cancellationToken);
     }
 
     internal ValueTask<WorkflowDispatchRedriveResult> RedriveAsync(

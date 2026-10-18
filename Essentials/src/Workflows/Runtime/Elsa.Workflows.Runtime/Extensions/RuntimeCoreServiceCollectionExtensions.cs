@@ -20,6 +20,7 @@ using Elsa.Workflows.Runtime.Services.Alterations;
 using Elsa.Workflows.Runtime.Services.Alterations.Handlers;
 using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
+using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Dispatch;
 using Elsa.Workflows.Runtime.Services.Executables;
 using Elsa.Workflows.Runtime.Services.Executions;
@@ -288,6 +289,25 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddSingleton<IWorkflowSchedulerWorkQueue, InMemoryWorkflowSchedulerWorkQueue>();
         services.TryAddSingleton<RuntimeSchedulerWorkClaimOptions>();
         services.TryAddSingleton<IDurableTimerStore, InMemoryDurableTimerStore>();
+        services.TryAddScoped<IWorkflowExecutionDeletionStore>(serviceProvider =>
+            new InMemoryWorkflowExecutionDeletionStore(
+                serviceProvider.GetRequiredService<InMemoryRuntimeCheckpointStoreState>(),
+                ResolveUnderlyingStore<IRuntimeCheckpointCommitStore>(serviceProvider, typeof(CoalescingRuntimeCheckpointCommitStore)),
+                ResolveUnderlyingStore<IActivityExecutionInspectionStore>(serviceProvider, typeof(CoalescingActivityExecutionInspectionStore)),
+                serviceProvider.GetRequiredService<IActivityExecutionHierarchyStore>(),
+                ResolveUnderlyingStore<IWorkflowExecutionStateStore>(serviceProvider, typeof(CoalescingWorkflowExecutionStateStore)),
+                serviceProvider.GetRequiredService<IExecutionLivenessStateStore>(),
+                ResolveUnderlyingStore<IActivityExecutionStateStore>(serviceProvider, typeof(CoalescingActivityExecutionStateStore)),
+                serviceProvider.GetRequiredService<IActivityExecutionInspectionWriter>(),
+                serviceProvider.GetRequiredService<IActivityExecutionHierarchyWriter>(),
+                serviceProvider.GetRequiredService<IBookmarkStateStore>(),
+                ResolveUnderlyingStore<IDurableValueStateStore>(serviceProvider, typeof(CoalescingDurableValueStateStore)),
+                ResolveUnderlyingStore<ISchedulerStateStore>(serviceProvider, typeof(CoalescingSchedulerStateStore)),
+                serviceProvider.GetRequiredService<IDurableTimerStore>(),
+                ResolveUnderlyingStore<IWorkflowSchedulerWorkQueue>(serviceProvider, typeof(CoalescingWorkflowSchedulerWorkQueue)),
+                serviceProvider.GetRequiredService<IIncidentStateStore>(),
+                serviceProvider.GetRequiredService<IWorkflowSchedulerPoisonStore>(),
+                serviceProvider.GetRequiredService<IWorkflowHoldStateStore>()));
         services.TryAddScoped<IActivityScopeCleanupStore, ActivityScopeCleanupStore>();
         services.TryAddScoped<ActivitySubtreeCancellationPlanner>();
         services.TryAddSingleton<WorkflowDrainOrchestratorOptions>();
@@ -504,6 +524,15 @@ public static class RuntimeCoreServiceCollectionExtensions
         RuntimeActivityExecutionStoreBackend.Find(services)?.EnsureOwnsRegisteredContracts(services);
 
         return services;
+    }
+
+    private static TStore ResolveUnderlyingStore<TStore>(IServiceProvider serviceProvider, Type decoratorType)
+        where TStore : class
+    {
+        var selected = serviceProvider.GetRequiredService<TStore>();
+        return selected.GetType() == decoratorType
+            ? serviceProvider.GetRequiredService<CoalescingInner<TStore>>().Value
+            : selected;
     }
 
     /// <summary>

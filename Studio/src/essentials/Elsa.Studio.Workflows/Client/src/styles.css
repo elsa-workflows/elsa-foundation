@@ -911,6 +911,98 @@
   grid-template-columns: minmax(170px, 1.2fr) 100px 112px minmax(150px, 1fr) minmax(160px, 1fr) 120px 130px 80px;
 }
 
+.wf-instance-grid--deletable .wf-grid-head,
+.wf-instance-grid--deletable .wf-grid-row {
+  grid-template-columns: minmax(170px, 1.2fr) 100px 112px minmax(150px, 1fr) minmax(160px, 1fr) 120px 130px 80px 88px;
+}
+
+.wf-instance-grid--deletable {
+  overflow-x: auto;
+}
+
+.wf-run-deletion-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 18px 10px;
+  color: var(--studio-text-muted);
+  font-size: 12px;
+}
+
+.wf-run-deletion-toolbar > span {
+  margin-right: auto;
+}
+
+.wf-run-deletion-feedback {
+  margin: 0 18px 10px;
+  color: var(--studio-text-muted);
+  font-size: 12px;
+}
+
+.wf-run-deletion-feedback p {
+  margin: 0;
+}
+
+.wf-run-deletion-feedback[role="alert"] {
+  color: var(--studio-danger-fg);
+}
+
+.wf-run-deletion-feedback ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.wf-run-column-header,
+.wf-run-identity-cell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.wf-run-select-all,
+.wf-run-select {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  align-items: center;
+  justify-content: center;
+}
+
+.wf-run-select-all input,
+.wf-run-select input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--studio-accent);
+  cursor: pointer;
+}
+
+.wf-run-inspect {
+  display: grid;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.wf-run-inspect:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
+}
+
+.wf-run-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .wf-run-health-indicator {
   display: inline-flex;
   align-items: center;
@@ -6741,6 +6833,11 @@ button.wf-reference-select {
     padding-inline: 8px;
   }
 
+  .wf-instance-grid--deletable .wf-grid-head,
+  .wf-instance-grid--deletable .wf-grid-row {
+    grid-template-columns: minmax(0, 1fr) 76px minmax(0, 1fr) minmax(0, 1.1fr) 82px;
+  }
+
   .wf-grid-head span:nth-child(3),
   .wf-grid-head span:nth-child(4),
   .wf-grid-head span:nth-child(5),
@@ -6800,6 +6897,16 @@ button.wf-reference-select {
 
   .wf-instance-grid .wf-grid-row > span {
     min-width: 0;
+  }
+
+  .wf-instance-grid--deletable .wf-grid-head span:nth-child(4),
+  .wf-instance-grid--deletable .wf-grid-row span:nth-child(4) {
+    display: none;
+  }
+
+  .wf-instance-grid--deletable .wf-grid-head,
+  .wf-instance-grid--deletable .wf-grid-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 82px;
   }
 
   .wf-instance-grid .wf-run-health-indicator {

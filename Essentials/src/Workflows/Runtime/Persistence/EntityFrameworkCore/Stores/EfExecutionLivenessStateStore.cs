@@ -1,8 +1,10 @@
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.Recovery;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -28,7 +30,7 @@ public sealed class EfExecutionLivenessStateStore(
             context.ExecutionLivenessStates.Add(ToEntity(state, scope, 1));
         else
         {
-            _ = Read(entity, scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId);
+            EnsureNotDeletionTombstone(Read(entity, scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId));
             Copy(entity, state, scope, checked(entity.Revision + 1));
         }
 
@@ -72,8 +74,10 @@ public sealed class EfExecutionLivenessStateStore(
         {
             if (entity is null)
                 return new(ExecutionLivenessStateWriteStatus.NotFound);
-            _ = Read(entity, scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId);
+            var current = Read(entity, scope, state.WorkflowExecutionId, state.ExecutionLivenessStateId);
             if (entity.Revision != expectedRevision)
+                return new ExecutionLivenessStateWriteResult(ExecutionLivenessStateWriteStatus.RevisionConflict, entity.Revision);
+            if (IsDeletionTombstone(current))
                 return new ExecutionLivenessStateWriteResult(ExecutionLivenessStateWriteStatus.RevisionConflict, entity.Revision);
             Copy(entity, state, scope, checked(expectedRevision + 1));
         }
@@ -532,6 +536,59 @@ public sealed class EfExecutionLivenessStateStore(
             throw new InvalidDataException("The execution-liveness row identity or recovery projection is corrupt.");
         return state;
     }
+
+    internal static async ValueTask EnsureWorkflowExecutionNotDeletedAsync(
+        RuntimeDbContext context,
+        string scope,
+        string workflowExecutionId,
+        CancellationToken cancellationToken)
+    {
+        if (await IsWorkflowExecutionDeletionTombstonedAsync(context, scope, workflowExecutionId, cancellationToken))
+            throw new InvalidOperationException("Execution-liveness state cannot be changed for a deleted workflow execution.");
+    }
+
+    internal static async ValueTask<bool> IsWorkflowExecutionDeletionTombstonedAsync(
+        RuntimeDbContext context,
+        string scope,
+        string workflowExecutionId,
+        CancellationToken cancellationToken)
+    {
+        var stateId = RuntimeExecutionOwnershipStateId.For(workflowExecutionId);
+        var scopeHash = EfRuntimeOperationalStoreSupport.Hash(scope);
+        var scopeKey = EfRuntimeOperationalStoreSupport.Encode(scope);
+        var workflowHash = EfRuntimeOperationalStoreSupport.Hash(workflowExecutionId);
+        var workflowKey = EfRuntimeOperationalStoreSupport.Encode(workflowExecutionId);
+        var stateIdHash = EfRuntimeOperationalStoreSupport.Hash(stateId);
+        var stateIdKey = EfRuntimeOperationalStoreSupport.Encode(stateId);
+        var row = await context.ExecutionLivenessStates.AsNoTracking().SingleOrDefaultAsync(candidate =>
+            candidate.Id == EfRuntimeOperationalStoreSupport.CompositeId(scope, workflowExecutionId, stateId) &&
+            candidate.ScopeKeyHash == scopeHash && candidate.ScopeKey == scopeKey &&
+            candidate.WorkflowExecutionIdHash == workflowHash && candidate.WorkflowExecutionId == workflowKey &&
+            candidate.OperationalStateIdHash == stateIdHash && candidate.OperationalStateId == stateIdKey,
+            cancellationToken);
+        if (row is null)
+            return false;
+
+        var state = Read(row, scope, workflowExecutionId, stateId);
+        if (!state.Metadata.TryGetValue(RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone, out var value))
+            return false;
+        if (!StringComparer.Ordinal.Equals(value, "true"))
+            throw new InvalidDataException("The persisted workflow-execution deletion tombstone is corrupt.");
+        return true;
+    }
+
+    private static void EnsureNotDeletionTombstone(ExecutionLivenessState state)
+    {
+        if (!state.Metadata.TryGetValue(RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone, out var value))
+            return;
+        if (!StringComparer.Ordinal.Equals(value, "true"))
+            throw new InvalidDataException("The persisted workflow-execution deletion tombstone is corrupt.");
+        throw new InvalidOperationException("Execution-liveness state cannot be changed for a deleted workflow execution.");
+    }
+
+    private static bool IsDeletionTombstone(ExecutionLivenessState state) =>
+        state.Metadata.TryGetValue(RuntimeMetadataKeys.WorkflowExecutionDeletionTombstone, out var value) &&
+        StringComparer.Ordinal.Equals(value, "true");
 
     private static void ValidateState(ExecutionLivenessState state)
     {

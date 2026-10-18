@@ -5,7 +5,7 @@ import { applyNodeChanges, ReactFlow, Background, Controls, MiniMap, type Edge, 
 import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityInputDescriptor, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
-import { getActivityExecutionInspection, getExecutable, getExecutableInputSources, getWorkflowInstance, listWorkflowInstances, supportsActivityExecutionInspection, supportsWorkflowInstanceHealthFilter, WorkflowInstanceHealthFilterUnavailableError, type WorkflowInstanceListPage } from "../api/runtime";
+import { deleteWorkflowInstance, getActivityExecutionInspection, getExecutable, getExecutableInputSources, getWorkflowInstance, listWorkflowInstances, supportsActivityExecutionInspection, supportsWorkflowInstanceDeletion, supportsWorkflowInstanceHealthFilter, WorkflowInstanceHealthFilterUnavailableError, type WorkflowInstanceListPage } from "../api/runtime";
 import { formatNamedIdentityTitle, loadDefinitionDisplayNames, resolveNamedIdentity } from "./definitionDisplayNames";
 import type { ActivityCatalogItem, ActivityExecutionInspection, ActivityExecutionInspectionValueSnapshot, ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowDefinitionVersionDetails, WorkflowExecutableDetails, WorkflowInstanceDetails, WorkflowInstanceSummary } from "../workflowTypes";
 import { formatActivitySummary } from "../activitySummary";
@@ -40,6 +40,7 @@ import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { buildBpmnCanvas, type BpmnNodeData } from "../bpmn/bpmnAdapter";
 import { CopyValueButton } from "./executableShared";
 import { useDialogFocus } from "./useDialogFocus";
+import { getDialogs } from "./dialogs";
 import {
   formatCaptureMode,
   formatSnapshotPayload,
@@ -107,11 +108,56 @@ export function WorkflowInstances({ context, navigate }: {
   const [page, setPage] = useState<WorkflowInstanceListPage>(emptyRunHistoryPage);
   const [definitionNames, setDefinitionNames] = useState<Map<string, string>>(() => new Map());
   const [healthFilterSupported, setHealthFilterSupported] = useState<boolean | null>(null);
+  const [deleteCapability, setDeleteCapability] = useState<{ context: StudioEndpointContext; supported: boolean } | null>(null);
+  const [selectedRunIds, setSelectedRunIds] = useState<Set<string>>(() => new Set());
+  const [deletionPhase, setDeletionPhase] = useState<"idle" | "confirming" | "deleting">("idle");
+  const deletingRuns = deletionPhase !== "idle";
+  const deletionTrigger = useRef<{ context: StudioEndpointContext; element: HTMLElement | null } | null>(null);
+  const refreshButton = useRef<HTMLButtonElement>(null);
+  const [deleteFeedback, setDeleteFeedback] = useState<{ message: string; failures: Array<{ id: string; message: string }> } | null>(null);
   const requestSequence = useRef(0);
+  const deletionSequence = useRef(0);
+  const deletionController = useRef<AbortController | null>(null);
+  const deletionScope = useRef({ context, location });
+  deletionScope.current = { context, location };
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+  const selectAllRef = useRef<HTMLInputElement>(null);
   const cursorScope = { backend: context, query: buildRunHistoryUrl({ ...location, cursor: null }) };
   const cursorHistory = useRef(createCursorHistory(cursorScope, location.cursor));
   const previousPage = getPreviousCursor(cursorHistory.current, cursorScope, location.cursor, page);
   const canFilterByHealth = healthFilterSupported === true;
+  const canDeleteRuns = deleteCapability?.context === context && deleteCapability.supported;
+  const visibleSelectedCount = page.items.reduce((count, instance) => count + Number(selectedRunIds.has(instance.workflowExecutionId)), 0);
+  const allVisibleSelected = page.items.length > 0 && visibleSelectedCount === page.items.length;
+  const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
+
+  useEffect(() => {
+    const trigger = deletionTrigger.current;
+    if (deletingRuns || !trigger) return;
+    deletionTrigger.current = null;
+    if (trigger.context !== context) return;
+    const element = trigger.element?.isConnected && trigger.element.tagName === "BUTTON" ? trigger.element : refreshButton.current;
+    element?.focus();
+  }, [context, deletingRuns]);
+
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someVisibleSelected;
+  }, [someVisibleSelected]);
+
+  useEffect(() => {
+    setSelectedRunIds(new Set());
+    setDeleteFeedback(null);
+    setDeletionPhase("idle");
+    deletionSequence.current += 1;
+    deletionController.current?.abort();
+    deletionController.current = null;
+    return () => {
+      deletionSequence.current += 1;
+      deletionController.current?.abort();
+      deletionController.current = null;
+    };
+  }, [context]);
 
   const load = useCallback(async () => {
     const requestId = ++requestSequence.current;
@@ -119,8 +165,13 @@ export function WorkflowInstances({ context, navigate }: {
     setError("");
     try {
       const filters = location.filters;
-      const supportsHealthFilter = await supportsWorkflowInstanceHealthFilter(context);
+      const [supportsHealthFilter, supportsDeletion] = await Promise.all([
+        supportsWorkflowInstanceHealthFilter(context),
+        supportsWorkflowInstanceDeletion(context)
+      ]);
+      if (requestId !== requestSequence.current) return;
       setHealthFilterSupported(supportsHealthFilter);
+      setDeleteCapability({ context, supported: supportsDeletion });
       if (filters.incidentHealth && !supportsHealthFilter) throw new WorkflowInstanceHealthFilterUnavailableError();
       const nextPage = await listWorkflowInstances(context, {
         status: valueOrUndefined(filters.status),
@@ -136,6 +187,20 @@ export function WorkflowInstances({ context, navigate }: {
         cursor: location.cursor ?? undefined
       });
       if (requestId !== requestSequence.current) return;
+      if (location.cursor && nextPage.items.length === 0) {
+        const firstLocation = { ...location, cursor: null };
+        cursorHistory.current = reconcileCursorHistory(cursorHistory.current, {
+          backend: context,
+          query: buildRunHistoryUrl({ ...firstLocation, cursor: null })
+        }, null);
+        setSelectedRunIds(new Set());
+        setState("loading");
+        setLocation(firstLocation);
+        navigateRef.current(buildRunHistoryUrl(firstLocation));
+        return;
+      }
+      const visibleIds = new Set(nextPage.items.map(instance => instance.workflowExecutionId));
+      setSelectedRunIds(current => new Set([...current].filter(id => visibleIds.has(id))));
       setPage(nextPage);
       setState("ready");
       void loadDefinitionDisplayNames(context, nextPage.items.map(item => item.definitionId)).then(names => {
@@ -160,6 +225,12 @@ export function WorkflowInstances({ context, navigate }: {
   useEffect(() => {
     const restoreLocation = () => {
       const next = readRunHistoryLocation();
+      setSelectedRunIds(new Set());
+      setDeleteFeedback(null);
+      setDeletionPhase("idle");
+      deletionSequence.current += 1;
+      deletionController.current?.abort();
+      deletionController.current = null;
       setLocation(next);
       setDraftFilters(next.filters);
     };
@@ -168,6 +239,12 @@ export function WorkflowInstances({ context, navigate }: {
   }, []);
 
   const updateLocation = (next: RunHistoryLocation, syncDraft = true) => {
+    setSelectedRunIds(new Set());
+    setDeleteFeedback(null);
+    setDeletionPhase("idle");
+    deletionSequence.current += 1;
+    deletionController.current?.abort();
+    deletionController.current = null;
     cursorHistory.current = reconcileCursorHistory(cursorHistory.current, {
       backend: context, query: buildRunHistoryUrl({ ...next, cursor: null })
     }, next.cursor);
@@ -193,6 +270,79 @@ export function WorkflowInstances({ context, navigate }: {
     navigate(`/workflows/instances/${encodeURIComponent(workflowExecutionId)}`);
   };
 
+  const toggleRunSelection = (workflowExecutionId: string, selected: boolean) => {
+    setSelectedRunIds(current => {
+      const next = new Set(current);
+      if (selected) next.add(workflowExecutionId);
+      else next.delete(workflowExecutionId);
+      return next;
+    });
+  };
+
+  const toggleVisibleRunSelection = (selected: boolean) => {
+    setSelectedRunIds(current => {
+      const next = new Set(current);
+      for (const instance of page.items) {
+        if (selected) next.add(instance.workflowExecutionId);
+        else next.delete(instance.workflowExecutionId);
+      }
+      return next;
+    });
+  };
+
+  const deleteRuns = async (workflowExecutionIds: string[]) => {
+    if (!canDeleteRuns || deletingRuns || workflowExecutionIds.length === 0) return;
+    const ids = [...new Set(workflowExecutionIds)];
+    const title = ids.length === 1 ? `Delete workflow run ${ids[0]}?` : `Delete these ${ids.length} workflow runs?`;
+    const confirmation = `${ids.join("\n")}\n\nActive runs will be stopped before deletion. This action cannot be undone.`;
+    const operationId = ++deletionSequence.current;
+    const operationContext = context;
+    const operationLocation = location;
+    const controller = new AbortController();
+    deletionController.current = controller;
+    const isCurrentOperation = () => deletionSequence.current === operationId
+      && deletionScope.current.context === operationContext
+      && deletionScope.current.location === operationLocation;
+    deletionTrigger.current = { context, element: document.activeElement instanceof HTMLElement ? document.activeElement : null };
+    setDeletionPhase("confirming");
+    const confirmed = await getDialogs().confirm({ title, message: confirmation, confirmLabel: "Delete", tone: "danger" });
+    if (!isCurrentOperation()) return;
+    if (!confirmed) {
+      if (deletionController.current === controller) deletionController.current = null;
+      setDeletionPhase("idle");
+      return;
+    }
+    setDeletionPhase("deleting");
+    setDeleteFeedback(null);
+
+    const results = await mapWithConcurrency(ids, 3, async id => {
+      if (controller.signal.aborted) return { id, deleted: false, message: "Deletion was interrupted." };
+      try {
+        await deleteWorkflowInstance(operationContext, id, controller.signal);
+        return { id, deleted: true, message: "" };
+      } catch (error) {
+        return { id, deleted: false, message: error instanceof Error ? error.message : String(error) };
+      }
+    });
+    if (!isCurrentOperation()) return;
+    if (deletionController.current === controller) deletionController.current = null;
+
+    const successfulIds = results.filter(result => result.deleted).map(result => result.id);
+    const failures = results.filter(result => !result.deleted).map(result => ({ id: result.id, message: result.message }));
+    setSelectedRunIds(current => {
+      const next = new Set(current);
+      for (const id of successfulIds) next.delete(id);
+      for (const { id } of failures) next.add(id);
+      return next;
+    });
+    setDeleteFeedback({
+      message: `${successfulIds.length ? `${formatRunCount(successfulIds.length)} deleted.` : "No workflow runs were deleted."}${failures.length ? ` ${formatRunCount(failures.length)} could not be deleted. Review the errors below before retrying.` : ""}`,
+      failures
+    });
+    setDeletionPhase("idle");
+    if (successfulIds.length > 0) void load();
+  };
+
   const instances = page.items;
   const activeFilterCount = Object.values(location.filters).filter(Boolean).length;
   const hasDraftFilters = Object.values(draftFilters).some(Boolean);
@@ -204,7 +354,7 @@ export function WorkflowInstances({ context, navigate }: {
         applyFilters();
       }}>
         <div className="wf-toolbar">
-        <button type="button" onClick={() => void load()}>Refresh</button>
+        <button ref={refreshButton} type="button" onClick={() => void load()}>Refresh</button>
         <label className="wf-toolbar-field">
           <span>Status</span>
           <select aria-label="Workflow run status" value={draftFilters.status} onChange={event => setDraftFilters(current => ({ ...current, status: event.target.value }))}>
@@ -254,6 +404,27 @@ export function WorkflowInstances({ context, navigate }: {
       {state === "failed" ? <div role="alert"><WfErrorCard message={error} /></div> : null}
       {state === "unsupported" ? <p className="wf-run-health-unavailable" role="status">{error} No workflow runs were loaded. Clear the incident-health filter to search without it.</p> : null}
       {state === "loading" ? <div role="status" aria-live="polite" aria-label="Loading workflow runs"><WfListSkeleton /></div> : null}
+      {canDeleteRuns && state === "ready" && (instances.length > 0 || selectedRunIds.size > 0) ? (
+        <div className="wf-run-deletion-toolbar" aria-label="Workflow run deletion controls">
+          <span aria-live="polite">{formatRunCount(selectedRunIds.size)} selected</span>
+          <button type="button" disabled={selectedRunIds.size === 0 || deletingRuns} onClick={() => void deleteRuns([...selectedRunIds])}>
+            {deletionPhase === "deleting" ? "Deleting…" : "Delete selected"}
+          </button>
+          <button type="button" disabled={selectedRunIds.size === 0 || deletingRuns} onClick={() => setSelectedRunIds(new Set())}>
+            Clear selection
+          </button>
+        </div>
+      ) : null}
+      {canDeleteRuns && deleteFeedback ? (
+        <div className="wf-run-deletion-feedback" role={deleteFeedback.failures.length ? "alert" : "status"}>
+          <p>{deleteFeedback.message}</p>
+          {deleteFeedback.failures.length ? (
+            <ul>
+              {deleteFeedback.failures.map(failure => <li key={failure.id}><code>{failure.id}</code>: {failure.message}</li>)}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
       {state === "ready" && instances.length === 0 ? (
         <div role="status" aria-live="polite">
           <WfEmptyState
@@ -266,45 +437,89 @@ export function WorkflowInstances({ context, navigate }: {
         </div>
       ) : null}
       {state === "ready" && instances.length > 0 ? (
-        <div className="wf-grid wf-instance-grid" role="table" aria-label="Workflow runs">
+        <div className={`wf-grid wf-instance-grid${canDeleteRuns ? " wf-instance-grid--deletable" : ""}`} role="table" aria-label="Workflow runs">
           <div className="wf-grid-head" role="row">
-            <span>Run</span>
-            <span>Kind</span>
-            <span>Status</span>
-            <span>Health</span>
-            <span>Definition</span>
-            <span>Activity</span>
-            <span>Started</span>
-            <span>Duration</span>
+            <span role="columnheader" className="wf-run-column-header">
+              {canDeleteRuns ? <label className="wf-run-select-all"><input
+                ref={selectAllRef}
+                type="checkbox"
+                aria-label="Select all workflow runs on this page"
+                checked={allVisibleSelected}
+                disabled={deletingRuns}
+                onChange={event => toggleVisibleRunSelection(event.target.checked)}
+              /></label> : null}
+              <strong>Run</strong>
+            </span>
+            <span role="columnheader">Kind</span>
+            <span role="columnheader">Status</span>
+            <span role="columnheader">Health</span>
+            <span role="columnheader">Definition</span>
+            <span role="columnheader">Activity</span>
+            <span role="columnheader">Started</span>
+            <span role="columnheader">Duration</span>
+            {canDeleteRuns ? <span role="columnheader">Actions</span> : null}
           </div>
           {instances.map(instance => (
-            <button
-              type="button"
+            <div
               className="wf-grid-row"
               role="row"
+              tabIndex={0}
+              aria-selected={selectedRunIds.has(instance.workflowExecutionId)}
               aria-label={`Inspect workflow run ${instance.workflowExecutionId} · ${instance.status}${instance.subStatus ? ` · ${instance.subStatus}` : ""} · ${formatCurrentIncidentHealth(instance)}`}
               key={instance.workflowExecutionId}
-              onClick={() => openInstance(instance.workflowExecutionId)}
+              onClick={event => {
+                if ((event.target as HTMLElement).closest("button, input, label")) return;
+                openInstance(instance.workflowExecutionId);
+              }}
+              onKeyDown={event => {
+                if (event.target !== event.currentTarget) return;
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  openInstance(instance.workflowExecutionId);
+                }
+              }}
             >
-              <span>
-                <strong>{instance.workflowExecutionId}</strong>
-                <small>{instance.artifactId}</small>
+              <span role="cell" className="wf-run-identity-cell">
+                {canDeleteRuns ? <label className="wf-run-select"><input
+                  type="checkbox"
+                  aria-label={`Select workflow run ${instance.workflowExecutionId}`}
+                  checked={selectedRunIds.has(instance.workflowExecutionId)}
+                  disabled={deletingRuns}
+                  onChange={event => toggleRunSelection(instance.workflowExecutionId, event.target.checked)}
+                /></label> : null}
+                <button
+                  type="button"
+                  className="wf-run-inspect"
+                  aria-label={`Inspect workflow run ${instance.workflowExecutionId}`}
+                  onClick={() => openInstance(instance.workflowExecutionId)}
+                >
+                  <strong>{instance.workflowExecutionId}</strong>
+                  <small>{instance.artifactId}</small>
+                </button>
               </span>
-              <span>{formatRunKind(instance.runKind)}</span>
-              <span><WorkflowStatusBadge status={instance.status} subStatus={instance.subStatus} /></span>
-              <span><CurrentIncidentHealthLabel instance={instance} /></span>
-              <NamedIdentity
+              <span role="cell">{formatRunKind(instance.runKind)}</span>
+              <span role="cell"><WorkflowStatusBadge status={instance.status} subStatus={instance.subStatus} /></span>
+              <span role="cell"><CurrentIncidentHealthLabel instance={instance} /></span>
+              <span role="cell"><NamedIdentity
                 name={definitionNames.get(instance.definitionId)}
                 id={instance.definitionId}
                 secondary={instance.definitionVersionId}
-              />
-              <span>
+              /></span>
+              <span role="cell">
                 <strong>{instance.activityCount} activities</strong>
                 <small>{instance.incidentCount} incidents</small>
               </span>
-              <span>{formatDate(instance.startedAt ?? instance.createdAt)}</span>
-              <span>{formatDuration(instance.startedAt ?? instance.createdAt, instance.completedAt ?? instance.updatedAt)}</span>
-            </button>
+              <span role="cell">{formatDate(instance.startedAt ?? instance.createdAt)}</span>
+              <span role="cell">{formatDuration(instance.startedAt ?? instance.createdAt, instance.completedAt ?? instance.updatedAt)}</span>
+              {canDeleteRuns ? <span role="cell" className="wf-run-row-actions">
+                <button
+                  type="button"
+                  disabled={deletingRuns}
+                  aria-label={`Delete workflow run ${instance.workflowExecutionId}`}
+                  onClick={() => void deleteRuns([instance.workflowExecutionId])}
+                >Delete</button>
+              </span> : null}
+            </div>
           ))}
         </div>
       ) : null}
@@ -374,6 +589,28 @@ function emptyRunHistoryFilters(): RunHistoryFilters {
     to: "",
     incidentHealth: ""
   };
+}
+
+function formatRunCount(count: number) {
+  return `${count} workflow run${count === 1 ? "" : "s"}`;
+}
+
+async function mapWithConcurrency<T, TResult>(
+  items: readonly T[],
+  maxConcurrency: number,
+  mapItem: (item: T) => Promise<TResult>
+): Promise<TResult[]> {
+  const results = new Array<TResult>(items.length);
+  let nextIndex = 0;
+  const workerCount = Math.min(items.length, Math.max(1, Math.floor(maxConcurrency)));
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= items.length) return;
+      results[index] = await mapItem(items[index]);
+    }
+  }));
+  return results;
 }
 
 function normalizeRunHistoryFilters(filters: RunHistoryFilters): RunHistoryFilters {
