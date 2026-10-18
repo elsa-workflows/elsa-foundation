@@ -33,7 +33,7 @@ describe("publication channel UX", () => {
   it("starts with a short confirmation and keeps changes and publishing options collapsed", () => {
     const container = render(review());
     expect(container.querySelector("h3")?.textContent).toBe("Publish workflow");
-    expect(container.querySelector(".wf-publication-header p")?.textContent).toBe("Make your latest changes available to run.");
+    expect(container.querySelector(".wf-publication-header p")?.textContent).toBe("Update the published workflow with your latest changes.");
     expect(container.querySelectorAll(".wf-publication-body > details")).toHaveLength(2);
     const options = summary(container, "Publishing options")!.parentElement as HTMLDetailsElement;
     const changes = summary(container, "Review changes")!.parentElement as HTMLDetailsElement;
@@ -131,7 +131,7 @@ describe("publication channel UX", () => {
       { mode: "automatic" });
   });
 
-  it("blocks on a foreign-owned target with an owner blocker, disabled Publish, and Review the highlighted issue before publishing. readiness", () => {
+  it("blocks a foreign-owned target and asks authors to review the blocker", () => {
     const container = render(review({
       preflight: preflight({ canActivate: false, targetSlotOwner: foreignSlotOwner() })
     }));
@@ -179,6 +179,39 @@ describe("publication channel UX", () => {
     expect(alert.closest("details")).toBeNull();
     expect(container.querySelector("details[open]")).toBeNull();
     expect(button(container, "Publish").disabled).toBe(true);
+  });
+
+  it("does not announce a version check while draft validation blocks review", () => {
+    const container = render(review({
+      phase: "validationBlocked",
+      versionPreflightSupported: true,
+      validationErrors: ["An HTTP endpoint needs a path."]
+    }));
+
+    expect(text(container)).not.toContain("Checking your version choice");
+    expect(container.querySelector("[role='alert']")?.textContent).toContain("An HTTP endpoint needs a path.");
+  });
+
+  it("does not announce a version check for an exact version with an empty new channel", () => {
+    const container = render(review({
+      versionPreflightSupported: true,
+      versionSelection: { mode: "exact", requestedVersion: "2.3.0" }
+    }));
+
+    changeSelect(container.querySelector<HTMLSelectElement>("select[aria-label='Publication channel']")!, "__create-publication-channel__");
+
+    expect(text(container)).toContain("Enter a channel name before publishing.");
+    expect(text(container)).not.toContain("Checking your version choice");
+  });
+
+  it("uses the preflight replacement action when slot occupancy is unavailable", () => {
+    const container = render(review({
+      intent: { action: "replace", slotName: "blue" },
+      preflight: preflight({ slotName: "blue", resolvedAction: "replace" }),
+      slotsUnavailableReason: "The host could not list activation slots."
+    }));
+
+    expect(container.querySelector(".wf-publication-header p")?.textContent).toBe("Update the published workflow in blue.");
   });
 
   it("shows both blockers when the target is foreign-owned and has trigger conflicts", () => {
@@ -324,7 +357,7 @@ describe("publication channel UX", () => {
       failureMessage: "Activation timed out. The promoted version was retained."
     }));
 
-    expect(text(container)).toContain("Version 2.1.0 was retained. default was not activated.");
+    expect(text(container)).toContain("Version 2.1.0 was retained. Channel default was not activated.");
     expect(button(container, "Retry publication")).toBeDefined();
     expect(button(container, "Close")).toBeDefined();
     expect(container.querySelector("select[aria-label='Publication channel']")).toBeNull();

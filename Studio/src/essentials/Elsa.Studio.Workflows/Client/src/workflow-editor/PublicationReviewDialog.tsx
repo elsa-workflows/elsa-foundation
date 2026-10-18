@@ -159,7 +159,9 @@ export function PublicationReviewDialog({
               {review.phase === "success" || review.phase === "partialFailure" || review.phase === "savedFailure"
                 ? null
                 : <p>
-                    {occupancy.kind === "publication"
+                    {(reviewedPreflight?.resolvedAction
+                      ? reviewedPreflight.resolvedAction === "replace"
+                      : occupancy.kind === "publication")
                       ? <>Update the published workflow{selectedChannel !== review.policy.defaultSlotName
                           ? <> in <strong>{selectedChannel}</strong></>
                           : " with your latest changes"}.</>
@@ -220,13 +222,6 @@ export function PublicationReviewDialog({
                   <div className="wf-publication-risks" role="alert">
                     <strong>Choose a valid version</strong>
                     <ul>{versionIssues.map(issue => <li key={`${issue.code}-${issue.message}`}>{issue.message}</li>)}</ul>
-                  </div>
-                ) : null}
-
-                {review.versionPreflightSupported && !review.reviewPending && !versionEvidenceMatches && !review.failureMessage ? (
-                  <div className="wf-publication-risks" role="alert">
-                    <strong>Checking your version choice</strong>
-                    <p>Wait for the version check to finish.</p>
                   </div>
                 ) : null}
 
@@ -484,7 +479,7 @@ function PublicationRecovery({ review }: { review: PublicationReviewState }) {
   return (
     <section className="wf-publication-outcome" aria-labelledby="publication-recovery-title">
       <h4 id="publication-recovery-title" tabIndex={-1}>
-        Version {review.proposedVersion} was retained. {channel} was not activated.
+        Version {review.proposedVersion} was retained. Channel {channel} was not activated.
       </h4>
       {review.failureMessage ? <p>{review.failureMessage}</p> : null}
     </section>
