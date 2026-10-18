@@ -19,7 +19,9 @@ for (const width of [320, 768, 1024, 1440]) {
     const table = page.getByRole("table", { name: "Connections", exact: true });
     await expect(table.getByRole("button", { name: "Customer API", exact: true })).toBeVisible();
     await expect(page.getByRole("dialog")).toHaveCount(0);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await expect.poll(() => page.evaluate(() =>
+      document.documentElement.scrollWidth <= document.documentElement.clientWidth
+    )).toBe(true);
 
     const opener = page.getByRole("button", { name: "Details for Customer API", exact: true });
     await opener.click();

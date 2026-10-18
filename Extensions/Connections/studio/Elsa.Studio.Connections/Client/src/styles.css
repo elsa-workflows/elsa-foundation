@@ -117,7 +117,7 @@
 .connections-shell :focus-visible,
 .connections-modal :focus-visible,
 .connection-picker-editor :focus-visible { outline: 2px solid var(--connections-focus); outline-offset: 2px; }
-.connections-table-wrap { overflow-x: auto; }
+.connections-table-wrap { position: relative; overflow-x: auto; }
 .connections-table { width: 100%; border-collapse: collapse; text-align: left; }
 .connections-table th,
 .connections-table td { padding: 1rem 1.25rem; vertical-align: middle; }
