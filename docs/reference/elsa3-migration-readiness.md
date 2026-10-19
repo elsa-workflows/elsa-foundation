@@ -5,8 +5,10 @@ import applies and every imported reusable activity publishes and runs. It cover
 activity** (reusable workflows) and the workflows that call them. General conversion rules for every Elsa 3 activity are
 in the [Elsa 3 mapping README](../../Extensions/Elsa3/src/Mapping/README.md#behaviour-worth-knowing).
 
-This page describes the import on `main` as of spec 246 (2026-10-19); conversion rules for JavaScript host functions
-change with spec 247 (#2717). Each check names the diagnostic code the import reports if it is not met. Every code comes with a message and guidance
+This page describes the import as of specs 246 and 247 (2026-10-19). JavaScript and Liquid rules for every workflow
+are in the README's [Migrating Elsa 3 JavaScript](../../Extensions/Elsa3/src/Mapping/README.md#migrating-elsa-3-javascript);
+this page adds what differs inside a reusable workflow. Each check names the diagnostic code the import reports if it is
+not met. Every code comes with a message and guidance
 in the API response; this page is the checklist, the response is the authority for one case.
 
 ## Status at a glance
@@ -32,12 +34,17 @@ are done.
 1. **No trigger.** The workflow does not start from a trigger (an activity with *Can start workflow*), nested or not.
    Move the trigger, with the activities it owns, into its own workflow that calls the reusable workflow.
 2. **No setting values.** The body uses no SetVariable, SetOutput, Correlate or SetName activity. No JavaScript or
-   Liquid assigns a value either (`setVariable`, `setOutput`, `setInput`, `setResult`, `variables.x = ...`, Liquid
-   `assign`): that is refused in every workflow (`VF-IMP-005`), and in a reusable body the Set activity it would move to
-   is not available yet.
-3. **No reading values.** No activity in the body reads a value: in JavaScript `getInput(...)`, `getVariable(...)` or
-   `variables.x`; in Liquid `Input.x`, `Variables.x` or `Output.x`; and no property bound to a variable or to another
-   activity's output (an Elsa 3 memory reference). Use literal values. Declared inputs may stay on the workflow, and callers may pass them,
+   Liquid assigns a value either (`setVariable`, `setOutput`, `setInput`, `setResult`, a generated `set{Name}(...)`,
+   `setCorrelationId`, `setWorkflowInstanceName`, `variables.x = ...`, Liquid `assign`): that is refused in every
+   workflow (`VF-IMP-005`), and the Set, Correlate or Set Name activity its guidance points to is not available in a
+   reusable body yet.
+3. **No reading values.** No activity in the body reads a value: in JavaScript `getInput(...)`, `getVariable(...)`,
+   `variables.x` or a generated `get{Name}()` accessor; in Liquid `Input.x`, `Variables.x` or `Output.x`; and no property
+   bound to a variable or to another activity's output (an Elsa 3 memory reference). Use literal values.
+   - Allowed: `getWorkflowInstanceId()` and `getCorrelationId()` read the running workflow instance, as in Elsa 3.
+   - The JavaScript guidance "pass the value in as a workflow input" or "capture the output into a variable" does not
+     help inside a reusable body, because the body cannot read either yet. Keep that logic in the calling workflow, or
+     make the reusable workflow a regular one (see below). Declared inputs may stay on the workflow, and callers may pass them,
    but the body cannot read them yet.
 4. **Outcomes.** Each Complete names exactly one literal outcome; not a list, not an expression, and not `done`, which
    collides with Elsa 4's natural outcome. Declare the outcomes on the workflow: an undeclared one is declared anyway with

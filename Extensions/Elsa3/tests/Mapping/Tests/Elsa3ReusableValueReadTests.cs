@@ -15,6 +15,9 @@ public sealed class Elsa3ReusableValueReadTests
     [Theory]
     [InlineData("getInput(\"message\")")]
     [InlineData("getVariable(\"total\")")]
+    // Elsa 3's generated accessors (spec 247) resolve to the same reads.
+    [InlineData("getMessage()")]
+    [InlineData("getTotal()")]
     public async Task A_reusable_body_reading_an_input_or_variable_is_refused(string script)
     {
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), Definition(script, reusable: true), isReusable: true);
