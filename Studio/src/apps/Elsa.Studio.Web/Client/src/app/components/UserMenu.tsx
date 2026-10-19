@@ -1,7 +1,7 @@
-import React, { useContext, useState } from "react";
+import React, { useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { LogOut } from "lucide-react";
-import { AuthContext } from "../../auth/AuthContext";
+import { useAuthContext } from "@elsa-workflows/studio-sdk";
 import "./UserMenu.css";
 
 function initials(name: string) {
@@ -14,7 +14,7 @@ function initials(name: string) {
  * nothing without an authenticated session, so a deployment with sign-in off shows no menu.
  */
 export function UserMenu() {
-  const auth = useContext(AuthContext);
+  const auth = useAuthContext();
   const [signingOut, setSigningOut] = useState(false);
   const [failed, setFailed] = useState(false);
   if (auth?.session.status !== "authenticated") return null;

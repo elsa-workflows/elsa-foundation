@@ -1,3 +1,4 @@
+import "@xyflow/react/dist/style.css";
 import { ActivityIconsFixture } from "./activityIconsFixture";
 import { ActivityInputEvidenceFixture } from "./activityInputEvidenceFixture";
 import React, { lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
