@@ -112,7 +112,7 @@ test("Ctrl+D does nothing while the designer code editor is focused", async ({ p
 
   const syntaxTrigger = page.getByRole("button", { name: /expression syntax/i }).first();
   if (await syntaxTrigger.isVisible()) {
-    const current = await syntaxTrigger.textContent();
+    const current = await syntaxTrigger.getAttribute("title");
     if (!current?.includes("JavaScript")) {
       await syntaxTrigger.click();
       await page.getByRole("option", { name: "JavaScript" }).click();
@@ -160,4 +160,28 @@ test("activity duplicate menu has no critical or serious automated accessibility
     );
   });
   expect(violations).toEqual([]);
+});
+
+test("floating node tools duplicate with undo and keep keyboard focus in the canvas", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/?mode=activity-duplicate-editor&theme=dark");
+  await selectNotifyBuyer(page);
+  const tools = page.getByRole("toolbar", { name: "Actions for Notify buyer", exact: true });
+  await expect(tools).toBeVisible();
+  await expect(tools.getByRole("button", { name: "Add next activity", exact: true })).toHaveCount(1);
+  await tools.getByRole("button", { name: "Duplicate Notify buyer", exact: true }).press("Enter");
+  const copy = page.locator(".react-flow__node").filter({ hasText: "Notify buyer (copy)" });
+  await expect(copy).toBeFocused();
+  await expect(copy).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(copy).toHaveCount(0);
+  await selectNotifyBuyer(page);
+  await page.getByRole("button", { name: "Delete Notify buyer", exact: true }).press("Enter");
+  await expect(page.locator(".react-flow__node[data-id='write-two']")).toBeFocused();
+  await expect(page.locator(".react-flow__node[data-id='write-one']")).toHaveCount(0);
+  await page.getByRole("button", { name: "Delete Write Line", exact: true }).press("Enter");
+  await expect(page.getByLabel("Workflow canvas", { exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.locator(".react-flow__node[data-id='write-one']")).toBeVisible();
 });

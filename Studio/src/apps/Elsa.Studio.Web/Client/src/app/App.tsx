@@ -24,6 +24,7 @@ import {
   PlayCircle,
   RefreshCw,
   Search,
+  Server,
   Settings,
   SlidersHorizontal
 } from "lucide-react";
@@ -757,12 +758,15 @@ export function ShellFrame({
           </nav>
         ) : null}
 
-        <div className="sidebar-footer" aria-label="Backend API status">
-          <span className="sidebar-status-dot" aria-hidden="true" />
-          <span>
-            <strong>Backend API</strong>
-            <small>{backendHost}</small>
-          </span>
+        <div className="sidebar-footer" role="group" aria-label="Environment and account">
+          <div className="sidebar-environment" role="group" aria-label={`Configured backend endpoint: ${backendHost}`} title="Configured backend endpoint; connectivity is not measured">
+            <span className="sidebar-environment-icon" aria-hidden="true"><Server size={16} /></span>
+            <span className="sidebar-environment-copy">
+              <strong>Backend API</strong>
+              <small>{backendHost}</small>
+            </span>
+          </div>
+          <div className="sidebar-account">{topNav ? null : <UserMenu />}</div>
         </div>
       </aside>
 
@@ -788,8 +792,8 @@ export function ShellFrame({
       </div>
       {panels.length > 0 ? <BottomPanel panels={panels} /> : null}
       {topNav ? (
-        <footer className="studio-statusbar" aria-label="Status">
-          <span><span className="sidebar-status-dot" aria-hidden="true" />Backend API · {backendHost}</span>
+        <footer className="studio-statusbar" aria-label="Environment status">
+          <span title="Configured backend endpoint; connectivity is not measured"><span className="sidebar-status-dot" aria-hidden="true" />Backend API · {backendHost}</span>
           <span>Studio / {title}</span>
         </footer>
       ) : null}

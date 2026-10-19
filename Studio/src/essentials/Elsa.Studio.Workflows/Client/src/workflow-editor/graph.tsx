@@ -11,6 +11,7 @@ import { truncate } from "../workflowFormatting";
 import { groupActivityPalette, isActivityBrowsable } from "./editorHelpers";
 import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext } from "./contexts";
 import { NodeSlotBadges } from "./NodeSlotBadges";
+import { WorkflowNodeContextToolbar } from "./WorkflowNodeContextToolbar";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { RuntimeIncidentAction } from "./RuntimeIncidentAction";
 import { BpmnElementNode } from "../bpmn/BpmnElementNode";
@@ -66,6 +67,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
           <Flag size={11} aria-hidden="true" /> Start
         </span>
       ) : null}
+      <WorkflowNodeContextToolbar nodeId={id} data={nodeData} selected={!!selected} />
       {availability ? (
         <span className="wf-node-availability" title={`No longer available for new use · ${getAvailabilityStateLabel(availability.state)}`}>
           <AlertTriangle size={13} />

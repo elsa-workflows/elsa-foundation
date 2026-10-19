@@ -1,15 +1,16 @@
 .wf-editor-toolbar.wf-editor-top {
+  position: relative;
   flex-wrap: wrap;
   gap: 8px 16px;
-  align-items: flex-start;
-  padding: 4px 14px;
+  align-items: center;
+  padding: 6px 12px;
 }
 
 .wf-editor-identity {
   display: flex;
-  flex: 1 1 240px;
+  flex: 1 1 180px;
   min-width: 0;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
 }
 
@@ -23,7 +24,7 @@
 }
 
 .wf-editor-toolbar .wf-editor-identity > svg {
-  margin-top: 9px;
+  margin-top: 0;
 }
 
 .wf-editor-title {
@@ -46,7 +47,7 @@
   min-height: 16px;
   align-items: center;
   gap: 8px;
-  margin-top: 2px;
+  margin-top: 0;
 }
 
 .wf-editor-title .wf-chip {
@@ -87,7 +88,7 @@
 .wf-editor-toolbar .wf-editor-actions {
   flex: 0 0 auto;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .wf-editor-toolbar .wf-editor-actions > button {
@@ -95,18 +96,25 @@
 }
 
 .wf-editor-toolbar .wf-review-button {
-  border-color: color-mix(in srgb, var(--studio-accent) 40%, var(--studio-border));
-}
-
-.wf-editor-toolbar .wf-run-button {
   border-color: var(--studio-accent);
   background: var(--studio-accent);
   color: var(--studio-accent-text);
   font-weight: 600;
 }
 
+.wf-editor-toolbar .wf-review-button > span {
+  text-transform: capitalize;
+}
+
+.wf-editor-toolbar .wf-run-button {
+  border-color: color-mix(in srgb, var(--studio-accent) 35%, var(--studio-border));
+  background: var(--studio-surface);
+  color: var(--studio-text);
+  font-weight: 600;
+}
+
 .wf-editor-toolbar .wf-run-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--studio-accent) 88%, var(--studio-text));
+  background: var(--studio-accent-soft);
 }
 
 .wf-editor-toolbar .wf-run-button:disabled {
@@ -189,5 +197,53 @@
     margin-right: 0;
     padding-right: 0;
     border-right: 0;
+  }
+}
+
+/* Quiet chrome leaves the canvas and primary publish command in focus. */
+.wf-editor-toolbar .wf-editor-identity > .wf-link-button {
+  padding: 0 4px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--studio-text-muted);
+}
+
+.wf-editor-toolbar .wf-canvas-tools {
+  gap: 0;
+  padding: 2px;
+  margin-right: 0;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius);
+  background: var(--studio-surface-muted);
+}
+
+.wf-editor-toolbar .wf-canvas-tools > button {
+  border-color: transparent;
+  background: transparent;
+}
+
+.wf-editor-toolbar .wf-review-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--studio-accent) 88%, var(--studio-text));
+}
+
+.wf-toolbar-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 600px) {
+  .wf-editor-toolbar .wf-editor-metadata {
+    flex-basis: 100%;
+  }
+
+  .wf-editor-toolbar .wf-canvas-tools {
+    flex: 0 0 auto;
   }
 }

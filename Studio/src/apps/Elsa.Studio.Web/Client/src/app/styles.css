@@ -436,7 +436,7 @@ textarea:focus {
 .sidebar {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   border-right: 1px solid var(--border);
   background: var(--sidebar);
   color: var(--sidebar-foreground);
@@ -544,7 +544,7 @@ textarea:focus {
 
 .nav-section {
   display: grid;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-sm);
 }
 
 .nav-heading {
@@ -591,7 +591,7 @@ textarea:focus {
   top: 0;
   bottom: 0;
   width: 2px;
-  background: var(--primary);
+  background: var(--studio-accent);
   opacity: 0;
   transition: opacity var(--transition-fast);
 }
@@ -633,11 +633,11 @@ textarea:focus {
 
 .nav-section a.has-active-child {
   color: var(--sidebar-foreground);
-  font-weight: 600;
+  font-weight: 550;
 }
 
 .nav-section a.has-active-child .nav-icon-tile {
-  background: color-mix(in srgb, var(--nav-icon-color) 18%, transparent);
+  background: color-mix(in srgb, var(--nav-icon-color) 11%, transparent);
 }
 
 .nav-children {
@@ -645,25 +645,35 @@ textarea:focus {
   gap: 2px;
   margin: 0 0 2px 22px;
   padding-left: 13px;
-  border-left: 1px solid color-mix(in srgb, var(--border) 75%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--studio-border) 78%, transparent);
 }
 
 .nav-section a.nav-child {
   min-height: 28px;
   gap: 0;
   border-radius: var(--radius-sm);
-  color: var(--muted-foreground);
+  color: var(--studio-text-muted);
   font-size: 12px;
   padding: 4px 10px;
+  overflow: visible;
 }
 
 .nav-section a.nav-child::before {
   left: -14px;
+  top: 7px;
+  bottom: 7px;
+  width: 2px;
+  border-radius: 999px;
 }
 
-.nav-section a.nav-child:hover,
+.nav-section a.nav-child:hover {
+  color: var(--studio-text);
+}
+
 .nav-section a.nav-child.active {
-  color: var(--sidebar-foreground);
+  background: color-mix(in srgb, var(--studio-accent) 8%, transparent);
+  color: var(--studio-text);
+  font-weight: 600;
 }
 
 .nav-section-more {
@@ -709,40 +719,87 @@ textarea:focus {
 
 .sidebar-footer {
   display: grid;
-  grid-template-columns: 8px minmax(0, 1fr);
-  align-items: start;
-  gap: 9px;
+  gap: 8px;
   margin-top: auto;
   border-top: 1px solid var(--border);
-  border-radius: 0;
-  background: transparent;
-  color: var(--muted-foreground);
-  font-size: 12px;
-  line-height: 1.5;
-  padding: 12px 10px 2px;
+  color: var(--studio-text-muted);
+  padding: 12px 4px 2px;
   transition: all var(--transition-fast);
 }
 
-.sidebar-footer span:last-child {
+.sidebar-environment {
   display: grid;
-  gap: 2px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  border: 1px solid color-mix(in srgb, var(--studio-border) 78%, transparent);
+  border-radius: var(--studio-radius-md);
+  background: color-mix(in srgb, var(--studio-surface) 84%, transparent);
+  padding: 8px;
+}
+
+.sidebar-environment-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid color-mix(in srgb, var(--studio-border) 72%, transparent);
+  border-radius: var(--studio-radius-sm);
+  background: color-mix(in srgb, var(--studio-surface-muted) 78%, transparent);
+  color: var(--studio-text-muted);
+}
+
+.sidebar-environment-copy {
+  display: grid;
+  gap: 3px;
   min-width: 0;
 }
 
-.sidebar-footer strong {
-  color: var(--foreground);
+.sidebar-environment strong {
+  color: var(--studio-text);
   font-size: 12px;
   font-weight: 680;
   line-height: 1.2;
 }
 
-.sidebar-footer small {
+.sidebar-environment small {
   min-width: 0;
   overflow: hidden;
-  color: var(--muted-foreground);
+  color: var(--studio-text-muted);
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.sidebar-account:empty {
+  display: none;
+}
+
+.sidebar-account .user-menu,
+.sidebar-account .user-menu-button {
+  width: 100%;
+  max-width: none;
+}
+
+.sidebar-account .user-menu-button {
+  height: 38px;
+  border-color: transparent;
+  background: transparent;
+  padding: 0 8px;
+  text-align: left;
+}
+
+.sidebar-account .user-menu-button:hover,
+.sidebar-account .user-menu-button[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--studio-border) 72%, transparent);
+  background: color-mix(in srgb, var(--studio-accent) 7%, transparent);
+  box-shadow: none;
+}
+
+.sidebar-account .user-menu-avatar {
+  background: color-mix(in srgb, var(--studio-accent) 10%, var(--studio-surface));
+  color: var(--studio-text);
 }
 
 .sidebar-status-dot {
@@ -750,8 +807,8 @@ textarea:focus {
   height: 8px;
   margin-top: 4px;
   border-radius: 999px;
-  background: var(--success);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 12%, transparent);
+  background: var(--studio-text-muted);
+  box-shadow: none;
 }
 
 .sidebar-top {
@@ -759,6 +816,8 @@ textarea:focus {
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-xs);
+  border-radius: var(--studio-radius-md);
+  background: radial-gradient(ellipse 115% 145% at top left, color-mix(in srgb, var(--studio-accent) 10%, transparent), transparent 75%);
 }
 
 .sidebar-top .brand {
@@ -819,7 +878,8 @@ textarea:focus {
   .sidebar-collapsed .sidebar .nav-heading,
   .sidebar-collapsed .sidebar .nav-children,
   .sidebar-collapsed .sidebar .nav-disclosure > svg:last-child,
-  .sidebar-collapsed .sidebar-footer span:last-child {
+  .sidebar-collapsed .sidebar-environment-copy,
+  .sidebar-collapsed .sidebar-account .user-menu-name {
     display: none;
   }
 
@@ -838,14 +898,32 @@ textarea:focus {
   }
 
   .sidebar-collapsed .sidebar-footer {
-    grid-template-columns: 8px;
-    justify-content: center;
+    justify-items: center;
     padding: 12px 0 2px;
   }
 
-  .sidebar-collapsed .sidebar-footer .sidebar-status-dot {
-    margin-top: 0;
+  .sidebar-collapsed .sidebar-environment {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    padding: 6px;
   }
+
+  .sidebar-collapsed .sidebar-account,
+  .sidebar-collapsed .sidebar-account .user-menu,
+  .sidebar-collapsed .sidebar-account .user-menu-button {
+    width: 100%;
+  }
+
+  .sidebar-collapsed .sidebar-account .user-menu-button {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .sidebar-collapsed .sidebar-account .user-menu-avatar {
+    width: 30px;
+    height: 30px;
+  }
+
 }
 
 .main-frame {
@@ -902,6 +980,16 @@ textarea:focus {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+/* Left navigation keeps its account control in the sidebar on desktop. A hidden duplicate lets
+   responsive layouts move the same menu into the top bar without changing auth behavior. */
+.topbar-actions .user-menu {
+  display: none;
+}
+
+html[data-nav-mode="top"] .topbar-actions .user-menu {
+  display: flex;
 }
 
 .topbar-actions > a,
@@ -3087,6 +3175,18 @@ textarea:focus {
     padding: 0 10px;
   }
 
+  .sidebar-account {
+    display: none;
+  }
+
+  html[data-nav-mode="left"] .sidebar-footer {
+    display: none;
+  }
+
+  html[data-nav-mode="left"] .topbar-actions .user-menu {
+    display: flex;
+  }
+
   html[data-nav-mode="top"] .sidebar-footer {
     display: none;
   }
@@ -3522,6 +3622,26 @@ html[data-theme-material] .nav-section a.has-active-child {
   background: var(--studio-material-active-bg);
   color: var(--studio-text);
   box-shadow: var(--studio-material-inset), 0 8px 18px color-mix(in srgb, var(--studio-accent) 9%, transparent);
+}
+
+html[data-theme-material] .nav-section a.nav-child.active {
+  border-color: color-mix(in srgb, var(--studio-accent) 24%, var(--studio-material-edge));
+  background: color-mix(in srgb, var(--studio-accent) 8%, var(--studio-material-row-bg));
+  box-shadow: none;
+}
+
+html[data-theme-material] .sidebar-environment {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-panel-bg-soft);
+  background-size: var(--studio-material-panel-bg-size);
+  box-shadow: var(--studio-material-inset-low);
+}
+
+html[data-theme-material] .sidebar-environment-icon {
+  border-color: var(--studio-material-edge);
+  background: var(--studio-material-node-bg);
+  background-size: var(--studio-material-node-bg-size);
+  box-shadow: var(--studio-material-inset-low);
 }
 
 html[data-theme-material] .topbar-actions > a,

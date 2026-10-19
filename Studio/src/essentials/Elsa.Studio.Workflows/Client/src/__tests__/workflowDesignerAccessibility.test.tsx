@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Position } from "@xyflow/react";
 import { ActivityPalettePanel } from "../workflow-editor/ActivityPalettePanel";
 import { ConnectMenu, WorkflowFlowEdge } from "../workflow-editor/graph";
-import { WorkflowEdgeActionsContext } from "../workflow-editor/contexts";
+import { WorkflowNodeContextToolbar } from "../workflow-editor/WorkflowNodeContextToolbar";
+import { WorkflowEdgeActionsContext, WorkflowNodeActionsContext } from "../workflow-editor/contexts";
 import type { ActivityCatalogItem } from "../workflowTypes";
 
 vi.mock("@xyflow/react", async importOriginal => {
@@ -13,7 +14,8 @@ vi.mock("@xyflow/react", async importOriginal => {
   return {
     ...actual,
     BaseEdge: () => <svg aria-hidden="true" />,
-    EdgeLabelRenderer: ({ children }: { children: React.ReactNode }) => <>{children}</>
+    EdgeLabelRenderer: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+    NodeToolbar: ({ children }: { children: React.ReactNode }) => <>{children}</>
   };
 });
 
@@ -207,6 +209,175 @@ describe("activity palette version chip", () => {
     expect(icons[1].getAttribute("data-tone")).toBe("trigger");
     expect(icons[0].querySelector("svg")).toBeTruthy();
     expect(icons[1].querySelector("svg")).toBeTruthy();
+  });
+});
+
+describe("selected workflow node actions", () => {
+  it("uses one tab stop and moves across toolbar actions with horizontal keys", () => {
+    const actions = { selectedNodeCount: 1, canAddAfter: true, addAfter: vi.fn(), duplicate: vi.fn(), delete: vi.fn() };
+    const data = {
+      label: "Review order",
+      activityVersionId: "review-order-v1",
+      childSlots: [],
+      acceptsInbound: true,
+      sourcePorts: [{ name: "Approved", displayName: "Approved" }, { name: "Rejected", displayName: "Rejected" }]
+    };
+
+    flushSync(() => root.render(
+      <WorkflowNodeActionsContext.Provider value={actions}>
+        <WorkflowNodeContextToolbar nodeId="review-order" data={data} selected />
+      </WorkflowNodeActionsContext.Provider>
+    ));
+
+    const buttons = [...container.querySelectorAll<HTMLButtonElement>("[role='toolbar'] button")];
+    const [add, duplicate, remove] = buttons;
+    expect(container.querySelector("[role='toolbar']")?.getAttribute("aria-orientation")).toBe("horizontal");
+    expect(buttons.map(button => button.tabIndex)).toEqual([0, -1, -1]);
+
+    add.focus();
+    press("ArrowRight");
+    expect(document.activeElement).toBe(duplicate);
+    expect(buttons.map(button => button.tabIndex)).toEqual([-1, 0, -1]);
+
+    press("ArrowRight");
+    expect(document.activeElement).toBe(remove);
+    press("ArrowRight");
+    expect(document.activeElement).toBe(add);
+    press("ArrowLeft");
+    expect(document.activeElement).toBe(remove);
+    press("Home");
+    expect(document.activeElement).toBe(add);
+    press("End");
+    expect(document.activeElement).toBe(remove);
+  });
+
+  it("offers one Add button and routes a selected outcome through the existing action", () => {
+    const actions = {
+      selectedNodeCount: 1,
+      canAddAfter: true,
+      addAfter: vi.fn(),
+      duplicate: vi.fn(),
+      delete: vi.fn()
+    };
+    const data = {
+      label: "Review order",
+      activityVersionId: "review-order-v1",
+      childSlots: [],
+      acceptsInbound: true,
+      sourcePorts: [{ name: "ApprovedBranch", displayName: "Approved" }, { name: "RejectedBranch", displayName: "Rejected" }]
+    };
+
+    flushSync(() => root.render(
+      <WorkflowNodeActionsContext.Provider value={actions}>
+        <WorkflowNodeContextToolbar nodeId="review-order" data={data} selected />
+      </WorkflowNodeActionsContext.Provider>
+    ));
+
+    const toolbar = container.querySelector<HTMLElement>("[role='toolbar'][aria-label='Actions for Review order']")!;
+    const add = container.querySelector<HTMLButtonElement>("button[aria-label='Add next activity']")!;
+    const duplicate = container.querySelector<HTMLButtonElement>("button[aria-label='Duplicate Review order']")!;
+    const remove = container.querySelector<HTMLButtonElement>("button[aria-label='Delete Review order']")!;
+
+    expect(toolbar).toBeTruthy();
+    expect(container.querySelectorAll("button[aria-label='Add next activity']")).toHaveLength(1);
+    add.focus();
+    expect(document.activeElement).toBe(add);
+    flushSync(() => add.click());
+    const approved = document.body.querySelector<HTMLButtonElement>("button[role='menuitem']")!;
+    expect(approved.textContent).toBe("Approved");
+    const rejected = [...document.body.querySelectorAll<HTMLButtonElement>("button[role='menuitem']")].find(item => item.textContent === "Rejected")!;
+    flushSync(() => rejected.click());
+    flushSync(() => duplicate.click());
+    flushSync(() => remove.click());
+
+    expect(actions.addAfter).toHaveBeenCalledOnce();
+    expect(actions.addAfter).toHaveBeenCalledWith("review-order", "RejectedBranch", expect.any(Object));
+    expect(actions.duplicate).toHaveBeenCalledWith("review-order");
+    expect(actions.delete).toHaveBeenCalledWith("review-order");
+  });
+
+  it("adds directly through the actual port when there is one outcome", () => {
+    const actions = { selectedNodeCount: 1, canAddAfter: true, addAfter: vi.fn(), duplicate: vi.fn(), delete: vi.fn() };
+    const data = {
+      label: "Write line",
+      activityVersionId: "write-line-v1",
+      childSlots: [],
+      acceptsInbound: true,
+      sourcePorts: [{ name: "Done", displayName: "Done" }]
+    };
+
+    flushSync(() => root.render(
+      <WorkflowNodeActionsContext.Provider value={actions}>
+        <WorkflowNodeContextToolbar nodeId="write-line" data={data} selected />
+      </WorkflowNodeActionsContext.Provider>
+    ));
+    const add = container.querySelector<HTMLButtonElement>("button[aria-label='Add next activity']")!;
+    vi.spyOn(add, "getBoundingClientRect").mockReturnValue(new DOMRect(10, 20, 30, 30));
+    flushSync(() => add.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 })));
+
+    expect(actions.addAfter).toHaveBeenCalledWith("write-line", "Done", { clientX: 25, clientY: 35 });
+    expect(document.body.querySelector("[role='menu']")).toBeNull();
+  });
+
+  it("omits Add when the node has no outcomes", () => {
+    const actions = { selectedNodeCount: 1, canAddAfter: true, addAfter: vi.fn(), duplicate: vi.fn(), delete: vi.fn() };
+    const data = { label: "Empty", activityVersionId: "empty-v1", childSlots: [], acceptsInbound: true, sourcePorts: [] };
+
+    flushSync(() => root.render(
+      <WorkflowNodeActionsContext.Provider value={actions}>
+        <WorkflowNodeContextToolbar nodeId="empty" data={data} selected />
+      </WorkflowNodeActionsContext.Provider>
+    ));
+
+    expect(container.querySelector("button[aria-label='Add next activity']")).toBeNull();
+    expect(container.querySelector("button[aria-label='Duplicate Empty']")).toBeTruthy();
+  });
+
+  it("returns focus to Add when Escape closes the outcome menu", async () => {
+    const actions = { selectedNodeCount: 1, canAddAfter: true, addAfter: vi.fn(), duplicate: vi.fn(), delete: vi.fn() };
+    const data = {
+      label: "Review order",
+      activityVersionId: "review-order-v1",
+      childSlots: [],
+      acceptsInbound: true,
+      sourcePorts: [{ name: "ApprovedBranch", displayName: "Approved" }, { name: "RejectedBranch", displayName: "Rejected" }]
+    };
+
+    flushSync(() => root.render(
+      <WorkflowNodeActionsContext.Provider value={actions}>
+        <WorkflowNodeContextToolbar nodeId="review-order" data={data} selected />
+      </WorkflowNodeActionsContext.Provider>
+    ));
+    const add = container.querySelector<HTMLButtonElement>("button[aria-label='Add next activity']")!;
+    add.focus();
+    flushSync(() => add.click());
+    await nextFrame();
+    expect(document.activeElement?.textContent).toBe("Approved");
+
+    press("Escape");
+    await nextFrame();
+    expect(document.activeElement).toBe(add);
+  });
+
+  it("hides node actions for multiselection and canvases without authoring actions", () => {
+    const data = {
+      label: "Review order",
+      activityVersionId: "review-order-v1",
+      childSlots: [],
+      acceptsInbound: true,
+      sourcePorts: [{ name: "Done", displayName: "Done" }]
+    };
+    const multiselectActions = { selectedNodeCount: 2, canAddAfter: true, addAfter: vi.fn(), duplicate: vi.fn(), delete: vi.fn() };
+
+    flushSync(() => root.render(
+      <WorkflowNodeActionsContext.Provider value={multiselectActions}>
+        <WorkflowNodeContextToolbar nodeId="review-order" data={data} selected />
+      </WorkflowNodeActionsContext.Provider>
+    ));
+    expect(container.querySelector("[role='toolbar']")).toBeNull();
+
+    flushSync(() => root.render(<WorkflowNodeContextToolbar nodeId="review-order" data={data} selected />));
+    expect(container.querySelector("[role='toolbar']")).toBeNull();
   });
 });
 

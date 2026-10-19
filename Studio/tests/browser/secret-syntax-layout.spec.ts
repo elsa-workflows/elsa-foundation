@@ -41,7 +41,7 @@ for (const width of [320, 1440]) {
     });
 
     await page.goto("/?mode=secret-reference");
-    const syntax = page.getByRole("button", { name: "API token expression syntax", exact: true });
+    const syntax = page.getByRole("button", { name: "API token expression syntax", exact: false });
     const picker = page.locator(".secret-picker-editor");
     const status = picker.locator(".secret-picker-status");
     const metadata = picker.locator(".secret-picker-metadata");
@@ -56,9 +56,12 @@ for (const width of [320, 1440]) {
     await expectPickerLayout(syntax, status, metadata);
 
     await chooseSyntax(page, "Literal");
-    await expect(syntax).toContainText("Literal");
+    await expect(syntax).toHaveAttribute("title", "Literal");
+    expect((await syntax.boundingBox())!.width).toBeLessThanOrEqual(40);
     await expect(select).toHaveCount(0);
     await chooseSyntax(page, "Secret");
+    await expect(syntax).toHaveAttribute("title", "Secret");
+    expect((await syntax.boundingBox())!.width).toBeLessThanOrEqual(40);
     await expect(page.getByRole("alert")).toContainText("Secret metadata is unavailable.");
     await expectPickerLayout(syntax, page.getByRole("alert"), metadata);
 
@@ -75,7 +78,7 @@ for (const width of [320, 1440]) {
 }
 
 async function chooseSyntax(page: import("@playwright/test").Page, syntax: "Literal" | "Secret") {
-  await page.getByRole("button", { name: "API token expression syntax", exact: true }).click();
+  await page.getByRole("button", { name: "API token expression syntax", exact: false }).click();
   await page.getByRole("option", { name: syntax, exact: true }).click();
 }
 
@@ -88,6 +91,7 @@ async function expectPickerLayout(
   const triggerBox = await syntax.boundingBox();
   expect(triggerBox).not.toBeNull();
   expect(triggerBox!.height).toBeLessThanOrEqual(40);
+  expect(triggerBox!.width).toBeLessThanOrEqual(40);
 
   for (const help of [status, metadata]) {
     if (!await help.isVisible()) continue;

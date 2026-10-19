@@ -166,6 +166,7 @@ export function useGraphCanvasInteractions({
   const nativePaletteDragRef = useRef<{ activityVersionId: string; handledDrop: boolean } | null>(null);
   const suppressPaletteClickRef = useRef(false);
   const pendingFocusNodeIdRef = useRef<string | null>(null);
+  const focusObserverRef = useRef<MutationObserver | null>(null);
 
   const isUnsupported = mode === "unsupported";
   // BPMN shares the free-connection graph editing model with flowcharts; sequence keeps its linear model.
@@ -225,20 +226,44 @@ export function useGraphCanvasInteractions({
       .find(candidate => candidate.dataset.id === nodeId);
     if (!element) return false;
     element.focus({ preventScroll: true });
-    return true;
+    return document.activeElement === element;
   }, []);
 
   const queueCanvasNodeFocus = useCallback((nodeId: string) => {
     pendingFocusNodeIdRef.current = nodeId;
-    window.requestAnimationFrame(() => {
+    focusObserverRef.current?.disconnect();
+    const tryFocus = () => {
       if (pendingFocusNodeIdRef.current !== nodeId || !focusCanvasNode(nodeId)) return;
       pendingFocusNodeIdRef.current = null;
-    });
+      focusObserverRef.current?.disconnect();
+      focusObserverRef.current = null;
+    };
+    // React Flow mounts new nodes hidden until measured. Observe its visibility update rather
+    // than treating a found-but-not-focusable wrapper as successful or guessing a render delay.
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const observer = new MutationObserver(tryFocus);
+      observer.observe(canvas, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "tabindex"] });
+      focusObserverRef.current = observer;
+    }
+    window.requestAnimationFrame(tryFocus);
   }, [focusCanvasNode]);
+
+  useEffect(() => () => {
+    pendingFocusNodeIdRef.current = null;
+    focusObserverRef.current?.disconnect();
+  }, []);
 
   useEffect(() => {
     const nodeId = pendingFocusNodeIdRef.current;
-    if (nodeId) queueCanvasNodeFocus(nodeId);
+    if (!nodeId) return;
+    if (nodes.some(node => node.id === nodeId)) {
+      queueCanvasNodeFocus(nodeId);
+    } else {
+      pendingFocusNodeIdRef.current = null;
+      focusObserverRef.current?.disconnect();
+      focusObserverRef.current = null;
+    }
   }, [nodes, queueCanvasNodeFocus]);
 
   /**
@@ -487,9 +512,10 @@ export function useGraphCanvasInteractions({
 
   // The inline "Add step" affordance (editorial layout): continue from the selected node when there is
   // one — the same commit as dragging a new activity off its default port — otherwise add to the scope.
-  const openAddStepMenu = (anchor: { clientX: number; clientY: number }) => {
-    if (selectedNodeId && canCreateActivityFromPort && nodes.some(node => node.id === selectedNodeId)) {
-      setConnectMenu({ kind: "fromPort", sourceNodeId: selectedNodeId, sourceHandleId: null, ...anchor });
+  const openAddStepMenu = (anchor: { clientX: number; clientY: number }, source?: { nodeId: string; handleId: string }) => {
+    const sourceNodeId = source?.nodeId ?? selectedNodeId;
+    if (sourceNodeId && canCreateActivityFromPort && nodes.some(node => node.id === sourceNodeId)) {
+      setConnectMenu({ kind: "fromPort", sourceNodeId, sourceHandleId: source?.handleId ?? null, ...anchor });
       return;
     }
 

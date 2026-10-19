@@ -1,0 +1,64 @@
+import React from "react";
+import { flushSync } from "react-dom";
+import { createRoot } from "react-dom/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { WorkflowEditorToolbar } from "../workflow-editor/WorkflowEditorToolbar";
+
+const mounted: { root: ReturnType<typeof createRoot>; container: HTMLDivElement }[] = [];
+afterEach(() => {
+  mounted.splice(0).forEach(({ root, container }) => {
+    flushSync(() => root.unmount());
+    container.remove();
+  });
+});
+
+function render(overrides: Partial<React.ComponentProps<typeof WorkflowEditorToolbar>> = {}) {
+  const commands = { onSave: vi.fn(), onPublish: vi.fn(), onRun: vi.fn() };
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  mounted.push({ root, container });
+  const props = {
+    name: "Customer quote", status: "Autosaved", saving: false, busy: false, autosaveEnabled: true,
+    onAutosaveChange: vi.fn(), canUndo: true, canRedo: false, canAutoLayout: true,
+    onUndo: vi.fn(), onRedo: vi.fn(), onAutoLayout: vi.fn(), onBack: vi.fn(),
+    ...commands, canRun: true, runTitle: "Run a transient test", moreActions: [], ...overrides
+  };
+  flushSync(() => root.render(<WorkflowEditorToolbar {...props} />));
+  return { container, commands };
+}
+
+function click(button: HTMLButtonElement) {
+  flushSync(() => button.click());
+}
+
+describe("compact workflow toolbar", () => {
+  it("keeps primary commands directly available with descriptive accessible labels", () => {
+    const { container, commands } = render();
+    const save = container.querySelector<HTMLButtonElement>(".wf-save-button")!;
+    const publish = container.querySelector<HTMLButtonElement>(".wf-review-button")!;
+    const run = container.querySelector<HTMLButtonElement>(".wf-run-button")!;
+    expect(save.title).toBe("Save workflow");
+    expect(save.textContent).toBe("Save");
+    expect(save.querySelector(".wf-toolbar-sr-only")).not.toBeNull();
+    expect(publish.textContent).toBe("Review & publish");
+    expect(publish.querySelector(".wf-toolbar-sr-only")?.textContent).toBe("Review & ");
+    expect(publish.title).toBe("Review changes and publish this workflow");
+    click(save); click(publish); click(run);
+    expect(commands.onSave).toHaveBeenCalledOnce();
+    expect(commands.onPublish).toHaveBeenCalledOnce();
+    expect(commands.onRun).toHaveBeenCalledOnce();
+  });
+
+  it("keeps save feedback with the actions and preserves busy and run eligibility guards", () => {
+    const { container, commands } = render({ busy: true, saving: true, canRun: false, status: "Saving before review..." });
+    const status = container.querySelector<HTMLElement>("[role='status']")!;
+    expect(status.closest(".wf-editor-actions")).not.toBeNull();
+    expect(status.getAttribute("data-pending")).toBe("true");
+    expect(status.textContent).toBe("Saving before review...");
+    const buttons = [".wf-save-button", ".wf-review-button", ".wf-run-button"].map(selector => container.querySelector<HTMLButtonElement>(selector)!);
+    expect(buttons.every(button => button.disabled)).toBe(true);
+    buttons.forEach(click);
+    Object.values(commands).forEach(command => expect(command).not.toHaveBeenCalled());
+  });
+});

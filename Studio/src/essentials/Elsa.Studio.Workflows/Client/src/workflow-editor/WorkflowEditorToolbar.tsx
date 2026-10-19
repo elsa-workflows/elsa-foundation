@@ -85,26 +85,26 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
             <strong title={props.name}>{props.name}</strong>
             <span className="wf-chip">Draft</span>
           </div>
-          <div className="wf-editor-metadata">
-            <span className="wf-editor-save-status" role="status" aria-live="polite" aria-atomic="true" title={props.status || undefined} data-pending={pending || undefined}>
-              {props.status ? <>
-                {pending ? <LoaderCircle size={12} aria-hidden="true" /> : <Check size={12} aria-hidden="true" />}
-                <span>{props.status}</span>
-              </> : null}
-            </span>
-          </div>
         </div>
       </div>
       <div className="wf-editor-actions">
+        <div className="wf-editor-metadata">
+          <span className="wf-editor-save-status" role="status" aria-live="polite" aria-atomic="true" title={props.status || undefined} data-pending={pending || undefined}>
+            {props.status ? <>
+              {pending ? <LoaderCircle size={12} aria-hidden="true" /> : <Check size={12} aria-hidden="true" />}
+              <span>{props.status}</span>
+            </> : null}
+          </span>
+        </div>
         <div className="wf-canvas-tools" role="group" aria-label="Canvas tools">
           <button type="button" className="wf-icon-button" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={!props.canUndo} onClick={props.onUndo}><Undo2 size={16} /></button>
           <button type="button" className="wf-icon-button" aria-label="Redo" title="Redo (Ctrl+Shift+Z)" disabled={!props.canRedo} onClick={props.onRedo}><Redo2 size={16} /></button>
           <button type="button" className="wf-icon-button" aria-label="Auto-layout" title="Auto-layout the canvas" disabled={!props.canAutoLayout} onClick={props.onAutoLayout}><Network size={16} /></button>
         </div>
-        <button type="button" disabled={props.busy} onClick={props.onSave}><Save size={15} /> Save</button>
-        <button type="button" className="wf-review-button" disabled={props.busy} title={props.saving ? "Finishing the current save; the review will open once it settles." : undefined} onClick={props.onPublish}><GitBranch size={15} /> Review &amp; publish</button>
+        <button type="button" className="wf-icon-button wf-save-button" title="Save workflow" disabled={props.busy} onClick={props.onSave}><Save size={15} aria-hidden="true" /><span className="wf-toolbar-sr-only">Save</span></button>
+        <button type="button" className="wf-review-button" aria-label="Review & publish" disabled={props.busy} title={props.saving ? "Finishing the current save; the review will open once it settles." : "Review changes and publish this workflow"} onClick={props.onPublish}><GitBranch size={15} aria-hidden="true" /><span><span className="wf-toolbar-sr-only">Review &amp; </span>publish</span></button>
         {props.runStatus}
-        <button type="button" className="wf-run-button" disabled={!props.canRun} title={props.runTitle} onClick={props.onRun}><Play size={15} /> Run</button>
+        <button type="button" className="wf-run-button" disabled={!props.canRun} title={props.runTitle} onClick={props.onRun}><Play size={15} aria-hidden="true" /> Run</button>
         <button
           ref={triggerRef}
           type="button"

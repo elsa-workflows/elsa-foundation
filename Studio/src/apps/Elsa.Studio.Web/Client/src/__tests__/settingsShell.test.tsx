@@ -79,6 +79,39 @@ describe("settings shell and appearance", () => {
     expect(container.querySelector('nav.nav-section[aria-label="Settings"]')?.textContent).not.toContain("Modules");
   });
 
+  it("keeps contributed child navigation under its generic parent with a clear active state", async () => {
+    const catalog: StudioNavigationContribution[] = [
+      { id: "catalog", label: "Catalog", path: "/catalog", placement: "main" },
+      { id: "catalog-records", label: "Records", path: "/catalog/records", parentId: "catalog" },
+      { id: "catalog-sources", label: "Sources", path: "/catalog/sources", parentId: "catalog" }
+    ];
+
+    await act(() => root.render(
+      <ThemeProvider>
+        <ShellFrame
+          navigation={catalog}
+          panels={[]}
+          path="/catalog/records"
+          title="Records"
+          backendBaseUrl="https://backend.example/"
+          onNavigate={() => {}}
+        >
+          <div>content</div>
+        </ShellFrame>
+      </ThemeProvider>
+    ));
+
+    const mainNav = container.querySelector('nav[aria-label="Main"]')!;
+    const parent = mainNav.querySelector('a[href="/catalog"]')!;
+    const activeChild = mainNav.querySelector('a[href="/catalog/records"]')!;
+
+    expect(parent.classList.contains("has-active-child")).toBe(true);
+    expect(activeChild.classList.contains("nav-child")).toBe(true);
+    expect(activeChild.classList.contains("active")).toBe(true);
+    expect(activeChild.getAttribute("aria-current")).toBe("page");
+    expect(mainNav.querySelector('a[href="/catalog/sources"]')?.classList.contains("active")).toBe(false);
+  });
+
   it("deep-links Appearance and lists Administration sections in the settings pane", async () => {
     const visited: string[] = [];
     await act(() => root.render(

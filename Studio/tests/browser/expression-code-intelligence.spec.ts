@@ -4,7 +4,7 @@ test("the activity inspector preserves a JavaScript session across compact, expa
   await page.setViewportSize({ width: 900, height: 620 });
   await page.goto("/?mode=expression-code-intelligence");
 
-  const syntax = page.getByRole("button", { name: "Path expression syntax" });
+  const syntax = page.getByRole("button", { name: /^Path expression syntax:/ });
   const compactPreview = page.getByRole("button", { name: /JavaScript expression\. Activate to edit\./ });
   await expect(compactPreview).toContainText("format");
   await compactPreview.click();
@@ -49,6 +49,7 @@ test("the activity inspector preserves a JavaScript session across compact, expa
 
   await syntax.click();
   await page.getByRole("option", { name: "Liquid", exact: true }).click();
+  await expect(syntax).toHaveAttribute("title", "Liquid");
   await expect(page.getByRole("button", { name: /Liquid expression\. Activate to edit\./ })).toContainText("format");
 });
 
@@ -111,13 +112,14 @@ for (const width of [390, 900]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto("/?mode=expression-code-intelligence&tooling=unavailable&theme=dark");
 
-    const syntax = page.getByRole("button", { name: "Path expression syntax" });
+    const syntax = page.getByRole("button", { name: /^Path expression syntax:/ });
     const expand = page.getByRole("button", { name: "Open expanded Path editor" });
     for (const language of ["JavaScript", "Liquid"]) {
       if (language === "Liquid") {
         await syntax.click();
         await page.getByRole("option", { name: language, exact: true }).click();
       }
+      await expect(syntax).toHaveAttribute("title", language);
       const preview = page.getByRole("button", { name: `${language} expression. Activate to edit.`, exact: true });
       if (await preview.isVisible()) await preview.click();
       const editor = page.locator(".studio-code-editor-rich-compact .cm-editor");
@@ -128,6 +130,7 @@ for (const width of [390, 900]) {
       const feedbackBox = (await feedback.boundingBox())!;
       for (const control of [syntax, expand]) {
         const box = (await control.boundingBox())!;
+        if (control === syntax) expect(box.width).toBeLessThanOrEqual(40);
         expect(box.y).toBeGreaterThanOrEqual(editorBox.y);
         expect(box.y + box.height).toBeLessThanOrEqual(editorBox.y + editorBox.height + 1);
         expect(box.y + box.height).toBeLessThanOrEqual(feedbackBox.y);
