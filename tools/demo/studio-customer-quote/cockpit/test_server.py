@@ -48,6 +48,17 @@ class FakeWorkflowHandler(BaseHTTPRequestHandler):
         return
 
 
+class FakeProxyHandler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        self.server.calls.append(self.path)
+        self.send_response(502)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def log_message(self, format, *args):
+        return
+
+
 class CockpitServerIntegrationTests(unittest.TestCase):
     def setUp(self):
         self.workflow = ThreadingHTTPServer(("127.0.0.1", 0), FakeWorkflowHandler)
@@ -248,6 +259,38 @@ class CockpitServerIntegrationTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(quote["status"], 302)
         self.assertFalse(quote["responseValid"])
+        self.assertEqual(self.workflow.calls, [
+            ("POST", "/workflows/http/quotes", {"subtotal": 40, "shipping": 2})
+        ])
+
+    def test_quote_request_bypasses_configured_environment_proxy(self):
+        proxy = ThreadingHTTPServer(("127.0.0.1", 0), FakeProxyHandler)
+        proxy.daemon_threads = True
+        proxy.calls = []
+        proxy_thread = threading.Thread(target=proxy.serve_forever, daemon=True)
+        proxy_thread.start()
+        proxy_url = f"http://127.0.0.1:{proxy.server_address[1]}"
+        proxy_environment = {
+            "HTTP_PROXY": proxy_url,
+            "http_proxy": proxy_url,
+            "NO_PROXY": "",
+            "no_proxy": "",
+            "ALL_PROXY": "",
+            "all_proxy": "",
+        }
+        try:
+            with patch.dict(os.environ, proxy_environment):
+                status, _, quote = self.request(
+                    "POST", "/cockpit/quote", body={"subtotal": 40, "shipping": 2}, headers=self.post_headers()
+                )
+        finally:
+            proxy.shutdown()
+            proxy.server_close()
+            proxy_thread.join(timeout=2)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(quote["status"], 200)
+        self.assertEqual(proxy.calls, [])
         self.assertEqual(self.workflow.calls, [
             ("POST", "/workflows/http/quotes", {"subtotal": 40, "shipping": 2})
         ])

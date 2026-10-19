@@ -139,7 +139,8 @@ class CockpitHandler(demo.DemoApiHandler):
         started = time.perf_counter()
         status = 502
         try:
-            with urllib.request.build_opener(NoRedirect).open(request, timeout=35) as response:
+            opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+            with opener.open(request, timeout=35) as response:
                 status, content = response.status, response.read(65536)
         except urllib.error.HTTPError as error:
             with error:

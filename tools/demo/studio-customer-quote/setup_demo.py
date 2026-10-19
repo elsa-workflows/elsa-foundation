@@ -18,7 +18,7 @@ import uuid
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlsplit
-from urllib.request import HTTPRedirectHandler, HTTPCookieProcessor, Request, build_opener
+from urllib.request import HTTPRedirectHandler, HTTPCookieProcessor, ProxyHandler, Request, build_opener
 
 
 WORKBENCH_ORIGIN = "http://127.0.0.1:5595"
@@ -74,7 +74,7 @@ class ElsaApi:
             raise DemoSetupError("Workbench URL must be exactly the isolated loopback origin http://127.0.0.1:5595.")
         self.origin = origin.rstrip("/")
         self.cookie_jar = http.cookiejar.CookieJar()
-        self.opener = build_opener(HTTPCookieProcessor(self.cookie_jar), NoRedirect())
+        self.opener = build_opener(ProxyHandler({}), HTTPCookieProcessor(self.cookie_jar), NoRedirect())
         self.request("POST", "_elsa/identity/login", {"username": username, "password": password})
         if not self.cookie_jar:
             raise DemoSetupError("Local sign-in returned without an authentication cookie.")

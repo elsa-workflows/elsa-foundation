@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import sys
 import unittest
+from urllib.request import ProxyHandler
 from unittest.mock import patch
 
 import setup_demo
@@ -22,6 +23,26 @@ class SetupPlanTests(unittest.TestCase):
             with self.assertRaises(setup_demo.DemoSetupError):
                 setup_demo.ElsaApi("fixture-user", "fixture-password", "https://external.invalid")
         opener.assert_not_called()
+
+    def test_local_api_opener_disables_environment_proxies(self):
+        proxy = "http://127.0.0.1:8765"
+        proxy_environment = {
+            "HTTP_PROXY": proxy,
+            "http_proxy": proxy,
+            "NO_PROXY": "",
+            "no_proxy": "",
+        }
+        with patch.dict("os.environ", proxy_environment), \
+                patch("setup_demo.http.cookiejar.CookieJar", return_value=[object()]), \
+                patch("setup_demo.build_opener") as build_opener, \
+                patch.object(setup_demo.ElsaApi, "request"):
+            setup_demo.ElsaApi("fixture-user", "fixture-password")
+
+        proxy_handler = next(
+            handler for handler in build_opener.call_args.args
+            if isinstance(handler, ProxyHandler)
+        )
+        self.assertEqual(proxy_handler.proxies, {})
 
 
 if __name__ == "__main__":
