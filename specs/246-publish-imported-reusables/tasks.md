@@ -321,7 +321,7 @@ no versions. Nothing publishes yet.
 - [X] T034 *(Done differently, 2026-10-19: the upload is deleted after a successful apply, so a same-key replay cannot
   re-convert. A same-key replay returns the stored receipt with live `Publications`; finishing a partly published import
   is a new apply of the re-uploaded export under a new idempotency key, whose commit reuses the rows and whose publish
-  phase publishes only what is missing. FR-009 amended; for maintainer review.)* [US3] In `IMP/Services/ReusableActivityImportOperationService.cs` (:243-254), when the stored receipt
+  phase publishes only what is missing. FR-009 amended; accepted by the maintainer 2026-10-19.)* [US3] In `IMP/Services/ReusableActivityImportOperationService.cs` (:243-254), when the stored receipt
   matches (`AlreadyImported`), run the publish phase again for the plan's selection before returning, and return its
   states (FR-009). This needs the plan's selection and the materialized drafts' inputs, so check that the replay has
   what the phase needs (version ids, versions, dependencies, draft ids). If the stored receipt lacks any of it, derive

@@ -254,8 +254,8 @@ A user with the import permission but not the publish permission tries to apply 
 - **FR-009**: Re-applying the same plan MUST resume publishing any selected version not yet published. Because a
   completed apply deletes its upload, re-applying means applying the re-uploaded export under a new idempotency key:
   its commit reuses the imported rows and its publish phase publishes only what is missing. A replay of the same key
-  returns the stored receipt with each version's live publication state. *(amended during implementation, 2026-10-19;
-  pending maintainer review)*
+  returns the stored receipt with each version's live publication state. *(amended during implementation;
+  accepted by the maintainer, 2026-10-19)*
 - **FR-010**: The apply result (first apply and replay) MUST report, for each reusable version, whether it is
   published, and for one that is not, the publisher's error code and diagnostics. An item not published because a
   dependency was not published MUST say so. A status read MUST report whether each version is published, read live
