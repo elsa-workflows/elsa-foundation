@@ -226,17 +226,6 @@
   font-weight: 600;
 }
 
-.wf-activity-boundary-details > details > summary > .wf-status-badge {
-  margin-left: auto;
-}
-
-.wf-activity-boundary-details > details > summary > small {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: var(--studio-text-muted);
-  font-size: 11px;
-}
-
 .wf-activity-boundary-details > details[open] > summary {
   border-bottom: 1px solid var(--studio-border);
 }
