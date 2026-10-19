@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "classification": "job-deadline cancellation; qualification incomplete",
+  "sourceCommit": "b4d576e624ee8854822171dd3662ae02b4145727",
+  "ciRun": {
+    "id": 39336931642,
+    "url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/39336931642",
+    "conclusion": "cancelled"
+  },
+  "backendJob": {
+    "id": 118348753013,
+    "startedAt": "2026-10-19T22:44:22Z",
+    "completedAt": "2026-10-19T23:14:37Z",
+    "maximumMinutes": 30,
+    "conclusion": "cancelled",
+    "annotations": [
+      "The job has exceeded the maximum execution time of 30m0s",
+      "The operation was canceled."
+    ]
+  },
+  "partialCompletedSuiteSummaries": {
+    "count": 90,
+    "passed": 16643,
+    "failed": 0,
+    "skipped": 32,
+    "overallPass": false
+  },
+  "affectedSuites": {
+    "Elsa.Workbench.BackgroundActivities.Tests.dll": {
+      "passed": 44,
+      "failed": 0,
+      "skipped": 0,
+      "completed": true
+    },
+    "Elsa.Workbench.Tests.dll": {
+      "started": true,
+      "completionSummaryPresent": false,
+      "result": "unverified"
+    }
+  },
+  "downstreamJobs": {
+    "Core-only build & test": "skipped",
+    "Architecture guards": "skipped"
+  },
+  "otherChecks": {
+    "studioRunId": 39336931636,
+    "studioConclusion": "success",
+    "generatedMapsJobId": 118348752577,
+    "generatedMapsConclusion": "success"
+  },
+  "retainedLog": {
+    "localEvidenceRoot": "/tmp/elsa-program-20261019/native-hosting-baseline",
+    "file": "pr3087-cancelled-backend.log",
+    "bytes": 696458,
+    "sha256": "656223e77c4788c4b23cc2fd2497b443eefa175ede27d62c649728f574e42334"
+  },
+  "repair": {
+    "backendJobBudgetMinutes": 45,
+    "testSelectionChanged": false,
+    "scenarioLimitsChanged": false,
+    "requiredCheckIdentityChanged": false,
+    "verification": "fresh complete CI still required"
+  },
+  "limits": [
+    "Completed suite totals are partial evidence, not an overall pass.",
+    "The missing Workbench result is not credited as passing.",
+    "This deadline does not establish any historical receipt or HTTP timeout cause."
+  ]
+}
