@@ -17,6 +17,13 @@ namespace Elsa3.Mapping.Services;
 /// </summary>
 public sealed class Elsa3ExpressionRewriter
 {
+    /// <summary>
+    /// What to change in the Elsa 3 workflow when an expression assigns a value: Elsa 4 expressions are pure. In Elsa 3
+    /// terms, because the engineer edits the Elsa 3 workflow; the reusable caveat is spec 246 D-7.
+    /// </summary>
+    private const string MutationGuidance =
+        "Move the assignment into a Set Variable activity in the Elsa 3 workflow. In a reusable workflow, Elsa 4 cannot set variables yet (ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED).";
+
     public Elsa3ExpressionRewriteResult Rewrite(
         string language,
         string source,
@@ -187,7 +194,7 @@ public sealed class Elsa3ExpressionRewriter
             return Elsa3ExpressionRewriteResult.Failure(new Elsa3ExpressionRewriteIssue(
                 Elsa3ImportDiagnosticCodes.ForbiddenCapability,
                 "Liquid template performs assignment or mutation.",
-                "Move mutation into a graph-visible activity or Set intrinsic before import."));
+                MutationGuidance));
         }
 
         foreach (var member in syntax.OfType<Fluid.Ast.MemberExpression>())
@@ -628,7 +635,7 @@ public sealed class Elsa3ExpressionRewriter
                 Issues.Add(new Elsa3ExpressionRewriteIssue(
                     Elsa3ImportDiagnosticCodes.ForbiddenCapability,
                     "JavaScript mutates an Elsa 3 ambient value.",
-                    "Move mutation into a graph-visible activity or Set intrinsic before import."));
+                    MutationGuidance));
                 return;
             }
 
@@ -640,7 +647,7 @@ public sealed class Elsa3ExpressionRewriter
                     Issues.Add(new Elsa3ExpressionRewriteIssue(
                         Elsa3ImportDiagnosticCodes.ForbiddenCapability,
                         $"JavaScript calls forbidden mutation helper '{callee.Name}'.",
-                        "Move mutation into a graph-visible activity or Set intrinsic before import."));
+                        MutationGuidance));
                     return;
                 }
 

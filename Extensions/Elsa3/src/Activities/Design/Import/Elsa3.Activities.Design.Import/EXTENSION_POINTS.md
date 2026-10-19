@@ -65,6 +65,9 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
   in its order (dependencies first, ascending per definition), from deterministic drafts and with deterministic
   idempotency keys, and reports one `ReusableActivityPublicationState` per version on the receipt's `Publications`.
   `Publications` is never stored: a replay and a status read report it live from the publication store.
+- **Reading a receipt:** a source's `activityVersionDisposition` describes the commit (`Created` = not yet published
+  when the commit ran), not publication. Read `publications` to know whether a version is published; a version that is
+  not carries a code and diagnostics whose remediation says what to change.
 
 ### `IReusableActivityCollectionAnalyzer`
 

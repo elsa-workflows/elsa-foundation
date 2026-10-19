@@ -27,7 +27,8 @@ internal sealed class PublisherReusableActivityImportPublisher(
             return ReusableActivityImportPublishOutcome.Refused(TenantDenied, [
                 new(TenantDenied, ActivityDiagnosticSeverity.Error,
                     "The publisher resolves another tenant than the import committed in.",
-                    new("ActivityDraft", request.DraftId, null, Revision: request.DraftRevision))
+                    new("ActivityDraft", request.DraftId, null, Revision: request.DraftRevision),
+                    Remediation: "The caller's tenant claim and the host's persistence scope must name the same tenant; check how the host resolves the tenant.")
             ]);
 
         try

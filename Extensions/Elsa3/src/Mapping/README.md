@@ -119,6 +119,7 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     (`ELS3-REUSABLE-UNSUPPORTED-START-TRIGGER`), uses an engine intrinsic such as SetVariable or SetOutput
     (`ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED`, #3023), or reads one of its inputs, a variable or another
     activity's result (`ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED`, #3027).
+  - What to change in Elsa 3 before exporting: [Elsa 3 migration readiness](../../../../docs/reference/elsa3-migration-readiness.md).
 
 ## Migrating Elsa 3 JavaScript
 

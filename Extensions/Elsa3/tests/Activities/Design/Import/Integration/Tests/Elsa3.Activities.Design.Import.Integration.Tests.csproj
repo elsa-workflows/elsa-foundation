@@ -45,6 +45,9 @@
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Sequence\Elsa.Activities.Sequence.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Flowchart\Elsa.Activities.Flowchart.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
+    <!-- Dispatch Workflow: what an Elsa 3 DispatchWorkflow or ExecuteWorkflow converts to. -->
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\DispatchWorkflow\Design\Elsa.Activities.DispatchWorkflow.Design.csproj" />
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\DispatchWorkflow\Runtime\Elsa.Activities.DispatchWorkflow.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Graph\Design\Elsa.Activities.Graph.Design.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Graph\Runtime\Elsa.Activities.Graph.Runtime.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />

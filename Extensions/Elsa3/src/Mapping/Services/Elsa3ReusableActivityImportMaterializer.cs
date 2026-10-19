@@ -64,8 +64,8 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
                 unordered.Select(id => new Elsa3MigrationDiagnostic(
                     Elsa3MigrationDiagnosticSeverity.Error,
                     ReusableActivityImportDiagnosticCodes.DependencyCycle,
-                    $"Reusable source version '{id}' and the versions it uses wait on each other once versions of one definition publish in ascending order.",
-                    guidance: "Select versions whose dependencies do not run against the version order of their definitions.",
+                    $"Reusable source version '{id}' cannot be published: it waits, directly or through the versions it uses, on a version that in turn waits on it, because Elsa 4 publishes each workflow's versions oldest first.",
+                    guidance: "Typically an older version of one workflow uses a newer version of another, and an older version of that one uses a newer version of the first. Separate imports do not help. Select fewer versions, for example only the newest version of each workflow.",
                     metadata: new Dictionary<string, string>(StringComparer.Ordinal) { ["SourceVersionId"] = id },
                     pathSegments: [new(Elsa3MigrationPathSegmentKind.SourceVersion, id)])).ToArray());
         var convertedById = new Dictionary<string, Elsa3ConvertedDefinition>(StringComparer.Ordinal);

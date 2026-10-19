@@ -219,6 +219,12 @@ public sealed record ReusableActivityImportReceipt(
     public IReadOnlyList<ReusableActivityPublicationState>? Publications { get; init; }
 }
 
+/// <summary>What the commit made or reused for one selected Elsa 3 source version.</summary>
+/// <remarks>
+/// <c>ActivityVersionDisposition</c> describes the commit, not publication: <c>Created</c> means the version was not yet
+/// published when the commit ran, so the publish phase was to publish it. Whether it is published now, and why not, is
+/// the receipt's <c>Publications</c> (spec 246 R-6).
+/// </remarks>
 public sealed record ReusableActivityImportSourceReceipt(
     string SourceDefinitionId,
     string SourceVersionId,
@@ -302,6 +308,12 @@ public static class ReusableActivityImportDiagnosticCodes
     /// <c>IReusableActivityImportPublisher</c> is registered (spec 246 R-1).
     /// </summary>
     public const string PublishingUnavailable = "ELS3-REUSABLE-PUBLISHING-UNAVAILABLE";
+
+    /// <summary>
+    /// An imported reusable version was not published because a version it uses was not published; publishing that one
+    /// first publishes this one on the next apply (spec 246 R-5).
+    /// </summary>
+    public const string DependencyNotPublished = "ELS3-REUSABLE-DEPENDENCY-NOT-PUBLISHED";
 }
 
 public static class ReusableActivityImportIdentity

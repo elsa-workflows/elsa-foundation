@@ -6,6 +6,7 @@ using Elsa.Activities.Design.Persistence.Core.Entities;
 using Elsa.Activities.Design.Persistence.Core.Stores;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa3.Activities.Design.Import.Services;
 
@@ -20,10 +21,20 @@ public sealed class ReusableActivityImportPublishPhase(
     IActivityDefinitionAuthoringStore authoring,
     IActivityDefinitionDraftStore drafts,
     ICreateActivityDraftCommand createDraft,
-    IReusableActivityImportPublisher publisher)
+    IReusableActivityImportPublisher publisher,
+    ILogger<ReusableActivityImportPublishPhase>? logger = null)
 {
     /// <summary>The host's publish failure code when the publisher fails for a reason other than a refusal.</summary>
     public const string PublicationFailed = "activity.publication.failed";
+
+    /// <summary>The publisher's code for a version below the definition's reviewed minimum.</summary>
+    private const string BumpInsufficient = "activity.version.bump-insufficient";
+
+    /// <summary>
+    /// How to resume: a completed apply deletes its upload, so the engineer re-uploads the export and applies it under a
+    /// new idempotency key; the commit reuses the imported rows and only the missing versions publish (FR-009).
+    /// </summary>
+    private const string ApplyAgain = "upload the same export again and apply it under a new idempotency key";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -58,7 +69,7 @@ public sealed class ReusableActivityImportPublishPhase(
     {
         var draft = await drafts.FindAsync(version.DraftId, cancellationToken);
         if (draft is not null && !SameContent(draft, version))
-            return Collision(version, $"Draft '{version.DraftId}' holds other content than the Elsa 3 source version '{version.SourceVersionId}' converts to.");
+            return Collision(version, $"Elsa 3 version '{version.SourceVersionId}' now converts to other content than the earlier import of it (draft '{version.DraftId}').");
 
         if (await publications.FindAsync(version.Id, cancellationToken) is { } publication)
         {
@@ -70,7 +81,15 @@ public sealed class ReusableActivityImportPublishPhase(
         }
 
         if (version.DependsOn.FirstOrDefault(dependency => !published.Contains(dependency)) is { } blockedBy)
-            return new(version.Id, version.SourceVersionId, ReusableActivityPublicationStatus.NotPublishedDependency, BlockedBy: blockedBy);
+            return new(version.Id, version.SourceVersionId, ReusableActivityPublicationStatus.NotPublishedDependency,
+                ReusableActivityImportDiagnosticCodes.DependencyNotPublished,
+                [
+                    new(ReusableActivityImportDiagnosticCodes.DependencyNotPublished, ActivityDiagnosticSeverity.Error,
+                        $"Version '{version.Id}' was not published because the version it uses, '{blockedBy}', was not published.",
+                        Subject(version),
+                        Remediation: $"Resolve why '{blockedBy}' was not published (its own state gives the reason), then {ApplyAgain}; this version is published then.")
+                ],
+                blockedBy);
 
         try
         {
@@ -86,7 +105,7 @@ public sealed class ReusableActivityImportPublishPhase(
                 cancellationToken);
             return outcome.Published
                 ? new(version.Id, version.SourceVersionId, ReusableActivityPublicationStatus.Published)
-                : new(version.Id, version.SourceVersionId, ReusableActivityPublicationStatus.Refused, outcome.ErrorCode, outcome.Diagnostics);
+                : new(version.Id, version.SourceVersionId, ReusableActivityPublicationStatus.Refused, outcome.ErrorCode, ForImport(outcome.Diagnostics));
         }
         catch (OperationCanceledException)
         {
@@ -94,12 +113,15 @@ public sealed class ReusableActivityImportPublishPhase(
         }
         catch (Exception exception)
         {
-            // One version's failure is that version's state; the versions that do not use it still publish (FR-011).
+            // One version's failure is that version's state; the versions that do not use it still publish (FR-011). The
+            // cause goes to the log, not into the response.
+            logger?.LogError(exception, "Publishing imported activity version {VersionId} failed unexpectedly", version.Id);
             return new(version.Id, version.SourceVersionId, ReusableActivityPublicationStatus.Refused, PublicationFailed,
             [
                 new(PublicationFailed, ActivityDiagnosticSeverity.Error,
-                    $"Publishing the imported activity version failed: {exception.Message}",
-                    Subject(version))
+                    $"Publishing the imported activity version '{version.Id}' failed unexpectedly.",
+                    Subject(version),
+                    Remediation: $"To retry, {ApplyAgain}. If it fails again, the host log has the cause.")
             ]);
         }
     }
@@ -111,11 +133,27 @@ public sealed class ReusableActivityImportPublishPhase(
         JsonNode.DeepEquals(JsonNode.Parse(draft.State.Provider.Payload.GetRawText()), JsonNode.Parse(version.GraphManifest.GetRawText())) &&
         JsonNode.DeepEquals(JsonSerializer.SerializeToNode(draft.State.Contract, Json), JsonSerializer.SerializeToNode(version.Contract, Json));
 
+    /// <summary>
+    /// The publisher's remediation speaks to a Studio author who picks the version. In an import the Elsa 3 version picks
+    /// it, so a version below the definition's minimum gets advice the engineer can follow.
+    /// </summary>
+    private static IReadOnlyList<ActivityDiagnostic> ForImport(IReadOnlyList<ActivityDiagnostic> diagnostics) =>
+        diagnostics.Select(diagnostic => StringComparer.Ordinal.Equals(diagnostic.Code, BumpInsufficient)
+                ? diagnostic with
+                {
+                    Remediation = "A newer version of this activity is already published in Elsa 4, and Elsa 4 publishes a workflow's versions oldest first. " +
+                                  "An older Elsa 3 version can be imported only before any newer version of the same workflow is published: " +
+                                  "select it together with the newer versions in one apply, or leave it out."
+                }
+                : diagnostic)
+            .ToArray();
+
     private static ReusableActivityPublicationState Collision(ImportedReusableActivityVersion version, string message) =>
         new(version.Id, version.SourceVersionId, ReusableActivityPublicationStatus.Refused, ReusableActivityImportDiagnosticCodes.IdentityCollision,
         [
             new(ReusableActivityImportDiagnosticCodes.IdentityCollision, ActivityDiagnosticSeverity.Error, message, Subject(version),
-                Remediation: "Import the changed Elsa 3 workflow as a new version, or remove the conflicting Elsa 4 version first.")
+                Remediation: "This usually means the Elsa 3 workflow changed but kept its version number, and an imported Elsa 4 version cannot be replaced. " +
+                             "Publish the changed workflow as a new version in Elsa 3, re-export, and import that version.")
         ]);
 
     private static ActivityDiagnosticSubject Subject(ImportedReusableActivityVersion version) =>

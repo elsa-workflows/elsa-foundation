@@ -25,8 +25,12 @@ public enum ReusableActivityPublicationStatus
 /// The publication state of one selected reusable version. Reported by the apply, a replay and a status read; never
 /// stored on the receipt, so it always reflects the publication store.
 /// </summary>
-/// <param name="ErrorCode">For <see cref="ReusableActivityPublicationStatus.Refused"/>: the publisher's code.</param>
-/// <param name="Diagnostics">For <see cref="ReusableActivityPublicationStatus.Refused"/>: the publisher's diagnostics.</param>
+/// <param name="ErrorCode">
+/// For <see cref="ReusableActivityPublicationStatus.Refused"/>: the publisher's code (or the import's own, such as
+/// <c>ELS3-REUSABLE-IDENTITY-COLLISION</c>); for <see cref="ReusableActivityPublicationStatus.NotPublishedDependency"/>:
+/// <c>ELS3-REUSABLE-DEPENDENCY-NOT-PUBLISHED</c>.
+/// </param>
+/// <param name="Diagnostics">What went wrong and what to change, for a version that is not published.</param>
 /// <param name="BlockedBy">For <see cref="ReusableActivityPublicationStatus.NotPublishedDependency"/>: the dependency's version id.</param>
 public sealed record ReusableActivityPublicationState(
     string ActivityDefinitionVersionId,
