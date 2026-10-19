@@ -146,6 +146,36 @@ describe("secret dialog keyboard focus", () => {
       expect(document.activeElement).toBe(opener);
     });
   });
+
+  it("keeps Create actions outside the scroll body and focuses a failed-save message without clearing fields", async () => {
+    const onSave = vi.fn(async () => { throw new Error("Fixture secret creation failed."); });
+    const { container, opener } = renderDialogWithTrigger("create", onSave);
+    flushSync(() => {
+      opener.focus();
+      opener.click();
+    });
+
+    const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
+    const content = dialog.querySelector<HTMLElement>(".secrets-create-content")!;
+    const actions = dialog.querySelector<HTMLElement>(".secrets-create-actions")!;
+    expect(content.contains(actions)).toBe(false);
+    expect(actions.parentElement).toBe(dialog.querySelector("form"));
+
+    const technicalName = dialog.querySelector<HTMLInputElement>("input")!;
+    const value = dialog.querySelector<HTMLInputElement>(".secrets-value-input input")!;
+    change(technicalName, "preserved.secret");
+    change(value, "preserved-secret-value");
+    flushSync(() => dialog.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(dialog.querySelector("[role='alert']")).not.toBeNull());
+    const alert = dialog.querySelector<HTMLElement>("[role='alert']")!;
+    await waitFor(() => expect(document.activeElement).toBe(alert));
+    expect(alert.tabIndex).toBe(-1);
+    expect(alert.textContent).toBe("Fixture secret creation failed.");
+    expect(technicalName.value).toBe("preserved.secret");
+    expect(value.value).toBe("preserved-secret-value");
+  });
 });
 
 function renderDialog(mode: "create" | "rotate") {
