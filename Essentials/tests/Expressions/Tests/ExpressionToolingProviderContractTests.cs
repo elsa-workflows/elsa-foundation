@@ -213,6 +213,20 @@ public sealed class ExpressionToolingProviderContractTests
         Assert.Empty(result.Payload!.Diagnostics);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData(" \n\t")]
+    [InlineData("// A comment is not a value.")]
+    [InlineData("/* A comment is not a value. */")]
+    public async Task JavaScript_validation_rejects_missing_bindings(string source)
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+        var result = await provider.ValidateAsync(new(CreateScope("JavaScript", []), source), CancellationToken.None);
+
+        Assert.Equal(ExpressionToolingOutcomeState.Success, result.State);
+        Assert.Equal("JavaScript/Syntax", Assert.Single(result.Payload!.Diagnostics).Code);
+    }
+
     [Fact]
     public async Task JavaScript_statement_diagnostics_use_authored_line_positions_and_never_execute()
     {

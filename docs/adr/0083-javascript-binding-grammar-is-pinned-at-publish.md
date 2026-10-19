@@ -29,6 +29,9 @@ Use one deterministic parsing rule, shared by runtime and metadata-only authorin
 3. Select the form before executing any authored code. Runtime errors, sandbox failures and
    result-materialization errors never trigger a retry under another grammar.
 
+Empty and comment-only source remain missing bindings and are rejected by authoring validation and
+runtime parsing. An explicitly returned empty string remains a valid value.
+
 Statement bodies support explicit `return`, declarations, loops and conditional control flow.
 They can also yield a Script completion value, as Elsa 3 does. Explicit `return` is the recommended
 form because its intent is clearer. A bare object always retains expression semantics; to write a

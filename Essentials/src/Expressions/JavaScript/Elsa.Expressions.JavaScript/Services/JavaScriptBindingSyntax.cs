@@ -16,7 +16,10 @@ internal static class JavaScriptBindingSyntax
         catch (ParseErrorException)
         {
             // Only syntax failure selects a statement body. Never retry after executing authored code.
-            new Parser(new ParserOptions { AllowReturnOutsideFunction = true }).ParseScript(source, strict: true);
+            var script = new Parser(new ParserOptions { AllowReturnOutsideFunction = true }).ParseScript(source, strict: true);
+            // A blank/comment-only field is still missing a binding, not a valid statement body.
+            if (script.Body.Count == 0)
+                throw;
             return false;
         }
     }

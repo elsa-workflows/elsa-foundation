@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Acornima;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript.Core.Exceptions;
 using Elsa.Expressions.JavaScript.Core.Contracts;
@@ -71,6 +72,25 @@ public sealed class StatementBindingTests
             EvaluateAsync("implicitBindingGlobal = 1; return implicitBindingGlobal;"));
 
         Assert.Contains("implicitBindingGlobal", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" \n\t")]
+    [InlineData("// A comment is not a value.")]
+    [InlineData("/* A comment is not a value. */")]
+    public async Task Empty_binding_is_rejected_before_execution(string source)
+    {
+        await Assert.ThrowsAnyAsync<ParseErrorException>(() => EvaluateAsync(source));
+    }
+
+    [Theory]
+    [InlineData("''")]
+    [InlineData("return '';")]
+    [InlineData("const value = ''; return value;")]
+    public async Task Empty_string_is_still_a_valid_result(string source)
+    {
+        Assert.Equal(string.Empty, (await EvaluateAsync(source)).GetString());
     }
 
     [Fact]
