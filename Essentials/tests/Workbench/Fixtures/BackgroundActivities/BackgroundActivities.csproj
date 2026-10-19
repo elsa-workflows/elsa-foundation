@@ -6,7 +6,7 @@
     <Description>Test-only background activities for the owned Workbench crash recovery witness.</Description>
   </PropertyGroup>
   <ItemGroup>
-    <InternalsVisibleTo Include="Elsa.Workbench.Tests.BackgroundActivities.Tests" />
+    <InternalsVisibleTo Include="Elsa.Workbench.BackgroundActivities.Tests" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />

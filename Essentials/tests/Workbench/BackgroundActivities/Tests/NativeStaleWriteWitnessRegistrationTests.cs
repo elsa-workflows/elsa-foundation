@@ -6,7 +6,7 @@ using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Workbench.Tests.BackgroundActivities.Tests;
+namespace Elsa.Workbench.BackgroundActivities.Tests;
 
 public class NativeStaleWriteWitnessRegistrationTests
 {

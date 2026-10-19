@@ -3,7 +3,7 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Distributed.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Elsa.Workbench.Tests.BackgroundActivities.Tests;
+namespace Elsa.Workbench.BackgroundActivities.Tests;
 
 public class NativeHostingWitnessDisposalTests
 {

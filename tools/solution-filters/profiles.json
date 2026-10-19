@@ -130,12 +130,12 @@
       "includeProjectNames": [
         "Elsa.Workbench",
         "Elsa.Workbench.Tests",
-        "Elsa.Workbench.Tests.BackgroundActivities.Tests"
+        "Elsa.Workbench.BackgroundActivities.Tests"
       ],
       "requiredRootPaths": [
         "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
         "Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj",
-        "Essentials/tests/Workbench/Fixtures/BackgroundActivities.Tests/Elsa.Workbench.Tests.BackgroundActivities.Tests.csproj"
+        "Essentials/tests/Workbench/BackgroundActivities/Tests/Elsa.Workbench.BackgroundActivities.Tests.csproj"
       ]
     }
   ]

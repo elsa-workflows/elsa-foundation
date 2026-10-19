@@ -7,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
-namespace Elsa.Workbench.Tests.BackgroundActivities.Tests;
+namespace Elsa.Workbench.BackgroundActivities.Tests;
 
 public class NativeHostingWitnessRegistrationTests
 {

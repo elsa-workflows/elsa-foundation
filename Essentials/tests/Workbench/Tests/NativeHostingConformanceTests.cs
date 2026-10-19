@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using static Elsa.Workbench.Tests.NativeHostingScenario;
 using Xunit;
@@ -69,6 +70,7 @@ public sealed class NativeHostingConformanceTests(ITestOutputHelper output)
         },
             "the survivor's real EF receipt commit", () => DescribeJournal(journal));
         Assert.True(File.Exists(Path.Combine(journal, first + ".receipt")));
+        var receiptDigest = File.ReadAllText(Path.Combine(journal, first + ".receipt"));
         var receiptCommittedAt = Value<DateTimeOffset>(receipt!, "RecordedAt");
         File.Delete(Path.Combine(journal, "hold-receipts"));
 
@@ -115,14 +117,14 @@ public sealed class NativeHostingConformanceTests(ITestOutputHelper output)
         Assert.False(Value<bool>(departed, "IsLive"));
         Assert.True(IsLive(released, "FreshMembershipMembers", survivorId));
 
-        await WaitForEventAsync(survivor, journal, "placement-claimed", executionId,
+        var survivorPlacement = await WaitForEventAsync(survivor, journal, "placement-claimed", executionId,
             record => Value<int>(record, "ProcessId") == survivor.ProcessId &&
                       Value<string>(record, "PlacementOwnerId") == survivorId &&
                       Value<long>(record, "PlacementToken") > placementToken);
         var leased = await WaitForEventAsync(survivor, journal, "transport-leased", executionId,
             record => Value<int>(record, "ProcessId") == survivor.ProcessId &&
                       Value<string>(record, "TransportItemId") == transportId && Value<string>(record, "LeaseOwnerId") == survivorId);
-        await WaitForEventAsync(survivor, journal, "transport-acked", executionId,
+        var acknowledged = await WaitForEventAsync(survivor, journal, "transport-acked", executionId,
             record => Value<int>(record, "ProcessId") == survivor.ProcessId &&
                       Value<string>(record, "TransportItemId") == transportId && Value<string>(record, "LeaseOwnerId") == survivorId &&
                       Value<long>(record, "LeaseToken") == Value<long>(leased, "LeaseToken") && Value<bool>(record, "AckResult"));
@@ -144,10 +146,42 @@ public sealed class NativeHostingConformanceTests(ITestOutputHelper output)
         Assert.Equal(survivor.ProcessId.ToString(), Assert.Single(StartedLines(journal, "final")).Split('|')[0]);
         Assert.Equal(firstStart, Assert.Single(StartedLines(journal, first)));
         Assert.Equal(secondStart, Assert.Single(StartedLines(journal, second)));
-        await WaitForEventAsync(survivor, journal, "ownership-acquired", executionId,
+        var survivorFence = await WaitForEventAsync(survivor, journal, "ownership-acquired", executionId,
             record => Value<int>(record, "ProcessId") == survivor.ProcessId && Value<string>(record, "OwnerId") == survivorId &&
                       Value<long>(record, "FencingToken") > Value<long>(originalFence, "FencingToken"));
         Assert.False(survivor.HasExited);
+        output.WriteLine(JsonSerializer.Serialize(new
+        {
+            Stage = "concurrent-routing-proof",
+            fixture.ScenarioId,
+            Profile = fixture.Profile.ToString(),
+            fixture.PackageSha256,
+            PackageFileName = Path.GetFileName(fixture.PackagePath),
+            OwnerHostId = ownerId,
+            SurvivorHostId = survivorId,
+            OwnerProcessId = owner.ProcessId,
+            SurvivorProcessId = survivor.ProcessId,
+            ExecutionId = executionId,
+            ArtifactId = completed["instance"]?["artifactId"]?.GetValue<string>(),
+            ArtifactHash = completed["instance"]?["artifactHash"]?.GetValue<string>(),
+            FirstCompleted = first,
+            OriginalFence = originalFence,
+            Receipt = receipt,
+            ReceiptDigest = receiptDigest,
+            TransportSent = sent,
+            PlacementRelease = released,
+            SurvivorPlacement = survivorPlacement,
+            TransportLeased = leased,
+            TransportAcknowledged = acknowledged,
+            SurvivorFence = survivorFence,
+            OwnerComposition = composition,
+            SurvivorComposition = survivorComposition,
+            FirstBodyStart = firstStart,
+            SecondBodyStart = secondStart,
+            FinalBodyStart = Assert.Single(StartedLines(journal, "final")),
+            NativeStatus = completed["instance"]?["status"]?.GetValue<string>(),
+            IncidentCount = completed["incidents"]!.AsArray().Count
+        }));
     }
 
     [SkippableFact]
