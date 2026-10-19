@@ -11,6 +11,7 @@ using Elsa.Workflows.Design.Validations.Validators;
 using Elsa3.Activities.Design.Import;
 using Elsa3.Activities.Design.Import.Contracts;
 using Elsa3.Activities.Design.Import.Models;
+using Elsa3.Activities.Design.Import.Services;
 using Elsa3.Mapping.Mappings;
 using Elsa3.Mapping.Services;
 using Elsa3.Models;
@@ -111,7 +112,44 @@ internal static class ReusableActivityImportFixtures
         new WorkflowDesignValidationsFeature().ConfigureServices(services);
         new Elsa3MappingFeature().ConfigureServices(services);
         new Elsa3ImportActivitiesFeature().ConfigureServices(services);
+        // A host also composes the publish phase (spec 246); these tests stop at the commit port, so it publishes
+        // into nothing and reports every version published.
+        services.AddScoped(_ => new ReusableActivityImportPublishPhase(
+            new NothingPublished(), new NothingPublished(), new NothingPublished(), new NothingPublished(), new NothingPublished()));
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+    }
+
+    /// <summary>Empty Design stores and a publisher that accepts everything, for compositions that capture the commit.</summary>
+    private sealed class NothingPublished :
+        Elsa.Activities.Design.Persistence.Core.Stores.IActivityDefinitionVersionPublicationStore,
+        Elsa.Activities.Design.Persistence.Core.Stores.IActivityDefinitionAuthoringStore,
+        Elsa.Activities.Design.Persistence.Core.Stores.IActivityDefinitionDraftStore,
+        Elsa.Activities.Design.Persistence.Core.Contracts.ICreateActivityDraftCommand,
+        IReusableActivityImportPublisher
+    {
+        public Task<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersionPublication?> FindAsync(string definitionVersionId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersionPublication?>(null);
+
+        public Task<IReadOnlyList<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersionPublication>> ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionVersionPublication>>([]);
+
+        Task<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionAuthoringState?> Elsa.Activities.Design.Persistence.Core.Stores.IActivityDefinitionAuthoringStore.FindAsync(string definitionId, CancellationToken cancellationToken) =>
+            Task.FromResult<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionAuthoringState?>(null);
+
+        public Task<IReadOnlyList<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionAuthoringState>> ListAsync(IEnumerable<string> definitionIds, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionAuthoringState>>([]);
+
+        Task<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionDraft?> Elsa.Activities.Design.Persistence.Core.Stores.IActivityDefinitionDraftStore.FindAsync(string draftId, CancellationToken cancellationToken) =>
+            Task.FromResult<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionDraft?>(null);
+
+        Task<IReadOnlyList<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionDraft>> Elsa.Activities.Design.Persistence.Core.Stores.IActivityDefinitionDraftStore.ListByDefinitionAsync(string definitionId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Elsa.Activities.Design.Persistence.Core.Entities.ActivityDefinitionDraft>>([]);
+
+        public Task ExecuteAsync(Elsa.Activities.Design.Persistence.Core.Contracts.CreateActivityDraftRequest request, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public ValueTask<ReusableActivityImportPublishOutcome> PublishAsync(ReusableActivityImportPublishRequest request, CancellationToken cancellationToken = default) =>
+            ValueTask.FromResult(ReusableActivityImportPublishOutcome.Applied);
     }
 
     /// <summary>The payload serializer the design stores write workflow state with.</summary>

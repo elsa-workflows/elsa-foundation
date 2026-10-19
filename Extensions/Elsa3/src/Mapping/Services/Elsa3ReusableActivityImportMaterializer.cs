@@ -50,22 +50,34 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
                 x => x.Key,
                 x => x.OrderBy(y => y.Version).ThenBy(y => y.Id, StringComparer.Ordinal).First(),
                 StringComparer.Ordinal);
-        var headByDefinition = selection.Where(x => x.IsReusable)
-            .GroupBy(x => x.SourceDefinitionId, StringComparer.Ordinal)
-            .ToDictionary(
-                x => x.Key,
-                x => x.OrderByDescending(y => y.SourceVersion).ThenByDescending(y => y.SourceVersionId, StringComparer.Ordinal).First(),
-                StringComparer.Ordinal);
         var activities = new List<ImportedReusableActivity>();
         var workflows = new List<ImportedWorkflow>();
         var failures = new List<Elsa3MigrationDiagnostic>();
         var warnings = new List<Elsa3MigrationDiagnostic>();
 
-        foreach (var item in selection.OrderBy(x => x.SourceVersionId, StringComparer.Ordinal))
+        // Reusable versions convert in publish order, so each caller reads the outcomes of the target it routes on
+        // from that target's own conversion (spec 246 R-9); non-reusable workflows follow.
+        var reusable = Elsa3ReusableImportOrder.Order(selection.Where(x => x.IsReusable).ToArray(), out var unordered);
+        if (unordered.Count > 0)
+            throw new ReusableActivityImportValidationException(
+                "The selected reusable Elsa 3 versions cannot be published in any order.",
+                unordered.Select(id => new Elsa3MigrationDiagnostic(
+                    Elsa3MigrationDiagnosticSeverity.Error,
+                    ReusableActivityImportDiagnosticCodes.DependencyCycle,
+                    $"Reusable source version '{id}' and the versions it uses wait on each other once versions of one definition publish in ascending order.",
+                    guidance: "Select versions whose dependencies do not run against the version order of their definitions.",
+                    metadata: new Dictionary<string, string>(StringComparer.Ordinal) { ["SourceVersionId"] = id },
+                    pathSegments: [new(Elsa3MigrationPathSegmentKind.SourceVersion, id)])).ToArray());
+        var convertedById = new Dictionary<string, Elsa3ConvertedDefinition>(StringComparer.Ordinal);
+
+        foreach (var item in reusable.Concat(selection.Where(x => !x.IsReusable).OrderBy(x => x.SourceVersionId, StringComparer.Ordinal)))
         {
             cancellationToken.ThrowIfCancellationRequested();
             var source = sourceById[item.SourceVersionId];
-            var replacements = BuildReplacements(item, sourceById, selectedById);
+            // A target that did not convert already fails the apply with its own diagnostics.
+            if (item.Rewrites.Any(rewrite => !convertedById.ContainsKey(rewrite.TargetSourceVersionId)))
+                continue;
+            var replacements = BuildReplacements(item, sourceById, selectedById, convertedById);
             var conversion = await converter.ConvertAsync(
                 new Elsa3ConversionRequest(source, item.IsReusable, replacements, DiagnosticMetadata(item)),
                 cancellationToken);
@@ -80,9 +92,9 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             var mappedState = converted.State;
             if (item.IsReusable)
             {
-                var head = headByDefinition[source.DefinitionId];
+                convertedById[item.SourceVersionId] = converted;
                 var lineage = canonicalByDefinition[source.DefinitionId];
-                activities.Add(BuildActivity(item, source, lineage, sourceById[head.SourceVersionId], head.ActivityDefinitionVersionId!, converted));
+                activities.Add(BuildActivity(item, source, lineage, converted));
                 workflows.Add(BuildWorkflow(item, source, lineage, await BuildWrapperStateAsync(item, mappedState, cancellationToken)));
             }
             else
@@ -101,7 +113,7 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             plan.PlanId,
             plan.CollectionId,
             selection.Select(x => x.SourceVersionId).Order(StringComparer.Ordinal).ToArray(),
-            activities.OrderBy(x => x.Definition.Id, StringComparer.Ordinal).ToArray(),
+            activities,
             workflows.OrderBy(x => x.Version.Id, StringComparer.Ordinal).ToArray(),
             Warnings: warnings);
     }
@@ -116,7 +128,8 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
     private IReadOnlyDictionary<string, Elsa3ActivityExactReplacement> BuildReplacements(
         ReusableActivityImportItem owner,
         IReadOnlyDictionary<string, Elsa3WorkflowDefinition> sourceById,
-        IReadOnlyDictionary<string, ReusableActivityImportItem> selectedById)
+        IReadOnlyDictionary<string, ReusableActivityImportItem> selectedById,
+        IReadOnlyDictionary<string, Elsa3ConvertedDefinition> convertedById)
     {
         var replacements = new Dictionary<string, Elsa3ActivityExactReplacement>(StringComparer.Ordinal);
         foreach (var rewrite in owner.Rewrites)
@@ -129,64 +142,26 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
                     rewrite.TargetActivityDefinitionVersionId,
                     targetSource.Inputs.Select(argumentMapper.MapInput).ToArray(),
                     targetSource.Outputs.Select(x => x.Name).ToHashSet(StringComparer.OrdinalIgnoreCase),
-                    CompletionOutcomes(targetSource))))
+                    CompletionOutcomes(convertedById[rewrite.TargetSourceVersionId]))))
                 throw new InvalidOperationException($"Import plan contains multiple rewrites for node '{rewrite.NodeId}' in source '{owner.SourceVersionId}'.");
         }
         return replacements;
     }
 
     /// <summary>
-    /// The outcomes a reusable workflow's converted activity completes with, which a caller's connections route by
-    /// (spec 239 R-3): <c>Done</c> plus every single literal outcome a <c>Complete</c> names at any depth, matching the
-    /// contract the converter declares for it (spec 236 D-5 to D-7). A Complete the converter refuses adds nothing; its
-    /// own conversion reports it.
+    /// The outcomes a caller's connections route by (spec 239 R-3): the names of the target's converted boundary
+    /// outcomes, the list its published contract declares (spec 246 R-9), so the two cannot disagree.
     /// </summary>
-    private static IReadOnlySet<string> CompletionOutcomes(Elsa3WorkflowDefinition target)
-    {
-        var outcomes = new HashSet<string>(StringComparer.Ordinal) { Elsa3OutcomeKey.Done };
-        var pending = new Stack<JsonElement>();
-        if (target.Root is not null)
-            pending.Push(JsonSerializer.SerializeToElement(target.Root, JsonOptions));
-        while (pending.TryPop(out var element))
-        {
-            if (element.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var item in element.EnumerateArray())
-                    pending.Push(item);
-                continue;
-            }
+    private static IReadOnlySet<string> CompletionOutcomes(Elsa3ConvertedDefinition target) =>
+        target.BoundaryOutcomes.Select(outcome => outcome.Name).ToHashSet(StringComparer.Ordinal);
 
-            if (element.ValueKind != JsonValueKind.Object)
-                continue;
-
-            if (element.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String &&
-                StringComparer.Ordinal.Equals(type.GetString(), "Elsa.Complete") &&
-                element.TryGetProperty("outcomes", out var value) &&
-                Elsa3TerminalPlacementRewrite.TryReadNameList(value, out _, out var names) &&
-                names is { Count: 1 })
-                outcomes.Add(names[0]);
-
-            foreach (var property in element.EnumerateObject())
-            {
-                if (property.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
-                    pending.Push(property.Value);
-            }
-        }
-
-        return outcomes;
-    }
-
-    private ImportedReusableActivity BuildActivity(
+    private static ImportedReusableActivity BuildActivity(
         ReusableActivityImportItem item,
         Elsa3WorkflowDefinition source,
         Elsa3WorkflowDefinition lineage,
-        Elsa3WorkflowDefinition headSource,
-        string headVersionId,
         Elsa3ConvertedDefinition converted)
     {
-        var mappedState = converted.State;
         var definitionId = item.ActivityDefinitionId!;
-        var versionId = item.ActivityDefinitionVersionId!;
         var definition = new ActivityDefinition
         {
             Id = definitionId,
@@ -197,35 +172,27 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             CreatedAt = lineage.CreatedAt,
             LastModifiedAt = lineage.CreatedAt
         };
-        var payload = BuildGraphManifest(converted);
-        var version = new ActivityDefinitionVersion($"{source.Version}.0.0", definitionId)
-        {
-            Id = versionId,
-            ProviderKey = "elsa.activity-graph",
+        var version = new ImportedReusableActivityVersion(
+            item.ActivityDefinitionVersionId!,
+            definitionId,
+            $"{source.Version}.0.0",
+            item.SourceVersionId,
+            Elsa3ImportedActivityContract.Build(converted),
             // Schema 2: the contract may declare several boundary outcomes, reached through Complete nodes (D-5).
-            ProviderSchemaVersion = "2",
-            ConsumerKey = "elsa.graph-activity",
-            ConsumerSchemaVersion = "1",
-            DescriptorPayload = payload,
-            Inputs = (source.Inputs ?? []).Select(argumentMapper.MapInput).ToArray(),
-            Outputs = (source.Outputs ?? []).Select(argumentMapper.MapOutput).ToArray(),
-            DesignFacets = [],
-            SourceKind = "Elsa3WorkflowDefinition",
-            SourceId = source.Id,
-            Hash = item.SourceFingerprint,
-            CreatedAt = source.CreatedAt,
-            LastModifiedAt = source.CreatedAt
-        };
+            BuildGraphManifest(converted),
+            item.Dependencies.Select(dependency => dependency.TargetActivityDefinitionVersionId).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(),
+            source.CreatedAt);
+        // No head: the definition has none until the publish phase publishes its first version (spec 246 FR-004).
         var authoring = new ActivityDefinitionAuthoringState
         {
             Id = ReusableActivityImportIdentity.Create("activity-authoring", definitionId),
             DefinitionId = definitionId,
             ContentAuthority = new(ActivityContentAuthorityKind.Design, "elsa3.collection-import"),
-            HeadVersionId = headVersionId,
+            HeadVersionId = null,
             CreatedAt = lineage.CreatedAt,
-            LastModifiedAt = headSource.CreatedAt
+            LastModifiedAt = lineage.CreatedAt
         };
-        return new(definition, version, authoring, mappedState);
+        return new(definition, version, authoring, converted.State);
     }
 
     private static ImportedWorkflow BuildWorkflow(
@@ -328,7 +295,8 @@ public sealed class Elsa3ReusableActivityImportMaterializer(
             item.ActivityDefinitionVersionId!,
             inputs.Select(x => new ArgumentState(
                 x.ReferenceKey,
-                new ArgumentValue($"getInput({JsonSerializer.Serialize(x.Name)})", "JavaScript"),
+                // The wrapper's own workflow request member: Elsa 4 JavaScript has no getInput.
+                new ArgumentValue(JsonSerializer.SerializeToElement(new { memberKey = x.Name }), "WorkflowRequest"),
                 null,
                 null,
                 x.StorageDriverType,

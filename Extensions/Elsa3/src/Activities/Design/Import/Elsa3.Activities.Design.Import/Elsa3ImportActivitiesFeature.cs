@@ -53,7 +53,15 @@ public class Elsa3ImportActivitiesFeature : IWebShellFeature
         }
 
         services.AddScoped<IReusableActivityCollectionAnalyzer, ReusableActivityCollectionAnalyzer>();
-        services.AddScoped<IReusableActivityCollectionImporter, ReusableActivityCollectionImporter>();
+        // The publish phase that publishes imported reusable versions after the commit comes from the
+        // Elsa3ImportActivitiesPublishing feature (spec 246); without it, an apply that selects one is refused.
+        services.AddScoped<IReusableActivityCollectionImporter>(provider => new ReusableActivityCollectionImporter(
+            provider.GetRequiredService<IReusableActivityCollectionAnalyzer>(),
+            provider.GetRequiredService<IReusableActivityImportMaterializer>(),
+            provider.GetRequiredService<IReusableActivityImportCommand>(),
+            provider.GetRequiredService<Elsa.Workflows.Design.Validations.Core.Contracts.ICredentialLiteralValidator>(),
+            provider.GetService<ReusableActivityImportPublishPhase>(),
+            requirePublishing: true));
         services.TryAddSingleton(TimeProvider.System);
         services.AddOptions<ReusableActivityImportOptions>().Configure(options =>
         {

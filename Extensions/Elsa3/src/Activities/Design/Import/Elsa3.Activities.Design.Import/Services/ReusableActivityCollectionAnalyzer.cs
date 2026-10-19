@@ -125,6 +125,18 @@ public sealed class ReusableActivityCollectionAnalyzer : IReusableActivityCollec
                             guidance: "Refactor the Elsa 3 trigger into a leaf trigger before importing the reusable collection.",
                             metadata: new Dictionary<string, string> { ["nodeId"] = activity.NodeId, ["isRoot"] = isRoot.ToString() }));
                     }
+                    else
+                    {
+                        // Spec 246 D-6: the wrapper cannot start from the trigger and a graph activity body may not hold
+                        // one, so the reusable would not start the way it did in Elsa 3.
+                        itemDiagnostics.Add(Diagnostic(
+                            ReusableActivityImportDiagnosticCodes.UnsupportedStartTrigger,
+                            $"Reusable workflow '{source.DefinitionId}' version {source.Version} starts from trigger '{activity.NodeId}' ({activity.Type}). Elsa 4 cannot start a reusable activity from a trigger.",
+                            source.Id,
+                            path,
+                            guidance: "Move the trigger into its own Elsa 3 workflow that calls the reusable workflow, then re-export the collection.",
+                            metadata: new Dictionary<string, string> { ["nodeId"] = activity.NodeId, ["activityType"] = activity.Type }));
+                    }
                 }
 
                 var reference = ReadReference(activity, reusableByDefinition);

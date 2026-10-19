@@ -27,6 +27,15 @@ on the receipt. Apply needs the publish permission. Reusables with a leaf start 
 - Compile proof at the provider level in the Mapping tests (R-11). A new TestServer integration test project for
   import → publish → run (R-13).
 
+**Implementation finding (2026-10-19, D-7):** graph activities cannot hold engine intrinsics, so a reusable body using
+SetVariable, SetOutput, Correlate or SetName is refused at conversion, and spec 236's SC-006 output test moves to a
+follow-up spec. The compile proof also found the root natural-outcome key spec 236 wrote (`done`), which a built-in root
+does not emit; conversion now maps from `Done`.
+
+**Implementation finding (2026-10-19, D-8):** graph body nodes cannot read the activity's inputs, its variables or other
+body results (R-18, #3027), so a reusable body that does is refused at conversion. 246 publishes and runs reusables whose
+bodies route on literal logic; Essentials gets one side fix (out-of-order type discriminators in descriptor payloads).
+
 **Review points** (agreed 2026-10-19; they change the spec; listed under [Spec amendments](#spec-amendments)): R-1
 bridge project, R-3 lower-version refusal, R-6 live publication state, R-13 new test project.
 

@@ -11,13 +11,15 @@
 **Builds on**: spec [236](../236-elsa3-activity-map/spec.md) (#2706, merged as #2805, 4b902aaa2), spec
 [239](../239-elsa3-flowchart-connections/spec.md) (#2705, merged as #2857, b0aea33a6), spec
 [238](../238-flowchart-trigger-start/spec.md) (merged as #2856, 6b3ad8c3d) and the `IElsa3NodeConverter` contract
-(#2845). Completes 236's deferred compile proof and its SC-006 (plan D-9).
+(#2845). Completes 236's deferred compile proof. Spec 236's SC-006 (a caller receives a reusable's output) moves to
+the follow-up spec for engine intrinsics in graph activities (D-7).
 
 **Runs alongside**: #2717 (spec 247). The two touch shared files only: diagnostic codes, the Mapping README,
 `EXTENSION_POINTS.md` and the generated maps.
 
 **Input**: Issue #2796 and spec 236's handover comment on it. The decisions under [Decisions](#decisions) come from a
-review with the maintainer on 2026-10-15; D-5 and D-6 were added in the 2026-10-19 review against main.
+review with the maintainer on 2026-10-15; D-5 and D-6 were added in the 2026-10-19 review against main, and D-7 during
+implementation on 2026-10-19.
 
 ## Context (verified on main at 9436d2193, 2026-10-19; line numbers drift)
 
@@ -82,19 +84,21 @@ review with the maintainer on 2026-10-15; D-5 and D-6 were added in the 2026-10-
 | D-4 | **Apply requires both import and publish permission.** `Elsa3ImportPermissions.Manage` and `WorkflowPublishingPermissions.Manage` are both checked before anything is written. | The import must not become a second way to publish that skips the publish permission. |
 | D-5 | **Caller outcomes must match the published contract.** The outcomes a caller routes on and the outcomes the dependency's contract declares come from one source, or the item is refused before commit. *(2026-10-19)* | Faithful or refuse: after publish, the caller compiles against the contract, so a mismatch would fail late or route wrongly. |
 | D-6 | **A reusable with a leaf start trigger is refused at analysis.** The analyzer refuses a reusable Elsa 3 workflow that contains a `CanStartWorkflow` activity, with an `ELS3-REUSABLE-*` diagnostic and guidance, before anything is written. Moving the trigger into the direct-start wrapper is left to its own Elsa 4 parity spec. *(2026-10-19)* | Faithful or refuse. Today the trigger stays in the graph body, where the graph provider forbids triggers and nothing would start the wrapper the way Elsa 3 started the workflow. |
+| D-7 | **A reusable whose body uses an engine intrinsic is refused at conversion.** SetVariable, SetOutput, Correlate and SetName convert to Elsa 4 engine intrinsics (`elsa.intrinsic.*`). A graph activity resolves every node to a published activity version, and intrinsics have none, so such a body cannot be published. Conversion refuses it with `ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED`. Intrinsic support in graph activities, and the output test it enables (spec 236 SC-006), move to a follow-up spec. *(2026-10-19, found by the compile proof)* | Faithful or refuse; a real parity gap gets its own spec. Without it, these versions would fail at publish with an unresolved-dependency error that does not say why. |
+| D-8 | **A reusable whose body reads its inputs, its variables or another activity's result is refused at conversion.** In Elsa 4 a graph body node resolves its bindings against the started workflow, never the graph: `getInput` reads the started workflow's inputs, a variable read reads the started workflow's variables, and a body activity-result reference is refused at workflow publish (`VF-COER-001`). Conversion refuses `getInput`, `getVariable`, output reads and Elsa 3 memory references in a reusable body with `ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED`. Body reads of graph-scoped values move to [#3027](https://github.com/elsa-workflows/elsa-foundation/issues/3027). *(2026-10-19, found by the integration tests; a first fix through a boundary-input graph variable was tried and does not work, because body nodes cannot read graph variables either)* | Faithful or refuse: the import otherwise reads the wrong data silently, or hangs. |
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - An imported reusable activity runs in an Elsa 4 workflow (Priority: P1)
 
-A migration engineer imports an Elsa 3 collection that contains a reusable workflow with a declared output. They then
-run an Elsa 4 workflow that uses the imported activity, and read the output it produced.
+A migration engineer imports an Elsa 3 collection that contains a reusable workflow. They then run an Elsa 4 workflow
+that uses the imported activity and see it follow the outcome the activity completed with.
 
 **Why this priority**: This is the defect. Without it, imported reusable activities exist in the catalog but cannot
 run, so the collection import does not migrate reusable behaviour at all.
 
-**Independent Test**: Import a collection with one reusable workflow that sets an output. Publish and run a workflow
-that calls it, then read the caller's view of the output.
+**Independent Test**: Import a collection with reusable workflows that complete with different outcomes, and caller
+flowcharts that branch on those outcomes. Run each caller and check the branch it takes.
 
 **Acceptance Scenarios**:
 
@@ -102,16 +106,22 @@ that calls it, then read the caller's view of the output.
    imported reusable version has an active publication. The publication's contract lists the converted inputs, outputs
    and outcomes, the version carries an `elsa.outcomes` facet and a compiled template exists.
 2. **Given** that published activity, **When** a workflow that calls it is published and run, **Then** the caller
-   receives the output value the reusable activity set, and the caller's own outputs are unchanged (spec 236 SC-006).
+   runs the published graph activity, binding a value to its declared input, and completes.
 3. **Given** the import's direct-start wrapper for that reusable workflow, **When** it runs, **Then** it runs the
-   published activity and exposes the same outputs.
+   published activity and completes.
 4. **Given** a reusable workflow whose Elsa 3 body ends with more than one outcome, **When** it is published,
    **Then** the contract and the `elsa.outcomes` facet carry `done` and each converted outcome, under the names the
    conversion produced.
 5. **Given** a reusable workflow whose Elsa 3 body is a flowchart, **When** the import is applied, **Then** it is
    published and compiled like a sequence-bodied one. 
 6. **Given** an imported caller whose flowchart routes on a non-`done` outcome of an imported reusable, **When** the
-   caller is run, **Then** it follows the connection for the outcome the reusable completed with. 
+   caller is run, **Then** it follows the connection for the outcome the reusable completed with.
+7. **Given** a reusable workflow whose body uses SetVariable, SetOutput, Correlate or SetName, **When** the import is
+   analyzed and applied, **Then** its conversion is refused with `ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED`, naming
+   the node, and nothing is written (D-7).
+8. **Given** a reusable workflow whose body reads one of its inputs, a variable or another activity's result, **When**
+   the import is applied, **Then** its conversion is refused with `ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED`, and
+   nothing is written (D-8).
 
 ---
 
@@ -259,9 +269,9 @@ A user with the import permission but not the publish permission tries to apply 
   converted reusable workflows, with dependencies resolved from `RealActivityCatalog`, extended into
   `Elsa3ReusableTerminalTests`, `Elsa3CollectionLoweringTests` and the flowchart-bodied reusable cases in
   `Elsa3FlowchartConversionTests`.
-- **FR-016**: A run-time test MUST import a reusable Elsa 3 workflow that sets an output, publish and run a workflow
-  that calls the imported activity, and assert the output the caller receives (spec 236 SC-006). A second case MUST
-  route a caller's flowchart on a non-`done` outcome of an imported reusable. The tests run in an in-process Elsa 4
+- **FR-016**: A run-time test MUST import a reusable Elsa 3 workflow, publish and run a workflow that calls the imported
+  activity, and assert that it ran: a caller's flowchart routes on the non-`done` outcome the reusable completed with.
+  Asserting a reusable's output moves to #3023 (D-7); a body computing from its inputs moves to #3027 (D-8). The tests run in an in-process Elsa 4
   host and upload test-owned Elsa 3 export JSON through the import API; no Elsa 3 instance is involved. *(amended
   2026-10-19, research R-13)*
 - **FR-017**: No Runtime project may gain a dependency on a Design project.
@@ -272,7 +282,13 @@ A user with the import permission but not the publish permission tries to apply 
   with an `ELS3-REUSABLE-*` diagnostic that names the node and gives guidance, before anything is written (D-6).
   
 - **FR-020**: The Mapping README MUST drop the note that imported reusable activities are not yet published, and
-  document the publish phase. 
+  document the publish phase.
+- **FR-021**: Conversion of a reusable workflow MUST refuse every node that resolves to an engine intrinsic with
+  `ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED`, naming the node and the Elsa 3 type, with guidance (D-7). Non-reusable
+  workflows keep converting them.
+- **FR-022**: Conversion of a reusable workflow MUST refuse a body that reads one of its inputs, a variable or another
+  activity's result (`getInput`, `getVariable`, output reads, Elsa 3 memory references) with
+  `ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED` (D-8). Non-reusable workflows keep converting them.
 
 ### Key Entities
 
@@ -291,8 +307,8 @@ A user with the import permission but not the publish permission tries to apply 
 
 - **SC-001**: Every reusable version in an applied import fixture has an active publication with a compiled template.
   None is left as an unpublished catalog row.
-- **SC-002**: A workflow calling an imported reusable activity runs to completion and receives the output value the
-  reusable workflow set (spec 236 SC-006). A caller routing on a non-`done` outcome follows the right connection.
+- **SC-002**: A workflow calling an imported reusable activity runs to completion, and a caller routing on a non-`done`
+  outcome follows the connection for the outcome the reusable completed with.
 - **SC-003**: `GraphProviderProof` compiles every converted reusable fixture that it validates today, flowchart bodies
   included, with zero error diagnostics.
 - **SC-004**: Re-applying an applied plan publishes nothing new and returns the same warnings and publication state as
@@ -319,6 +335,10 @@ A user with the import permission but not the publish permission tries to apply 
 
 - Publishing imported workflow definitions, wrappers included.
 - Moving a reusable's start trigger into its wrapper (D-6); this needs its own Elsa 4 parity spec.
+- Engine intrinsics in graph activities (D-7), and with them reusable outputs set by SetOutput and spec 236's SC-006;
+  these need their own Elsa 4 spec ([#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023)).
+- Graph body nodes reading the activity's inputs, its variables or other body results (D-8,
+  [#3027](https://github.com/elsa-workflows/elsa-foundation/issues/3027)).
 - Surfacing conversion warnings in Studio's activity views.
 - Changing how Studio or REST choose version ids.
 - Routing the import through `IElsa3NodeConverter` (#2845).
