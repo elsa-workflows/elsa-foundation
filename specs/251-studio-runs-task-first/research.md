@@ -67,4 +67,3 @@ Reviewed the Gate indexes in framework constitution v6.1.0 and Elsa constitution
 4. **ID copyability and row semantics**: test actual copied values, name-first ordering, keyboard inspection, checkbox behavior, and the existing deletion guards.
 5. **Pagination/filter composition**: use a deterministic server fixture with eleven active matches over two pages plus healthy, resolved-only and suppressed-only controls; filter before slicing. Exercise the actual detail page and return action rather than a navigation placeholder.
 6. **Maps and shared gates**: source changes do not alter C# feature registration or dependency maps, but the newly numbered spec/status changes the generated spec-status map. Run the maps check and refresh that map if stale. Run the repository-required Architecture guard suite and other epic delivery gates; the client-only scope does not waive them.
-

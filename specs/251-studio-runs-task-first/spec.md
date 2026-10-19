@@ -1,10 +1,10 @@
 # Feature Specification: Task-first Runs triage in Studio
 
-**Feature Branch**: `agent/codex/3062-runs-golden-path`  
-**Created**: 2026-10-20  
-**Status**: In progress  
-**Issue**: #3062  
-**Program**: Epic #3057 · Program #2559 · Phase 2  
+**Feature Branch**: `agent/codex/3062-runs-golden-path`
+**Created**: 2026-10-20
+**Status**: In progress
+**Issue**: #3062
+**Program**: Epic #3057 · Program #2559 · Phase 2
 **Input**: User description from #3062: “Make Runs a task-first triage list with progressive filters.”
 
 ## User Scenarios & Testing
@@ -135,4 +135,3 @@ An operator opens a run from a filtered or paged list and returns to the same qu
 - [Issue #3062](https://github.com/elsa-workflows/elsa-foundation/issues/3062)
 - [Spec 192: Workflow Incident Troubleshooting](../192-incident-troubleshooting/spec.md)
 - [Spec 192 incident contract](../192-incident-troubleshooting/contracts/incident-troubleshooting.md)
-
