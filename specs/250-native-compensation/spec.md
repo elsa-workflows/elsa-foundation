@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-19
 
-**Status**: Draft — design packet for [#3043](https://github.com/elsa-workflows/elsa-foundation/issues/3043); implementation of the M1 slice follows under [#3044](https://github.com/elsa-workflows/elsa-foundation/issues/3044).
+**Status**: In progress — design packet [#3043](https://github.com/elsa-workflows/elsa-foundation/issues/3043); M1 runtime under [#3044](https://github.com/elsa-workflows/elsa-foundation/issues/3044), Studio and end-to-end proof to follow.
 
 **Program**: [Native compensation #3035](https://github.com/elsa-workflows/elsa-foundation/issues/3035) → [Contract #3041](https://github.com/elsa-workflows/elsa-foundation/issues/3041) → [Design #3043](https://github.com/elsa-workflows/elsa-foundation/issues/3043). Requirements: [PRD #3036](https://github.com/elsa-workflows/elsa-foundation/issues/3036). Boundary with BPMN: [ADR 0086](../../docs/adr/0086-native-and-bpmn-compensation-stay-separate.md).
 

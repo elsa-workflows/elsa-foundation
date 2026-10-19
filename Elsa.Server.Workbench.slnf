@@ -5,6 +5,7 @@
       "Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj",
       "Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj",
       "Essentials/src/Activities/Bpmn/Interchange/Elsa.Activities.Bpmn.Interchange.csproj",
+      "Essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj",
       "Essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj",
       "Essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj",
       "Essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj",
