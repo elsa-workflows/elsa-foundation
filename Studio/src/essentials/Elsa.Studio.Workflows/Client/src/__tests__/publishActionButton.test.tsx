@@ -131,6 +131,11 @@ describe("PublishActionButton", () => {
     primary.focus();
     flushSync(() => primary.click());
     primaryCommand.rerender({ busy: true });
+    // Browsers blur a focused button when it is disabled; jsdom keeps focus unless modeled explicitly.
+    document.body.tabIndex = -1;
+    document.body.focus();
+    document.body.removeAttribute("tabindex");
+    expect(document.activeElement).toBe(document.body);
     primaryCommand.rerender({ busy: false });
     await nextFrame();
     expect(document.activeElement).toBe(primary);

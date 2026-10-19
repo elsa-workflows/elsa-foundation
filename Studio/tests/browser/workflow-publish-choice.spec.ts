@@ -50,6 +50,11 @@ test("remembers Publish across reload without starting another publication", asy
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect((await readApiCalls(page)).filter(isMutationRequest)).toHaveLength(0);
   expect(mutationCountBeforeReload).toBeGreaterThan(0);
+
+  const primary = page.getByRole("button", { name: "Publish", exact: true });
+  await primary.press("Enter");
+  await expect(page.getByRole("status")).toContainText("Published to default");
+  await expect(primary).toBeFocused();
 });
 
 test("falls back to review when the direct publication preflight finds a trigger conflict", async ({ page }) => {
