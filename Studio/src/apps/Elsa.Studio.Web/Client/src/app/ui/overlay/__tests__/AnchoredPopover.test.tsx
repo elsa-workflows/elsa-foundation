@@ -66,11 +66,12 @@ describe("AnchoredPopover", () => {
     let anchorTop = 40;
     let rectReads = 0;
     const dismissals: string[] = [];
+    const onPositioned = vi.fn();
 
     flushSync(() => root.render(
       <>
         <button ref={anchorRef}>Anchor</button>
-        <AnchoredPopover anchorRef={anchorRef} open onDismiss={reason => dismissals.push(reason)}>
+        <AnchoredPopover anchorRef={anchorRef} open onDismiss={reason => dismissals.push(reason)} onPositioned={onPositioned}>
           <div>Portal content</div>
         </AnchoredPopover>
       </>
@@ -90,6 +91,12 @@ describe("AnchoredPopover", () => {
         });
       }
     });
+    expect(onPositioned).not.toHaveBeenCalled();
+    const popover = document.body.querySelector<HTMLElement>(".studio-anchored-popover");
+    expect(popover?.hasAttribute("inert")).toBe(true);
+    expect(popover?.getAttribute("aria-hidden")).toBe("true");
+    expect(popover?.style.visibility).toBe("");
+    expect(popover?.style.opacity).toBe("0");
     flushSync(() => {
       window.dispatchEvent(new Event("resize"));
       window.dispatchEvent(new Event("resize"));
@@ -99,11 +106,14 @@ describe("AnchoredPopover", () => {
     expect(frames).toHaveLength(1);
     flushSync(() => frames.shift()?.(0));
     expect(rectReads).toBe(1);
+    expect(onPositioned).toHaveBeenCalledTimes(1);
 
-    const popover = document.body.querySelector<HTMLElement>(".studio-anchored-popover");
     expect(popover).not.toBeNull();
     expect(host.contains(popover)).toBe(false);
     expect(popover?.style.top).toBe("78px");
+    expect(popover?.hasAttribute("inert")).toBe(false);
+    expect(popover?.getAttribute("aria-hidden")).toBe("false");
+    expect(popover?.style.opacity).toBe("1");
 
     anchorTop = 80;
     flushSync(() => {
@@ -114,11 +124,13 @@ describe("AnchoredPopover", () => {
     flushSync(() => frames.shift()?.(1));
     expect(rectReads).toBe(2);
     expect(popover?.style.top).toBe("118px");
+    expect(onPositioned).toHaveBeenCalledTimes(1);
 
     anchorTop = -100;
     flushSync(() => window.dispatchEvent(new Event("scroll")));
     flushSync(() => frames.shift()?.(2));
     expect(dismissals).toEqual(["anchor-hidden"]);
+    expect(onPositioned).toHaveBeenCalledTimes(1);
 
     cleanup = () => {
       flushSync(() => root.unmount());

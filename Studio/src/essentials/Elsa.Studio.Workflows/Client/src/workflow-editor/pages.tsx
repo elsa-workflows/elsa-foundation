@@ -55,7 +55,7 @@ export function WorkflowManagementPage({
       </WorkflowLazyBoundary>
     )
     : (
-      <WorkflowsPageFrame title="Definitions">
+      <WorkflowsPageFrame title="Workflow definitions" definitions>
         <WorkflowLazyBoundary label="workflow definitions">
           <WorkflowDefinitions context={context} ai={ai} onOpen={openDefinition} />
         </WorkflowLazyBoundary>
@@ -183,17 +183,18 @@ export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [
   );
 }
 
-function WorkflowsPageFrame({ title, context, workbench = false, children }: {
+function WorkflowsPageFrame({ title, context, workbench = false, definitions = false, children }: {
   title: string;
   context?: React.ReactNode;
   workbench?: boolean;
+  definitions?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <section className={workbench ? "wf-page wf-page--run-workbench" : "wf-page"}>
+    <section className={`wf-page${workbench ? " wf-page--run-workbench" : ""}${definitions ? " wf-page--definitions" : ""}`}>
       <div className="wf-page-header">
         <div>
-          <span className="wf-kicker">Workflow management</span>
+          {!definitions ? <span className="wf-kicker">Workflow management</span> : null}
           <h2>{title}</h2>
         </div>
         {context}

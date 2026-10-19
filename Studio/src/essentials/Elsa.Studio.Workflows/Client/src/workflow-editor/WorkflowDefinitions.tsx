@@ -1,6 +1,7 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Check, Package, Plus, RotateCcw, Search, Sparkles, Trash2 } from "lucide-react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { AlertCircle, Check, Package, Plus, Search } from "lucide-react";
 import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { OverflowMenu, type OverflowMenuItem } from "@elsa-workflows/studio-ui";
 import { createDefinition, deleteDefinition, deleteDefinitionPermanently, listDefinitions, restoreDefinition, workflowDefinitionFolderMovePath } from "../api/workflowDesign";
 import type { ActivityCatalogItem, DefinitionListState, WorkflowDefinitionDetails, WorkflowDefinitionSummary } from "../workflowTypes";
 import { formatDate } from "../workflowFormatting";
@@ -253,6 +254,12 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
 
   const clearSelection = () => setSelectedDefinitionIds(new Set());
 
+  const openMoveDialog = () => {
+    setError("");
+    setStatus("");
+    setMoveDialogOpen(true);
+  };
+
   useEffect(() => {
     if (moveDialogOpen || !focusRefreshAfterMove) return;
     clearSelection();
@@ -358,162 +365,158 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
 
   return (
     <>
-      <WorkflowFolderNavigation
-        context={context}
-        selection={folderSelection}
-        onSelect={changeFolder}
-        onAvailable={handleFolderAvailability}
-        onFoldersMutated={foldersMutated}
-      />
-      {folderCapability === "unavailable" && folderSelection !== "all" ? (
-        <div className="wf-alert" role="status">
-          Workflow folders are unavailable. Showing all workflows while preserving the requested folder context.
+      <div className="wf-definitions-list">
+        <WorkflowFolderNavigation
+          context={context}
+          selection={folderSelection}
+          onSelect={changeFolder}
+          onAvailable={handleFolderAvailability}
+          onFoldersMutated={foldersMutated}
+        />
+        {folderCapability === "unavailable" && folderSelection !== "all" ? (
+          <div className="wf-alert" role="status">
+            Workflow folders are unavailable. Showing all workflows while preserving the requested folder context.
+          </div>
+        ) : null}
+        <div className="wf-toolbar">
+          <div className="wf-segmented" role="group" aria-label="Definition state">
+            <button type="button" className={listState === "active" ? "active" : ""} aria-pressed={listState === "active"} onClick={() => changeListState("active")}>Active</button>
+            <button type="button" className={listState === "deleted" ? "active" : ""} aria-pressed={listState === "deleted"} onClick={() => changeListState("deleted")}>Deleted</button>
+            <button type="button" className={listState === "all" ? "active" : ""} aria-pressed={listState === "all"} onClick={() => changeListState("all")}>All states</button>
+          </div>
+          <label className="wf-search">
+            <Search size={15} />
+            <input aria-label={searchLabel} value={search} onChange={event => changeSearch(event.target.value)} placeholder="Search definitions" />
+          </label>
+          {effectiveFolderSelection !== "all" ? <button type="button" onClick={() => changeFolder("all")}>Search all workflows</button> : null}
+          <button ref={refreshButtonRef} type="button" onClick={() => void load()}>Refresh</button>
+          <div className="wf-actions">
+            <button type="button" title="Create workflow" onClick={openCreateDialog}><Plus size={15} /> Create</button>
+          </div>
         </div>
-      ) : null}
-      <div className="wf-toolbar">
-        <div className="wf-segmented" role="tablist" aria-label="Definition state">
-          <button type="button" className={listState === "active" ? "active" : ""} aria-selected={listState === "active"} onClick={() => changeListState("active")}>Active</button>
-          <button type="button" className={listState === "deleted" ? "active" : ""} aria-selected={listState === "deleted"} onClick={() => changeListState("deleted")}>Deleted</button>
-          <button type="button" className={listState === "all" ? "active" : ""} aria-selected={listState === "all"} onClick={() => changeListState("all")}>All states</button>
-        </div>
-        <label className="wf-search">
-          <Search size={15} />
-          <input aria-label={searchLabel} value={search} onChange={event => changeSearch(event.target.value)} placeholder="Search definitions" />
-        </label>
-        {effectiveFolderSelection !== "all" ? <button type="button" onClick={() => changeFolder("all")}>Search all workflows</button> : null}
-        <button ref={refreshButtonRef} type="button" onClick={() => void load()}>Refresh</button>
-        <div className="wf-actions">
-          <button type="button" title="Create workflow" onClick={openCreateDialog}><Plus size={15} /> Create</button>
-          {moveCapabilityAvailable ? (
-            <button
-              type="button"
-              aria-disabled={selectedDefinitionIds.size === 0}
-              title={selectedDefinitionIds.size === 0 ? "Select one or more workflow definitions to move." : "Move selected workflow definitions to a folder"}
-              onClick={() => {
-                if (selectedDefinitionIds.size === 0) return;
-                setError("");
-                setStatus("");
-                setMoveDialogOpen(true);
-              }}
-            >Move to folder</button>
-          ) : null}
-        </div>
-      </div>
 
-      {state === "failed" ? (
-        <WfErrorCard
-          message={error}
-          title="Couldn't load workflow definitions"
-          action={page > 1 ? (
-            <button type="button" onClick={() => rebasePaging()}>Restart from first page</button>
-          ) : undefined}
-        />
-      ) : null}
-      {state !== "failed" && error ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
-      {status ? <div className="wf-status-line" role="status"><Check size={14} /> {status}</div> : null}
-      {selectedDefinitionIds.size > 0 ? (
-        <div className="wf-selection-bar" aria-live="polite">
-          <span>{selectedDefinitionIds.size} selected</span>
-          <button type="button" onClick={clearSelection}>Clear selection</button>
-        </div>
-      ) : null}
-      {state === "loading" ? <WfListSkeleton /> : null}
-      {state === "ready" && definitions.length === 0 ? (
-        <WfEmptyState
-          icon={<Package size={22} />}
-          title={emptyTitle}
-          description={emptyDescription}
-          action={<button type="button" className="wf-link-button" onClick={openCreateDialog}><Plus size={15} /> Create workflow</button>}
-        />
-      ) : null}
-      {state === "ready" && (definitions.length > 0 || page > 1) ? (
-        <>
-          {definitions.length > 0 ? <div className="wf-definition-table-scroll" role="region" aria-label="Workflow definitions table" tabIndex={0}><div className="wf-grid wf-definition-grid" role="table" aria-label="Workflow definitions">
-            <div className="wf-grid-head" role="row">
-              <div className="wf-row-select" role="columnheader">
-                <input
-                  ref={selectVisibleRef}
-                  type="checkbox"
-                  checked={allVisibleSelected}
-                  onChange={event => toggleVisibleSelection(event.target.checked)}
-                  aria-label="Select visible workflow definitions"
-                />
-              </div>
-              <span role="columnheader">Name</span>
-              <span role="columnheader">Latest version</span>
-              <span role="columnheader">Published version</span>
-              <span role="columnheader">Modified</span>
-              <span className="wf-definition-actions-header" role="columnheader">Actions</span>
+        {state === "failed" ? (
+          <WfErrorCard
+            message={error}
+            title="Couldn't load workflow definitions"
+            action={page > 1 ? (
+              <button type="button" onClick={() => rebasePaging()}>Restart from first page</button>
+            ) : undefined}
+          />
+        ) : null}
+        {state !== "failed" && error ? <div className="wf-alert"><AlertCircle size={16} /> {error}</div> : null}
+        {status ? <div className="wf-status-line" role="status"><Check size={14} /> {status}</div> : null}
+        {selectedDefinitionIds.size > 0 ? (
+          <div className="wf-selection-bar" aria-live="polite">
+            <span>{selectedDefinitionIds.size} selected</span>
+            <div className="wf-selection-actions">
+              {moveCapabilityAvailable ? <button type="button" onClick={openMoveDialog}>Move to folder</button> : null}
+              <button type="button" onClick={clearSelection}>Clear selection</button>
             </div>
-            {definitions.map(definition => {
-              const isDeleted = Boolean(definition.deletedAt);
-              return (
-              <div
-                className="wf-grid-row"
-                role="row"
-                aria-label={`Open workflow definition ${definition.name}`}
-                aria-selected={selectedDefinitionIds.has(definition.id)}
-                tabIndex={0}
-                onClick={() => onOpen(definition.id)}
-                onKeyDown={event => {
-                  if (event.currentTarget !== event.target) return;
-                  if (event.key !== "Enter" && event.key !== " ") return;
-                  event.preventDefault();
-                  onOpen(definition.id);
-                }}
-                key={definition.id}
-              >
-                <div className="wf-row-select" role="cell" onClick={event => event.stopPropagation()}>
+          </div>
+        ) : null}
+        {state === "loading" ? <WfListSkeleton /> : null}
+        {state === "ready" && definitions.length === 0 ? (
+          <WfEmptyState
+            icon={<Package size={22} />}
+            title={emptyTitle}
+            description={emptyDescription}
+            action={<button type="button" className="wf-link-button" onClick={openCreateDialog}><Plus size={15} /> Create workflow</button>}
+          />
+        ) : null}
+        {state === "ready" && (definitions.length > 0 || page > 1) ? (
+          <>
+            {definitions.length > 0 ? <div className="wf-definition-table-scroll" role="region" aria-label="Workflow definitions table" tabIndex={0}><div className="wf-grid wf-definition-grid" role="table" aria-label="Workflow definitions">
+              <div className="wf-grid-head" role="row">
+                <div className="wf-row-select" role="columnheader">
                   <input
+                    ref={selectVisibleRef}
                     type="checkbox"
-                    checked={selectedDefinitionIds.has(definition.id)}
-                    onChange={event => toggleDefinitionSelection(definition.id, event.target.checked)}
-                    aria-label={`Select workflow definition ${definition.name}`}
+                    checked={allVisibleSelected}
+                    onChange={event => toggleVisibleSelection(event.target.checked)}
+                    aria-label="Select visible workflow definitions"
                   />
                 </div>
-                <span className="wf-definition-name" role="cell">
-                  <strong title={definition.name}>{definition.name}</strong>
-                  <small>{definition.description || definition.id}</small>
-                  {isDeleted ? <><span className="wf-status-badge" data-status="cancelled">Deleted</span><small>{formatDate(definition.deletedAt)}</small></> : null}
-                  {effectiveFolderSelection === "all" ? (
-                    <ResultFolderBreadcrumb definition={definition} onSelect={changeFolder} />
-                  ) : null}
-                </span>
-                <span className="wf-definition-version" role="cell"><LatestDefinitionVersion definition={definition} /></span>
-                <span className="wf-definition-version" role="cell"><PublishedDefinitionVersion definition={definition} /></span>
-                <span role="cell">{formatDate(definition.lastModifiedAt)}</span>
-                <span className="wf-row-actions" role="cell" onClick={event => event.stopPropagation()}>
-                  {!isDeleted ? (
-                    <>
-                      <button type="button" onClick={event => { event.stopPropagation(); onOpen(definition.id); }}>Open</button>
-                      <button type="button" onClick={event => { event.stopPropagation(); openDefinitionArtifacts(definition.id); }}>Artifacts</button>
-                      {explainDefinitionAction ? (
-                        <button type="button" onClick={() => dispatchAiAction(ai, explainDefinitionAction, definition)}><Sparkles size={13} /> Explain</button>
-                      ) : null}
-                      <button type="button" className="danger" onClick={() => void softDelete(definition)}><Trash2 size={13} /> Delete</button>
-                    </>
-                  ) : (
-                    <>
-                      <button type="button" onClick={() => void restore(definition)}><RotateCcw size={13} /> Restore</button>
-                      <button type="button" className="danger" onClick={() => void permanentDelete(definition)}><Trash2 size={13} /> Delete permanently</button>
-                    </>
-                  )}
-                </span>
+                <span role="columnheader">Name</span>
+                <span role="columnheader">Latest version</span>
+                <span role="columnheader">Published version</span>
+                <span role="columnheader">Modified</span>
+                <span className="wf-definition-actions-header" role="columnheader">Actions</span>
               </div>
-              );
-            })}
-          </div></div> : null}
-          <DefinitionPager
-            page={page}
-            pageSize={pageSize}
-            totalCount={usesCursorPaging ? undefined : totalCount}
-            itemCount={definitions.length}
-            hasNextPage={Boolean(nextContinuationTokens[page + 1])}
-            onPageChange={setPage}
-            onPageSizeChange={changePageSize}
-          />
-        </>
-      ) : null}
+              {definitions.map(definition => {
+                const isDeleted = Boolean(definition.deletedAt);
+                const definitionUrl = new URL(window.location.href);
+                definitionUrl.searchParams.set("definition", definition.id);
+                const menuItems: OverflowMenuItem[] = isDeleted
+                  ? [
+                    { id: "restore", label: "Restore", onSelect: () => void restore(definition) },
+                    { id: "permanent-delete", label: "Delete permanently", destructive: true, onSelect: () => void permanentDelete(definition) }
+                  ]
+                  : [
+                    { id: "artifacts", label: "Artifacts", onSelect: () => openDefinitionArtifacts(definition.id) },
+                    ...(explainDefinitionAction ? [{ id: "explain", label: "Explain", onSelect: () => dispatchAiAction(ai, explainDefinitionAction, definition) }] : []),
+                    { id: "delete", label: "Delete", destructive: true, onSelect: () => void softDelete(definition) }
+                  ];
+                return (
+                  <div
+                    className="wf-grid-row"
+                    role="row"
+                    aria-label={`Open workflow definition ${definition.name}`}
+                    aria-selected={selectedDefinitionIds.has(definition.id)}
+                    onClick={() => onOpen(definition.id)}
+                    key={definition.id}
+                  >
+                    <div className="wf-row-select" role="cell" onClick={event => event.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedDefinitionIds.has(definition.id)}
+                        onChange={event => toggleDefinitionSelection(definition.id, event.target.checked)}
+                        aria-label={`Select workflow definition ${definition.name}`}
+                      />
+                    </div>
+                    <span className="wf-definition-name" role="cell">
+                      <strong title={definition.name}>
+                        <a
+                          className="wf-definition-link"
+                          href={`${definitionUrl.pathname}${definitionUrl.search}${definitionUrl.hash}`}
+                          onClick={(event: ReactMouseEvent<HTMLAnchorElement>) => {
+                            event.stopPropagation();
+                            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                            event.preventDefault();
+                            onOpen(definition.id);
+                          }}
+                        >
+                          {definition.name}
+                        </a>
+                      </strong>
+                      <small>{definition.description || definition.id}</small>
+                      {isDeleted ? <><span className="wf-status-badge" data-status="cancelled">Deleted</span><small>{formatDate(definition.deletedAt)}</small></> : null}
+                      {effectiveFolderSelection === "all" ? (
+                        <ResultFolderBreadcrumb definition={definition} onSelect={changeFolder} />
+                      ) : null}
+                    </span>
+                    <span className="wf-definition-version" role="cell"><LatestDefinitionVersion definition={definition} /></span>
+                    <span className="wf-definition-version" role="cell"><PublishedDefinitionVersion definition={definition} /></span>
+                    <span role="cell">{formatDate(definition.lastModifiedAt)}</span>
+                    <span className="wf-row-actions" role="cell" onClick={event => event.stopPropagation()}>
+                      <OverflowMenu items={menuItems} ariaLabel={`Actions for ${definition.name}`} />
+                    </span>
+                  </div>
+                );
+              })}
+            </div></div> : null}
+            <DefinitionPager
+              page={page}
+              pageSize={pageSize}
+              totalCount={usesCursorPaging ? undefined : totalCount}
+              itemCount={definitions.length}
+              hasNextPage={Boolean(nextContinuationTokens[page + 1])}
+              onPageChange={setPage}
+              onPageSizeChange={changePageSize}
+            />
+          </>
+        ) : null}
+      </div>
       {createDraft ? (
         <Suspense fallback={<div className="wf-dialog-backdrop" role="status">Loading create dialog…</div>}>
           <CreateWorkflowDialog

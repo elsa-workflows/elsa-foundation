@@ -1684,7 +1684,7 @@ function browserVersion(
 // Activity-icon shots default to Classic light — Studio 4's default theme.
 const darkVariant = searchParams.get("theme") === "dark";
 const fixtureTheme = activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture ? "classic" : "meridian";
-if (searchParams.get("mode") !== "activity-authoring" && !navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture && !homeFixture && !homeDashboardFixture && !userMenuFixture) {
+if (searchParams.get("mode") !== "activity-authoring" && !navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture && !homeFixture && !homeDashboardFixture && searchParams.get("mode") !== "definition-versions" && !userMenuFixture) {
   document.documentElement.dataset.theme = fixtureTheme;
   document.documentElement.dataset.themeLayout = "classic";
   document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";

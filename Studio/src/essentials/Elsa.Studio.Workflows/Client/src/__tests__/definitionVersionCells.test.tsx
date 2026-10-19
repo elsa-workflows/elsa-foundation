@@ -20,30 +20,37 @@ function cells(overrides: Partial<WorkflowDefinitionSummary> = {}) {
 describe("definition version cells", () => {
   it("distinguishes latest saved from an older active publication", () => {
     const result = cells();
-    expect(result.latest).toBe("3.0.0");
+    expect(result.latest).toContain("3.0.0");
+    expect(result.latest).not.toContain("2.0.0");
     expect(result.published).toContain("2.0.0");
     expect(result.published).not.toContain("3.0.0");
   });
 
   it("shows the actual draft source without inventing a new version", () => {
     const result = cells({ draftId: "draft", draftSourceVersion: "1.0.0" });
+    expect(result.latest).toMatch(/<details(?:\s[^>]*)?>/);
+    expect(result.latest).not.toMatch(/<details\b[^>]*\bopen(?:\s|=|>)/);
     expect(result.latest).toContain(">Draft<");
-    expect(result.latest).toContain("Based on 1.0.0");
-    expect(result.latest).toContain("Latest saved 3.0.0");
+    expect(result.latest).toContain("Draft based on version 1.0.0.");
+    expect(result.latest).toContain("3.0.0");
+    expect(result.latest).toContain("Latest saved version is 3.0.0");
     expect(result.latest).not.toContain("4.0.0");
     expect(result.published).toContain("2.0.0");
+    expect(result.published).not.toContain("1.0.0");
   });
 
   it("does not repeat the draft source when it is also the latest saved version", () => {
     const result = cells({ draftId: "draft", draftSourceVersion: "3.0.0" });
-    expect(result.latest).toContain("Based on 3.0.0");
+    expect(result.latest).toContain("Draft based on saved version 3.0.0.");
     expect(result.latest).not.toContain("Latest saved");
   });
 
   it("shows a first unversioned draft as not published", () => {
-    const result = cells({ draftId: "draft", latestVersion: null, publicationState: "draft", publishedVersion: null });
+    const result = cells({ draftId: "draft", draftSourceVersion: "0.9.0", latestVersion: null, publicationState: "draft", publishedVersion: null });
     expect(result.latest).toContain(">Draft<");
-    expect(result.latest).not.toContain("Based on");
+    expect(result.latest).toContain("Draft based on saved version 0.9.0.");
+    expect(result.latest).not.toContain("wf-definition-version-number");
+    expect(result.latest).not.toContain("1.0.0");
     expect(result.published).toContain("Not published");
   });
 
