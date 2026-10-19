@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "a37b3652241279f10d9b17379e82829521d2efcf",
+  "last_publish_commit": "b510d82c96bd3a1751b9b8dd40b0c2ac79c8ba49",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -94,8 +94,8 @@
     },
     {
       "package_id": "Elsa.Activities.Runtime.Core",
-      "version": "4.0.16-preview",
-      "commit": "2d73d87cc3ed5545efcaa8510e2b7fa2099f9d59"
+      "version": "4.0.17-preview",
+      "commit": "b510d82c96bd3a1751b9b8dd40b0c2ac79c8ba49"
     },
     {
       "package_id": "Elsa.Activities.Scheduling",
@@ -464,18 +464,18 @@
     },
     {
       "package_id": "Elsa.Secrets",
-      "version": "4.0.12-preview",
-      "commit": "15feed9e0be709348602e054cca85a33f0f76873"
+      "version": "4.0.13-preview",
+      "commit": "b510d82c96bd3a1751b9b8dd40b0c2ac79c8ba49"
     },
     {
       "package_id": "Elsa.Secrets.Api",
-      "version": "4.0.11-preview",
-      "commit": "c976625675e93fe5724b8cdd02a4125bb21cf08c"
+      "version": "4.0.12-preview",
+      "commit": "b510d82c96bd3a1751b9b8dd40b0c2ac79c8ba49"
     },
     {
       "package_id": "Elsa.Secrets.Core",
-      "version": "4.0.7-preview",
-      "commit": "15feed9e0be709348602e054cca85a33f0f76873"
+      "version": "4.0.8-preview",
+      "commit": "b510d82c96bd3a1751b9b8dd40b0c2ac79c8ba49"
     },
     {
       "package_id": "Elsa.Secrets.Nuplane",
