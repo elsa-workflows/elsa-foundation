@@ -48,13 +48,13 @@ Replace both: implement both contracts on one class, or register a node converte
   - `ValueTask<Elsa3MigrationResult<ActivityNode>> ConvertNodeAsync(Elsa3NodeConversionContext, Elsa3Activity, CancellationToken)`.
 - **Purpose:** Converts nodes one at a time, from a definition prepared as a whole.
   - `PrepareAsync` normalizes and lowers the whole definition, exactly as `IElsa3DefinitionConverter.ConvertAsync`
-    does, including flowchart graph conversion (spec 239). A graph-level node a later stage owns would be deferred
-    rather than stopping the rest, listed in the context's `Deferred`; no built-in shape is deferred since spec 239.
+    does, including flowchart graph conversion (spec 239). It fails with every diagnostic when anything is
+    unconvertible.
   - `ConvertNodeAsync` maps one node and its descendants from that lowered result; a flowchart arrives with its
     connections and start node. It refuses a `FlowFork`, `FlowJoin` or `Start` node (`ELS3-ACTIVITY-UNSUPPORTED-MODE`):
     those became connections or the start node of their flowchart and have no node of their own.
   - One rule for both paths: an Elsa 3 expression is lowered or refused the same way whichever converter reaches it.
-  - `Elsa3NodeConversionContext` is abstract, with a protected `(Request, Deferred)` constructor: each node converter
+  - `Elsa3NodeConversionContext` is abstract, with a protected `(Request)` constructor: each node converter
     derives its own context to carry what its `PrepareAsync` computed, and its `ConvertNodeAsync` accepts only the
     contexts it created. The default converter's context holds the lowered plan internally, and it throws
     `ArgumentException` for a context another converter created.

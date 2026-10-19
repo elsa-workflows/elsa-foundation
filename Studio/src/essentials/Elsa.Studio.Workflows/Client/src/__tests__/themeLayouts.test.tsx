@@ -90,18 +90,22 @@ describe("theme layouts in the designer", () => {
 
 function sidePanelLayout(): ReturnType<typeof useSidePanelLayout> {
   return {
+    containerRef: () => {},
     paletteWidth: 260,
     inspectorWidth: 320,
+    paletteMinimumWidth: 180,
+    inspectorMinimumWidth: 260,
     paletteCollapsed: false,
     inspectorCollapsed: false,
     maximizedSidePanel: null,
     paletteExpanded: true,
     inspectorExpanded: true,
     editorBodyClassName: "wf-editor-body",
-    editorBodyStyle: {},
+    editorBodyStyle: { "--wf-palette-width": "260px", "--wf-inspector-width": "320px" },
+    setInspectorCollapsed: () => {},
     toggleSidePanelCollapsed: () => {},
     toggleSidePanelMaximized: () => {},
     startSidePanelResize: () => {},
     handleSidePanelResizeKeyDown: () => {}
-  } as unknown as ReturnType<typeof useSidePanelLayout>;
+  };
 }

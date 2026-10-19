@@ -159,6 +159,58 @@ describe("HomePage", () => {
     flushSync(() => root.unmount());
   });
 
+  it("contains focus and preserves an invalid widget settings draft until it is dismissed", async () => {
+    const api = stubApi();
+    api.settingEditors.add({
+      id: "test-text",
+      supports: () => true,
+      component: ({ setting, value, onChange }) => <input aria-label={setting.displayName} value={String(value ?? "")} onChange={event => onChange(event.target.value)} />
+    });
+    const validate = vi.fn((value: unknown) => (value as { message?: string }).message === "ready" ? value as { message: string } : null);
+    api.dashboardWidgets.add(widget({
+      id: "settings-test",
+      title: "Settings test",
+      settings: {
+        schemaVersion: 1,
+        defaults: { message: "" },
+        descriptors: [{
+          name: "message", displayName: "Message", jsonType: "string", required: true,
+          secret: false, sensitive: false, restartRequired: false, advanced: false, experimental: false, options: []
+        }],
+        validate
+      }
+    }));
+    seedHomeLayout(api, ["settings-test"]);
+    const { container, root } = render(api);
+    await waitUntil(() => container.querySelector("article[data-widget-id='settings-test']") !== null);
+
+    clickText(container, "Edit home");
+    const opener = container.querySelector<HTMLButtonElement>('button[aria-label="Settings for Settings test"]')!;
+    opener.focus();
+    flushSync(() => opener.click());
+    const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
+    const input = dialog.querySelector<HTMLInputElement>('input[aria-label="Message"]')!;
+    expect(document.activeElement).toBe(input);
+
+    const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    flushSync(() => {
+      nativeSetter.call(input, "draft to keep");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    clickText(dialog, "Save");
+
+    expect(dialog.querySelector("[role='alert']")?.textContent).toBe("Review the settings and try again.");
+    expect(dialog.querySelector<HTMLInputElement>('input[aria-label="Message"]')?.value).toBe("draft to keep");
+    expect(validate).toHaveBeenCalledOnce();
+    expect(api.backend.http.putJson).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(input);
+
+    clickText(dialog, "Cancel");
+    expect(container.querySelector("[role='dialog']")).toBeNull();
+    expect(document.activeElement).toBe(opener);
+    flushSync(() => root.unmount());
+  });
+
   it("skips an unregistered widget and keeps it in the saved layout", async () => {
     const api = stubApi();
     api.dashboardWidgets.add(widget({ id: "first", title: "First", component: () => <span>First body</span> }));
