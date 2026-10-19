@@ -101,13 +101,10 @@ internal sealed class TaskStateManager(ILogger<TaskStateManager> logger, Cancell
         {
             // Expected when cancellation is requested.
         }
-        catch (AggregateException e)
+        catch (Exception e) when (!e.IsFatal())
         {
+            // Await unwraps worker faults; log them without skipping lifetime cancellation and recurring cleanup.
             logger.LogError(e, "One or more background tasks failed while stopping tenant tasks");
-        }
-        catch (InvalidOperationException e)
-        {
-            logger.LogError(e, "Background task collection was in an invalid state while stopping tenant tasks");
         }
 
         RunningBackgroundTasks.Clear();

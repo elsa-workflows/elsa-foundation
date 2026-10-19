@@ -22,20 +22,28 @@ internal sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider
 
     public async Task StartExecutingRegisteredTasks(CancellationToken cancellationToken = default)
     {
-        if (Volatile.Read(ref _disposeRequested) == 1)
-            return;
+        CancellationTokenSource startupCancellation;
+        TaskStateManager stateManager;
+        lock (_stopLock)
+        {
+            if (Volatile.Read(ref _disposeRequested) == 1)
+                return;
 
-        var taskExecutor = serviceProvider.GetRequiredService<ITaskExecutor>();
+            // Publish the state and link startup before Stop can dispose the shutdown source.
+            stateManager = GetOrInitializeTaskStateManager();
+            startupCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCancellationTokenSource.Token);
+        }
 
-        var stateManager = GetOrInitializeTaskStateManager(cancellationToken);
-        var tasksToken = stateManager.GetCancellationToken();
-
-        await stateManager.Gate.WaitAsync(tasksToken);
+        using var startupLifetime = startupCancellation;
+        var startupToken = startupCancellation.Token;
+        await stateManager.Gate.WaitAsync(startupToken);
 
         try
         {
             if (Volatile.Read(ref _disposeRequested) == 1)
                 return;
+
+            var taskExecutor = serviceProvider.GetRequiredService<ITaskExecutor>();
 
             // Stop any previously-started tasks before (re)starting. On the supported path this runs
             // once per shell: CShells builds a fresh provider (and thus a fresh singleton IEventChannel
@@ -45,17 +53,19 @@ internal sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider
             // channel cannot be reopened — the restarted reader would drain-and-exit and every later
             // background publish would throw. Restart means: dispose this manager (new shell generation).
             await stateManager.Stop();
-            stateManager.CancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            tasksToken = stateManager.GetCancellationToken();
+            // An activation caller may cancel its token after startup has succeeded. Running tasks belong
+            // to the shell, and graceful Stop must drain them before cancelling this independent lifetime.
+            stateManager.CancellationTokenSource = new CancellationTokenSource();
 
             // Step 1: Run startup tasks (with dependency ordering)
-            await RunStartupTasks(serviceProvider, taskExecutor, tasksToken);
+            await RunStartupTasks(serviceProvider, taskExecutor, startupToken);
 
             // Step 2: Run background tasks
-            await RunBackgroundTasks(serviceProvider, taskExecutor, stateManager, tasksToken);
+            await RunBackgroundTasks(serviceProvider, taskExecutor, stateManager, startupToken);
 
             // Step 3: Start recurring tasks
-            await StartRecurringTasksAsync(serviceProvider, taskExecutor, stateManager, tasksToken);
+            await StartRecurringTasksAsync(serviceProvider, taskExecutor, stateManager, startupToken);
+            startupToken.ThrowIfCancellationRequested();
         }
         catch (Exception e)
         {
@@ -69,7 +79,7 @@ internal sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider
         }
     }
 
-    private TaskStateManager GetOrInitializeTaskStateManager(CancellationToken token)
+    private TaskStateManager GetOrInitializeTaskStateManager()
     {
         if (taskStateManager is not null)
             return taskStateManager;
@@ -81,8 +91,7 @@ internal sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider
             if (taskStateManager is not null)
                 return taskStateManager;
 
-            var activationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(token, _shutdownCancellationTokenSource.Token);
-            taskStateManager = new TaskStateManager(loggerFactory.CreateLogger<TaskStateManager>(), activationTokenSource);
+            taskStateManager = new TaskStateManager(loggerFactory.CreateLogger<TaskStateManager>(), new CancellationTokenSource());
         }
 
         return taskStateManager;
@@ -112,41 +121,35 @@ internal sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider
         }
     }
 
-    private static Task RunBackgroundTasks(IServiceProvider serviceProvider, ITaskExecutor taskExecutor, TaskStateManager stateManager, CancellationToken cancellationToken)
+    private static async Task RunBackgroundTasks(IServiceProvider serviceProvider, ITaskExecutor taskExecutor, TaskStateManager stateManager, CancellationToken cancellationToken)
     {
         var backgroundTasks = serviceProvider.GetServices<IBackgroundTask>();
         var backgroundTaskStarter = serviceProvider.GetRequiredService<TaskExecutor>();
-        var tenantCancellationToken = stateManager.CancellationTokenSource?.Token ?? cancellationToken;
+        var tenantCancellationToken = stateManager.GetCancellationToken();
 
         foreach (var backgroundTask in backgroundTasks)
         {
-            // Track the instance so TaskStateManager can signal it to stop gracefully on shutdown.
+            cancellationToken.ThrowIfCancellationRequested();
+            // Track before Start so partial startup is also stopped if its hook fails or is cancelled.
             stateManager.BackgroundTasks.Add(backgroundTask);
-
-            var task = backgroundTaskStarter
-                .StartAsync(backgroundTask, tenantCancellationToken)
-                .ContinueWith(
-                    _ => taskExecutor.ExecuteTaskAsync(backgroundTask, tenantCancellationToken),
-                    cancellationToken,
-                    TaskContinuationOptions.RunContinuationsAsynchronously,
-                    TaskScheduler.Default
-                )
-                .Unwrap();
-
-            if (!task.IsCompleted)
-                stateManager.RunningBackgroundTasks.Add(task);
+            await backgroundTaskStarter.StartAsync(backgroundTask, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            stateManager.RunningBackgroundTasks.Add(Task.Run(
+                () => taskExecutor.ExecuteTaskAsync(backgroundTask, tenantCancellationToken), CancellationToken.None));
         }
-
-        return Task.CompletedTask;
     }
 
     private async Task StartRecurringTasksAsync(IServiceProvider serviceProvider, ITaskExecutor taskExecutor, TaskStateManager state, CancellationToken cancellationToken)
     {
         var recurringTasks = serviceProvider.GetServices<IRecurringTask>().ToList();
-        var tenantCancellationToken = state.CancellationTokenSource?.Token ?? cancellationToken;
+        var tenantCancellationToken = state.GetCancellationToken();
 
         foreach (var task in recurringTasks)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            state.RecurringTasks.Add(task);
+            await task.StartAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             var schedule = task.GetSchedule();
             var scheduledExecution = schedule.ScheduleExecution(async () =>
             {
@@ -170,8 +173,6 @@ internal sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider
             });
 
             state.ScheduledTaskExecutions.Add(scheduledExecution);
-            state.RecurringTasks.Add(task);
-            await task.StartAsync(cancellationToken);
         }
     }
 
