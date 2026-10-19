@@ -3,9 +3,7 @@ import type React from "react";
 import type { StudioGraphAuthoringResourceKind } from "@elsa-workflows/studio-sdk";
 import {
   maxInspectorWidth,
-  maxPaletteWidth,
-  minInspectorWidth,
-  minPaletteWidth
+  maxPaletteWidth
 } from "../workflow-editor/constants";
 import type { WorkflowEditorPanelTab } from "../workflow-editor/editorTypes";
 import { PanelTabList } from "../workflow-editor/PanelTabList";
@@ -45,6 +43,7 @@ export function GraphAuthoringWorkbench({
   return (
     <GraphAuthoringWorkspace
       resourceKind={resourceKind}
+      containerRef={layout.containerRef}
       className={[layout.editorBodyClassName, palette ? "" : "palette-absent", className].filter(Boolean).join(" ")}
       style={layout.editorBodyStyle}
       palette={palette && activePalette ? (
@@ -68,6 +67,7 @@ export function GraphAuthoringWorkbench({
           side="palette"
           visible={layout.paletteExpanded && !layout.maximizedSidePanel}
           value={layout.paletteWidth}
+          min={layout.paletteMinimumWidth}
           onPointerDown={event => layout.startSidePanelResize("palette", event)}
           onKeyDown={event => layout.handleSidePanelResizeKeyDown("palette", event)}
         />
@@ -78,6 +78,7 @@ export function GraphAuthoringWorkbench({
           side="inspector"
           visible={layout.inspectorExpanded && !layout.maximizedSidePanel}
           value={layout.inspectorWidth}
+          min={layout.inspectorMinimumWidth}
           onPointerDown={event => layout.startSidePanelResize("inspector", event)}
           onKeyDown={event => layout.handleSidePanelResizeKeyDown("inspector", event)}
         />
@@ -160,12 +161,14 @@ function WorkbenchResizeHandle({
   side,
   visible,
   value,
+  min,
   onPointerDown,
   onKeyDown
 }: {
   side: "palette" | "inspector";
   visible: boolean;
   value: number;
+  min: number;
   onPointerDown(event: React.PointerEvent<HTMLDivElement>): void;
   onKeyDown(event: React.KeyboardEvent<HTMLDivElement>): void;
 }) {
@@ -177,7 +180,7 @@ function WorkbenchResizeHandle({
       role="separator"
       aria-label={`Resize ${palette ? "activities" : "inspector"} panel`}
       aria-orientation="vertical"
-      aria-valuemin={palette ? minPaletteWidth : minInspectorWidth}
+      aria-valuemin={min}
       aria-valuemax={palette ? maxPaletteWidth : maxInspectorWidth}
       aria-valuenow={value}
       tabIndex={0}
