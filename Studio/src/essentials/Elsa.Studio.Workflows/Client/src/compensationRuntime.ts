@@ -45,7 +45,7 @@ export function deriveCompensationRuntime(
   const steps = readCompensationSteps(scope);
   const scopeExecution = latest(activities.filter(activity => matchesNode(activity, scope.nodeId)));
   const children = scopeExecution
-    ? activities.filter(activity => activity.parentActivityExecutionId === scopeExecution.activityExecutionId)
+    ? activities.filter(activity => parentOf(activity) === scopeExecution.activityExecutionId)
     : [];
 
   const handlerExecutions = children
@@ -169,6 +169,11 @@ function causeOf(step: string, forward: ActivityExecutionStateSummary, incidents
     failureType: incident?.failureType || undefined,
     message: incident?.message || undefined
   };
+}
+
+// Run lists carry the parent inside the scheduling provenance; single-execution reads also carry it top-level.
+function parentOf(activity: ActivityExecutionStateSummary): string | null | undefined {
+  return activity.parentActivityExecutionId ?? activity.provenance?.parentActivityExecutionId;
 }
 
 function matchesNode(activity: ActivityExecutionStateSummary, nodeId: string): boolean {

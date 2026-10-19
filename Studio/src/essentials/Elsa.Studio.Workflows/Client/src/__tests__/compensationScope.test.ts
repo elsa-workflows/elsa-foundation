@@ -10,6 +10,7 @@ import {
   removeCompensationStep,
   updateCompensationStep
 } from "../compensationScope";
+import { buildExecutableActivityGraph } from "../executableGraph";
 import { deriveCompensationRuntime, isCompensationHandlerExecution, ordinalLabel } from "../compensationRuntime";
 import { buildCanvas, findActivityNode, getActivityDesignerSupport, getChildSlots, replaceSlotActivities, updateActivity } from "../workflowAdapter";
 import type { ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary } from "../workflowTypes";
@@ -88,6 +89,29 @@ describe("compensation scope model", () => {
       [1, 'Step "Reserve" is defined more than once.'],
       [2, "Step needs a name."],
       [3, 'Step "Confirm" has no activity.']
+    ]);
+  });
+});
+
+describe("compensation scope from a pinned executable", () => {
+  it("rebuilds the steps in executable order from the named step and compensation slots", () => {
+    const leafNode = (id: string) => ({ executableNodeId: id, authoredActivityId: id, activityType: "Elsa.WriteLine", activityTypeVersion: "1.0.0" });
+    const graph = buildExecutableActivityGraph({
+      executableNodeId: "scope",
+      authoredActivityId: "scope",
+      activityType: "Elsa.Activities.Compensation.Activities.CompensationScope",
+      activityTypeVersion: "1.0.0",
+      structureKind: compensationScopeStructureKind,
+      childSlots: [
+        { name: "CompensationScope.Step[Reserve inventory]", activities: [leafNode("reserve")] },
+        { name: "CompensationScope.Compensation[Reserve inventory]", activities: [leafNode("release")] },
+        { name: "CompensationScope.Step[Confirm order]", activities: [leafNode("confirm")] }
+      ]
+    } as never, []);
+
+    expect(readCompensationSteps(graph.root).map(step => [step.name, step.activity?.nodeId, step.compensation?.nodeId ?? null])).toEqual([
+      ["Reserve inventory", "reserve", "release"],
+      ["Confirm order", "confirm", null]
     ]);
   });
 });
@@ -204,10 +228,15 @@ function execution(
     activityTypeVersion: "1.0.0",
     status,
     scheduledAt: `2026-10-19T10:00:${at}Z`,
-    parentActivityExecutionId: options.parent ?? null,
+    // Run lists carry the parent only inside the provenance.
+    parentActivityExecutionId: null,
     schedulingActivityExecutionId: options.scheduledBy ?? null,
     outcomeNames: options.outcomeNames ?? null,
-    provenance: options.handler ? { schedulingCause: "compensation", schedulingActivityExecutionId: options.scheduledBy } : { schedulingCause: "ActivityCompletion" },
+    provenance: {
+      parentActivityExecutionId: options.parent ?? null,
+      schedulingActivityExecutionId: options.scheduledBy ?? null,
+      schedulingCause: options.handler ? "compensation" : "ActivityCompletion"
+    },
     metadata: {}
   };
 }

@@ -78,6 +78,43 @@ export function withCompensationSteps(scope: ActivityNode, steps: CompensationSt
   };
 }
 
+const stepSlotPrefix = "CompensationScope.Step[";
+const compensationSlotPrefix = "CompensationScope.Compensation[";
+
+// Rebuilds the authored steps from a pinned executable's named slots, `CompensationScope.Step[{name}]` and
+// `CompensationScope.Compensation[{name}]`, in the order the executable lists them. The run view draws from the
+// executable, whose compiled payload holds node ids rather than activities.
+export function compensationStepsFromExecutableSlots<TSlot extends { name: string; activities: TChild[] }, TChild>(
+  slots: TSlot[],
+  adapt: (child: TChild) => ActivityNode
+): CompensationStep[] {
+  const steps: CompensationStep[] = [];
+  const byName = new Map<string, CompensationStep>();
+  const stepFor = (name: string) => {
+    let step = byName.get(name);
+    if (!step) {
+      step = { name, activity: null, compensation: null };
+      byName.set(name, step);
+      steps.push(step);
+    }
+    return step;
+  };
+
+  for (const slot of slots) {
+    const child = slot.activities[0];
+    const stepName = slotStepName(slot.name, stepSlotPrefix);
+    const compensationName = slotStepName(slot.name, compensationSlotPrefix);
+    if (stepName !== null) stepFor(stepName).activity = child === undefined ? null : adapt(child);
+    else if (compensationName !== null) stepFor(compensationName).compensation = child === undefined ? null : adapt(child);
+  }
+
+  return steps;
+}
+
+function slotStepName(slotName: string, prefix: string): string | null {
+  return slotName.startsWith(prefix) && slotName.endsWith("]") ? slotName.slice(prefix.length, -1) : null;
+}
+
 // The first free "Step N" name, so a new step never duplicates an existing name.
 export function nextCompensationStepName(steps: CompensationStep[]): string {
   const names = new Set(steps.map(step => step.name.trim()));
