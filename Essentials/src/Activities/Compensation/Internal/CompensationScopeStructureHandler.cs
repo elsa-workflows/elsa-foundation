@@ -51,6 +51,30 @@ internal sealed class CompensationScopeStructureHandler : IActivityStructureHand
         };
     }
 
+    // Steps run in order, and a handler runs only after its own step completed. A step therefore sees the results of
+    // the steps before it, and a handler sees its own step's result first, then the earlier steps', nearest first.
+    // Handler results are never guaranteed: handlers run only on recovery.
+    public IReadOnlyList<string>? ChildrenCompletedBefore(ActivityNode activity, string childNodeId)
+    {
+        var steps = CompensationScopeAuthoredStructureReader.Read(activity).Steps.ToArray();
+        for (var index = 0; index < steps.Length; index++)
+        {
+            var isForward = StringComparer.Ordinal.Equals(steps[index].Activity?.NodeId, childNodeId);
+            var isHandler = StringComparer.Ordinal.Equals(steps[index].Compensation?.NodeId, childNodeId);
+            if (!isForward && !isHandler)
+                continue;
+
+            var completed = isHandler ? index : index - 1;
+            return Enumerable.Range(0, completed + 1)
+                .Reverse()
+                .Select(step => steps[step].Activity?.NodeId)
+                .OfType<string>()
+                .ToArray();
+        }
+
+        return null;
+    }
+
     public ActivityNodeStructure CompileExecutableStructure(ActivityNode activity)
     {
         var authored = CompensationScopeAuthoredStructureReader.Read(activity);

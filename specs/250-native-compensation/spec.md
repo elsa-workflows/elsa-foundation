@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-19
 
-**Status**: In progress — design packet [#3043](https://github.com/elsa-workflows/elsa-foundation/issues/3043); M1 runtime under [#3044](https://github.com/elsa-workflows/elsa-foundation/issues/3044), Studio and end-to-end proof to follow.
+**Status**: M1 implemented — design packet [#3043](https://github.com/elsa-workflows/elsa-foundation/issues/3043); M1 runtime, Studio and end-to-end proof under [#3044](https://github.com/elsa-workflows/elsa-foundation/issues/3044). FR-014 is deferred to M5 (see FR-014). M2–M5 follow.
 
 **Program**: [Native compensation #3035](https://github.com/elsa-workflows/elsa-foundation/issues/3035) → [Contract #3041](https://github.com/elsa-workflows/elsa-foundation/issues/3041) → [Design #3043](https://github.com/elsa-workflows/elsa-foundation/issues/3043). Requirements: [PRD #3036](https://github.com/elsa-workflows/elsa-foundation/issues/3036). Boundary with BPMN: [ADR 0086](../../docs/adr/0086-native-and-bpmn-compensation-stay-separate.md).
 
@@ -35,7 +35,7 @@ A workflow author drops a **Compensation scope** onto a Flowchart, opens it and 
 
 1. **Given** a Flowchart, **when** the author adds a Compensation scope and opens it, **then** Studio shows the paired step list with an empty-state prompt to add the first step.
 2. **Given** a step row, **when** the author chooses "Add compensation", **then** the activity picker opens and the chosen activity appears in that row's compensation column, labelled "Undoes: *step name*".
-3. **Given** a handler whose input references the forward step's output, **when** the author opens the input editor, **then** the forward step's outputs are offered as captured values and the reference is stored as an ordinary authored expression.
+3. **Given** a handler input, **when** the author edits its expression, **then** the expression editor offers the paired forward step's results first, then the earlier steps' results, and the reference is stored as an ordinary authored expression.
 4. **Given** duplicate or blank step names, **when** the author publishes, **then** publication is blocked and each error names its row and navigates to it.
 5. **Given** only the keyboard, **when** the author navigates the step list, **then** rows, the forward cell and the compensation cell are reachable and operable, and each control has an accessible name.
 
@@ -114,21 +114,21 @@ An authorized operator retries a failed handler, marks an entry resolved manuall
 
 **Captured context and identity**
 
-- **FR-010**: Handler inputs are ordinary authored expressions. Captured context is the forward occurrence's committed result and pinned input snapshot. Both are immutable once committed, so a handler never reads later mutable workflow variables unless its author explicitly references a variable (PRD FR3).
+- **FR-010**: Handler inputs are ordinary authored expressions. Captured context is the forward occurrence's committed result and pinned input snapshot. Both are immutable once committed, so a handler never reads later mutable workflow variables unless its author explicitly references a variable (PRD FR3). The handler is scheduled from its forward occurrence, so a reference to the forward step's result resolves through causal lineage to exactly that occurrence, also when the handler runs again after a restart (proved by the Workbench owned-process test).
 - **FR-011**: The forward step's **invocation id** (`ActivityExecutionContext.InvocationId`) is stable across crash re-attempts and is the idempotency key that forward and handler activities send to external participants. The **logical operation key**, which stays stable across operator boundary retries that mint a new activity execution id, is defined in M2 and owned by this program (see the [program boundary](../../docs/program-goals/native-compensation.md#relationship-to-other-programs)).
 - **FR-012**: Handlers are pinned with the scope's executable artifact. A running scope's recovery uses the handler nodes of the artifact it started on, after restart and after later publications.
 
 **Durability**
 
 - **FR-013**: Compensation is supported in Durable, Balanced and Ephemeral modes. The pre-effect boundary is mode-independent: an activity whose side-effect profile is `External` (the default) has its invocation identity and input snapshot durably flushed before its body runs in every mode (`CoalescingRuntimeCheckpointPersistencePolicy`). Support for each mode is claimed only with that mode's restart tests passing. If a mode's tests cannot pass, publication refuses compensation scopes in that mode with a clear diagnostic. Support is never silently downgraded.
-- **FR-014**: Publication warns, without blocking, when a step or handler activity is declared `ReplaySafe`. Its claim may be deferred, which is correct for in-workflow work but almost never what a compensated external effect wants.
+- **FR-014**: Publication warns, without blocking, when a step or handler activity is declared `ReplaySafe`. Its claim may be deferred, which is correct for in-workflow work but almost never what a compensated external effect wants. **Deferred to M5**: design-time validation has no side-effect profile for an activity version (the profile exists only on the compiled executable node), so the warning needs the activity catalog to carry it first.
 
 **Studio**
 
 - **FR-015**: Studio renders a scope's contents as a paired step list (OD4). Each row has an order number, the step name, the forward activity cell and the compensation cell. An empty compensation cell offers "Add compensation". Both cells support drill-in, replace and remove. Rows can be reordered, added and deleted.
-- **FR-016**: Handler input editing offers the paired forward step's outputs as captured values.
-- **FR-017**: Publish validation errors for scope rows use the existing path grammar (`{scopeNodeId}/steps/{stepName}/…`), so "Go to" lands on the row.
-- **FR-018**: Run inspection shows the paired list read-only, with forward and recovery state per row as text and icon. It also shows a Recovery panel for the scope and, on a handler occurrence, a "Compensates" link to its forward occurrence. Handler occurrences are labelled as compensation in the timeline.
+- **FR-016**: Expression authoring offers a step the results of the steps before it, and a handler its own step's result first, then the earlier steps' results, nearest first (`IActivityStructureHandler.ChildrenCompletedBefore`). Handler results are never offered: handlers run only on recovery.
+- **FR-017**: Publish validation errors for scope rows use the path `{scopeNodeId}/steps/{index}`, so "Go to" opens the scope's step list with that row's activity selected (the scope itself for a row without an activity).
+- **FR-018**: Run inspection shows the paired list read-only, with forward and recovery state per row as text and icon. It also shows a recovery summary for the scope (its phase and the failure that started recovery) and, on a handler occurrence, a "Compensates" link to its forward occurrence. Handler occurrences are labelled as compensation in the timeline.
 - **FR-019**: Inspection adds no endpoint. Studio derives each row from the run data it already reads under the existing activity-execution permission and payload disclosure policy: the scope's latest execution, its children matched by the steps' node ids, handler executions recognised by scheduling cause `compensation`, and the absorbed incident for the cause (research R13). Raw private state is never exposed.
 - **FR-020**: Every new Studio control is keyboard operable and has an accessible name, and every state is conveyed by text as well as color. The axe check in the browser test passes.
 

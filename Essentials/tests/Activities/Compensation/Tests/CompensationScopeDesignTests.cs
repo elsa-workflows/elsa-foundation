@@ -63,6 +63,21 @@ public sealed class CompensationScopeDesignTests : IDisposable
     }
 
     [Fact]
+    public void A_handler_is_offered_its_own_step_s_result_first_and_a_step_the_steps_before_it()
+    {
+        var node = ScopeNode("scope",
+            ("Inventory", Leaf("reserve"), Leaf("release")),
+            ("Delivery", Leaf("deliver"), Leaf("cancel")),
+            ("Confirm", Leaf("confirm"), null));
+
+        Assert.Equal(["deliver", "reserve"], _structureService.ChildrenCompletedBefore(node, "cancel"));
+        Assert.Equal(["reserve"], _structureService.ChildrenCompletedBefore(node, "release"));
+        Assert.Equal(["deliver", "reserve"], _structureService.ChildrenCompletedBefore(node, "confirm"));
+        Assert.Empty(_structureService.ChildrenCompletedBefore(node, "reserve")!);
+        Assert.Null(_structureService.ChildrenCompletedBefore(node, "elsewhere"));
+    }
+
+    [Fact]
     public void Replacing_children_round_trips_through_compile_and_remap()
     {
         var node = ScopeNode("scope", ("Reserve", Leaf("reserve"), null), ("Confirm", Leaf("confirm"), null));

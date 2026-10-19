@@ -61,6 +61,11 @@ public sealed class WorkbenchCompensationRecoveryTests
         Assert.Equal(killedCall.InvocationId, calls[1].InvocationId);
         Assert.Single(Calls(journal, "inventory-release"));
 
+        // Each handler undid the reservation its own forward step made, through the captured variable and through the
+        // direct result reference alike.
+        Assert.Equal([$"delivery:{Assert.Single(Calls(journal, "delivery")).InvocationId}"], Undone(journal, "delivery-cancel").Distinct());
+        Assert.Equal([$"inventory:{Assert.Single(Calls(journal, "inventory")).InvocationId}"], Undone(journal, "inventory-release"));
+
         var scope = Activity(completed, "scope");
         Assert.Contains("Compensated", scope["outcomeNames"]!.AsArray().Select(outcome => outcome!.GetValue<string>()));
         var incident = Assert.Single(completed["incidents"]!.AsArray());
@@ -84,8 +89,15 @@ public sealed class WorkbenchCompensationRecoveryTests
     {
         var participant = await ActivityVersionAsync(host, ParticipantType);
         var scope = await ActivityVersionAsync(host, ScopeType);
-        JsonObject Participant(string nodeId, string key, bool reject = false, bool hold = false) => Node(nodeId, participant,
-            [Input("DirectoryPath", journal), Input("Key", key), Input("Reject", reject), Input("HoldAfterEffect", hold)]);
+        // A handler gets the reservation id its forward step made in one of two ways: the step captures it into a
+        // workflow variable that the handler reads, or the handler references the step's result directly.
+        JsonObject Participant(string nodeId, string key, bool reject = false, bool hold = false, string? captures = null, JsonObject? undoes = null)
+        {
+            JsonNode[] inputs = [Input("DirectoryPath", journal), Input("Key", key), Input("Reject", reject), Input("HoldAfterEffect", hold)];
+            var node = Node(nodeId, participant, undoes is null ? inputs : [.. inputs, undoes]);
+            if (captures is not null) node["outputs"] = new JsonArray(VariableArgument("Reservation", captures));
+            return node;
+        }
         JsonObject Step(string name, JsonObject activity, JsonObject? compensation) => new()
         {
             ["name"] = name, ["activity"] = activity, ["compensation"] = compensation
@@ -97,15 +109,17 @@ public sealed class WorkbenchCompensationRecoveryTests
             ["payload"] = new JsonObject
             {
                 ["steps"] = new JsonArray(
-                    Step("Reserve inventory", Participant("inventory", "inventory"), Participant("inventory-release", "inventory-release")),
-                    Step("Reserve delivery", Participant("delivery", "delivery"), Participant("delivery-cancel", "delivery-cancel", hold: true)),
+                    Step("Reserve inventory", Participant("inventory", "inventory", captures: "inventoryReservation"),
+                        Participant("inventory-release", "inventory-release", undoes: VariableArgument("Undoes", "inventoryReservation"))),
+                    Step("Reserve delivery", Participant("delivery", "delivery"),
+                        Participant("delivery-cancel", "delivery-cancel", hold: true, undoes: ActivityResultArgument("Undoes", "delivery", "Reservation"))),
                     Step("Confirm order", Participant("confirm", "confirm", reject: true), null))
             }
         });
         var definition = await PostAsync(host, "/design/workflows/definitions/submit", new
         {
             name = "Compensation recovery witness", description = "Reservations undone after a rejected order",
-            state = new { variables = Array.Empty<object>(), inputs = Array.Empty<object>(), outputs = Array.Empty<object>(), rootActivity = root }
+            state = new { variables = new[] { Variable("inventoryReservation") }, inputs = Array.Empty<object>(), outputs = Array.Empty<object>(), rootActivity = root }
         });
         var published = await PostAsync(host, $"/publishing/workflows/{definition["version"]!["id"]!.GetValue<string>()}/publish", new { });
         return new(published["artifactId"]!.GetValue<string>(), published["sourceReferenceId"]!.GetValue<string>());
@@ -117,6 +131,28 @@ public sealed class WorkbenchCompensationRecoveryTests
         var instance = Assert.Single(instances!, item => item?["artifactId"]?.GetValue<string>() == artifactId);
         return instance!["workflowExecutionId"]!.GetValue<string>();
     }
+
+    private static object Variable(string referenceKey) =>
+        new { referenceKey, name = referenceKey, type = new { alias = "String" }, storageDriverType = (string?)null, @default = (object?)null };
+
+    private static JsonObject VariableArgument(string key, string variable) => new()
+    {
+        ["referenceKey"] = key,
+        ["value"] = new JsonObject
+        {
+            ["expressionType"] = "Variable", ["value"] = new JsonObject { ["referenceKey"] = variable, ["declaringScopeId"] = "workflow" }
+        }
+    };
+
+    private static JsonObject ActivityResultArgument(string key, string producerNodeId, string projectionKey) => new()
+    {
+        ["referenceKey"] = key,
+        ["value"] = new JsonObject
+        {
+            ["expressionType"] = "ActivityResult",
+            ["value"] = new JsonObject { ["producerNodeId"] = producerNodeId, ["projectionKey"] = projectionKey, ["producerScopeId"] = "scope" }
+        }
+    };
 
     private static JsonObject Node(string id, string version, JsonNode[]? inputs = null, JsonNode? structure = null) => new()
     {
@@ -145,6 +181,12 @@ public sealed class WorkbenchCompensationRecoveryTests
             ? File.ReadAllLines(path).Select(line => line.Split('|')).Where(parts => parts.Length == 3)
                 .Select(parts => new ParticipantCall(parts[0], parts[1])).ToArray()
             : [];
+    }
+
+    private static string[] Undone(string journal, string key)
+    {
+        var path = Path.Combine(journal, key + ".undoes");
+        return File.Exists(path) ? File.ReadAllLines(path).Where(line => line.Length > 0).ToArray() : [];
     }
 
     private static string Describe(string journal) => Directory.Exists(journal)

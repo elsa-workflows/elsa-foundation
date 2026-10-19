@@ -34,7 +34,7 @@ Releases and deployment are outside this program. Runtime and persistence PRs ge
 | M2 | Uncertain effects, retries and intervention | [Epic #3038](https://github.com/elsa-workflows/elsa-foundation/issues/3038), [feature #3045](https://github.com/elsa-workflows/elsa-foundation/issues/3045) |
 | M3 | Nested/repeated occurrences, confirmation and native composition | [Epic #3039](https://github.com/elsa-workflows/elsa-foundation/issues/3039), [feature #3046](https://github.com/elsa-workflows/elsa-foundation/issues/3046) |
 | M4 | Accessible Studio recovery inspection and authorized operator controls | [Epic #3040](https://github.com/elsa-workflows/elsa-foundation/issues/3040), [feature #3047](https://github.com/elsa-workflows/elsa-foundation/issues/3047) |
-| M5 | Integrated qualification, documentation, samples and Elsa 3 follow-on assessment | [Feature #3048](https://github.com/elsa-workflows/elsa-foundation/issues/3048) |
+| M5 | Integrated qualification, documentation, samples and Elsa 3 follow-on assessment; the replay-safe warning deferred from M1 (spec 250 FR-014) | [Feature #3048](https://github.com/elsa-workflows/elsa-foundation/issues/3048) |
 
 The M0 design packet is a spec under `specs/` and settles the contract, state schema and visual notation.
 Later features are refined from it; do not pre-create implementation leaves before it is reviewed.

@@ -7,9 +7,9 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 ## Summary
 
 - Source projects: 147
-- Test projects: 149
+- Test projects: 150
 - Domains: 33
-- Direct cross-domain references: 1080
+- Direct cross-domain references: 1084
 
 ## Domains
 
@@ -47,7 +47,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Workbench | 1 | 1 | host<br>test |
 | Elsa.Workflows | 31 | 24 | contract<br>feature/implementation<br>test |
 | Elsa3 | 4 | 3 | feature/implementation<br>test |
-| Other | 0 | 5 | test |
+| Other | 0 | 6 | test |
 
 ## Projects
 
@@ -308,7 +308,8 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Versioning.Calculator.Tests](../../Essentials/tests/Versioning/Calculator/Tests/Elsa.Versioning.Calculator.Tests.csproj) | test | Elsa.Versioning | Calculator.Tests | test | Elsa.Versioning.Calculator |
 | [Elsa.Versioning.Publisher.Tests](../../Essentials/tests/Versioning/Publisher/Tests/Elsa.Versioning.Publisher.Tests.csproj) | test | Elsa.Versioning | Publisher.Tests | test | Elsa.Versioning.Publisher |
 | [BackgroundActivities](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj) | test | Other | - | test | Elsa.Activities.Design.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core |
-| [Elsa.Workbench.Tests](../../Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj) | test | Elsa.Workbench | - | test | BackgroundActivities<br>Elsa.Workbench |
+| [Reservations](../../Essentials/tests/Workbench/Fixtures/Reservations/Reservations.csproj) | test | Other | - | test | Elsa.Activities.Design.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Workbench.Tests](../../Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj) | test | Elsa.Workbench | - | test | BackgroundActivities<br>Elsa.Workbench<br>Reservations |
 | [Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests](../../Essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Workflows | Dashboard.Persistence.EntityFrameworkCore.ProviderTests | test | Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests |
 | [Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests](../../Essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Workflows | Dashboard.Persistence.EntityFrameworkCore.Tests | test | Elsa.Tasks<br>Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Resumption |
 | [Elsa.Workflows.Dashboard.Tests](../../Essentials/tests/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj) | test | Elsa.Workflows | Dashboard.Tests | test | Elsa.Testing<br>Elsa.Workflows.Dashboard |
@@ -1113,6 +1114,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Workbench](../../Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj) | Elsa.Workbench | [Elsa.Workflows.Runtime.Resumption](../../Essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj) | Elsa.Workflows |
 | [Elsa.Workbench](../../Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj) | Elsa.Workbench | [Elsa.Workflows.Runtime.Scheduling](../../Essentials/src/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj) | Elsa.Workflows |
 | [Elsa.Workbench.Tests](../../Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj) | Elsa.Workbench | [BackgroundActivities](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj) | Other |
+| [Elsa.Workbench.Tests](../../Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj) | Elsa.Workbench | [Reservations](../../Essentials/tests/Workbench/Fixtures/Reservations/Reservations.csproj) | Other |
 | [Elsa.Workflows.Dashboard](../../Essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/Elsa.Workflows.Dashboard.csproj) | Elsa.Workflows | [Elsa.Api.AspNetCore](../../Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | Elsa.Api |
 | [Elsa.Workflows.Dashboard](../../Essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/Elsa.Workflows.Dashboard.csproj) | Elsa.Workflows | [Elsa.Events.Core](../../Essentials/src/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events |
 | [Elsa.Workflows.Dashboard](../../Essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/Elsa.Workflows.Dashboard.csproj) | Elsa.Workflows | [Elsa.Foundation.Identity](../../Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj) | Elsa.Foundation |
@@ -1371,6 +1373,9 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa3.Mapping.Tests](../../Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj) | Elsa3 | [Elsa.Serialization.SystemText](../../Essentials/src/Serialization/SystemText/Elsa.Serialization.SystemText.csproj) | Elsa.Serialization |
 | [Elsa3.Mapping.Tests](../../Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj) | Elsa3 | [Elsa.Serialization.Testing](../../Essentials/tests/Serialization/Testing/Elsa.Serialization.Testing.csproj) | Elsa.Serialization |
 | [Elsa3.Mapping.Tests](../../Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj) | Elsa3 | [Elsa.Workflows.Design.Validations](../../Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/Elsa.Workflows.Design.Validations.csproj) | Elsa.Workflows |
+| [Reservations](../../Essentials/tests/Workbench/Fixtures/Reservations/Reservations.csproj) | Other | [Elsa.Activities.Design.Core](../../Essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj) | Elsa.Activities |
+| [Reservations](../../Essentials/tests/Workbench/Fixtures/Reservations/Reservations.csproj) | Other | [Elsa.Activities.Runtime.Core](../../Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj) | Elsa.Activities |
+| [Reservations](../../Essentials/tests/Workbench/Fixtures/Reservations/Reservations.csproj) | Other | [Elsa.Workflows.Runtime.Core](../../Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj) | Elsa.Workflows |
 | [ResponseReplayHost](../../Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/ResponseReplayHost.csproj) | Other | [Elsa.Activities.Design.Api](../../Essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj) | Elsa.Activities |
 | [ResponseReplayHost](../../Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/ResponseReplayHost.csproj) | Other | [Elsa.Activities.Design.Persistence.EntityFrameworkCore](../../Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj) | Elsa.Activities |
 | [ResponseReplayHost](../../Essentials/tests/Activities/Http/Fixtures/ResponseReplayHost/ResponseReplayHost.csproj) | Other | [Elsa.Activities.Design.Reconciliation](../../Essentials/src/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation/Elsa.Activities.Design.Reconciliation.csproj) | Elsa.Activities |

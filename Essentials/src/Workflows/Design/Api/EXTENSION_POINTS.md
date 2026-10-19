@@ -106,6 +106,7 @@ Known implementations: none in the foundation host; feature modules opt in by re
   - `CompileExecutableStructure(activity)` — materialize the authored structure into the executable structure the runtime consumes.
   - `SupportsScopedVariables` *(default `false`)* — whether this activity is a **container scope** that can own container-scoped variable declarations (ADR 0027). Container activities (`Sequence`, `Flowchart`) return `true`.
   - `ProjectScopedVariables(activity)` *(default empty)* — the container-scoped `VariableDefinition`s the activity declares, visible to its descendant activities. These flow through publishing into the compiled executable structure's `variables`, so the runtime materializes the visible variable scope chain (`RuntimeVariableScopeFactory` / `RuntimeContainerScopeService` in `Elsa.Workflows.Runtime.Core`) without re-reading the design document.
+  - `ChildrenCompletedBefore(activity, childNodeId)` *(default `null`)* — the direct children whose results the structure guarantees are committed before `childNodeId` runs, most relevant first. `PersistedExpressionAuthoringContextSource` offers their results to that child's expressions, ranked first; `null` promises no order. Sequence keeps its built-in document-order rule.
   - `AuthoredPayloadType` *(default `null`)* — the CLR model type of the handler's *authored* structure payload. The structure-kind registry endpoint (`GET design/workflows/structures`) publishes a generated JSON Schema per kind from this type so headless clients can compose structure payloads without reading source; `null` keeps the payload opaque/undocumented.
 - **Aggregation:** `IActivityStructureService` (`DefaultActivityStructureService`) resolves the registered handlers by `Kind`. `ScopedVariableResolver` walks the authored tree through this contract to compute per-node scoped-variable visibility.
 - **Registration:** register an implementation with DI as `IActivityStructureHandler` from the activity's own module.
@@ -113,6 +114,7 @@ Known implementations: none in the foundation host; feature modules opt in by re
 Known implementations:
 - `SequenceStructureHandler` (`Elsa.Activities.Sequence`) *(cross-domain — `SupportsScopedVariables = true`)*.
 - `FlowchartStructureHandler` (`Elsa.Activities.Flowchart`) *(cross-domain — `SupportsScopedVariables = true`)*.
+- `CompensationScopeStructureHandler` (`Elsa.Activities.Compensation`) *(cross-domain — implements `ChildrenCompletedBefore`: a handler sees its own step's result first)*.
 
 ---
 

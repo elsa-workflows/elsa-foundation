@@ -35,6 +35,8 @@ private-state contracts as they are.
 2. Runtime: activity, structure handler, validation, feature, unit and integration restart tests, sample
    participant.
 3. Inspection API and Studio: designer, run view, recovery panel, component tests.
-4. End-to-end: e2e restart script, opt-in live browser journey, docs, maps. Spec status becomes `Implemented`.
+4. End-to-end: owned-process Workbench restart test, opt-in live browser journey, remaining M1 gaps (repeat
+   deliveries, republish, captured values, row "Go to", mocked browser suite), docs, maps. Spec status becomes
+   `M1 implemented`.
 
 PRs 2 and 3 can be reviewed independently; PR 4 needs both merged.

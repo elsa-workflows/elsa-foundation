@@ -23,7 +23,7 @@ Order fulfilment  ›  Compensation scope "Reserve and confirm"
 ```
 
 - **Row actions** (keyboard: arrow keys move between rows; Tab moves between the row's cells; Enter opens; Delete
-  removes after confirmation): rename the step, move up/down, delete, open the step, open the compensation,
+  removes the step; the editor's undo restores it): rename the step, move up/down, delete, open the step, open the compensation,
   replace or remove the compensation.
 - **Opening a cell** drills into that slot with `enterSlotScope`. The breadcrumb reads
   `… › Reserve and confirm › Reserve inventory (compensation)`.
@@ -31,14 +31,15 @@ Order fulfilment  ›  Compensation scope "Reserve and confirm"
   `Open step Reserve delivery` and `Open compensation for Reserve delivery`; add button `Add compensation for Confirm order`.
 - **Inspector** for the scope: inputs (`afterCompensation`: "Finish with outcome Compensated" | "Fail with the
   original error"), outcomes `Done` and `Compensated`.
-- **Captured values**: when editing a handler input, the expression editor's reference picker lists the paired
-  step's outputs first, under "From *Reserve inventory*". The stored value is the ordinary activity-output
-  reference. Nothing new is persisted.
-- **Validation** messages:
-  - `Step name is required.` (path `{scope}/steps/{index}/name`)
-  - `Step "Reserve inventory" is defined twice.`
+- **Captured values**: a handler input's expression editor offers the paired step's results first, then the earlier
+  steps' results, nearest first. The stored value is the ordinary activity-result reference, which resolves to the
+  exact forward occurrence the handler undoes. Nothing new is persisted.
+- **Validation** messages (path `{scope}/steps/{index}`; "Go to" selects the row's activity):
+  - `Step 2 needs a name.`
+  - `Step "Reserve inventory" is defined more than once. Step names must be unique.`
   - `Step "Reserve delivery" has no activity.`
-  - Warning: `"Release inventory" is marked replay-safe; its effect may not be recorded before it runs.`
+  - The row shows the same problem inline as you type.
+  - Deferred to M5 (FR-014): a warning when a step or handler is marked replay-safe.
 
 ## Authoring — nested example (M3 semantics, notation fixed now)
 
