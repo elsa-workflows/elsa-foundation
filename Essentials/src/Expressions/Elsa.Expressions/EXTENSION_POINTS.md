@@ -12,6 +12,8 @@ descriptors are metadata only; they do not carry runtime handler factories.
 - **Register:** `services.AddScoped<IPortableExpressionHandler, MyPortableHandler>()`.
 - **Boundary:** The request contains portable source/options and immutable declared parameters. It
   exposes no workflow context, variable frame, service provider, delegate, or mutation callback.
+  Workflow-instance metadata (correlation ID, instance ID) reaches a handler only as a declared
+  `WorkflowInstance` parameter value, never as ambient state.
 
 Shipped implementations are `PortableJavaScriptExpressionHandler` and
 `PortableLiquidExpressionHandler`, both restricted to `binding-pure-v1`.

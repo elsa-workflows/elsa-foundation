@@ -5,6 +5,7 @@ using Acornima;
 using Acornima.Ast;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa3.Mapping.Internal;
 using Fluid;
 
 namespace Elsa3.Mapping.Services;
@@ -63,7 +64,8 @@ public sealed class Elsa3ExpressionRewriter
         Script script;
         try
         {
-            script = new Parser().ParseScript(source);
+            // Elsa 3 parsed with return allowed outside a function, so `return x` at the top level is its result.
+            script = new Parser(new ParserOptions { AllowReturnOutsideFunction = true }).ParseScript(source);
         }
         catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
         {
@@ -82,13 +84,47 @@ public sealed class Elsa3ExpressionRewriter
         // expression as one parenthesized expression and a script as a function body that must return.
         var edits = analyzer.Edits.ToList();
         var body = script.Body;
+        var prelude = analyzer.Prelude;
+        var topLevelReturns = new List<ReturnStatement>();
+        CollectTopLevelReturns(script, topLevelReturns);
+        if (topLevelReturns.Count > 0)
+        {
+            // Elsa 3 turned a bare `return;` (undefined) into null; Elsa 4 refuses an undefined result.
+            foreach (var bare in topLevelReturns.Where(statement => statement.Argument is null))
+                edits.Add(new SourceEdit(bare.Start + "return".Length, bare.Start + "return".Length, " null"));
+
+            // Every path ends in a return Elsa 3 would have returned: a trailing return keeps its value, a trailing
+            // expression is Elsa 3's completion value and gets a return. Any other trailing statement could carry a
+            // completion value that a return cannot reproduce (spec 247 research R-1).
+            // A script's lost value only matters when its result is read, which the caller decides (as below).
+            var preserved = body[^1] is ExpressionStatement or ReturnStatement;
+            if (body[^1] is ExpressionStatement trailing)
+                edits.Add(new SourceEdit(trailing.Start, trailing.Start, "return "));
+
+            if (mode == Elsa3JavaScriptMode.Script)
+            {
+                return Elsa3ExpressionRewriteResult.Success(
+                    CreateDefinition("JavaScript", prelude + ApplyEdits(source, edits), resultType, analyzer.Parameters),
+                    completionValueLost: !preserved);
+            }
+
+            if (!preserved)
+            {
+                return Elsa3ExpressionRewriteResult.Failure(DynamicIssue(
+                    "JavaScript returns at the top level but ends with a statement that is neither a return nor an expression, so its Elsa 3 result cannot be preserved as one Elsa 4 expression."));
+            }
+
+            return Elsa3ExpressionRewriteResult.Success(CreateDefinition(
+                "JavaScript", $"(function () {{\n{prelude}{ApplyEdits(source, edits)}\n}})()", resultType, analyzer.Parameters));
+        }
+
         if (mode == Elsa3JavaScriptMode.Script)
         {
             var hasCompletion = body.Count > 0 && body[^1] is ExpressionStatement;
             if (hasCompletion)
                 edits.Add(new SourceEdit(body[^1].Start, body[^1].Start, "return "));
             return Elsa3ExpressionRewriteResult.Success(
-                CreateDefinition("JavaScript", ApplyEdits(source, edits), resultType, analyzer.Parameters),
+                CreateDefinition("JavaScript", prelude + ApplyEdits(source, edits), resultType, analyzer.Parameters),
                 completionValueLost: body.Count > 0 && !hasCompletion);
         }
 
@@ -106,7 +142,7 @@ public sealed class Elsa3ExpressionRewriter
                 "JavaScript ends with a statement rather than an expression, so its Elsa 3 completion value cannot be preserved as one Elsa 4 expression."));
         }
 
-        if (body.Count == 1)
+        if (body.Count == 1 && prelude.Length == 0)
         {
             // One expression, evaluated by Elsa 4 inside parentheses: drop its statement semicolon, and end with a
             // newline when a line comment trails, so the comment cannot swallow the closing parenthesis. Block
@@ -120,7 +156,7 @@ public sealed class Elsa3ExpressionRewriter
 
         // Statements: an immediately invoked function that returns the last expression, Elsa 3's completion value.
         edits.Add(new SourceEdit(last.Start, last.Start, "return "));
-        var wrapped = $"(function () {{\n{ApplyEdits(source, edits)}\n}})()";
+        var wrapped = $"(function () {{\n{prelude}{ApplyEdits(source, edits)}\n}})()";
         return Elsa3ExpressionRewriteResult.Success(CreateDefinition("JavaScript", wrapped, resultType, analyzer.Parameters));
     }
 
@@ -224,6 +260,19 @@ public sealed class Elsa3ExpressionRewriter
             CreateDefinition("Liquid", ApplyEdits(source, edits), resultType, parameters));
     }
 
+    /// <summary>The <c>return</c> statements outside every function, which Elsa 3 allowed and evaluated as the result.</summary>
+    private static void CollectTopLevelReturns(Node node, List<ReturnStatement> returns)
+    {
+        foreach (var child in node.ChildNodes)
+        {
+            if (child is IFunction)
+                continue;
+            if (child is ReturnStatement statement)
+                returns.Add(statement);
+            CollectTopLevelReturns(child, returns);
+        }
+    }
+
     private static ExpressionDefinition CreateDefinition(
         string language,
         string source,
@@ -321,6 +370,31 @@ public sealed class Elsa3ExpressionRewriter
         {
             "setVariable", "setOutput", "setInput", "setResult",
         };
+        /// <summary>
+        /// Elsa 3 string helpers with an exact Elsa 4 equivalent, and the local function each call becomes. The
+        /// whitespace class is .NET's <c>char.IsWhiteSpace</c> set, which differs from JavaScript's <c>\s</c>
+        /// (spec 247 research R-6).
+        /// </summary>
+        private static readonly Dictionary<string, (string Name, string Declaration)> InlineHelpers = new(StringComparer.Ordinal)
+        {
+            ["isNullOrEmpty"] = ("__elsa3IsNullOrEmpty",
+                "function __elsa3IsNullOrEmpty(v) { return v == null || v === \"\"; }"),
+            ["isNullOrWhiteSpace"] = ("__elsa3IsNullOrWhiteSpace",
+                "function __elsa3IsNullOrWhiteSpace(v) { return v == null || /^[\\t-\\r \\u0085\\u00A0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000]*$/.test(v); }"),
+        };
+
+        private readonly SortedSet<string> _helpers = new(StringComparer.Ordinal);
+
+        /// <summary>The local functions the rewritten source calls, one per line, or empty.</summary>
+        public string Prelude => string.Concat(_helpers.Select(helper => InlineHelpers[helper].Declaration + "\n"));
+
+        /// <summary>Elsa 3 built-ins that read instance metadata, and the parameter each one becomes.</summary>
+        private static readonly Dictionary<string, (string Member, string Parameter)> InstanceMembers = new(StringComparer.Ordinal)
+        {
+            ["getCorrelationId"] = (WorkflowInstanceExpressionParameterBinding.Members.CorrelationId, "elsa3CorrelationId"),
+            ["getWorkflowInstanceId"] = (WorkflowInstanceExpressionParameterBinding.Members.InstanceId, "elsa3WorkflowInstanceId"),
+        };
+
         private static readonly HashSet<string> PureGlobalCalls = new(StringComparer.Ordinal)
         {
             "Boolean", "Number", "String", "parseFloat", "parseInt",
@@ -338,7 +412,66 @@ public sealed class Elsa3ExpressionRewriter
         private static Elsa3ExpressionRewriteIssue UnavailableGlobal(string name) => new(
             Elsa3ImportDiagnosticCodes.ForbiddenCapability,
             $"JavaScript uses '{name}', which the Elsa 4 JavaScript engine does not provide.",
-            "Supply the value as a pinned input or compute it in an activity before import.");
+            name switch
+            {
+                "Date" or "DateTime" or "DateTimeOffset" => TimeGuidance,
+                "Guid" or "Random" => UniqueValueGuidance,
+                _ => "Supply the value as a pinned input or compute it in an activity before import.",
+            });
+
+        private const string TimeGuidance =
+            "Elsa 4 expressions have no clock. In the Elsa 3 workflow, replace a wait loop with a Delay activity, and pass the current time or date values in as workflow inputs, before import.";
+
+        private const string UniqueValueGuidance =
+            "Elsa 4 expressions have no random or unique values. In the Elsa 3 workflow, use getWorkflowInstanceId() when one unique value per run is enough, or pass the value in as a workflow input, before import.";
+
+        private const string DataGuidance =
+            "Elsa 4 values are JSON and expressions have no byte, stream or Base64 helpers. Move the conversion into an activity before import.";
+
+        private const string InstanceGuidance =
+            "Elsa 4 expressions can read only the correlation ID and the instance ID of a workflow instance. Pass the value in as a workflow input, or move the operation into an activity, before import.";
+
+        private const string OutcomeGuidance =
+            "Elsa 4 scripts have no outcomes. In the Elsa 3 workflow, route with a Decision or Switch activity whose conditions carry the script's logic, before import.";
+
+        /// <summary>
+        /// Elsa 3 host functions Elsa 4 cannot run the same, each with what to change in the Elsa 3 workflow
+        /// (spec 247 contracts/javascript-conversion.md, "Refused"). The code stays VF-IMP-005.
+        /// </summary>
+        private static readonly Dictionary<string, (string Message, string Guidance)> RefusedHostFunctions = new(StringComparer.Ordinal)
+        {
+            ["setOutcome"] = ("JavaScript calls 'setOutcome', which sets an Elsa 3 script outcome.", OutcomeGuidance),
+            ["setOutcomes"] = ("JavaScript calls 'setOutcomes', which sets Elsa 3 script outcomes.", OutcomeGuidance),
+            ["newGuid"] = ("JavaScript calls 'newGuid', which generates a random value.", UniqueValueGuidance),
+            ["newGuidString"] = ("JavaScript calls 'newGuidString', which generates a random value.", UniqueValueGuidance),
+            ["newShortGuid"] = ("JavaScript calls 'newShortGuid', which generates a random value.", UniqueValueGuidance),
+            ["getGuidString"] = ("JavaScript calls 'getGuidString', which generates a random value.", UniqueValueGuidance),
+            ["getShortGuid"] = ("JavaScript calls 'getShortGuid', which generates a random value.", UniqueValueGuidance),
+            ["toJson"] = ("JavaScript calls 'toJson'. Elsa 3 serialized with .NET, which escapes HTML characters and keeps .NET property casing, so no Elsa 4 form returns the same text.",
+                "Use JSON.stringify(value) in the Elsa 3 workflow, or JSON.parse(JSON.stringify(value)) to copy a value, before import."),
+            ["parseGuid"] = ("JavaScript calls 'parseGuid', which returns a .NET Guid that Elsa 4 values cannot carry.",
+                "Keep the GUID as a string in the Elsa 3 workflow, and check its format in the script if needed, before import."),
+            ["bytesToString"] = ("JavaScript calls 'bytesToString'.", DataGuidance),
+            ["bytesFromString"] = ("JavaScript calls 'bytesFromString'.", DataGuidance),
+            ["bytesToBase64"] = ("JavaScript calls 'bytesToBase64'.", DataGuidance),
+            ["bytesFromBase64"] = ("JavaScript calls 'bytesFromBase64'.", DataGuidance),
+            ["streamToBytes"] = ("JavaScript calls 'streamToBytes'.", DataGuidance),
+            ["streamToBase64"] = ("JavaScript calls 'streamToBase64'.", DataGuidance),
+            ["stringToBase64"] = ("JavaScript calls 'stringToBase64'.", DataGuidance),
+            ["stringFromBase64"] = ("JavaScript calls 'stringFromBase64'.", DataGuidance),
+            ["getConfig"] = ("JavaScript calls 'getConfig', which reads host configuration.",
+                "Pass the setting in as a workflow input before import."),
+            ["getWorkflowDefinitionId"] = ("JavaScript calls 'getWorkflowDefinitionId'.", InstanceGuidance),
+            ["getWorkflowDefinitionVersionId"] = ("JavaScript calls 'getWorkflowDefinitionVersionId'.", InstanceGuidance),
+            ["getWorkflowDefinitionVersion"] = ("JavaScript calls 'getWorkflowDefinitionVersion'.", InstanceGuidance),
+            ["getWorkflowInstanceName"] = ("JavaScript calls 'getWorkflowInstanceName'.", InstanceGuidance),
+            ["setWorkflowInstanceName"] = ("JavaScript calls 'setWorkflowInstanceName', which changes the workflow instance.",
+                "Use a Set Name activity in the Elsa 3 workflow before import."),
+            ["setCorrelationId"] = ("JavaScript calls 'setCorrelationId', which changes the workflow instance.",
+                "Use a Correlate activity in the Elsa 3 workflow before import."),
+            ["getLastResult"] = ("JavaScript calls 'getLastResult', which reads whichever activity ran last.",
+                "Capture the producing activity's output into a variable and read that variable before import."),
+        };
 
         /// <summary>
         /// The names declared in the scopes enclosing the node being visited, innermost last. A reference to one of them
@@ -535,6 +668,100 @@ public sealed class Elsa3ExpressionRewriter
                     return;
                 }
 
+                if (InlineHelpers.TryGetValue(callee.Name, out var inline))
+                {
+                    if (call.Arguments.Count != 1 || call.Arguments[0] is SpreadElement)
+                    {
+                        Issues.Add(new Elsa3ExpressionRewriteIssue(
+                            Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                            $"JavaScript calls '{callee.Name}' with other than one argument.",
+                            "Call it with exactly one argument before import."));
+                        return;
+                    }
+
+                    if (IsDeclared(inline.Name))
+                    {
+                        Issues.Add(new Elsa3ExpressionRewriteIssue(
+                            Elsa3ImportDiagnosticCodes.AmbiguousReference,
+                            $"JavaScript declares '{inline.Name}', the name the converter gives Elsa 3's '{callee.Name}'.",
+                            "Rename the declaration before import."));
+                        return;
+                    }
+
+                    _helpers.Add(callee.Name);
+                    Edits.Add(new SourceEdit(callee.Start, callee.End, inline.Name));
+                    Visit(call.Arguments[0]);
+                    return;
+                }
+
+                // Instance metadata reads become a declared WorkflowInstance parameter (spec 247 R-4).
+                if (InstanceMembers.TryGetValue(callee.Name, out var instance))
+                {
+                    if (call.Arguments.Count != 0)
+                    {
+                        Issues.Add(new Elsa3ExpressionRewriteIssue(
+                            Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                            $"JavaScript calls '{callee.Name}' with arguments, which it does not take.",
+                            "Call it without arguments before import."));
+                        return;
+                    }
+
+                    // Elsa 3 registered built-ins and generated accessors in an order its source does not fix, so a
+                    // variable or input whose accessor has the built-in's name leaves the call ambiguous (R-3).
+                    if (resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, callee.Name["get".Length..])).Succeeded)
+                    {
+                        Issues.Add(new Elsa3ExpressionRewriteIssue(
+                            Elsa3ImportDiagnosticCodes.AmbiguousReference,
+                            $"JavaScript calls '{callee.Name}', which is both an Elsa 3 built-in and the generated accessor of a variable or input.",
+                            $"Rename the variable or input so that '{callee.Name}' only means the built-in, before import."));
+                        return;
+                    }
+
+                    var binding = new WorkflowInstanceExpressionParameterBinding(instance.Member);
+                    if (!TryAddParameter(Parameters, instance.Parameter, binding, out var collision))
+                    {
+                        Issues.Add(collision!);
+                        return;
+                    }
+
+                    Edits.Add(new SourceEdit(call.Start, call.End, $"args.{instance.Parameter}"));
+                    return;
+                }
+
+                // Elsa 3 generated get{Name}() per variable and workflow input; the resolver decides which (spec 247 R-2).
+                if (TryGetAccessorName(callee.Name, "get", out var accessor) &&
+                    (call.Arguments.Count == 0 ||
+                     resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, accessor)).Succeeded))
+                {
+                    if (call.Arguments.Count != 0)
+                    {
+                        Issues.Add(new Elsa3ExpressionRewriteIssue(
+                            Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                            $"JavaScript calls '{callee.Name}' with arguments, which no Elsa 3 generated accessor takes.",
+                            "Call the accessor without arguments before import."));
+                        return;
+                    }
+
+                    AddResolvedEdit(call, Elsa3AmbientReferenceKind.GeneratedAccessor, accessor);
+                    return;
+                }
+
+                if (TryGetAccessorName(callee.Name, "set", out var setter) &&
+                    resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, setter)).Succeeded)
+                {
+                    Issues.Add(new Elsa3ExpressionRewriteIssue(
+                        Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                        $"JavaScript calls generated setter '{callee.Name}', which mutates workflow state.",
+                        "Use a Set Variable activity instead of the setter before import."));
+                    return;
+                }
+
+                if (RefusedHostFunctions.TryGetValue(callee.Name, out var refused))
+                {
+                    Issues.Add(new Elsa3ExpressionRewriteIssue(Elsa3ImportDiagnosticCodes.ForbiddenCapability, refused.Message, refused.Guidance));
+                    return;
+                }
+
                 if (!PureGlobalCalls.Contains(callee.Name))
                 {
                     Issues.Add(new Elsa3ExpressionRewriteIssue(
@@ -572,6 +799,15 @@ public sealed class Elsa3ExpressionRewriter
                 return;
             }
 
+            // A generated accessor passed around as a value has no static read to lower.
+            if (node is Identifier accessorValue && !IsDeclared(accessorValue.Name) &&
+                TryGetAccessorName(accessorValue.Name, "get", out var accessorValueName) &&
+                resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, accessorValueName)).Succeeded)
+            {
+                Issues.Add(DynamicIssue($"JavaScript uses generated accessor '{accessorValue.Name}' as a value instead of calling it."));
+                return;
+            }
+
             if (node is Identifier { Name: "args" } && !IsDeclared("args"))
             {
                 Issues.Add(new Elsa3ExpressionRewriteIssue(
@@ -581,12 +817,13 @@ public sealed class Elsa3ExpressionRewriter
                 return;
             }
 
-            if (node is CallExpression { Callee: MemberExpression calledMember } && IsNondeterministicCall(calledMember))
+            if (node is CallExpression { Callee: MemberExpression { Object: Identifier helperRoot, Property: Identifier helper } calledMember } &&
+                IsNondeterministicCall(calledMember))
             {
                 Issues.Add(new Elsa3ExpressionRewriteIssue(
                     Elsa3ImportDiagnosticCodes.ForbiddenCapability,
-                    "JavaScript calls a nondeterministic time or random helper.",
-                    "Supply time/random data as an explicit pinned input or move the operation into an activity."));
+                    $"JavaScript calls '{helperRoot.Name}.{helper.Name}', a nondeterministic time or random helper.",
+                    helperRoot.Name == "Date" ? TimeGuidance : UniqueValueGuidance));
                 return;
             }
 
@@ -667,7 +904,8 @@ public sealed class Elsa3ExpressionRewriter
             if (node is Identifier identifier && !IsDeclared(identifier.Name) &&
                 (TryGetAmbientKind(identifier.Name, out _) || identifier.Name.Equals("args", StringComparison.Ordinal)))
                 return true;
-            if (node is CallExpression { Callee: Identifier reader } && reader.Name is "getVariable" or "getInput" && !IsDeclared(reader.Name))
+            if (node is CallExpression { Callee: Identifier reader } && !IsDeclared(reader.Name) &&
+                (reader.Name is "getVariable" or "getInput" || TryGetAccessorName(reader.Name, "get", out _)))
                 return true;
             foreach (var child in node.ChildNodes)
             {
@@ -675,6 +913,17 @@ public sealed class Elsa3ExpressionRewriter
                     return true;
             }
             return false;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="name"/> has the shape of an Elsa 3 generated accessor (<c>get{Name}</c> or
+        /// <c>set{Name}</c>) rather than a built-in, and the <c>{Name}</c> part as written.
+        /// </summary>
+        private static bool TryGetAccessorName(string name, string prefix, out string accessor)
+        {
+            accessor = name.Length > prefix.Length ? name[prefix.Length..] : string.Empty;
+            return accessor.Length > 0 && name.StartsWith(prefix, StringComparison.Ordinal) &&
+                   !Elsa3JavaScriptNames.BuiltIns.Contains(name);
         }
 
         private bool IsNondeterministicCall(MemberExpression member) =>
@@ -836,6 +1085,12 @@ public enum Elsa3AmbientReferenceKind
     WorkflowRequest,
     Variable,
     ActivityResult,
+
+    /// <summary>
+    /// A call <c>get{Name}()</c> to a function Elsa 3 generated per variable or workflow input; <c>Name</c> is the
+    /// callee without <c>get</c>, as written. The resolver decides which declaration Elsa 3 bound it to.
+    /// </summary>
+    GeneratedAccessor,
 }
 
 public sealed record Elsa3AmbientReference(Elsa3AmbientReferenceKind Kind, string Name);

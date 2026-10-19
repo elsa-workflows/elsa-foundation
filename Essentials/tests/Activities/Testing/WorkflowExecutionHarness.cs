@@ -151,7 +151,8 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         JsonElement? stimulusInput = null,
         string? triggerNodeId = null,
         IReadOnlyDictionary<string, string>? triggerMetadata = null,
-        bool allowAcceptedButFaulted = false)
+        bool allowAcceptedButFaulted = false,
+        string? correlationId = null)
     {
         // Register the loaded activity CLR types into the well-known type registry now, not at Build() time.
         // The CLR construction descriptor resolves an activity's stable alias back to its type through this
@@ -170,7 +171,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         var agent = await _provider.GetRequiredService<IWorkflowExecutionActorProvider>()
             .GetAgentAsync(NewActivationRequest());
 
-        var dispatch = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity, inputs, stimulusInput, triggerNodeId, triggerMetadata));
+        var dispatch = await agent.EnqueueAsync(NewStartEnvelope(executable.Identity, inputs, stimulusInput, triggerNodeId, triggerMetadata, correlationId));
         if (dispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted &&
             !(allowAcceptedButFaulted && dispatch.Status == WorkflowExecutionCommandDispatchStatus.AcceptedButFaulted))
             throw new InvalidOperationException($"Start command was not accepted (status: {dispatch.Status}). Reason: {dispatch.Reason}");
@@ -851,9 +852,24 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         IReadOnlyDictionary<string, JsonElement>? inputs = null,
         JsonElement? stimulusInput = null,
         string? triggerNodeId = null,
-        IReadOnlyDictionary<string, string>? triggerMetadata = null)
+        IReadOnlyDictionary<string, string>? triggerMetadata = null,
+        string? correlationId = null)
     {
-        var payload = new WorkflowExecutionStartCommandPayload(pinnedExecutable, pinnedExecutable.ArtifactId, inputs: inputs, stimulusInput: stimulusInput, triggerNodeId: triggerNodeId, triggerMetadata: triggerMetadata);
+        var payload = new WorkflowExecutionStartCommandPayload(
+            pinnedExecutable,
+            pinnedExecutable.ArtifactId,
+            variables: null,
+            inputs,
+            stimulusInput,
+            triggerNodeId,
+            WorkflowRunKind.Unknown,
+            pinnedSource: null,
+            parentWorkflowExecutionId: null,
+            correlationId,
+            tenantId: null,
+            partition: null,
+            authority: null,
+            triggerMetadata);
         // The artifact id rides on the command and the envelope, as WorkflowStartDispatcher puts it there.
         var metadata = new Dictionary<string, string> { ["runtime.artifactId"] = pinnedExecutable.ArtifactId };
         var command = new WorkflowExecutionCommand(

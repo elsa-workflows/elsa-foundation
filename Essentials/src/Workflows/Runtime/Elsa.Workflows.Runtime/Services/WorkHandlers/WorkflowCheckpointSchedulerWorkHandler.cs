@@ -173,7 +173,7 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
                 scheduler: null,
                 activityExecutions: activityStateChanges.ToArray(),
                 bookmarks: [],
-                durableValues: BuildSeedDurableValueChanges(workItem, payload, occurredAt),
+                durableValues: BuildSeedDurableValueChanges(workItem, payload, occurredAt, priorWorkflowState),
                 incidents: [],
                 operational: [],
                 activityExecutionInspections: activityInspectionChanges.ToArray()),
@@ -188,11 +188,18 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
     private static IReadOnlyCollection<RuntimeStateChange<DurableValueState>> BuildSeedDurableValueChanges(
         RuntimeSchedulerWorkItem workItem,
         RuntimeCheckpointCommandPayload payload,
-        DateTimeOffset occurredAt)
+        DateTimeOffset occurredAt,
+        WorkflowExecutionState? priorWorkflowState)
     {
+        // Only the start seeds the correlation id; later checkpoints must not overwrite a Correlate assignment.
+        var correlationId = StringComparer.Ordinal.Equals(payload.CheckpointName, RuntimeCheckpointNames.WorkflowStarted)
+            ? priorWorkflowState?.CorrelationId ?? payload.CorrelationId
+            : null;
+
         // SeedVariables are NOT written to the durable-value channel (#972): caller-supplied variable
         // values overlay the root variable frame in CreateRootVariableFrame, the single runtime truth.
-        if (payload.SeedInputs.Count == 0 && payload.SeedStimulusInput is null && string.IsNullOrWhiteSpace(payload.SeedTriggerNodeId) && payload.SeedTriggerMetadata.Count == 0)
+        if (payload.SeedInputs.Count == 0 && payload.SeedStimulusInput is null && string.IsNullOrWhiteSpace(payload.SeedTriggerNodeId) && payload.SeedTriggerMetadata.Count == 0 &&
+            string.IsNullOrWhiteSpace(correlationId))
             return [];
 
         return RuntimeWorkflowStateSeed.BuildSeedChanges(
@@ -201,7 +208,8 @@ public sealed class WorkflowCheckpointSchedulerWorkHandler : IWorkflowSchedulerW
             occurredAt,
             stimulusInput: payload.SeedStimulusInput,
             triggerNodeId: payload.SeedTriggerNodeId,
-            triggerMetadata: payload.SeedTriggerMetadata);
+            triggerMetadata: payload.SeedTriggerMetadata,
+            correlationId: correlationId);
     }
 
     private static void ValidateTerminalCheckpointStatus(

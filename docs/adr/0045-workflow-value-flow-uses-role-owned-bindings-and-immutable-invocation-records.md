@@ -174,6 +174,20 @@ Time, randomness, and other nondeterministic data enter an expression as explici
 or through a separately specified deterministic runtime capability. Merely marking an expression
 read-only is not enough if its evaluator can reach mutable ambient state.
 
+**Amendment (issue #2717): workflow-instance metadata as a declared parameter.** An expression parameter
+binding may also read metadata of the running workflow instance: its correlation ID or its instance ID
+(`{"kind":"WorkflowInstance","member":"correlationId"|"instanceId"}`). This is a fifth canonical parameter
+kind beside literal, workflow request, variable and activity result; it is not an ambient accessor, because an
+expression sees the value only through the parameter it declares, and the binding-pure-v1 profile is unchanged.
+The value comes from committed runtime state, never live memory: the instance ID is the workflow execution ID,
+and the correlation ID is the latest committed identity durable value, which the workflow-started checkpoint
+seeds from the start request and a `SetCorrelationId` intrinsic replaces. An instance without a correlation ID
+binds JSON null. Like every input read, a change is seen by inputs materialized after it commits; snapshots
+already pinned are not re-evaluated, and a re-materialized snapshot (replay, a `While` pass) reads the same
+committed value. A runtime build that predates this kind cannot read an executable that uses it; before GA this
+is accepted, not mitigated. The Elsa 3 converter lowers `getCorrelationId()` and `getWorkflowInstanceId()` to it
+(spec 247).
+
 ### 6. Separate activity contracts, activations, and invocations
 
 An activity contract is immutable versioned metadata. A published executable pins the activity type

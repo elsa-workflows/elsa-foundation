@@ -668,3 +668,17 @@ virtual Elsa.Expressions.Core.Models.ExpressionParameterBinding.PrintMembers(Sys
 ~override Elsa.Expressions.Core.Models.ExpressionToolingPosition.ToString() -> string
 ~override Elsa.Expressions.Core.Models.ExpressionToolingRange.Equals(object obj) -> bool
 ~override Elsa.Expressions.Core.Models.ExpressionToolingRange.ToString() -> string
+Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding
+Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.WorkflowInstanceExpressionParameterBinding(string! member) -> void
+Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? other) -> bool
+Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.Member.get -> string!
+Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.Members
+const Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.Members.CorrelationId = "correlationId" -> string!
+const Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.Members.InstanceId = "instanceId" -> string!
+override Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.<Clone>$() -> Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding!
+override Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.ToString() -> string!
+override sealed Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.ExpressionParameterBinding? other) -> bool
+static Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.operator !=(Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? left, Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? right) -> bool
+static Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.operator ==(Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? left, Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? right) -> bool
