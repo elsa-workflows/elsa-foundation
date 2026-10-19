@@ -94,10 +94,6 @@
   white-space: nowrap;
 }
 
-.wf-editor-toolbar .wf-review-button {
-  border-color: color-mix(in srgb, var(--studio-accent) 40%, var(--studio-border));
-}
-
 .wf-editor-toolbar .wf-run-button {
   border-color: var(--studio-accent);
   background: var(--studio-accent);
@@ -189,5 +185,16 @@
     margin-right: 0;
     padding-right: 0;
     border-right: 0;
+  }
+}
+
+@media (min-width: 601px) and (max-width: 900px) {
+  .wf-editor-toolbar .wf-editor-identity,
+  .wf-editor-toolbar .wf-editor-actions {
+    flex-basis: 100%;
+  }
+
+  .wf-editor-toolbar .wf-editor-actions {
+    justify-content: flex-end;
   }
 }

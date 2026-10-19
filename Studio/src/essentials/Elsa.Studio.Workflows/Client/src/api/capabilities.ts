@@ -196,7 +196,12 @@ function shellBaseUrl(context: StudioEndpointContext): URL {
   return base;
 }
 
-/** Test seam; production callers should rely on automatic error eviction. */
+/** Drop one backend's cached document after an explicit refresh action. */
+export function invalidateApiCapabilityCache(context: StudioEndpointContext) {
+  documentsByShell.delete(shellKey(context));
+}
+
+/** Test seam for isolating cached capability documents between tests. */
 export function clearApiCapabilityCache() {
   documentsByShell.clear();
 }

@@ -110,3 +110,64 @@
 .ad-interface-suggestions > summary { color: var(--studio-text-muted); cursor: pointer; font-weight: 600; }
 .ad-interface-suggestions[open] > summary { margin-bottom: 1rem; }
 .ad-draft-editor .ad-publication-toolbar-trigger { color: var(--studio-accent-text); }
+
+/* Keep the two routine authoring tasks visually separate from technical controls. */
+.ad-draft-editor .ad-authoring-view-tabs {
+  gap: 4px;
+  margin: 16px 0;
+  padding: 0 0 8px;
+  border: 0;
+  border-bottom: 1px solid var(--studio-border);
+  border-radius: 0;
+  background: transparent;
+}
+
+.ad-draft-editor .ad-authoring-view-tabs button {
+  min-height: 36px;
+  padding: 8px 12px;
+  border-color: transparent;
+  background: transparent;
+  font-weight: 600;
+}
+
+.ad-draft-editor .ad-authoring-view-tabs button[aria-selected="true"] {
+  border-color: var(--studio-border);
+  background: var(--studio-surface-muted);
+  color: var(--studio-text);
+}
+
+.ad-draft-editor [role="tabpanel"][hidden] { display: none; }
+.ad-draft-editor .ad-authoring-view-tabs button:focus-visible,
+.ad-draft-editor .ad-interface-suggestions > summary:focus-visible,
+.ad-draft-editor .ad-proposal-technical > summary:focus-visible {
+  outline: 2px solid var(--studio-accent);
+  outline-offset: 2px;
+}
+
+.ad-draft-editor .ad-interface-suggestions {
+  margin: 16px 0;
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--studio-border);
+  border-radius: 0;
+}
+
+.ad-draft-editor .ad-interface-suggestions > summary { color: var(--studio-text-muted); font-size: var(--studio-label-size); }
+.ad-draft-editor .ad-interface-suggestions > .ad-publication-review { margin: 0; padding: 16px 0; border: 0; background: transparent; }
+.ad-proposal-technical > summary,
+.ad-mapping-technical > summary { width: fit-content; color: var(--studio-text-muted); cursor: pointer; font-size: var(--studio-label-size); }
+.ad-proposal-technical .ad-publication-summary { margin-top: 12px; }
+.ad-interface-connections-header h2 { margin: 0 0 4px; font-size: var(--studio-section-title-size); }
+.ad-interface-connections-header p { margin: 0; color: var(--studio-text-muted); }
+.ad-draft-editor .ad-graph-public-interface { display: grid; gap: 16px; margin: 24px 0 0; }
+.ad-draft-editor .ad-graph-output-mappings,
+.ad-draft-editor .ad-graph-outcome-mappings { gap: 12px; padding: 16px 0; border: 0; border-top: 1px solid var(--studio-border); border-radius: 0; background: transparent; }
+.ad-draft-editor .ad-graph-output-mapping { padding: 12px; border-radius: var(--studio-radius-sm); background: var(--studio-surface); }
+.ad-draft-editor .ad-graph-output-mapping > header strong { font-weight: 600; }
+.ad-draft-editor .ad-graph-outcome-mapping-add { gap: 12px; }
+.ad-draft-editor .ad-graph-outcome-mapping-add label { min-width: 0; }
+
+@media (max-width: 760px) {
+  .ad-draft-editor .ad-graph-outcome-mapping-add { grid-template-columns: 1fr; }
+  .ad-draft-editor .ad-graph-outcome-mappings li { grid-template-columns: minmax(0, 1fr) auto; }
+}

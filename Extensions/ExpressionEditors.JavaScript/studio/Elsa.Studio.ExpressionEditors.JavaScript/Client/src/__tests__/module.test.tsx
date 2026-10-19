@@ -114,6 +114,27 @@ describe("JavaScript expression editor module", () => {
     expect(onExpandedChange).toHaveBeenCalledWith("return 4;");
   });
 
+  it("explains expression and statement-body input in the expanded editor", () => {
+    const expanded = JavaScriptExpandedEditor({
+      descriptor: descriptor(),
+      syntax: "JavaScript",
+      value: "",
+      context: context("JavaScript"),
+      onChange: vi.fn()
+    }) as React.ReactElement<{ children: React.ReactNode }>;
+    const children = React.Children.toArray(expanded.props.children);
+
+    expect(children).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: "p",
+        props: expect.objectContaining({
+          className: "js-expression-help",
+          children: "Use an expression, or write statements and return a value."
+        })
+      })
+    ]));
+  });
+
   it("owns JavaScript globals and resolves getter-call members through the neutral shared traversal", async () => {
     const authoringContext = {
       workflowInputs: [{ id: "input:customer", name: "customer", kind: "value" as const, shapeId: "shape:customer" }],

@@ -213,17 +213,9 @@
 .ad-contract-editor { display: grid; gap: 1rem; margin-bottom: 1rem; padding: 1rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md); background: var(--studio-surface); }
 .ad-contract-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; padding-bottom: .8rem; border-bottom: 1px solid var(--studio-border); }
 .ad-contract-header h2 { margin: .15rem 0 .25rem; font-size: var(--studio-section-title-size); }
-.ad-contract-add { display: grid; grid-template-columns: minmax(14rem, 1fr) repeat(3, auto); align-items: end; gap: .5rem; padding: .8rem; border-radius: var(--studio-radius); background: var(--studio-surface-muted); }
-.ad-contract-add label, .ad-contract-fields label { display: grid; gap: .3rem; color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 650; }
-.ad-contract-add input, .ad-contract-fields input, .ad-contract-fields select, .ad-contract-fields textarea { width: 100%; min-width: 0; padding: .5rem .6rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); color: var(--studio-text); background: var(--studio-surface-muted); }
-.ad-contract-add button, .ad-contract-member button, .ad-impact-dialog button { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; min-height: 2.35rem; padding: .4rem .65rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); color: inherit; background: var(--studio-surface); cursor: pointer; }
-.ad-contract-group { display: grid; gap: .65rem; }
-.ad-contract-group > header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
-.ad-contract-group h3 { margin: 0; font-size: var(--studio-section-title-size); }
-.ad-contract-group > header span { display: grid; place-items: center; min-width: 1.65rem; min-height: 1.65rem; border-radius: 999px; color: var(--studio-text-muted); background: var(--studio-surface-muted); font-size: var(--studio-label-size); font-weight: 700; }
-.ad-contract-members { display: grid; gap: .75rem; }
-.ad-contract-member { display: grid; gap: .75rem; min-width: 0; margin: 0; padding: .9rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); }
-.ad-contract-member legend { padding: 0 .4rem; font-weight: 750; }
+.ad-contract-fields label { display: grid; gap: .3rem; color: var(--studio-text-muted); font-size: var(--studio-label-size); font-weight: 650; }
+.ad-contract-fields input, .ad-contract-fields select, .ad-contract-fields textarea { width: 100%; min-width: 0; padding: .5rem .6rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); color: var(--studio-text); background: var(--studio-surface-muted); }
+.ad-impact-dialog button { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; min-height: 2.35rem; padding: .4rem .65rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius); color: inherit; background: var(--studio-surface); cursor: pointer; }
 .ad-contract-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
 .ad-contract-fields label > small, .ad-readonly-fact small { color: var(--studio-text-muted); font-weight: 400; line-height: 1.4; }
 .ad-contract-check { grid-template-columns: auto 1fr !important; align-content: start; align-items: start; }
@@ -240,7 +232,6 @@
 .ad-contract-staged-field label { min-width: 0; }
 .ad-contract-staged-field > small { grid-column: 1 / -1; color: var(--studio-text-muted); font-weight: 400; line-height: 1.4; }
 .ad-danger-action { width: fit-content; border-color: var(--studio-danger) !important; color: var(--studio-danger-fg) !important; }
-.ad-contract-empty { padding: .8rem; border: 1px dashed var(--studio-border); border-radius: var(--studio-radius); text-align: center; }
 
 .ad-publication-review { display: grid; gap: 1rem; margin-bottom: 1rem; padding: 1rem; border: 1px solid var(--studio-border); border-radius: var(--studio-radius-md); background: var(--studio-surface); }
 .ad-publication-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
@@ -482,9 +473,8 @@ html[data-theme-material] .ad-filters input, html[data-theme-material] .ad-filte
   .ad-choice-grid, .ad-review-facts { grid-template-columns: 1fr; }
   .ad-section-heading-row { align-items: stretch; flex-direction: column; }
   .ad-inline-pager { align-items: stretch; flex-direction: column; }
-  .ad-contract-add, .ad-contract-fields, .ad-impact-facts { grid-template-columns: 1fr; }
+  .ad-contract-fields, .ad-impact-facts { grid-template-columns: 1fr; }
   .ad-historical-contract-groups { grid-template-columns: 1fr; }
-  .ad-contract-add button { width: 100%; }
   .ad-contract-staged-field { grid-template-columns: 1fr; }
   .ad-contract-staged-field > small { grid-column: auto; }
   .ad-publication-header, .ad-publication-status, .ad-publication-success, .ad-publication-impact > header, .ad-publication-readiness > header, .ad-publication-actions { align-items: stretch; flex-direction: column; }
