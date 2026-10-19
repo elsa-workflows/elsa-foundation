@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { AnonymousAuthProvider, type ElsaStudioModuleApi, type StudioDashboardWidgetContribution } from "@elsa-workflows/studio-sdk";
+import { AnonymousAuthProvider, type ElsaStudioModuleApi, type StudioDashboardWidgetContribution, type StudioSettingEditorContribution } from "@elsa-workflows/studio-sdk";
 import { StatusChip } from "@elsa-workflows/studio-ui";
 import { ShellFrame, getStudioNavigation } from "../../src/apps/Elsa.Studio.Web/Client/src/app/App";
 import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
@@ -35,13 +35,20 @@ function widget(overrides: Partial<StudioDashboardWidgetContribution>): StudioDa
   };
 }
 
-function createWidgetHost() {
+export function createWidgetHost() {
   const items: StudioDashboardWidgetContribution[] = [];
   const widgets = {
     add: (item: StudioDashboardWidgetContribution) => { items.push(item); },
     list: () => items,
     compose: () => [],
     slot: { id: "test", kind: "test", owner: { kind: "host" as const, id: "host" } }
+  };
+  const settingEditorItems: StudioSettingEditorContribution[] = [];
+  const settingEditors = {
+    add: (item: StudioSettingEditorContribution) => { settingEditorItems.push(item); },
+    list: () => settingEditorItems,
+    compose: () => [],
+    slot: widgets.slot
   };
   const notFound = async () => {
     const error = new Error("missing") as Error & { status: number };
@@ -56,7 +63,7 @@ function createWidgetHost() {
     routes: { add() {}, list: () => [], compose: () => [], slot: widgets.slot },
     dashboardWidgets: widgets,
     homeWidgets: widgets,
-    settingEditors: { add() {}, list: () => [], compose: () => [], slot: widgets.slot }
+    settingEditors
   } as unknown as ElsaStudioModuleApi;
   return { api, widgets };
 }

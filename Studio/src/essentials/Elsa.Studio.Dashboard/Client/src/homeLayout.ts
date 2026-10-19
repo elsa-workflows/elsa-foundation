@@ -38,10 +38,12 @@ export interface HomeLayoutDocument {
 export const builtInHomeLayout: HomeLayoutValue = {
   widgets: [
     { id: homeWidgetIds.getStarted, size: "full", visible: true },
+    { id: "workflows.run-health", size: "full", visible: true },
+    { id: "workflows.portfolio", size: "medium", visible: true },
     { id: homeWidgetIds.quickActions, size: "medium", visible: true },
-    { id: homeWidgetIds.recentWorkflows, size: "medium", visible: true },
-    { id: homeWidgetIds.recentRuns, size: "medium", visible: true },
     { id: homeWidgetIds.needsAttention, size: "medium", visible: true },
+    { id: homeWidgetIds.recentRuns, size: "medium", visible: true },
+    { id: homeWidgetIds.recentWorkflows, size: "medium", visible: true },
     { id: homeWidgetIds.tasks, size: "medium", visible: true }
   ]
 };

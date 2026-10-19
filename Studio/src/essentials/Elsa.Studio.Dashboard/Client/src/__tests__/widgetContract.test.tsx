@@ -280,10 +280,12 @@ describe("dashboard widget contract", () => {
     expect((await first.load()).value.widgets.map(entry => entry.id)).toEqual(["home.recent-runs"]);
     expect((await second.load()).value.widgets.map(entry => entry.id)).toEqual([
       "home.get-started",
+      "workflows.run-health",
+      "workflows.portfolio",
       "home.quick-actions",
-      "home.recent-workflows",
-      "home.recent-runs",
       "home.needs-attention",
+      "home.recent-runs",
+      "home.recent-workflows",
       "home.tasks"
     ]);
     await first.reset();

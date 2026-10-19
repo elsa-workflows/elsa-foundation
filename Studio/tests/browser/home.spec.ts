@@ -68,6 +68,102 @@ test.describe("customizable Home", () => {
     await expectNoSeriousAxeViolations(page);
   });
 
+  test("renders run trends, exact buckets, definition names, and portfolio counts from the real widgets", async ({ page }) => {
+    await page.goto("/?mode=home-dashboard&state=ready");
+    await expect(page.getByRole("heading", { level: 2, name: "Home" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Workflow run health" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Workflow portfolio" })).toBeVisible();
+    expect(await page.locator(".dashboard-grid > article.dashboard-widget").evaluateAll(articles =>
+      articles.map(article => article.getAttribute("data-widget-id"))
+    )).toEqual([
+      "home.get-started",
+      "workflows.run-health",
+      "workflows.portfolio",
+      "home.quick-actions",
+      "home.needs-attention",
+      "home.recent-runs",
+      "home.recent-workflows"
+    ]);
+    await expect(page.locator('[data-widget-id="workflows.run-health"] [role="img"]')).toHaveAttribute("aria-label", /Run starts by hour: 12 starts/);
+    await expect(page.locator('[data-widget-id="workflows.portfolio"] [data-metric="Active definitions"] .workflow-dashboard-metric__value')).toHaveText("12");
+    await expect(page.getByRole("link", { name: "View all failed runs for Orders" })).toHaveAttribute("href", "/workflows/instances?definitionId=orders&status=Faulted&runKind=PublishedRun");
+
+    await page.getByText("View exact bucket counts").click();
+    await expect(page.locator('[data-widget-id="workflows.run-health"] tbody tr')).toHaveCount(24);
+    const request = await page.evaluate(() => (window.__homeDashboardRequests ?? []).find(value => value.startsWith("/_elsa/workflows/dashboard/runs?")) ?? "");
+    const query = new URL(request, "https://backend.example").searchParams;
+    expect(query.get("bucket")).toBe("hour");
+    expect(query.get("includeTestRuns")).toBe("false");
+    expect(query.get("from")).not.toBeNull();
+    expect(query.get("to")).not.toBeNull();
+    await expectNoSeriousAxeViolations(page);
+    await page.setViewportSize({ width: 768, height: 1000 });
+    const healthWidth = await page.locator(".workflow-run-health").evaluate(element => ({ width: element.clientWidth, scrollWidth: element.scrollWidth }));
+    expect(healthWidth.scrollWidth).toBeLessThanOrEqual(healthWidth.width);
+  });
+
+  test("distinguishes an empty start window from unavailable aggregate data", async ({ page }) => {
+    await page.goto("/?mode=home-dashboard&state=empty");
+    const health = page.locator('[data-widget-id="workflows.run-health"]');
+    await expect(health.getByText("No workflow starts in this window.")).toBeVisible();
+    await expect(health.locator('[data-metric="Started"] .workflow-dashboard-metric__value')).toHaveText("0");
+    await expect(health.locator('[data-metric="Running now"] .workflow-dashboard-metric__value')).toHaveText("2");
+    await expect(health.getByRole("img")).toHaveCount(0);
+    await expect(page.locator('[data-widget-id="workflows.portfolio"] [data-metric="Active definitions"] .workflow-dashboard-metric__value')).toHaveText("0");
+
+    await page.goto("/?mode=home-dashboard&state=unavailable");
+    await expect(page.getByText("Run statistics are unavailable.")).toBeVisible();
+    await expect(page.getByText("Portfolio statistics are unavailable.")).toBeVisible();
+    await expect(page.getByText("Try refreshing the widget.").first()).toBeVisible();
+    await expect(page.locator('[data-widget-id="workflows.run-health"] [data-metric="Started"]')).toHaveCount(0);
+    await expect(page.locator('[data-widget-id="workflows.portfolio"] [data-metric="Active definitions"]')).toHaveCount(0);
+  });
+
+  test("does not request aggregate widgets without dashboard read permission", async ({ page }) => {
+    await page.goto("/?mode=home-dashboard&state=denied");
+    await expect(page.getByRole("heading", { name: "Quick actions" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Workflow run health" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Workflow portfolio" })).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => (window.__homeDashboardRequests ?? []).some(value => value === "/design/workflows/definitions?take=8"))).toBe(true);
+    const aggregateRequests = await page.evaluate(() => (window.__homeDashboardRequests ?? []).filter(value => value.startsWith("/_elsa/workflows/dashboard/")));
+    expect(aggregateRequests).toEqual([]);
+  });
+
+  test("keeps edited run-health options when the widget is removed and added again", async ({ page }) => {
+    await page.goto("/?mode=home-dashboard&state=ready");
+    const health = page.locator('[data-widget-id="workflows.run-health"]');
+    await expect(health).toBeVisible();
+    await page.getByRole("button", { name: "Edit home" }).click();
+    await health.getByRole("button", { name: "Settings for Workflow run health" }).click();
+    const dialog = page.getByRole("dialog", { name: "Workflow run health settings" });
+    await dialog.getByLabel("Date range").selectOption({ label: "7 days" });
+    await dialog.getByLabel("Include test runs").check();
+    await dialog.getByRole("button", { name: "Save" }).click();
+    await expect.poll(() => page.evaluate(() => (window.__homeDashboardRequests ?? []).some(value => {
+      if (!value.startsWith("/_elsa/workflows/dashboard/runs?")) return false;
+      const query = new URL(value, "https://backend.example").searchParams;
+      return query.get("bucket") === "day" && query.get("includeTestRuns") === "true";
+    }))).toBe(true);
+
+    await page.getByRole("button", { name: "Hide Workflow run health" }).click();
+    await expect(page.locator('[data-widget-id="workflows.run-health"]')).toHaveCount(0);
+    await page.getByRole("button", { name: "Add widget" }).first().click();
+    const picker = page.getByRole("dialog", { name: "Add widget" });
+    await picker.getByRole("button", { name: "Workflow run health" }).click();
+    await expect(page.locator('[data-widget-id="workflows.run-health"]')).toBeVisible();
+    await expect.poll(() => page.evaluate(() => (window.__homeDashboardLayouts ?? []).length)).toBeGreaterThanOrEqual(3);
+    const savedOptions = await page.evaluate(() => {
+      const layouts = window.__homeDashboardLayouts ?? [];
+      const layout = layouts.at(-1) as { widgets?: Array<{ id: string; options?: unknown }> } | undefined;
+      return layout?.widgets?.find(entry => entry.id === "workflows.run-health")?.options;
+    });
+    expect(savedOptions).toMatchObject({ range: "7d", includeTestRuns: true, keepVisible: true });
+    await expect(page.locator('[data-widget-id="workflows.run-health"] .workflow-run-health__scope')).toContainText("day");
+    await expect(page.locator('[data-widget-id="workflows.run-health"] .workflow-run-health__scope')).toContainText("Test runs included");
+    await page.locator('[data-widget-id="workflows.run-health"] summary').click();
+    await expect(page.locator('[data-widget-id="workflows.run-health"] tbody tr')).toHaveCount(7);
+  });
+
   test("captures Classic light and dark before/after screenshots when asked", async ({ page }) => {
     test.skip(!process.env.HOME_SCREENSHOTS, "Screenshot capture is opt-in.");
     await mkdir(screenshotDir, { recursive: true });
