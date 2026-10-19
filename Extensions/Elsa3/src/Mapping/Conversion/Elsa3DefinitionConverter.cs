@@ -62,12 +62,11 @@ internal sealed class Elsa3DefinitionConverter(
         try
         {
             var (plan, _) = await PrepareCoreAsync(request, cancellationToken);
-            if (plan.Diagnostics.Any(diagnostic => diagnostic.IsError && !IsDeferred(diagnostic)))
+            if (plan.HasErrors)
                 return Elsa3MigrationResult<Elsa3NodeConversionContext>.Failure(Ordered(plan.Diagnostics));
 
-            var deferred = Ordered(plan.Diagnostics.Where(IsDeferred));
             return Elsa3MigrationResult<Elsa3NodeConversionContext>.Success(
-                new Elsa3PreparedNodeConversionContext(request, plan, deferred),
+                new Elsa3PreparedNodeConversionContext(request, plan),
                 Ordered(plan.Diagnostics.Where(diagnostic => !diagnostic.IsError)));
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
@@ -136,13 +135,6 @@ internal sealed class Elsa3DefinitionConverter(
         return (plan, boundaryOutcomes);
     }
 
-    /// <summary>
-    /// A graph-level node left to a later conversion stage; it does not stop lowering of the rest. No built-in entry
-    /// raises it since graph conversion (spec 239) runs in the normalizer.
-    /// </summary>
-    private static bool IsDeferred(Elsa3MigrationDiagnostic diagnostic) =>
-        StringComparer.Ordinal.Equals(diagnostic.Code, Elsa3ActivityDiagnosticCodes.GraphConversionPending);
-
     /// <summary>Whether <paramref name="path"/> is the node at <paramref name="nodePath"/> or inside it.</summary>
     private static bool IsWithin(string? path, string nodePath) =>
         path is not null &&
@@ -151,7 +143,7 @@ internal sealed class Elsa3DefinitionConverter(
 
     private async ValueTask LowerAsync(Elsa3ConversionPlan plan, CancellationToken cancellationToken)
     {
-        if (plan.Definition.Root is null || plan.Diagnostics.Any(diagnostic => diagnostic.IsError && !IsDeferred(diagnostic)))
+        if (plan.Definition.Root is null || plan.HasErrors)
             return;
 
         var jsonPaths = plan.JsonPaths;

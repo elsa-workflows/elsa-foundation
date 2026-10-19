@@ -44,8 +44,8 @@ public static class Elsa3ActivityDiagnosticCodes
     public const string UnsupportedMode = "ELS3-ACTIVITY-UNSUPPORTED-MODE";
 
     /// <summary>
-    /// No longer raised by any built-in map entry: graph conversion (spec 239) converts Flowchart, FlowFork, FlowJoin and
-    /// Start. Kept because a code is never reused.
+    /// Retired 2026-10-19 (spec 247): never raised. Graph conversion (spec 239) converts Flowchart, FlowFork, FlowJoin and
+    /// Start, and the map target that raised it is removed. Kept because a code is never removed or reused.
     /// </summary>
     public const string GraphConversionPending = "ELS3-ACTIVITY-GRAPH-CONVERSION-PENDING";
 

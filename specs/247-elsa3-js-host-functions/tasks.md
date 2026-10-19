@@ -230,8 +230,8 @@ refused (FR-015, FR-016, research R-6).
 **Independent test**: the catalog and XML doc say "retired"; the removed members no longer exist; the full Mapping
 suite is green.
 
-- [ ] T034 [P] [US6] In `Extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs`, rewrite the XML doc of `GraphConversionPending`: "Retired 2026-10-19 (spec 247): no longer raised since spec 239 converts Flowchart, FlowFork, FlowJoin and Start; kept because a code is never removed or reused." In `specs/236-elsa3-activity-map/contracts/diagnostic-codes.md`, mark the row **Retired** with the same reason
-- [ ] T035 [US6] Remove the pending-graph path (D-6):
+- [X] T034 [P] [US6] In `Extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs`, rewrite the XML doc of `GraphConversionPending`: "Retired 2026-10-19 (spec 247): no longer raised since spec 239 converts Flowchart, FlowFork, FlowJoin and Start; kept because a code is never removed or reused." In `specs/236-elsa3-activity-map/contracts/diagnostic-codes.md`, mark the row **Retired** with the same reason
+- [X] T035 [US6] Remove the pending-graph path (D-6):
   - `Elsa3ActivityTarget.GraphLevel` in `Extensions/Elsa3/src/Mapping/ActivityMap/Elsa3ActivityTarget.cs`
   - its case in `Extensions/Elsa3/src/Mapping/Resolution/Elsa3ActivityResolver.cs`
   - `IsDeferred` and its three uses in `Extensions/Elsa3/src/Mapping/Conversion/Elsa3DefinitionConverter.cs`, so `PrepareAsync` and `LowerAsync` fail on any error
@@ -239,7 +239,7 @@ suite is green.
   - the constructor call in `Extensions/Elsa3/src/Mapping/Conversion/Elsa3PreparedNodeConversionContext.cs`
   - the deferred remarks in `IElsa3NodeConverter.cs`
   - the "deferred" sentence and the constructor signature in `Extensions/Elsa3/src/Mapping/EXTENSION_POINTS.md`
-- [ ] T036 [US6] Update the tests:
+- [X] T036 [US6] Update the tests:
   - `Elsa3ActivityResolverTests.cs`: remove the `GraphLevel` test map and the `Elsa.FlowFork` → `GraphConversionPending` row
   - `Elsa3NodeConverterTests.cs`: remove the `Deferred` assertion and the filter on line 59
   - `Elsa3MappingFeatureRegistrationTests.cs`: update the test context constructor

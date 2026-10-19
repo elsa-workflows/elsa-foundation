@@ -163,7 +163,7 @@ public sealed class Elsa3MappingFeatureRegistrationTests
             throw new NotSupportedException();
     }
 
-    private sealed class HostNodeConversionContext(Elsa3ConversionRequest request) : Elsa3NodeConversionContext(request, []);
+    private sealed class HostNodeConversionContext(Elsa3ConversionRequest request) : Elsa3NodeConversionContext(request);
 
     private sealed class HostActivityMap : IElsa3ActivityMap
     {
