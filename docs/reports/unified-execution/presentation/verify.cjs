@@ -107,8 +107,9 @@ const check=(name,detail)=>result.checks.push({name,detail});
   await page.screenshot({path:path.join(out,'offline-agent.png'),fullPage:true});result.screenshots.push('offline-agent.png');
   fs.writeFileSync(path.join(out,'accessibility-tree.txt'),await page.locator('body').ariaSnapshot());
   const links=await page.locator('a[href]').evaluateAll(es=>es.map(e=>({text:e.textContent,url:e.href,raw:e.getAttribute('href')})));
+  for(const link of links.filter(l=>l.url.includes('/tools/experiments/'))){assert.ok(link.url.startsWith('https://github.com/elsa-workflows/elsa-foundation/blob/4b464e1637483e89a11f632f2c99c5779cb4e0de/tools/experiments/'),link.url);}
   for(const link of links.filter(l=>l.raw.startsWith('../'))){assert.ok(fs.existsSync(new URL(link.url)));}
-  check('Bundled local report targets','All relative report targets exist; GitHub evidence explicitly requires connection');
+  check('Bundled local report targets','All relative report targets exist; all rendered experiment links use the pinned research revision; GitHub evidence explicitly requires connection');
   const fileLinks=[...new Set(links.filter(l=>l.raw.startsWith('../')).map(l=>l.url))];
   for(const target of fileLinks){await page.goto(target,{waitUntil:'load'});assert.ok((await page.locator('body').innerText()).length>500);}
   check('Local report navigation offline',fileLinks);
