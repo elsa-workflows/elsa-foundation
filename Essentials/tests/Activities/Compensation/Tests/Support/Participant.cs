@@ -12,6 +12,7 @@ public sealed class Participant
     private readonly List<ParticipantCall> _effects = [];
     private readonly HashSet<string> _faultingNodes = new(StringComparer.Ordinal);
     private string? _killAfterEffectOf;
+    private string? _killBeforeEffectOf;
 
     /// <summary>Every call, including repeats the participant de-duplicated.</summary>
     public IReadOnlyList<ParticipantCall> Calls { get { lock (_gate) return _calls.ToArray(); } }
@@ -37,6 +38,27 @@ public sealed class Participant
         lock (_gate)
             _killAfterEffectOf = nodeId;
         return this;
+    }
+
+    /// <summary>Stops the host once, when the named node is called and before its effect is applied.</summary>
+    public Participant KillingHostBeforeEffectOf(string nodeId)
+    {
+        lock (_gate)
+            _killBeforeEffectOf = nodeId;
+        return this;
+    }
+
+    /// <summary>Whether the host must stop now, before this node's effect. One-shot.</summary>
+    public bool StopsBefore(string nodeId)
+    {
+        lock (_gate)
+        {
+            if (!StringComparer.Ordinal.Equals(_killBeforeEffectOf, nodeId))
+                return false;
+
+            _killBeforeEffectOf = null;
+            return true;
+        }
     }
 
     public bool Rejects(string nodeId)

@@ -15,6 +15,12 @@ public sealed class ParticipantActivity(Participant participant, HostKillSwitch 
         if (participant.Rejects(context.ExecutableNodeId))
             return ValueTask.FromResult(ActivityTransition.Fault<ActivityUnit>(new ActivityFault(RejectionCode, $"'{context.ExecutableNodeId}' was rejected.")));
 
+        if (participant.StopsBefore(context.ExecutableNodeId))
+        {
+            killSwitch.Kill();
+            return ValueTask.FromResult(ActivityTransition.Complete(ActivityUnit.Value));
+        }
+
         if (participant.Apply(context.ExecutableNodeId, context.InvocationId))
             killSwitch.Kill();
 
