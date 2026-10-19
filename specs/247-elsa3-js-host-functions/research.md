@@ -194,7 +194,7 @@ node's children are no longer prepared. The documented promise ("its children ar
 `IElsa3NodeConverter.cs:19-23`, `EXTENSION_POINTS.md:52` and the resolver guidance) is now false. Calling
 `ConvertNodeAsync` on such a child would throw `ArgumentException` (inferred from the code, not run).
 
-**Decision (D-6, proposed).** Remove the path:
+**Decision (D-6, approved 2026-10-19).** Remove the path:
 - `GraphLevel`, the resolver case, `IsDeferred`, and `Deferred` together with its constructor parameter.
 - Keep the constant, marked retired.
 
@@ -202,10 +202,6 @@ Rationale:
 - The path is reachable only through a public extension that is already broken.
 - ADR 0080 asks for pre-GA cleanup.
 - No consumer exists (spec 235 does not use it).
-
-**Fallback if not approved.**
-- Keep everything and mark `GraphLevel` `[Obsolete]`.
-- Fix the three false doc statements.
 
 `Elsa3GraphConstructKind` and `Elsa3MemberRuleKind.GraphLevel` are live (spec 239) and are not part of this cleanup.
 

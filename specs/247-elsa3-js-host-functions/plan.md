@@ -40,8 +40,7 @@ Everything else spec 236 refuses stays refused, with sharper messages and a writ
   `parseGuid` and the byte/stream helpers stay refused, each with an Elsa 3 rewrite in the guidance.
 - **Refusal messages (R-7).** A refusal table in the rewriter gives each refused name its own message and guidance.
   The codes are unchanged.
-- **Cleanup (R-8).** Retire the code in the docs. Removing the pending-graph code paths is proposed, pending approval
-  (D-6).
+- **Cleanup (R-8).** Retire the code in the docs. Removing the pending-graph code paths is approved (D-6).
 
 ## Spec corrections from research
 
@@ -114,7 +113,7 @@ linear in the number of declared names.
 | §E2.7 Elsa 3 stays behind the import boundary | PASS | Accessor naming, helper semantics and refusal text stay in `Extensions/Elsa3`. The Core binding is Elsa 4 vocabulary |
 | §E2.6.1 executable-always-runs | PASS, risk noted | An older runtime build cannot read the new discriminator in a published executable (mixed-version or rollback). Elsa 4 is pre-GA (ADR 0080) and has no supported mixed-version deployment. Recorded in the ADR 0045 amendment |
 | §E2.6.2 artifact-only runtime | PASS | Values come from runtime state, not design data |
-| §E5 versioning | PASS | Additive: a new record and discriminator, a new enum member `Elsa3AmbientReferenceKind.GeneratedAccessor`, a new context property. `PublicAPI.Unshipped.txt` is updated. Removals under D-6 happen only with approval |
+| §E5 versioning | PASS | Additive: a new record and discriminator, a new enum member `Elsa3AmbientReferenceKind.GeneratedAccessor`, a new context property. `PublicAPI.Unshipped.txt` is updated. D-6 removes public members (approved, pre-GA cleanup per ADR 0080) |
 | §E6 naming | PASS | `WorkflowInstanceExpressionParameterBinding` follows the `{Source}ExpressionParameterBinding` family |
 | §2.6.2 replacement contracts | PASS | None added |
 | §2.17 duplication beats dependency | PASS | Elsa 3 Pascal-casing is a few lines in `Elsa3.Mapping`, not a Humanizer dependency (R-3) |
@@ -133,7 +132,7 @@ linear in the number of declared names.
 | D-3 | One Core binding for instance metadata | `WorkflowInstanceExpressionParameterBinding(string member)`, with members `correlationId` and `instanceId`. An unknown member is rejected at construction. Discriminator `"WorkflowInstance"` (R-4) |
 | D-4 | The correlation ID comes from the identity projection, seeded at start | `RuntimeWorkflowStateSeed.BuildSeedChanges` writes `identity:correlationId` from the dispatch payload. Resolution reads `RuntimeIdentityStateProjection.CorrelationId` from committed values; when absent, it binds JSON `null`. The instance ID is `WorkflowExecutionId` (R-5) |
 | D-5 | Inline two helpers, refuse the rest | `isNullOrEmpty(x)` → `x == null \|\| x === ""`. `isNullOrWhiteSpace(x)` → a regex over .NET's `char.IsWhiteSpace` set. Both are emitted as a local-function prelude so each argument is evaluated once (R-6) |
-| D-6 | **Proposed, needs approval:** remove the pending-graph path | Remove `Elsa3ActivityTarget.GraphLevel`, the resolver case, `IsDeferred`, and `Elsa3NodeConversionContext.Deferred` with its constructor parameter. They are public but unused, and broken since spec 239 (R-8). If not approved, keep them and fix their docs |
+| D-6 | Remove the pending-graph path (approved by the maintainer 2026-10-19) | Remove `Elsa3ActivityTarget.GraphLevel`, the resolver case, `IsDeferred`, and `Elsa3NodeConversionContext.Deferred` with its constructor parameter. They are public but unused, and broken since spec 239 (R-8). The constant stays, marked retired |
 | D-7 | Refusal guidance is data | A static table in the rewriter maps each refused name to its message and guidance. The codes are unchanged (FR-023) |
 
 ## Project Structure
@@ -197,7 +196,7 @@ Tests:
    - Then the converter lowering.
    - Then the ADR 0045 and spec 095 amendments.
 4. **Helpers and refusal table** (US4, US5), plus the Mapping README migration story.
-5. **Cleanup** (US6). Retire the code; D-6 removals happen only after approval.
+5. **Cleanup** (US6). Retire the code and remove the pending-graph path (D-6, approved).
 6. **Measure** (SC-001, SC-002). Rerun the throwaway corpus probe (never committed) and put the numbers in the PR.
 7. **Follow-up** (FR-022). Draft the issue for an Elsa 4 time and unique-value capability; file it only with the
    maintainer's approval.
