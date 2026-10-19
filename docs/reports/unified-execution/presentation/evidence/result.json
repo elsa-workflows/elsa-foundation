@@ -1,8 +1,8 @@
 {
   "researchArtifactBaseline": "4b464e1637483e89a11f632f2c99c5779cb4e0de",
-  "htmlSha256": "7e1879c8770a88c778994755c6649ec8eb67199296cb9b37fa1bae8796b5e5ae",
+  "htmlSha256": "5648d59ff13e3eda52390a34d0f782728c6ff64703802d731254cee8dc888bef",
   "playwright": "1.62.1",
-  "date": "2026-10-19T16:59:41.178Z",
+  "date": "2026-10-19T17:23:57.739Z",
   "checks": [
     {
       "name": "Cold direct-file load in offline reduced-motion context",
@@ -14,18 +14,22 @@
     },
     {
       "name": "Five model lenses and all nine responsibility drill-downs",
-      "detail": "Correct model heading, nested composition, selected state and detail content"
+      "detail": "Correct model heading, nested composition, selected state, breadcrumb context, proposed status and scoped source link"
     },
     {
       "name": "Zoom and bounds",
       "detail": "CSS zoom agrees; 75%/175% limits disable controls; reset returns 100%"
     },
     {
+      "name": "Breadcrumb navigation",
+      "detail": "Current model and detail follow every drill-down; keyboard return restores Native/kernel overview, zoom and scroll"
+    },
+    {
       "name": "Keyboard entry and view activation",
       "detail": "Tab follows skip link, program, Architecture, Recovery; Enter selects Recovery"
     },
     {
-      "name": "All five scenario paths",
+      "name": "All six scenario paths",
       "detail": "Every transition, final disabled state, previous and restart verified offline"
     },
     {

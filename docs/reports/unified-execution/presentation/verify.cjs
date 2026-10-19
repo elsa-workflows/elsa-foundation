@@ -27,12 +27,19 @@ const check=(name,detail)=>result.checks.push({name,detail});
    await page.getByLabel('View through').selectOption(value);
    assert.equal(await page.locator('#model-heading').innerText(),title);
    assert.ok((await page.locator('#nested-copy').innerText()).includes(nested));
+   assert.ok((await page.locator('#nested-composition').innerText()).includes('Proposed composition'));
+   assert.ok((await page.locator('#nested-link').getAttribute('href')).startsWith('https://github.com/elsa-workflows/elsa-foundation/blob/4b464e1637483e89a11f632f2c99c5779cb4e0de/tools/experiments/'));
    for(const node of await page.locator('[data-detail]').all()){
     await node.click();assert.equal(await node.getAttribute('aria-pressed'),'true');
     assert.ok((await page.locator('#detail-title').innerText()).length>0);
+    assert.ok((await page.locator('#detail-status').innerText()).startsWith('Proposed'));
+    const source=await page.locator('#detail-link').getAttribute('href');
+    assert.ok(source==='../architecture-recommendation.md'||source.startsWith('https://github.com/elsa-workflows/elsa-foundation/blob/4b464e1637483e89a11f632f2c99c5779cb4e0de/tools/experiments/'));
+    assert.equal(await page.locator('#breadcrumb-model').innerText(),title);
+    assert.equal(await page.locator('#breadcrumb-detail').innerText(),await page.locator('#detail-title').innerText());
    }
   }
-  check('Five model lenses and all nine responsibility drill-downs','Correct model heading, nested composition, selected state and detail content');
+  check('Five model lenses and all nine responsibility drill-downs','Correct model heading, nested composition, selected state, breadcrumb context, proposed status and scoped source link');
   await page.getByLabel('Zoom diagram in',{exact:true}).click();assert.equal(await page.locator('#zoom-value').innerText(),'125%');
   assert.equal(await page.locator('#diagram').evaluate(e=>getComputedStyle(e).zoom),'1.25');
   await page.getByLabel('Zoom diagram in',{exact:true}).click();await page.getByLabel('Zoom diagram in',{exact:true}).click();assert.ok(await page.getByLabel('Zoom diagram in',{exact:true}).isDisabled());
@@ -40,6 +47,22 @@ const check=(name,detail)=>result.checks.push({name,detail});
   await page.getByLabel('Zoom diagram out',{exact:true}).click();assert.ok(await page.getByLabel('Zoom diagram out',{exact:true}).isDisabled());
   await page.getByRole('button',{name:'Reset view',exact:true}).click();
   check('Zoom and bounds','CSS zoom agrees; 75%/175% limits disable controls; reset returns 100%');
+  const breadcrumbs=page.getByRole('navigation',{name:'Diagram breadcrumbs',exact:true});
+  assert.equal(await breadcrumbs.locator('[aria-current="location"]').count(),1);
+  await page.getByLabel('View through').selectOption('etl');
+  await page.locator('[data-detail="effects"]').click();
+  await page.getByLabel('Zoom diagram in',{exact:true}).click();
+  await page.setViewportSize({width:320,height:1100});
+  await page.locator('.diagram-scroll').evaluate(e=>e.scrollLeft=100);
+  await breadcrumbs.getByRole('button',{name:'Architecture overview',exact:true}).focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await page.getByLabel('View through').inputValue(),'native');
+  assert.equal(await page.locator('#breadcrumb-detail').innerText(),'Atomic durable transition');
+  assert.equal(await page.locator('[data-detail="kernel"]').getAttribute('aria-pressed'),'true');
+  assert.equal(await page.locator('#zoom-value').innerText(),'100%');
+  assert.equal(await page.locator('.diagram-scroll').evaluate(e=>e.scrollLeft),0);
+  check('Breadcrumb navigation','Current model and detail follow every drill-down; keyboard return restores Native/kernel overview, zoom and scroll');
+  await page.setViewportSize({width:1440,height:1100});
   await page.reload({waitUntil:'load'});
   await page.keyboard.press('Tab');assert.equal(await page.locator(':focus').innerText(),'Skip to architecture');
   await page.keyboard.press('Tab');assert.ok((await page.locator(':focus').innerText()).includes('Program #2892'));
@@ -48,9 +71,9 @@ const check=(name,detail)=>result.checks.push({name,detail});
   await page.keyboard.press('Enter');assert.ok(await page.locator('#recovery').isVisible());
   assert.equal(await page.getByRole('button',{name:'02 Recovery lab'}).getAttribute('aria-pressed'),'true');
   check('Keyboard entry and view activation','Tab follows skip link, program, Architecture, Recovery; Enter selects Recovery');
-  const scenarios={crash:6,duplicate:4,cancel:3,success:3,buffer:5};
+  const scenarios={normal:4,crash:6,duplicate:4,cancel:3,success:3,buffer:5};
   for(const [key,total] of Object.entries(scenarios)){
-   await page.getByLabel('Failure scenario').selectOption(key);
+   await page.getByLabel('Execution scenario').selectOption(key);
    assert.ok(await page.getByRole('button',{name:'Previous',exact:true}).isDisabled());
    for(let i=1;i<=total;i++){
     assert.ok((await page.locator('#step-caption').innerText()).startsWith(`${i} / ${total} · `));
@@ -63,7 +86,7 @@ const check=(name,detail)=>result.checks.push({name,detail});
    await page.getByRole('button',{name:'Restart',exact:true}).click();
    assert.ok((await page.locator('#step-caption').innerText()).startsWith(`1 / ${total}`));
   }
-  check('All five scenario paths','Every transition, final disabled state, previous and restart verified offline');
+  check('All six scenario paths','Every transition, final disabled state, previous and restart verified offline');
   assert.ok((await page.locator('#recovery').innerText()).includes('Illustrative simulation.'));
   await page.getByRole('button',{name:'03 Evidence & decisions'}).click();
   assert.ok((await page.locator('#evidence').innerText()).includes('not a production migration'));

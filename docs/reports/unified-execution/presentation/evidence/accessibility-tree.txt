@@ -24,6 +24,9 @@
     - status: 100%
     - button "Zoom diagram in": +
     - button "Reset view"
+    - navigation "Diagram breadcrumbs":
+      - button "Architecture overview"
+      - text: Agent collaboration Atomic durable transition
     - heading "Agent collaboration" [level=2]
     - paragraph: Candidate native composition with explicit messages, rounds and resource bindings.
     - region "Scrollable architecture diagram":
@@ -45,6 +48,9 @@
         - text: Mailboxes / rounds / fan-in
       - strong: Nested composition
       - paragraph: Sequence → Collect request → Agent collaboration [Researcher ∥ Specialist → Reviewer → bounded feedback → approved tool] → Notify. One native execution; no actor per turn.
+      - text: Proposed composition ·
+      - link "Inspect bounded resource-binding evidence (online) ↗":
+        - /url: https://github.com/elsa-workflows/elsa-foundation/blob/4b464e1637483e89a11f632f2c99c5779cb4e0de/tools/experiments/AgentCompositionProof/evidence.json
       - button "Durable execution kernel State + owed work + receipt · revision + ownership fence" [pressed]:
         - strong: Durable execution kernel
         - text: State + owed work + receipt · revision + ownership fence
@@ -65,8 +71,9 @@
       - heading "Atomic durable transition" [level=2]
       - paragraph: Commit state, owed work and a stable receipt together. Check current ownership fence and state revision for new writes; safely replay identical receipts.
       - text: "The experiment exposes a gap: a completion boolean and work cancellation are not a full model-outcome contract."
-      - link "Read the architectural recommendation":
-        - /url: ../architecture-recommendation.md
+      - paragraph: Proposed contract · bounded work witness
+      - link "Inspect bounded shared-work evidence (online) ↗":
+        - /url: https://github.com/elsa-workflows/elsa-foundation/blob/4b464e1637483e89a11f632f2c99c5779cb4e0de/tools/experiments/UnifiedExecution.WorkProof/evidence.json
   - paragraph:
     - strong: Reviewed research proposal
     - text: · Executable evidence baseline
