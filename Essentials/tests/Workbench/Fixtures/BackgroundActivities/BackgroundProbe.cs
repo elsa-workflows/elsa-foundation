@@ -15,10 +15,11 @@ using Microsoft.Extensions.Hosting;
 namespace Elsa.Workbench.Tests.BackgroundActivities;
 
 [ShellFeature("BackgroundActivityWitness", DependsOn = new object[] { "BackgroundActivities", "WorkflowsRuntimeEntityFrameworkCore" })]
-public class BackgroundActivityWitnessFeature : IShellFeature
+public class BackgroundActivityWitnessFeature : IShellFeature, IPostConfigureShellServices
 {
     public string? JournalDirectory { get; set; }
     public string Role { get; set; } = "standalone";
+    public bool NativeHostingObservation { get; set; }
 
     public virtual void ConfigureServices(IServiceCollection services)
     {
@@ -40,6 +41,12 @@ public class BackgroundActivityWitnessFeature : IShellFeature
             (IBackgroundActivityWorkStore)(provider.ImplementationInstance ?? provider.ImplementationFactory?.Invoke(scope) ??
                 ActivatorUtilities.CreateInstance(scope, provider.ImplementationType!)), journal, Role,
             ownsInner: provider.ImplementationInstance is null), provider.Lifetime));
+    }
+
+    public virtual void PostConfigureServices(IServiceCollection services)
+    {
+        if (NativeHostingObservation)
+            NativeHostingWitnessRegistration.Register(services, JournalDirectory!, Role);
     }
 }
 

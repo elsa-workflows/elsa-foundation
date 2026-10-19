@@ -7,12 +7,15 @@ uptime
 dotnet test Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj --filter 'FullyQualifiedName~WorkbenchBackgroundActivityRecoveryTests|FullyQualifiedName~NativeHostingConformanceTests'
 ```
 
-Expect both completion orders, accepted-work recovery and cancellation to preserve one native final continuation. Clustered cases must identify two actual PIDs. The fence case must show an unaccepted original commit reaching real EF with its original uncancelled token, then `StaleToken` and the greater persisted successor token. Expiry, cancellation or replay does not count.
+The implemented recovery subset covers both completion orders, accepted-work recovery and cancellation. Concurrent clustered cases identify two actual PIDs and actual scoped EF connections. See the [evidence report](../../docs/reports/native-hosting-conformance.md) for the current boundary.
+
+The original stale-write scenario remains unimplemented (T009–T012). Its future fence case must show an unaccepted original commit reaching real EF with its original uncancelled token, then `StaleToken` and the greater persisted successor token. Expiry, cancellation or replay does not count.
 
 Run affected runtime, runtime EF, distributed runtime/EF and membership tests selected in `tasks.md`; record concrete filters/results in the final report. These are contract/EF evidence, not all process-level evidence. Run architecture and map freshness:
 
 ```bash
-dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj
+bash tools/architecture/restore-ci-project-graph.sh
+dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj -c Release
 dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 git diff --check
 ```

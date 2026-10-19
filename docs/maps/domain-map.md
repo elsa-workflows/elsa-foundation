@@ -9,7 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 146
 - Test projects: 148
 - Domains: 33
-- Direct cross-domain references: 1068
+- Direct cross-domain references: 1073
 
 ## Domains
 
@@ -305,7 +305,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Testing](../../Essentials/tests/Testing/Elsa.Testing.csproj) | test | Elsa.Testing | (root) | test | Elsa.Primitives |
 | [Elsa.Versioning.Calculator.Tests](../../Essentials/tests/Versioning/Calculator/Tests/Elsa.Versioning.Calculator.Tests.csproj) | test | Elsa.Versioning | Calculator.Tests | test | Elsa.Versioning.Calculator |
 | [Elsa.Versioning.Publisher.Tests](../../Essentials/tests/Versioning/Publisher/Tests/Elsa.Versioning.Publisher.Tests.csproj) | test | Elsa.Versioning | Publisher.Tests | test | Elsa.Versioning.Publisher |
-| [BackgroundActivities](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj) | test | Other | - | test | Elsa.Activities.Design.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core |
+| [BackgroundActivities](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj) | test | Other | - | test | Elsa.Activities.Design.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Cluster.Core<br>Elsa.Cluster.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Distributed<br>Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
 | [Elsa.Workbench.Tests](../../Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj) | test | Elsa.Workbench | - | test | BackgroundActivities<br>Elsa.Workbench |
 | [Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests](../../Essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Workflows | Dashboard.Persistence.EntityFrameworkCore.ProviderTests | test | Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests |
 | [Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests](../../Essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Workflows | Dashboard.Persistence.EntityFrameworkCore.Tests | test | Elsa.Tasks<br>Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Resumption |
@@ -356,7 +356,12 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Acme.Widgets.Collision](../../Essentials/tests/Cli/Fixtures/Collision/Acme.Widgets.Collision.csproj) | Other | [Elsa.Persistence.EntityFramework](../../Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
 | [BackgroundActivities](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj) | Other | [Elsa.Activities.Design.Core](../../Essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj) | Elsa.Activities |
 | [BackgroundActivities](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj) | Other | [Elsa.Activities.Runtime.Core](../../Essentials/src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj) | Elsa.Activities |
+| [BackgroundActivities](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj) | Other | [Elsa.Cluster.Core](../../Essentials/src/Cluster/Core/Elsa.Cluster.Core.csproj) | Elsa.Cluster |
+| [BackgroundActivities](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj) | Other | [Elsa.Cluster.EntityFrameworkCore](../../Essentials/src/Cluster/EntityFrameworkCore/Elsa.Cluster.EntityFrameworkCore.csproj) | Elsa.Cluster |
 | [BackgroundActivities](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj) | Other | [Elsa.Workflows.Runtime.Core](../../Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj) | Elsa.Workflows |
+| [BackgroundActivities](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj) | Other | [Elsa.Workflows.Runtime.Distributed](../../Essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/Elsa.Workflows.Runtime.Distributed.csproj) | Elsa.Workflows |
+| [BackgroundActivities](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj) | Other | [Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore](../../Essentials/src/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore.csproj) | Elsa.Workflows |
+| [BackgroundActivities](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj) | Other | [Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore](../../Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj) | Elsa.Workflows |
 | [Elsa.Activities.Behavioral.Tests](../../Essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj) | Elsa.Activities | [Elsa.Expressions.JavaScript](../../Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/Elsa.Expressions.JavaScript.csproj) | Elsa.Expressions |
 | [Elsa.Activities.Behavioral.Tests](../../Essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj) | Elsa.Activities | [Elsa.Expressions.JavaScript.Jint](../../Essentials/src/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj) | Elsa.Expressions |
 | [Elsa.Activities.Behavioral.Tests](../../Essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj) | Elsa.Activities | [Elsa.Http](../../Essentials/src/Http/Elsa.Http/Elsa.Http.csproj) | Elsa.Http |

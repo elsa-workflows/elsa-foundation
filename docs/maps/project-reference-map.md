@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 146
 - Test projects: 148
-- Direct project references: 1604
+- Direct project references: 1609
 
 ## Projects
 
@@ -266,7 +266,7 @@ Records direct project references only.
 | [Elsa.Testing](../../Essentials/tests/Testing/Elsa.Testing.csproj) | test | Elsa.Testing | - | false | Elsa.Primitives |
 | [Elsa.Versioning.Calculator.Tests](../../Essentials/tests/Versioning/Calculator/Tests/Elsa.Versioning.Calculator.Tests.csproj) | test | Elsa.Versioning | - | false | Elsa.Versioning.Calculator |
 | [Elsa.Versioning.Publisher.Tests](../../Essentials/tests/Versioning/Publisher/Tests/Elsa.Versioning.Publisher.Tests.csproj) | test | Elsa.Versioning | - | false | Elsa.Versioning.Publisher |
-| [BackgroundActivities](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj) | test | Other | - | false | Elsa.Activities.Design.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core |
+| [BackgroundActivities](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj) | test | Other | - | false | Elsa.Activities.Design.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Cluster.Core<br>Elsa.Cluster.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Distributed<br>Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
 | [Elsa.Workbench.Tests](../../Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj) | test | Elsa.Workbench | - | false | BackgroundActivities<br>Elsa.Workbench |
 | [Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests](../../Essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests |
 | [Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests](../../Essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Tasks<br>Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Resumption |

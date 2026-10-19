@@ -20,16 +20,19 @@ internal sealed class NativeHostingFixture : IAsyncDisposable
 
     private readonly string _root;
     private readonly string _packagePath;
+    private readonly bool _observeNativeHosting;
     private readonly List<WorkbenchProcess> _hosts = [];
     private readonly HashSet<WorkbenchProcess> _currentHosts = [];
     private readonly HashSet<string> _roles = new(StringComparer.Ordinal);
     private bool _disposed;
 
-    private NativeHostingFixture(NativeHostingProfile profile, string root, string packagePath, string packageSha256)
+    private NativeHostingFixture(NativeHostingProfile profile, string root, string packagePath, string packageSha256,
+        bool observeNativeHosting)
     {
         Profile = profile;
         _root = root;
         _packagePath = packagePath;
+        _observeNativeHosting = observeNativeHosting;
         PackageSha256 = packageSha256;
         ScenarioId = $"native-hosting-{Guid.NewGuid():N}"[..29];
         JournalDirectory = Path.Combine(root, "journal");
@@ -44,10 +47,12 @@ internal sealed class NativeHostingFixture : IAsyncDisposable
     internal string PackageSha256 { get; }
     internal string SharedRoot => _root;
 
-    internal static NativeHostingFixture Create(NativeHostingProfile profile)
+    internal static NativeHostingFixture Create(NativeHostingProfile profile, bool observeNativeHosting = false)
     {
         if (!Enum.IsDefined(profile))
             throw new ArgumentOutOfRangeException(nameof(profile), profile, "Select an explicit native hosting profile.");
+        if (observeNativeHosting && profile != NativeHostingProfile.Clustered)
+            throw new ArgumentException("The transport observation requires the clustered profile.", nameof(profile));
         var root = Directory.CreateTempSubdirectory("elsa-native-hosting-").FullName;
 
         try
@@ -55,7 +60,7 @@ internal sealed class NativeHostingFixture : IAsyncDisposable
             Directory.CreateDirectory(Path.Combine(root, "packages"));
             var packagePath = NativeHostingScenario.CreatePackage(root);
             var packageSha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(packagePath)));
-            return new NativeHostingFixture(profile, root, packagePath, packageSha256);
+            return new NativeHostingFixture(profile, root, packagePath, packageSha256, observeNativeHosting);
         }
         catch
         {
@@ -162,7 +167,8 @@ internal sealed class NativeHostingFixture : IAsyncDisposable
         features["BackgroundActivityWitness"] = new JsonObject
         {
             ["JournalDirectory"] = JournalDirectory,
-            ["Role"] = role
+            ["Role"] = role,
+            ["NativeHostingObservation"] = _observeNativeHosting
         };
 
         if (Profile == NativeHostingProfile.InProcess)
@@ -173,7 +179,10 @@ internal sealed class NativeHostingFixture : IAsyncDisposable
         }
         else
         {
-            features[DistributedRuntimeFeature] = new JsonObject();
+            features[DistributedRuntimeFeature] = _observeNativeHosting
+                // Departure must reclaim a still-live routing lease; waiting for its expiry would prove less.
+                ? new JsonObject { ["LeaseDurationSeconds"] = 120 }
+                : new JsonObject();
             features[DistributedPersistenceFeature] = new JsonObject();
             features[DistributedTransportFeature] = new JsonObject();
         }
