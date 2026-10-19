@@ -136,7 +136,7 @@ refusal says what to change in the Elsa 3 workflow so that it converts. Specs 23
 | Any other undeclared function | `VF-IMP-005` | Replace it with plain JavaScript, or move it into an activity |
 
 A workflow that genuinely needs the current time or a fresh unique value cannot migrate until Elsa 4 has an explicit
-capability for them. Elsa 4 deliberately strips them from expressions to keep them deterministic.
+capability for them (#3026). Elsa 4 deliberately strips them from expressions to keep them deterministic.
 
 Known differences that convert without a diagnostic today: Elsa 4 evaluates in strict mode, and it rejects an
 `undefined` result where Elsa 3 returned `null` (#3012). Elsa 3 handed scripts mutable .NET values; Elsa 4 hands them
