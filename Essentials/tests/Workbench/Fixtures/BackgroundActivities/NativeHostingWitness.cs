@@ -19,7 +19,7 @@ namespace Elsa.Workbench.Tests.BackgroundActivities;
 
 internal static class NativeHostingWitnessRegistration
 {
-    public static void Register(IServiceCollection services, string? journalDirectory, string role)
+    public static void Register(IServiceCollection services, string? journalDirectory, string role, bool nativeStaleWriteObservation = false)
     {
         ArgumentNullException.ThrowIfNull(services);
         if (string.IsNullOrWhiteSpace(journalDirectory) || !Path.IsPathFullyQualified(journalDirectory))
@@ -46,7 +46,7 @@ internal static class NativeHostingWitnessRegistration
         var transport = RequireScoped<IExecutionCommandTransport>(services);
 
         services.AddOptions<NativeHostingObservationSettings>()
-            .Configure<IConfiguration>((settings, configuration) => settings.Load(configuration, journalDirectory, role))
+            .Configure<IConfiguration>((settings, configuration) => settings.Load(configuration, journalDirectory, role, nativeStaleWriteObservation))
             .Validate(settings => settings.ConfigurationError is null,
                 "Native hosting observation requires SQLite providers, absolute shared Data Source paths, and an absolute lock folder.")
             .ValidateOnStart();
@@ -62,6 +62,9 @@ internal static class NativeHostingWitnessRegistration
             new ExecutionPlacementStoreBackend(placementBackend.Name, decoratedPlacement));
         ReplaceBackendMarker(services, commandBackend,
             new ExecutionCommandTransportBackend(commandBackend.Name, decoratedTransport));
+
+        if (nativeStaleWriteObservation)
+            NativeStaleWriteWitnessRegistration.Register(services);
     }
 
     private static void RequireOne<TService>(IServiceCollection services)
@@ -71,7 +74,7 @@ internal static class NativeHostingWitnessRegistration
             throw new InvalidOperationException($"Native hosting observation requires exactly one {typeof(TService).Name} registration, found {count}.");
     }
 
-    private static ServiceDescriptor RequireScoped<TService>(IServiceCollection services)
+    internal static ServiceDescriptor RequireScoped<TService>(IServiceCollection services)
     {
         var descriptors = services
             .Where(descriptor => descriptor.ServiceType == typeof(TService) && !descriptor.IsKeyedService)
@@ -100,7 +103,7 @@ internal static class NativeHostingWitnessRegistration
         return replacement;
     }
 
-    private static TService CreateInner<TService>(ServiceDescriptor descriptor, IServiceProvider provider)
+    internal static TService CreateInner<TService>(ServiceDescriptor descriptor, IServiceProvider provider)
         where TService : class
     {
         var inner = descriptor.ImplementationFactory is not null
@@ -133,6 +136,7 @@ internal sealed class NativeHostingObservationSettings
 
     public string JournalDirectory { get; private set; } = string.Empty;
     public string Role { get; private set; } = string.Empty;
+    public bool NativeStaleWriteObservation { get; private set; }
     public string RuntimeProvider { get; private set; } = string.Empty;
     public string MembershipProvider { get; private set; } = string.Empty;
     public string PlacementProvider { get; private set; } = string.Empty;
@@ -144,10 +148,11 @@ internal sealed class NativeHostingObservationSettings
     public string LocksFolderPath { get; private set; } = string.Empty;
     public string? ConfigurationError { get; private set; }
 
-    public void Load(IConfiguration configuration, string journalDirectory, string role)
+    public void Load(IConfiguration configuration, string journalDirectory, string role, bool nativeStaleWriteObservation)
     {
         JournalDirectory = journalDirectory;
         Role = role;
+        NativeStaleWriteObservation = nativeStaleWriteObservation;
 
         RuntimeProvider = FeatureValue(configuration, "WorkflowsRuntimeEntityFrameworkCore", "Provider") ?? "Sqlite";
         MembershipProvider = configuration["Elsa:Cluster:Membership:EntityFrameworkCore:Provider"] ?? "Sqlite";
@@ -280,11 +285,33 @@ internal sealed class NativeHostingOwnershipWitness(
             FencingToken = lease.FencingToken,
             LeaseExpiresAt = lease.ExpiresAt
         });
+        await NativeStaleWriteWitness.GateSuccessorAcquireAsync(Services, Settings, lease, cancellationToken);
         return lease;
     }
 
-    public ValueTask<RuntimeExecutionOwnershipTransitionResult> HeartbeatAsync(RuntimeExecutionLease lease, CancellationToken cancellationToken = default) =>
-        Inner.HeartbeatAsync(lease, cancellationToken);
+    public async ValueTask<RuntimeExecutionOwnershipTransitionResult> HeartbeatAsync(RuntimeExecutionLease lease, CancellationToken cancellationToken = default)
+    {
+        RuntimeExecutionOwnershipTransitionResult? result = null;
+        Exception? failure = null;
+        var delegated = false;
+        try
+        {
+            await NativeStaleWriteWitness.GateOwnerHeartbeatAsync(Services, Settings, lease, cancellationToken);
+            delegated = true;
+            result = await Inner.HeartbeatAsync(lease, cancellationToken);
+            return result;
+        }
+        catch (Exception exception)
+        {
+            failure = exception;
+            throw;
+        }
+        finally
+        {
+            if (delegated)
+                await NativeStaleWriteWitness.RecordHeartbeatOutcomeAsync(Settings, lease, cancellationToken, result, failure);
+        }
+    }
 
     public ValueTask<RuntimeExecutionOwnershipTransitionResult> ReleaseAsync(RuntimeExecutionLease lease, CancellationToken cancellationToken = default) =>
         Inner.ReleaseAsync(lease, cancellationToken);
@@ -701,7 +728,7 @@ internal static class NativeHostingWitnessRecorder
         }
     }
 
-    private static string? ResolveTypeName<T>(IServiceProvider services)
+    private static string? ResolveTypeName<T>(IServiceProvider services) where T : notnull
     {
         try
         {

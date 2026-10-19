@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Net.Http.Json;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -60,6 +61,25 @@ internal static class NativeHostingScenario
 
     internal static async Task<string> PublishAndStartAsync(WorkbenchProcess host, string journal)
     {
+        var published = await PublishAndStartCoreAsync(
+            host,
+            journal,
+            "Native background crash witness",
+            "Two gated bodies and one native parent continuation",
+            "background witness fork");
+        return published.ExecutionId;
+    }
+
+    internal static Task<PublishedExecution> PublishAndStartAsync(WorkbenchProcess host, string journal, string name) =>
+        PublishAndStartCoreAsync(host, journal, name, "Graceful native hosting handoff witness", "graceful handoff fork");
+
+    private static async Task<PublishedExecution> PublishAndStartCoreAsync(
+        WorkbenchProcess host,
+        string journal,
+        string name,
+        string description,
+        string forkText)
+    {
         var probe = await ActivityVersionAsync(host, ProbeType);
         var sequence = await ActivityVersionAsync(host, "Elsa.Activities.Sequence.Activities.Sequence");
         var flowchart = await ActivityVersionAsync(host, "Elsa.Activities.Flowchart.Activities.Flowchart");
@@ -72,7 +92,7 @@ internal static class NativeHostingScenario
             ["kind"] = "elsa.flowchart.structure", ["schemaVersion"] = "1.0.0",
             ["payload"] = new JsonObject
             {
-                ["activities"] = new JsonArray(Node("fork", writeLine, [Input("text", "background witness fork")]), Probe("left", true), Probe("right", true)),
+                ["activities"] = new JsonArray(Node("fork", writeLine, [Input("text", forkText)]), Probe("left", true), Probe("right", true)),
                 ["connections"] = new JsonArray(Connection("fork", "left"), Connection("fork", "right")),
                 ["startNodeId"] = "fork", ["nodeMetadata"] = new JsonObject(), ["connectionMetadata"] = new JsonObject()
             }
@@ -84,13 +104,14 @@ internal static class NativeHostingScenario
         });
         var definition = await PostAsync(host, "/design/workflows/definitions/submit", new
         {
-            name = "Native background crash witness", description = "Two gated bodies and one native parent continuation",
+            name, description,
             state = new { variables = Array.Empty<object>(), inputs = Array.Empty<object>(), outputs = Array.Empty<object>(), rootActivity = root }
         });
         var published = await PostAsync(host, $"/publishing/workflows/{definition["version"]!["id"]!.GetValue<string>()}/publish", new { });
-        var started = await PostAsync(host, $"/runtime/workflows/executables/{published["artifactId"]!.GetValue<string>()}/execute",
+        var artifactId = published["artifactId"]!.GetValue<string>();
+        var started = await PostAsync(host, $"/runtime/workflows/executables/{artifactId}/execute",
             new { sourceReferenceId = published["sourceReferenceId"]!.GetValue<string>() });
-        return started["workflowExecutionId"]!.GetValue<string>();
+        return new PublishedExecution(started["workflowExecutionId"]!.GetValue<string>(), artifactId);
     }
 
     internal static JsonObject Node(string id, string version, JsonNode[]? inputs = null, JsonNode? structure = null, int placement = 0) => new()
@@ -132,10 +153,14 @@ internal static class NativeHostingScenario
     internal static string? ActivityStatus(JsonNode instance, string nodeId) => instance["activities"]!.AsArray()
         .SingleOrDefault(activity => activity?["executableNodeId"]?.GetValue<string>() == nodeId)?["status"]?.GetValue<string>();
 
-    internal static async Task<JsonNode> WaitForStateAsync(WorkbenchProcess host, string executionId, Func<JsonNode, bool> predicate)
+    internal static async Task<JsonNode> WaitForStateAsync(
+        WorkbenchProcess host,
+        string executionId,
+        Func<JsonNode, bool> predicate,
+        TimeSpan? timeout = null)
     {
         JsonNode? last = null;
-        var deadline = DateTimeOffset.UtcNow + Patience;
+        var deadline = DateTimeOffset.UtcNow + (timeout ?? Patience);
         while (DateTimeOffset.UtcNow < deadline)
         {
             last = await host.Client.GetFromJsonAsync<JsonNode>($"/runtime/workflows/instances/{executionId}");
@@ -146,10 +171,14 @@ internal static class NativeHostingScenario
         throw new InvalidOperationException($"Workflow did not reach the expected state: {last}\n{host.Output}");
     }
 
-    internal static async Task WaitForAsync(WorkbenchProcess host, Func<bool> predicate, string expected,
-        Func<string>? timeoutEvidence = null)
+    internal static async Task WaitForAsync(
+        WorkbenchProcess host,
+        Func<bool> predicate,
+        string expected,
+        Func<string>? timeoutEvidence = null,
+        TimeSpan? timeout = null)
     {
-        var deadline = DateTimeOffset.UtcNow + Patience;
+        var deadline = DateTimeOffset.UtcNow + (timeout ?? Patience);
         while (!predicate())
         {
             if (DateTimeOffset.UtcNow >= deadline)
@@ -159,6 +188,78 @@ internal static class NativeHostingScenario
             }
             await Task.Delay(100);
         }
+    }
+
+    internal static Task<JsonObject> WaitForEventAsync(
+        WorkbenchProcess host,
+        string journal,
+        string stage,
+        string? executionId,
+        Func<JsonObject, bool> predicate,
+        string pattern = "native-hosting.*.json") =>
+        WaitForEventCoreAsync(host, journal, stage, executionId, predicate, Patience, pattern);
+
+    internal static Task<JsonObject> WaitForEventAsync(
+        string journal,
+        string stage,
+        string? executionId,
+        Func<JsonObject, bool> predicate,
+        TimeSpan timeout) =>
+        WaitForEventCoreAsync(null, journal, stage, executionId, predicate, timeout, "native-hosting.*.json");
+
+    private static async Task<JsonObject> WaitForEventCoreAsync(
+        WorkbenchProcess? host,
+        string journal,
+        string stage,
+        string? executionId,
+        Func<JsonObject, bool> predicate,
+        TimeSpan timeout,
+        string pattern)
+    {
+        var deadline = DateTimeOffset.UtcNow + timeout;
+        JsonObject? found = null;
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            found = ReadEvents(journal, pattern).FirstOrDefault(record =>
+                Value<string>(record, "Stage") == stage &&
+                (executionId is null || record["ExecutionId"]?.GetValue<string>() == executionId) &&
+                predicate(record));
+            if (found is not null)
+                return found;
+            if (stage == "stale-commit-captured")
+            {
+                var failure = ReadEvents(journal, pattern).FirstOrDefault(record =>
+                    record["Stage"]?.GetValue<string>() == "stale-commit-failed" &&
+                    record["ExecutionId"]?.GetValue<string>() == executionId);
+                Assert.True(failure is null,
+                    $"The original checkpoint failed before capture: {failure}\n" +
+                    string.Join(Environment.NewLine, ReadEvents(journal, pattern).Select(record => record.ToJsonString())));
+            }
+            await Task.Delay(100);
+        }
+
+        var evidence = string.Join(Environment.NewLine, ReadEvents(journal, pattern).TakeLast(12).Select(record => record.ToJsonString()));
+        if (host is not null && evidence.Length > 12000)
+            evidence = evidence[..12000] + "… native hosting evidence truncated";
+        var hostOutput = host is null ? string.Empty : $"\n{host.Output}";
+        Assert.Fail($"Timed out waiting for native hosting event '{stage}' for {executionId ?? "composition"}.\n{evidence}{hostOutput}");
+        return null!;
+    }
+
+    internal static IEnumerable<JsonObject> ReadEvents(string journal, string pattern = "native-hosting.*.json") =>
+        Directory.EnumerateFiles(journal, pattern)
+            .Select(path => JsonNode.Parse(File.ReadAllText(path))!.AsObject())
+            .OrderBy(record => Value<DateTimeOffset>(record, "RecordedAt"));
+
+    internal static JsonObject Member(JsonObject record, string key, string hostId) =>
+        Assert.Single(record[key]!.AsArray().Select(node => node!.AsObject()), member => Value<string>(member, "HostId") == hostId);
+
+    internal static T Value<T>(JsonObject record, string key) => record[key]!.GetValue<T>();
+
+    internal static void AssertPinnedPackage(NativeHostingFixture fixture, WorkbenchProcess host)
+    {
+        var copiedPackage = Path.Combine(host.ContentRoot, "packages", Path.GetFileName(fixture.PackagePath));
+        Assert.Equal(fixture.PackageSha256, Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(copiedPackage))));
     }
 
     /// <summary>
@@ -287,3 +388,5 @@ internal static class NativeHostingScenario
         stream.Write(Encoding.UTF8.GetBytes(value));
     }
 }
+
+internal sealed record PublishedExecution(string ExecutionId, string ArtifactId);

@@ -7,6 +7,7 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using CShells.Lifecycle;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,6 +21,7 @@ public class BackgroundActivityWitnessFeature : IShellFeature, IPostConfigureShe
     public string? JournalDirectory { get; set; }
     public string Role { get; set; } = "standalone";
     public bool NativeHostingObservation { get; set; }
+    public bool NativeStaleWriteObservation { get; set; }
 
     public virtual void ConfigureServices(IServiceCollection services)
     {
@@ -29,6 +31,7 @@ public class BackgroundActivityWitnessFeature : IShellFeature, IPostConfigureShe
         if (string.IsNullOrWhiteSpace(Role) || Role.Any(character => !char.IsAsciiLetterOrDigit(character) && character != '-'))
             throw new InvalidOperationException("The witness role may contain only ASCII letters, digits, and hyphens.");
         services.AddScoped<IActivityReconciliationSource, BackgroundProbeCatalog>();
+        services.AddSingleton<IBackgroundTask>(new NativeHostingShutdownGate(journal, Role));
         services.AddSingleton<ActivationTokenCancellationWitness>(serviceProvider =>
             new ActivationTokenCancellationWitness(journal, Role, serviceProvider.GetRequiredService<IHostApplicationLifetime>()));
         services.AddShellInitializer<ActivationTokenCancellationInitializer>(LifecyclePhase.Start, int.MaxValue);
@@ -46,7 +49,9 @@ public class BackgroundActivityWitnessFeature : IShellFeature, IPostConfigureShe
     public virtual void PostConfigureServices(IServiceCollection services)
     {
         if (NativeHostingObservation)
-            NativeHostingWitnessRegistration.Register(services, JournalDirectory!, Role);
+            NativeHostingWitnessRegistration.Register(services, JournalDirectory!, Role, NativeStaleWriteObservation);
+        else if (NativeStaleWriteObservation)
+            throw new InvalidOperationException("Native stale-write observation requires NativeHostingObservation.");
     }
 }
 

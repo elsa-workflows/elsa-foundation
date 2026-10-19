@@ -18,6 +18,14 @@ A real receipt is correlated by work ID and worker PID. A subsequent runtime-res
 
 Fresh-read authorization belongs to the owning-layer [FailoverTests](../../Essentials/tests/Workflows/Runtime/Distributed/Tests/Placement/FailoverTests.cs): cached-only departure, a restarted or absent host, and failure to obtain a fresh read must not permit reclaim. These use the real placement pump with a modeled fleet and stores; they are not process-level membership evidence.
 
+## Stale-write and graceful-drain checkpoint
+
+The strengthened focused run passed **2/2**, zero failures/skips (`native-stale-graceful-diagnostics`): original uncancelled stale-checkpoint rejection and graceful handoff. The stale case uses the actual coalescing/EF path, the original commit identity/fingerprint/token, a real persisted live successor, the exact `StaleToken` exception and unchanged durable activity/receipt/scheduler/marker state. It also observes the original heartbeat gate and real cleanup outcome, then completes native recovery with no incidents. The measured scheduler row is unclaimed; this does not invent a durable scheduler claim.
+
+Graceful handoff observes SIGTERM, the actual released placement lease and a fresh post-release Draining/live owner snapshot. The active survivor starts new directly addressed work while the owner is held in its bounded stop, then completes that work and the already accepted workflow after clean owner exit. This proves survivor admission and completion, while owning-layer tests supply routing exclusion semantics.
+
+The targeted EF fence-removal control failed for the intended reason: the stale original committed its marker, Completed activity and Accepted receipt under a live higher successor fence. Production source was restored and its diff verified empty. The rebuilt `native-stale-graceful-final` run passed both cases again, **2/2 with zero failures/skips**. The final integrated matrix is still pending. [Research](../../specs/249-native-hosting-conformance/research.md#original-stale-write-and-graceful-drain-validation-19-october-2026) records identities, earlier invalid controls and an earlier unexplained incident assertion. Those failures are retained rather than represented as passing proof.
+
 ## Owning-layer qualification
 
 The following runs used Release, `--no-restore -p:WarningsNotAsErrors=NU1603` and the unchanged production sources at base `5e15ddb5d`. The process fixture additions do not alter those sources. Log/TRX stems are retained in the same session evidence directory.
@@ -28,21 +36,25 @@ The following runs used Release, `--no-restore -p:WarningsNotAsErrors=NU1603` an
 | `Essentials/tests/Workflows/Runtime/Distributed/Persistence/EntityFrameworkCore/Tests`, entire project | 107 / 0 / 0 | `native-distributed-ef-qualification`: real SQLite placement/transport persistence, scope separation and backend registration; in-process store tests |
 | `Essentials/tests/Cluster/Tests`, entire project | 159 / 0 / 30 | `native-membership-contract-qualification`: provider-neutral contracts, reference fleet, in-process provider and deliberately broken-provider controls; 30 multi-member cases are explicitly inapplicable to the cluster-of-one provider |
 | `Essentials/tests/Cluster/EntityFrameworkCore/Tests`, `SqliteEfClusterMembership`, `EfClusterMembershipStoreTests`, `EfClusterMembershipRegistrationTests`, `ClusterMembershipConfigurationTests`, `ClusterMembershipHostStopTests` | 88 / 0 / 1 | `native-membership-ef-qualification`: real SQLite membership with controlled member handles, conformance/incarnation scenarios, configuration/registration and host stop; FR039 fleet-entry diagnostic is skipped because the race-free join never produces that entry; FR004b checks the terminal duplicate-host refusal instead |
+| `Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests`, `BackgroundActivityWorkTests`, `BackgroundActivityWorkCheckpointAtomicityTests`, `NativeBackgroundActivityFlowchartEfTests` | 26 / 0 / 0 | `native-acceptance-ef-qualification`: real SQLite receipt acceptance, duplicates/conflicts, checkpoint atomicity and native Flowchart continuation in process; does not claim duplicate network delivery between hosts |
 
-Filters in the last row are joined with `FullyQualifiedName~...` and `|`. Skips are unavailable evidence, not passes. These results do not supply the still-pending real graceful admission/handoff case, and they do not qualify other database providers.
+Multiple filters in a row are joined with `FullyQualifiedName~...` and `|`. Skips are unavailable evidence, not passes. These results do not supply the still-pending real graceful admission/handoff case, and they do not qualify other database providers.
 
 Rollback of qualification is limited to its test fixture, tests and documentation; no production provider or persistence format changes here. Disable the opt-in observation to restore the existing fixture profile. The separately delivered task-lifetime prerequisite has its own PR and evidence; reverting it requires rechecking the preserved recovery baseline. Do not remove runtime fencing, membership authorization or receipt guards to make a scenario pass.
+
+## Fixture registration and disposal
+
+The dedicated `Essentials/tests/Workbench/Fixtures/BackgroundActivities.Tests` project passed **44/44**, zero failures/skips, in `native-fixture-registration-expanded`. These are in-process dependency-injection tests, not distributed execution evidence. They cover required scoped registrations, backend ownership and type checks, invalid observation configuration, stale-witness coalescer/EF holder selection, and exactly-once synchronous/asynchronous disposal through retained holders. No private-constructor reflection is used.
 
 ## Delivery prerequisite
 
 The activation/task lifetime repair merged in [PR #3077](https://github.com/elsa-workflows/elsa-foundation/pull/3077) as `c6271a8071b303644e5fa5a6bd177f975c521259`. Exact-head PR gates passed. On the merge commit, Studio, CodeQL and maps passed; backend CI failed in the unchanged standalone Jint cancellation test, so downstream architecture/core jobs were skipped.
 
-[PR #3082](https://github.com/elsa-workflows/elsa-foundation/pull/3082) isolates that test from its competing allocation cap and records exception details. Local Jint 84/84, architecture 578/578, maps and the delayed-cancellation adverse control passed at `c93344869`. Production sandbox limits are unchanged. Hosted and resulting-main checks remain pending. The original failed CI log did not identify its exception, so the controlled memory-limit mechanism does not establish that run's exact cause.
+[PR #3082](https://github.com/elsa-workflows/elsa-foundation/pull/3082) isolates that test from its competing allocation cap and records exception details. Local Jint 84/84, architecture 578/578, maps and the delayed-cancellation adverse control passed at `c93344869`. Production sandbox limits are unchanged. Exact-head backend, core, architecture, Studio and maps passed, and the repair merged as `e996bf02a`. Resulting-main CI 39329100787, Studio 39329100635 and CodeQL 39329100537 remain pending. The original failed CI log did not identify its exception, so the controlled memory-limit mechanism does not establish that run's exact cause.
 
 ## Remaining qualification
 
-- Original uncancelled engine checkpoint rejected by the actual EF stale-token stage, including the restored/bypassed safeguard control.
-- Focused observation registration/disposal coverage, graceful handoff and the remaining lower-tier provider/acceptance evidence matrix.
+- Final integrated recovery matrix and reconciliation of fixture, process and owning-layer evidence.
 - Integrated review, exact-head CI/Maps and resulting-main verification before closing #3056.
 
 The concurrent routing case begins at a quiescent background wait after the original native execution lease was released. It is not the pending stale-write proof. SQLite local-process results do not qualify other databases, multi-machine partitions, clock skew, Orleans or other execution models. Physical external effects remain at least once. The historical receipt and HTTP timeout causes remain unproven by these passing runs.

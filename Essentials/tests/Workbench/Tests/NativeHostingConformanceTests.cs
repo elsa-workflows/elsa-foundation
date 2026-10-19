@@ -1,13 +1,13 @@
-using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using static Elsa.Workbench.Tests.NativeHostingScenario;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Elsa.Workbench.Tests;
 
 /// <summary>Exercises native routing and continuation through two real processes and shared EF stores.</summary>
 [Collection(WorkbenchBackgroundActivityRecoveryTests.Name)]
-public sealed class NativeHostingConformanceTests
+public sealed class NativeHostingConformanceTests(ITestOutputHelper output)
 {
     [SkippableTheory]
     [InlineData("left", "right")]
@@ -150,10 +150,154 @@ public sealed class NativeHostingConformanceTests
         Assert.False(survivor.HasExited);
     }
 
-    private static void AssertPinnedPackage(NativeHostingFixture fixture, WorkbenchProcess host)
+    [SkippableFact]
+    public async Task Original_uncancelled_checkpoint_is_rejected_after_a_real_successor_acquires()
     {
-        var copiedPackage = Path.Combine(host.ContentRoot, "packages", Path.GetFileName(fixture.PackagePath));
-        Assert.Equal(fixture.PackageSha256, Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(copiedPackage))));
+        Skip.If(OperatingSystem.IsWindows(), "The fixture suspends its owned coordinator with POSIX signals.");
+        await using var fixture = NativeHostingFixture.Create(NativeHostingProfile.Clustered, observeStaleWrite: true);
+        fixture.HoldWorkerClaims("owner");
+        var hosts = await fixture.SerialStartAsync(("owner", true), ("survivor", true));
+        var owner = hosts[0];
+        var survivor = hosts[1];
+        var journal = fixture.JournalDirectory;
+        var ownerId = $"{fixture.ScenarioId}-owner";
+        var survivorId = $"{fixture.ScenarioId}-survivor";
+        Assert.NotEqual(owner.ProcessId, survivor.ProcessId);
+        AssertPinnedPackage(fixture, owner);
+        AssertPinnedPackage(fixture, survivor);
+        await LoginAsync(owner);
+        await LoginAsync(survivor);
+
+        try
+        {
+            var executionId = await PublishAndStartAsync(owner, journal);
+            await WaitForStateAsync(owner, executionId,
+                state => ActivityStatus(state, "left") == "Running" && ActivityStatus(state, "right") == "Running");
+            await WaitForAsync(survivor, () => StartedCount(journal, "left") == 1 && StartedCount(journal, "right") == 1,
+                "both held bodies before the original checkpoint proof", () => DescribeJournal(journal));
+            var leftStart = Assert.Single(StartedLines(journal, "left"));
+            var rightStart = Assert.Single(StartedLines(journal, "right"));
+            Assert.Equal(survivor.ProcessId.ToString(), leftStart.Split('|')[0]);
+            Assert.Equal(survivor.ProcessId.ToString(), rightStart.Split('|')[0]);
+            var selector = Path.Combine(journal, "stale.execution-id");
+            File.WriteAllText(selector + ".tmp", executionId);
+            File.Move(selector + ".tmp", selector);
+            File.WriteAllText(Path.Combine(journal, "left.release"), "release");
+
+            var captured = await WaitForEventAsync(owner, journal, "stale-commit-captured", executionId,
+                record => Value<int>(record, "ProcessId") == owner.ProcessId, "native-stale.*.json");
+            output.WriteLine(captured.ToJsonString());
+            var original = await WaitForEventAsync(owner, journal, "stale-commit-public", executionId,
+                record => Value<string>(record, "CommitId") == Value<string>(captured, "CommitId"), "native-stale.*.json");
+            foreach (var field in new[] { "CommitId", "CheckpointId", "WorkItemId", "Fingerprint", "CommitObjectId", "CancellationTokenHash", "ExpectedFence" })
+                Assert.True(JsonNode.DeepEquals(original[field], captured[field]), $"The original {field} changed before the EF boundary.");
+            Assert.Equal("ActivityCompleted", Value<string>(captured, "CheckpointName"));
+            Assert.Equal("BackgroundActivityResult", Value<string>(captured, "CheckpointReason"));
+            Assert.Equal("Immediate", Value<string>(captured, "DecisionMode"));
+            Assert.False(Value<bool>(captured, "CoalescedFlush"));
+            Assert.True(Value<bool>(captured, "CancellationTokenCanBeCanceled"));
+            Assert.False(Value<bool>(captured, "CancellationRequested"));
+            Assert.Empty(captured["ConsumedSchedulerWorkItemIds"]!.AsArray());
+            var oldFence = captured["ExpectedFence"]!.AsObject();
+            Assert.Equal(ownerId, Value<string>(oldFence, "OwnerId"));
+            var oldToken = Value<long>(oldFence, "FencingToken");
+            Assert.Null(captured["Marker"]);
+            Assert.Equal("ResultReady", Value<string>(captured, "BackgroundStatus"));
+            Assert.Equal("Running", Value<string>(captured, "ActivityStatus"));
+            var leftClaim = JsonNode.Parse(File.ReadAllText(Path.Combine(journal, "left.claim.json")))!.AsObject();
+            Assert.Equal(Value<string>(leftClaim, "WorkId"),
+                Assert.Single(captured["ReceiptAcceptances"]!.AsArray())!["WorkId"]!.GetValue<string>());
+            var scheduler = captured["SchedulerRow"]!.AsObject();
+            Assert.Equal(Value<string>(captured, "WorkItemId"), Value<string>(scheduler, "WorkItemId"));
+            Assert.Null(scheduler["ClaimOwnerId"]);
+            Assert.Equal(0, Value<long>(scheduler, "ClaimToken"));
+            Assert.Null(scheduler["ClaimedAtUtcTicks"]);
+            Assert.Null(scheduler["VisibleAfterUtcTicks"]);
+
+            var suspendedAt = DateTimeOffset.UtcNow;
+            await owner.SuspendAsync();
+            var successor = await WaitForEventAsync(survivor, journal, "stale-successor-acquired", executionId,
+                record => Value<int>(record, "ProcessId") == survivor.ProcessId &&
+                          Value<long>(record, "FencingToken") > oldToken, "native-stale.*.json");
+            output.WriteLine(successor.ToJsonString());
+            Assert.Equal(survivorId, Value<string>(successor, "OwnerId"));
+            Assert.Equal(survivorId, Value<string>(successor, "PersistedOwnerId"));
+            Assert.Equal(Value<string>(successor, "LeaseId"), Value<string>(successor, "PersistedLeaseId"));
+            Assert.Equal(Value<long>(successor, "FencingToken"), Value<long>(successor, "PersistedFencingToken"));
+            Assert.True(Value<bool>(successor, "PersistedLeaseUnexpired"));
+            Assert.True(Value<DateTimeOffset>(successor, "LeaseExpiresAt") > DateTimeOffset.UtcNow);
+            await owner.ResumeAsync();
+            var heartbeatBlocked = await WaitForEventAsync(owner, journal, "stale-heartbeat-blocked", executionId,
+                record => Value<int>(record, "ProcessId") == owner.ProcessId &&
+                          Value<long>(record, "FencingToken") == oldToken &&
+                          Value<string>(record, "LeaseId") == Value<string>(oldFence, "LeaseId"), "native-stale.*.json");
+            output.WriteLine(heartbeatBlocked.ToJsonString());
+            Assert.False(Value<bool>(heartbeatBlocked, "CancellationRequested"));
+            // The normal scheduler dispatch ceiling is 30 minutes. This proof must retain its original live token.
+            Assert.True(DateTimeOffset.UtcNow - suspendedAt < TimeSpan.FromMinutes(30));
+            File.WriteAllText(Path.Combine(journal, "stale.commit.release"), "release");
+
+            var delegating = await WaitForEventAsync(owner, journal, "stale-commit-delegating", executionId,
+                record => Value<string>(record, "CommitId") == Value<string>(captured, "CommitId"), "native-stale.*.json");
+            output.WriteLine(delegating.ToJsonString());
+            var attempted = await WaitForEventAsync(owner, journal, "stale-commit-attempted", executionId,
+                record => Value<string>(record, "CommitId") == Value<string>(captured, "CommitId"), "native-stale.*.json");
+            output.WriteLine(attempted.ToJsonString());
+            Assert.Equal("stale-token-rejected", Value<string>(attempted, "Outcome"));
+            Assert.Equal("Elsa.Workflows.Runtime.Core.Exceptions.RuntimeStaleFencingTokenException", Value<string>(attempted, "ExceptionType"));
+            Assert.Equal("StaleToken", Value<string>(attempted, "FencingRejectionReason"));
+            Assert.Equal(oldToken, Value<long>(attempted, "PresentedFencingToken"));
+            Assert.Equal(Value<long>(successor, "FencingToken"), Value<long>(attempted, "ExceptionCurrentFencingToken"));
+            foreach (var record in new[] { delegating, attempted })
+            {
+                Assert.False(Value<bool>(record, "CancellationRequested"));
+                Assert.Null(record["Marker"]);
+                Assert.Equal(survivorId, Value<string>(record, "CurrentOwnerId"));
+                Assert.Equal(Value<long>(successor, "FencingToken"), Value<long>(record, "PersistedFencingToken"));
+                Assert.True(Value<DateTimeOffset>(record, "CurrentLeaseExpiresAt") > Value<DateTimeOffset>(record, "RecordedAt"));
+                foreach (var field in new[] { "Fingerprint", "CommitObjectId", "CancellationTokenHash", "ExpectedFence", "BackgroundStatus", "ReceiptDigest", "BackgroundRevision", "ActivityStatus", "ActivityRevision", "ActivityContentHash", "SchedulerRow" })
+                    Assert.True(JsonNode.DeepEquals(captured[field], record[field]), $"The original checkpoint changed protected {field} at {record["Stage"]}.");
+            }
+            Assert.Equal(0, StartedCount(journal, "final"));
+            File.WriteAllText(Path.Combine(journal, "stale.heartbeat.release"), "release");
+            JsonObject[] HeartbeatOutcomes() => ReadEvents(journal, "native-stale.*.json")
+                .Where(record => record["ExecutionId"]?.GetValue<string>() == executionId &&
+                                 record["FencingToken"]?.GetValue<long>() == oldToken &&
+                                 record["Stage"]?.GetValue<string>() is "stale-heartbeat-delegated" or "stale-heartbeat-cancelled")
+                .ToArray();
+            await WaitForAsync(owner, () => HeartbeatOutcomes().Length != 0,
+                "the real old-heartbeat result or cleanup cancellation", () => DescribeJournal(journal));
+            var heartbeatOutcome = Assert.Single(HeartbeatOutcomes());
+            output.WriteLine(heartbeatOutcome.ToJsonString());
+            if (Value<string>(heartbeatOutcome, "Stage") == "stale-heartbeat-cancelled")
+            {
+                Assert.True(Value<bool>(heartbeatOutcome, "CancellationRequested"));
+                Assert.False(Value<bool>(heartbeatOutcome, "Delegated"));
+            }
+            File.Delete(selector);
+            File.WriteAllText(Path.Combine(journal, "stale.successor.release"), "release");
+            await WaitForStateAsync(survivor, executionId,
+                state => ActivityStatus(state, "left") == "Completed" && ActivityStatus(state, "right") == "Running");
+            Assert.Equal(0, StartedCount(journal, "final"));
+            File.WriteAllText(Path.Combine(journal, "right.release"), "release");
+            var completed = await WaitForStateAsync(survivor, executionId,
+                state => state["instance"]?["status"]?.GetValue<string>() == "Completed");
+            output.WriteLine(completed.ToJsonString());
+            Assert.Empty(completed["incidents"]!.AsArray());
+            Assert.Equal(survivor.ProcessId.ToString(), Assert.Single(StartedLines(journal, "final")).Split('|')[0]);
+            Assert.Equal(leftStart, Assert.Single(StartedLines(journal, "left")));
+            Assert.Equal(rightStart, Assert.Single(StartedLines(journal, "right")));
+            Assert.False(owner.HasExited);
+            Assert.False(survivor.HasExited);
+        }
+        finally
+        {
+            File.Delete(Path.Combine(journal, "stale.execution-id"));
+            foreach (var control in new[] { "stale.commit.release", "stale.heartbeat.release", "stale.successor.release" })
+                File.WriteAllText(Path.Combine(journal, control), "release");
+            if (!owner.HasExited)
+                await owner.ResumeAsync();
+        }
     }
 
     private static void AssertEffectiveClusterComposition(NativeHostingFixture fixture, JsonObject record)
@@ -178,35 +322,8 @@ public sealed class NativeHostingConformanceTests
         Assert.Equal(Path.Combine(fixture.SharedRoot, "locks"), Value<string>(record, "LocksFolderPath"));
     }
 
-    private static JsonObject Member(JsonObject record, string key, string hostId) =>
-        Assert.Single(record[key]!.AsArray().Select(node => node!.AsObject()), member => Value<string>(member, "HostId") == hostId);
-
     private static bool IsLive(JsonObject record, string key, string hostId) =>
         record[key]?.AsArray().Any(member => member?["HostId"]?.GetValue<string>() == hostId &&
             member["Status"]?.GetValue<string>() == "Active" && member["IsLive"]?.GetValue<bool>() == true &&
             member["IsDisplaced"]?.GetValue<bool>() == false) == true;
-
-    private static T Value<T>(JsonObject record, string key) => record[key]!.GetValue<T>();
-
-    private static async Task<JsonObject> WaitForEventAsync(WorkbenchProcess host, string journal, string stage,
-        string? executionId, Func<JsonObject, bool> predicate)
-    {
-        JsonObject? found = null;
-        await WaitForAsync(host, () =>
-        {
-            found = ReadEvents(journal).FirstOrDefault(record => Value<string>(record, "Stage") == stage &&
-                (executionId is null || record["ExecutionId"]?.GetValue<string>() == executionId) && predicate(record));
-            return found is not null;
-        }, $"native hosting event '{stage}' for {executionId ?? "composition"}", () =>
-        {
-            var evidence = string.Join(Environment.NewLine, ReadEvents(journal).TakeLast(12).Select(record => record.ToJsonString()));
-            return evidence.Length <= 12000 ? evidence : evidence[..12000] + "… native hosting evidence truncated";
-        });
-        return found!;
-    }
-
-    private static IEnumerable<JsonObject> ReadEvents(string journal) =>
-        Directory.EnumerateFiles(journal, "native-hosting.*.json")
-            .Select(path => JsonNode.Parse(File.ReadAllText(path))!.AsObject())
-            .OrderBy(record => Value<DateTimeOffset>(record, "RecordedAt"));
 }

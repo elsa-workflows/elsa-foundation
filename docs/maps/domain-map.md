@@ -7,9 +7,9 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 ## Summary
 
 - Source projects: 146
-- Test projects: 148
+- Test projects: 149
 - Domains: 33
-- Direct cross-domain references: 1073
+- Direct cross-domain references: 1077
 
 ## Domains
 
@@ -44,7 +44,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | Elsa.Tasks | 3 | 2 | contract<br>feature/implementation<br>helper<br>test |
 | Elsa.Testing | 0 | 1 | test |
 | Elsa.Versioning | 0 | 2 | test |
-| Elsa.Workbench | 1 | 1 | host<br>test |
+| Elsa.Workbench | 1 | 2 | host<br>test |
 | Elsa.Workflows | 31 | 24 | contract<br>feature/implementation<br>test |
 | Elsa3 | 4 | 3 | feature/implementation<br>test |
 | Other | 0 | 5 | test |
@@ -305,6 +305,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Testing](../../Essentials/tests/Testing/Elsa.Testing.csproj) | test | Elsa.Testing | (root) | test | Elsa.Primitives |
 | [Elsa.Versioning.Calculator.Tests](../../Essentials/tests/Versioning/Calculator/Tests/Elsa.Versioning.Calculator.Tests.csproj) | test | Elsa.Versioning | Calculator.Tests | test | Elsa.Versioning.Calculator |
 | [Elsa.Versioning.Publisher.Tests](../../Essentials/tests/Versioning/Publisher/Tests/Elsa.Versioning.Publisher.Tests.csproj) | test | Elsa.Versioning | Publisher.Tests | test | Elsa.Versioning.Publisher |
+| [Elsa.Workbench.Tests.BackgroundActivities.Tests](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities.Tests/Elsa.Workbench.Tests.BackgroundActivities.Tests.csproj) | test | Elsa.Workbench | - | test | BackgroundActivities<br>Elsa.Cluster.Core<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Distributed |
 | [BackgroundActivities](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj) | test | Other | - | test | Elsa.Activities.Design.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Cluster.Core<br>Elsa.Cluster.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Core<br>Elsa.Workflows.Runtime.Distributed<br>Elsa.Workflows.Runtime.Distributed.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore |
 | [Elsa.Workbench.Tests](../../Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj) | test | Elsa.Workbench | - | test | BackgroundActivities<br>Elsa.Workbench |
 | [Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests](../../Essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Workflows | Dashboard.Persistence.EntityFrameworkCore.ProviderTests | test | Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests |
@@ -1104,6 +1105,10 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Workbench](../../Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj) | Elsa.Workbench | [Elsa.Workflows.Runtime.Resumption](../../Essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj) | Elsa.Workflows |
 | [Elsa.Workbench](../../Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj) | Elsa.Workbench | [Elsa.Workflows.Runtime.Scheduling](../../Essentials/src/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj) | Elsa.Workflows |
 | [Elsa.Workbench.Tests](../../Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj) | Elsa.Workbench | [BackgroundActivities](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj) | Other |
+| [Elsa.Workbench.Tests.BackgroundActivities.Tests](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities.Tests/Elsa.Workbench.Tests.BackgroundActivities.Tests.csproj) | Elsa.Workbench | [BackgroundActivities](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj) | Other |
+| [Elsa.Workbench.Tests.BackgroundActivities.Tests](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities.Tests/Elsa.Workbench.Tests.BackgroundActivities.Tests.csproj) | Elsa.Workbench | [Elsa.Cluster.Core](../../Essentials/src/Cluster/Core/Elsa.Cluster.Core.csproj) | Elsa.Cluster |
+| [Elsa.Workbench.Tests.BackgroundActivities.Tests](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities.Tests/Elsa.Workbench.Tests.BackgroundActivities.Tests.csproj) | Elsa.Workbench | [Elsa.Workflows.Runtime.Core](../../Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj) | Elsa.Workflows |
+| [Elsa.Workbench.Tests.BackgroundActivities.Tests](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities.Tests/Elsa.Workbench.Tests.BackgroundActivities.Tests.csproj) | Elsa.Workbench | [Elsa.Workflows.Runtime.Distributed](../../Essentials/src/Workflows/Runtime/Distributed/Elsa.Workflows.Runtime.Distributed/Elsa.Workflows.Runtime.Distributed.csproj) | Elsa.Workflows |
 | [Elsa.Workflows.Dashboard](../../Essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/Elsa.Workflows.Dashboard.csproj) | Elsa.Workflows | [Elsa.Api.AspNetCore](../../Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj) | Elsa.Api |
 | [Elsa.Workflows.Dashboard](../../Essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/Elsa.Workflows.Dashboard.csproj) | Elsa.Workflows | [Elsa.Events.Core](../../Essentials/src/Events/Core/Elsa.Events.Core.csproj) | Elsa.Events |
 | [Elsa.Workflows.Dashboard](../../Essentials/src/Workflows/Dashboard/Elsa.Workflows.Dashboard/Elsa.Workflows.Dashboard.csproj) | Elsa.Workflows | [Elsa.Foundation.Identity](../../Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj) | Elsa.Foundation |

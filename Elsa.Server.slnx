@@ -611,6 +611,7 @@
     <Project Path="Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Workbench/Fixtures/">
+    <Project Path="Essentials/tests/Workbench/Fixtures/BackgroundActivities.Tests/Elsa.Workbench.Tests.BackgroundActivities.Tests.csproj" />
     <Project Path="Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Workflows/" />
