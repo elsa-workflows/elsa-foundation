@@ -203,6 +203,11 @@ internal sealed class TaskManager(ILoggerFactory loggerFactory, IServiceProvider
         {
             // Already disposed by a concurrent path.
         }
+        catch (AggregateException e) when (e.Flatten().InnerExceptions.All(exception => !exception.IsFatal()))
+        {
+            // Cancellation still reaches the other callbacks. Join startup and finish teardown even if one fails.
+            logger.LogWarning(e, "A startup cancellation callback failed while stopping tenant tasks");
+        }
 
         if (taskStateManager is not null)
         {

@@ -82,10 +82,12 @@ public sealed class TaskManagerLifetimeTests
         Assert.Equal(0, recurring.StartCount);
     }
 
-    [Fact]
-    public async Task Concurrent_stop_cancels_startup_and_unblocks_the_start_call()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Concurrent_stop_cancels_startup_and_unblocks_the_start_call(bool failCancellationCallback)
     {
-        var startup = new BlockingStartupProbe();
+        var startup = new BlockingStartupProbe(failCancellationCallback);
         var background = new BackgroundProbe();
         var recurring = new RecurringProbe();
         await using var provider = CreateProvider(background, recurring, startup);
@@ -177,13 +179,16 @@ public sealed class TaskManagerLifetimeTests
         return services.BuildServiceProvider();
     }
 
-    private sealed class BlockingStartupProbe : IStartupTask
+    private sealed class BlockingStartupProbe(bool failCancellationCallback = false) : IStartupTask
     {
         public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource CancellationObserved { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public async Task ExecuteAsync(CancellationToken cancellationToken)
         {
+            using var registration = failCancellationCallback
+                ? cancellationToken.Register(static () => throw new IOException("Startup cancellation callback failed."))
+                : default;
             Entered.TrySetResult();
             try
             {
