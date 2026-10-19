@@ -29,7 +29,9 @@ const writeLineCatalog: ActivityCatalogItem = {
     referenceKey: "text",
     name: "Text",
     typeName: "System.String",
-    displayName: "Text",
+    displayName: new URLSearchParams(window.location.search).has("long-label")
+      ? "Message to include when notifying the customer about their completed order"
+      : "Text",
     description: "Text to write.",
     order: 0,
     category: "General",
