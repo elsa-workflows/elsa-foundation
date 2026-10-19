@@ -2669,16 +2669,18 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  margin: 8px 0 0;
+  margin: 10px 0 0;
+  padding: 0 2px;
   font-size: 12px;
 }
 
 .wf-activity-compensates-link {
   padding: 0;
   border: 0;
-  color: var(--studio-accent-text, var(--studio-accent));
+  color: var(--studio-accent);
   background: none;
   font: inherit;
+  font-weight: 600;
   text-decoration: underline;
   cursor: pointer;
 }

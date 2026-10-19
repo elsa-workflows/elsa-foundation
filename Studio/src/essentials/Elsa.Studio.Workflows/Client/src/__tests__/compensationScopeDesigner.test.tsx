@@ -46,6 +46,22 @@ describe("CompensationScopeDesigner", () => {
     expect(props.onRequestActivity).toHaveBeenNthCalledWith(2, { kind: "new-step", index: 2 }, expect.anything());
   });
 
+  it("applies edits to the current steps, so a concurrent change to an activity is kept", () => {
+    const { props } = mount();
+
+    click(button("Remove compensation for Reserve inventory"));
+
+    const edit = (props.onChangeSteps as ReturnType<typeof vi.fn>).mock.calls[0][0] as (steps: CompensationStep[]) => CompensationStep[];
+    const edited = { ...leaf("reserve"), inputs: [{ referenceKey: "text", value: { expressionType: "Literal", value: "changed meanwhile" } }] } as ActivityNode;
+    const result = edit([
+      { name: "Reserve inventory", activity: edited, compensation: leaf("release") },
+      { name: "Confirm order", activity: leaf("confirm"), compensation: null }
+    ]);
+
+    expect(result[0].activity).toBe(edited);
+    expect(result[0].compensation).toBeNull();
+  });
+
   it("renames, reorders, removes compensation and deletes steps", () => {
     const { props } = mount();
 
@@ -59,7 +75,13 @@ describe("CompensationScopeDesigner", () => {
     click(button("Remove compensation for Reserve inventory"));
     click(button("Delete step Reserve inventory"));
 
-    const calls = (props.onChangeSteps as ReturnType<typeof vi.fn>).mock.calls.map(call => call[0] as CompensationStep[]);
+    // Each change is an edit of the current steps; apply it to the steps the designer rendered.
+    const rendered = [
+      { name: "Reserve inventory", activity: leaf("reserve"), compensation: leaf("release") },
+      { name: "Confirm order", activity: leaf("confirm"), compensation: null }
+    ];
+    const calls = (props.onChangeSteps as ReturnType<typeof vi.fn>).mock.calls
+      .map(call => (call[0] as (steps: CompensationStep[]) => CompensationStep[])(rendered));
     expect(calls[0].map(step => step.name)).toEqual(["Reserve inventory", "Confirm"]);
     expect(calls[1].map(step => step.name)).toEqual(["Confirm order", "Reserve inventory"]);
     expect(calls[2][0].compensation).toBeNull();

@@ -81,7 +81,8 @@ button.wf-compensation-state {
   font-size: .8125rem;
 }
 
-.wf-compensation-table {
+.wf-compensation-table,
+.wf-compensation-rows {
   display: flex;
   flex-direction: column;
   gap: .5rem;

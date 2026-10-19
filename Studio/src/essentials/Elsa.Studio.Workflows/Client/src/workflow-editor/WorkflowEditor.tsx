@@ -712,7 +712,7 @@ export function WorkflowEditor({
   // A compensation scope's designer edits the owner's steps directly, as the BPMN canvas edits its payload.
   const isCompensationScopeCanvas = scope?.slot.id === compensationStepsSlotId;
   const [compensationPick, setCompensationPick] = useState<{ target: CompensationActivityTarget; clientX: number; clientY: number } | null>(null);
-  const updateCompensationSteps = useCallback((steps: CompensationStep[], nextStatus: string, selectNodeId?: string) => {
+  const updateCompensationSteps = useCallback((edit: (steps: CompensationStep[]) => CompensationStep[], nextStatus: string, selectNodeId?: string) => {
     const ownerNodeId = scopeOwner?.nodeId;
     if (!ownerNodeId) return;
     const recipe = ({ draft: current }: { draft: WorkflowDraft | null }) => {
@@ -722,7 +722,8 @@ export function WorkflowEditor({
         ...current,
         state: {
           ...current.state,
-          rootActivity: updateActivity(rootActivity, ownerNodeId, owner => withCompensationSteps(owner, steps), catalogByVersion)
+          // The edit runs against the scope as it is in this draft, not as it was when the designer rendered.
+          rootActivity: updateActivity(rootActivity, ownerNodeId, owner => withCompensationSteps(owner, edit(readCompensationSteps(owner))), catalogByVersion)
         }
       };
     };
@@ -735,16 +736,15 @@ export function WorkflowEditor({
     setCompensationPick(null);
     if (!pick || !scopeOwner) return;
     const node = createActivityNode(activity, createNodeId(activity));
-    const steps = readCompensationSteps(scopeOwner);
     const label = getActivityDisplay(activity);
     const { target } = pick;
     if (target.kind === "new-step") {
-      updateCompensationSteps(addCompensationStep(steps, target.index, node), `Added step ${label}`, node.nodeId);
+      updateCompensationSteps(steps => addCompensationStep(steps, target.index, node), `Added step ${label}`, node.nodeId);
     } else if (target.kind === "step-activity") {
-      updateCompensationSteps(updateCompensationStep(steps, target.index, { activity: node }), `Set ${label} as the step's activity`, node.nodeId);
+      updateCompensationSteps(steps => updateCompensationStep(steps, target.index, { activity: node }), `Set ${label} as the step's activity`, node.nodeId);
     } else {
-      const stepName = steps[target.index]?.name || `step ${target.index + 1}`;
-      updateCompensationSteps(updateCompensationStep(steps, target.index, { compensation: node }), `${label} now undoes ${stepName}`, node.nodeId);
+      const stepName = readCompensationSteps(scopeOwner)[target.index]?.name || `step ${target.index + 1}`;
+      updateCompensationSteps(steps => updateCompensationStep(steps, target.index, { compensation: node }), `${label} now undoes ${stepName}`, node.nodeId);
     }
   }, [compensationPick, scopeOwner, updateCompensationSteps]);
 
@@ -1324,7 +1324,7 @@ export function WorkflowEditor({
               readOnly={!canAddActivitiesToCanvas}
               canvasRef={canvasRef}
               onSelect={select}
-              onChangeSteps={(steps, nextStatus) => updateCompensationSteps(steps, nextStatus)}
+              onChangeSteps={(edit, nextStatus) => updateCompensationSteps(edit, nextStatus)}
               onRequestActivity={(target, anchor) => setCompensationPick({ target, ...anchor })}
               onOpenSlot={(ownerId, label, slot) => enterSlotScope(ownerId, slot, slotCrumbLabel(label, slot))}
             >
