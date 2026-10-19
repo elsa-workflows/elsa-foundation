@@ -22,7 +22,6 @@ public sealed class Elsa3JavaScriptConversionTests
     [InlineData("moment().format()")]
     [InlineData("args.value")]
     [InlineData("getVariable('o').name = 'x'")]
-    [InlineData("getCorrelationId()")]
     [InlineData("getOrderId()")]
     [InlineData("Date.now")]
     [InlineData("typeof moment")]

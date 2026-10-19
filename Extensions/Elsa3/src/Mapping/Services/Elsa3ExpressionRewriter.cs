@@ -369,6 +369,13 @@ public sealed class Elsa3ExpressionRewriter
         {
             "setVariable", "setOutput", "setInput", "setResult",
         };
+        /// <summary>Elsa 3 built-ins that read instance metadata, and the parameter each one becomes.</summary>
+        private static readonly Dictionary<string, (string Member, string Parameter)> InstanceMembers = new(StringComparer.Ordinal)
+        {
+            ["getCorrelationId"] = (WorkflowInstanceExpressionParameterBinding.Members.CorrelationId, "elsa3CorrelationId"),
+            ["getWorkflowInstanceId"] = (WorkflowInstanceExpressionParameterBinding.Members.InstanceId, "elsa3WorkflowInstanceId"),
+        };
+
         private static readonly HashSet<string> PureGlobalCalls = new(StringComparer.Ordinal)
         {
             "Boolean", "Number", "String", "parseFloat", "parseInt",
@@ -580,6 +587,40 @@ public sealed class Elsa3ExpressionRewriter
                 if (callee.Name.Equals("getOutputFrom", StringComparison.Ordinal))
                 {
                     Issues.Add(DynamicIssue("JavaScript helper 'getOutputFrom' cannot prove one producer statically."));
+                    return;
+                }
+
+                // Instance metadata reads become a declared WorkflowInstance parameter (spec 247 R-4).
+                if (InstanceMembers.TryGetValue(callee.Name, out var instance))
+                {
+                    if (call.Arguments.Count != 0)
+                    {
+                        Issues.Add(new Elsa3ExpressionRewriteIssue(
+                            Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                            $"JavaScript calls '{callee.Name}' with arguments, which it does not take.",
+                            "Call it without arguments before import."));
+                        return;
+                    }
+
+                    // Elsa 3 registered built-ins and generated accessors in an order its source does not fix, so a
+                    // variable or input whose accessor has the built-in's name leaves the call ambiguous (R-3).
+                    if (resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, callee.Name["get".Length..])).Succeeded)
+                    {
+                        Issues.Add(new Elsa3ExpressionRewriteIssue(
+                            Elsa3ImportDiagnosticCodes.AmbiguousReference,
+                            $"JavaScript calls '{callee.Name}', which is both an Elsa 3 built-in and the generated accessor of a variable or input.",
+                            $"Rename the variable or input so that '{callee.Name}' only means the built-in, before import."));
+                        return;
+                    }
+
+                    var binding = new WorkflowInstanceExpressionParameterBinding(instance.Member);
+                    if (!TryAddParameter(Parameters, instance.Parameter, binding, out var collision))
+                    {
+                        Issues.Add(collision!);
+                        return;
+                    }
+
+                    Edits.Add(new SourceEdit(call.Start, call.End, $"args.{instance.Parameter}"));
                     return;
                 }
 

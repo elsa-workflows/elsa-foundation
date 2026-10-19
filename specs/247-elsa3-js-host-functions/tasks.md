@@ -120,14 +120,14 @@ converted Elsa 3 calls lower to it.
 
 ### Core
 
-- [ ] T014 [US3] Add `WorkflowInstanceExpressionParameterBinding` to `Essentials/src/Expressions/Core/Models/ExpressionDefinition.cs`:
+- [X] T014 [US3] Add `WorkflowInstanceExpressionParameterBinding` to `Essentials/src/Expressions/Core/Models/ExpressionDefinition.cs`:
   - A sealed record with `[JsonPropertyName("member")] string Member`
   - Nested static class `Members` with `CorrelationId = "correlationId"` and `InstanceId = "instanceId"`
   - The `[JsonConstructor]` constructor throws `ArgumentException` for any other value
   - Add `[JsonDerivedType(typeof(WorkflowInstanceExpressionParameterBinding), "WorkflowInstance")]`
   - XML docs as in the contract
-- [ ] T015 [US3] Add the new public API lines to `Essentials/src/Expressions/Core/PublicAPI.Unshipped.txt`
-- [ ] T016 [P] [US3] In `Essentials/tests/Expressions/Tests/ExpressionParameterBindingWireTests.cs`:
+- [X] T015 [US3] Add the new public API lines to `Essentials/src/Expressions/Core/PublicAPI.Unshipped.txt`
+- [X] T016 [P] [US3] In `Essentials/tests/Expressions/Tests/ExpressionParameterBindingWireTests.cs`:
   - Add the kind to the wire-shape theory and the round-trip tests
   - Add a test that an unknown `member` is rejected by both the constructor and deserialization
   - Add a separate pinned-bytes fixture for a definition containing the new kind
@@ -135,29 +135,30 @@ converted Elsa 3 calls lower to it.
 
 ### Runtime
 
-- [ ] T017 [US3] Add `public string? CorrelationId { get; init; }` (XML doc: committed identity value, null when the instance has none) to `Essentials/src/Workflows/Runtime/Core/Models/RuntimeInputBindingResolutionContext.cs`
-- [ ] T018 [US3] In `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/RuntimeWorkflowStateSeed.cs` `BuildSeedChanges`, write the `identity:correlationId` durable value (tagged `RuntimeMetadataKeys.IdentityName`, the same shape as `BuildIdentityChanges`) when the start carries a correlation ID
-- [ ] T019 [US3] Fill `CorrelationId` from `RuntimeIdentityStateProjection` over the committed durable values the context already loads, in both places that build the context:
+- [X] T017 [US3] Add `public string? CorrelationId { get; init; }` (XML doc: committed identity value, null when the instance has none) to `Essentials/src/Workflows/Runtime/Core/Models/RuntimeInputBindingResolutionContext.cs`
+- [X] T018 [US3] In `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/RuntimeWorkflowStateSeed.cs` `BuildSeedChanges`, write the `identity:correlationId` durable value (tagged `RuntimeMetadataKeys.IdentityName`, the same shape as `BuildIdentityChanges`) when the start carries a correlation ID
+- [X] T019 [US3] Fill `CorrelationId` from `RuntimeIdentityStateProjection` over the committed durable values the context already loads, in both places that build the context:
   - `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/RuntimeActivityInputSnapshotMaterializer.cs`
   - `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/WorkflowIntrinsicExecutor.cs`
-- [ ] T020 [US3] In `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/RuntimePortableExpressionEvaluator.cs`:
+- [X] T020 [US3] In `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Services/Values/RuntimePortableExpressionEvaluator.cs`:
   - `MaterializeParametersAsync`: `WorkflowInstanceExpressionParameterBinding` → `CorrelationId` (JSON null when absent) or `WorkflowExecutionId`
   - `DetermineDependencyPolicy`: an explicit arm returning `null` (no policy)
-- [ ] T021 [P] [US3] Runtime tests:
+- [X] T021 [P] [US3] Runtime tests:
   - `Essentials/tests/Workflows/Runtime/Tests/RuntimeWorkflowStateSeedTests.cs`: the start seed writes `identity:correlationId`, and writes nothing without one
-  - A new `Essentials/tests/Workflows/Runtime/Tests/WorkflowInstanceParameterBindingTests.cs`: both members resolve; an absent correlation ID binds JSON null; the value comes from committed state, so re-materializing a snapshot gives the same value
-- [ ] T022 [P] [US3] End-to-end test in `Essentials/tests/Activities/Runtime/Tests/WorkflowInstanceParameterRunTests.cs`, modelled on `SetVariableDurabilityExecutionTests.cs`:
+  - A new `Essentials/tests/Workflows/Runtime/Tests/WorkflowInstanceParameterBindingTests.cs`: both members resolve; an absent correlation ID binds JSON null; the value comes from committed state, so re-materializing a snapshot gives the same value. (Done in the existing `CanonicalRuntimeInputBindingResolverTests.cs`, whose materializer helpers are private, instead of a new file; the seed tests also cover a later Correlate replacing the seeded value)
+- [X] T022 [P] [US3] End-to-end test in `Essentials/tests/Activities/Runtime/Tests/WorkflowInstanceParameterRunTests.cs`, modelled on `SetVariableDurabilityExecutionTests.cs`:
   - A WriteLine whose text reads the binding writes `c-1`
   - After a `SetCorrelationId` intrinsic to `c-2`, a later WriteLine writes `c-2`
   - With no correlation ID, it writes null (US3 scenarios 1–3)
+  - (The test harness `Essentials/tests/Activities/Testing/WorkflowExecutionHarness.cs` gained an optional `correlationId` on `RunAsync`, so a test run can start correlated)
 
 ### Converter
 
-- [ ] T023 [US3] In `Elsa3ExpressionRewriter.JavaScriptAnalyzer.VisitNode`, an undeclared zero-argument `getCorrelationId()` or `getWorkflowInstanceId()`:
+- [X] T023 [US3] In `Elsa3ExpressionRewriter.JavaScriptAnalyzer.VisitNode`, an undeclared zero-argument `getCorrelationId()` or `getWorkflowInstanceId()`:
   - First checks for a generated accessor with the same name, by resolving `GeneratedAccessor` (`CorrelationId` / `WorkflowInstanceId`). If it resolves → VF-IMP-002 ("variable or input shadows built-in"; guidance: rename)
   - Otherwise replaces the call with `args.elsa3CorrelationId` / `args.elsa3WorkflowInstanceId`, bound to the new binding
   - Refuses with VF-IMP-002 if the script declares those names
-- [ ] T024 [P] [US3] Tests in `Extensions/Elsa3/tests/Mapping/Tests/Elsa3JavaScriptHostFunctionTests.cs` (new):
+- [X] T024 [P] [US3] Tests in `Extensions/Elsa3/tests/Mapping/Tests/Elsa3JavaScriptHostFunctionTests.cs` (new):
   - Both calls lower to the right binding
   - A variable `CorrelationId` → VF-IMP-002
   - Evaluate with T002, passing a parameter value `c-1`
@@ -165,12 +166,12 @@ converted Elsa 3 calls lower to it.
 
 ### Decision record and docs
 
-- [ ] T025 [US3] Add "**Amendment (issue #2717): workflow-instance metadata parameter binding.**" to `docs/adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md`, after the #1004 amendment. It covers: the new kind; the declared, pinned, committed-state rules; the start seed; and the §E2.6.1 compatibility note
-- [ ] T026 [P] [US3] Amend `specs/095-value-flow-redesign/contracts/expression-and-import-contract.md`: change "exactly one of" the four kinds to five, and link the ADR amendment
-- [ ] T027 [P] [US3] Docs:
+- [X] T025 [US3] Add "**Amendment (issue #2717): workflow-instance metadata parameter binding.**" to `docs/adr/0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md`, after the #1004 amendment. It covers: the new kind; the declared, pinned, committed-state rules; the start seed; and the §E2.6.1 compatibility note
+- [X] T026 [P] [US3] Amend `specs/095-value-flow-redesign/contracts/expression-and-import-contract.md`: change "exactly one of" the four kinds to five, and link the ADR amendment
+- [X] T027 [P] [US3] Docs:
   - `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md`: add "workflow-instance metadata" to the `IRuntimeInputBindingResolver` sources
   - `Essentials/src/Expressions/Elsa.Expressions/EXTENSION_POINTS.md`: note that instance metadata reaches a handler only as a declared parameter
-  - The "Activity input binding" value sources in `docs/glossary/elsa.md`
+  - The "Activity input binding" value sources in `docs/glossary/elsa.md` (unchanged on inspection: that entry lists activity input sources, and the new kind is an expression parameter, not an input source)
 
 **Checkpoint**: Expressions, Workflows Runtime, Activities Runtime and Mapping tests are green.
 
