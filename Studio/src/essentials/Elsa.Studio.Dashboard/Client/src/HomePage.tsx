@@ -60,6 +60,13 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
   const [refreshIntervalMs, setRefreshIntervalMs] = useState(api.runtime.dashboard?.defaultRefreshIntervalMs ?? 300_000);
   const [active, setActive] = useState(!globalThis.document.hidden);
   const [getStartedSnapshot, setGetStartedSnapshot] = useState<GetStartedSnapshot | null>(null);
+  const widgetSettings = useMemo(() => {
+    const contributions = new Map(available.map(widget => [widget.id, widget]));
+    return new Map((document?.value.widgets ?? []).flatMap(entry => {
+      const widget = contributions.get(entry.id);
+      return widget ? [[entry.id, resolveWidgetSettings(widget.settings?.defaults, entry.options)] as const] : [];
+    }));
+  }, [available, document]);
 
   useEffect(() => {
     let live = true;
@@ -206,7 +213,7 @@ export function HomePage({ api }: { api: ElsaStudioModuleApi }) {
               api={api}
               widget={widget}
               size={entry.size}
-              settings={entry.options ?? widget.settings?.defaults}
+              settings={widgetSettings.get(entry.id)}
               refreshIntervalMs={refreshIntervalMs}
               globalRefreshVersion={refreshVersion}
               active={active}
@@ -298,6 +305,15 @@ function AddWidgetGroup({
       </ul>
     </section>
   );
+}
+
+function resolveWidgetSettings(defaults: unknown, options?: Record<string, unknown>): unknown {
+  if (!isSettingsRecord(defaults)) return options ?? defaults;
+  return { ...defaults, ...(options ?? {}) };
+}
+
+function isSettingsRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 export { HomePage as DashboardPage };
