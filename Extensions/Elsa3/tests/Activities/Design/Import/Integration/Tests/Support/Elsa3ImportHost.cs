@@ -45,6 +45,7 @@ using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Scheduling;
+using Elsa3.Activities.Design.Import.Models;
 using Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore;
 using Elsa3.Activities.Design.Import.Publishing;
 using Elsa3.Mapping;
@@ -70,6 +71,35 @@ public sealed record ApplyResponse(HttpStatusCode StatusCode, JsonNode Body)
     /// <summary>The problem's diagnostic codes, for a refused apply.</summary>
     public IReadOnlyList<string> DiagnosticCodes =>
         Body["diagnostics"]?.AsArray().Select(diagnostic => (string?)diagnostic?["code"]).OfType<string>().ToArray() ?? [];
+}
+
+/// <summary>One upload, its analysis and the apply of a selection from it; replaying it needs all of them.</summary>
+public sealed record ImportAttempt(string Handle, string PlanId, IReadOnlyList<string> Selection, IReadOnlyList<JsonNode> Items, ApplyResponse Apply)
+{
+    /// <summary>The analyzed item of the source version <paramref name="sourceVersionId"/>.</summary>
+    public JsonNode Item(string sourceVersionId) =>
+        Items.Single(item => Elsa3ImportHost.Required(item, "sourceVersionId") == sourceVersionId);
+
+    /// <summary>The plan's activity version id for the reusable source version <paramref name="sourceVersionId"/>.</summary>
+    public string VersionId(string sourceVersionId) => Elsa3ImportHost.Required(Item(sourceVersionId), "activityDefinitionVersionId");
+}
+
+/// <summary>One entry of a receipt's <c>publications</c>, as the import API returns it.</summary>
+public sealed record PublicationEntry(string VersionId, string SourceVersionId, ReusableActivityPublicationStatus Status, string? ErrorCode, string? BlockedBy, JsonNode Json)
+{
+    /// <summary>The receipt's publication states in its order; none when it carries none.</summary>
+    public static IReadOnlyList<PublicationEntry> Of(JsonNode receipt) =>
+        receipt["publications"]?.AsArray().Select(state => new PublicationEntry(
+            Elsa3ImportHost.Required(state, "activityDefinitionVersionId"),
+            Elsa3ImportHost.Required(state, "sourceVersionId"),
+            (ReusableActivityPublicationStatus)(int)state!["status"]!,
+            (string?)state["errorCode"],
+            (string?)state["blockedBy"],
+            state)).ToArray() ?? [];
+
+    /// <summary>Each source version's status, by source version id.</summary>
+    public static IReadOnlyDictionary<string, ReusableActivityPublicationStatus> StatusBySource(JsonNode receipt) =>
+        Of(receipt).ToDictionary(entry => entry.SourceVersionId, entry => entry.Status, StringComparer.Ordinal);
 }
 
 /// <summary>A run's committed state, read through the runtime stores.</summary>
@@ -129,6 +159,9 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     public WarningLog Warnings { get; }
     public HttpClient Client { get; }
 
+    /// <summary>The version ids the host's publish seam refuses (<see cref="Elsa3ImportPublishSeamFeature"/>).</summary>
+    public PublishRefusals Refusals => Shell.ServiceProvider.GetRequiredService<PublishRefusals>();
+
     /// <summary>The permissions every request carries; every permission unless a test narrows it.</summary>
     public IReadOnlyList<string> Permissions { get; set; } = [PermissionKey.Wildcard];
 
@@ -138,15 +171,16 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     /// <summary>
     /// Starts a host, activates its shell, waits for its startup tasks (catalog reconciliation among them) and checks the
     /// catalog holds the built-in activities an imported body converts to. Without <paramref name="withPublishing"/> the
-    /// shell does not compose <c>Elsa3ImportActivitiesPublishing</c>.
+    /// shell does not compose <c>Elsa3ImportActivitiesPublishing</c>; with <paramref name="withPublishSeam"/> it composes
+    /// the test's publish seam around it (<see cref="Refusals"/>).
     /// </summary>
-    public static async Task<Elsa3ImportHost> StartAsync(bool withPublishing = true)
+    public static async Task<Elsa3ImportHost> StartAsync(bool withPublishing = true, bool withPublishSeam = false)
     {
         var root = Directory.CreateTempSubdirectory("elsa3-import-");
         var warnings = new WarningLog();
         try
         {
-            var configuration = new ConfigurationBuilder().AddInMemoryCollection(ShellSettings(root.FullName, withPublishing)).Build();
+            var configuration = new ConfigurationBuilder().AddInMemoryCollection(ShellSettings(root.FullName, withPublishing, withPublishSeam)).Build();
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
             builder.WebHost.UseTestServer();
             builder.Logging.ClearProviders();
@@ -154,6 +188,8 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
             builder.Configuration.AddConfiguration(configuration);
             builder.Services.AddSingleton<IConfiguration>(configuration);
             builder.Services.AddSingleton<IDistributedLockProvider, ProcessLockProvider>();
+            // An instance, not a type: a shell copies the host's registrations, and the tests read the one its seam uses.
+            builder.Services.AddSingleton(new PublishRefusals());
             builder.Services.AddFoundationIdentityAbstractions(options =>
                 options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal) { AuthenticationScheme });
             builder.Services.AddAuthentication(AuthenticationScheme).AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(AuthenticationScheme, _ => { });
@@ -194,7 +230,8 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
                     typeof(Elsa3MappingFeature).Assembly,
                     typeof(Elsa3ImportActivitiesFeature).Assembly,
                     typeof(Elsa3ImportActivitiesEntityFrameworkCoreFeature).Assembly,
-                    typeof(Elsa3ImportActivitiesPublishingFeature).Assembly)
+                    typeof(Elsa3ImportActivitiesPublishingFeature).Assembly,
+                    typeof(Elsa3ImportPublishSeamFeature).Assembly)
                 .WithConfigurationProvider(configuration));
 
             var app = builder.Build();
@@ -223,7 +260,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         }
     }
 
-    private static Dictionary<string, string?> ShellSettings(string root, bool withPublishing)
+    private static Dictionary<string, string?> ShellSettings(string root, bool withPublishing, bool withPublishSeam)
     {
         var features = $"CShells:Shells:{ShellName}:Features:";
         var design = Sqlite(Path.Join(root, "design.db"));
@@ -238,7 +275,9 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
             [$"{features}WorkflowsRuntimeEntityFrameworkCore:RecoveryContinuationSigningKey"] = GeneratedKey(),
             [$"{features}WorkflowsRuntimeEntityFrameworkCore:HierarchyCursorSigningKey"] = GeneratedKey()
         };
-        foreach (var feature in Features.Concat(withPublishing ? ["Elsa3ImportActivitiesPublishing"] : []))
+        foreach (var feature in Features
+                     .Concat(withPublishing ? ["Elsa3ImportActivitiesPublishing"] : [])
+                     .Concat(withPublishSeam ? [Elsa3ImportPublishSeamFeature.Name] : []))
             settings.TryAdd($"{features}{feature}", null);
         return settings;
     }
@@ -306,7 +345,12 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     {
         var definitions = new JsonArray();
         foreach (var name in fixtureNames)
-            definitions.Add(JsonNode.Parse(File.ReadAllText(Path.Join(AppContext.BaseDirectory, "Fixtures", $"{name}.json"))));
+        {
+            // A fixture holds one definition, or an array of the versions that belong together.
+            var fixture = JsonNode.Parse(File.ReadAllText(Path.Join(AppContext.BaseDirectory, "Fixtures", $"{name}.json")));
+            foreach (var definition in fixture is JsonArray versions ? versions.Select(version => version!.DeepClone()).ToArray() : [fixture!])
+                definitions.Add(definition);
+        }
         return definitions.ToJsonString();
     }
 
@@ -344,7 +388,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
             ["idempotencyKey"] = idempotencyKey
         });
         var content = await response.Content.ReadAsStringAsync();
-        return new(response.StatusCode, JsonNode.Parse(content) ?? new JsonObject());
+        return new(response.StatusCode, Body(content));
     }
 
     /// <summary>Uploads, analyzes, selects and applies every source version of the named fixtures.</summary>
@@ -357,11 +401,33 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         return (await ApplyAsync(handle, planId, idempotencyKey, all), items);
     }
 
+    /// <summary>
+    /// Uploads the named fixtures, analyzes them and applies <paramref name="sourceVersionIds"/> (every analyzed source
+    /// version when none are named) under <paramref name="idempotencyKey"/>; <paramref name="beforeApply"/> runs between
+    /// the analysis and the apply.
+    /// </summary>
+    public async Task<ImportAttempt> ImportSelectionAsync(
+        string idempotencyKey,
+        string[] fixtureNames,
+        string[]? sourceVersionIds = null,
+        Action<IReadOnlyList<JsonNode>>? beforeApply = null)
+    {
+        var handle = await UploadCollectionAsync(fixtureNames);
+        var (planId, items) = await AnalyzeAsync(handle);
+        var selection = sourceVersionIds ?? items.Select(item => Required(item, "sourceVersionId")).ToArray();
+        beforeApply?.Invoke(items);
+        return new(handle, planId, selection, items, await ApplyAsync(handle, planId, idempotencyKey, selection.ToArray()));
+    }
+
+    /// <summary>Applies <paramref name="attempt"/>'s selection again under <paramref name="idempotencyKey"/>.</summary>
+    public Task<ApplyResponse> ReplayAsync(ImportAttempt attempt, string idempotencyKey) =>
+        ApplyAsync(attempt.Handle, attempt.PlanId, idempotencyKey, attempt.Selection.ToArray());
+
     /// <summary>The import status under <paramref name="idempotencyKey"/>; its answer whatever its status.</summary>
     public async Task<(HttpStatusCode StatusCode, JsonNode Body)> GetImportStatusAsync(string idempotencyKey)
     {
         using var response = await Send(HttpMethod.Get, $"{ImportRoute}/imports/{Uri.EscapeDataString(idempotencyKey)}");
-        return (response.StatusCode, JsonNode.Parse(await response.Content.ReadAsStringAsync()) ?? new JsonObject());
+        return (response.StatusCode, Body(await response.Content.ReadAsStringAsync()));
     }
 
     // ---- Publishing and runs -------------------------------------------------------------------------------------
@@ -461,6 +527,10 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         Assert.True(response.IsSuccessStatusCode, $"{what} returned {(int)response.StatusCode}: {content}");
         return JsonNode.Parse(content)!;
     }
+
+    /// <summary>A response body as JSON; an empty object for an empty body, as a 403 has.</summary>
+    private static JsonNode Body(string content) =>
+        string.IsNullOrWhiteSpace(content) ? new JsonObject() : JsonNode.Parse(content) ?? new JsonObject();
 
     public static string Required(JsonNode? node, params string[] path)
     {

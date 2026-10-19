@@ -8,7 +8,8 @@ using NativeEndpoints;
 namespace Elsa3.Activities.Design.Import.Endpoints.Collections.Apply;
 
 [Post("migration/elsa3/reusable-activities/collections/{collectionHandle}/apply")]
-[RequirePermission(Elsa3ImportPermissions.Manage)]
+// Applying publishes the imported reusable activities, so it is never a way around the publish permission (spec 246 D-4).
+[RequireAllPermissions(Elsa3ImportPermissions.Manage, Elsa3ImportPermissions.PublishingManage)]
 public sealed class Endpoint(IReusableActivityImportOperationService service) : ApiEndpointWithResult<ReusableActivityImportApplyHttpRequest, ReusableActivityImportReceipt>
 {
     public override void Configure(ApiEndpointOptions options)

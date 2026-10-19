@@ -121,7 +121,11 @@ public static class ReusableActivityImportCommitRules
             scope,
             ReusableActivityImportReceiptStatus.Applied,
             completedAt,
-            sources);
+            sources)
+        {
+            // Stored with the receipt, so a replay and a status read return them (spec 246 D-3).
+            Warnings = mutation.Warnings is { Count: > 0 } warnings ? warnings : null
+        };
 
         ReusableActivityImportResourceDisposition Disposition(string kind, string id) =>
             wasCreated(kind, id)

@@ -44,13 +44,22 @@ internal sealed class PublisherReusableActivityImportPublisher(
                 cancellationToken);
             return receipt.Status == ActivityPublicationReceiptStatus.Applied
                 ? ReusableActivityImportPublishOutcome.Applied
-                : ReusableActivityImportPublishOutcome.Refused(receipt.ErrorCode ?? ActivityErrorCodes.PublicationInvalid, receipt.Diagnostics);
+                : ReusableActivityImportPublishOutcome.Refused(Specific(receipt.ErrorCode, receipt.Diagnostics), receipt.Diagnostics);
         }
         catch (ActivityPublicationRejectedException rejection)
         {
-            return ReusableActivityImportPublishOutcome.Refused(rejection.ErrorCode, rejection.Diagnostics);
+            return ReusableActivityImportPublishOutcome.Refused(Specific(rejection.ErrorCode, rejection.Diagnostics), rejection.Diagnostics);
         }
     }
+
+    /// <summary>
+    /// The publisher's code, or, when that is only the generic "publication invalid", the first error diagnostic's code
+    /// that says why (such as <c>activity.version.bump-insufficient</c>), as a refused preflight reports it.
+    /// </summary>
+    private static string Specific(string? errorCode, IReadOnlyList<ActivityDiagnostic> diagnostics) =>
+        errorCode is null || StringComparer.Ordinal.Equals(errorCode, ActivityErrorCodes.PublicationInvalid)
+            ? FirstErrorCode(diagnostics)
+            : errorCode;
 
     private static string FirstErrorCode(IReadOnlyList<ActivityDiagnostic> diagnostics) =>
         diagnostics.FirstOrDefault(diagnostic => diagnostic.Severity == ActivityDiagnosticSeverity.Error)?.Code

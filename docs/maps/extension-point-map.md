@@ -6,10 +6,10 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 
 ## Summary
 
-- Catalog files discovered: 71
-- Source catalogs discovered: 70
+- Catalog files discovered: 72
+- Source catalogs discovered: 71
 - Source catalogs indexed from root: 70
-- Discovered source catalogs not linked from root index: 0
+- Discovered source catalogs not linked from root index: 1
 - Root-indexed catalogs missing on disk: 0
 
 ## Catalogs
@@ -85,11 +85,12 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 | [Essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md](../../Essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md) | Elsa.Workflows.Runtime.Resumption | Elsa.Workflows | Shell feature<br>Contributor implementations<br>Options | `WorkflowsRuntimeResumptionFeature : IShellFeature` *(`Elsa.Workflows.Runtime.Resumption`)*<br>`RuntimeResumptionPumpTask : IRecurringTask` *(`Elsa.Workflows.Runtime.Resumption`)*<br>`RuntimeResumptionOptions` *(`Elsa.Workflows.Runtime.Resumption`)* | Contributor (recurring task; scheduled by the Tasks domain `TaskManager`). | 0 | yes |
 | [Extensions/Agent/src/Core/EXTENSION_POINTS.md](../../Extensions/Agent/src/Core/EXTENSION_POINTS.md) | Elsa.Agent.Core | Elsa.Agent | Overridable contracts<br>Implementable contributor interfaces<br>Provider bridge contracts | `IAgentSessionService`<br>`IAgentPolicyEvaluator`<br>`IAgentContextCollector`<br>`IAgentContextSanitizer`<br>`IAgentProposalService`<br>`IAgentActionProposalExecutor`<br>`IAgentStreamingService`<br>`IAgentToolInvoker`<br>`IAgentTurnRegistry`<br>`IAgentTurnStateStore`<br>`IAgentFeedbackService`<br>`IAgentAuditSink`<br>`IAgentAuditReader`<br>`IAgentProviderRegistry`<br>`IAgentContextProvider`<br>`IAgentCapabilityProvider`<br>`IAgentTool`<br>`IAgentProvider`<br>`IAgentHarness` | - | 0 | yes |
 | [Extensions/Agent/src/Workflows/EXTENSION_POINTS.md](../../Extensions/Agent/src/Workflows/EXTENSION_POINTS.md) | Elsa.Agent.Workflows | Elsa.Agent | Contributions to other domains<br>Overridable contracts | `IAgentCapabilityProvider` *(Agent core contract — `Elsa.Agent.Core`)*<br>`IAgentContextProvider` *(Agent core contract — `Elsa.Agent.Core`)*<br>`IWorkflowAgentContextProvider`<br>`IWorkflowRevisionProvider`<br>`IWorkflowChangePermissionEvaluator`<br>`IWorkflowChangeProposalService` | - | 0 | yes |
-| [Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/EXTENSION_POINTS.md](../../Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/EXTENSION_POINTS.md) | Elsa3.Activities.Design.Import | Elsa3 | Implementable contributor interfaces<br>Authorized HTTP contract | `IReusableActivityImportMaterializer`<br>`IReusableActivityImportCommand`<br>`IReusableActivityImportOperationStore`<br>`IReusableActivityCollectionAnalyzer`<br>`IActivityCollectionJsonSource` *(Feature contract — `Elsa3.Activities.Design.Import`)* | Design mapping strategy.<br>atomic persistence command.<br>scoped durable operation store.<br>replaceable pure analysis strategy.<br>Source (opens a stream of activity JSON — pull pattern). | 1 | yes |
+| [Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/EXTENSION_POINTS.md](../../Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/EXTENSION_POINTS.md) | Elsa3.Activities.Design.Import | Elsa3 | Implementable contributor interfaces<br>Authorized HTTP contract | `IReusableActivityImportMaterializer`<br>`IReusableActivityImportCommand`<br>`IReusableActivityImportOperationStore`<br>`IReusableActivityImportPublisher`<br>`IReusableActivityCollectionAnalyzer`<br>`IActivityCollectionJsonSource` *(Feature contract — `Elsa3.Activities.Design.Import`)* | Design mapping strategy.<br>atomic persistence command.<br>scoped durable operation store.<br>replacement contract (exactly one per shell), **no default** (spec 246 R-1).<br>replaceable pure analysis strategy.<br>Source (opens a stream of activity JSON — pull pattern). | 1 | yes |
+| [Extensions/Elsa3/src/Activities/Design/Import/Publishing/EXTENSION_POINTS.md](../../Extensions/Elsa3/src/Activities/Design/Import/Publishing/EXTENSION_POINTS.md) | Elsa3.Activities.Design.Import.Publishing | Elsa3 | Implemented replacement contracts<br>Registered services<br>Feature | `IReusableActivityImportPublisher` *(owned by `Elsa3.Activities.Design.Import`)* | - | 0 | no |
 | [Extensions/Elsa3/src/Mapping/EXTENSION_POINTS.md](../../Extensions/Elsa3/src/Mapping/EXTENSION_POINTS.md) | Elsa3.Mapping | Elsa3 | Replacement/import boundary contracts | `IElsa3WorkflowDefinitionImporter` *(Feature contract — `Elsa3.Mapping`)*<br>Replacing a mapping contract<br>`IElsa3DefinitionConverter` *(Replacement contract — `Elsa3.Mapping`)*<br>`IElsa3NodeConverter` *(Replacement contract — `Elsa3.Mapping`)*<br>`IElsa3ActivityMap` *(Replacement contract — `Elsa3.Mapping`)*<br>`IReusableActivityImportMaterializer` contribution | Replacement/import boundary contract. | 0 | yes |
 
 ## Root Index Coverage
 
 | Status | Catalog |
 |---|---|
-| ok | Root index and discovered source catalogs match. |
+| discovered but not root-indexed | [Extensions/Elsa3/src/Activities/Design/Import/Publishing/EXTENSION_POINTS.md](../../Extensions/Elsa3/src/Activities/Design/Import/Publishing/EXTENSION_POINTS.md) |
