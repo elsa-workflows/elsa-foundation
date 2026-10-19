@@ -281,7 +281,7 @@ export function ActivityGraphImplementationEditor({
     complete(result: StudioActivityDiagnosticFocusResult): void;
   } | null>(null);
   const expressionState = useActivityGraphExpressionDescriptors(context);
-  const sidePanelLayout = useSidePanelLayout(activityGraphSidePanelStorageKeys);
+  const sidePanelLayout = useSidePanelLayout(activityGraphSidePanelStorageKeys, { palettePresent: true });
 
   const buildModel = useCallback((documentRoot: ActivityNode, layout: ReturnType<typeof activityGraphLayoutToDesign>) => {
     const documentScope = resolveScope(documentRoot, scopePath, catalogByVersion)
