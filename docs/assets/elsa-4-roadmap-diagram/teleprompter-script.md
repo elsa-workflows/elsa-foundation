@@ -1,6 +1,6 @@
 # Elsa 4 talk: teleprompter script
 
-Read top to bottom. Lines in [brackets] are cues for the slide, not words to say. About 565 spoken words, roughly 4 to 5 minutes at a relaxed pace.
+Read top to bottom. Lines in [brackets] are cues for the slide, not words to say. About 538 spoken words, roughly 4 to 5 minutes at a relaxed pace.
 
 ## Where we're heading
 
@@ -39,8 +39,6 @@ Next, the execution models. There are three in this picture: BPMN, native workfl
 *[Native workflows, the middle card]*
 
 Native workflows are built from compositions: Sequence, Flowchart, and agent collaboration, with a state machine possible later. Each composition owns its own rules for ordering, routing and joining.
-
-Agent collaboration starts as a composition inside native workflows. I don't think it's a fourth engine, and I'd want real evidence before we draw it as one.
 
 *[BPMN, the left card. Follow the amber arrow.]*
 
