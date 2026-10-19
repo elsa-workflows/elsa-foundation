@@ -4508,13 +4508,21 @@ describe("workflows module", () => {
   it("rebases definitions once when deleting the selected folder chooses its survivor", async () => {
     const folder = workflowFolder("folder-delete", "Delete me");
     let globalDefinitionRequests = 0;
+    let rootFolderRequests = 0;
+    let resolveDeletedRootRefresh: ((value: Response) => void) | undefined;
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url.endsWith("/folders/folder-delete") && init?.method === "DELETE") {
         return new Response(null, { status: 204 });
       }
       if (url.includes("/folders/folder-delete")) return response({ folder, ancestors: [] });
-      if (url.includes("/folders?pageSize=100")) return response({ items: [folder], nextContinuationToken: null });
+      if (url.includes("/folders?pageSize=100")) {
+        rootFolderRequests += 1;
+        if (rootFolderRequests === 2) {
+          return new Promise<Response>(resolve => { resolveDeletedRootRefresh = resolve; });
+        }
+        return response({ items: [folder], nextContinuationToken: null });
+      }
       if (url.includes("definition-pages")) {
         if (!url.includes("folderId=")) globalDefinitionRequests += 1;
         return response({
@@ -4536,6 +4544,14 @@ describe("workflows module", () => {
     await click(container.querySelector<HTMLElement>("[data-folder-id='folder-delete']"));
     await waitForText(container, "Folder workflow");
     await click(buttonByText(container, "Delete"));
+    try {
+      await vi.waitFor(() => expect(rootFolderRequests).toBe(2));
+      // Hold the folder refresh open so the selection-change request is observable before the
+      // mutation callback runs. This makes a duplicate rebase deterministic instead of timing-based.
+      await vi.waitFor(() => expect(globalDefinitionRequests).toBe(2));
+    } finally {
+      resolveDeletedRootRefresh?.(response({ items: [], nextContinuationToken: null }));
+    }
     await waitForText(container, "Deleted folder Delete me");
     await waitForText(container, "All workflow");
 
