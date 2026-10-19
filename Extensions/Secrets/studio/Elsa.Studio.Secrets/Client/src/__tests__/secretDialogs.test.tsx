@@ -171,7 +171,7 @@ describe("secret dialog keyboard focus", () => {
     await waitFor(() => expect(dialog.querySelector("[role='alert']")).not.toBeNull());
     const alert = dialog.querySelector<HTMLElement>("[role='alert']")!;
     await waitFor(() => expect(document.activeElement).toBe(alert));
-    expect(alert.tabIndex).toBe(-1);
+    expect(alert.tabIndex).toBe(0);
     expect(alert.textContent).toBe("Fixture secret creation failed.");
     expect(technicalName.value).toBe("preserved.secret");
     expect(value.value).toBe("preserved-secret-value");

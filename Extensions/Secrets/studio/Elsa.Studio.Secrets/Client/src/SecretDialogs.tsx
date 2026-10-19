@@ -93,7 +93,7 @@ export function CreateSecretDialog({
             <h3>Create secret</h3>
           </header>
           <div className="secrets-create-content">
-            {error ? <p ref={errorRef} className="secrets-alert" role="alert" tabIndex={-1}>{error}</p> : null}
+            {error ? <p ref={errorRef} className="secrets-alert" role="alert" tabIndex={0}>{error}</p> : null}
             <Field label="Technical name" value={name} onChange={setName} onBlur={() => setName(normalizedName)} autoComplete="off" />
             <p className={nameInvalid ? "secrets-field-error" : "secrets-field-hint"}>Trimmed and lowercased. Use letters, numbers, dot, dash, underscore, or colon.</p>
             <Field label="Display name" value={displayName} onChange={setDisplayName} />

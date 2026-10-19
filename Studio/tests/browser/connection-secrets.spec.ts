@@ -50,7 +50,11 @@ for (const viewport of [
     const alert = dialog.getByRole("alert");
     await expect(alert).toContainText("Fixture connection create failed.");
     await expect(alert).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect.poll(() => dialog.evaluate(element => element.contains(document.activeElement))).toBe(true);
+    await page.keyboard.press("Tab");
     const name = dialog.getByLabel("Name", { exact: true });
+    await expect(name).toBeFocused();
     await name.scrollIntoViewIfNeeded();
     await expect(name).toBeInViewport();
     await expect(name).toHaveValue("preserved.connection");

@@ -64,7 +64,13 @@ for (const viewport of [
     const alert = dialog.getByRole("alert");
     await expect(alert).toContainText("Fixture secret creation failed.");
     await expect(alert).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(create).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(alert).toBeFocused();
+    await page.keyboard.press("Tab");
     const technicalName = dialog.getByLabel("Technical name", { exact: true });
+    await expect(technicalName).toBeFocused();
     await technicalName.scrollIntoViewIfNeeded();
     await expect(technicalName).toBeInViewport();
     await expect(technicalName).toHaveValue("preserved.secret");
