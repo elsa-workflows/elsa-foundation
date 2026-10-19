@@ -1,6 +1,12 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution } from "@elsa-workflows/studio-sdk";
+import type {
+  StudioActivityDefinitionImplementationEditorProps,
+  StudioAiContributionApi,
+  StudioEndpointContext,
+  StudioExpressionEditorContribution
+} from "@elsa-workflows/studio-sdk";
+import { ActivityGraphImplementationEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityGraphImplementationEditor";
 import { WorkflowEditor } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditor";
 import {
   flowchartActivity,
@@ -47,7 +53,7 @@ const notifyBuyer: ActivityNode = {
 function editorDraft(): WorkflowDraft {
   const sequence = new URLSearchParams(window.location.search).get("composition") === "sequence";
   const root = sequence
-    ? sequenceNode("sequence-root", [notifyBuyer, forEachNode("loop", sequenceNode("body", [leafNode("nested")])), leafNode("write-two")])
+    ? sequenceRootActivity()
     : flowchartNode("flow-root", [notifyBuyer, leafNode("write-two")]);
   if (!sequence) root.structure!.payload.connections = [{
     id: "flow-write-one-write-two",
@@ -67,6 +73,26 @@ function editorDraft(): WorkflowDraft {
   };
 }
 
+function sequenceRootActivity(): ActivityNode {
+  return sequenceNode("sequence-root", [
+    notifyBuyer,
+    forEachNode("loop", sequenceNode("body", [leafNode("nested")])),
+    leafNode("write-two")
+  ]);
+}
+
+function activityGraphSequenceValue(): StudioActivityDefinitionImplementationEditorProps["value"] {
+  return {
+    payload: {
+      rootActivity: sequenceRootActivity(),
+      variables: [],
+      outputMappings: [],
+      outcomeMappings: []
+    },
+    layout: []
+  };
+}
+
 const expressionEditors: StudioExpressionEditorContribution[] = [{
   id: "browser.javascript-expression-editor",
   supports: context => context.syntax === "JavaScript",
@@ -75,6 +101,7 @@ const expressionEditors: StudioExpressionEditorContribution[] = [{
 
 export function ActivityDuplicateEditorFixture() {
   const context = useMemo(() => createEditorContext(), []);
+  const activityHost = new URLSearchParams(window.location.search).get("host") === "activity";
   const ai = useMemo(() => ({
     promptActions: { list: () => [] },
     providerAvailability: { get: () => false, subscribe: () => () => undefined },
@@ -84,20 +111,43 @@ export function ActivityDuplicateEditorFixture() {
   return (
     <div className="activity-duplicate-editor" data-testid="activity-duplicate-editor">
       <QueryClientProvider client={queryClient}>
-        <WorkflowEditor
-          context={context}
-          definitionId="definition-1"
-          ai={ai}
-          propertyEditors={[]}
-          expressionEditors={expressionEditors}
-          runInputEditors={[]}
-          workflowDesignerPanels={[]}
-          autosaveEnabledByDefault={false}
-          onBack={() => undefined}
-        />
+        {activityHost
+          ? <ControlledActivityGraphFixture context={context} />
+          : <WorkflowEditor
+              context={context}
+              definitionId="definition-1"
+              ai={ai}
+              propertyEditors={[]}
+              expressionEditors={expressionEditors}
+              runInputEditors={[]}
+              workflowDesignerPanels={[]}
+              autosaveEnabledByDefault={false}
+              onBack={() => undefined}
+            />}
       </QueryClientProvider>
     </div>
   );
+}
+
+function ControlledActivityGraphFixture({ context }: { context: StudioEndpointContext }) {
+  const [value, setValue] = useState(activityGraphSequenceValue);
+  return <ActivityGraphImplementationEditor
+    context={context}
+    definitionId="definition-1"
+    draftId="draft-1"
+    revision={1}
+    providerKey="elsa.activity-graph"
+    providerSchemaVersion="2"
+    manifestFingerprint="sha256:browser-activity-duplicate"
+    contract={{ contractSchemaVersion: "1", inputs: [], outputs: [], outcomes: [] }}
+    propertyEditors={[]}
+    expressionEditors={expressionEditors}
+    graphAuthoringPanels={[]}
+    historyResetKey="draft-1:activity-sequence"
+    value={value}
+    readOnly={false}
+    onChange={setValue}
+  />;
 }
 
 function createEditorContext(): StudioEndpointContext {

@@ -186,6 +186,29 @@ test("Sequence uses authored order, step commands, undo and nested body navigati
   await expect(steps).toHaveCount(3);
 });
 
+test("Activity Graph Sequence host preserves order, undo, and duplicate focus", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto("/?mode=activity-duplicate-editor&host=activity&composition=sequence&theme=dark");
+
+  const steps = page.locator(".ad-graph-editor .wf-sequence-step");
+  const ids = () => steps.evaluateAll(elements => elements.map(element => element.getAttribute("data-id")));
+  await expect(steps).toHaveCount(3, { timeout: 15_000 });
+  expect(await ids()).toEqual(["write-one", "loop", "write-two"]);
+
+  await page.getByRole("button", { name: "1. Write Line", exact: true }).click();
+  await page.getByRole("button", { name: "Move Write Line down", exact: true }).click();
+  expect(await ids()).toEqual(["loop", "write-one", "write-two"]);
+  await page.getByRole("button", { name: "Undo Activity Graph edit", exact: true }).click();
+  expect(await ids()).toEqual(["write-one", "loop", "write-two"]);
+
+  await page.getByRole("button", { name: "1. Write Line", exact: true }).click();
+  await page.getByRole("button", { name: "Duplicate Write Line", exact: true }).click();
+  await expect(steps).toHaveCount(4);
+  const clone = steps.nth(1);
+  expect(await clone.getAttribute("data-id")).not.toBe("write-one");
+  await expect(clone).toBeFocused();
+});
+
 test("Sequence insertion works before an existing step without manual connections", async ({ page }) => {
   await page.goto("/?mode=activity-duplicate-editor&composition=sequence&theme=light");
   await page.getByRole("button", { name: "Insert step before Notify buyer", exact: true }).click();
