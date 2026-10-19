@@ -31,20 +31,17 @@ Do not invent a named program-goal bucket just because one is missing. Propose c
 | [Elsa 4 Simplification](elsa-4-simplification.md) | Active | Whole product: tests, API, language, structure, docs | Sipke | Program #2559, ADR 0080 |
 | [Runtime Efficiency](runtime-efficiency.md) | Active | Runtime database access, persistence modes, concurrent correctness | Sipke | Program #2531; persistence-mode epic #2564 |
 | [Unified Execution](unified-execution.md) | Active; owner authorization, 18 October | Native workflows, BPMN, ETL, hosting and agent collaboration | Sipke | Program #2892; lifecycle compatibility under #2905, released BPMN adoption under #2735 |
-| [Native Compensation and Saga Recovery](native-compensation.md) | Active for establishment/planning; owner authorization, 19 October | Native workflow compensation and integrated Studio authoring/inspection | Sipke | Program #3035; establishment #3042, prepared design successor #3043 |
+| [Native Compensation and Saga Recovery](native-compensation.md) | Active; owner authorization, 19 October | Native workflow compensation and integrated Studio authoring/inspection | Sipke | Program #3035; design packet #3043, then the M1 journey #3044 |
 | [BPMN Engine](bpmn-engine.md) | Active; owner exception, 14 October | BPMN composite, interchange, shared `valence-works/bpmn` core | Sipke | #2735 switch to `Bpmn.Semantics`; #2736 refuse degraded imports |
 | [Elsa 3.8/3.9 Parity](elsa3-parity.md) | Active; owner exception, 15 October | Identity administration, then tenancy, Elsa 3 import, operations, modules | Sipke | Program #2771, ADR 0085; Phase 1 users and roles |
 
-The [11 October owner amendment to ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus)
-reactivates existing #2501 and #2495 as named exceptions to parking and the two-program cap.
-Their linked issues are the current charters and decision records; reuse their existing queues.
-The [14 October owner amendment](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) adds BPMN Engine as a third named exception.
-The [15 October owner amendment](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) adds Elsa 3.8/3.9 Parity as a fourth.
-The [18 October unified-execution authorization](unified-execution.md) adds Program #2892 within its explicit scope.
-The [19 October compensation authorization](native-compensation.md) adds Program #3035 for establishment and planning;
-production implementation remains gated on its semantic and Studio design contract.
-None of these authorizations reactivates unrelated parked goals or authorizes programs beyond the ones they name. The remaining goals below retain
-their own status and decisions, including the 2026-11-21 review for parked work unless separately superseded.
+The Active table above is the complete list of active programs. The
+[19 October owner amendment to ADR 0080 D0](../adr/0080-elsa-4-simplification-decisions.md#d0--focus) replaced the
+former two-program cap and its run of named exceptions (11, 14, 15 and 18 October). A program is active only
+when an owner amendment there names it and states its sequencing. Each authorization covers only its named
+scope and reactivates nothing else; linked issues remain the charters and decision records. The goals below
+retain their own status and decisions, including the 2026-11-21 review for parked work unless separately
+superseded.
 
 | Goal | Status |
 |---|---|

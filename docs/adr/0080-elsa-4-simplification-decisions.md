@@ -94,6 +94,25 @@ implementation follows separately. This amendment authorizes the program records
 the establishment task does not authorize production implementation, releases, deployment or reactivation of
 other parked programs. The remaining decisions in this ADR continue to apply.
 
+**Owner amendment, 19 October 2026 (later that day): the two-program cap is replaced.** Five named exceptions
+in nine days show that the cap no longer describes how programs are approved. The owner retired it instead of
+adding another exception. From this amendment on:
+
+- The active programs are exactly the rows of the Active table in the
+  [program-goal registry](../program-goals/README.md#registry). There is no numeric cap.
+- A program becomes active only through an owner amendment to this section that names it and states its
+  sequencing against the active programs: what it waits on, what it displaces, or why it can run beside them.
+- Parking of every unlisted program and the 2026-11-21 parked-work review remain. The cap of 20
+  `ready-for-agent` issues remains.
+
+The same amendment widens #3035 from establishment to **end-to-end delivery of its M0–M5 milestones** ("Yes
+clean it up, then deliver the program end to end"). Sequencing: it runs beside #2892 and consumes existing
+runtime contracts instead of waiting on #2892; see
+[its relationship to other programs](../program-goals/native-compensation.md#relationship-to-other-programs).
+Releases and deployment are not included, and D7's human merge for runtime and persistence code still applies.
+The separate Elsa 3 compensation program (elsa-workflows/elsa-core#8884) is paused until the Elsa 4 design
+packet #3043 is reviewed.
+
 ### D1 — Risk-based testing
 
 - Test observable behaviour at the cheapest level that proves it; unit-test logic that carries real risk.
