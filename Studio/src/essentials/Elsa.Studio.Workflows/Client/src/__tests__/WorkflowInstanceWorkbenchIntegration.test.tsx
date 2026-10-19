@@ -163,6 +163,19 @@ describe("workflow run workbench incident navigation", () => {
     expect(container.querySelector(".wf-sequence-designer")).toBeTruthy();
   });
 
+  it("selects unvisited Sequence steps and clears selection from the canvas background", async () => {
+    api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [], incidents: [] }));
+    renderWorkbench("timeline");
+    await vi.waitFor(() => expect(container.querySelector(".wf-sequence-step")).toBeTruthy());
+    const step = container.querySelector<HTMLButtonElement>(".wf-sequence-step")!;
+    expect(step.getAttribute("aria-pressed")).toBe("false");
+    click(step);
+    await vi.waitFor(() => expect(step.getAttribute("aria-pressed")).toBe("true"));
+    expect(container.querySelector(".wf-sequence-runtime-strip")).toBeNull();
+    click(container.querySelector<HTMLElement>(".wf-sequence-content"));
+    await vi.waitFor(() => expect(step.getAttribute("aria-pressed")).toBe("false"));
+  });
+
   it("keeps Flowchart mode at the pinned root and switches to Sequence for a nested scope", async () => {
     api.listActivities.mockResolvedValue({ activities: [sequenceActivity, flowchartActivity, writeLine] });
     api.getExecutable.mockResolvedValue(flowchartExecutable());
@@ -259,7 +272,7 @@ describe("workflow run workbench incident navigation", () => {
     await vi.waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(2));
     await vi.waitFor(() => expect(focus).toHaveBeenCalledTimes(1));
     expect(document.activeElement).toBe(targetNode);
-    expect(scrollIntoView).toHaveBeenLastCalledWith({ block: "nearest", inline: "nearest", behavior: "smooth" });
+    expect(scrollIntoView).toHaveBeenLastCalledWith({ block: "nearest", inline: "nearest", behavior: "auto" });
     expect(mockFlowInstance.fitView).not.toHaveBeenCalled();
   });
 
@@ -962,7 +975,7 @@ function renderWorkbench(
   />));
 }
 
-function click(button: HTMLButtonElement | undefined | null) {
+function click(button: HTMLElement | undefined | null) {
   flushSync(() => button?.click());
 }
 

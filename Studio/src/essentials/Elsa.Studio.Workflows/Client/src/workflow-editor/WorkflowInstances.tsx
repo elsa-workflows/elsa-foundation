@@ -1561,6 +1561,7 @@ function WorkflowInstanceCanvas({
             key={scopeKey}
             nodes={canvas.nodes}
             onSelectActivity={onSelectActivity}
+            onSelectEvidence={onSelectEvidence}
             focusNodeId={focusCanvasNodeId}
             focusRequestId={focusRequestId}
           />

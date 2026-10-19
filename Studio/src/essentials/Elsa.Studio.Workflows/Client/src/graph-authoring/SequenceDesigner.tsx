@@ -123,7 +123,9 @@ export function SequenceDesigner({
   ) : null;
 
   return (
-    <div ref={canvasRef} className="wf-sequence-designer" tabIndex={-1} aria-label="Sequence canvas">
+    <div ref={canvasRef} className="wf-sequence-designer" tabIndex={-1} aria-label="Sequence canvas" onClick={event => {
+      if (readOnly && event.target instanceof Element && !event.target.closest(".wf-sequence-item, button")) onSelect(null);
+    }}>
       <header className="wf-sequence-heading">
         <span className="wf-sequence-mode-pill">Sequence · runs top to bottom</span>
       </header>
