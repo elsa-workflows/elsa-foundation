@@ -32,6 +32,57 @@ async function fillRequiredMetadata(dialog: import("@playwright/test").Locator, 
   await dialog.getByLabel("Value", { exact: true }).fill(fixtureValue);
 }
 
+for (const viewport of [
+  { width: 1440, height: 900 },
+  { width: 1280, height: 800 },
+  { width: 360, height: 640 }
+]) {
+  test(`secret create keeps actions visible, body scrollable, and values on errors at ${viewport.width}x${viewport.height}`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    const { dialog, opener } = await openCreateSecret(page, "tall-error");
+    const content = dialog.locator(".secrets-create-content");
+    const cancel = dialog.getByRole("button", { name: "Cancel", exact: true });
+    const create = dialog.getByRole("button", { name: "Create", exact: true });
+    await expect.poll(() => content.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+    await expect(cancel).toBeInViewport();
+    await expect(create).toBeInViewport();
+
+    await dialog.getByLabel("Technical name", { exact: true }).fill("preserved.secret");
+    await dialog.getByLabel("Value", { exact: true }).fill(fixtureValue);
+    await dialog.getByLabel("Expires", { exact: true }).scrollIntoViewIfNeeded();
+    await expect.poll(() => content.evaluate(element => element.scrollTop > 0)).toBe(true);
+    expect(await dialog.evaluate(element => element.scrollTop)).toBe(0);
+    await expect(cancel).toBeInViewport();
+    await expect(create).toBeInViewport();
+
+    await page.setViewportSize({ ...viewport, height: viewport.height - 24 });
+    await expect(dialog.getByLabel("Technical name", { exact: true })).toHaveValue("preserved.secret");
+    await expect(dialog.getByLabel("Value", { exact: true })).toHaveValue(fixtureValue);
+    await expect(create).toBeInViewport();
+    await create.click();
+
+    const alert = dialog.getByRole("alert");
+    await expect(alert).toContainText("Fixture secret creation failed.");
+    await expect(alert).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(create).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(alert).toBeFocused();
+    await page.keyboard.press("Tab");
+    const technicalName = dialog.getByLabel("Technical name", { exact: true });
+    await expect(technicalName).toBeFocused();
+    await technicalName.scrollIntoViewIfNeeded();
+    await expect(technicalName).toBeInViewport();
+    await expect(technicalName).toHaveValue("preserved.secret");
+    await expect(dialog.getByLabel("Value", { exact: true })).toHaveValue(fixtureValue);
+    await expect(cancel).toBeInViewport();
+    await expect(create).toBeInViewport();
+    await cancel.click();
+    await expect(dialog).toHaveCount(0);
+    await expect(opener).toBeFocused();
+  });
+}
+
 test("suggested scope selection shows advisory metadata and creates metadata only", async ({ page }) => {
   const { dialog } = await openCreateSecret(page);
   const scope = dialog.getByRole("combobox", { name: "Scope", exact: true });
