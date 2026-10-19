@@ -45,9 +45,10 @@ The JTest suite (36 Elsa 3 definitions, not committed) was measured with a throw
 | Other unknown calls (`getConfiguration`, `base64Encode`, `setRunJavascriptOutputVariable`, …) | 6 | 3 |
 | `setOutcome` / `setOutcomes` | 0 | 0 |
 
-Definitions whose JavaScript would fully convert, cumulatively: top-level `return`, accessors and helpers **4/33**;
-plus `getCorrelationId` **8/33**; plus `newGuid` **19/33**; plus `Date` **29/33**. This spec delivers the first two
-steps. The last two stay refused (User Story 5), and the documented migration story says what authors change.
+Definitions whose JavaScript would fully convert, cumulatively (first estimate, before research): top-level
+`return`, accessors and helpers **4/33**; plus `getCorrelationId` **8/33**; plus `newGuid` **19/33**; plus `Date`
+**29/33**. This spec delivers the first two steps; with exact Elsa 3 naming and `toJson` refused, research R-9 expects
+**7/33**. The last two stay refused (User Story 5), and the documented migration story says what authors change.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -95,10 +96,12 @@ bindings the explicit `getVariable`/`getInput` forms produce.
 
 1. **Given** a variable `HttpRequestBody`, **When** a script calls `getHttpRequestBody()`, **Then** it converts to
    the variable read, exactly as `getVariable("HttpRequestBody")` would.
-2. **Given** a workflow input and a variable with the same name, **When** a script calls the accessor, **Then** it
-   reads the input (Elsa 3 order: an input accessor shadows a variable accessor).
-3. **Given** a variable `orderId` and a call `getOrderId()`, **When** it is converted, **Then** names match
-   ignoring case, consistent with the converter's existing variable matching.
+2. **Given** a workflow input and a variable whose generated accessors have the identical name, **When** a script
+   calls the accessor, **Then** it reads the input (Elsa 3 order: an input accessor shadows a variable accessor with
+   the identical name; an activity output accessor shadows both and is refused).
+3. **Given** a variable `orderId`, **When** a script calls `getOrderId()`, **Then** it converts, because Elsa 3
+   generated the variable accessor with a Pascal-cased name. **When** a script calls `getorderId()`, **Then** it is
+   refused, because Elsa 3 had no such function (JavaScript names are case-sensitive).
 4. **Given** a call `getSomething()` where no variable or input named `Something` exists, **When** it is converted,
    **Then** it is refused as an unknown host function (`VF-IMP-005`), as today.
 5. **Given** a script that assigns to a member of an accessor's result (`getOrder().total = 1`), **When** it is
@@ -154,11 +157,11 @@ against the results recorded from Elsa 3.
 
 1. **Given** `isNullOrEmpty` / `isNullOrWhiteSpace` called on `null`, `""`, `"  "` and `"a"`, **When** converted,
    **Then** the results equal Elsa 3's.
-2. **Given** `toJson(value)`, **When** converted, **Then** the produced text equals Elsa 3's text for the same value
-   (including property order, casing and whitespace), or the helper stays refused with guidance if that cannot be
-   guaranteed.
-3. **Given** `parseGuid(s)` on a valid GUID string, **When** converted, **Then** it yields the GUID in the form Elsa 4
-   values carry it; an invalid string fails as it did in Elsa 3.
+2. **Given** `toJson(value)`, **When** converted, **Then** it stays refused with guidance to use `JSON.stringify`:
+   Elsa 3's `toJson` escapes HTML-sensitive characters and keeps .NET property casing, so no Elsa 4 form is equal
+   (research R-6).
+3. **Given** `parseGuid(s)`, **When** converted, **Then** it stays refused with guidance: it returns a .NET `Guid` and
+   accepts five formats, so no simple Elsa 4 form is equal (research R-6).
 4. **Given** byte or stream helpers (`bytesToString`, `streamToBytes`, `bytesFromString`), **When** converted,
    **Then** they stay refused: Elsa 4 expression values are JSON and have no byte arrays or streams.
 
@@ -246,14 +249,18 @@ reason and date. The plan records a decision about the code paths that exist onl
 
 - **FR-004**: A call `get{Name}()` with no arguments, where `{Name}` matches a declared workflow input or variable,
   MUST convert to the same parameter binding that `getInput("{Name}")` or `getVariable("{Name}")` produces.
-- **FR-005**: When `{Name}` matches both an input and a variable, the input MUST win (Elsa 3 order).
-- **FR-006**: Matching MUST follow the converter's existing name rules (case-insensitive); more than one match MUST
-  be refused as ambiguous.
+- **FR-005**: Resolution MUST follow Elsa 3's registration order: an output accessor `get{Output}From{Activity}()`
+  shadows everything and is refused; then an input accessor; then a variable accessor. An input accessor shadows a
+  variable accessor only when the generated names are identical.
+- **FR-006**: Names MUST match exactly as Elsa 3 generates them (case-sensitive): `get{Pascalize(variable)}` for
+  variables whose name is all letters and digits, `get{input}` verbatim for workflow inputs in a standalone run, and
+  `get{Pascalize(input)}` in a reusable run, where Elsa 3 declares inputs as variables. More than one match at the same
+  step MUST be refused as ambiguous.
 - **FR-007**: A generated name that collides with an Elsa 3 built-in host function MUST be refused as ambiguous.
 - **FR-008**: Mutating an accessor's result, or calling a generated setter `set{Name}(…)`, MUST be refused as a
   mutation (`VF-IMP-005`).
 - **FR-009**: Output accessors `get{Output}From{Activity}()` are NOT lowered by this spec (no corpus use; resolving
-  activity names is a risk); they stay refused as unknown host functions.
+  activity names is a risk); they stay refused (`VF-IMP-005`) with guidance to capture the output into a variable.
 
 **Instance metadata reads (User Story 3)**
 
@@ -268,9 +275,9 @@ reason and date. The plan records a decision about the code paths that exist onl
 
 **Pure helpers (User Story 4)**
 
-- **FR-015**: `isNullOrEmpty`, `isNullOrWhiteSpace`, `toJson` and `parseGuid` MUST convert when the converted form
-  yields Elsa 3's result for every input Elsa 3 accepts; a helper for which that equivalence is not established MUST
-  stay refused, with guidance.
+- **FR-015**: `isNullOrEmpty` and `isNullOrWhiteSpace` MUST convert to forms that yield Elsa 3's result for every
+  string or null input (whitespace as .NET defines it). `toJson` and `parseGuid` MUST stay refused, with guidance,
+  because no simple Elsa 4 form is equal (research R-6).
 - **FR-016**: Byte and stream helpers MUST stay refused, with guidance that Elsa 4 values have no byte arrays or
   streams.
 
@@ -317,8 +324,8 @@ reason and date. The plan records a decision about the code paths that exist onl
 
 - **SC-001**: Measured again with the same method as the baseline, 0 of the corpus's 217 JavaScript sources are
   refused for a top-level `return` (baseline: 200).
-- **SC-002**: The JavaScript of at least 8 of the 33 corpus definitions with JavaScript converts with no refusal
-  (baseline: 0), and every remaining JavaScript refusal in the corpus is one of the deliberate refusals of User
+- **SC-002**: The JavaScript of at least 7 of the 33 corpus definitions with JavaScript converts with no refusal
+  (baseline: 0; research R-9), and every remaining JavaScript refusal in the corpus is one of the deliberate refusals of User
   Story 5 or an unknown call listed in Edge Cases.
 - **SC-003**: Every converted construct in this spec has a test that evaluates the converted expression in Elsa 4
   and compares the result with Elsa 3's result for the same inputs.
