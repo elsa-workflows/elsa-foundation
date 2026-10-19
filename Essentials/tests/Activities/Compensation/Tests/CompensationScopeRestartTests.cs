@@ -110,6 +110,38 @@ public sealed class CompensationScopeRestartTests : IDisposable
         Assert.Single(participant.Calls, call => call.NodeId == "cancel-delivery");
     }
 
+    /// <summary>
+    /// A republish while recovery is in flight does not change the run's handlers: recovery finishes with the handler
+    /// of the executable the run started on, not the one published since.
+    /// </summary>
+    [Fact]
+    public async Task A_republish_mid_recovery_keeps_the_handlers_of_the_pinned_executable()
+    {
+        var participant = new Participant().Rejecting("confirm-order").KillingHostAfterEffectOf("cancel-delivery");
+
+        await using (var first = await StartHostAsync(participant, PersistenceMode.Durable))
+        {
+            var reference = await first.PublishAsync(Executable(ReservationJourney()), "source-compensation-restart");
+            await StartUntilTheHostStopsAsync(first, reference);
+        }
+
+        await using var second = await StartHostAsync(participant, PersistenceMode.Durable);
+        var republished = Scope(
+            new Step("Reserve inventory", Participant("reserve-inventory"), Participant("release-inventory-v2")),
+            new Step("Reserve delivery", Participant("reserve-delivery"), Participant("cancel-delivery")),
+            new Step("Confirm order", Participant("confirm-order")));
+        // The next version of the same definition: a new artifact, reachable through its own source reference.
+        var nextVersion = new WorkflowExecutableIdentity("artifact-2", WorkflowExecutionHarness.Identity.DefinitionId, "version-2", "2.0.0", "sha256:test-2");
+        await second.PublishAsync(WorkflowExecutionHarness.NewExecutable(republished, nextVersion), "source-compensation-republished");
+        await RecoverAsync(second);
+
+        var run = await second.ReadRunAsync(WorkflowExecutionId);
+        run.AssertWorkflowCompleted();
+        run.AssertOutcomes(ScopeNodeId, CompensationScope.CompensatedOutcome);
+        Assert.Equal(ExpectedEffects, participant.EffectOrder);
+        Assert.DoesNotContain(participant.Calls, call => call.NodeId == "release-inventory-v2");
+    }
+
     // The stopped host's work-item and ownership leases outlive it. A restarted process waits them out; here the shared
     // clock moves past them before the new host sweeps.
     private async Task RecoverAsync(WorkflowExecutionHarness host)
