@@ -74,6 +74,15 @@ import { useWorkflowScope } from "./useWorkflowScope";
 import { useWorkflowContextBridge } from "./useWorkflowContextBridge";
 import { ActivityPalettePanel } from "./ActivityPalettePanel";
 import { SequenceDesigner } from "../graph-authoring/SequenceDesigner";
+import { CompensationScopeDesigner, type CompensationActivityTarget } from "../graph-authoring/CompensationScopeDesigner";
+import {
+  addCompensationStep,
+  compensationStepsSlotId,
+  readCompensationSteps,
+  updateCompensationStep,
+  withCompensationSteps,
+  type CompensationStep
+} from "../compensationScope";
 import { GraphAuthoringCanvas } from "../graph-authoring/GraphAuthoringCanvas";
 import { GraphAuthoringWorkbench } from "../graph-authoring/GraphAuthoringWorkbench";
 import { AddStepButton, authorsInline } from "../graph-authoring/AddStepButton";
@@ -700,6 +709,45 @@ export function WorkflowEditor({
     });
   }, [catalogByVersion, editDraft, scopeOwner?.nodeId]);
 
+  // A compensation scope's designer edits the owner's steps directly, as the BPMN canvas edits its payload.
+  const isCompensationScopeCanvas = scope?.slot.id === compensationStepsSlotId;
+  const [compensationPick, setCompensationPick] = useState<{ target: CompensationActivityTarget; clientX: number; clientY: number } | null>(null);
+  const updateCompensationSteps = useCallback((steps: CompensationStep[], nextStatus: string, selectNodeId?: string) => {
+    const ownerNodeId = scopeOwner?.nodeId;
+    if (!ownerNodeId) return;
+    const recipe = ({ draft: current }: { draft: WorkflowDraft | null }) => {
+      const rootActivity = current?.state.rootActivity;
+      if (!current || !rootActivity) return null;
+      return {
+        ...current,
+        state: {
+          ...current.state,
+          rootActivity: updateActivity(rootActivity, ownerNodeId, owner => withCompensationSteps(owner, steps), catalogByVersion)
+        }
+      };
+    };
+    if (selectNodeId) editDraftAndSelect(recipe, selectNodeId);
+    else editDraft(recipe);
+    setStatus(nextStatus);
+  }, [catalogByVersion, editDraft, editDraftAndSelect, scopeOwner?.nodeId]);
+  const pickCompensationActivity = useCallback((activity: ActivityCatalogItem) => {
+    const pick = compensationPick;
+    setCompensationPick(null);
+    if (!pick || !scopeOwner) return;
+    const node = createActivityNode(activity, createNodeId(activity));
+    const steps = readCompensationSteps(scopeOwner);
+    const label = getActivityDisplay(activity);
+    const { target } = pick;
+    if (target.kind === "new-step") {
+      updateCompensationSteps(addCompensationStep(steps, target.index, node), `Added step ${label}`, node.nodeId);
+    } else if (target.kind === "step-activity") {
+      updateCompensationSteps(updateCompensationStep(steps, target.index, { activity: node }), `Set ${label} as the step's activity`, node.nodeId);
+    } else {
+      const stepName = steps[target.index]?.name || `step ${target.index + 1}`;
+      updateCompensationSteps(updateCompensationStep(steps, target.index, { compensation: node }), `${label} now undoes ${stepName}`, node.nodeId);
+    }
+  }, [compensationPick, scopeOwner, updateCompensationSteps]);
+
   // A start node is a Flowchart concept; a Sequence runs in authored order and has none.
   const isFlowchartScope = scope?.slot.mode === "flowchart";
   // The Flowchart start node is authored, not positional: this is the only writer besides the
@@ -1268,7 +1316,29 @@ export function WorkflowEditor({
           ) : (
           <>
           <ScopeBreadcrumb frames={visibleFrames} onNavigate={next => navigateToScope(next, null)} />
-          {scope?.slot.mode === "sequence" && scope.slot.cardinality === "many" && !isUnsupportedDesigner ? (
+          {isCompensationScopeCanvas && scopeOwner && !isUnsupportedDesigner ? (
+            <CompensationScopeDesigner
+              owner={scopeOwner}
+              nodes={nodes}
+              selectedNodeId={selectedNodeId}
+              readOnly={!canAddActivitiesToCanvas}
+              canvasRef={canvasRef}
+              onSelect={select}
+              onChangeSteps={(steps, nextStatus) => updateCompensationSteps(steps, nextStatus)}
+              onRequestActivity={(target, anchor) => setCompensationPick({ target, ...anchor })}
+              onOpenSlot={(ownerId, label, slot) => enterSlotScope(ownerId, slot, slotCrumbLabel(label, slot))}
+            >
+              {compensationPick ? (
+                <ConnectMenu
+                  clientX={compensationPick.clientX}
+                  clientY={compensationPick.clientY}
+                  activities={paletteCatalog}
+                  onPick={pickCompensationActivity}
+                  onClose={() => setCompensationPick(null)}
+                />
+              ) : null}
+            </CompensationScopeDesigner>
+          ) : scope?.slot.mode === "sequence" && scope.slot.cardinality === "many" && !isUnsupportedDesigner ? (
             <SequenceDesigner
               nodes={nodes}
               selectedNodeId={selectedNodeId}

@@ -2657,6 +2657,32 @@
   white-space: nowrap;
 }
 
+.wf-timeline-body .wf-timeline-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: inherit;
+}
+
+.wf-activity-compensates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+
+.wf-activity-compensates-link {
+  padding: 0;
+  border: 0;
+  color: var(--studio-accent-text, var(--studio-accent));
+  background: none;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .wf-timeline-meta {
   display: flex;
   flex: 0 0 auto;
