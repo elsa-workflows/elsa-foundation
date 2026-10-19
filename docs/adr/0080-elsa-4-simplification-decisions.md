@@ -84,6 +84,16 @@ including necessary BPMN-library changes and releases. Reuse the existing #2892 
 keep one active implementation leaf and do not reactivate unrelated parked objectives. The remaining decisions
 in this ADR continue to apply within the current owner-authorized scope.
 
+**Owner amendment, 19 October 2026:** [Native Compensation and Saga Recovery #3035](../program-goals/native-compensation.md)
+is authorized for program establishment and planning as a named exception to D0's parking and two-program cap.
+The owner approved the proposed program with "This sounds great. Let's proceed and create a program."
+Its [PRD #3036](https://github.com/elsa-workflows/elsa-foundation/issues/3036) includes native compensation and
+integrated Elsa Studio visual authoring and recovery inspection from the first durable slice. BPMN is semantic
+inspiration only, with no implementation reuse, shared compensation abstraction or dependency. Elsa 3
+implementation follows separately. This amendment authorizes the program records and prepared design work;
+the establishment task does not authorize production implementation, releases, deployment or reactivation of
+other parked programs. The remaining decisions in this ADR continue to apply.
+
 ### D1 — Risk-based testing
 
 - Test observable behaviour at the cheapest level that proves it; unit-test logic that carries real risk.
