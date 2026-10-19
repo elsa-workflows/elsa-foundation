@@ -85,3 +85,17 @@ public sealed class RuntimeAlterationCapabilitySource(IServiceProvider servicePr
         return ValueTask.FromResult(declarations);
     }
 }
+
+/// <summary>Deletion requires a cohesive provider capable of atomic, fenced run cleanup.</summary>
+public sealed class RuntimeRunDeletionCapabilitySource(IServiceProvider services) : IApiCapabilitySource
+{
+    public ValueTask<IReadOnlyCollection<ApiCapabilityDeclaration>> GetCapabilitiesAsync(CancellationToken cancellationToken = default)
+    {
+        IReadOnlyCollection<ApiCapabilityDeclaration> declarations = services.GetService<IWorkflowExecutionDeletionStore>() is not { IsSupported: true }
+            ? []
+            : [new(RuntimeApiCapabilities.CapabilityId, 1,
+                [new ApiCapabilityLink("workflow-instance-delete", "runtime/workflows/instances/{workflowExecutionId}", templated: true)],
+                $"{RuntimeApiCapabilities.SourceFeatureId}.RunDeletion")];
+        return ValueTask.FromResult(declarations);
+    }
+}

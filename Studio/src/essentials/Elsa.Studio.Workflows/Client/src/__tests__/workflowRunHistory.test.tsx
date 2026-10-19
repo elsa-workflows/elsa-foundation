@@ -5,11 +5,17 @@ import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { clearApiCapabilityCache } from "../api/capabilities";
 import { WorkflowInstances } from "../workflow-editor/WorkflowInstances";
+import { setDialogs } from "../workflow-editor/dialogs";
+
+const confirmRuns = vi.fn(async (_options: { title?: string; message: string }) => false);
+setDialogs({ confirm: confirmRuns, prompt: async () => null, alert: async () => {} });
 
 let mounted: { root: Root; container: HTMLDivElement } | null = null;
 
 afterEach(() => {
   clearApiCapabilityCache();
+  confirmRuns.mockReset().mockResolvedValue(false);
+  vi.restoreAllMocks();
   if (mounted) {
     flushSync(() => mounted!.root.unmount());
     mounted.container.remove();
@@ -198,6 +204,216 @@ describe("workflow run history", () => {
     expect(appliedUrl).toContain("definitionId=definition-1");
     expect(appliedUrl).not.toContain("incidentHealth=");
   });
+
+  it("hides deletion controls when Runtime does not advertise the deletion relation", async () => {
+    const deleteJson = vi.fn(async () => ({ workflowExecutionId: "execution-1", status: "Deleted" }));
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? capabilities : page("execution-1"));
+    const container = render(context(getJson, deleteJson), vi.fn());
+
+    await waitFor(() => expect(container.textContent).toContain("execution-1"));
+    expect(container.querySelector("input[aria-label='Select all workflow runs on this page']")).toBeNull();
+    expect(container.querySelector("button[aria-label^='Delete workflow run']")).toBeNull();
+    expect(buttonByTextOptional(container, "Delete selected")).toBeNull();
+    expect(deleteJson).not.toHaveBeenCalled();
+  });
+
+  it("keeps an unavailable or resource-denied run selected without claiming success", async () => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? deletionCapabilities : pageWithRuns("execution-1"));
+    const deleteJson = vi.fn(async () => { throw { status: 404 }; });
+    const container = render(context(getJson, deleteJson), vi.fn());
+    confirmRuns.mockResolvedValue(true);
+    await waitFor(() => expect(container.textContent).toContain("execution-1"));
+    click(input(container, "Select workflow run execution-1"));
+    click(buttonByText(container, "Delete selected"));
+    await waitFor(() => expect(container.querySelector("[role='alert']")?.textContent).toContain("do not have permission"));
+    expect(container.querySelector("[role='alert']")?.textContent).toContain("No workflow runs were deleted.");
+    expect(input(container, "Select workflow run execution-1").checked).toBe(true);
+  });
+
+  it("drops selections that disappear when refreshing the visible page", async () => {
+    let ids = ["execution-1", "execution-2"];
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? deletionCapabilities : pageWithRuns(...ids));
+    const container = render(context(getJson, vi.fn()), vi.fn());
+    await waitFor(() => expect(container.textContent).toContain("execution-1"));
+    click(input(container, "Select all workflow runs on this page"));
+    expect(container.querySelector(".wf-run-deletion-toolbar")?.textContent).toContain("2 workflow runs selected");
+    ids = ["execution-2"];
+    click(buttonByText(container, "Refresh"));
+    await waitFor(() => expect(container.querySelector(".wf-run-deletion-toolbar")?.textContent).toContain("1 workflow run selected"));
+    expect(input(container, "Select workflow run execution-2").checked).toBe(true);
+    expect(container.querySelector("input[aria-label='Select workflow run execution-1']")).toBeNull();
+  });
+
+  it("selects visible runs, confirms exact IDs, cancels without a request, and preserves row keyboard inspection", async () => {
+    const deleteJson = vi.fn(async (url: string) => ({
+      workflowExecutionId: decodeURIComponent(url.split("/").pop()!),
+      status: "Deleted"
+    }));
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? deletionCapabilities : pageWithRuns("execution-1", "execution-2"));
+    const navigate = vi.fn();
+    const container = render(context(getJson, deleteJson), navigate);
+    const confirm = confirmRuns.mockResolvedValue(false);
+
+    await waitFor(() => expect(container.textContent).toContain("execution-1"));
+    const selectAll = input(container, "Select all workflow runs on this page");
+    expect(selectAll.checked).toBe(false);
+    click(input(container, "Select workflow run execution-1"));
+    await waitFor(() => expect(selectAll.indeterminate).toBe(true));
+    click(input(container, "Select workflow run execution-2"));
+    expect(selectAll.checked).toBe(true);
+    expect(selectAll.indeterminate).toBe(false);
+    expect(container.querySelector(".wf-run-deletion-toolbar")?.textContent).toContain("2 workflow runs selected");
+
+    const deleteSelected = buttonByText(container, "Delete selected");
+    deleteSelected.focus();
+    click(deleteSelected);
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ title: "Delete these 2 workflow runs?", tone: "danger" }));
+    expect(confirm).toHaveBeenLastCalledWith(expect.objectContaining({ message: expect.stringContaining("execution-1\nexecution-2") }));
+    expect(confirm).toHaveBeenLastCalledWith(expect.objectContaining({ message: expect.stringContaining("Active runs will be stopped before deletion.") }));
+    expect(confirm).toHaveBeenLastCalledWith(expect.objectContaining({ message: expect.stringContaining("This action cannot be undone.") }));
+    expect(deleteJson).not.toHaveBeenCalled();
+    expect(selectAll.checked).toBe(true);
+
+    const row = container.querySelector<HTMLElement>(".wf-grid-row")!;
+    row.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(navigate).toHaveBeenCalledWith("/workflows/instances/execution-1");
+  });
+
+  it("keeps only failed runs selected after a partial deletion so they can be retried", async () => {
+    let failExecutionTwo = true;
+    const deleteJson = vi.fn(async (url: string) => {
+      if (url.endsWith("execution-2") && failExecutionTwo) throw new Error("Runtime unavailable");
+      return { workflowExecutionId: url.split("/").pop(), status: "Deleted" };
+    });
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? deletionCapabilities : pageWithRuns("execution-1", "execution-2"));
+    const container = render(context(getJson, deleteJson), vi.fn());
+    confirmRuns.mockResolvedValue(true);
+
+    await waitFor(() => expect(container.textContent).toContain("execution-1"));
+    click(input(container, "Select all workflow runs on this page"));
+    click(buttonByText(container, "Delete selected"));
+
+    await waitFor(() => expect(container.querySelector("[role='alert']")?.textContent).toContain("Runtime unavailable"));
+    expect(container.querySelector("[role='alert']")?.textContent).toContain("1 workflow run deleted.");
+    await waitFor(() => expect(input(container, "Select workflow run execution-1").checked).toBe(false));
+    expect(input(container, "Select workflow run execution-2").checked).toBe(true);
+    expect(container.querySelector(".wf-run-deletion-toolbar")?.textContent).toContain("1 workflow run selected");
+
+    failExecutionTwo = false;
+    click(buttonByText(container, "Delete selected"));
+    await waitFor(() => expect(container.querySelector(".wf-run-deletion-feedback")?.textContent).toContain("1 workflow run deleted."));
+    await waitFor(() => expect(deleteJson).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(input(container, "Select workflow run execution-2").checked).toBe(false));
+  });
+
+  it("clears selection when the visible page or applied filters change", async () => {
+    window.history.replaceState({}, "", "/workflows/instances?pageSize=10");
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return deletionCapabilities;
+      if (url.includes("cursor=next-cursor")) return page("execution-2");
+      if (url.includes("workflowExecutionId=filtered-run")) return page("filtered-run");
+      return page("execution-1", { nextCursor: "next-cursor", hasNext: true });
+    });
+    const navigate = vi.fn((path: string) => window.history.pushState({}, "", path));
+    const container = render(context(getJson), navigate);
+
+    await waitFor(() => expect(container.textContent).toContain("execution-1"));
+    click(input(container, "Select all workflow runs on this page"));
+    expect(container.querySelector(".wf-run-deletion-toolbar")?.textContent).toContain("1 workflow run selected");
+
+    click(button(container, "Next workflow run page"));
+    await waitFor(() => expect(container.textContent).toContain("execution-2"));
+    expect(input(container, "Select workflow run execution-2").checked).toBe(false);
+    expect(container.querySelector(".wf-run-deletion-toolbar")?.textContent).toContain("0 workflow runs selected");
+
+    click(input(container, "Select workflow run execution-2"));
+    fill(input(container, "Workflow run execution id"), "filtered-run");
+    click(buttonByText(container, "Apply filters"));
+    await waitFor(() => expect(container.textContent).toContain("filtered-run"));
+    expect(input(container, "Select workflow run filtered-run").checked).toBe(false);
+    expect(container.querySelector(".wf-run-deletion-toolbar")?.textContent).toContain("0 workflow runs selected");
+  });
+
+  it("limits bulk deletion to three concurrent requests", async () => {
+    let activeRequests = 0;
+    let maximumConcurrentRequests = 0;
+    const completions: Array<() => void> = [];
+    const runIds = ["execution-1", "execution-2", "execution-3", "execution-4"];
+    const deleteJson = vi.fn((url: string) => {
+      activeRequests++;
+      maximumConcurrentRequests = Math.max(maximumConcurrentRequests, activeRequests);
+      return new Promise(resolve => completions.push(() => {
+        activeRequests--;
+        resolve({ workflowExecutionId: decodeURIComponent(url.split("/").pop()!), status: "Deleted" });
+      }));
+    });
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? deletionCapabilities : pageWithRuns(...runIds));
+    const container = render(context(getJson, deleteJson), vi.fn());
+    confirmRuns.mockResolvedValue(true);
+
+    await waitFor(() => expect(container.textContent).toContain("execution-1"));
+    click(input(container, "Select all workflow runs on this page"));
+    click(buttonByText(container, "Delete selected"));
+    await waitFor(() => expect(deleteJson).toHaveBeenCalledTimes(3));
+    expect(maximumConcurrentRequests).toBe(3);
+
+    completions.splice(0, 3).forEach(complete => complete());
+    await waitFor(() => expect(deleteJson).toHaveBeenCalledTimes(4));
+    expect(maximumConcurrentRequests).toBe(3);
+    completions.shift()!();
+    await waitFor(() => expect(container.querySelector(".wf-run-deletion-feedback")?.textContent).toContain("4 workflow runs deleted."));
+  });
+
+  it("reloads the current cursor after deletion and returns to the first page when that cursor is empty", async () => {
+    window.history.replaceState({}, "", "/workflows/instances?pageSize=10");
+    let nextPageLoads = 0;
+    const getJson = vi.fn(async (url: string) => {
+      if (url === "/capabilities") return deletionCapabilities;
+      if (url.includes("cursor=next-cursor")) {
+        nextPageLoads++;
+        return nextPageLoads === 1
+          ? page("execution-2")
+          : page("execution-2", { items: [], count: 0, totalCount: 1 });
+      }
+      return page("execution-1", { nextCursor: "next-cursor", hasNext: true, totalCount: 2 });
+    });
+    const deleteJson = vi.fn(async () => ({ workflowExecutionId: "execution-2", status: "Deleted" }));
+    const navigate = vi.fn((path: string) => window.history.pushState({}, "", path));
+    const container = render(context(getJson, deleteJson), navigate);
+    confirmRuns.mockResolvedValue(true);
+
+    await waitFor(() => expect(container.textContent).toContain("execution-1"));
+    click(button(container, "Next workflow run page"));
+    await waitFor(() => expect(container.textContent).toContain("execution-2"));
+    click(button(container, "Delete workflow run execution-2"));
+
+    await waitFor(() => expect(container.textContent).toContain("execution-1"));
+    expect(getJson.mock.calls.map(([url]) => url).filter(url => url.includes("cursor=next-cursor"))).toHaveLength(2);
+    expect(navigate).toHaveBeenLastCalledWith("/workflows/instances?pageSize=10");
+  });
+
+  it("ignores a deletion result after the endpoint context changes", async () => {
+    let resolveDeletion: ((value: unknown) => void) | undefined;
+    const oldDeleteJson = vi.fn(() => new Promise(resolve => { resolveDeletion = resolve; }));
+    const oldGetJson = vi.fn(async (url: string) => url === "/capabilities" ? deletionCapabilities : page("old-run"));
+    const navigate = vi.fn();
+    const container = render(context(oldGetJson, oldDeleteJson), navigate);
+    confirmRuns.mockResolvedValue(true);
+
+    await waitFor(() => expect(container.textContent).toContain("old-run"));
+    click(button(container, "Delete workflow run old-run"));
+    await waitFor(() => expect(oldDeleteJson).toHaveBeenCalledTimes(1));
+
+    const nextGetJson = vi.fn(async (url: string) => url === "/capabilities" ? deletionCapabilities : page("new-run"));
+    rerender(context(nextGetJson), navigate);
+    await waitFor(() => expect(container.textContent).toContain("new-run"));
+    resolveDeletion!({ workflowExecutionId: "old-run", status: "Deleted" });
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(container.querySelector(".wf-run-deletion-feedback")).toBeNull();
+    expect(oldGetJson).toHaveBeenCalledTimes(2);
+    expect(nextGetJson).toHaveBeenCalledTimes(2);
+  });
 });
 
 function render(contextValue: StudioEndpointContext, navigate: (path: string) => void) {
@@ -207,6 +423,11 @@ function render(contextValue: StudioEndpointContext, navigate: (path: string) =>
   mounted = { root, container };
   flushSync(() => root.render(<WorkflowInstances context={contextValue} navigate={navigate} />));
   return container;
+}
+
+function rerender(contextValue: StudioEndpointContext, navigate: (path: string) => void) {
+  flushSync(() => mounted!.root.render(<WorkflowInstances context={contextValue} navigate={navigate} />));
+  return mounted!.container;
 }
 
 async function waitFor(assertion: () => void) {
@@ -223,10 +444,13 @@ async function waitFor(assertion: () => void) {
   throw lastError;
 }
 
-function context(getJson: (url: string) => Promise<unknown>) {
+function context(
+  getJson: (url: string) => Promise<unknown>,
+  deleteJson: (url: string) => Promise<unknown> = async () => ({})
+) {
   return {
     baseUrl: `test://run-history-${Math.random()}`,
-    http: { getJson }
+    http: { getJson, deleteJson }
   } as unknown as StudioEndpointContext;
 }
 
@@ -259,6 +483,12 @@ function forwardOnlyPage(workflowExecutionId: string, nextCursor: string | null 
   return { items, nextCursor, hasNext: Boolean(nextCursor), count: items.length, totalCount };
 }
 
+function pageWithRuns(...workflowExecutionIds: string[]) {
+  const template = page(workflowExecutionIds[0] ?? "execution-1").items[0];
+  const items = workflowExecutionIds.map(workflowExecutionId => ({ ...template, workflowExecutionId }));
+  return page(workflowExecutionIds[0] ?? "execution-1", { items, count: items.length, totalCount: items.length });
+}
+
 const capabilities = {
   capabilities: [{
     id: "elsa.api.runtime",
@@ -282,6 +512,18 @@ const healthCapabilities = {
   }]
 };
 
+const deletionCapabilities = {
+  capabilities: [{
+    id: "elsa.api.runtime",
+    contractVersion: "1",
+    links: [
+      { rel: "workflow-instances", href: "runtime/workflows/instances" },
+      { rel: "workflow-instances-page", href: "runtime/workflows/instances/page" },
+      { rel: "workflow-instance-delete", href: "runtime/workflows/instances/{workflowExecutionId}", templated: true }
+    ]
+  }]
+};
+
 function input(container: HTMLElement, label: string) {
   return container.querySelector<HTMLInputElement>(`input[aria-label='${label}']`)!;
 }
@@ -292,6 +534,10 @@ function button(container: HTMLElement, label: string) {
 
 function buttonByText(container: HTMLElement, text: string) {
   return [...container.querySelectorAll<HTMLButtonElement>("button")].find(candidate => candidate.textContent === text)!;
+}
+
+function buttonByTextOptional(container: HTMLElement, text: string) {
+  return [...container.querySelectorAll<HTMLButtonElement>("button")].find(candidate => candidate.textContent === text) ?? null;
 }
 
 function click(element: HTMLElement) {
