@@ -616,6 +616,7 @@
   </Folder>
   <Folder Name="/Essentials/tests/Workbench/Fixtures/">
     <Project Path="Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj" />
+    <Project Path="Essentials/tests/Workbench/Fixtures/Reservations/Reservations.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Workflows/" />
   <Folder Name="/Essentials/tests/Workflows/Design/">

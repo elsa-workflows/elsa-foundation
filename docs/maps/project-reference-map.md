@@ -7,8 +7,8 @@ Records direct project references only.
 ## Summary
 
 - Source projects: 147
-- Test projects: 149
-- Direct project references: 1623
+- Test projects: 150
+- Direct project references: 1627
 
 ## Projects
 
@@ -269,7 +269,8 @@ Records direct project references only.
 | [Elsa.Versioning.Calculator.Tests](../../Essentials/tests/Versioning/Calculator/Tests/Elsa.Versioning.Calculator.Tests.csproj) | test | Elsa.Versioning | - | false | Elsa.Versioning.Calculator |
 | [Elsa.Versioning.Publisher.Tests](../../Essentials/tests/Versioning/Publisher/Tests/Elsa.Versioning.Publisher.Tests.csproj) | test | Elsa.Versioning | - | false | Elsa.Versioning.Publisher |
 | [BackgroundActivities](../../Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj) | test | Other | - | false | Elsa.Activities.Design.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core |
-| [Elsa.Workbench.Tests](../../Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj) | test | Elsa.Workbench | - | false | BackgroundActivities<br>Elsa.Workbench |
+| [Reservations](../../Essentials/tests/Workbench/Fixtures/Reservations/Reservations.csproj) | test | Other | - | false | Elsa.Activities.Design.Core<br>Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Workbench.Tests](../../Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj) | test | Elsa.Workbench | - | false | BackgroundActivities<br>Elsa.Workbench<br>Reservations |
 | [Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests](../../Essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/ProviderTests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.ProviderTests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.ProviderTests |
 | [Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests](../../Essentials/tests/Workflows/Dashboard/Persistence/EntityFrameworkCore/Tests/Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore.Tests.csproj) | test | Elsa.Workflows | net10.0 | false | Elsa.Tasks<br>Elsa.Workflows.Dashboard.Persistence.EntityFrameworkCore<br>Elsa.Workflows.Runtime.Resumption |
 | [Elsa.Workflows.Dashboard.Tests](../../Essentials/tests/Workflows/Dashboard/Tests/Elsa.Workflows.Dashboard.Tests.csproj) | test | Elsa.Workflows | - | false | Elsa.Testing<br>Elsa.Workflows.Dashboard |
@@ -347,4 +348,4 @@ Records direct project references only.
 | Elsa.Workbench | 1 | 1 |
 | Elsa.Workflows | 31 | 24 |
 | Elsa3 | 4 | 3 |
-| Other | 0 | 5 |
+| Other | 0 | 6 |
