@@ -12,6 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\Elsa.Expressions.JavaScript\Services\JavaScriptBindingSyntax.cs" Link="Shared\JavaScriptBindingSyntax.cs" />
     <ProjectReference Include="..\Core\Elsa.Expressions.JavaScript.Core.csproj" />
   </ItemGroup>
 

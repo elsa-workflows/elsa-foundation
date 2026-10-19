@@ -768,7 +768,7 @@ describe("workflows module", () => {
 
     const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
 
-    await waitForText(container, "Review & publish");
+    await waitForText(container, "Review and Publish");
     await click(container.querySelector<HTMLButtonElement>('[aria-label="More workflow actions"]')!);
     expect(document.querySelector('[role="menuitemcheckbox"]')?.getAttribute("aria-checked")).toBe("true");
 
@@ -782,7 +782,7 @@ describe("workflows module", () => {
       api.runtime.workflows = { autosaveEnabledByDefault: false };
     });
 
-    await waitForText(container, "Review & publish");
+    await waitForText(container, "Review and Publish");
     await click(container.querySelector<HTMLButtonElement>('[aria-label="More workflow actions"]')!);
     expect(document.querySelector('[role="menuitemcheckbox"]')?.getAttribute("aria-checked")).toBe("false");
 
@@ -1874,7 +1874,7 @@ describe("workflows module", () => {
     await fill(inputByLabel(container, "Display name"), "Customer onboarding");
     await click(buttonByText(dialog(container), "Create"));
 
-    await waitForText(container, "Review & publish");
+    await waitForText(container, "Review and Publish");
     expect(container.textContent).toContain("No validation errors");
 
     await unmount();
@@ -2446,7 +2446,7 @@ describe("workflows module", () => {
 
       try {
         if (scenario.surface === "artifacts") {
-          await waitForText(container, "Review & publish");
+          await waitForText(container, "Review and Publish");
           await click(buttonByText(container, "Artifacts"));
         }
         await waitForText(container, scenario.surface === "inspector" ? "Executable Inspector" : scenario.artifactId);
@@ -5194,7 +5194,7 @@ async function renderArtifactsPanel(slots: ActivationSlotFixture[], capabilities
   });
   vi.stubGlobal("fetch", fetchMock);
   const rendered = await renderRegisteredRoute("/workflows/definitions?definition=definition-1", undefined, false, capabilities);
-  await waitForText(rendered.container, "Review & publish");
+  await waitForText(rendered.container, "Review and Publish");
   await click(buttonByText(rendered.container, "Artifacts"));
   return { ...rendered, fetchMock };
 }
