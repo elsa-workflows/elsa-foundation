@@ -1,6 +1,11 @@
 import { useMemo } from "react";
-import type { StudioAiContributionApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { WorkflowDefinitions } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowDefinitions";
+import { AnonymousAuthProvider, type StudioAiContributionApi, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { WorkflowManagementPage } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/pages";
+import { ShellFrame, getStudioNavigation } from "../../src/apps/Elsa.Studio.Web/Client/src/app/App";
+import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
+import { writeAppearancePreferences } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/appearance";
+import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
+import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
 import type { WorkflowDefinitionSummary } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 
 type DefinitionFixtureOverrides = Pick<WorkflowDefinitionSummary, "id" | "name" | "description">
@@ -94,6 +99,10 @@ const definitions = [
 ];
 
 export function DefinitionVersionsFixture() {
+  const parameters = new URLSearchParams(window.location.search);
+  const scenario = parameters.get("scenario");
+  writeAppearancePreferences({ themeId: "classic", mode: parameters.get("theme") === "dark" ? "dark" : "light", navigation: "left" });
+  setDialogs({ confirm: async () => false, prompt: async () => null, alert: async () => undefined });
   const context = useMemo(() => ({
     baseUrl: "definition-versions-browser",
     http: {
@@ -104,27 +113,42 @@ export function DefinitionVersionsFixture() {
           links: [{ rel: "workflow-definitions-page", href: "browser/definition-pages" }]
         }] };
         if (url.startsWith("/browser/definition-pages")) {
-          const state = new URL(url, window.location.origin).searchParams.get("state");
+          if (scenario === "failed") throw new Error("The workflow service is unavailable.");
+          if (scenario === "loading") return new Promise(() => undefined);
+          const query = new URL(url, window.location.origin).searchParams;
+          const state = query.get("state");
+          const search = query.get("searchTerm")?.toLowerCase() ?? "";
+          const sampleNames = ["Customer quote", "Order total", "Approval workflow", "Customer welcome"];
+          const samples = scenario === "showcase"
+            ? definitions.slice(0, 4).map((definition, index) => ({ ...definition, name: sampleNames[index], description: ["Look up a customer and prepare a quote", "Calculate the order total", "Review and approve requests", "Welcome a new customer"][index] }))
+            : definitions;
+          const matching = (scenario === "empty" ? [] : samples).filter(definition => `${definition.name} ${definition.description} ${definition.id}`.toLowerCase().includes(search));
           return {
             items: state === "deleted"
-              ? definitions.filter(definition => definition.deletedAt)
+              ? matching.filter(definition => definition.deletedAt)
               : state === "all"
-                ? definitions
-                : definitions.filter(definition => !definition.deletedAt),
+                ? matching
+                : matching.filter(definition => !definition.deletedAt),
             nextContinuationToken: null
           };
         }
         throw new Error(`Unexpected definition-versions fixture request: ${url}`);
       }
     }
-  }) as unknown as StudioEndpointContext, []);
+  }) as unknown as StudioEndpointContext, [scenario]);
   const ai = useMemo(() => ({
     promptActions: { list: () => [] },
     dispatchPrompt: () => undefined
   }) as unknown as StudioAiContributionApi, []);
 
-  return <main className="wf-editor browser-fixture">
-    <h1>Workflow definitions</h1>
-    <WorkflowDefinitions context={context} ai={ai} onOpen={() => undefined} />
-  </main>;
+  const navigation = getStudioNavigation([
+    { id: "home", label: "Home", path: "/dashboard", order: 10, placement: "main" },
+    { id: "workflows", label: "Workflows", path: "/workflows/definitions", order: 20, placement: "main" },
+    { id: "runs", label: "Runs", path: "/workflows/instances", order: 30, placement: "main" }
+  ]);
+  return <ThemeProvider><AnonymousAuthProvider>
+    <ShellFrame navigation={navigation} panels={[]} path="/workflows/definitions" title="Workflows" backendBaseUrl="https://backend.example/" enabledFeatures={["Elsa.Studio.Workflows"]} onNavigate={() => undefined}>
+      <WorkflowManagementPage context={context} ai={ai} propertyEditors={[]} expressionEditors={[]} runInputEditors={[]} workflowDesignerPanels={[]} />
+    </ShellFrame>
+  </AnonymousAuthProvider></ThemeProvider>;
 }

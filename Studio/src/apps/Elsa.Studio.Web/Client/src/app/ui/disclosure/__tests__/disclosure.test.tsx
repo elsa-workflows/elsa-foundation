@@ -38,6 +38,23 @@ function mount(node: React.ReactElement): HTMLElement {
   return host;
 }
 
+function giveElementLayout(element: HTMLElement) {
+  Object.defineProperty(element, "getBoundingClientRect", {
+    configurable: true,
+    value: () => ({
+      x: 40,
+      y: 40,
+      top: 40,
+      right: 68,
+      bottom: 68,
+      left: 40,
+      width: 28,
+      height: 28,
+      toJSON: () => ({})
+    } as DOMRect)
+  });
+}
+
 describe("never-hide invariant", () => {
   it("treats a non-default, bound or invalid value as forced", () => {
     expect(shouldForceReveal({ isNonDefault: true })).toBe(true);
@@ -336,8 +353,10 @@ describe("OverflowMenu", () => {
       />
     );
     const trigger = host.querySelector<HTMLButtonElement>(".studio-overflow-menu-trigger")!;
+    giveElementLayout(trigger);
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     expect(trigger.getAttribute("aria-controls")).toBeNull();
+    trigger.focus();
     flushSync(() => trigger.dispatchEvent(new MouseEvent("click", { bubbles: true })));
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
     expect(trigger.getAttribute("aria-controls")).toBeTruthy();
@@ -357,6 +376,46 @@ describe("OverflowMenu", () => {
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     expect(trigger.getAttribute("aria-controls")).toBeNull();
     expect(document.activeElement).toBe(trigger);
+  });
+
+  it("opens with ArrowDown and focuses the first item once positioned", () => {
+    const host = mount(<OverflowMenu items={[{ id: "retry", label: "Retry", onSelect: () => undefined }]} />);
+    const trigger = host.querySelector<HTMLButtonElement>(".studio-overflow-menu-trigger")!;
+    giveElementLayout(trigger);
+    trigger.focus();
+    flushSync(() => trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+
+    const firstItem = document.body.querySelector<HTMLButtonElement>("[role='menuitem']")!;
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(firstItem);
+  });
+
+  it("restores trigger focus when the menu closes before positioning", () => {
+    const host = mount(<OverflowMenu items={[{ id: "retry", label: "Retry", onSelect: () => undefined }]} />);
+    const trigger = host.querySelector<HTMLButtonElement>(".studio-overflow-menu-trigger")!;
+    trigger.focus();
+    flushSync(() => trigger.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+
+    const menu = document.body.querySelector<HTMLElement>("[role='menu']")!;
+    const popover = document.body.querySelector<HTMLElement>(".studio-overflow-menu-popover")!;
+    expect(popover.hasAttribute("inert")).toBe(true);
+    expect(document.activeElement).toBe(trigger);
+    flushSync(() => menu.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("removes an unpositioned menu on unmount", () => {
+    const host = mount(<OverflowMenu items={[{ id: "retry", label: "Retry", onSelect: () => undefined }]} />);
+    const trigger = host.querySelector<HTMLButtonElement>(".studio-overflow-menu-trigger")!;
+    flushSync(() => trigger.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    const firstItem = document.body.querySelector<HTMLButtonElement>("[role='menuitem']")!;
+    expect(document.body.querySelector(".studio-overflow-menu-popover")?.hasAttribute("inert")).toBe(true);
+
+    cleanup?.();
+    cleanup = null;
+    expect(firstItem.isConnected).toBe(false);
+    expect(document.activeElement).not.toBe(firstItem);
   });
 });
 
