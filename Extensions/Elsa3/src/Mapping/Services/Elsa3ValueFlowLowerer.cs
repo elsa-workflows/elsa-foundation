@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
 using Elsa3.Mapping.ActivityMap.Rewrites;
+using Elsa3.Mapping.Internal;
 using Elsa3.Models;
 
 namespace Elsa3.Mapping.Services;
@@ -21,7 +22,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         Func<Elsa3Activity, string, string>? sourceNameOf = null,
         Func<Elsa3Activity, string, bool>? isScriptBody = null,
         IReadOnlySet<string>? containerVariableIds = null,
-        IReadOnlyDictionary<string, string>? memoryAliases = null)
+        IReadOnlyDictionary<string, string>? memoryAliases = null,
+        bool isReusable = false)
     {
         ArgumentNullException.ThrowIfNull(definition);
         ArgumentNullException.ThrowIfNull(inventory);
@@ -45,6 +47,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
 
         var containerVariables = containerVariableIds ?? new HashSet<string>(StringComparer.Ordinal);
+        var accessors = new AccessorScope(isReusable, ActivityAccessorNames(definition.Root));
         var cyclicMemoryIds = FindCycleMemoryIds(inventory, variablesById, outputsByMemory, diagnostics, input);
 
         foreach (var property in properties)
@@ -81,9 +84,9 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             if (property.Expression is not null)
             {
                 if (isScriptBody?.Invoke(property.Activity, property.PropertyName) == true)
-                    LowerScript(definition, input, property, outputs, nodeOrder, diagnostics);
+                    LowerScript(definition, input, property, outputs, nodeOrder, accessors, diagnostics);
                 else
-                    LowerExpression(definition, input, property, outputs, nodeOrder, diagnostics);
+                    LowerExpression(definition, input, property, outputs, nodeOrder, accessors, diagnostics);
                 continue;
             }
 
@@ -255,6 +258,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         ActivityProperty property,
         IReadOnlyList<Elsa3MemoryOccurrence> outputs,
         IReadOnlyDictionary<string, int> nodeOrder,
+        AccessorScope accessors,
         List<Elsa3MigrationDiagnostic> diagnostics)
     {
         var expression = property.Expression!;
@@ -273,7 +277,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             expression.Type,
             expression.Value,
             resultType,
-            ambient => ResolveAmbient(definition, property, outputs, nodeOrder, ambient));
+            ambient => ResolveAmbient(definition, property, outputs, nodeOrder, accessors, ambient));
 
         if (!rewrite.Succeeded)
         {
@@ -391,12 +395,13 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         ActivityProperty property,
         IReadOnlyList<Elsa3MemoryOccurrence> outputs,
         IReadOnlyDictionary<string, int> nodeOrder,
+        AccessorScope accessors,
         List<Elsa3MigrationDiagnostic> diagnostics)
     {
         var expression = property.Expression!;
         if (!expression.Type.Equals("Literal", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(expression.Value))
         {
-            LowerExpression(definition, input, property, outputs, nodeOrder, diagnostics);
+            LowerExpression(definition, input, property, outputs, nodeOrder, accessors, diagnostics);
             return;
         }
 
@@ -404,7 +409,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             "JavaScript",
             expression.Value,
             new TypeReference("Object"),
-            ambient => ResolveAmbient(definition, property, outputs, nodeOrder, ambient),
+            ambient => ResolveAmbient(definition, property, outputs, nodeOrder, accessors, ambient),
             Elsa3JavaScriptMode.Script);
         if (!rewrite.Succeeded)
         {
@@ -471,6 +476,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         ActivityProperty consumer,
         IReadOnlyList<Elsa3MemoryOccurrence> outputs,
         IReadOnlyDictionary<string, int> nodeOrder,
+        AccessorScope accessors,
         Elsa3AmbientReference ambient)
     {
         switch (ambient.Kind)
@@ -549,8 +555,83 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 return Elsa3ExpressionParameterResolution.Success(
                     new ActivityResultExpressionParameterBinding(producer.ActivityNodeId, producer.StablePropertyKey));
             }
+            case Elsa3AmbientReferenceKind.GeneratedAccessor:
+                return ResolveGeneratedAccessor(definition, consumer, outputs, nodeOrder, accessors, ambient.Name);
             default:
                 throw new ArgumentOutOfRangeException(nameof(ambient), ambient.Kind, "Unknown ambient reference kind.");
+        }
+    }
+
+    /// <summary>
+    /// Resolves <c>get{name}()</c> to the declaration Elsa 3 generated it for, in Elsa 3's registration order: an
+    /// activity output accessor shadows everything (and is not lowered), then a workflow input (verbatim name; in a
+    /// reusable run Elsa 3 declares inputs as variables instead), then a variable (Pascal-cased name). Spec 247 R-2.
+    /// </summary>
+    private static Elsa3ExpressionParameterResolution ResolveGeneratedAccessor(
+        Elsa3WorkflowDefinition definition,
+        ActivityProperty consumer,
+        IReadOnlyList<Elsa3MemoryOccurrence> outputs,
+        IReadOnlyDictionary<string, int> nodeOrder,
+        AccessorScope accessors,
+        string name)
+    {
+        Elsa3ExpressionParameterResolution Resolve(Elsa3AmbientReferenceKind kind, string declared) =>
+            ResolveAmbient(definition, consumer, outputs, nodeOrder, accessors, new Elsa3AmbientReference(kind, declared));
+
+        if (accessors.ActivityNames.Any(activity =>
+                name.Length > activity.Length + "From".Length && name.EndsWith($"From{activity}", StringComparison.Ordinal)))
+        {
+            return Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
+                Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                $"JavaScript calls 'get{name}', which Elsa 3 generated for an activity output and which shadows any variable or input of that name.",
+                "Capture the activity output into a variable and read it with get{Variable}() before import."));
+        }
+
+        if (!accessors.IsReusable)
+        {
+            var inputs = definition.Inputs.Where(value => value.Name.Equals(name, StringComparison.Ordinal)).ToArray();
+            if (inputs.Length > 1)
+                return AmbiguousAmbient(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, name));
+            if (inputs.Length == 1)
+                return Resolve(Elsa3AmbientReferenceKind.WorkflowRequest, inputs[0].Name);
+        }
+
+        var variables = definition.Variables.Where(value => HasAccessor(value.Name, name)).ToArray();
+        var inputVariables = accessors.IsReusable
+            ? definition.Inputs.Where(value => HasAccessor(value.Name, name)).ToArray()
+            : [];
+        if (variables.Length + inputVariables.Length > 1)
+            return AmbiguousAmbient(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, name));
+        if (variables.Length == 1)
+            return Resolve(Elsa3AmbientReferenceKind.Variable, variables[0].Id);
+        if (inputVariables.Length == 1)
+            return Resolve(Elsa3AmbientReferenceKind.WorkflowRequest, inputVariables[0].Name);
+
+        return Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
+            Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+            $"JavaScript calls unknown or unapproved host function 'get{name}'.",
+            "Declare the variable or workflow input it reads, or replace the call with deterministic language syntax, before import."));
+
+        static bool HasAccessor(string declared, string accessor) =>
+            Elsa3JavaScriptNames.IsAccessorName(declared) &&
+            Elsa3JavaScriptNames.Pascalize(declared).Equals(accessor, StringComparison.Ordinal);
+    }
+
+    /// <summary>The Pascal-cased names of the definition's named activities, as Elsa 3 used them in output accessors.</summary>
+    private static IReadOnlyList<string> ActivityAccessorNames(Elsa3Activity? root)
+    {
+        var names = new List<string>();
+        Collect(root);
+        return names;
+
+        void Collect(Elsa3Activity? activity)
+        {
+            if (activity is null)
+                return;
+            if (!string.IsNullOrWhiteSpace(activity.Name))
+                names.Add(Elsa3JavaScriptNames.Pascalize(activity.Name));
+            foreach (var child in activity.Activities ?? [])
+                Collect(child);
         }
     }
 
@@ -919,5 +1000,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     private sealed record DiagnosticScope(IReadOnlyDictionary<string, string> Metadata, string DefinitionId);
 
     private sealed record ReferenceEdge(Elsa3MemoryOccurrence Producer, Elsa3MemoryOccurrence Consumer);
+
+    /// <summary>What decides which Elsa 3 generated accessors exist: the run mode and the named activities.</summary>
+    private sealed record AccessorScope(bool IsReusable, IReadOnlyList<string> ActivityNames);
 
 }

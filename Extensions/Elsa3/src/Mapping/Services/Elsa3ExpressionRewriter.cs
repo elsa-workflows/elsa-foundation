@@ -5,6 +5,7 @@ using Acornima;
 using Acornima.Ast;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa3.Mapping.Internal;
 using Fluid;
 
 namespace Elsa3.Mapping.Services;
@@ -582,6 +583,32 @@ public sealed class Elsa3ExpressionRewriter
                     return;
                 }
 
+                // Elsa 3 generated get{Name}() per variable and workflow input; the resolver decides which (spec 247 R-2).
+                if (TryGetAccessorName(callee.Name, "get", out var accessor))
+                {
+                    if (call.Arguments.Count != 0)
+                    {
+                        Issues.Add(new Elsa3ExpressionRewriteIssue(
+                            Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                            $"JavaScript calls '{callee.Name}' with arguments, which no Elsa 3 generated accessor takes.",
+                            "Call the accessor without arguments before import."));
+                        return;
+                    }
+
+                    AddResolvedEdit(call, Elsa3AmbientReferenceKind.GeneratedAccessor, accessor);
+                    return;
+                }
+
+                if (TryGetAccessorName(callee.Name, "set", out var setter) &&
+                    resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, setter)).Succeeded)
+                {
+                    Issues.Add(new Elsa3ExpressionRewriteIssue(
+                        Elsa3ImportDiagnosticCodes.ForbiddenCapability,
+                        $"JavaScript calls generated setter '{callee.Name}', which mutates workflow state.",
+                        "Use a Set Variable activity instead of the setter before import."));
+                    return;
+                }
+
                 if (!PureGlobalCalls.Contains(callee.Name))
                 {
                     Issues.Add(new Elsa3ExpressionRewriteIssue(
@@ -616,6 +643,15 @@ public sealed class Elsa3ExpressionRewriter
             if (node is Property { Computed: false, Shorthand: false } objectProperty)
             {
                 Visit(objectProperty.Value);
+                return;
+            }
+
+            // A generated accessor passed around as a value has no static read to lower.
+            if (node is Identifier accessorValue && !IsDeclared(accessorValue.Name) &&
+                TryGetAccessorName(accessorValue.Name, "get", out var accessorValueName) &&
+                resolve(new Elsa3AmbientReference(Elsa3AmbientReferenceKind.GeneratedAccessor, accessorValueName)).Succeeded)
+            {
+                Issues.Add(DynamicIssue($"JavaScript uses generated accessor '{accessorValue.Name}' as a value instead of calling it."));
                 return;
             }
 
@@ -714,7 +750,8 @@ public sealed class Elsa3ExpressionRewriter
             if (node is Identifier identifier && !IsDeclared(identifier.Name) &&
                 (TryGetAmbientKind(identifier.Name, out _) || identifier.Name.Equals("args", StringComparison.Ordinal)))
                 return true;
-            if (node is CallExpression { Callee: Identifier reader } && reader.Name is "getVariable" or "getInput" && !IsDeclared(reader.Name))
+            if (node is CallExpression { Callee: Identifier reader } && !IsDeclared(reader.Name) &&
+                (reader.Name is "getVariable" or "getInput" || TryGetAccessorName(reader.Name, "get", out _)))
                 return true;
             foreach (var child in node.ChildNodes)
             {
@@ -722,6 +759,17 @@ public sealed class Elsa3ExpressionRewriter
                     return true;
             }
             return false;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="name"/> has the shape of an Elsa 3 generated accessor (<c>get{Name}</c> or
+        /// <c>set{Name}</c>) rather than a built-in, and the <c>{Name}</c> part as written.
+        /// </summary>
+        private static bool TryGetAccessorName(string name, string prefix, out string accessor)
+        {
+            accessor = name.Length > prefix.Length ? name[prefix.Length..] : string.Empty;
+            return accessor.Length > 0 && name.StartsWith(prefix, StringComparison.Ordinal) &&
+                   !Elsa3JavaScriptNames.BuiltIns.Contains(name);
         }
 
         private bool IsNondeterministicCall(MemberExpression member) =>
@@ -883,6 +931,12 @@ public enum Elsa3AmbientReferenceKind
     WorkflowRequest,
     Variable,
     ActivityResult,
+
+    /// <summary>
+    /// A call <c>get{Name}()</c> to a function Elsa 3 generated per variable or workflow input; <c>Name</c> is the
+    /// callee without <c>get</c>, as written. The resolver decides which declaration Elsa 3 bound it to.
+    /// </summary>
+    GeneratedAccessor,
 }
 
 public sealed record Elsa3AmbientReference(Elsa3AmbientReferenceKind Kind, string Name);

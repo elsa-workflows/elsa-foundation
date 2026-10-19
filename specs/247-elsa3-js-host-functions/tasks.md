@@ -80,20 +80,20 @@ Elsa 3's values.
 **Independent test**: a variable `HttpRequestBody` and an input `OrderId` give the same bindings as the explicit
 `getVariable`/`getInput` calls.
 
-- [ ] T009 [US2] Add `GeneratedAccessor` to the public enum `Elsa3AmbientReferenceKind` in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs`, with an XML doc: "a call `get{Name}()`; `Name` is the callee without `get`, as written"
-- [ ] T010 [US2] In `Elsa3ExpressionRewriter.JavaScriptAnalyzer.VisitNode`, for an undeclared callee `get{N}` with zero arguments that is not a built-in, call `AddResolvedEdit(call, GeneratedAccessor, N)`. Rules:
-  - The parameter name is the resolved declaration's name. Pass it back through the resolution: add `string? ParameterName` to `Elsa3ExpressionParameterResolution.Success` (an optional parameter, so the change is additive)
+- [X] T009 [US2] Add `GeneratedAccessor` to the public enum `Elsa3AmbientReferenceKind` in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs`, with an XML doc: "a call `get{Name}()`; `Name` is the callee without `get`, as written"
+- [X] T010 [US2] In `Elsa3ExpressionRewriter.JavaScriptAnalyzer.VisitNode`, for an undeclared callee `get{N}` with zero arguments that is not a built-in, call `AddResolvedEdit(call, GeneratedAccessor, N)`. Rules:
+  - The parameter is named after the accessor (`getHttpRequestBody()` → `args.HttpRequestBody`), so no `ParameterName` was added to the resolution (deviation from the first draft of this task)
   - With arguments, or a callee used without a call (`var f = getX`) where `getX` resolves → `DynamicIssue` (VF-IMP-006)
   - Treat `set{N}(…)` for a resolvable `N` as a mutation (VF-IMP-005, guidance "Use a Set Variable activity")
   - Extend `ContainsAmbientRoot` so mutating `get{N}()` results is refused, like `getVariable`
-- [ ] T011 [US2] In `Extensions/Elsa3/src/Mapping/Services/Elsa3ValueFlowLowerer.cs` `ResolveAmbient`, add the `GeneratedAccessor` case, in order (data-model.md, research R-2):
+- [X] T011 [US2] In `Extensions/Elsa3/src/Mapping/Services/Elsa3ValueFlowLowerer.cs` `ResolveAmbient`, add the `GeneratedAccessor` case, in order (data-model.md, research R-2):
   1. An output-accessor match → `Failure(VF-IMP-005, "reads activity output accessor …", "Capture the output into a variable and read it with get{Variable}()")`. A match is a named activity in the definition with an output whose `get{Pascalize(output)}From{Pascalize(activityName)}` equals the callee
   2. Standalone only: an input with ordinal-equal name → `WorkflowRequestExpressionParameterBinding`
   3. Variables with `IsAccessorName(name)` and `Pascalize(name) == N`, through the existing variable path (loop variables included). In reusable mode, inputs with `Pascalize(input) == N` are also candidates; an input match resolves as `getInput` does today
   4. No match → `Failure(VF-IMP-005, "calls unknown or unapproved host function 'get{N}'", existing guidance)`
 
   Two candidates at one step give VF-IMP-002. Thread `IsReusable` from `Elsa3ConversionRequest` into the lowerer if it is not already available there
-- [ ] T012 [P] [US2] Tests in a new `Extensions/Elsa3/tests/Mapping/Tests/Elsa3GeneratedAccessorTests.cs`:
+- [X] T012 [P] [US2] Tests in a new `Extensions/Elsa3/tests/Mapping/Tests/Elsa3GeneratedAccessorTests.cs`:
   - US2 scenarios 1–6
   - `getHttpRequestBody().text` and `getVariable('HttpRequestBody').text` give equal parameter bindings
   - `getorderId()` with a variable `orderId` → VF-IMP-005
@@ -103,7 +103,7 @@ Elsa 3's values.
   - A variable `a_b` has no accessor → refused
   - `getOrderId(1)` → refused
   - Run the converted expressions with T002 to check the value (SC-003)
-- [ ] T013 [US2] In `Extensions/Elsa3/tests/Mapping/Tests/Elsa3JavaScriptConversionTests.cs`, move the `getOrderId()` row of `Constructs_elsa4_cannot_run_are_refused` to a case with no matching declaration, so it still refuses for the right reason
+- [X] T013 [US2] In `Extensions/Elsa3/tests/Mapping/Tests/Elsa3JavaScriptConversionTests.cs`, move the `getOrderId()` row of `Constructs_elsa4_cannot_run_are_refused` to a case with no matching declaration, so it still refuses for the right reason. (Already true: that fixture declares no matching variable; nothing changed.)
 
 **Checkpoint**: Mapping tests are green.
 
