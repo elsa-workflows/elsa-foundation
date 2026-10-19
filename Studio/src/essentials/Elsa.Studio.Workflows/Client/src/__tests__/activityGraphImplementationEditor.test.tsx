@@ -55,15 +55,15 @@ describe("ActivityGraphImplementationEditor boundary outcome mappings", () => {
       onChange
     });
 
-    const source = rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Root outcome reference key']")!;
-    const boundary = rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Boundary outcome reference key']")!;
+    const source = rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Designer outcome']")!;
+    const boundary = rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Activity outcome']")!;
     expect([...source.options].map(option => ({ value: option.value, disabled: option.disabled }))).toContainEqual({ value: "rejected", disabled: false });
     expect([...source.options].map(option => option.value)).not.toContain("unstable-name-only");
     expect([...boundary.options].map(option => ({ value: option.value, disabled: option.disabled }))).toContainEqual({ value: "declined-boundary", disabled: false });
 
     change(source, "rejected");
     change(boundary, "declined-boundary");
-    click(buttonByText(rendered.container, "Add mapping"));
+    click(buttonByText(rendered.container, "Connect"));
 
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
       payload: expect.objectContaining({
@@ -83,16 +83,16 @@ describe("ActivityGraphImplementationEditor boundary outcome mappings", () => {
       })
     });
 
-    expect(rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Root outcome reference key']")?.disabled).toBe(true);
-    expect(rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Boundary outcome reference key']")?.disabled).toBe(true);
-    expect(buttonByText(rendered.container, "Add mapping").disabled).toBe(true);
-    expect(buttonByText(rendered.container, "Remove mapping").disabled).toBe(true);
+    expect(rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Designer outcome']")?.disabled).toBe(true);
+    expect(rendered.container.querySelector<HTMLSelectElement>("select[aria-label='Activity outcome']")?.disabled).toBe(true);
+    expect(buttonByText(rendered.container, "Connect").disabled).toBe(true);
+    expect(buttonByText(rendered.container, "Remove connection").disabled).toBe(true);
   });
 
   it("keeps schema 1 free of schema-2 mapping controls", () => {
     const rendered = renderEditor({ providerSchemaVersion: "1" });
 
-    expect(rendered.container.textContent).not.toContain("Boundary outcome mappings");
+    expect(rendered.container.textContent).not.toContain("Completion paths");
   });
 });
 
@@ -695,9 +695,9 @@ describe("ActivityGraphImplementationEditor boundary output mappings", () => {
       onChange
     });
 
-    expect(rendered.container.textContent).toContain("A required public output needs exactly one boundary expression.");
-    await vi.waitFor(() => expect(buttonByText(rendered.container, "Add expression").disabled).toBe(false));
-    click(buttonByText(rendered.container, "Add expression"));
+    expect(rendered.container.textContent).toContain("Choose a value for this required output.");
+    await vi.waitFor(() => expect(buttonByText(rendered.container, "Set value").disabled).toBe(false));
+    click(buttonByText(rendered.container, "Set value"));
 
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({
       payload: expect.objectContaining({
@@ -727,8 +727,8 @@ describe("ActivityGraphImplementationEditor boundary output mappings", () => {
       }
     });
 
-    expect(rendered.container.textContent).toContain("No boundary expression is configured.");
-    expect(rendered.container.textContent).not.toContain("A required public output needs exactly one boundary expression.");
+    expect(rendered.container.textContent).toContain("No value is configured.");
+    expect(rendered.container.textContent).not.toContain("Choose a value for this required output.");
   });
 });
 

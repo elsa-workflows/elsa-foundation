@@ -1653,7 +1653,7 @@ function browserVersion(
 // Activity-icon shots default to Classic light — Studio 4's default theme.
 const darkVariant = searchParams.get("theme") === "dark";
 const fixtureTheme = activityIconsFixture || activityDuplicateFixture || activityDuplicateEditorFixture || activityInspectorTabsFixture || validationLabelsFixture ? "classic" : "meridian";
-if (!navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture && !homeFixture && !userMenuFixture) {
+if (searchParams.get("mode") !== "activity-authoring" && !navPlacementFixture && !navBeforeFixture && !settingsBeforeFixture && !settingsFixture && !homeFixture && !userMenuFixture) {
   document.documentElement.dataset.theme = fixtureTheme;
   document.documentElement.dataset.themeLayout = "classic";
   document.documentElement.dataset.themeMode = darkVariant ? "dark" : "light";
@@ -1674,6 +1674,11 @@ if (activityIconsFixture && searchParams.get("host-override") === "1") {
 const root = createRoot(document.getElementById("root")!);
 
 async function renderRequestedFixture() {
+  if (searchParams.get("mode") === "activity-authoring") {
+    const { ActivityAuthoringFixture } = await import("./activityAuthoringFixture");
+    root.render(<ActivityAuthoringFixture />);
+    return;
+  }
   if (searchParams.get("mode") === "incident-diagnostics") {
     const { IncidentDiagnosticsFixture } = await import("./incidentDiagnosticsFixture");
     root.render(<IncidentDiagnosticsFixture />);
