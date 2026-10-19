@@ -435,9 +435,7 @@ internal sealed class Elsa3ActivityNormalizer(
     {
         var custom = context.Activity.CustomProperties;
         var canStartWorkflow = custom?.CanStartWorkflow ?? false;
-        var rule = entry.Members.FirstOrDefault(member =>
-            member.Kind == Elsa3MemberKind.CustomProperty &&
-            StringComparer.OrdinalIgnoreCase.Equals(member.Elsa3Name, "CanStartWorkflow"));
+        var rule = CanStartWorkflowRule(entry);
         var literal = canStartWorkflow ? "true" : "false";
         switch (rule?.Rule)
         {
@@ -455,13 +453,8 @@ internal sealed class Elsa3ActivityNormalizer(
                         "Use a Delay for a mid-flow wait, or make the activity start the workflow.",
                         "customProperties.canStartWorkflow");
                 break;
-            default:
-                if (canStartWorkflow)
-                    context.Error(RemovedInputBound,
-                        $"Elsa 3 activity '{context.Activity.Type}' is marked canStartWorkflow, which its Elsa 4 activity does not support.",
-                        "Clear canStartWorkflow, or start the workflow with a trigger activity.",
-                        "customProperties.canStartWorkflow");
-                break;
+            // A non-trigger: Elsa 3 only uses the flag to pick a flowchart's start when no trigger fired. Graph
+            // conversion reads it for the start node; the Elsa 4 activity gets nothing.
         }
 
         if (custom?.RunAsynchronously == true)
@@ -470,6 +463,19 @@ internal sealed class Elsa3ActivityNormalizer(
                 "Clear runAsynchronously before converting.",
                 "customProperties.runAsynchronously");
     }
+
+    /// <summary>The entry's <c>customProperties.canStartWorkflow</c> rule; only Elsa 3 triggers declare one.</summary>
+    private static Elsa3MemberRule? CanStartWorkflowRule(Elsa3ActivityMapEntry entry) =>
+        entry.Members.FirstOrDefault(member =>
+            member.Kind == Elsa3MemberKind.CustomProperty &&
+            StringComparer.OrdinalIgnoreCase.Equals(member.Elsa3Name, "CanStartWorkflow"));
+
+    /// <summary>
+    /// Whether the node's map entry says it is not an Elsa 3 trigger, so its <c>canStartWorkflow</c> flag can only pick
+    /// a flowchart's start. A node without an entry (alias, catalog key, replacement) is not known to be a non-trigger.
+    /// </summary>
+    internal static bool IsNonTrigger(Elsa3NodePlan? node) =>
+        node?.Resolved?.Entry is { } entry && CanStartWorkflowRule(entry) is null;
 
     private static void ApplyEntryWarnings(Elsa3RewriteContext context, Elsa3ActivityMapEntry entry)
     {
@@ -587,7 +593,7 @@ internal sealed class Elsa3ActivityNormalizer(
             case Elsa3ValueContract.JsonOnly:
                 if (isLiteral)
                     return IsJson(literal) ? value : Outside("must be JSON", "Use a JSON literal.");
-                if (alias is null || alias is "Object" or "JsonElement" or "JsonNode" or "JsonObject" or "ExpandoObject" or "IDictionary" or "Dictionary")
+                if (alias is null || alias is "Object" or "JsonElement" or "JsonNode" or "JsonObject" or "ExpandoObject" or "IDictionary" or "Dictionary" or "ObjectDictionary")
                     return value;
                 return Outside($"must be JSON, but is declared as '{alias}'", "Produce a JSON object in the expression and declare its type as Object.");
             case Elsa3ValueContract.EnumNameToInt:
@@ -765,7 +771,8 @@ internal sealed class Elsa3ActivityNormalizer(
             return;
         foreach (var input in node.Resolved.Inputs.Where(input => input.IsRequired))
         {
-            if (context.Activity.AdditionalProperties.TryGetValue(input.ReferenceKey, out var value) && Elsa3TypedValues.IsBound(value))
+            if (context.Activity.AdditionalProperties.TryGetValue(input.ReferenceKey, out var value) &&
+                (Elsa3TypedValues.IsBound(value) || IsEmittedDefault(node.Resolved.Entry, input.ReferenceKey, value)))
                 continue;
             context.Error(RequiredInputUnbound,
                 $"Required Elsa 4 input '{input.ReferenceKey}' of '{node.Resolved.ActivityTypeKey ?? node.Resolved.ActivityVersionId}' would stay unbound.",
@@ -773,6 +780,17 @@ internal sealed class Elsa3ActivityNormalizer(
                 input.ReferenceKey);
         }
     }
+
+    /// <summary>
+    /// Whether the value is the literal the entry's R2 rule emits for the member. A blank default (WriteLine's empty
+    /// line) is bound although <see cref="Elsa3TypedValues.IsBound"/> counts a blank literal as unbound.
+    /// </summary>
+    private static bool IsEmittedDefault(Elsa3ActivityMapEntry? entry, string elsa4Key, JsonElement value) =>
+        entry?.Members.FirstOrDefault(rule => rule is { Rule: Elsa3MemberRuleKind.DefaultFlip, Kind: Elsa3MemberKind.Input } &&
+                                              StringComparer.Ordinal.Equals(rule.Elsa4Key, elsa4Key))
+            is { Elsa3Default: { ValueKind: JsonValueKind.String } elsa3Default } &&
+        Elsa3TypedValues.TryGetLiteral(value, out var literal) &&
+        StringComparer.Ordinal.Equals(literal, elsa3Default.GetString());
 
     private Elsa3Activity? ReadChild(
         Elsa3ConversionPlan plan,

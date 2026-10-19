@@ -89,7 +89,7 @@ internal sealed partial class Elsa3BuiltInActivityMap
 
     private static IEnumerable<Elsa3ActivityMapEntry> PrimitivesAndIntrinsics() =>
     [
-        Catalog("WriteLine", Primitives + "WriteLine", [Carry("Text", "text")]),
+        Catalog("WriteLine", Primitives + "WriteLine", [DefaultFlip("Text", "text", "")]),
         Catalog("ReadLine", Primitives + "ReadLine", [CarryOutput("Result", "Result")]),
         Catalog("Fault", Primitives + "Fault",
             [
