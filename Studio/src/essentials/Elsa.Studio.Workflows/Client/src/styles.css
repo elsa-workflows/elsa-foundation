@@ -3201,7 +3201,7 @@
   transition: border-color 0.12s ease, background 0.12s ease;
 }
 
-.wf-root-card:not([aria-disabled="true"]):hover {
+.wf-root-card:not(:where([aria-disabled="true"])):hover {
   border-color: color-mix(in srgb, var(--wf-accent) 32%, var(--wf-border));
   background:
     linear-gradient(color-mix(in srgb, var(--wf-accent) 6%, transparent) 0 0),
