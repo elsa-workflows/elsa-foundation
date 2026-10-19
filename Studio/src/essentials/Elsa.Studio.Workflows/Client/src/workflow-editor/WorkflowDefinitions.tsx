@@ -43,9 +43,11 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
   const [selectedDefinitionIds, setSelectedDefinitionIds] = useState<Set<string>>(() => new Set());
   const [createDraft, setCreateDraft] = useState<CreateWorkflowDraft | null>(null);
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState("");
   const [catalog, setCatalog] = useState<ActivityCatalogItem[]>([]);
   const [catalogState, setCatalogState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const [catalogError, setCatalogError] = useState("");
+  const createInFlightRef = useRef(false);
   const [folderCapability, setFolderCapability] = useState<"unknown" | "available" | "unavailable">("unknown");
   const [moveCapabilityAvailable, setMoveCapabilityAvailable] = useState(false);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
@@ -206,15 +208,17 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
 
   const openCreateDialog = () => {
     setError("");
+    setCreateError("");
     setStatus("");
     setCreateDraft({ name: "", description: "", rootActivityVersionId: null });
     void loadCatalog();
   };
 
   const submitCreate = async () => {
-    if (!createDraft?.name.trim() || catalogState !== "ready") return;
+    if (createInFlightRef.current || !createDraft?.name.trim() || catalogState !== "ready") return;
+    createInFlightRef.current = true;
     setCreating(true);
-    setError("");
+    setCreateError("");
     setStatus("");
     try {
       const folderId = folderCapability === "available" ? selectedFolderId(folderSelection) : null;
@@ -232,8 +236,9 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
       setCreateDraft(null);
       onOpen(details.definition.id);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setCreateError(e instanceof Error ? e.message : String(e));
     } finally {
+      createInFlightRef.current = false;
       setCreating(false);
     }
   };
@@ -525,6 +530,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
             catalogState={catalogState}
             catalogError={catalogError}
             creating={creating}
+            submitError={createError}
             ai={ai}
             suggestMetadataAction={suggestMetadataAction}
             onChange={nextDraft => setCreateDraft(nextDraft)}
