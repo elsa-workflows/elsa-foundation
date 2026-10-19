@@ -67,10 +67,10 @@ test("Activity Definition graph authoring shares the designer without workflow l
   const target = page.getByRole("combobox", { name: "Activity outcome" });
   await source.selectOption("completed");
   await target.selectOption("accepted");
-  await page.getByRole("button", { name: "Connect" }).click();
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
   await source.selectOption("faulted");
   await target.selectOption("accepted");
-  await page.getByRole("button", { name: "Connect" }).click();
+  await page.getByRole("button", { name: "Connect", exact: true }).click();
   await expect(page.getByText("Completed → Accepted")).toBeVisible();
   await expect(page.getByText("Faulted → Accepted")).toBeVisible();
 
@@ -96,5 +96,5 @@ test("Activity Definition graph authoring shares the designer without workflow l
   await page.getByRole("tab", { name: "Public Interface" }).click();
   await page.getByText("Compatibility details", { exact: true }).click();
   await expect(page.getByText(/Schema 1 retains its historical single/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Connect" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Connect", exact: true })).toHaveCount(0);
 });
