@@ -778,95 +778,189 @@ test("published recommendation is placed exactly, dispatched once, and inspected
   await expect(page.getByText("One Run · workflow-execution-1")).toBeVisible();
   expect(journey.dispatchWrites).toBe(1);
   const runDetails = page.getByRole("complementary", { name: "Run details" });
+  const overview = runDetails.locator(".wf-activity-overview");
+  await expect(overview).toContainText("Published browser activity");
+  await expect(overview).toContainText("Completed");
+  await expect(runDetails.getByRole("heading", { name: "Inputs" })).toBeVisible();
+  await expect(runDetails.getByRole("heading", { name: "Outputs" })).toBeVisible();
+  await expect(runDetails.getByRole("heading", { name: "Outcomes" })).toBeVisible();
   const boundaryDetails = runDetails.locator(".wf-activity-boundary-details > details");
   await expect(boundaryDetails).toBeVisible();
   await expect(boundaryDetails).not.toHaveAttribute("open");
-  await expect(runDetails.getByRole("region", { name: "Reusable boundary Runtime Evidence" })).toHaveCount(0);
+  await expect(runDetails.getByRole("region", { name: "Activity internals" })).toHaveCount(0);
   expect(journey.boundaryLayoutReads).toBe(0);
   expect(journey.descendantReads).toBe(0);
   await boundaryDetails.locator("summary").click();
-  const exactSource = runDetails.getByRole("region", { name: "Exact boundary source" });
-  await expect(exactSource.getByRole("link", { name: "Open exact Activity Definition" })).toBeVisible();
-  const technicalIdentity = runDetails.locator("details.wf-boundary-technical-identity");
-  await expect(technicalIdentity).toBeVisible();
-  await expect(technicalIdentity).not.toHaveAttribute("open");
-  await expect(runDetails.getByRole("region", { name: "Technical identity" })).toBeHidden();
-  const aggregate = runDetails.locator("details.wf-boundary-aggregate-disclosure");
-  await expect(aggregate).toBeVisible();
-  await expect(aggregate).not.toHaveAttribute("open");
+  const internals = runDetails.getByRole("region", { name: "Activity internals" });
+  await expect(internals).toBeVisible();
+  await expect(internals.getByRole("tablist", { name: "Activity details" })).toBeVisible();
+  await expect(internals.getByRole("tab", { name: "Steps" })).toHaveAttribute("aria-selected", "true");
+  await expect(internals.getByRole("tab", { name: "Definition" })).toHaveAttribute("aria-selected", "false");
+  await expect(internals.getByRole("link", { name: "View activity definition" })).toBeVisible();
+  const technical = internals.locator("details.wf-boundary-technical");
+  await expect(technical).toBeVisible();
+  await expect(technical).not.toHaveAttribute("open");
+  await expect(technical.getByText("Definition ID", { exact: true })).toBeHidden();
+  await expect(technical.getByText("activity-def-browser", { exact: true })).toBeHidden();
   await expect.poll(() => journey.boundaryLayoutReads).toBe(1);
   await expect.poll(() => journey.descendantReads).toBe(1);
-  await expect(runDetails).toContainText("Pinned historical layout");
-  await expect(runDetails).toContainText("workflow-source-1");
-  await technicalIdentity.locator("summary").click();
-  await expect(technicalIdentity.getByRole("region", { name: "Technical identity" })).toBeVisible();
-  await expect(technicalIdentity).toContainText("activity-def-browser");
-  await expect(technicalIdentity).toContainText("published-version-1");
-  await aggregate.locator("summary").click();
-  await expect(aggregate.getByRole("region", { name: "Descendant aggregate" })).toBeVisible();
-  await expect(aggregate).toContainText("Descendant aggregate");
-  await expect(runDetails).toContainText("invoice-write");
+  await expect(internals.getByRole("tree", { name: "Activity steps" })).toBeVisible();
+  await expect(internals.getByRole("button", { name: "Refresh activity steps" })).toContainText("Refresh");
+  const announcement = internals.locator(".wf-boundary-announcement");
+  await expect(announcement).toHaveAttribute("aria-live", "polite");
+  const announcementStyle = await announcement.evaluate(element => {
+    const style = getComputedStyle(element);
+    return {
+      width: style.width,
+      height: style.height,
+      overflow: style.overflow,
+      clipPath: style.clipPath
+    };
+  });
+  expect(announcementStyle).toEqual({ width: "1px", height: "1px", overflow: "hidden", clipPath: "inset(50%)" });
+  expect(await internals.evaluate(element => getComputedStyle(element).position)).toBe("relative");
+  const announcementDocumentHeightDelta = await announcement.evaluate(element => {
+    const root = document.documentElement;
+    const documentHeight = root.scrollHeight;
+    const originalDisplay = element.style.display;
+    element.style.display = "none";
+    const heightWithoutAnnouncement = root.scrollHeight;
+    element.style.display = originalDisplay;
+    return documentHeight - heightWithoutAnnouncement;
+  });
+  expect(announcementDocumentHeightDelta).toBe(0);
+  await expect(internals.getByRole("treeitem").filter({ hasText: "Write Line" })).toHaveCount(2);
+  await expect(internals.getByRole("treeitem").filter({ hasText: "descendant-execution-1" })).toHaveCount(0);
+  await expect(internals.getByText("Saved activity layout", { exact: true })).toHaveCount(0);
 
-  await runDetails.getByRole("tab", { name: /Runtime Evidence/ }).click();
-  await expect(runDetails).toContainText("Committed through sequence 5");
-  expect(journey.descendantReads).toBe(1);
-  const descendant = runDetails.getByRole("treeitem", { name: /descendant-execution-1/ });
-  await expect(descendant).toBeVisible();
-  await descendant.focus();
-  await page.keyboard.press("Enter");
-  await expect(runDetails).toContainText("Canonical execution descendant-execution-1");
-  await expect(runDetails).toContainText("Cancelling is nonterminal");
-  await expect(runDetails).toContainText("bookmark-attempt-2");
-  await expect(runDetails).toContainText("incident-attempt-2");
-  await expect(runDetails.getByText("Captured", { exact: true })).toBeVisible();
-  await expect(runDetails.getByText("Redacted", { exact: true })).toBeVisible();
-  await expect(runDetails.getByText("Not captured", { exact: true })).toBeVisible();
-  await expect(runDetails.getByText("Capture failed", { exact: true })).toBeVisible();
-  await expect(runDetails.getByText("Payload reference", { exact: true })).toBeVisible();
-  await expect(runDetails.getByRole("button", { name: /Reveal|Download/ })).toHaveCount(0);
-  await runDetails.getByRole("button", { name: /Previous attempt.*faulted-execution-1/ }).click();
-  await expect(runDetails).toContainText("Canonical execution faulted-execution-1");
-  await expect(runDetails).toContainText("incident-attempt-1");
-  await expect(runDetails).toContainText("Original fault remains inspectable");
-  const historicalLoop = runDetails.getByRole("treeitem", { name: /loop-execution-1/ });
-  await expect(historicalLoop).toContainText("iteration loop-7");
-  await expect(historicalLoop).toContainText("Contoso.RemovedActivity");
+  const longLabel = "Long Unusually Long Activity Name With Many Words And Compound Segments";
+  const longRow = internals.getByRole("treeitem").filter({ hasText: longLabel });
+  await expect(longRow).toContainText("1234567890");
+  await expect(longRow).toContainText("987654321");
+  await internals.evaluate(element => {
+    const inspector = element as HTMLElement;
+    inspector.style.width = "320px";
+    inspector.style.maxWidth = "320px";
+    inspector.style.boxSizing = "border-box";
+  });
+  const rowGeometry = await internals.evaluate(element => {
+    const inspector = element as HTMLElement;
+    const viewport = inspector.querySelector<HTMLElement>(".wf-boundary-hierarchy-viewport")!;
+    const spacer = viewport.querySelector<HTMLElement>(".wf-boundary-hierarchy-spacer")!;
+    const rows = [...spacer.querySelectorAll<HTMLElement>(".wf-boundary-hierarchy-row")];
+    return {
+      inspectorWidth: inspector.getBoundingClientRect().width,
+      spacerHeight: Number.parseFloat(spacer.style.height),
+      viewportHeight: viewport.getBoundingClientRect().height,
+      rowHeights: rows.map(row => row.getBoundingClientRect().height),
+      rowTops: rows.map(row => row.getBoundingClientRect().top),
+      overlappingRows: rows.filter(row => {
+        const identity = row.querySelector(".wf-boundary-hierarchy-identity")!.getBoundingClientRect();
+        const state = row.querySelector(".wf-boundary-hierarchy-state")!.getBoundingClientRect();
+        return identity.right > state.left + 1;
+      }).length
+    };
+  });
+  expect(rowGeometry.inspectorWidth).toBe(320);
+  expect(rowGeometry.spacerHeight).toBe(rowGeometry.rowHeights.length * 88);
+  expect(rowGeometry.rowHeights.every(height => height === 88)).toBe(true);
+  expect(rowGeometry.rowTops.slice(1).every((top, index) => top - rowGeometry.rowTops[index]! === 88)).toBe(true);
+  expect(rowGeometry.overlappingRows).toBe(0);
+  await longRow.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(internals.getByRole("treeitem").filter({ hasText: "Removed Activity" })).toBeFocused();
+
+  await internals.getByRole("tab", { name: "Definition" }).click();
+  await expect(internals).toContainText("Saved activity layout");
+  await expect(internals).toContainText("workflow-source-1");
+  await internals.getByRole("tab", { name: "Steps" }).click();
+  await expectBoundarySnapshotSequence(internals, 5);
+  await expect(technical).toContainText("activity-def-browser");
+  await expect(technical).toContainText("published-version-1");
+  await expect(technical).toContainText("Descendant aggregate");
+
+  const descendant = internals.getByRole("treeitem").filter({ hasText: "Cancelling" });
+  await expect(descendant).toContainText("Write Line");
+  await descendant.click();
+  const selectedStep = internals.getByRole("region", { name: "Selected activity step" });
+  await expect(selectedStep).toContainText("Write Line");
+  await expect(selectedStep).toContainText("Cancellation is still finishing.");
+  await expect(selectedStep).toContainText("Cancellation cleanup is still running.");
+  await expect(selectedStep).not.toContainText("descendant-execution-1");
+  await expect(selectedStep).toContainText("Captured");
+  await expect(selectedStep).toContainText("Redacted");
+  await expect(selectedStep).toContainText("Not captured");
+  await expect(selectedStep).toContainText("Capture failed");
+  await expect(selectedStep).toContainText("Payload reference");
+  await expect(selectedStep.getByRole("button", { name: /Reveal|Download/ })).toHaveCount(0);
+  await expect(technical).not.toHaveAttribute("open");
+  await expectBoundarySnapshotSequence(internals, 5);
+  await expect(technical).toContainText("descendant-execution-1");
+  await expect(technical).toContainText("bookmark-attempt-2");
+  await expect(technical).toContainText("incident-attempt-2");
+
+  await technical.getByRole("button", { name: /Previous attempt/ }).click();
+  const faultedStep = internals.getByRole("region", { name: "Selected activity step" });
+  await expect(faultedStep).toContainText("Write Line");
+  await expect(faultedStep).toContainText("Original fault remains inspectable after retry.");
+  await expect(faultedStep).toContainText("Faulted");
+  await expect(faultedStep.getByRole("button", { name: /Reveal|Download/ })).toHaveCount(0);
+
+  const historicalLoop = internals.getByRole("treeitem").filter({ hasText: "Removed Activity" });
+  await expect(historicalLoop).toBeVisible();
   await historicalLoop.click();
-  await expect(runDetails).toContainText("Canonical execution detail is unavailable");
-  await runDetails.getByRole("tab", { name: "Pinned structure" }).click();
-  await expect(runDetails).toContainText("Pinned historical layout");
-  await expect(runDetails).toContainText("workflow-source-1");
-  await runDetails.getByRole("tab", { name: /Runtime Evidence/ }).click();
+  await expect(internals.getByRole("alert")).toContainText("Selected step detail is unavailable");
 
-  const nestedBoundary = runDetails.getByRole("treeitem", { name: /nested-boundary-execution-1/ });
-  await nestedBoundary.getByRole("button", { name: "Open boundary" }).click();
-  await expect(runDetails).toContainText("Execution nested-boundary-execution-1");
-  await expect(runDetails).toContainText("nested-source-reference");
-  await runDetails.getByRole("tab", { name: /Runtime Evidence/ }).click();
-  await expect(runDetails).toContainText("Committed through sequence 6");
-  await expect(runDetails.getByRole("treeitem", { name: /nested-child-execution-1/ })).toBeVisible();
+  const nestedBoundary = internals.getByRole("treeitem").filter({ hasText: "Nested Evaluator" });
+  await nestedBoundary.getByRole("button", { name: "View steps" }).click();
+  const path = internals.getByRole("navigation", { name: "Activity boundary path" });
+  await expect(path).toContainText("Published browser activity");
+  await expect(path).toContainText("Nested Evaluator");
+  await expect(path).not.toContainText("boundary-execution-1");
+  await expect(path).not.toContainText("nested-boundary-execution-1");
+  await expect(path).toContainText("Completed");
+  await expect(internals.getByRole("treeitem").filter({ hasText: "Write Line" })).toBeVisible();
+  await expectBoundarySnapshotSequence(internals, 6);
+  const singleRowViewport = await internals.evaluate(element => {
+    const viewport = element.querySelector<HTMLElement>(".wf-boundary-hierarchy-viewport")!;
+    return {
+      rowCount: viewport.querySelectorAll(".wf-boundary-hierarchy-row").length,
+      clientHeight: viewport.clientHeight,
+      scrollHeight: viewport.scrollHeight
+    };
+  });
+  expect(singleRowViewport.rowCount).toBe(1);
+  expect(singleRowViewport.clientHeight).toBe(88);
+  expect(singleRowViewport.scrollHeight).toBeLessThanOrEqual(singleRowViewport.clientHeight);
 
-  await runDetails.getByRole("button", { name: /InvoiceEvaluator.*Execution boundary-execution-1/ }).click();
-  await expect(runDetails).toContainText("Committed through sequence 5");
-  await expect(runDetails).toContainText("Canonical execution detail is unavailable");
-  await expect(runDetails).toContainText("Contoso.RemovedActivity");
+  await path.getByRole("button", { name: "Published browser activity" }).click();
+  await expectBoundarySnapshotSequence(internals, 5);
+  await expect(internals.getByRole("treeitem").filter({ hasText: "Removed Activity" })).toBeVisible();
 
-  await runDetails.getByRole("button", { name: "Load next committed page" }).click();
-  await expect(runDetails).toContainText("Loaded evidence is stale");
-  await expect(runDetails).toContainText("Committed through sequence 5");
-  await expect(runDetails).toContainText("loop-execution-1");
-  await runDetails.getByRole("button", { name: "Restart from first page" }).click();
-  await expect(runDetails).toContainText("Committed through sequence 6");
+  await internals.getByRole("button", { name: "Load more steps" }).click();
+  await expect(internals).toContainText("out of date");
+  await expectBoundarySnapshotSequence(internals, 5);
+  await expect(internals.getByRole("treeitem").filter({ hasText: "Removed Activity" })).toBeVisible();
+  await internals.getByRole("button", { name: "Refresh steps" }).click();
+  await expectBoundarySnapshotSequence(internals, 6);
 
-  await runDetails.getByRole("button", { name: "Load next committed page" }).click();
-  await expect(runDetails).toContainText("Loaded evidence is stale");
-  await expect(runDetails).toContainText("Committed through sequence 6");
-  await runDetails.getByRole("button", { name: "Restart from first page" }).click();
-  await expect(runDetails).toContainText("Committed through sequence 7");
+  await internals.getByRole("button", { name: "Load more steps" }).click();
+  await expect(internals).toContainText("out of date");
+  await expectBoundarySnapshotSequence(internals, 6);
+  await internals.getByRole("button", { name: "Refresh steps" }).click();
+  await expectBoundarySnapshotSequence(internals, 7);
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
 });
+
+async function expectBoundarySnapshotSequence(scope: import("@playwright/test").Locator, sequence: number) {
+  const technical = scope.locator("details.wf-boundary-technical");
+  if (await technical.getAttribute("open") === null) await technical.locator("summary").click();
+  await expect(
+    technical.locator("dt").filter({ hasText: "Snapshot through sequence" }).locator("xpath=following-sibling::dd[1]")
+  ).toHaveText(String(sequence));
+}
 
 test("Activity Definition publication reconciles an ambiguous response without duplicate writes", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
@@ -2063,6 +2157,16 @@ async function mockReusableBoundaryJourney(page: Page) {
             },
             bookmarkCount: 1,
             incidentCount: 1
+          },
+          {
+            ...hierarchyBrowserItem(
+              "long-activity-execution-1",
+              "long-node",
+              "Elsa.Activities.Test.LongUnusuallyLongActivityNameWithManyWordsAndCompoundSegments",
+              4
+            ),
+            bookmarkCount: 1234567890,
+            incidentCount: 987654321
           },
           {
             ...hierarchyBrowserItem("loop-execution-1", "removed-loop", "Contoso.RemovedActivity", 4),
