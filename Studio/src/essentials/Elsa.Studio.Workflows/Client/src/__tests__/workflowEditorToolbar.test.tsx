@@ -36,17 +36,17 @@ describe("compact workflow toolbar", () => {
   it("keeps primary commands directly available with descriptive accessible labels", () => {
     const { container, commands } = render();
     const save = container.querySelector<HTMLButtonElement>(".wf-save-button")!;
-    const publish = container.querySelector<HTMLButtonElement>(".wf-review-button")!;
+    const publish = container.querySelector<HTMLButtonElement>(".wf-publish-primary")!;
     const run = container.querySelector<HTMLButtonElement>(".wf-run-button")!;
     expect(save.title).toBe("Save workflow");
     expect(save.textContent).toBe("Save");
     expect(save.querySelector(".wf-toolbar-sr-only")).not.toBeNull();
-    expect(publish.textContent).toBe("Review & publish");
-    expect(publish.querySelector(".wf-toolbar-sr-only")?.textContent).toBe("Review & ");
-    expect(publish.title).toBe("Review changes and publish this workflow");
+    expect(publish.textContent).toBe("Review and Publish");
+    expect(container.querySelector("[aria-label='Publish options']")).not.toBeNull();
     click(save); click(publish); click(run);
     expect(commands.onSave).toHaveBeenCalledOnce();
     expect(commands.onPublish).toHaveBeenCalledOnce();
+    expect(commands.onPublish).toHaveBeenCalledWith("review");
     expect(commands.onRun).toHaveBeenCalledOnce();
   });
 
@@ -56,7 +56,7 @@ describe("compact workflow toolbar", () => {
     expect(status.closest(".wf-editor-actions")).not.toBeNull();
     expect(status.getAttribute("data-pending")).toBe("true");
     expect(status.textContent).toBe("Saving before review...");
-    const buttons = [".wf-save-button", ".wf-review-button", ".wf-run-button"].map(selector => container.querySelector<HTMLButtonElement>(selector)!);
+    const buttons = [".wf-save-button", ".wf-publish-primary", ".wf-run-button"].map(selector => container.querySelector<HTMLButtonElement>(selector)!);
     expect(buttons.every(button => button.disabled)).toBe(true);
     buttons.forEach(click);
     Object.values(commands).forEach(command => expect(command).not.toHaveBeenCalled());

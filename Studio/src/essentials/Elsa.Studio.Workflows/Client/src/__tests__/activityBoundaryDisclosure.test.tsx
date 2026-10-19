@@ -17,8 +17,8 @@ vi.mock("../api/runtime", async importOriginal => ({
 
 vi.mock("../workflow-editor/ReusableBoundaryInspector", () => ({
   ReusableBoundaryInspector: ({ inspection }: { inspection: ActivityExecutionInspection }) => (
-    <section aria-label="Reusable boundary Runtime Evidence">
-      <h4>Boundary lifecycle</h4>
+    <section aria-label="Activity internals">
+      <h4>Activity details</h4>
       <p>Exact version {inspection.boundary?.version} ({inspection.boundary?.definitionVersionId})</p>
     </section>
   )
@@ -143,10 +143,10 @@ describe("activity boundary disclosure", () => {
       <WorkflowActivityExecutionDetails context={context} activity={firstActivity} activityCatalog={[]} />
     );
     const findBoundaryDetails = () => [...container.querySelectorAll<HTMLElement>("summary")]
-      .find(summary => summary.textContent?.includes("Boundary details"));
+      .find(summary => summary.textContent?.includes("Inside this activity"));
     await waitFor(() => expect(findBoundaryDetails()).toBeTruthy());
 
-    expect(container.querySelector('[aria-label="Reusable boundary Runtime Evidence"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Activity internals"]')).toBeNull();
 
     const openBoundary = async (openContext: ReturnType<typeof createEndpointContext>, openActivity: ActivityExecutionStateSummary) => {
       const summary = findBoundaryDetails();
@@ -154,12 +154,12 @@ describe("activity boundary disclosure", () => {
       flushSync(() => summary!.click());
       await waitFor(() => expect((summary!.parentElement as HTMLDetailsElement).open).toBe(true));
       await waitFor(() => expect(
-        container.querySelector('[aria-label="Reusable boundary Runtime Evidence"]') ||
-        container.textContent?.includes("Loading boundary details...")
+        container.querySelector('[aria-label="Activity internals"]') ||
+        container.textContent?.includes("Loading activity steps...")
       ).toBeTruthy());
       rerender(<WorkflowActivityExecutionDetails context={openContext} activity={openActivity} activityCatalog={[]} />);
-      await waitFor(() => expect(container.querySelector('[aria-label="Reusable boundary Runtime Evidence"]')).toBeTruthy());
-      expect(container.textContent).toContain("Boundary lifecycle");
+      await waitFor(() => expect(container.querySelector('[aria-label="Activity internals"]')).toBeTruthy());
+      expect(container.textContent).toContain("Activity details");
     };
 
     await openBoundary(context, firstActivity);
@@ -171,7 +171,7 @@ describe("activity boundary disclosure", () => {
     await waitFor(() => expect(getActivityExecutionInspection).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(findBoundaryDetails()).toBeTruthy());
     expect((findBoundaryDetails()!.parentElement as HTMLDetailsElement).open).toBe(false);
-    expect(container.querySelector('[aria-label="Reusable boundary Runtime Evidence"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Activity internals"]')).toBeNull();
 
     await openBoundary(nextContext, firstActivity);
     expect(container.textContent).toContain("Exact version 1.0.0 (definition-ae-1-version)");
@@ -182,6 +182,6 @@ describe("activity boundary disclosure", () => {
     await waitFor(() => expect(getActivityExecutionInspection).toHaveBeenCalledTimes(3));
     await waitFor(() => expect(findBoundaryDetails()).toBeTruthy());
     expect((findBoundaryDetails()!.parentElement as HTMLDetailsElement).open).toBe(false);
-    expect(container.querySelector('[aria-label="Reusable boundary Runtime Evidence"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Activity internals"]')).toBeNull();
   });
 });

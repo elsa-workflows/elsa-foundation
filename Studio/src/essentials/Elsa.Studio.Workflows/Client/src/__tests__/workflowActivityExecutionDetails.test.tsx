@@ -45,10 +45,10 @@ vi.mock("../api/activityExecutionValuePayload", () => ({
 
 vi.mock("../workflow-editor/ReusableBoundaryInspector", () => ({
   ReusableBoundaryInspector: ({ inspection }: { inspection: ActivityExecutionInspection }) => (
-    <section>
-      <h4>Boundary lifecycle</h4>
+    <section aria-label="Activity internals">
+      <h4>Activity details</h4>
       <span>{inspection.boundary?.definitionVersionId}</span>
-      <h4>Descendant aggregate</h4>
+      <h4>Steps</h4>
       <span>Pinned historical layout</span>
     </section>
   )
@@ -299,7 +299,7 @@ describe("WorkflowActivityExecutionDetails", () => {
     expect(container.textContent).not.toContain("Renamed live catalog label");
   });
 
-  it("keeps reusable Boundary details collapsed until requested", async () => {
+  it("keeps Inside this activity collapsed until requested", async () => {
     vi.mocked(getActivityExecutionInspection).mockResolvedValue({
       ...inspection([]),
       boundary: {
@@ -332,16 +332,16 @@ describe("WorkflowActivityExecutionDetails", () => {
     const container = render(<WorkflowActivityExecutionDetails context={context} activity={activity} activityCatalog={catalog} />);
 
     await waitFor(() => expect([...container.querySelectorAll("summary")]
-      .some(summary => summary.textContent?.includes("Boundary details"))).toBe(true));
-    expect(container.textContent).not.toContain("Boundary lifecycle");
+      .some(summary => summary.textContent?.includes("Inside this activity"))).toBe(true));
+    expect(container.querySelector('[aria-label="Activity internals"]')).toBeNull();
     expect(getActivityExecutionLayout).not.toHaveBeenCalled();
     expect(getActivityExecutionDescendants).not.toHaveBeenCalled();
     expect(getActivityExecutionInspection).toHaveBeenCalledWith(context, "wf-1", "ae-1", expect.any(AbortSignal));
 
     const summary = [...container.querySelectorAll<HTMLElement>("summary")]
-      .find(candidate => candidate.textContent?.includes("Boundary details"))!;
+      .find(candidate => candidate.textContent?.includes("Inside this activity"))!;
     summary.click();
-    await waitFor(() => expect(container.textContent).toContain("Loading boundary details..."));
+    await waitFor(() => expect(container.textContent).toContain("Loading activity steps..."));
   });
 
   it("loads and renders diagnostic snapshots for selected execution inputs and outputs", async () => {

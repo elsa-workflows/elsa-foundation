@@ -1117,7 +1117,7 @@ export function WorkflowEditor({
         onAutoLayout={autoLayout}
         onBack={onBack}
         onSave={() => void save()}
-        onPublish={() => void preparePublication()}
+        onPublish={mode => void preparePublication(mode)}
         onRun={() => void run()}
         canRun={canRunTest}
         runTitle={draft.state.rootActivity ? "Run a transient test of the current design" : "Add a root activity before running"}

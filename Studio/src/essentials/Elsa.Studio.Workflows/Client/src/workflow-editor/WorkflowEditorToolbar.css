@@ -95,15 +95,11 @@
   white-space: nowrap;
 }
 
-.wf-editor-toolbar .wf-review-button {
+.wf-editor-toolbar .wf-publish-actions > button {
   border-color: var(--studio-accent);
   background: var(--studio-accent);
   color: var(--studio-accent-text);
   font-weight: 600;
-}
-
-.wf-editor-toolbar .wf-review-button > span {
-  text-transform: capitalize;
 }
 
 .wf-editor-toolbar .wf-run-button {
@@ -222,7 +218,7 @@
   background: transparent;
 }
 
-.wf-editor-toolbar .wf-review-button:hover:not(:disabled) {
+.wf-editor-toolbar .wf-publish-actions > button:hover:not(:disabled) {
   background: color-mix(in srgb, var(--studio-accent) 88%, var(--studio-text));
 }
 
@@ -245,5 +241,16 @@
 
   .wf-editor-toolbar .wf-canvas-tools {
     flex: 0 0 auto;
+  }
+}
+
+@media (min-width: 601px) and (max-width: 900px) {
+  .wf-editor-toolbar .wf-editor-identity,
+  .wf-editor-toolbar .wf-editor-actions {
+    flex-basis: 100%;
+  }
+
+  .wf-editor-toolbar .wf-editor-actions {
+    justify-content: flex-end;
   }
 }

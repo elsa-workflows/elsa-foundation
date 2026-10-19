@@ -1,0 +1,26 @@
+.wf-publish-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+}
+
+.wf-editor-toolbar .wf-publish-actions > .wf-publish-primary,
+.wf-editor-toolbar .wf-publish-actions > .wf-publish-menu-trigger {
+  border-color: color-mix(in srgb, var(--studio-accent) 40%, var(--studio-border));
+}
+
+.wf-editor-toolbar .wf-publish-actions > .wf-publish-primary {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  white-space: nowrap;
+}
+
+.wf-editor-toolbar .wf-publish-actions > .wf-publish-menu-trigger {
+  width: auto;
+  min-width: 28px;
+  justify-content: center;
+  margin-left: -1px;
+  padding: 0 6px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}

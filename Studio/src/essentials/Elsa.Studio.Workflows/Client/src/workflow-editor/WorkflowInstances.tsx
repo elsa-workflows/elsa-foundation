@@ -2067,6 +2067,7 @@ export function WorkflowActivityExecutionDetails({
           key={JSON.stringify([selectedContextIdentity, selectedWorkflowExecutionId, selectedActivityExecutionId])}
           context={context}
           inspection={currentInspectionState.inspection}
+          activityLabel={activityLabel}
         />
       ) : null}
       <section className="wf-instance-section">
@@ -2086,23 +2087,19 @@ export function WorkflowActivityExecutionDetails({
   );
 }
 
-function ActivityBoundaryDetails({ context, inspection }: { context: StudioEndpointContext; inspection: ActivityExecutionInspection }) {
+function ActivityBoundaryDetails({ context, inspection, activityLabel }: { context: StudioEndpointContext; inspection: ActivityExecutionInspection; activityLabel: string }) {
   const [open, setOpen] = useState(false);
-  const boundary = inspection.boundary!;
-  const version = formatActivityVersion(boundary.version);
 
   return (
     <section className="wf-instance-section wf-activity-boundary-details">
       <details onToggle={event => setOpen(event.currentTarget.open)}>
         <summary>
           <ChevronRight size={14} aria-hidden="true" />
-          <span>Boundary details</span>
-          <WorkflowStatusBadge status={inspection.status} subStatus={inspection.subStatus} />
-          <small title={version.full}>Version {version.short}</small>
+          <span>Inside this activity</span>
         </summary>
         {open ? (
-          <Suspense fallback={<p role="status">Loading boundary details...</p>}>
-            <ReusableBoundaryInspector context={context} inspection={inspection} compactPresentation />
+          <Suspense fallback={<p role="status">Loading activity steps...</p>}>
+            <ReusableBoundaryInspector context={context} inspection={inspection} activityLabel={activityLabel} />
           </Suspense>
         ) : null}
       </details>
