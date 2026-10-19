@@ -47,29 +47,33 @@ describe("ActivityDefinitionContractEditor", () => {
     }
 
     flushSync(() => root.render(<Harness />));
-    const input = container.querySelector<HTMLElement>("[data-contract-kind='input']")!;
-    const basicFields = input.querySelector<HTMLElement>(":scope > .ad-contract-fields")!;
+    const input = container.querySelector<HTMLElement>("[data-contract-kind='input'][data-contract-selected='true']")!;
+    expect(input.hidden).toBe(false);
+    const basicFields = input.querySelector<HTMLElement>(".ad-contract-fields")!;
     const basicLabels = [...basicFields.querySelectorAll(":scope label > span, :scope .ad-readonly-fact > span")].map(label => label.textContent?.trim());
-    expect(basicLabels).toEqual(expect.arrayContaining(["Name", "Type", "Collection", "Required", "Allow null", "Default value"]));
+    expect(basicLabels).toEqual(expect.arrayContaining(["Name", "Type", "Required", "Default"]));
     expect(basicLabels).not.toContain("Capability type");
     expect([...basicFields.querySelector<HTMLSelectElement>("[data-contract-field='default']")!.options].map(option => ({ text: option.textContent, value: option.value }))).toEqual([
       { text: "No default", value: "none" },
-      { text: "Value (JSON)", value: "literal" },
+      { text: "Value", value: "literal" },
+      { text: "Null", value: "null" },
       { text: "Expression", value: "expression" }
     ]);
 
-    const advanced = input.querySelector<HTMLDetailsElement>(":scope > details.ad-contract-advanced")!;
+    const advanced = input.querySelector<HTMLDetailsElement>("details.ad-contract-advanced")!;
     expect(advanced.open).toBe(false);
     expect(advanced.querySelector("[data-contract-field='referenceKey']")).toBeTruthy();
     expect(advanced.querySelector("[data-contract-field='storageDriverKey']")).toBeTruthy();
     expect(advanced.querySelector("[data-contract-field='type.alias']")).toBeTruthy();
+    expect(advanced.querySelector("[data-contract-field='type.collectionKind']")).toBeTruthy();
+    expect(advanced.querySelector("[data-contract-field='isNullable']")).toBeTruthy();
     expect([...advanced.querySelectorAll("small")].some(copy => copy.textContent?.includes("CLR type names are not stored"))).toBe(true);
     expect(container.textContent).not.toContain("exact-revision draft queue");
     const schemaDetails = container.querySelector<HTMLDetailsElement>("details[data-contract-schema]")!;
     expect(schemaDetails.open).toBe(false);
     expect(schemaDetails.textContent).toContain("Schema version");
     expect(container.querySelector(".ad-badge[data-contract-schema]")).toBeNull();
-    expect(basicFields.querySelector<HTMLSelectElement>("[data-contract-field='default']")?.options).toHaveLength(3);
+    expect(basicFields.querySelector<HTMLSelectElement>("[data-contract-field='default']")?.options).toHaveLength(4);
 
     advanced.open = true;
     changeInput(controlByLabel<HTMLInputElement>(advanced, "Display name"), "Friendly value");
@@ -148,7 +152,7 @@ describe("ActivityDefinitionContractEditor", () => {
     change(controlByLabel<HTMLTextAreaElement>(container, "Value (JSON)"), "3");
     click(buttonByText(container, "Reset upstream default"));
     await waitFor(() => expect(controlByLabel<HTMLTextAreaElement>(container, "Value (JSON)").value).toBe("3"));
-    expect(controlByLabel<HTMLSelectElement>(container, "Default value").value).toBe("literal");
+    expect(controlByLabel<HTMLSelectElement>(container, "Default").value).toBe("literal");
   });
 });
 

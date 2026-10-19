@@ -62,15 +62,15 @@ test("Activity Definition graph authoring shares the designer without workflow l
   });
 
   await page.getByRole("tab", { name: "Public Interface" }).click();
-  await expect(page.getByRole("tabpanel", { name: "Public Interface" })).toContainText("Several sources may converge on one public outcome");
-  const source = page.getByRole("combobox", { name: "Root outcome reference key" });
-  const target = page.getByRole("combobox", { name: "Boundary outcome reference key" });
+  await expect(page.getByRole("tabpanel", { name: "Public Interface" })).toContainText("Choose the activity outcome for each way the designer can finish.");
+  const source = page.getByRole("combobox", { name: "Designer outcome" });
+  const target = page.getByRole("combobox", { name: "Activity outcome" });
   await source.selectOption("completed");
   await target.selectOption("accepted");
-  await page.getByRole("button", { name: "Add mapping" }).click();
+  await page.getByRole("button", { name: "Connect" }).click();
   await source.selectOption("faulted");
   await target.selectOption("accepted");
-  await page.getByRole("button", { name: "Add mapping" }).click();
+  await page.getByRole("button", { name: "Connect" }).click();
   await expect(page.getByText("Completed → Accepted")).toBeVisible();
   await expect(page.getByText("Faulted → Accepted")).toBeVisible();
 
@@ -94,6 +94,7 @@ test("Activity Definition graph authoring shares the designer without workflow l
 
   await page.getByRole("button", { name: "Preview legacy schema" }).click();
   await page.getByRole("tab", { name: "Public Interface" }).click();
+  await page.getByText("Compatibility details", { exact: true }).click();
   await expect(page.getByText(/Schema 1 retains its historical single/)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Add mapping" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Connect" })).toHaveCount(0);
 });

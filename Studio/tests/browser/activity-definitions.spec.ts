@@ -520,14 +520,15 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
 
   await expect(page).toHaveURL(/definition=activity-def-browser.*section=editor.*draft=activity-draft-browser/);
   await expectSavedRevision(page, 1);
-  await page.getByRole("tab", { name: "Public Interface" }).click();
-  await page.getByRole("textbox", { name: "Member name" }).fill("Customer note");
-  await page.getByRole("button", { name: "Add input" }).click();
-  const contractInput = page.getByRole("group", { name: "Input 1: Customer note" });
+  await page.getByRole("tab", { name: "Inputs & outputs" }).click();
+  await page.getByRole("button", { name: "Add input", exact: true }).click();
+  await page.getByRole("textbox", { name: "Input name", exact: true }).fill("Customer note");
+  await page.getByRole("button", { name: "Add input", exact: true }).last().click();
+  const contractInput = page.getByRole("region", { name: "Customer note", exact: true });
   await expect(contractInput).toBeVisible();
+  await contractInput.getByText("Advanced", { exact: true }).click();
   await contractInput.getByRole("checkbox", { name: /Allow null/ }).check();
-  await contractInput.getByRole("combobox", { name: "Default value" }).selectOption("literal");
-  await contractInput.getByRole("textbox", { name: "Value (JSON)" }).fill("null");
+  await contractInput.getByRole("combobox", { name: /^Default/ }).selectOption("null");
   await contractInput.getByRole("button", { name: "Apply default" }).click();
   await expectSavedRevision(page, 2);
   await page.getByRole("tab", { name: "Designer" }).click();
@@ -541,8 +542,8 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
 
   await page.reload();
   await expectSavedRevision(page, 4);
-  await page.getByRole("tab", { name: "Public Interface" }).click();
-  await expect(page.getByRole("group", { name: "Input 1: Customer note" }).getByRole("textbox", { name: "Value (JSON)" })).toHaveValue("null");
+  await page.getByRole("tab", { name: "Inputs & outputs" }).click();
+  await expect(page.getByRole("region", { name: "Customer note", exact: true }).getByRole("combobox", { name: /^Default/ })).toHaveValue("null");
   await page.getByRole("tab", { name: "Designer" }).click();
   await expect(page.locator(".wf-node").getByText("Write line", { exact: true })).toHaveCount(1);
   await expect(page.locator(".wf-node").getByText("Delay", { exact: true })).toHaveCount(1);
@@ -573,16 +574,16 @@ test("Activity Definition provider contract proposals require review and apply a
   const state = await mockActivityDefinitionAuthoring(page);
   await createBrowserActivity(page);
 
-  await page.getByRole("tab", { name: "Public Interface" }).click();
+  await page.getByRole("tab", { name: "Inputs & outputs" }).click();
   await page.locator("details.ad-interface-suggestions summary").click();
-  await expect(page.getByText("Add input currency")).toBeVisible();
+  await expect(page.getByText("Add input Currency")).toBeVisible();
   await expect(page.getByText("1 of 1 changes selected")).toBeVisible();
   expect(state.proposalApplies).toBe(0);
   expect(state.draft.revision).toBe(1);
 
   await page.getByRole("button", { name: "Apply selected changes" }).click();
   await expectSavedRevision(page, 2);
-  await expect(page.locator("[data-contract-kind='input'][data-contract-reference-key='currency']")).toBeVisible();
+  await expect(page.locator("button[data-member-kind='input'][data-member-reference-key='currency']")).toBeVisible();
   expect(state.proposalApplies).toBe(1);
   expect(state.lastProposalApply).toEqual({
     expectedRevision: 1,
@@ -612,7 +613,7 @@ test("Activity Definition validation distinguishes valid, invalid, unavailable, 
   const contractDiagnostic = page.getByRole("button", { name: "Focus activity.contract.outcome-required" });
   await contractDiagnostic.click();
   await expect(page.locator("[data-contract-field='referenceKey']").locator("..")).toBeFocused();
-  await expect(page.getByRole("tab", { name: "Public Interface" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "Inputs & outputs" })).toHaveAttribute("aria-selected", "true");
   await page.getByRole("button", { name: "Return to diagnostic" }).click();
   await expect(contractDiagnostic).toBeFocused();
 
