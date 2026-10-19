@@ -251,14 +251,14 @@ suite is green.
 
 ## Phase 9: Polish and cross-cutting
 
-- [ ] T037 Run the touched suites:
+- [X] T037 Run the touched suites:
   - `dotnet test Extensions/Elsa3/tests/Mapping/Tests`
   - `dotnet test Essentials/tests/Expressions/Tests`
   - `dotnet test Essentials/tests/Workflows/Runtime/Tests`
   - `dotnet test Essentials/tests/Activities/Runtime/Tests`
   - the architecture guard tests (`Essentials/tests/Architecture/Tests`, filter `ArchitectureGuardTests|Elsa3MigrationBoundaryTests`) for §E2.2 and §E2.7
-- [ ] T038 Refresh the generated maps: run `dotnet run --project tools/maps/Elsa.Maps.Generator -- all`, then `git diff --stat docs/` (the local `-- check` is unreliable on Windows). Stage only the maps that actually changed, by explicit path, including `docs/maps/manifest.json`
-- [ ] T039 Measure (SC-001, SC-002, SC-006):
+- [X] T038 Refresh the generated maps: run `dotnet run --project tools/maps/Elsa.Maps.Generator -- all`, then `git diff --stat docs/` (the local `-- check` is unreliable on Windows). Stage only the maps that actually changed, by explicit path, including `docs/maps/manifest.json`
+- [X] T039 Measure (SC-001, SC-002, SC-006):
   - Rerun the throwaway probes `ZzJsProbe` (with the Literal-script extension) and `ZzCorpusProbe` with `JTEST_CORPUS` set
   - Record: parse refusals (target 0), definitions with fully converting JavaScript (target ≥ 7 of 33), and the remaining refusal counts per construct
   - Convert one corpus definition twice and compare bytes
