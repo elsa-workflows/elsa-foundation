@@ -9,6 +9,7 @@ for (const width of [320, 768, 1024, 1440]) {
     const toolbar = page.locator(".wf-editor-toolbar");
     const buttons = toolbar.getByRole("button");
     const initial = await readButtonPositions(buttons);
+    const initialToolbar = await toolbar.boundingBox();
     const initialStatus = await toolbar.getByRole("status").boundingBox();
     const title = toolbar.locator("strong[title]");
     const badge = toolbar.getByText("Draft", { exact: true });
@@ -32,7 +33,11 @@ for (const width of [320, 768, 1024, 1440]) {
     expect(initialBadge!.x + initialBadge!.width).toBeLessThanOrEqual(width);
     if (width >= 768) {
       expect(Math.abs(initialCanvasTools!.y - initialSave!.y)).toBeLessThan(1);
+    }
+    if (width >= 1024) {
       expect(Math.abs(centerY(initialTitle!) - centerY(initialSave!))).toBeLessThan(1);
+    } else if (width === 768) {
+      expect(initialTitleRow!.y + initialTitleRow!.height).toBeLessThanOrEqual(initialSave!.y);
     }
     await expect(title).toHaveAttribute("title", "A long workflow definition name that must not crowd the actions");
     expect(initial.every(box => box.x >= 0 && box.x + box.width <= width)).toBe(true);
@@ -49,6 +54,13 @@ for (const width of [320, 768, 1024, 1440]) {
       expect(await breadcrumbChevron.boundingBox()).toEqual(initialChevron);
     }
     await expect(toolbar.getByRole("button", { name: "Review and Publish" })).toBeVisible();
+    if (width === 768) {
+      await toolbar.getByRole("button", { name: "Publish options", exact: true }).click();
+      await page.getByRole("menuitemradio", { name: "Publish", exact: true }).click();
+      await expect(toolbar.getByRole("button", { name: "Publish", exact: true })).toBeVisible();
+      expect((await toolbar.boundingBox())!.height).toBe(initialToolbar!.height);
+      expect(await titleRow.boundingBox()).toEqual(initialTitleRow);
+    }
   });
 }
 
