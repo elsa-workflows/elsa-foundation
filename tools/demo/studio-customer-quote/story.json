@@ -1,0 +1,107 @@
+{
+  "version": 4,
+  "title": "Elsa Studio customer quote",
+  "chapters": [
+    {
+      "id": "quote",
+      "title": "Customer quote",
+      "headline": "A customer and a total",
+      "lines": [
+        "Protected customer lookup",
+        "Reusable calculation",
+        "One JSON response"
+      ],
+      "cue": "Show this slide, then open the prepared quote workflow in Studio.",
+      "paragraphs": [
+        "I’ll walk through the prepared quote workflow. It uses a local customer API and a small calculation to return a customer and total in one response.",
+        "I’ll show the prepared runtime incident and safe API receipt. Live fault injection or Secret rotation is optional."
+      ]
+    },
+    {
+      "id": "api-access",
+      "title": "API access",
+      "headline": "A Secret and a Connection",
+      "lines": [
+        "Secret: customer-api",
+        "HTTP Connection with Bearer authentication",
+        "The workflow uses the Connection"
+      ],
+      "cue": "Open the existing customer-api Text Secret and HTTP Connection. Show Bearer authentication and the Secret selection. Keep the value hidden.",
+      "paragraphs": [
+        "The customer-api Text Secret is already prepared. I’ll open it and show its status without revealing the value.",
+        "Then I’ll open the existing HTTP Connection and show its Bearer authentication setting and customer-api Secret reference.",
+        "The prepared quote workflow already uses this Connection to call the customer API. The token stays in the Secret store.",
+        "The demo API runs locally. The existing Connection is limited to its loopback host and uses HTTP for this local setup."
+      ]
+    },
+    {
+      "id": "calculation",
+      "title": "Reusable calculation",
+      "headline": "40 + 2 = 42",
+      "lines": [
+        "Inputs: Subtotal and Shipping",
+        "Output: Total",
+        "Outcome: Calculated"
+      ],
+      "cue": "Open the existing CalculateOrderTotal. Show its inputs, output, outcome and prepared test result for 40 + 2 = 42. Then show the published version.",
+      "paragraphs": [
+        "This is the existing CalculateOrderTotal activity. It has two integer inputs, Subtotal and Shipping.",
+        "It adds them and returns Total. When it finishes, it reports the Calculated outcome.",
+        "Its prepared test result uses 40 and 2 and returns 42.",
+        "The prepared quote workflow uses a published version of this activity. The same calculation can be reused in other workflows."
+      ]
+    },
+    {
+      "id": "workflow",
+      "title": "Quote workflow",
+      "headline": "One request, one quote",
+      "lines": [
+        "Look up the customer",
+        "Calculate the total",
+        "Return the response"
+      ],
+      "cue": "Show the four workflow activities. Send POST /workflows/http/quotes with subtotal 40 and shipping 2. Open the completed run and select CalculateOrderTotal.",
+      "paragraphs": [
+        "Here is the prepared quote workflow. It receives an HTTP request, looks up a customer through the Connection, calculates the total, and writes the response.",
+        "I send a POST with subtotal 40 and shipping 2. The customer ID comes from the configured lookup URL.",
+        "The response contains the customer details and a total of 42.",
+        "In the completed run, I can select the calculation and see the two inputs, the output, and the Calculated outcome. More detail is available when I need it."
+      ]
+    },
+    {
+      "id": "diagnosis",
+      "title": "Runtime diagnosis",
+      "headline": "The failed Body input",
+      "lines": [
+        "Inspect the incident",
+        "Read the input and its error",
+        "Fix, publish and retry"
+      ],
+      "cue": "Optional live fault injection: change the response Body to read the missing profile.segment property, publish, and send the same request. Otherwise, show the prepared incident. Inspect the error; only if you injected the failure, restore Body, publish, and retry.",
+      "paragraphs": [
+        "The prepared run shows a response expression reading a property this customer response doesn’t have. If I want to demonstrate this live, I can set the Body to that expression, publish, and send a request.",
+        "The expression is valid JavaScript, but it fails when the workflow evaluates it. The request doesn’t receive the expected quote response.",
+        "I open the run and inspect the incident. It points to the Body input of Write HTTP Response, with the expression and its error together.",
+        "If I injected the failure, I restore Body to use the customer ID and name that the API returns, along with the total. Then I publish and send the request again.",
+        "The prepared successful run returns HTTP 200 with a total of 42."
+      ]
+    },
+    {
+      "id": "rotation",
+      "title": "Secret rotation",
+      "headline": "The workflow stays the same",
+      "lines": [
+        "Update the existing Secret",
+        "Send the same request",
+        "Confirm 200 and total 42"
+      ],
+      "cue": "Optional live rotation: update customer-api to the prepared second demo value. If you do, do not republish the repaired workflow. Repeat the request and show the safe API receipt. Otherwise, show the prepared receipt.",
+      "paragraphs": [
+        "The customer-api Secret is already prepared. If I demonstrate rotation live, I update the existing Secret and leave the repaired workflow as it is.",
+        "After a live rotation, the same request still returns the customer and a total of 42.",
+        "The local API receipt confirms that the next call used credential version two. It records the version and result, without showing the token.",
+        "The Connection picks up the updated Secret while the workflow keeps using the same published version."
+      ]
+    }
+  ]
+}
