@@ -151,7 +151,8 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
       }
     }
     setLocalRefreshKey(current => current + 1);
-    await onFoldersMutated?.(nextSelection);
+    // Deleting the selected folder supplies its survivor; changing selection already reloads definitions.
+    if (nextSelection === undefined) await onFoldersMutated?.();
   };
 
   const restoreFolderFocus = (key: string) => {
