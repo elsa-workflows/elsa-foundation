@@ -16,7 +16,7 @@ This spec is the semantic contract for the whole program (FR-001 to FR-020) and 
 
 | ID | Question | Decision |
 |---|---|---|
-| OD1 | What does a scope do after its handlers ran? | Completes with outcome **`Compensated`** and exposes the original cause as output. A per-scope setting re-raises the original fault instead. |
+| OD1 | What does a scope do after its handlers ran? | Completes with outcome **`Compensated`** and exposes the original cause (M1: through inspection; as an activity output once structural outputs are supported, research R12). A per-scope setting re-raises the original fault instead. |
 | OD2 | What happens when a handler fails after its retries? | The scope **waits for intervention**. An authorized operator retries the handler, marks it resolved manually with a reason, or abandons recovery. Nothing is labelled compensated. |
 | OD3 | Can a completed scope be compensated later? | **Yes, until it is confirmed** or the workflow ends. M1 ships recovery triggered inside an active scope; later targeting lands in M3. |
 | OD4 | How does Studio show the pairing? | A **paired step list**: each row shows a forward step and its compensation handler side by side, with a labelled link and drill-in on either side. |
@@ -53,7 +53,7 @@ The published workflow runs. Both reservations succeed against an independently 
 2. **Given** a step that faulted, **then** its own handler does not run, because it never completed (FR-006).
 3. **Given** a crash after a handler's external effect but before its completion is committed, **when** the host restarts, **then** the handler runs again with the same invocation identity, the participant treats the repeat as a no-op, and the journal records one compensated entry.
 4. **Given** a crash between two handlers, **when** the host restarts, **then** recovery resumes at the next pending entry. A completed entry's handler is never scheduled again.
-5. **Given** all handlers completed, **then** the scope completes with outcome `Compensated` and output `cause`, and the workflow continues along that outcome.
+5. **Given** all handlers completed, **then** the scope completes with outcome `Compensated`, the workflow continues along that outcome, and the cause is readable through the inspection projection.
 6. **Given** each persistence mode (Durable, Balanced, Ephemeral), **then** stories 2.1–2.5 hold, with each mode's restart tests passing (FR-013).
 7. **Given** a scope with no failing step, **then** it completes with outcome `Done` and runs no handler.
 

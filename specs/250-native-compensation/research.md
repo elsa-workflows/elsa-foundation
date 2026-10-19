@@ -114,3 +114,11 @@ semantics. That combination is tested in M3, not assumed.
 ## R11 — BPMN
 
 See [ADR 0086](../../docs/adr/0086-native-and-bpmn-compensation-stay-separate.md). Nothing in BPMN changes.
+
+## R12 — Structural activities have no output channel
+
+`RuntimeStructuralContinuation` carries an outcome, a fault or a cancellation, plus private state; it has no
+outputs (`Workflows/Runtime/Core/Models/RuntimeStructuralContinuation.cs`). The graph activity captures outputs
+through its own completion-checkpoint preparation path, which is specific to graph boundaries. M1 therefore
+exposes the recovery cause through the inspection projection and the `Compensated` outcome. Making the cause
+an expression-readable output is an M3 item that needs a structural-output seam, reviewed by the runtime owner.

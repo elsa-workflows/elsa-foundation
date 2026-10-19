@@ -101,9 +101,9 @@ modes, so the table above holds in each. What differs is how much replays: in Ba
 because entry status and handler id commit with the schedule. Each mode is claimed only with its restart tests
 passing (FR-013).
 
-## Recovery cause and output
+## Recovery cause
 
-The scope's `Compensated` completion has output `cause`:
+The recovery cause is recorded in the scope's private state and returned by the inspection projection. Structural activities complete with an outcome only (`RuntimeStructuralContinuation`), so exposing the cause as an activity output needs structural output support (research R12). Its shape:
 
 ```json
 { "kind": "fault", "step": "Confirm order", "activityExecutionId": "…", "incidentId": "…",
