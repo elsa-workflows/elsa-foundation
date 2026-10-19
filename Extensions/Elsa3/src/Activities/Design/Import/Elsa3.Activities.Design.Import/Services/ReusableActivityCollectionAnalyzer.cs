@@ -122,7 +122,8 @@ public sealed class ReusableActivityCollectionAnalyzer : IReusableActivityCollec
                             $"Direct-start activity '{activity.NodeId}' owns nested behavior that cannot be separated into the generated wrapper deterministically.",
                             source.Id,
                             path,
-                            guidance: "Refactor the Elsa 3 trigger into a leaf trigger before importing the reusable collection.",
+                            // A leaf trigger is refused too (UnsupportedStartTrigger), so the advice is the same: take the trigger out.
+                            guidance: "Move the trigger and the activities it owns into their own Elsa 3 workflow that calls the reusable workflow, then re-export the collection.",
                             metadata: new Dictionary<string, string> { ["nodeId"] = activity.NodeId, ["isRoot"] = isRoot.ToString() }));
                     }
                     else
@@ -152,7 +153,7 @@ public sealed class ReusableActivityCollectionAnalyzer : IReusableActivityCollec
                         $"Reusable workflow reference at node '{activity.NodeId}' could not be resolved to one exact reusable Elsa 3 workflow version.",
                         source.Id,
                         path,
-                        guidance: "Include the exact reusable target version in the analyzed collection and remove ambiguous or non-reusable references.",
+                        guidance: "Include the exact reusable target version in the analyzed collection. A workflow that is not usable as an activity cannot be used as one: call it with Dispatch Workflow or Execute Workflow instead.",
                         metadata: ReferenceMetadata(activity, reference),
                         dependencySourceIdentity: reference.VersionId ?? reference.DefinitionId,
                         dependencyPathKind: reference.VersionId is null
@@ -234,10 +235,25 @@ public sealed class ReusableActivityCollectionAnalyzer : IReusableActivityCollec
         }
     }
 
+    /// <summary>
+    /// Built-in activities that start another workflow by its definition id. Their <c>workflowDefinitionId</c> is the
+    /// workflow they dispatch, not a reusable activity they run inline, so they convert as Dispatch Workflow and their
+    /// target may be a regular workflow (spec 246).
+    /// </summary>
+    private static readonly HashSet<string> DispatchTypes = new(StringComparer.Ordinal)
+    {
+        "Elsa.DispatchWorkflow",
+        "Elsa.ExecuteWorkflow",
+        "Elsa.BulkDispatchWorkflows"
+    };
+
     private static ReusableReference? ReadReference(
         Elsa3Activity activity,
         IReadOnlyDictionary<string, Elsa3WorkflowDefinition[]> reusableByDefinition)
     {
+        if (DispatchTypes.Contains(activity.Type))
+            return null;
+
         var exactVersionId = ReadString(activity.AdditionalProperties, "workflowDefinitionVersionId");
         var definitionId = ReadString(activity.AdditionalProperties, "workflowDefinitionId");
         if (!string.IsNullOrWhiteSpace(exactVersionId) || !string.IsNullOrWhiteSpace(definitionId))

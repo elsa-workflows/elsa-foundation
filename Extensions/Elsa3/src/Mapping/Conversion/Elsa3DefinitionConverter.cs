@@ -76,7 +76,7 @@ internal sealed class Elsa3DefinitionConverter(
                 Elsa3MigrationDiagnosticSeverity.Error,
                 Elsa3ActivityDiagnosticCodes.ReusableIntrinsicUnsupported,
                 $"Reusable workflow node '{node.Node.NodeId}' ({node.Node.Type}) becomes an Elsa 4 engine intrinsic, which a graph activity cannot hold yet.",
-                "Import this workflow as a non-reusable workflow, or wait for engine intrinsics in graph activities.",
+                Elsa3ReusableGuidance.Intrinsic,
                 node.JsonPath,
                 new Dictionary<string, string> { ["ActivityNodeId"] = node.Node.NodeId, ["ActivityType"] = node.Node.Type }));
         }

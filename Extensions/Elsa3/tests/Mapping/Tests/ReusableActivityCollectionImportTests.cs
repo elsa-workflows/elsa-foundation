@@ -125,6 +125,25 @@ public sealed class ReusableActivityCollectionImportTests
         Assert.Equal(ReusableActivityImportDiagnosticCodes.UnsupportedTrigger, Assert.Single(Assert.Single(plan.Items).Diagnostics).Code);
     }
 
+    [Theory]
+    [InlineData("Elsa.DispatchWorkflow")]
+    [InlineData("Elsa.ExecuteWorkflow")]
+    public async Task A_dispatch_of_a_regular_workflow_is_not_a_reusable_reference(string type)
+    {
+        // Its workflowDefinitionId names the workflow it starts, not an activity it runs inline (spec 246).
+        var dispatch = ReusableActivityImportFixtures.Leaf("dispatch", type);
+        dispatch.AdditionalProperties["workflowDefinitionId"] = System.Text.Json.JsonSerializer.SerializeToElement("target");
+        var caller = ReusableActivityImportFixtures.Workflow("caller", "caller-v1", 1, false, dispatch);
+        var target = ReusableActivityImportFixtures.Workflow("target", "target-v1", 1, false, ReusableActivityImportFixtures.Leaf("root"));
+
+        var plan = await analyzer.AnalyzeAsync(ReusableActivityImportFixtures.Collection(caller, target));
+
+        Assert.True(plan.CanApply);
+        var item = plan.Items.Single(x => x.SourceVersionId == "caller-v1");
+        Assert.Empty(item.Rewrites);
+        Assert.Empty(item.Dependencies);
+    }
+
     [Fact]
     public async Task Analysis_only_inventories_direct_starts_for_reusable_sources()
     {

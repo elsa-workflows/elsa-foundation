@@ -22109,6 +22109,16 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Activities.DispatchWorkflow.Design",
+          "path": "Essentials/src/Activities/DispatchWorkflow/Design/Elsa.Activities.DispatchWorkflow.Design.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.DispatchWorkflow.Runtime",
+          "path": "Essentials/src/Activities/DispatchWorkflow/Runtime/Elsa.Activities.DispatchWorkflow.Runtime.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Flowchart",
           "path": "Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj"
         },

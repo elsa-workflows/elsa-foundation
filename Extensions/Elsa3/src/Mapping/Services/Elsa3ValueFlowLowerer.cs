@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa3.Mapping.Conversion;
 using System.Text.Json.Nodes;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
@@ -656,8 +657,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         }
     }
 
-    private const string ReusableValueReadGuidance =
-        "Import this workflow as a non-reusable workflow, or keep the reusable body to literal values until graph activity bodies can read inputs, variables and results.";
+    private const string ReusableValueReadGuidance = Elsa3ReusableGuidance.ValueRead;
 
     private static Elsa3ExpressionParameterResolution MissingAmbient(Elsa3AmbientReference ambient) =>
         Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
