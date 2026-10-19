@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "73451fd575d0e595a79603568896101184887805",
+  "last_publish_commit": "a37b3652241279f10d9b17379e82829521d2efcf",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -284,8 +284,8 @@
     },
     {
       "package_id": "Elsa.Expressions.JavaScript",
-      "version": "4.0.10-preview",
-      "commit": "c976625675e93fe5724b8cdd02a4125bb21cf08c"
+      "version": "4.0.11-preview",
+      "commit": "a37b3652241279f10d9b17379e82829521d2efcf"
     },
     {
       "package_id": "Elsa.Expressions.JavaScript.Core",
@@ -294,8 +294,8 @@
     },
     {
       "package_id": "Elsa.Expressions.JavaScript.Jint",
-      "version": "4.0.9-preview",
-      "commit": "c976625675e93fe5724b8cdd02a4125bb21cf08c"
+      "version": "4.0.10-preview",
+      "commit": "a37b3652241279f10d9b17379e82829521d2efcf"
     },
     {
       "package_id": "Elsa.Expressions.JavaScript.Rendering",
