@@ -179,6 +179,7 @@ jobs:
 
           sys.path.insert(0, os.environ["STUDIO_IMAGE_VALIDATORS"])
           from studio_image_tags import derive_tags
+          from studio_docker_publish import read_preview_floor, require_preview_above_floor
           from verify_studio_nuget_packages import verify_packages
 
           artifact = Path("Studio/packages/nuget")
@@ -213,6 +214,8 @@ jobs:
           version = manifest["version"]
           ref = manifest["ref"]
           tags = derive_tags(ref, version, sha, publish_requested, os.environ["PREVIEW_IMAGE_TAG"])
+          if publish_requested and source_branch == "main":
+              require_preview_above_floor(os.environ["PREVIEW_IMAGE_TAG"], read_preview_floor())
 
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
               output.write(f"studio_version={version}\n")

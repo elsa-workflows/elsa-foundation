@@ -144,6 +144,14 @@ def next_preview_version(floor: int | None) -> str:
     return f"4.0.0-preview.{(floor or 0) + 1}"
 
 
+def require_preview_above_floor(version: str, floor: int | None) -> None:
+    """Reject a manual preview that an earlier queued publisher has already used."""
+    minimum = int(next_preview_version(floor).rsplit(".", 1)[1])
+    match = PREVIEW_TAG.fullmatch(version)
+    if match is None or int(match.group(1)) < minimum:
+        raise ValueError(f"Manual image tag must be 4.0.0-preview.N with N at least {minimum}.")
+
+
 def preview_image_tags(source_sha: str, studio_version: str) -> list[str]:
     """Create stable source tags for a preview build, deliberately excluding latest."""
     if not FULL_SHA.fullmatch(source_sha):

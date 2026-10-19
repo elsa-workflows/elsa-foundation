@@ -195,6 +195,14 @@ class StudioDockerPublishTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             publish.next_preview_version(-1)
 
+    def test_manual_preview_must_exceed_the_floor_when_its_queue_slot_starts(self) -> None:
+        for version, floor in (("4.0.0-preview.1", None), ("4.0.0-preview.21", 20), ("4.0.0-preview.30", 20)):
+            with self.subTest(version=version, floor=floor):
+                publish.require_preview_above_floor(version, floor)
+        for version, floor in (("4.0.0-preview.20", 20), ("4.0.0-preview.19", 20), ("4.0.0-preview.0", None), ("invalid", 20)):
+            with self.subTest(version=version, floor=floor), self.assertRaises(ValueError):
+                publish.require_preview_above_floor(version, floor)
+
     def test_preview_tags_include_short_compatibility_and_full_unique_sha_without_latest(self) -> None:
         tags = publish.preview_image_tags(SHA, "4.0.0-preview.21")
         self.assertEqual(

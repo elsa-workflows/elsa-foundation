@@ -134,6 +134,7 @@ class WorkflowGuardTests(unittest.TestCase):
             step = workflow.split("- name: " + name, 1)[1].split("\n      - name:", 1)[0]
             self.assertIn(authority, step)
         self.assertIn('sys.path.insert(0, os.environ["STUDIO_IMAGE_VALIDATORS"])', workflow)
+        self.assertIn('require_preview_above_floor(os.environ["PREVIEW_IMAGE_TAG"], read_preview_floor())', workflow)
         self.assertLess(workflow.index("Preserve trusted image validators"), workflow.index("Checkout the verified source commit"))
 
     def test_workflow_wiring_and_removal_mutant(self) -> None:
