@@ -31,7 +31,7 @@ for (const width of [320, 768, 1024, 1440]) {
     expect(Math.abs(initialBadge!.y + initialBadge!.height / 2 - initialTitle!.y - initialTitle!.height / 2)).toBeLessThan(1);
     expect(initialBadge!.x + initialBadge!.width).toBeLessThanOrEqual(width);
     if (width >= 768) {
-      expect(Math.abs(initialCanvasTools!.y - initialSave!.y)).toBeLessThan(1);
+      expect(Math.abs(centerY(initialCanvasTools!) - centerY(initialSave!))).toBeLessThan(1);
       expect(Math.abs(centerY(initialTitle!) - centerY(initialSave!))).toBeLessThan(1);
     }
     await expect(title).toHaveAttribute("title", "A long workflow definition name that must not crowd the actions");

@@ -2,6 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { UserMenu } from "../app/components/UserMenu";
 import { ShellFrame } from "../app/App";
 import { StudioAuthBoundary } from "../app/auth/studioAuth";
 import { ThemeProvider } from "../app/components/ThemeProvider";
@@ -53,7 +54,7 @@ describe("shell user menu", () => {
     await act(() => root.render(
       <StudioAuthBoundary manager={authManager}>
         <ThemeProvider>
-          <ShellFrame navigation={[]} panels={[]} path="/" title="Home" backendBaseUrl="https://backend.example/" onNavigate={() => {}}>
+          <ShellFrame accountAction={<UserMenu />} navigation={[]} panels={[]} path="/" title="Home" backendBaseUrl="https://backend.example/" onNavigate={() => {}}>
             <div>content</div>
           </ShellFrame>
         </ThemeProvider>

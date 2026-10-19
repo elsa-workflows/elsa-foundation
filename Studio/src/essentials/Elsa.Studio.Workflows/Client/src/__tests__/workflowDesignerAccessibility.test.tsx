@@ -334,6 +334,7 @@ describe("selected workflow node actions", () => {
   });
 
   it("returns focus to Add when Escape closes the outcome menu", async () => {
+    const canvasKeyDown = vi.fn();
     const actions = { selectedNodeCount: 1, canAddAfter: true, addAfter: vi.fn(), duplicate: vi.fn(), delete: vi.fn() };
     const data = {
       label: "Review order",
@@ -344,9 +345,9 @@ describe("selected workflow node actions", () => {
     };
 
     flushSync(() => root.render(
-      <WorkflowNodeActionsContext.Provider value={actions}>
+      <div onKeyDown={canvasKeyDown}><WorkflowNodeActionsContext.Provider value={actions}>
         <WorkflowNodeContextToolbar nodeId="review-order" data={data} selected />
-      </WorkflowNodeActionsContext.Provider>
+      </WorkflowNodeActionsContext.Provider></div>
     ));
     const add = container.querySelector<HTMLButtonElement>("button[aria-label='Add next activity']")!;
     add.focus();
@@ -357,6 +358,7 @@ describe("selected workflow node actions", () => {
     press("Escape");
     await nextFrame();
     expect(document.activeElement).toBe(add);
+    expect(canvasKeyDown).not.toHaveBeenCalled();
   });
 
   it("hides node actions for multiselection and canvases without authoring actions", () => {

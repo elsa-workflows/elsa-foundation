@@ -86,7 +86,7 @@ test.describe("shell user menu", () => {
     await page.keyboard.press("Enter");
     await expect(page.getByRole("menu")).toBeVisible();
     // The open menu hides the rest of the page from assistive tech, trigger included, so read it by class.
-    await expect(page.locator(".user-menu-button")).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator(".user-menu-button:visible")).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByRole("menuitem", { name: "Sign out" })).toBeFocused();
 
     await page.keyboard.press("Escape");
