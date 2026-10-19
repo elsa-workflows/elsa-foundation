@@ -10,7 +10,6 @@ import type { useSidePanelLayout } from "../workflow-editor/useSidePanelLayout";
 vi.mock("@xyflow/react", async importOriginal => {
   const actual = await importOriginal<typeof import("@xyflow/react")>();
   return {
-    containerRef: () => {},
     ...actual,
     BaseEdge: ({ path }: { path: string }) => <svg><path data-edge-path d={path} /></svg>,
     EdgeLabelRenderer: ({ children }: { children: React.ReactNode }) => <>{children}</>
@@ -91,6 +90,7 @@ describe("theme layouts in the designer", () => {
 
 function sidePanelLayout(): ReturnType<typeof useSidePanelLayout> {
   return {
+    containerRef: () => {},
     paletteWidth: 260,
     inspectorWidth: 320,
     paletteMinimumWidth: 180,
