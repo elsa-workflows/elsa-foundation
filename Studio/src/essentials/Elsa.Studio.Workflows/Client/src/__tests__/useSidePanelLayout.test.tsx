@@ -182,6 +182,18 @@ describe("adaptive workflow side-panel layout", () => {
     window.dispatchEvent(new Event("pointerup"));
   });
 
+  it("opens the inspector for programmatic actions while the compact palette is selected", async () => {
+    renderLayout();
+    await vi.waitFor(() => expect(resize).toBeTypeOf("function"));
+    flushSync(() => resize?.(700));
+    flushSync(() => layout.toggleSidePanelCollapsed("palette"));
+    expect(layout.inspectorExpanded).toBe(false);
+
+    flushSync(() => layout.setInspectorCollapsed(false));
+    expect(layout.inspectorExpanded).toBe(true);
+    expect(layout.paletteCollapsed).toBe(true);
+  });
+
   it("leaves enough room for both preferred panels at a standard desktop width", () => {
     const resolved = resolveAdaptiveSidePanelLayout({
       containerWidth: 1440,

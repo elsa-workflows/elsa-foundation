@@ -10,6 +10,7 @@ import type { useSidePanelLayout } from "../workflow-editor/useSidePanelLayout";
 vi.mock("@xyflow/react", async importOriginal => {
   const actual = await importOriginal<typeof import("@xyflow/react")>();
   return {
+    containerRef: () => {},
     ...actual,
     BaseEdge: ({ path }: { path: string }) => <svg><path data-edge-path d={path} /></svg>,
     EdgeLabelRenderer: ({ children }: { children: React.ReactNode }) => <>{children}</>
@@ -92,16 +93,19 @@ function sidePanelLayout(): ReturnType<typeof useSidePanelLayout> {
   return {
     paletteWidth: 260,
     inspectorWidth: 320,
+    paletteMinimumWidth: 180,
+    inspectorMinimumWidth: 260,
     paletteCollapsed: false,
     inspectorCollapsed: false,
     maximizedSidePanel: null,
     paletteExpanded: true,
     inspectorExpanded: true,
     editorBodyClassName: "wf-editor-body",
-    editorBodyStyle: {},
+    editorBodyStyle: { "--wf-palette-width": "260px", "--wf-inspector-width": "320px" },
+    setInspectorCollapsed: () => {},
     toggleSidePanelCollapsed: () => {},
     toggleSidePanelMaximized: () => {},
     startSidePanelResize: () => {},
     handleSidePanelResizeKeyDown: () => {}
-  } as unknown as ReturnType<typeof useSidePanelLayout>;
+  };
 }

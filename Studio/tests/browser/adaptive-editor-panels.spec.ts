@@ -122,3 +122,14 @@ test("editorial workflow uses the available space when the palette is absent", a
   await expect.poll(async () => Math.round((await page.locator(".wf-inspector").boundingBox())!.width)).toBe(560);
   await expectInsideViewport(page.locator(".wf-inspector"), page);
 });
+
+test("Run opens its inspector panel while the compact palette is selected", async ({ page }) => {
+  await page.setViewportSize({ width: 700, height: 800 });
+  await page.goto("/?mode=activity-duplicate-editor&composition=sequence&theme=light");
+  await page.getByRole("button", { name: "Expand activities panel" }).press("Enter");
+  await expect(page.getByRole("button", { name: "Expand inspector panel" })).toBeVisible();
+  await page.getByRole("button", { name: "Run", exact: true }).press("Enter");
+  await expect(page.getByRole("button", { name: "Collapse inspector panel" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Test Run", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expectInsideViewport(page.locator(".wf-inspector"), page);
+});

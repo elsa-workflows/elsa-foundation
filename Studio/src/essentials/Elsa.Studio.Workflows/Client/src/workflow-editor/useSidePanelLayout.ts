@@ -411,6 +411,12 @@ export function useSidePanelLayout(
     }
   }, [resizeSidePanel]);
 
+  const setInspectorPanelCollapsed = useCallback((collapsed: boolean) => {
+    setResponsiveExpandedSide(collapsed ? null : "inspector");
+    setInspectorCollapsed(collapsed);
+    if (!collapsed) setMaximizedSidePanel(current => current === "palette" ? null : current);
+  }, []);
+
   const effectiveMaximizedSidePanel = !palettePresent && maximizedSidePanel === "palette" ? null : maximizedSidePanel;
   const paletteExpanded = palettePresent && !adaptiveLayout.paletteCollapsed && effectiveMaximizedSidePanel !== "inspector";
   const inspectorExpanded = !adaptiveLayout.inspectorCollapsed && effectiveMaximizedSidePanel !== "palette";
@@ -435,7 +441,7 @@ export function useSidePanelLayout(
     paletteCollapsed: adaptiveLayout.paletteCollapsed,
     inspectorCollapsed: adaptiveLayout.inspectorCollapsed,
     maximizedSidePanel: effectiveMaximizedSidePanel,
-    setInspectorCollapsed,
+    setInspectorCollapsed: setInspectorPanelCollapsed,
     paletteExpanded,
     inspectorExpanded,
     editorBodyClassName,
