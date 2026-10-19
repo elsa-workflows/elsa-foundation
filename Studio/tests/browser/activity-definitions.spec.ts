@@ -685,13 +685,15 @@ test("Activity Graph diagnostics focus accessible root context while the exact c
 test("Activity Definition publication keeps first and later recommendation semantics while preserving exact versions", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
   await createBrowserActivity(page);
+  const changesRegion = page.getByRole("region", { name: "Changes", exact: true });
 
   await page.getByRole("button", { name: "Review & publish" }).click();
   await expect(page.getByText("First publication", { exact: true })).toBeVisible();
   await expect(page.getByText("No published baseline exists", { exact: true })).toBeVisible();
-  await expect(page.locator(".ad-publication-impact")).not.toBeVisible();
+  await expect(changesRegion).not.toBeVisible();
   await expect(page.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeVisible();
   await page.getByText("Review initial activity contents", { exact: true }).click();
+  await expect(changesRegion).toBeVisible();
   await page.locator(".ad-impact-group details summary").first().click();
   await expect(page.getByText("Protected value redacted")).toBeVisible();
   await expect(page.getByText("raw-protected-provider-value")).toHaveCount(0);
@@ -717,6 +719,7 @@ test("Activity Definition publication keeps first and later recommendation seman
 
   await page.getByRole("button", { name: "Review & publish" }).click();
   await expect(page.getByText("Compared with published head")).toBeVisible();
+  await expect(changesRegion).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Publication version" })).toHaveValue("2.1.0");
   await page.getByRole("textbox", { name: "Publication version" }).fill("3.4.5");
   await page.getByRole("button", { name: "Publish 3.4.5" }).click();
