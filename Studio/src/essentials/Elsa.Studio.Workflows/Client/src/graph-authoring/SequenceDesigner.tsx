@@ -5,27 +5,44 @@ import { renderActivityIcon } from "../activityIconView";
 import { getAvailabilityStateLabel } from "../activityAvailability";
 import { activityDragDataType } from "../workflow-editor/constants";
 import type { WorkflowNodeAvailabilityLookup } from "../workflow-editor/editorTypes";
+import { WorkflowNodeRuntimeBadges } from "../workflow-editor/WorkflowNodeRuntimeBadges";
 import { resolveNodeActivityVisual } from "../workflow-editor/workflowNodeVisual";
 import type { ChildSlot, WorkflowNodeData } from "../workflowAdapter";
 import "./sequenceDesigner.css";
 
 export const sequenceNodeDragDataType = "application/x-elsa-sequence-node";
 
-export interface SequenceDesignerProps {
+interface SequenceDesignerBaseProps {
   nodes: Node<WorkflowNodeData>[];
   selectedNodeId: string | null;
-  readOnly: boolean;
   canvasRef: RefObject<HTMLDivElement | null>;
   onSelect(id: string | null): void;
+  onOpenSlot?(ownerNodeId: string, ownerLabel: string, slot: ChildSlot): void;
+  availabilityLookup?: WorkflowNodeAvailabilityLookup;
+  children?: ReactNode;
+}
+
+export interface ReadOnlySequenceDesignerProps extends SequenceDesignerBaseProps {
+  readOnly: true;
+  onInsert?: never;
+  onDropActivity?: never;
+  onMove?: never;
+  onDelete?: never;
+  onDuplicate?: never;
+}
+
+interface SequenceDesignerEditProps {
   onInsert(index: number, anchor: { clientX: number; clientY: number }): void;
   onDropActivity(activityVersionId: string, index: number): void;
   onMove(nodeId: string, boundaryIndex: number): void;
   onDelete(nodeId: string): void;
   onDuplicate?(nodeId: string): void;
-  onOpenSlot?(ownerNodeId: string, ownerLabel: string, slot: ChildSlot): void;
-  availabilityLookup?: WorkflowNodeAvailabilityLookup;
-  children?: ReactNode;
 }
+
+export type EditableSequenceDesignerProps = SequenceDesignerBaseProps & SequenceDesignerEditProps & { readOnly?: false };
+export type DynamicReadOnlySequenceDesignerProps = SequenceDesignerBaseProps & SequenceDesignerEditProps & { readOnly: boolean };
+
+export type SequenceDesignerProps = ReadOnlySequenceDesignerProps | EditableSequenceDesignerProps | DynamicReadOnlySequenceDesignerProps;
 
 export function SequenceDesigner({
   nodes,
@@ -58,7 +75,7 @@ export function SequenceDesigner({
 
   const insertAt = (index: number, event: MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
-    onInsert(index, {
+    onInsert?.(index, {
       clientX: event.clientX || rect.left + rect.width / 2,
       clientY: event.clientY || rect.top + rect.height / 2
     });
@@ -79,13 +96,13 @@ export function SequenceDesigner({
 
     const draggedNodeId = event.dataTransfer.getData(sequenceNodeDragDataType);
     if (draggedNodeId) {
-      if (nodes.some(node => node.id === draggedNodeId)) onMove(draggedNodeId, index);
+      if (nodes.some(node => node.id === draggedNodeId)) onMove?.(draggedNodeId, index);
       return;
     }
 
     const activityVersionId = event.dataTransfer.getData(activityDragDataType) ||
       (Array.from(event.dataTransfer.types).includes("text/plain") ? event.dataTransfer.getData("text/plain") : "");
-    if (activityVersionId) onDropActivity(activityVersionId, index);
+    if (activityVersionId) onDropActivity?.(activityVersionId, index);
   };
 
   const boundary = (index: number, label: string, isEmpty = false, isEnd = false) => !readOnly ? (
@@ -106,7 +123,9 @@ export function SequenceDesigner({
   ) : null;
 
   return (
-    <div ref={canvasRef} className="wf-sequence-designer" tabIndex={-1} aria-label="Sequence canvas">
+    <div ref={canvasRef} className="wf-sequence-designer" tabIndex={-1} aria-label="Sequence canvas" onClick={event => {
+      if (readOnly && event.target instanceof Element && !event.target.closest(".wf-sequence-item, button")) onSelect(null);
+    }}>
       <header className="wf-sequence-heading">
         <span className="wf-sequence-mode-pill">Sequence · runs top to bottom</span>
       </header>
@@ -116,7 +135,7 @@ export function SequenceDesigner({
           <section className="wf-sequence-empty" aria-label="Empty sequence">
             <span className="wf-sequence-empty-icon" aria-hidden="true"><Plus size={22} /></span>
             <h3>No steps yet</h3>
-            <p>Add an activity to start this sequence.</p>
+            <p>{readOnly ? "This sequence has no steps." : "Add an activity to start this sequence."}</p>
             {boundary(0, "Add the first step", true)}
           </section>
         ) : (
@@ -128,7 +147,7 @@ export function SequenceDesigner({
                   node={node}
                   index={index}
                   selected={selectedNodeId === node.id}
-                  readOnly={readOnly}
+                  readOnly={!!readOnly}
                   tabIndex={rovingNodeId === node.id ? 0 : -1}
                   listSize={nodes.length}
                   onSelect={() => {
@@ -136,8 +155,8 @@ export function SequenceDesigner({
                     onSelect(node.id);
                   }}
                   onFocus={() => setRovingNodeId(node.id)}
-                  onMove={boundaryIndex => onMove(node.id, boundaryIndex)}
-                  onDelete={() => onDelete(node.id)}
+                  onMove={boundaryIndex => onMove?.(node.id, boundaryIndex)}
+                  onDelete={() => onDelete?.(node.id)}
                   onDuplicate={onDuplicate ? () => onDuplicate(node.id) : undefined}
                   onOpenSlot={onOpenSlot}
                   availabilityLookup={availabilityLookup}
@@ -228,12 +247,13 @@ function SequenceStep({
   };
 
   return (
-    <article className={`wf-sequence-item${selected ? " is-selected" : ""}${availability ? " wf-sequence-unavailable" : ""}`} role="listitem" data-icon={icon} data-tone={tone} title={availabilityLabel ?? undefined}>
+    <article className={`wf-sequence-item${selected ? " is-selected" : ""}${availability ? " wf-sequence-unavailable" : ""}${data.runtime ? " wf-sequence-runtime" : ""}${data.runtime?.hasBlockingIncident ? " faulted" : ""}`} role="listitem" data-icon={icon} data-tone={tone} title={availabilityLabel ?? undefined}>
       <button
         type="button"
         className="wf-sequence-step"
         data-id={node.id}
         data-graph-node-id={node.id}
+        data-runtime-node-id={data.runtimeNodeId ?? node.id}
         data-selected={String(selected)}
         data-index={index}
         aria-pressed={selected}
@@ -276,6 +296,8 @@ function SequenceStep({
           ))}
         </div>
       ) : null}
+
+      {data.runtime ? <WorkflowNodeRuntimeBadges data={data} className="wf-sequence-runtime-strip" /> : null}
 
       {selected && !readOnly ? (
         <div className="wf-sequence-actions" aria-label={`${data.label} actions`}>
