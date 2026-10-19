@@ -64,6 +64,19 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--studio-accent) 22%, transparent), var(--studio-shadow-sm);
 }
 
+.wf-sequence-item.wf-sequence-runtime.faulted {
+  border-color: color-mix(in srgb, var(--studio-danger) 56%, var(--studio-border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--studio-danger) 18%, transparent), var(--studio-shadow-sm);
+}
+
+.wf-sequence-item.wf-sequence-runtime.faulted.is-selected {
+  border-color: var(--studio-danger);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--studio-danger) 18%, transparent),
+    0 0 0 6px color-mix(in srgb, var(--studio-focus) 42%, transparent),
+    var(--studio-shadow-sm);
+}
+
 .wf-sequence-step {
   display: flex;
   width: 100%;
@@ -162,6 +175,12 @@
   font-size: .75rem;
   line-height: 1.4;
   text-overflow: ellipsis;
+}
+
+.wf-sequence-runtime-strip {
+  margin: 0;
+  padding: .5rem .75rem .625rem;
+  border-top: 1px solid var(--studio-border);
 }
 
 .wf-sequence-summary {

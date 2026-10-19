@@ -1138,7 +1138,7 @@
   display: none;
 }
 
-.wf-instance-canvas-shell header {
+.wf-instance-canvas-shell > header {
   display: flex;
   min-height: 58px;
   flex: 0 0 auto;
@@ -1150,7 +1150,7 @@
   padding: 10px 12px;
 }
 
-.wf-instance-canvas-shell header span {
+.wf-instance-canvas-shell > header span {
   color: var(--wf-muted-text);
   font-size: 11px;
   font-weight: 700;
@@ -1158,13 +1158,13 @@
   letter-spacing: var(--wf-label-tracking, 0);
 }
 
-.wf-instance-canvas-shell h3 {
+.wf-instance-canvas-shell > header h3 {
   margin: 2px 0 0;
   font-size: 16px;
   line-height: 1.25;
 }
 
-.wf-instance-canvas-shell h3 small {
+.wf-instance-canvas-shell > header h3 small {
   color: var(--wf-muted-text);
   font-size: 12px;
 }
@@ -7398,7 +7398,7 @@ html[data-theme-material] .wf-canvas-tabs,
 html[data-theme-material] .wf-code-view-toolbar,
 html[data-theme-material] .wf-properties-section,
 html[data-theme-material] .wf-instance-canvas-shell,
-html[data-theme-material] .wf-instance-canvas-shell header,
+html[data-theme-material] .wf-instance-canvas-shell > header,
 html[data-theme-material] .wf-instance-inspector,
 html[data-theme-material] .wf-instance-inspector header,
 html[data-theme-material] .wf-instance-tabs,
@@ -7971,4 +7971,8 @@ html[data-theme-material] .availability-search .wf-search {
 .ad-graph-root-options {
   display: grid;
   gap: .35rem;
+}
+
+.wf-instance-canvas > .wf-sequence-designer {
+  height: 100%;
 }

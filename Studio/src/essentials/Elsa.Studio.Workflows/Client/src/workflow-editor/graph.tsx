@@ -11,8 +11,7 @@ import { groupActivityPalette, isActivityBrowsable } from "./editorHelpers";
 import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext } from "./contexts";
 import { NodeSlotBadges } from "./NodeSlotBadges";
 import { WorkflowNodeContextToolbar } from "./WorkflowNodeContextToolbar";
-import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
-import { RuntimeIncidentAction } from "./RuntimeIncidentAction";
+import { WorkflowNodeRuntimeBadges } from "./WorkflowNodeRuntimeBadges";
 import { BpmnElementNode } from "../bpmn/BpmnElementNode";
 import { httpEndpointResponseBadge } from "../httpEndpointResponseMode";
 import type { WorkflowEdge } from "./editorTypes";
@@ -79,13 +78,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
         slots={nodeData.childSlots}
         onEnterSlot={nodeData.onEnterSlot}
       />
-      {runtime ? (
-        <div className="wf-node-runtime-strip">
-          {runtime.status ? <WorkflowStatusBadge status={runtime.status} subStatus={runtime.subStatus} /> : null}
-          <RuntimeIncidentAction runtime={runtime} onOpenIncident={nodeData.onIncidentClick} activityLabel={nodeData.label} />
-          {runtime.faultCount > 0 ? <span className="wf-node-runtime-count" data-health={runtime.hasBlockingIncident ? "blocking" : "neutral"}>{runtime.faultCount} faults</span> : null}
-        </div>
-      ) : null}
+      <WorkflowNodeRuntimeBadges data={nodeData} />
       {sourcePorts.map((port, index) => {
         const top = `${((index + 1) / (sourcePorts.length + 1)) * 100}%`;
         return (

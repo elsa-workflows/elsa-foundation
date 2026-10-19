@@ -6,7 +6,7 @@ import type { Node } from "@xyflow/react";
 import { activityDragDataType } from "../workflow-editor/constants";
 import type { WorkflowNodeAvailabilityLookup } from "../workflow-editor/editorTypes";
 import { SequenceDesigner, sequenceNodeDragDataType } from "../graph-authoring/SequenceDesigner";
-import type { ChildSlot, WorkflowNodeData } from "../workflowAdapter";
+import type { ChildSlot, WorkflowNodeData, WorkflowRuntimeNodeOverlay } from "../workflowAdapter";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -61,6 +61,89 @@ describe("SequenceDesigner", () => {
     click(container.querySelector<HTMLButtonElement>("button[aria-label='Add the first step']")!);
     expect(callbacks.onInsert).toHaveBeenCalledWith(0, { clientX: 0, clientY: 0 });
     expect(container.querySelector(".wf-sequence-list")).toBeNull();
+  });
+
+  it("renders runtime status, faults, and active, historical, and contained incident actions", () => {
+    const onIncidentClick = vi.fn();
+    const node = workflowNode("runtime-step", "Write Line", {
+      runtimeNodeId: "runtime-write-line",
+      runtime: runtimeOverlay({
+        status: "Running",
+        subStatus: "Retrying",
+        faultCount: 2,
+        incidentCount: 1,
+        primaryIncidentId: "active-incident",
+        hasBlockingIncident: true,
+        containedIncidentCount: 2,
+        containedAffectedActivityCount: 1,
+        containedPrimaryIncidentId: "contained-incident",
+        containsBlockingIncident: true
+      }),
+      onIncidentClick
+    });
+    const historyNode = workflowNode("history-step", "Timer", {
+      runtime: runtimeOverlay({
+        status: "Completed",
+        incidentCount: 0,
+        historicalIncidentCount: 3,
+        primaryIncidentId: "historical-incident"
+      }),
+      onIncidentClick
+    });
+    const { callbacks } = mount([node, historyNode], { readOnly: true, selectedNodeId: "runtime-step" });
+
+    expect(container.querySelector(".wf-sequence-runtime-strip")?.textContent).toContain("Running · Retrying");
+    expect(container.querySelector(".wf-node-runtime-count")?.textContent).toBe("2 faults");
+    expect(container.querySelector(".wf-node-runtime-count")?.getAttribute("data-health")).toBe("blocking");
+    expect(container.querySelector(".wf-sequence-item")?.classList.contains("faulted")).toBe(true);
+    expect(stepButton("runtime-step").dataset.runtimeNodeId).toBe("runtime-write-line");
+
+    const activeAction = container.querySelector<HTMLButtonElement>("button[data-health='blocking']")!;
+    expect(activeAction.getAttribute("aria-label")).toContain("1 active, needs intervention");
+    click(activeAction);
+    const containedAction = container.querySelector<HTMLButtonElement>(".wf-node-contained-incident-action")!;
+    expect(containedAction.getAttribute("aria-label")).toContain("2 incidents inside Write Line");
+    click(containedAction);
+    const historyAction = container.querySelector<HTMLButtonElement>("button[data-health='history']")!;
+    expect(historyAction.textContent).toContain("3 history");
+    expect(historyAction.getAttribute("aria-label")).toContain("3 resolved or suppressed incidents");
+    click(historyAction);
+
+    expect(onIncidentClick.mock.calls).toEqual([["active-incident"], ["contained-incident", null], ["historical-incident"]]);
+    expect(callbacks.onSelect).not.toHaveBeenCalled();
+  });
+
+  it("tracks parent selection for runtime cards and keeps the runtime view read-only", () => {
+    const node = workflowNode("runtime-step", "Write Line", {
+      runtime: runtimeOverlay({ status: "Completed" })
+    });
+    const { callbacks, render } = mount([node], { readOnly: true, selectedNodeId: "runtime-step" });
+
+    expect(stepButton("runtime-step").getAttribute("aria-pressed")).toBe("true");
+    expect(stepButton("runtime-step").draggable).toBe(false);
+    expect(container.querySelectorAll(".wf-sequence-insert")).toHaveLength(0);
+    expect(container.querySelectorAll(".wf-sequence-actions")).toHaveLength(0);
+
+    render([node], { readOnly: true, selectedNodeId: null });
+    expect(stepButton("runtime-step").getAttribute("aria-pressed")).toBe("false");
+    click(stepButton("runtime-step"));
+    pressKey(stepButton("runtime-step"), "Delete");
+    pressKey(stepButton("runtime-step"), "Backspace");
+
+    expect(callbacks.onSelect).toHaveBeenCalledWith("runtime-step");
+    expect(callbacks.onDelete).not.toHaveBeenCalled();
+    expect(callbacks.onMove).not.toHaveBeenCalled();
+    expect(callbacks.onDuplicate).not.toHaveBeenCalled();
+    expect(callbacks.onInsert).not.toHaveBeenCalled();
+    expect(callbacks.onDropActivity).not.toHaveBeenCalled();
+  });
+
+  it("does not invite edits from an empty read-only sequence", () => {
+    mount([], { readOnly: true });
+
+    expect(container.querySelector(".wf-sequence-empty")?.textContent).toContain("No steps yet");
+    expect(container.querySelector(".wf-sequence-empty")?.textContent).not.toContain("Add an activity");
+    expect(container.querySelectorAll(".wf-sequence-insert")).toHaveLength(0);
   });
 
   it("exposes every insertion boundary and accepts palette and sequence drags", () => {
@@ -234,6 +317,16 @@ function workflowNode(id: string, label: string, overrides: Partial<WorkflowNode
 
 function workflowNodeActivity(id: string) {
   return { nodeId: id, activityVersionId: `${id}-v1`, inputs: [], outputs: [] };
+}
+
+function runtimeOverlay(overrides: Partial<WorkflowRuntimeNodeOverlay> = {}): WorkflowRuntimeNodeOverlay {
+  return {
+    faultCount: 0,
+    incidentCount: 0,
+    hasBlockingIncident: false,
+    selected: false,
+    ...overrides
+  };
 }
 
 function childSlot(id: string, label: string, activities: ChildSlot["activities"]): ChildSlot {

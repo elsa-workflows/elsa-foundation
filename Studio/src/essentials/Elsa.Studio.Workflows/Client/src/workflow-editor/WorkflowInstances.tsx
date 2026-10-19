@@ -37,6 +37,7 @@ import { PanelTabList } from "./PanelTabList";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { nodeTypes, edgeTypes } from "./graph";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
+import { ReadOnlyWorkflowSequence } from "./ReadOnlyWorkflowSequence";
 import { buildBpmnCanvas, type BpmnNodeData } from "../bpmn/bpmnAdapter";
 import { CopyValueButton } from "./executableShared";
 import { useDialogFocus } from "./useDialogFocus";
@@ -1519,13 +1520,13 @@ function WorkflowInstanceCanvas({
     : null;
 
   useEffect(() => {
-    if (!flowInstance || !focusCanvasNodeId) return;
+    if (canvas.mode !== "graph" || !flowInstance || !focusCanvasNodeId) return;
     const frame = requestAnimationFrame(() => {
       flowInstance.fitView({ nodes: [{ id: focusCanvasNodeId }], duration: 220, padding: 0.35 });
       focusSelectedCanvasActivity(focusNodeId);
     });
     return () => cancelAnimationFrame(frame);
-  }, [flowInstance, focusCanvasNodeId, focusNodeId, focusRequestId, scopeKey]);
+  }, [canvas.mode, flowInstance, focusCanvasNodeId, focusNodeId, focusRequestId, scopeKey]);
 
   return (
     <section className="wf-instance-canvas-shell" aria-label="Workflow run canvas" aria-hidden={inactive || undefined} inert={inactive || undefined}>
@@ -1554,8 +1555,16 @@ function WorkflowInstanceCanvas({
             {definitionVersionError ? <small>{definitionVersionError}</small> : null}
           </div>
         ) : null}
-        {definitionVersion && canvas.nodes.length === 0 ? <div className="wf-empty">No workflow activities are available for this executable.</div> : null}
-        {canvas.nodes.length > 0 ? (
+        {definitionVersion && canvas.mode === "graph" && canvas.nodes.length === 0 ? <div className="wf-empty">No workflow activities are available for this executable.</div> : null}
+        {definitionVersion && canvas.mode === "sequence" ? (
+          <ReadOnlyWorkflowSequence
+            key={scopeKey}
+            nodes={canvas.nodes}
+            onSelectActivity={onSelectActivity}
+            focusNodeId={focusCanvasNodeId}
+            focusRequestId={focusRequestId}
+          />
+        ) : canvas.nodes.length > 0 ? (
           <ReadOnlyWorkflowFlow
             key={scopeKey}
             nodes={canvas.nodes}
@@ -1652,9 +1661,9 @@ export function buildInstanceCanvas(
   onOpenIncident: (incidentId: string, nodeId?: string | null) => void = () => undefined,
   associationActivities: ActivityExecutionStateSummary[] = details.activities,
   executableGraph: ExecutableActivityGraph | null = null
-): { nodes: Node<WorkflowNodeData>[]; edges: Edge<WorkflowEdgeData>[] } {
+): { nodes: Node<WorkflowNodeData>[]; edges: Edge<WorkflowEdgeData>[]; mode: "sequence" | "graph" } {
   const root = definitionVersion?.state.rootActivity;
-  if (!definitionVersion || !root) return { nodes: [], edges: [] };
+  if (!definitionVersion || !root) return { nodes: [], edges: [], mode: "graph" };
 
   const scope = resolveScope(root, frames, activityCatalog);
   const scopeOwner = scope?.owner ?? root;
@@ -1697,10 +1706,15 @@ export function buildInstanceCanvas(
     } as Node<WorkflowNodeData>;
   });
 
-  return decorateWorkflowCanvasElements(
+  const canvas = decorateWorkflowCanvasElements(
     applyRuntimeOverlays(readonlyNodes, associationActivities, Array.isArray(details.incidents) ? details.incidents : [], selectedEvidenceId, activityCatalog, executableGraph),
     baseCanvas.edges.map(edge => ({ ...edge, deletable: false }))
   );
+  return {
+    ...canvas,
+    mode: support !== "unsupported" && scope?.slot.mode === "sequence" && scope.slot.cardinality === "many"
+      ? "sequence" : "graph"
+  };
 }
 
 function nodeRuntimeId(node: Node) {
@@ -2075,7 +2089,7 @@ function findSelectedActivityExecution(
 export function focusSelectedCanvasActivity(selectedEvidenceId: string | null) {
   if (!selectedEvidenceId) return;
   const node = [...document.querySelectorAll<HTMLElement>(".wf-instance-canvas [data-id]")]
-    .find(element => element.dataset.id === selectedEvidenceId ||
+    .find(element => element.dataset.id === selectedEvidenceId || element.dataset.runtimeNodeId === selectedEvidenceId ||
       [...element.querySelectorAll<HTMLElement>("[data-runtime-node-id]")]
         .some(runtimeNode => runtimeNode.dataset.runtimeNodeId === selectedEvidenceId));
   node?.focus();
