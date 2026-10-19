@@ -68,6 +68,33 @@ public sealed class PublisherBridgeTests
     }
 
     [Fact]
+    public async Task A_publish_rejected_as_invalid_refuses_with_the_code_of_its_first_error()
+    {
+        // The publisher rejects a version below the head as "publication invalid" and says why in a diagnostic.
+        var bump = Diagnostic("activity.version.bump-insufficient", ActivityDiagnosticSeverity.Error);
+        var publisher = new FakeActivityPublisher
+        {
+            Preflight = Preflight(isPublishable: true),
+            Rejection = new ActivityPublicationRejectedException("activity.publication.invalid", "Below the minimum.", [bump])
+        };
+
+        var outcome = await new PublisherReusableActivityImportPublisher(publisher, new Tenant("tenant-a")).PublishAsync(Request);
+
+        Assert.Equal("activity.version.bump-insufficient", outcome.ErrorCode);
+        Assert.Equal([bump], outcome.Diagnostics);
+    }
+
+    [Fact]
+    public void Imp_publishing_permission_constant_equals_WorkflowPublishingPermissions_Manage()
+    {
+        // The import duplicates the constant rather than reference Publishing; this pins the copy.
+        var permissions = typeof(Elsa3ImportActivitiesFeature).Assembly.GetType("Elsa3.Activities.Design.Import.Endpoints.Elsa3ImportPermissions", throwOnError: true)!;
+        var constant = permissions.GetField("PublishingManage", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)!;
+
+        Assert.Equal(Elsa.Workflows.Publishing.Api.Authorization.WorkflowPublishingPermissions.Manage, constant.GetRawConstantValue());
+    }
+
+    [Fact]
     public async Task An_applied_publish_names_the_plan_version_id_review_token_and_idempotency_key()
     {
         var publisher = new FakeActivityPublisher { Preflight = Preflight(isPublishable: true) };

@@ -744,6 +744,26 @@ public sealed class EfReusableActivityImportBehaviorTests : IAsyncLifetime
         Assert.All(await activities.ActivityDefinitions.AsNoTracking().ToListAsync(), row => Assert.Equal("tenant-a", row.TenantId));
     }
 
+    [Fact]
+    public async Task The_stored_receipt_keeps_conversion_warnings_and_never_publication_states()
+    {
+        // Spec 246 D-3: the warnings describe the conversion, so a status read returns the ones the apply did. A declared
+        // outcome no Complete reaches is one (ELS3-BEHAVIOUR-OUTCOME-UNREACHED).
+        var reusable = Workflow("warned", "warned-v1", 1, true, Leaf("root"));
+        reusable.Outcomes = ["never"];
+        var (upload, planId) = await UploadAsync(Db.Service(access), Scope, reusable);
+
+        var applied = await Db.Service(access).ApplyAsync(upload.CollectionHandle, planId, ["warned-v1"], "warned", Scope);
+        var status = await Db.Service(access).GetStatusAsync("warned", Scope);
+
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.OutcomeUnreached, Assert.Single(applied.Warnings!).Code);
+        Assert.Equal(applied.Warnings!.Select(warning => (warning.Code, warning.Message)), status.Warnings!.Select(warning => (warning.Code, warning.Message)));
+        await using var import = Db.Import();
+        var stored = (await import.Receipts.AsNoTracking().SingleAsync()).ContentJson;
+        Assert.Contains(Elsa3ActivityDiagnosticCodes.OutcomeUnreached, stored, StringComparison.Ordinal);
+        Assert.DoesNotContain("publications", stored, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static async Task<(ReusableActivityImportUploadResult Upload, string PlanId)> UploadAsync(
         IReusableActivityImportOperationService service,
         ReusableActivityImportAccessScope scope,

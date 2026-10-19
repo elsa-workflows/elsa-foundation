@@ -77,7 +77,7 @@ public sealed record ReusableActivityImportApplyRequest(
     ReusableActivityImportAccessScope? AccessScope = null,
     string? IdempotencyKey = null);
 
-/// <param name="Warnings">Conversion warnings of the applied items (runtime differences); never persisted.</param>
+/// <param name="Warnings">Conversion warnings of the applied items (runtime differences); the receipt stores them too.</param>
 public sealed record ReusableActivityImportApplyResult(
     string PlanId,
     IReadOnlyList<string> AppliedSourceVersionIds,
@@ -205,8 +205,8 @@ public sealed record ReusableActivityImportReceipt(
     IReadOnlyList<ReusableActivityImportSourceReceipt> Sources)
 {
     /// <summary>
-    /// The conversion warnings of the apply that produced this receipt (runtime differences, spec 236 R-7). Returned by
-    /// the apply that commits, never persisted: a replayed or status read returns the receipt without them.
+    /// The conversion warnings of the apply that produced this receipt (runtime differences, spec 236 R-7). Stored with
+    /// the receipt, so a replay and a status read return the same warnings (spec 246 D-3).
     /// </summary>
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<Elsa3MigrationDiagnostic>? Warnings { get; init; }

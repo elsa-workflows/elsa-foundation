@@ -104,7 +104,21 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     trigger that another activity leads into, and that is not the start node, is
     `ELS3-ACTIVITY-GRAPH-START-TRIGGER-MISPLACED`: Elsa 4 cannot begin a run there.
   - Conversion assumes the host's default `deadPathJoin` flowchart join option.
-- **Imported reusable activities** are not yet published, so they do not run as graphs until #2796.
+- **Imported reusable activities are published after the import commits** (spec 246). The commit writes each new
+  activity definition with no head and the draft of its first selected version; the import's publish phase then
+  publishes every selected version through the activity publisher under the plan's version id, dependencies first and
+  the versions of one definition in ascending order. The apply, a replay and a status read report each version's
+  publication state; a version the publisher refuses blocks only the versions that use it, and a later apply of the
+  same export (a new idempotency key) publishes what is still missing. Publishing needs the
+  `Elsa3ImportActivitiesPublishing` feature; without it, an apply that selects a reusable workflow is refused with
+  `ELS3-REUSABLE-PUBLISHING-UNAVAILABLE`.
+  - Conversion runs the selected reusable versions in that publish order, so a caller routes on the outcomes the
+    target's own conversion declares (its published contract).
+  - A reusable body's natural completion maps from its root's own `Done` key to the boundary's `done`.
+  - Refused until Elsa 4 graph activities support them: a reusable whose body starts from a trigger
+    (`ELS3-REUSABLE-UNSUPPORTED-START-TRIGGER`), uses an engine intrinsic such as SetVariable or SetOutput
+    (`ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED`, #3023), or reads one of its inputs, a variable or another
+    activity's result (`ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED`, #3027).
 
 ## Migrating Elsa 3 JavaScript
 

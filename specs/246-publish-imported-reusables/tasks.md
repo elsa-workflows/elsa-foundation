@@ -293,11 +293,11 @@ no versions. Nothing publishes yet.
 
 **Independent test**: `IT/ImportPublishOrderTests.cs` against `reusable-calls-reusable`.
 
-- [ ] T031 [US2] In `IMP/Services/ReusableActivityImportPublishPhase.cs`, make sure each subsequent version of one
+- [X] T031 [US2] In `IMP/Services/ReusableActivityImportPublishPhase.cs`, make sure each subsequent version of one
   definition creates its draft only after the previous version is published, with the expected head = that version,
   so each step is an ascending major (R-3). A version the publisher refuses as lower than the head
   (`activity.version.bump-insufficient`) is reported `Refused` with that code (amended edge case).
-- [ ] T032 [US2] Add `IT/ImportPublishOrderTests.cs`:
+- [X] T032 [US2] Add `IT/ImportPublishOrderTests.cs`:
   - `Dependency_is_published_before_its_caller` (compare publication timestamps or the receipt order);
   - `Versions_of_one_definition_publish_ascending_and_head_ends_on_highest`;
   - `Published_versions_keep_the_plan_ids_so_wrappers_and_callers_resolve`;
@@ -314,18 +314,21 @@ no versions. Nothing publishes yet.
 **Independent test**: `IT/ImportPublishResumeTests.cs` against `reusable-refused-body` and
 `reusable-depends-on-refused`.
 
-- [ ] T033 [US3] In `IMP/Services/ReusableActivityImportPublishPhase.cs`, add the dependency gate: a version whose
+- [X] T033 [US3] In `IMP/Services/ReusableActivityImportPublishPhase.cs`, add the dependency gate: a version whose
   dependency is neither `Published` nor `AlreadyPublished` is `NotPublishedDependency` with `BlockedBy` set, and the
   port is not called. An infrastructure exception from the port is recorded as
   `Refused("activity.publication.failed")` with one diagnostic, and the phase moves on (FR-011).
-- [ ] T034 [US3] In `IMP/Services/ReusableActivityImportOperationService.cs` (:243-254), when the stored receipt
+- [X] T034 *(Done differently, 2026-10-19: the upload is deleted after a successful apply, so a same-key replay cannot
+  re-convert. A same-key replay returns the stored receipt with live `Publications`; finishing a partly published import
+  is a new apply of the re-uploaded export under a new idempotency key, whose commit reuses the rows and whose publish
+  phase publishes only what is missing. FR-009 amended; for maintainer review.)* [US3] In `IMP/Services/ReusableActivityImportOperationService.cs` (:243-254), when the stored receipt
   matches (`AlreadyImported`), run the publish phase again for the plan's selection before returning, and return its
   states (FR-009). This needs the plan's selection and the materialized drafts' inputs, so check that the replay has
   what the phase needs (version ids, versions, dependencies, draft ids). If the stored receipt lacks any of it, derive
   it from the stored plan via the importer and note the choice in the PR.
-- [ ] T035 [US3] In `GetStatusAsync` (:280-289), fill `Publications` live: `AlreadyPublished` when an active
+- [X] T035 [US3] In `GetStatusAsync` (:280-289), fill `Publications` live: `AlreadyPublished` when an active
   publication exists for the plan's version id, `NotPublished` otherwise (FR-010 as amended).
-- [ ] T036 [US3] Add `IT/ImportPublishResumeTests.cs`:
+- [X] T036 *(All but `Crash_after_publisher_commit_replays_to_the_same_publication`: its idempotency key is per receipt, and a resume is a new receipt, so the deterministic key covers a retry inside one apply only; left for review.)* [US3] Add `IT/ImportPublishResumeTests.cs`:
   - `Refused_version_reports_publisher_code_and_diagnostics_and_independent_versions_still_publish` (scenario 1);
   - `Dependant_of_a_refused_version_reports_NotPublishedDependency` (scenario 1);
   - `Reapply_after_fix_publishes_only_the_missing_versions` (scenario 2, SC-004): fix by making the missing activity
@@ -345,14 +348,14 @@ no versions. Nothing publishes yet.
 
 **Independent test**: `IT/ImportWarningsTests.cs` and the codec tests in `IEFT/`.
 
-- [ ] T037 [US4] In `IEF/Stores/Elsa3ImportRecordCodec.cs` (:81-82), stop setting `Warnings = null`, and remove the
+- [X] T037 [US4] In `IEF/Stores/Elsa3ImportRecordCodec.cs` (:81-82), stop setting `Warnings = null`, and remove the
   "Warnings belong to the apply response only" comment. Update the doc comments on `ReusableActivityImportReceipt.Warnings`
   and `ReusableActivityImportApplyResult` (`IMP/Models/ReusableActivityImportPlan.cs`). In
   `IMP/Services/ReusableActivityImportOperationService.cs` (:276), return the stored warnings on replay and in the
   status read.
-- [ ] T038 [P] [US4] In `IEFT/`, add codec tests: warnings round-trip with the content hash intact; a schema-`1.0.0`
+- [X] T038 [P] [US4] In `IEFT/`, add codec tests: warnings round-trip with the content hash intact; a schema-`1.0.0`
   row without `Warnings` still reads (null); `Publications` is never written. Run `dotnet test IEFT`.
-- [ ] T039 [US4] Add `IT/ImportWarningsTests.cs`:
+- [X] T039 [US4] Add `IT/ImportWarningsTests.cs`:
   - `Status_and_replay_return_the_warnings_of_the_committing_apply` (scenario 1);
   - `Publication_contract_and_facets_carry_no_conversion_warning` (scenario 2, FR-013).
 
@@ -366,17 +369,17 @@ no versions. Nothing publishes yet.
 
 **Independent test**: `IT/ImportPublishPermissionTests.cs` and `ARCH/EndpointSecurityTests.cs`.
 
-- [ ] T040 [US5] In `ID/Authorization/AuthorizationServices.cs`, add `RequireAllPermissionsAttribute` beside
+- [X] T040 [US5] In `ID/Authorization/AuthorizationServices.cs`, add `RequireAllPermissionsAttribute` beside
   `RequireAnyPermissionAttribute` (:270-283), as its mirror: `PermissionPolicyDescriptor.All`, and `Apply` calling
   `builder.RequireAllPermissions(...)`. Add one test next to the existing `RequireAnyPermissionAttribute` tests
   (grep its test file) asserting the policy name and the applied convention.
-- [ ] T041 [US5] In `IMP/Endpoints/ReusableActivityImportApi.cs` (:41-45), add the internal constant
+- [X] T041 [US5] In `IMP/Endpoints/ReusableActivityImportApi.cs` (:41-45), add the internal constant
   `PublishingManage = "workflows/publishing:manage"`, with a comment on the duplication (§2.17) and the test that pins
   it. In `IMP/Endpoints/Collections/Apply/Endpoint.cs` (:11), replace `[RequirePermission(Manage)]` with
   `[RequireAllPermissions(Elsa3ImportPermissions.Manage, PublishingManage)]`.
-- [ ] T042 [US5] Update `ARCH/EndpointSecurityTests.cs` (:91-92) for the apply endpoint's two permissions. Run
+- [X] T042 [US5] Update `ARCH/EndpointSecurityTests.cs` (:91-92) for the apply endpoint's two permissions. Run
   `dotnet test ARCH --filter EndpointSecurity`.
-- [ ] T043 [US5] Add `IT/ImportPublishPermissionTests.cs`:
+- [X] T043 [US5] Add `IT/ImportPublishPermissionTests.cs`:
   - `Apply_without_publish_permission_is_forbidden_and_writes_nothing` (scenario 1, SC-005: 403, no receipt, no
     definition, no draft);
   - `Apply_with_both_permissions_publishes_in_the_callers_tenant` (scenario 2);
@@ -388,23 +391,23 @@ no versions. Nothing publishes yet.
 
 ## Phase 8: Polish and cross-cutting
 
-- [ ] T044 [P] `M/README.md`: drop "Imported reusable activities are not yet published … until #2796" (:105). Add a
+- [X] T044 [P] `M/README.md`: drop "Imported reusable activities are not yet published … until #2796" (:105). Add a
   short "Publishing imported reusable activities" section: commit then publish, dependency order, plan ids, states,
   bridge feature, and the start-trigger refusal. Shared with #2717: keep edits local to these lines.
-- [ ] T045 [P] `IMP/EXTENSION_POINTS.md`: add `IReusableActivityImportPublisher` (replacement contract, no default,
+- [X] T045 [P] `IMP/EXTENSION_POINTS.md`: add `IReusableActivityImportPublisher` (replacement contract, no default,
   implemented by `Elsa3ImportActivitiesPublishing`, absence → `PublishingUnavailable`). Add `BR/EXTENSION_POINTS.md`
   listing the implementation and the feature. Check `PUB/Api/EXTENSION_POINTS.md` and
   `M/EXTENSION_POINTS.md` for anything that names the request record or `CompletionOutcomes`, and update it.
-- [ ] T046 [P] Grep the repo for remaining "#2796" deferral notes (`specs/236*/`, `specs/239*/spec.md:25`,
+- [X] T046 [P] Grep the repo for remaining "#2796" deferral notes (`specs/236*/`, `specs/239*/spec.md:25`,
   `M/README.md`, `MT/Support/GraphProviderProof.cs`, `docs/reports/`). Leave merged specs as historical records;
   update live docs and reports only.
-- [ ] T047 Run `dotnet test ARCH` (feature composition, InternalsVisibleTo, EF dependency guard, Elsa3 boundary,
+- [X] T047 Run `dotnet test ARCH` (feature composition, InternalsVisibleTo, EF dependency guard, Elsa3 boundary,
   `ReusableActivityArchitectureTests`). If a guard pins project references for the new projects, add the narrowest
   allow-list entry and say so in the PR. Do not restructure to satisfy a guard; ask first.
-- [ ] T048 Refresh the generated maps: `dotnet run --project tools/maps/Elsa.Maps.Generator -- all`, then
+- [X] T048 Refresh the generated maps: `dotnet run --project tools/maps/Elsa.Maps.Generator -- all`, then
   `git diff --stat docs/`. Stage every changed map by explicit path, `docs/maps/manifest.json` included. On Windows,
   `-- check` always says stale (CRLF), so rely on the diff.
-- [ ] T049 Run [quickstart.md](quickstart.md) steps 1–5 and record the results for the PR evidence comment.
+- [X] T049 Run [quickstart.md](quickstart.md) steps 1–5 and record the results for the PR evidence comment.
 - [ ] T050 Re-check #2796 and open PRs for competing work before committing (AGENTS.md claims). Ask the maintainer
   before pushing or opening the draft PR against `main`.
 
