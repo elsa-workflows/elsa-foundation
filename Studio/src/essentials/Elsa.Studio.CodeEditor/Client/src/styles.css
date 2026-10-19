@@ -1,4 +1,6 @@
 .studio-code-editor {
+  /* Keep clipped keyboard help inside the editor's owning scrollport. */
+  position: relative;
   color: var(--studio-text);
   font-family: var(--studio-font-mono);
 }
