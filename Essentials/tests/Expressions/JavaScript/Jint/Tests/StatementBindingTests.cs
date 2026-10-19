@@ -147,12 +147,14 @@ public sealed class StatementBindingTests
                     feature.ExecutionTimeout = TimeSpan.FromSeconds(5);
                     feature.MaxStatements = null;
                     feature.MaxRecursionDepth = null;
+                    // A delayed cancellation callback must not race an unrelated allocation limit.
+                    feature.MaxMemoryBytes = null;
                 });
         });
 
         // Jint reports cancellation observed during execution with its own cancellation exception.
         var exception = await Assert.ThrowsAnyAsync<Exception>(() => evaluation.WaitAsync(TimeSpan.FromSeconds(5)));
-        Assert.True(exception is ExecutionCanceledException or OperationCanceledException);
+        Assert.True(exception is ExecutionCanceledException or OperationCanceledException, exception.ToString());
     }
 
     [Fact]
