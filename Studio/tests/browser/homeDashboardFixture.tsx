@@ -5,7 +5,8 @@ import {
   type AuthProviderManager,
   type AuthSession,
   type ElsaStudioModuleApi,
-  type StudioNavigationContribution
+  type StudioNavigationContribution,
+  type StudioSettingDescriptor
 } from "@elsa-workflows/studio-sdk";
 import { registerBuiltInSettingEditors } from "../../src/apps/Elsa.Studio.Web/Client/src/app/ui/shared";
 import { ShellFrame, getStudioNavigation } from "../../src/apps/Elsa.Studio.Web/Client/src/app/App";
@@ -107,7 +108,42 @@ function createDashboardApi(responseState: string, permissions: string[]): ElsaS
   registerBuiltInSettingEditors(api);
   registerCoreHomeWidgets(api);
   registerWorkflowDashboardWidgets(api);
+  if (responseState === "settings") registerSettingsFixture(api, scope);
   return api;
+}
+
+function registerSettingsFixture(api: ElsaStudioModuleApi, scope: ReturnType<typeof createHomeLayoutScope>) {
+  const descriptor: StudioSettingDescriptor = {
+    name: "message", displayName: "Message", jsonType: "string", required: true,
+    secret: false, sensitive: false, restartRequired: false, advanced: false, experimental: false, options: []
+  };
+  api.dashboardWidgets.add({
+    id: "fixture.settings",
+    moduleId: "HomeDashboardFixture",
+    title: "Fixture settings",
+    defaultVisible: true,
+    defaultSize: "wide",
+    supportedSizes: ["wide"],
+    settings: {
+      schemaVersion: 1,
+      defaults: { message: "not-ready" },
+      descriptors: [descriptor],
+      validate: value => {
+        const message = (value as { message?: unknown } | null)?.message;
+        return message === "ready" ? { message } : null;
+      }
+    },
+    isEmpty: () => true,
+    emptyState: { title: "This widget needs configuration.", description: "Set the message to make the widget ready." },
+    component: () => null
+  });
+
+  window.localStorage.setItem(`${homeLayoutLocalStoragePrefix}${encodeURIComponent(JSON.stringify(scope))}`, JSON.stringify({
+    source: "local",
+    namespace: "home-layout",
+    schemaVersion: 1,
+    value: { widgets: [{ id: "fixture.settings", size: "wide", visible: true, options: { message: "not-ready" } }] }
+  }));
 }
 
 function createManager(permissions: string[]): AuthProviderManager {
