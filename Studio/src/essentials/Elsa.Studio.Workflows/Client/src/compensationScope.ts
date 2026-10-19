@@ -146,6 +146,15 @@ export function removeCompensationStep(steps: CompensationStep[], index: number)
   return steps.filter((_, candidate) => candidate !== index);
 }
 
+// A scope row's validation path, `{scope}/steps/{index}`, lands on that row's forward activity, so "Go to" opens the
+// scope designer with the row's cell selected. A row without an activity has nothing to select: the caller falls back
+// to the scope itself, and the row shows its problem inline.
+export function compensationValidationTarget(scope: ActivityNode | null | undefined, path: string | null | undefined): string | null {
+  const [scopeId, segment, index] = String(path ?? "").split("/").filter(Boolean);
+  if (!scope || !isCompensationScope(scope) || scope.nodeId !== scopeId || segment !== "steps" || !/^\d+$/.test(index ?? "")) return null;
+  return readCompensationSteps(scope)[Number(index)]?.activity?.nodeId ?? null;
+}
+
 // Row-level problems the designer shows inline. The server's Draft validator reports the same rules on publish.
 export function compensationStepProblems(steps: CompensationStep[]): Map<number, string> {
   const problems = new Map<number, string>();
