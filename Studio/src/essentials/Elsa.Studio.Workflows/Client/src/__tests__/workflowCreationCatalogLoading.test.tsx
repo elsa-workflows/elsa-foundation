@@ -230,7 +230,9 @@ it("allows a new create attempt after the previous request fails", async () => {
   await waitForDialog(container);
   await fill(inputByLabel(dialog(container), "Display name"), "Retry create");
   await click(buttonByText(dialog(container), "Create"));
-  await waitForText(container, "Temporary create failure.");
+  await waitForText(dialog(container), "Temporary create failure.");
+  expect(inputByLabel(dialog(container), "Display name")?.value).toBe("Retry create");
+  await vi.waitFor(() => expect(document.activeElement).toBe(dialog(container).querySelector('[role="alert"]')));
   expect(createRequests).toBe(1);
 
   await click(buttonByText(dialog(container), "Create"));

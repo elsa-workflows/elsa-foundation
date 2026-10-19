@@ -68,6 +68,7 @@ test("recovers a failed activity catalog and creates with the explicitly selecte
 
   const dialog = page.getByRole("dialog", { name: "Create Workflow" });
   await expect(dialog.getByRole("alert")).toContainText("The activity catalog could not be loaded.");
+  await expect(dialog.getByRole("combobox", { name: "Starting point" })).toHaveAccessibleDescription("The activity catalog could not be loaded. Retry");
   await dialog.getByRole("button", { name: "Retry" }).click();
   const sequence = dialog.getByRole("radio", { name: "Sequence" });
   await expect(sequence).toBeEnabled();
@@ -90,6 +91,7 @@ test("explains pending catalog readiness on keyboard activation without reportin
   await create.focus();
   await expect(create).toHaveAttribute("aria-disabled", "true");
   await expect(create).toHaveAccessibleDescription("Loading available starting activities…");
+  await expect(dialog.getByRole("combobox", { name: "Starting point" })).toHaveAccessibleDescription("Loading available starting activities…");
   await expect(dialog.locator("#wf-http-starter-unavailable, .wf-root-card-unavailable")).toHaveCount(0);
   await page.keyboard.press("Enter");
   await page.keyboard.press("Space");
@@ -98,3 +100,28 @@ test("explains pending catalog readiness on keyboard activation without reportin
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Open create workflow" })).toBeFocused();
 });
+
+for (const width of [1280, 360]) {
+  test(`keeps a failed create visible and preserves the draft for retry (${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto("/?mode=workflow-creation-readiness&scenario=create-failed");
+    await page.getByRole("button", { name: "Open create workflow" }).click();
+    const dialog = page.getByRole("dialog", { name: "Create Workflow" });
+    await dialog.getByRole("textbox", { name: "Display name" }).fill("Retry this workflow");
+    await dialog.getByText("Sequence", { exact: true }).click();
+    await dialog.getByRole("button", { name: "Create", exact: true }).click();
+    const alert = dialog.getByRole("alert");
+    await expect(alert).toHaveText("The workflow could not be created. Try again.");
+    await expect(alert).toBeFocused();
+    await expect(alert).toBeInViewport();
+    await expect(dialog.getByRole("textbox", { name: "Display name" })).toHaveValue("Retry this workflow");
+    await expect(dialog.getByRole("radio", { name: "Sequence" })).toBeChecked();
+    await page.keyboard.press("Shift+Tab");
+    await expect(dialog.getByRole("radio", { name: "Sequence" })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(dialog.getByRole("button", { name: "Cancel" })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("status")).toHaveText("Created root version: sequence-v7");
+  });
+}

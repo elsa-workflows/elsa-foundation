@@ -8,12 +8,13 @@ import { WorkflowRootRadioCards } from "./WorkflowRootCards";
 import { getHttpStarterAvailabilityReason } from "./httpWorkflowStarter";
 import { useDialogFocus } from "./useDialogFocus";
 
-export function CreateWorkflowDialog({ draft, catalog, catalogState = "ready", catalogError = "", creating, ai, suggestMetadataAction, onChange, onClose, onRetryCatalog = () => {}, onSubmit }: {
+export function CreateWorkflowDialog({ draft, catalog, catalogState = "ready", catalogError = "", creating, submitError = "", ai, suggestMetadataAction, onChange, onClose, onRetryCatalog = () => {}, onSubmit }: {
   draft: CreateWorkflowDraft;
   catalog: ActivityCatalogItem[];
   catalogState?: "idle" | "loading" | "ready" | "failed";
   catalogError?: string;
   creating: boolean;
+  submitError?: string;
   ai: StudioAiContributionApi;
   suggestMetadataAction?: StudioAiPromptActionContribution | null;
   onChange(draft: CreateWorkflowDraft): void;
@@ -23,6 +24,10 @@ export function CreateWorkflowDialog({ draft, catalog, catalogState = "ready", c
 }) {
   const dialogRef = useRef<HTMLElement>(null);
   useDialogFocus(dialogRef, creating ? null : onClose);
+  const submitErrorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (submitError) submitErrorRef.current?.focus();
+  }, [submitError]);
   const [intentOpen, setIntentOpen] = useState(false);
   const httpStarterAvailabilityReason = getHttpStarterAvailabilityReason(catalog);
   const httpStarterAvailable = !httpStarterAvailabilityReason;
@@ -31,13 +36,14 @@ export function CreateWorkflowDialog({ draft, catalog, catalogState = "ready", c
     ? httpStarterAvailable
     : Boolean(rootActivity?.authoringTemplate);
   const canCreate = catalogState === "ready" && starterReady && !creating && Boolean(draft.name.trim());
-  const createReadinessDescriptionId = catalogState === "loading" || catalogState === "idle"
-    ? "wf-activity-catalog-loading"
+  const catalogDescriptionId = catalogState === "ready"
+    ? undefined
     : catalogState === "failed"
       ? "wf-activity-catalog-error"
-      : !starterReady
-        ? draft.starter === "http" ? "wf-http-starter-unavailable" : "wf-root-create-readiness"
-        : undefined;
+      : "wf-activity-catalog-loading";
+  const createReadinessDescriptionId = catalogDescriptionId ?? (!starterReady
+    ? draft.starter === "http" ? "wf-http-starter-unavailable" : "wf-root-create-readiness"
+    : undefined);
   const [intent, setIntent] = useState("");
   const [suggesting, setSuggesting] = useState(false);
   const [suggestion, setSuggestion] = useState<WorkflowMetadataSuggestion | null>(null);
@@ -176,7 +182,7 @@ export function CreateWorkflowDialog({ draft, catalog, catalogState = "ready", c
             <span>Starting point</span>
             <select
               aria-label="Starting point"
-              aria-describedby={catalogState === "ready" && httpStarterAvailabilityReason ? "wf-http-starter-unavailable" : undefined}
+              aria-describedby={catalogDescriptionId ?? (httpStarterAvailabilityReason ? "wf-http-starter-unavailable" : undefined)}
               value={draft.starter ?? "blank"}
               disabled={creating}
               onChange={event => onChange({ ...draft, starter: event.target.value === "http" ? "http" : undefined })}
@@ -207,6 +213,7 @@ export function CreateWorkflowDialog({ draft, catalog, catalogState = "ready", c
           {catalogState === "ready" && draft.starter !== "http" && !starterReady ? (
             <p className="wf-muted" id="wf-root-create-readiness">No compatible root activity is available. Each disabled choice explains why.</p>
           ) : null}
+          {submitError ? <div ref={submitErrorRef} className="wf-alert" role="alert" tabIndex={-1}>{submitError}</div> : null}
           <div className="wf-dialog-actions">
             <button type="button" onClick={onClose} disabled={creating}>Cancel</button>
             <button type="submit" disabled={creating || !draft.name.trim()} aria-disabled={!canCreate} aria-describedby={createReadinessDescriptionId}>{creating ? "Creating..." : "Create"}</button>

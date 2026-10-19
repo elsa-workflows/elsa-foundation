@@ -28,6 +28,7 @@ export function WorkflowCreationReadinessFixture() {
   const [draft, setDraft] = useState<CreateWorkflowDraft>({ name: "", description: "", rootActivityVersionId: null });
   const [open, setOpen] = useState(false);
   const [created, setCreated] = useState("");
+  const [submitError, setSubmitError] = useState("");
   const ai = useMemo(() => ({} as StudioAiContributionApi), []);
 
   return <ThemeProvider>
@@ -40,6 +41,7 @@ export function WorkflowCreationReadinessFixture() {
         catalogState={catalogState}
         catalogError="The activity catalog could not be loaded."
         creating={false}
+        submitError={submitError}
         ai={ai}
         onChange={setDraft}
         onClose={() => setOpen(false)}
@@ -48,6 +50,11 @@ export function WorkflowCreationReadinessFixture() {
           setCatalogState("ready");
         }}
         onSubmit={() => {
+          if (scenario === "create-failed" && !submitError) {
+            setSubmitError("The workflow could not be created. Try again.");
+            return;
+          }
+          setSubmitError("");
           setCreated(draft.rootActivityVersionId ?? "none");
           setOpen(false);
         }}
