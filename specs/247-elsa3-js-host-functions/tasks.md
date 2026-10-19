@@ -263,8 +263,8 @@ suite is green.
   - Record: parse refusals (target 0), definitions with fully converting JavaScript (target ≥ 7 of 33), and the remaining refusal counts per construct
   - Convert one corpus definition twice and compare bytes
   - Keep the numbers for the PR evidence. Do not commit the probes
-- [ ] T040 Draft the follow-up issue for an explicit Elsa 4 time and unique-value capability (FR-022). Use the corpus numbers (`newGuid` in 17 definitions, `Date` in 9) and the migration story. Show the text to the maintainer and file it as `needs-triage` only after approval; then link it from the README (T031)
-- [ ] T041 Update `specs/247-elsa3-js-host-functions/spec.md` status to `Implemented — <PR link>` per `docs/reference/spec-lifecycle.md` when the PR opens. Remove the probe files from the worktree before the final `git status` check
+- [X] T040 Draft the follow-up issue for an explicit Elsa 4 time and unique-value capability (FR-022). Use the corpus numbers (`newGuid` in 17 definitions, `Date` in 9) and the migration story. Show the text to the maintainer and file it as `needs-triage` only after approval; then link it from the README (T031). (Filed as #3026 with approval.)
+- [X] T041 Update `specs/247-elsa3-js-host-functions/spec.md` status per `docs/reference/spec-lifecycle.md` when the PR opens (`In progress — #3028`; `Implemented` only once merged). Remove the probe files from the worktree before the final `git status` check
 
 ---
 

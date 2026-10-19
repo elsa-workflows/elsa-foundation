@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-19
 
-**Status**: Draft
+**Status**: In progress — draft PR [#3028](https://github.com/elsa-workflows/elsa-foundation/pull/3028)
 
 **Issue**: [#2717](https://github.com/elsa-workflows/elsa-foundation/issues/2717)
 
