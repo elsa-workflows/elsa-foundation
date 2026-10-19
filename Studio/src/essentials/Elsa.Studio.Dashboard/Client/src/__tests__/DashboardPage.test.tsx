@@ -181,6 +181,84 @@ describe("HomePage", () => {
     flushSync(() => root.unmount());
   });
 
+  it("keeps unavailable and missing contributions out of Home without changing saved layout state", async () => {
+    const api = stubApi();
+    api.runtime.enabledFeatures = [];
+    api.dashboardWidgets.add(widget({ id: "second", title: "Second", component: () => <span>Second body</span> }));
+    api.dashboardWidgets.add(widget({ id: "first", title: "First", component: () => <span>First body</span> }));
+    api.dashboardWidgets.add(widget({
+      id: "workflows.portfolio",
+      title: "Workflow portfolio",
+      requiresFeature: "workflows",
+      component: () => <span>Portfolio placeholder</span>
+    }));
+    const scope = {
+      studioHostId: "test",
+      backendBaseUrl: "https://backend.example",
+      subjectId: "anonymous",
+      tenantId: "default"
+    };
+    const original = {
+      source: "local",
+      namespace: "home-layout",
+      schemaVersion: 1,
+      value: { widgets: [
+        { id: "workflows.portfolio", size: "medium", visible: true, options: { sort: "name" } },
+        { id: "second", size: "wide", visible: true, options: { range: "7d", keepVisible: true } },
+        { id: "workflows.run-health", size: "full", visible: true, options: { range: "12h", includeTestRuns: true } },
+        { id: "first", size: "wide", visible: true, options: { color: "blue" } },
+        { id: "hidden", size: "small", visible: false, options: { pinned: true } },
+        { id: "weather.forecast", size: "medium", visible: true, options: { unit: "c" } }
+      ] }
+    };
+    const storageKey = `${homeLayoutLocalStoragePrefix}${encodeURIComponent(JSON.stringify(scope))}`;
+    localStorage.setItem(storageKey, JSON.stringify(original));
+    const { container, root } = render(api);
+    await waitUntil(() => container.querySelectorAll("article.dashboard-widget").length === 2);
+
+    expect([...container.querySelectorAll("article.dashboard-widget")].map(article => article.getAttribute("data-widget-id")))
+      .toEqual(["second", "first"]);
+    expect(container.querySelector('[data-widget-id="workflows.run-health"]')).toBeNull();
+    expect(container.querySelector('[data-widget-id="workflows.portfolio"]')).toBeNull();
+    expect(container.querySelector('[data-widget-id="weather.forecast"]')).toBeNull();
+    expect(container.textContent).not.toContain("Portfolio placeholder");
+    expect(JSON.parse(localStorage.getItem(storageKey)!)).toEqual(original);
+    flushSync(() => root.unmount());
+  });
+
+  it("merges widget defaults with metadata when adding a workflow run-health widget", async () => {
+    const api = stubApi();
+    const load = vi.fn(async ({ settings }: { settings: unknown }) => ({ settings }));
+    api.dashboardWidgets.add(widget({
+      id: "workflows.run-health",
+      title: "Workflow run health",
+      defaultSize: "full",
+      supportedSizes: ["full", "medium"],
+      settings: {
+        schemaVersion: 1,
+        defaults: { range: "24h", includeTestRuns: false },
+        descriptors: [],
+        validate: value => value as { range: string; includeTestRuns: boolean }
+      },
+      load,
+      component: ({ settings }) => <span>{JSON.stringify(settings)}</span>
+    }));
+    seedHomeLayout(api, []);
+    const { container, root } = render(api);
+    await waitUntil(() => container.querySelector("h2")?.textContent === "Home");
+
+    clickText(container, "Edit home");
+    clickText(container, "Add widget");
+    clickText(container, "Workflow run health");
+    await waitUntil(() => load.mock.calls.length === 1);
+
+    const settings = (load.mock.calls[0][0] as { settings: unknown }).settings;
+    expect(settings).toEqual({ range: "24h", includeTestRuns: false, keepVisible: true });
+    await waitUntil(() => container.textContent?.includes(JSON.stringify(settings)) === true);
+    expect(container.textContent).toContain(JSON.stringify(settings));
+    flushSync(() => root.unmount());
+  });
+
   it("skips a widget whose required feature is disabled", async () => {
     const api = stubApi();
     api.runtime.enabledFeatures = [];

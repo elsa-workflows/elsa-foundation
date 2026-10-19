@@ -911,6 +911,98 @@
   grid-template-columns: minmax(170px, 1.2fr) 100px 112px minmax(150px, 1fr) minmax(160px, 1fr) 120px 130px 80px;
 }
 
+.wf-instance-grid--deletable .wf-grid-head,
+.wf-instance-grid--deletable .wf-grid-row {
+  grid-template-columns: minmax(170px, 1.2fr) 100px 112px minmax(150px, 1fr) minmax(160px, 1fr) 120px 130px 80px 88px;
+}
+
+.wf-instance-grid--deletable {
+  overflow-x: auto;
+}
+
+.wf-run-deletion-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 18px 10px;
+  color: var(--studio-text-muted);
+  font-size: 12px;
+}
+
+.wf-run-deletion-toolbar > span {
+  margin-right: auto;
+}
+
+.wf-run-deletion-feedback {
+  margin: 0 18px 10px;
+  color: var(--studio-text-muted);
+  font-size: 12px;
+}
+
+.wf-run-deletion-feedback p {
+  margin: 0;
+}
+
+.wf-run-deletion-feedback[role="alert"] {
+  color: var(--studio-danger-fg);
+}
+
+.wf-run-deletion-feedback ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.wf-run-column-header,
+.wf-run-identity-cell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.wf-run-select-all,
+.wf-run-select {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  align-items: center;
+  justify-content: center;
+}
+
+.wf-run-select-all input,
+.wf-run-select input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--studio-accent);
+  cursor: pointer;
+}
+
+.wf-run-inspect {
+  display: grid;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.wf-run-inspect:focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
+}
+
+.wf-run-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .wf-run-health-indicator {
   display: inline-flex;
   align-items: center;
@@ -5609,7 +5701,7 @@ button.wf-reference-select {
 .wf-expression-field--control .wf-syntax-picker.inline {
   position: relative;
   inset: auto;
-  flex: 0 0 94px;
+  flex: 0 0 38px;
 }
 
 .wf-expression-field--control .wf-syntax-picker-trigger.inline {
@@ -5619,7 +5711,7 @@ button.wf-reference-select {
 }
 
 .wf-expression-field:not(.wf-expression-field--control) .wf-expression-editor > input[type="text"] {
-  padding-right: 134px;
+  padding-right: 78px;
 }
 
 .wf-syntax-picker {
@@ -5656,10 +5748,15 @@ button.wf-reference-select {
   width: auto;
 }
 
+.wf-syntax-picker.compact {
+  width: auto;
+}
+
 .wf-syntax-picker-trigger.inline {
-  width: 94px;
+  width: 38px;
   height: 100%;
-  gap: 6px;
+  justify-content: center;
+  gap: 3px;
   border-color: transparent;
   border-left-color: var(--wf-border);
   border-radius: 0 4px 4px 0;
@@ -5667,9 +5764,27 @@ button.wf-reference-select {
     linear-gradient(color-mix(in srgb, var(--wf-bg) 22%, transparent) 0 0),
     var(--wf-surface);
   color: var(--wf-muted-text);
-  font-size: 11px;
-  font-weight: var(--wf-label-weight, 600);
-  padding: 0 8px;
+  padding: 0;
+}
+
+.wf-syntax-picker-trigger.inline .wf-syntax-picker-icon {
+  flex: 0 0 auto;
+}
+
+.wf-syntax-picker-trigger.compact {
+  width: 32px;
+  height: 32px;
+  justify-content: center;
+  gap: 2px;
+  border-color: transparent;
+  border-radius: var(--wf-radius);
+  background: none;
+  color: var(--wf-muted-text);
+  padding: 0;
+}
+
+.wf-syntax-picker-trigger.compact .wf-syntax-picker-icon {
+  flex: 0 0 auto;
 }
 
 .wf-expression-field:focus-within .wf-syntax-picker-trigger.inline,
@@ -5703,6 +5818,15 @@ button.wf-reference-select {
   border-color: transparent;
   border-left-color: color-mix(in srgb, var(--wf-accent) 50%, var(--wf-border));
   box-shadow: none;
+}
+
+.wf-syntax-picker-trigger.compact:hover,
+.wf-syntax-picker-trigger.compact:focus-visible,
+.wf-syntax-picker-trigger.compact.open {
+  border-color: color-mix(in srgb, var(--wf-accent) 36%, var(--wf-border));
+  background: var(--wf-accent-soft);
+  color: var(--wf-accent);
+  outline: none;
 }
 
 .wf-syntax-picker-trigger span {
@@ -5753,7 +5877,7 @@ button.wf-reference-select {
 
 /* Compact-editor feedback stays below the source line and its overlaid controls. */
 .wf-expression-field:has(.studio-code-editor-compact) {
-  --wf-expression-chrome-width: 134px;
+  --wf-expression-chrome-width: 78px;
 }
 
 .wf-expression-field:has(.studio-code-editor-compact) > .wf-syntax-picker.inline,
@@ -6741,6 +6865,11 @@ button.wf-reference-select {
     padding-inline: 8px;
   }
 
+  .wf-instance-grid--deletable .wf-grid-head,
+  .wf-instance-grid--deletable .wf-grid-row {
+    grid-template-columns: minmax(0, 1fr) 76px minmax(0, 1fr) minmax(0, 1.1fr) 82px;
+  }
+
   .wf-grid-head span:nth-child(3),
   .wf-grid-head span:nth-child(4),
   .wf-grid-head span:nth-child(5),
@@ -6800,6 +6929,16 @@ button.wf-reference-select {
 
   .wf-instance-grid .wf-grid-row > span {
     min-width: 0;
+  }
+
+  .wf-instance-grid--deletable .wf-grid-head span:nth-child(4),
+  .wf-instance-grid--deletable .wf-grid-row span:nth-child(4) {
+    display: none;
+  }
+
+  .wf-instance-grid--deletable .wf-grid-head,
+  .wf-instance-grid--deletable .wf-grid-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 82px;
   }
 
   .wf-instance-grid .wf-run-health-indicator {

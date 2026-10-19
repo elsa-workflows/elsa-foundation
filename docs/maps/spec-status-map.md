@@ -253,3 +253,4 @@ Notes come only from explicit `**Notes**:` metadata; see [Spec status metadata](
 | [242-execution-lifecycle](../../specs/242-execution-lifecycle/spec.md) | Execution lifecycle compatibility | In progress | - | 0 | 0 | - |
 | [243-connection-secret-picker](../../specs/243-connection-secret-picker/spec.md) | Connection credential Secret selection | Implemented | - | 7 | 0 | - |
 | [244-secret-scope-catalog](../../specs/244-secret-scope-catalog/spec.md) | Secret scope catalogue and picker | Implemented | - | 0 | 0 | - |
+| [245-workflow-run-deletion](../../specs/245-workflow-run-deletion/spec.md) | Individual and bulk workflow-run deletion | Implemented; PR verification pending | - | 0 | 0 | - |

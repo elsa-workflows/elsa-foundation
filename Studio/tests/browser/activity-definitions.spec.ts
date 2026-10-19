@@ -535,34 +535,34 @@ test("Activity Definition create, graph autosave, reload, conflict preservation,
   await expect(page.locator("[data-graph-root-location]")).toContainText("Sequence");
   await addPaletteActivity(page, "Write line");
   await expectSavedRevision(page, 3);
-  await expect(page.locator(".wf-node").getByText("Write line", { exact: true })).toHaveCount(1);
+  await expect(page.locator(".wf-sequence-step").getByText("Write line", { exact: true })).toHaveCount(1);
   await addPaletteActivity(page, "Delay");
   await expectSavedRevision(page, 4);
-  await expect(page.locator(".wf-node").getByText("Delay", { exact: true })).toHaveCount(1);
+  await expect(page.locator(".wf-sequence-step").getByText("Delay", { exact: true })).toHaveCount(1);
 
   await page.reload();
   await expectSavedRevision(page, 4);
   await page.getByRole("tab", { name: "Inputs & outputs" }).click();
   await expect(page.getByRole("region", { name: "Customer note", exact: true }).getByRole("combobox", { name: /^Default/ })).toHaveValue("null");
   await page.getByRole("tab", { name: "Designer" }).click();
-  await expect(page.locator(".wf-node").getByText("Write line", { exact: true })).toHaveCount(1);
-  await expect(page.locator(".wf-node").getByText("Delay", { exact: true })).toHaveCount(1);
-  await selectGraphNode(page, "Write line");
+  await expect(page.locator(".wf-sequence-step").getByText("Write line", { exact: true })).toHaveCount(1);
+  await expect(page.locator(".wf-sequence-step").getByText("Delay", { exact: true })).toHaveCount(1);
+  await selectSequenceStep(page, "Write line");
   page.once("dialog", dialog => dialog.dismiss());
   await page.getByRole("button", { name: "Remove", exact: true }).click();
-  await expect(page.locator(".wf-node").getByText("Write line", { exact: true })).toHaveCount(1);
+  await expect(page.locator(".wf-sequence-step").getByText("Write line", { exact: true })).toHaveCount(1);
 
   state.conflictNextSave = true;
-  await selectGraphNode(page, "Delay");
-  await page.getByRole("button", { name: "Move activity left" }).click();
+  await selectSequenceStep(page, "Delay");
+  await page.getByRole("button", { name: "Move activity up" }).click();
   await expect(page.getByText("Local work preserved")).toBeVisible();
   await expect(page.getByText(/server draft advanced to revision 5/i)).toBeVisible();
-  await expect(page.locator(".wf-node").getByText("Delay", { exact: true })).toHaveCount(1);
+  await expect(page.locator(".wf-sequence-step").getByText("Delay", { exact: true })).toHaveCount(1);
   await page.getByRole("button", { name: "Create parallel recovery draft" }).click();
 
   await expect(page).toHaveURL(/draft=activity-draft-recovery/);
   await expectSavedRevision(page, 1);
-  await expect(page.locator(".wf-node").getByText("Delay", { exact: true })).toHaveCount(1);
+  await expect(page.locator(".wf-sequence-step").getByText("Delay", { exact: true })).toHaveCount(1);
   expect(state.conflictCopyPayload).toMatchObject({ rootActivity: { activityVersionId: "sequence-v1", structure: { payload: { activities: [
     { activityVersionId: "delay-v1" },
     { activityVersionId: "write-line-v1" }
@@ -2685,8 +2685,8 @@ async function addPaletteActivity(page: Page, name: string) {
   await page.getByRole("treeitem").filter({ hasText: name }).click();
 }
 
-async function selectGraphNode(page: Page, name: string) {
-  await page.locator(".react-flow__node").filter({ hasText: name }).dispatchEvent("click");
+async function selectSequenceStep(page: Page, name: string) {
+  await page.locator(".wf-sequence-step").filter({ hasText: name }).click();
 }
 
 function authoringDraftSummary(draft: ReturnType<typeof authoringDraft>) {

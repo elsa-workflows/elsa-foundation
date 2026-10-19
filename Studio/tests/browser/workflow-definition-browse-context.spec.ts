@@ -6,7 +6,7 @@ test("narrow keyboard users preserve workflow browse context through global sear
 
   await expect(page.getByText("Operations workflow")).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Search selected folder" })).toHaveValue("workflow");
-  await expect(page.getByRole("button", { name: "All states" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("button", { name: "All states" })).toHaveAttribute("aria-pressed", "true");
 
   await page.getByRole("button", { name: "Search all workflows" }).click();
   await expect(page.getByText("All workflow", { exact: true })).toBeVisible();

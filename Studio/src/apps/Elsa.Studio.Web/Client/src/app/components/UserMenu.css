@@ -1,5 +1,4 @@
-/* The account control sits at the end of the top-bar cluster with the same 40px height, border and
-   radius as the theme selector, so the cluster reads as one row. */
+/* The top-bar control matches the theme selector; the left-rail footer applies its own compact treatment. */
 .user-menu {
   display: flex;
   min-width: 0;

@@ -3,7 +3,6 @@ import { BaseEdge, EdgeLabelRenderer, Handle, Position, getBezierPath, getSmooth
 import { useStudioThemeLayout, type StudioThemeLayout } from "@elsa-workflows/studio-sdk";
 import { AlertTriangle, Flag, Plus, Trash2 } from "lucide-react";
 import type { ActivityCatalogItem } from "../workflowTypes";
-import { resolveActivityIcon, resolveActivityIconFallback, resolveActivityIconTone } from "../activityIcons";
 import { renderActivityIcon } from "../activityIconView";
 import { getActivityDisplay, type WorkflowNodeData } from "../workflowAdapter";
 import { getAvailabilityStateLabel } from "../activityAvailability";
@@ -11,31 +10,16 @@ import { truncate } from "../workflowFormatting";
 import { groupActivityPalette, isActivityBrowsable } from "./editorHelpers";
 import { WorkflowEdgeActionsContext, WorkflowNodeAvailabilityContext } from "./contexts";
 import { NodeSlotBadges } from "./NodeSlotBadges";
+import { WorkflowNodeContextToolbar } from "./WorkflowNodeContextToolbar";
 import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { RuntimeIncidentAction } from "./RuntimeIncidentAction";
 import { BpmnElementNode } from "../bpmn/BpmnElementNode";
 import { httpEndpointResponseBadge } from "../httpEndpointResponseMode";
 import type { WorkflowEdge } from "./editorTypes";
+import { resolveNodeActivityVisual } from "./workflowNodeVisual";
 
 export const nodeTypes = { workflowActivity: WorkflowActivityNode, bpmnElement: BpmnElementNode };
 export const edgeTypes = { workflow: WorkflowFlowEdge };
-
-function resolveNodeActivityVisual(nodeData: WorkflowNodeData) {
-  const source = {
-    activityTypeKey: nodeData.activityTypeKey ?? "",
-    displayName: nodeData.label,
-    category: nodeData.category ?? "",
-    executionType: nodeData.executionType ?? "",
-    icon: nodeData.catalogIcon,
-    iconName: nodeData.catalogIconName,
-    activityDefinitionId: nodeData.activityDefinitionId
-  };
-  return {
-    icon: nodeData.icon ?? resolveActivityIcon(source),
-    fallback: resolveActivityIconFallback(source),
-    tone: nodeData.iconTone ?? resolveActivityIconTone(source)
-  };
-}
 
 export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
   const nodeData = data as WorkflowNodeData;
@@ -66,6 +50,7 @@ export function WorkflowActivityNode({ id, data, selected }: NodeProps) {
           <Flag size={11} aria-hidden="true" /> Start
         </span>
       ) : null}
+      <WorkflowNodeContextToolbar nodeId={id} data={nodeData} selected={!!selected} />
       {availability ? (
         <span className="wf-node-availability" title={`No longer available for new use · ${getAvailabilityStateLabel(availability.state)}`}>
           <AlertTriangle size={13} />

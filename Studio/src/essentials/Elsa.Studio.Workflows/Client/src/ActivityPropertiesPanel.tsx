@@ -1,5 +1,5 @@
 import { type KeyboardEvent as ReactKeyboardEvent, memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { Maximize2, SlidersHorizontal, X } from "lucide-react";
+import { Braces, Cable, Code2, KeyRound, Maximize2, SlidersHorizontal, Type, X, type LucideIcon } from "lucide-react";
 import { AnchoredPopover } from "@elsa-workflows/studio-ui";
 import {
   authSessionEndedEvent,
@@ -824,6 +824,17 @@ function PropertyRow({
         <label>{input.displayName || input.name}</label>
         <div className="wf-property-row-header-meta">
           <span>{formatTypeName(input.typeName)}</span>
+          {wrapped && !useInlineSyntaxPicker && !useDictionarySyntaxPicker ? (
+            <SyntaxPicker
+              label={`${input.displayName || input.name} expression syntax`}
+              value={syntax}
+              descriptors={syntaxDescriptors}
+              getUnavailableReason={getUnavailableReason}
+              disabled={readOnly}
+              variant="compact"
+              onChange={setSyntax}
+            />
+          ) : null}
           {wrapped && !secretOnly ? (
             <button
               ref={conversionToggleRef}
@@ -841,16 +852,6 @@ function PropertyRow({
         </div>
       </div>
       {input.description ? <p>{input.description}</p> : null}
-      {wrapped && !useInlineSyntaxPicker && !useDictionarySyntaxPicker ? (
-        <SyntaxPicker
-          label={`${input.displayName || input.name} expression syntax`}
-          value={syntax}
-          descriptors={syntaxDescriptors}
-          getUnavailableReason={getUnavailableReason}
-          disabled={readOnly}
-          onChange={setSyntax}
-        />
-      ) : null}
       {useInlineSyntaxPicker ? (
         <div className={`wf-expression-field${useToggleLayout ? " wf-expression-field--toggle" : useControlLayout ? " wf-expression-field--control" : ""}`}>
           <div className="wf-expression-editor">
@@ -1420,7 +1421,7 @@ export function SyntaxPicker({
   descriptors: StudioExpressionDescriptor[];
   getUnavailableReason?(descriptor: StudioExpressionDescriptor): string | null;
   disabled: boolean;
-  variant?: "block" | "inline";
+  variant?: "block" | "compact" | "inline";
   onChange(value: string): void;
 }) {
   const [open, setOpen] = useState(false);
@@ -1429,12 +1430,15 @@ export function SyntaxPicker({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const selected = descriptors.find(descriptor => descriptor.type === value);
+  const selectedName = selected?.displayName || selected?.type || value;
+  const SyntaxIcon = syntaxIconFor(selected);
+  const iconOnly = variant !== "block";
   const selectedIndex = Math.max(0, descriptors.findIndex(descriptor => descriptor.type === value));
   const unavailableReasons = descriptors.map(getUnavailableReason);
   const availableIndices = descriptors.flatMap((_, index) => unavailableReasons[index] ? [] : [index]);
   const className = [
     "wf-syntax-picker-trigger",
-    variant === "inline" ? "inline" : "",
+    iconOnly ? variant : "",
     open ? "open" : ""
   ].filter(Boolean).join(" ");
 
@@ -1520,26 +1524,29 @@ export function SyntaxPicker({
   };
 
   return (
-    <div className={variant === "inline" ? "wf-syntax-picker inline" : "wf-syntax-picker"}>
+    <div className={["wf-syntax-picker", iconOnly ? variant : ""].filter(Boolean).join(" ")}>
       <button
         ref={triggerRef}
         type="button"
         className={className}
-        aria-label={label}
+        aria-label={iconOnly ? `${label}: ${selectedName}` : label}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listboxId}
+        title={iconOnly ? selectedName : undefined}
         disabled={disabled}
         onClick={() => open ? closePicker(false) : openPicker()}
         onKeyDown={handleTriggerKeyDown}
       >
-        <span>{selected?.displayName || selected?.type || value}</span>
+        {iconOnly
+          ? <SyntaxIcon className="wf-syntax-picker-icon" size={14} strokeWidth={2} aria-hidden="true" />
+          : <span>{selectedName}</span>}
       </button>
       <AnchoredPopover
         anchorRef={triggerRef}
         open={open}
         className="wf-syntax-picker-menu"
-        minWidth={variant === "inline" ? 176 : 0}
+        minWidth={iconOnly ? 176 : 0}
         maxHeight={210}
         onDismiss={reason => closePicker(reason !== "anchor-hidden")}
       >
@@ -1573,6 +1580,17 @@ export function SyntaxPicker({
       </AnchoredPopover>
     </div>
   );
+}
+
+function syntaxIconFor(descriptor: StudioExpressionDescriptor | undefined): LucideIcon {
+  const syntax = descriptor?.type.toLowerCase() ?? "";
+  if (syntax === "literal") return Type;
+  if (syntax.includes("secret")) return KeyRound;
+  if (syntax === "connection") return Cable;
+  if (["input", "variable", "object", "json"].includes(syntax) || descriptor?.editingMode === "structured") return Braces;
+  if (descriptor?.editingMode === "reference") return Cable;
+  if (descriptor?.editingMode === "literal") return Type;
+  return Code2;
 }
 
 function resolveEditor(

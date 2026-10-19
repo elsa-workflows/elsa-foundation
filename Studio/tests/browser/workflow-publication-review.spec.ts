@@ -8,6 +8,9 @@ test("keeps the publication decision calm and actions visible at constrained hei
   await expect(dialog.getByText("Update the published workflow with your latest changes.")).toBeVisible();
   await expect(dialog.getByText("Review changes")).toBeVisible();
   await expect(dialog.getByText("Publishing options")).toBeVisible();
+  await expect(dialog.getByText("Technical details", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Version 2.0.0", { exact: true })).toBeVisible();
+  await expect(dialog.locator(".wf-publication-technical")).not.toHaveAttribute("open");
   await expect(dialog).toContainText("Ready to publish");
   await expect(dialog.getByRole("alert")).toHaveCount(0);
   await expect(dialog.getByRole("button", { name: "Publish" })).toBeVisible();
@@ -67,4 +70,23 @@ test("success and retained-promotion recovery keep their actions in the fixed fo
   await expect(recovery).toContainText("Version 2.0.0 was retained. Channel default was not activated.");
   await expect(recovery.getByRole("button", { name: "Close" })).toBeVisible();
   await expect(recovery.getByRole("button", { name: "Retry publication" })).toBeVisible();
+});
+
+
+test("shows trigger counts while keeping exact identifiers in an explicit technical disclosure", async ({ page }) => {
+  await page.goto("/?mode=publication-review&theme=dark");
+  const dialog = page.getByRole("dialog", { name: "Publish workflow" });
+  const technical = dialog.locator(".wf-publication-technical");
+  const changes = dialog.locator("details").filter({ has: page.getByText("Review changes", { exact: true }) });
+  await changes.locator("summary").click();
+  await expect(changes).toContainText("1 added");
+  await expect(changes).not.toContainText("sha256:");
+  await expect(technical.locator(".wf-publication-claims")).not.toBeVisible();
+
+  await technical.locator("summary").click();
+  await expect(technical.locator(".wf-publication-claims")).toContainText("httpendpoint:sha256:");
+  await expect(technical.locator(".wf-publication-claims")).toBeVisible();
+  await technical.locator("summary").click();
+  await expect(technical.locator(".wf-publication-claims")).not.toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
 });

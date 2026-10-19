@@ -1,4 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from "react";
+import { X } from "lucide-react";
 import { useDialogFocus, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { createConnection } from "./connectionsApi";
 import type {
@@ -37,6 +38,8 @@ export function ConnectionCreateDialog({
   const nameId = useId();
   const typeId = useId();
   const schemeId = useId();
+  const serviceSettingsTitleId = useId();
+  const authenticationTitleId = useId();
   currentContextRef.current = context;
 
   const contextIsCurrent = boundContext === context;
@@ -173,102 +176,134 @@ export function ConnectionCreateDialog({
         tabIndex={-1}
       >
         <form onSubmit={event => void submit(event)}>
-          <h2 id={dialogTitleId}>Create connection</h2>
-          <p className="connections-modal-help">Credentials are stored as Secret references or entered as new values. Secret values are never shown here.</p>
+          <header className="connections-create-header">
+            <div>
+              <p className="connections-create-eyebrow">New connection</p>
+              <h2 id={dialogTitleId}>Create connection</h2>
+              <p className="connections-modal-help">Choose a service and how it authenticates. Secret values are never shown here.</p>
+            </div>
+            <button
+              type="button"
+              className="connections-create-close"
+              aria-label="Close create connection dialog"
+              title="Close"
+              disabled={!contextIsCurrent || submitting}
+              onClick={() => {
+                if (contextIsCurrent && !submitting) onCancel();
+              }}
+            >
+              <X size={16} aria-hidden />
+            </button>
+          </header>
           {error ? <p className="connections-create-error" role="alert">{error}</p> : null}
 
-          <label htmlFor={nameId}>Name</label>
-          <input
-            id={nameId}
-            data-dialog-initial-focus
-            required
-            autoComplete="off"
-            disabled={!contextIsCurrent || submitting}
-            value={contextIsCurrent ? name : ""}
-            onChange={event => {
-              setName(event.target.value);
-              setError(null);
-            }}
-          />
+          <div className="connections-create-fields">
+            <div className="connections-create-field connections-create-name">
+              <label htmlFor={nameId}>Name</label>
+              <input
+                id={nameId}
+                data-dialog-initial-focus
+                required
+                autoComplete="off"
+                disabled={!contextIsCurrent || submitting}
+                value={contextIsCurrent ? name : ""}
+                onChange={event => {
+                  setName(event.target.value);
+                  setError(null);
+                }}
+              />
+            </div>
+            <div className="connections-create-field">
+              <label htmlFor={typeId}>Type</label>
+              <select
+                id={typeId}
+                required
+                value={visibleTypeName}
+                disabled={!contextIsCurrent || submitting}
+                onChange={event => changeType(event.target.value)}
+              >
+                {descriptors.types.map(type => <option key={type.name} value={type.name}>{type.displayName}</option>)}
+              </select>
+            </div>
+            <div className="connections-create-field">
+              <label htmlFor={schemeId}>Auth scheme</label>
+              <select
+                id={schemeId}
+                required
+                value={visibleAuthScheme}
+                disabled={!contextIsCurrent || submitting || availableSchemes.length === 0}
+                onChange={event => changeScheme(event.target.value)}
+              >
+                {availableSchemes.map(scheme => <option key={scheme.name} value={scheme.name}>{scheme.displayName}</option>)}
+              </select>
+            </div>
+          </div>
 
-          <label htmlFor={typeId}>Type</label>
-          <select
-            id={typeId}
-            required
-            value={visibleTypeName}
-            disabled={!contextIsCurrent || submitting}
-            onChange={event => changeType(event.target.value)}
-          >
-            {descriptors.types.map(type => <option key={type.name} value={type.name}>{type.displayName}</option>)}
-          </select>
+          <section className="connections-create-section" aria-labelledby={serviceSettingsTitleId}>
+            <h3 id={serviceSettingsTitleId}>Service settings</h3>
+            {(selectedType?.settings ?? []).length > 0 ? (selectedType?.settings ?? []).map(field => {
+              const id = `${nameId}-type-${safeId(field.name)}`;
+              const checked = visibleSettings[field.name] === "true";
+              return (
+                <label className="connection-setting-field" key={field.name} htmlFor={id}>
+                  {field.displayName}{field.required ? " (required)" : ""}
+                  <input
+                    id={id}
+                    type={field.editorHint === "checkbox" ? "checkbox" : "text"}
+                    required={field.required && field.editorHint !== "checkbox"}
+                    checked={field.editorHint === "checkbox" ? checked : undefined}
+                    value={field.editorHint === "checkbox" ? undefined : visibleSettings[field.name] ?? ""}
+                    placeholder={field.name === "allowedHosts" ? "api.example, *.googleapis.com" : undefined}
+                    disabled={!contextIsCurrent || submitting}
+                    onChange={event => {
+                      setSettings(current => ({
+                        ...current,
+                        [field.name]: field.editorHint === "checkbox" ? String(event.target.checked) : event.target.value
+                      }));
+                      setError(null);
+                    }}
+                  />
+                </label>
+              );
+            }) : <p className="connections-create-section-empty">No additional service settings required.</p>}
+          </section>
 
-          <label htmlFor={schemeId}>Auth scheme</label>
-          <select
-            id={schemeId}
-            required
-            value={visibleAuthScheme}
-            disabled={!contextIsCurrent || submitting || availableSchemes.length === 0}
-            onChange={event => changeScheme(event.target.value)}
-          >
-            {availableSchemes.map(scheme => <option key={scheme.name} value={scheme.name}>{scheme.displayName}</option>)}
-          </select>
+          <section className="connections-create-section" aria-labelledby={authenticationTitleId}>
+            <h3 id={authenticationTitleId}>Authentication</h3>
+            {nonSensitiveSchemeFields.map(field => {
+              const id = `${nameId}-scheme-${safeId(field.name)}`;
+              return (
+                <label className="connection-setting-field" key={field.name} htmlFor={id}>
+                  {field.displayName}{field.required ? " (required)" : ""}
+                  <input
+                    id={id}
+                    value={visibleSettings[field.name] ?? ""}
+                    required={field.required}
+                    autoComplete="off"
+                    disabled={!contextIsCurrent || submitting}
+                    onChange={event => {
+                      setSettings(current => ({ ...current, [field.name]: event.target.value }));
+                      setError(null);
+                    }}
+                  />
+                </label>
+              );
+            })}
 
-          {(selectedType?.settings ?? []).map(field => {
-            const id = `${nameId}-type-${safeId(field.name)}`;
-            const checked = visibleSettings[field.name] === "true";
-            return (
-              <label className="connection-setting-field" key={field.name} htmlFor={id}>
-                {field.displayName}{field.required ? " (required)" : ""}
-                <input
-                  id={id}
-                  type={field.editorHint === "checkbox" ? "checkbox" : "text"}
-                  required={field.required && field.editorHint !== "checkbox"}
-                  checked={field.editorHint === "checkbox" ? checked : undefined}
-                  value={field.editorHint === "checkbox" ? undefined : visibleSettings[field.name] ?? ""}
-                  placeholder={field.name === "allowedHosts" ? "api.example, *.googleapis.com" : undefined}
-                  disabled={!contextIsCurrent || submitting}
-                  onChange={event => {
-                    setSettings(current => ({
-                      ...current,
-                      [field.name]: field.editorHint === "checkbox" ? String(event.target.checked) : event.target.value
-                    }));
-                    setError(null);
-                  }}
-                />
-              </label>
-            );
-          })}
-
-          {nonSensitiveSchemeFields.map(field => {
-            const id = `${nameId}-scheme-${safeId(field.name)}`;
-            return (
-              <label className="connection-setting-field" key={field.name} htmlFor={id}>
-                {field.displayName}{field.required ? " (required)" : ""}
-                <input
-                  id={id}
-                  value={visibleSettings[field.name] ?? ""}
-                  required={field.required}
-                  autoComplete="off"
-                  disabled={!contextIsCurrent || submitting}
-                  onChange={event => {
-                    setSettings(current => ({ ...current, [field.name]: event.target.value }));
-                    setError(null);
-                  }}
-                />
-              </label>
-            );
-          })}
-
-          {sensitiveFields.map(field => (
-            <ConnectionCredentialField
-              key={`${typeName}:${authScheme}:${field.name}`}
-              context={context}
-              field={field}
-              value={visibleCredentials[field.name] ?? defaultCredentialInput()}
-              disabled={!contextIsCurrent || submitting}
-              onChange={input => setCredentialInput(field.name, input)}
-            />
-          ))}
+            {sensitiveFields.map(field => (
+              <ConnectionCredentialField
+                key={`${typeName}:${authScheme}:${field.name}`}
+                context={context}
+                field={field}
+                value={visibleCredentials[field.name] ?? defaultCredentialInput()}
+                disabled={!contextIsCurrent || submitting}
+                onChange={input => setCredentialInput(field.name, input)}
+              />
+            ))}
+            {nonSensitiveSchemeFields.length === 0 && sensitiveFields.length === 0
+              ? <p className="connections-create-section-empty">No additional authentication fields required.</p>
+              : null}
+          </section>
 
           <div className="connections-dialog-actions">
             <button type="button" disabled={submitting} onClick={onCancel}>Cancel</button>

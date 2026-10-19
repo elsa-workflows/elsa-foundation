@@ -63,7 +63,7 @@ async function expectNoSeriousAxeViolations(page: Page) {
   expect(violations).toEqual([]);
 }
 
-test.describe("app-bar user menu", () => {
+test.describe("shell user menu", () => {
   test.use({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
 
   test("names the signed-in user and offers Sign out", async ({ page }) => {
@@ -86,12 +86,22 @@ test.describe("app-bar user menu", () => {
     await page.keyboard.press("Enter");
     await expect(page.getByRole("menu")).toBeVisible();
     // The open menu hides the rest of the page from assistive tech, trigger included, so read it by class.
-    await expect(page.locator(".user-menu-button")).toHaveAttribute("aria-expanded", "true");
+    await expect(page.locator(".user-menu-button:visible")).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByRole("menuitem", { name: "Sign out" })).toBeFocused();
 
     await page.keyboard.press("Escape");
     await expect(page.getByRole("menu")).toHaveCount(0);
     await expect(account(page)).toBeFocused();
+  });
+
+  test("keeps left-nav account access visible in the top bar on narrow screens", async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 900 });
+    await openShell(page);
+
+    await expect(page.locator(".sidebar-account .user-menu-button")).toBeHidden();
+    await expect(account(page)).toBeVisible();
+    await account(page).click();
+    await expect(page.getByRole("menuitem", { name: "Sign out" })).toBeVisible();
   });
 
   test("signs out through the provider and lands on the backend sign-in page", async ({ page }) => {

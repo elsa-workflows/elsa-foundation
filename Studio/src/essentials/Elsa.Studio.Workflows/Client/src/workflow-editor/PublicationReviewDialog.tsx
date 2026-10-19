@@ -99,11 +99,17 @@ export function PublicationReviewDialog({
   const occupancy = publicationChannelOccupancy(review, selectedChannel);
   const changes = publicationChangesFor(review, activeSlot?.slotName ?? "");
   const preflightChanges = reviewedPreflight?.triggers ?? reviewedPreflight?.changes ?? [];
+  const triggerCounts = preflightChanges.reduce((counts, change) => {
+    counts[change.change]++;
+    return counts;
+  }, { added: 0, removed: 0, retained: 0 });
   const triggerSummary = reviewedPreflight
-    ? preflightChanges.length
-      ? preflightChanges.map(change => `${change.change} ${change.key} (${change.cardinality})`).join("; ")
-      : "No trigger changes."
-    : formatChangeCount(changes?.triggers);
+    ? Object.entries(triggerCounts).filter(([, count]) => count > 0)
+      .map(([kind, count]) => `${count} ${kind}`).join(", ") || "No trigger changes."
+    : "Not checked";
+  const summaryChanges = changes
+    ? { ...changes, triggers: { added: reviewedPreflight ? triggerCounts.added : 0, removed: reviewedPreflight ? triggerCounts.removed : 0, changed: 0 } }
+    : null;
   const versionIssues = matchingVersionPreflight?.issues ?? [];
   // A host predating elsa-foundation#1659 can still block without reporting why: no targetSlotOwner
   // and no conflicts. Say so honestly instead of rendering neither blocker and leaving the author
@@ -249,11 +255,10 @@ export function PublicationReviewDialog({
                   <div className="wf-publication-risks" role="alert">
                     <strong>These triggers are already in use</strong>
                     <ul>
-                      {reviewedPreflight.conflicts.map(conflict => (
-                        <li key={`${conflict.publicationId}-${conflict.key}`}>
-                          Conflict with {conflict.slotName}: {conflict.key}
-                        </li>
-                      ))}
+                      {[...new Set(reviewedPreflight.conflicts.map(conflict => conflict.slotName))].map(channel => {
+                        const count = new Set(reviewedPreflight.conflicts.filter(conflict => conflict.slotName === channel).map(conflict => conflict.key)).size;
+                        return <li key={channel}>{count} {count === 1 ? "trigger conflicts" : "triggers conflict"} with channel <strong>{channel}</strong>.</li>;
+                      })}
                     </ul>
                   </div>
                 ) : null}
@@ -293,14 +298,17 @@ export function PublicationReviewDialog({
                   </div>
                 ) : null}
 
+                <div className="wf-publication-overview">
+                  {versionSelection.mode === "automatic" ? <p className="wf-publication-selection">Version <strong>{matchingVersionPreflight?.resolvedVersion || review.proposedVersion}</strong></p> : null}
+                  <p className="wf-publication-change-summary"><strong>Changes:</strong> {summaryChanges ? compactChangeSummary(summaryChanges, !!reviewedPreflight) : comparisonUnavailableMessage(occupancy, selectedChannel)}</p>
+                  {!reviewedPreflight || !changes ? <p className="wf-publication-change-summary">{reviewedPreflight ? `Trigger changes: ${triggerSummary}` : "Trigger changes have not been checked."}</p> : null}
+                </div>
+
                 <details className="wf-publication-disclosure">
                   <summary>Review changes</summary>
                   <div className="wf-publication-disclosure-body">
                     <p className="wf-publication-baseline">
                       Compared with <strong>{publicationBaselineFor(review, selectedChannel)}</strong>
-                    </p>
-                    <p className="wf-publication-change-summary">
-                      {changes ? compactChangeSummary(changes) : comparisonUnavailableMessage(occupancy, selectedChannel)}
                     </p>
                     <dl className="wf-publication-detail-grid">
                       <ChangeSummary label="Activities" value={changes?.activities} />
@@ -308,26 +316,6 @@ export function PublicationReviewDialog({
                       <ChangeSummary label="Outputs" value={changes?.outputs} />
                       <div><dt>Triggers</dt><dd>{triggerSummary}</dd></div>
                     </dl>
-                    <details className="wf-publication-disclosure wf-publication-technical">
-                      <summary>Technical details</summary>
-                      <dl className="wf-publication-detail-grid">
-                        <DecisionFact
-                          label="Policy"
-                          value={reviewedPreflight
-                            ? `${reviewedPreflight.policySource}${reviewedPreflight.policyRevision == null ? "" : ` · revision ${reviewedPreflight.policyRevision}`}`
-                            : "Awaiting authoritative review"}
-                        />
-                        <DecisionFact label="Resolved action" value={reviewedPreflight?.resolvedAction ?? "Awaiting authoritative review"} />
-                        <DecisionFact label="Internal slot" value={(reviewedPreflight?.slotName ?? selectedChannel) || "—"} />
-                        <DecisionFact label="Preflight token" value={reviewedPreflight?.preflightToken ?? "—"} />
-                      </dl>
-                      <div className="wf-publication-claims">
-                        <strong>Authoritative trigger claims</strong>
-                        {reviewedPreflight?.claims.length
-                          ? <ul>{reviewedPreflight.claims.map(claim => <li key={`${claim.key}-${claim.cardinality}`}>{claim.key} ({claim.cardinality})</li>)}</ul>
-                          : <p>No trigger claims.</p>}
-                      </div>
-                    </details>
                   </div>
                 </details>
 
@@ -424,6 +412,35 @@ export function PublicationReviewDialog({
                       </fieldset>
                     ) : null}
                   </div>
+                </details>
+                <details className="wf-publication-disclosure wf-publication-technical">
+                  <summary>Technical details</summary>
+                  <dl className="wf-publication-detail-grid">
+                    <DecisionFact label="Trigger changes" value={preflightChanges.length
+                      ? preflightChanges.map(change => `${change.change} ${change.key} (${change.cardinality})`).join("; ")
+                      : "No trigger changes."} />
+                    <DecisionFact
+                      label="Policy"
+                      value={reviewedPreflight
+                        ? `${reviewedPreflight.policySource}${reviewedPreflight.policyRevision == null ? "" : ` · revision ${reviewedPreflight.policyRevision}`}`
+                        : "Awaiting authoritative review"}
+                    />
+                    <DecisionFact label="Resolved action" value={reviewedPreflight?.resolvedAction ?? "Awaiting authoritative review"} />
+                    <DecisionFact label="Internal slot" value={(reviewedPreflight?.slotName ?? selectedChannel) || "—"} />
+                    <DecisionFact label="Preflight token" value={reviewedPreflight?.preflightToken ?? "—"} />
+                  </dl>
+                  <div className="wf-publication-claims">
+                    <strong>Authoritative trigger claims</strong>
+                    {reviewedPreflight?.claims.length
+                      ? <ul>{reviewedPreflight.claims.map(claim => <li key={`${claim.key}-${claim.cardinality}`}>{claim.key} ({claim.cardinality})</li>)}</ul>
+                      : <p>No trigger claims.</p>}
+                  </div>
+                  {reviewedPreflight?.conflicts.length ? <div className="wf-publication-claims">
+                    <strong>Trigger conflict identifiers</strong>
+                    <ul>{reviewedPreflight.conflicts.map(conflict => <li key={`${conflict.publicationId}-${conflict.key}`}>
+                      <code>{conflict.key}</code> · channel {conflict.slotName} · publication <code>{conflict.publicationId}</code>
+                    </li>)}</ul>
+                  </div> : null}
                 </details>
               </>
             )}
@@ -532,7 +549,7 @@ function comparisonUnavailableMessage(occupancy: PublicationChannelOccupancy, ch
     : "Not compared: the current publication in this channel is unknown on this backend.";
 }
 
-function compactChangeSummary(changes: PublicationReviewState["changes"]) {
+function compactChangeSummary(changes: PublicationReviewState["changes"], triggersChecked: boolean) {
   const categories = [
     { single: "activity", plural: "activities", value: changes.activities },
     { single: "input", plural: "inputs", value: changes.inputs },
@@ -542,7 +559,7 @@ function compactChangeSummary(changes: PublicationReviewState["changes"]) {
   return categories.flatMap(({ single, plural, value }) => {
     const count = value.added + value.changed + value.removed;
     return count ? [`${count} ${count === 1 ? single : plural}`] : [];
-  }).join(" · ") || "No structural changes.";
+  }).join(" · ") || (triggersChecked ? "No structural changes." : "No activity, input or output changes.");
 }
 
 function publicationStatusMessage(

@@ -2,6 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { UserMenu } from "../app/components/UserMenu";
 import { ShellFrame } from "../app/App";
 import { StudioAuthBoundary } from "../app/auth/studioAuth";
 import { ThemeProvider } from "../app/components/ThemeProvider";
@@ -17,7 +18,7 @@ async function act(update: () => void) {
 
 const alice: AuthSession = { status: "authenticated", subject: "user-1", displayName: "Alice Admin", roles: [], permissions: [] };
 
-describe("app-bar user menu", () => {
+describe("shell user menu", () => {
   let container: HTMLDivElement;
   let root: Root;
   let session: AuthSession;
@@ -53,7 +54,7 @@ describe("app-bar user menu", () => {
     await act(() => root.render(
       <StudioAuthBoundary manager={authManager}>
         <ThemeProvider>
-          <ShellFrame navigation={[]} panels={[]} path="/" title="Home" backendBaseUrl="https://backend.example/" onNavigate={() => {}}>
+          <ShellFrame accountAction={<UserMenu />} navigation={[]} panels={[]} path="/" title="Home" backendBaseUrl="https://backend.example/" onNavigate={() => {}}>
             <div>content</div>
           </ShellFrame>
         </ThemeProvider>
@@ -61,7 +62,7 @@ describe("app-bar user menu", () => {
     ));
   }
 
-  const trigger = () => container.querySelector<HTMLButtonElement>(".topbar-actions .user-menu-button");
+  const trigger = () => container.querySelector<HTMLButtonElement>(".sidebar-account .user-menu-button, .topbar-actions .user-menu-button");
   const signOutItem = () => document.querySelector<HTMLElement>('[role="menu"] [role="menuitem"]');
 
   /** Opens the menu from the keyboard, as Radix does for Enter on its trigger. */
@@ -76,10 +77,23 @@ describe("app-bar user menu", () => {
     expect(trigger()).toBeNull();
   });
 
-  it("names the signed-in user in the app bar and opens a menu focused on Sign out", async () => {
+  it("shows the configured backend host without claiming a live health check", async () => {
+    await renderShell(null);
+
+    const environment = container.querySelector<HTMLElement>(".sidebar-environment")!;
+    expect(environment.textContent).toContain("Backend API");
+    expect(environment.textContent).toContain("backend.example");
+    expect(environment.title).toContain("connectivity is not measured");
+    expect(container.querySelector(".sidebar-account")?.textContent).toBe("");
+  });
+
+  it("keeps the signed-in user in the left-rail footer for desktop layouts", async () => {
     await renderShell(manager);
 
     expect(trigger()!.textContent).toContain("Alice Admin");
+    expect(container.querySelector(".sidebar-account .user-menu-button")).toBe(trigger());
+    // CSS exposes this second rendering only at responsive widths; the stylesheet policy is asserted in navMode.test.
+    expect(container.querySelector(".topbar-actions .user-menu-button")).not.toBeNull();
     expect(trigger()!.getAttribute("aria-label")).toBe("Account: Alice Admin");
     expect(trigger()!.getAttribute("aria-haspopup")).toBe("menu");
 
@@ -89,6 +103,23 @@ describe("app-bar user menu", () => {
     expect(document.querySelector('[role="menu"]')!.textContent).toContain("Signed in asAlice Admin");
     expect(signOutItem()!.textContent).toBe("Sign out");
     expect(document.activeElement).toBe(signOutItem());
+  });
+
+  it("keeps the account control in the top bar when navigation is at the top", async () => {
+    localStorage.setItem("elsa-studio-nav-mode", "top");
+    await renderShell(manager);
+
+    expect(document.documentElement.getAttribute("data-nav-mode")).toBe("top");
+    expect(container.querySelector(".topbar-actions .user-menu-button")).not.toBeNull();
+    expect(container.querySelector(".sidebar-account .user-menu-button")).toBeNull();
+  });
+
+  it("keeps the account control available in the collapsed icon rail", async () => {
+    localStorage.setItem("elsa-studio-sidebar-collapsed", "true");
+    await renderShell(manager);
+
+    expect(container.querySelector(".studio-shell.sidebar-collapsed")).not.toBeNull();
+    expect(container.querySelector(".sidebar-account .user-menu-button")).not.toBeNull();
   });
 
   it("falls back to the subject when the session carries no display name", async () => {

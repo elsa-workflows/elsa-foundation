@@ -300,7 +300,7 @@ describe("activity property organization", () => {
     expect(fields).toHaveLength(1);
     expect(fields.every(field => !field.classList.contains("wf-expression-field--toggle"))).toBe(true);
     expect(fields[0]?.querySelector("textarea[aria-label='JavaScript expression']")).not.toBeNull();
-    const referenceRow = container.querySelector("[aria-label='VariableValue expression syntax']")?.closest(".wf-property-row");
+    const referenceRow = container.querySelector(".wf-syntax-picker-trigger.compact[aria-label^='VariableValue expression syntax']")?.closest(".wf-property-row");
     expect(referenceRow?.querySelector(".wf-expression-field")).toBeNull();
     expect(referenceRow?.textContent).toContain("current value is preserved and read-only");
   });
@@ -437,7 +437,7 @@ describe("activity property organization", () => {
       })
     });
 
-    expect(container.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")?.textContent).toContain("Literal");
+    expect(container.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")?.title).toBe("Literal");
     expect(container.querySelector(".test-checklist")?.textContent).toBe("GET");
     expect(container.textContent).not.toContain("Open the expanded editor to edit JSON.");
   });
@@ -785,7 +785,7 @@ describe("secret-only inputs", () => {
   it("defaults to the secret picker ahead of the descriptor's default syntax and offers no literal editor", () => {
     const row = rowOf(renderSecretOnly(), "Authorization");
 
-    expect(row.querySelector(".wf-syntax-picker-trigger")?.textContent).toBe("Secret");
+    expect(row.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")?.title).toBe("Secret");
     expect(row.querySelector("[aria-label='Secret picker']")).not.toBeNull();
     expect(row.querySelector("[aria-label='Literal editor']")).toBeNull();
     expect(row.querySelector("input[type='text'], textarea")).toBeNull();
@@ -800,12 +800,11 @@ describe("secret-only inputs", () => {
     expect(rowOf(container, "Url").querySelector("[aria-label='Literal editor']")).not.toBeNull();
   });
 
-  // Each layout has its own syntax picker. A dictionary layout is reached only when the Secret descriptor
-  // reports literal mode, since a secret-only input's syntax is always Secret.
+  // Reference and multiline rows use the property heading; inline and dictionary layouts keep their own controls.
   const layouts: Array<[string, string, Partial<StudioActivityInputDescriptor>, StudioExpressionDescriptor["editingMode"]]> = [
-    ["reference", ".wf-syntax-picker-trigger:not(.inline)", {}, "reference"],
+    ["reference", ".wf-syntax-picker-trigger.compact", {}, "reference"],
     ["inline", ".wf-expression-field .wf-syntax-picker-trigger", {}, "literal"],
-    ["block", ".wf-syntax-picker-trigger:not(.inline)", { uiHint: "multiline" }, "reference"],
+    ["multiline heading", ".wf-syntax-picker-trigger.compact", { uiHint: "multiline" }, "reference"],
     ["dictionary", ".wf-dictionary-expression-toolbar .wf-syntax-picker-trigger", { typeName: "System.Collections.Generic.IDictionary`2[System.String,System.String]" }, "literal"]
   ];
 
@@ -815,6 +814,10 @@ describe("secret-only inputs", () => {
 
     expect(row.querySelectorAll(".wf-syntax-picker-trigger")).toHaveLength(1);
     expect(row.querySelector(picker)).not.toBeNull();
+    if (_layout === "reference" || _layout === "multiline heading") {
+      expect(row.querySelector(".wf-property-row-header-meta > .wf-syntax-picker.compact")).not.toBeNull();
+      expect(row.querySelector(":scope > .wf-syntax-picker")).toBeNull();
+    }
     expect(syntaxOptions(row)).toEqual(["Secret"]);
   });
 
@@ -825,7 +828,7 @@ describe("secret-only inputs", () => {
     const row = rowOf(container, "Authorization");
 
     expect(container.innerHTML).not.toContain(legacyLiteral);
-    expect(row.querySelector(".wf-syntax-picker-trigger")?.textContent).toBe("Secret");
+    expect(row.querySelector<HTMLButtonElement>(".wf-syntax-picker-trigger")?.title).toBe("Secret");
     expect(row.querySelector("[aria-label='Literal editor']")).toBeNull();
     expect(row.querySelector("[aria-label='Secret picker']")?.getAttribute("data-value")).toBe("null");
   });

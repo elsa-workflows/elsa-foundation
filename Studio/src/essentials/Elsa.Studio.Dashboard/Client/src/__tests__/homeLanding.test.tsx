@@ -10,14 +10,19 @@ import { registerCoreHomeWidgets } from "../widgets/registerCoreHomeWidgets";
 import { stubApi } from "./testSupport";
 
 describe("Home default landing", () => {
-  it("ships Get started, quick actions, recent lists, attention, and gated Tasks", () => {
+  it("ships workflow health and portfolio before the core Home widgets", () => {
     expect(builtInHomeLayout.widgets.map(entry => entry.id)).toEqual([
       "home.get-started",
+      "workflows.run-health",
+      "workflows.portfolio",
       "home.quick-actions",
-      "home.recent-workflows",
-      "home.recent-runs",
       "home.needs-attention",
+      "home.recent-runs",
+      "home.recent-workflows",
       "home.tasks"
+    ]);
+    expect(builtInHomeLayout.widgets.map(entry => entry.size)).toEqual([
+      "full", "full", "medium", "medium", "medium", "medium", "medium", "medium"
     ]);
   });
 

@@ -10,7 +10,7 @@ import {
   type PublicationReviewState,
   type PublicationVersionSelection
 } from "../workflow-editor/publicationReview";
-import type { WorkflowDraft } from "../workflowTypes";
+import type { ActivityCatalogItem, WorkflowDraft } from "../workflowTypes";
 import {
   foreignSlotOwner,
   importedActivationSlot,
@@ -30,17 +30,26 @@ afterEach(() => {
 });
 
 describe("publication channel UX", () => {
-  it("starts with a short confirmation and keeps changes and publishing options collapsed", () => {
-    const container = render(review());
+  it("starts with the proposed version and compact change summary, with all three disclosures collapsed", () => {
+    const container = render(review({
+      proposedVersion: "2.0.0",
+      preflight: preflight({
+        triggers: [{ change: "added", key: "http:orders", cardinality: "exclusive" }]
+      })
+    }));
     expect(container.querySelector("h3")?.textContent).toBe("Publish workflow");
     expect(container.querySelector(".wf-publication-header p")?.textContent).toBe("Update the published workflow with your latest changes.");
-    expect(container.querySelectorAll(".wf-publication-body > details")).toHaveLength(2);
+    expect(container.querySelectorAll(".wf-publication-body > details")).toHaveLength(3);
     const options = summary(container, "Publishing options")!.parentElement as HTMLDetailsElement;
     const changes = summary(container, "Review changes")!.parentElement as HTMLDetailsElement;
+    const technical = summary(container, "Technical details")!.parentElement as HTMLDetailsElement;
     expect(options.open).toBe(false);
     expect(changes.open).toBe(false);
+    expect(technical.open).toBe(false);
     expect(container.querySelector("select[aria-label='Publication channel']")?.closest("details")).toBe(options);
     expect(container.querySelector(".wf-publication-baseline")?.closest("details")).toBe(changes);
+    expect(text(container)).toContain("Version 2.0.0");
+    expect(container.querySelector(".wf-publication-change-summary")?.textContent).toBe("Changes: 1 activity · 1 trigger");
     expect(container.querySelector("#publication-review-status")?.getAttribute("data-visible")).toBe("false");
     expect(button(container, "Publish").disabled).toBe(false);
     expect(text(container)).not.toContain("captured editor state");
@@ -52,7 +61,7 @@ describe("publication channel UX", () => {
     expect(container.querySelector(".wf-publication-header p")?.textContent).toBe("Make your latest changes available to run.");
   });
 
-  it("keeps technical evidence in progressive disclosures", () => {
+  it("keeps technical evidence in its own collapsed top-level disclosure", () => {
     const container = render(review({
       preflight: preflight({
         policyRevision: 7,
@@ -63,10 +72,87 @@ describe("publication channel UX", () => {
     const changes = summary(container, "Review changes")!.parentElement as HTMLDetailsElement;
     const technical = summary(container, "Technical details")!.parentElement as HTMLDetailsElement;
     expect(technical.open).toBe(false);
-    expect(technical.parentElement?.closest("details")).toBe(changes);
-    expect(text(container)).toContain("Policy");
-    expect(text(container)).toContain("host · revision 7");
-    expect(text(container)).toContain("http:orders (exclusive)");
+    expect(technical.parentElement?.closest("details")).toBeNull();
+    expect(technical.textContent).toContain("Policy");
+    expect(technical.textContent).toContain("host · revision 7");
+    expect(technical.textContent).toContain("http:orders (exclusive)");
+    expect(changes.textContent).not.toContain("http:orders");
+  });
+
+  it("shows grouped conflict counts while exact trigger and publication identifiers stay in Technical details", () => {
+    const triggerKey = "sha256:8a80851546a1f1875cf5c1d78dbbc51ac6e42d8f8f47b3f77b6e5db34f01c3cb";
+    const publicationId = "publication-7f4d2a1c-9b6e-4f20-a45d-01a28dbe3381";
+    const container = render(review({
+      proposedVersion: "2.0.0",
+      preflight: preflight({
+        canActivate: false,
+        claims: [{ key: triggerKey, cardinality: "exclusive" }],
+        triggers: [{ change: "added", key: triggerKey, cardinality: "exclusive" }],
+        conflicts: [
+          { key: triggerKey, cardinality: "exclusive", publicationId, slotName: "default" },
+          { key: triggerKey, cardinality: "exclusive", publicationId: `${publicationId}-other`, slotName: "default" }
+        ]
+      })
+    }));
+
+    const changes = summary(container, "Review changes")!.parentElement as HTMLDetailsElement;
+    const technical = summary(container, "Technical details")!.parentElement as HTMLDetailsElement;
+    const conflictAlert = container.querySelector<HTMLElement>(".wf-publication-risks[role='alert']")!;
+    expect(conflictAlert.textContent).toContain("1 trigger conflicts with channel default.");
+    expect(conflictAlert.textContent).not.toContain(triggerKey);
+    expect(conflictAlert.textContent).not.toContain(publicationId);
+    expect(container.querySelector(".wf-publication-change-summary")?.textContent).toBe("Changes: 1 activity · 1 trigger");
+    expect(changes.textContent).toContain("1 added");
+    expect(changes.textContent).not.toContain(triggerKey);
+    expect(changes.textContent).not.toContain(publicationId);
+    expect(technical.open).toBe(false);
+    expect(technical.textContent).toContain(triggerKey);
+    expect(technical.textContent).toContain(publicationId);
+  });
+
+  it.each([
+    ["missing", undefined],
+    ["stale", publicationPreflight({ slotName: "blue" })]
+  ] as const)("does not present local trigger differences as authoritative when preflight is %s", (_state, preflightValue) => {
+    const container = render(reviewWithLocalTrigger({ preflight: preflightValue }));
+    const summaryLines = [...container.querySelectorAll<HTMLElement>(".wf-publication-change-summary")]
+      .map(line => line.textContent);
+    const changes = summary(container, "Review changes")!.parentElement as HTMLDetailsElement;
+    const triggerRow = [...changes.querySelectorAll("dt")].find(term => term.textContent === "Triggers");
+
+    expect(summaryLines).toEqual(["Changes: 1 activity", "Trigger changes have not been checked."]);
+    expect(triggerRow?.nextElementSibling?.textContent).toBe("Not checked");
+  });
+
+  it("shows matching-preflight trigger counts when the target has no comparable design baseline", () => {
+    const container = render(reviewWithLocalTrigger({
+      policy: { defaultAction: "replace", defaultSlotName: "imported", source: "host" },
+      slots: [withoutPublication(importedActivationSlot())],
+      intent: { action: "replace", slotName: "imported" },
+      preflight: publicationPreflight({
+        slotName: "imported",
+        triggers: [{ change: "added", key: "http:orders", cardinality: "exclusive" }]
+      })
+    }));
+    const summaryLines = [...container.querySelectorAll<HTMLElement>(".wf-publication-change-summary")]
+      .map(line => line.textContent);
+
+    expect(summaryLines).toContain("Trigger changes: 1 added");
+    expect(summaryLines[0]).toContain("Not compared: imported is occupied by an activation from artifact-reconciliation (orders-bundle)");
+  });
+
+  it("does not count retained-only preflight triggers as changes", () => {
+    const container = render(reviewWithLocalTrigger({
+      preflight: publicationPreflight({
+        triggers: [{ change: "retained", key: "http:orders", cardinality: "exclusive" }]
+      })
+    }));
+    const compactSummary = container.querySelector<HTMLElement>(".wf-publication-change-summary")!;
+    const changes = summary(container, "Review changes")!.parentElement as HTMLDetailsElement;
+    const triggerRow = [...changes.querySelectorAll("dt")].find(term => term.textContent === "Triggers");
+
+    expect(compactSummary.textContent).toBe("Changes: 1 activity");
+    expect(triggerRow?.nextElementSibling?.textContent).toBe("1 retained");
   });
 
   it("lists existing channels and exposes a distinct create-new path", () => {
@@ -160,7 +246,11 @@ describe("publication channel UX", () => {
     }), { onReview: vi.fn(async () => undefined) });
 
     expect(text(container)).toContain("These triggers are already in use");
-    expect(text(container)).toContain("Conflict with default: http:orders");
+    expect(text(container)).toContain("1 trigger conflicts with channel default.");
+    const technical = summary(container, "Technical details")!.parentElement as HTMLDetailsElement;
+    expect(technical.open).toBe(false);
+    expect(technical.textContent).toContain("http:orders");
+    expect(technical.textContent).toContain("publication-9");
     expect(text(container)).not.toContain("owned by another activation source");
     expect(text(container)).toContain("Review the highlighted issue before publishing.");
     expect(container.querySelector("#publication-review-status")?.textContent).toBe("Review the highlighted issue before publishing.");
@@ -244,7 +334,7 @@ describe("publication channel UX", () => {
 
     expect(text(container)).toContain("This channel is managed elsewhere");
     expect(text(container)).toContain("These triggers are already in use");
-    expect(text(container)).toContain("Conflict with default: http:orders");
+    expect(text(container)).toContain("1 trigger conflicts with channel default.");
     expect(button(container, "Publish").disabled).toBe(true);
   });
 
@@ -455,6 +545,19 @@ function review(overrides: Partial<PublicationReviewState> = {}): PublicationRev
   return state;
 }
 
+function reviewWithLocalTrigger(overrides: Partial<PublicationReviewState> = {}): PublicationReviewState {
+  const state = review(overrides);
+  state.catalog = [localTrigger];
+  state.triggerActivityVersionIds = [localTrigger.activityVersionId];
+  state.draftSnapshot.state.rootActivity = {
+    nodeId: "trigger-root",
+    activityVersionId: localTrigger.activityVersionId,
+    inputs: [],
+    outputs: []
+  };
+  return state;
+}
+
 function draft(): WorkflowDraft {
   return {
     id: "draft-1",
@@ -501,3 +604,14 @@ function setInput(input: HTMLInputElement, value: string) {
 function text(container: HTMLElement) {
   return container.textContent ?? "";
 }
+
+const localTrigger = {
+  activityVersionId: "test-http-trigger-v1",
+  activityTypeKey: "Test.HttpTrigger",
+  version: "1.0.0",
+  category: "Triggers",
+  displayName: "HTTP Trigger",
+  executionType: "Trigger",
+  inputs: [],
+  outputs: []
+} satisfies ActivityCatalogItem;

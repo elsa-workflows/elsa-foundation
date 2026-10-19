@@ -161,6 +161,17 @@ public static class RuntimeEntityFrameworkCoreRegistration
             services.AddRuntimeWorkflowActivationAuthorityEntityFrameworkCore();
             UseEntityFrameworkActivationSwitch(services);
 
+            // Execution deletion is a capability of the complete, transactionally coupled EF family. Individual
+            // EF store registrations intentionally do not advertise that the corresponding run-owned graph can be
+            // purged atomically.
+            // The Runtime default is the coherent in-memory deletion implementation. Replace it only at this
+            // complete provider-composition boundary; individual EF store extensions must not advertise a partial purge.
+            if (services.LastOrDefault(descriptor => descriptor.ServiceType == typeof(IWorkflowExecutionDeletionStore))?.ImplementationType != typeof(EfWorkflowExecutionDeletionStore))
+            {
+                services.RemoveAll<IWorkflowExecutionDeletionStore>();
+                services.AddScoped<IWorkflowExecutionDeletionStore, EfWorkflowExecutionDeletionStore>();
+            }
+
             return services;
         }
         catch

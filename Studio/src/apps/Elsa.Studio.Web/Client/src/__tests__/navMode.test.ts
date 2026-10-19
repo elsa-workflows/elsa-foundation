@@ -111,4 +111,23 @@ describe("navigation mode stylesheet", () => {
     expect(ruleBody(phoneShellCss, ".sidebar")).toMatch(/flex-direction:\s*row;/);
     expect(ruleBody(stylesCss, ".sidebar-collapsed .sidebar-search")).toMatch(/display:\s*none;/);
   });
+
+  it("moves left-nav account access to the top bar on narrow screens", () => {
+    expect(ruleBody(stylesCss, ".topbar-actions .user-menu")).toMatch(/display:\s*none;/);
+    expect(ruleBody(stylesCss, 'html[data-nav-mode="top"] .topbar-actions .user-menu')).toMatch(/display:\s*flex;/);
+    expect(ruleBody(mobileShellCss, ".sidebar-account")).toMatch(/display:\s*none;/);
+    expect(ruleBody(mobileShellCss, 'html[data-nav-mode="left"] .sidebar-footer')).toMatch(/display:\s*none;/);
+    expect(ruleBody(mobileShellCss, 'html[data-nav-mode="left"] .topbar-actions .user-menu')).toMatch(/display:\s*flex;/);
+  });
+
+  it("keeps left-rail hierarchy and environment details quiet and token-based", () => {
+    expect(ruleBody(stylesCss, ".sidebar-top")).toMatch(/radial-gradient\([^;]*var\(--studio-accent\)/);
+    expect(ruleBody(stylesCss, ".nav-children")).toMatch(/border-left:\s*1px solid color-mix\(in srgb, var\(--studio-border\)/);
+    expect(ruleBody(stylesCss, ".nav-section a.nav-child.active")).toMatch(/background:\s*color-mix\(in srgb, var\(--studio-accent\) 8%, transparent\)/);
+    expect(ruleBody(stylesCss, ".sidebar-environment")).toMatch(/grid-template-columns:\s*28px minmax\(0, 1fr\)/);
+    expect(ruleBody(stylesCss, ".sidebar-status-dot")).toMatch(/background:\s*var\(--studio-text-muted\)/);
+    expect(ruleBody(stylesCss, ".sidebar-status-dot")).not.toMatch(/var\(--success\)/);
+    expect(stylesCss).toMatch(/sidebar-collapsed \.sidebar-environment-copy/);
+    expect(stylesCss).toMatch(/sidebar-collapsed \.sidebar-account \.user-menu-name/);
+  });
 });

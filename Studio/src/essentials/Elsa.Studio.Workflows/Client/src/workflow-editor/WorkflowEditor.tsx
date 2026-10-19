@@ -31,7 +31,7 @@ import { weaverUnavailableTitle } from "./constants";
 
 void loadActivityIconRegistry().catch(() => undefined);
 import type { CanvasView, WorkflowDesignerPanelContext, WorkflowEditorError, WorkflowEditorOperation, WorkflowEditorPanelTab, WorkflowErrorInput, WorkflowTestDriveSetupState } from "./editorTypes";
-import type { WorkflowSlotNavigation } from "./contexts";
+import type { WorkflowNodeActions, WorkflowSlotNavigation } from "./contexts";
 import {
   createNodeId,
   dispatchAiAction,
@@ -73,6 +73,7 @@ import { useDraftEquivalence } from "./useDraftEquivalence";
 import { useWorkflowScope } from "./useWorkflowScope";
 import { useWorkflowContextBridge } from "./useWorkflowContextBridge";
 import { ActivityPalettePanel } from "./ActivityPalettePanel";
+import { SequenceDesigner } from "../graph-authoring/SequenceDesigner";
 import { GraphAuthoringCanvas } from "../graph-authoring/GraphAuthoringCanvas";
 import { GraphAuthoringWorkbench } from "../graph-authoring/GraphAuthoringWorkbench";
 import { AddStepButton, authorsInline } from "../graph-authoring/AddStepButton";
@@ -365,6 +366,7 @@ export function WorkflowEditor({
     edges,
     canvasRef,
     setReactFlowInstance,
+    queueCanvasNodeFocus,
     onMoveEnd,
     canCreateActivityFromPort,
     connectMenu,
@@ -387,6 +389,9 @@ export function WorkflowEditor({
     onCanvasDrop,
     openEmptyConnectMenu,
     openAddStepMenu,
+    openSequenceInsertMenu,
+    insertSequenceActivity,
+    moveSequenceActivity,
     onConnectMenuPick,
     addActivity,
     addBpmnShape,
@@ -414,9 +419,42 @@ export function WorkflowEditor({
     disabled: isUnsupportedDesigner || !canAddActivitiesToCanvas,
     definitionId,
     editDraft,
-    select,
+    select: nodeId => {
+      select(nodeId);
+      if (nodeId) queueCanvasNodeFocus(nodeId);
+    },
     setStatus
   });
+
+  const deleteCanvasNode = useCallback((nodeId: string) => {
+    const node = nodes.find(candidate => candidate.id === nodeId);
+    if (!node) return;
+    onNodesDelete([node]);
+    if (nodes.length === 1) canvasRef.current?.focus({ preventScroll: true });
+  }, [nodes, onNodesDelete, canvasRef]);
+
+  const nodeActions = useMemo<WorkflowNodeActions | null>(() => {
+    if (isUnsupportedDesigner || isBpmnDesigner || !canAddActivitiesToCanvas) return null;
+    return {
+      selectedNodeCount: selectedCanvasNodeIds.length,
+      canAddAfter: canCreateActivityFromPort,
+      addAfter: (nodeId, portName, anchor) => {
+        if (selectedCanvasNodeIds.length !== 1 || selectedCanvasNodeIds[0] !== nodeId) return;
+        openAddStepMenu(anchor, { nodeId, handleId: portName });
+      },
+      duplicate: nodeId => { duplicateSelectedActivities([nodeId]); },
+      delete: deleteCanvasNode
+    };
+  }, [
+    canAddActivitiesToCanvas,
+    canCreateActivityFromPort,
+    deleteCanvasNode,
+    duplicateSelectedActivities,
+    isBpmnDesigner,
+    isUnsupportedDesigner,
+    openAddStepMenu,
+    selectedCanvasNodeIds
+  ]);
 
   // Inside a slot (breadcrumb non-empty) whose resolved slot is empty, show a guided picker instead of a
   // blank grid. Root-level empty canvas keeps its own affordances (the flowchart "Add activity" button or
@@ -1258,9 +1296,32 @@ export function WorkflowEditor({
           ) : (
           <>
           <ScopeBreadcrumb frames={visibleFrames} onNavigate={next => navigateToScope(next, null)} />
-          <GraphAuthoringCanvas
+          {scope?.slot.mode === "sequence" && scope.slot.cardinality === "many" && !isUnsupportedDesigner ? (
+            <SequenceDesigner
+              nodes={nodes}
+              selectedNodeId={selectedNodeId}
+              readOnly={!canAddActivitiesToCanvas}
+              canvasRef={canvasRef}
+              availabilityLookup={availabilityLookup}
+              onSelect={select}
+              onInsert={openSequenceInsertMenu}
+              onDropActivity={(versionId, index) => {
+                const activity = paletteCatalog.find(item => item.activityVersionId === versionId);
+                if (activity) insertSequenceActivity(activity, index);
+              }}
+              onMove={moveSequenceActivity}
+              onDelete={deleteCanvasNode}
+              onDuplicate={nodeId => duplicateSelectedActivities([nodeId])}
+              onOpenSlot={(ownerId, label, slot) => enterSlotScope(ownerId, slot, slotCrumbLabel(label, slot))}
+            >
+              {connectMenu ? <ConnectMenu clientX={connectMenu.clientX} clientY={connectMenu.clientY} activities={paletteCatalog} onPick={onConnectMenuPick} onClose={() => setConnectMenu(null)} /> : null}
+            </SequenceDesigner>
+          ) : <GraphAuthoringCanvas
             canvasRef={canvasRef}
+            nodeActions={nodeActions}
             canvasProps={{
+              tabIndex: -1,
+              "aria-label": "Workflow canvas",
               onDragOver: onCanvasDragOver,
               onDragLeave: onCanvasDragLeave,
               onDrop: onCanvasDrop
@@ -1342,7 +1403,7 @@ export function WorkflowEditor({
               />
             ) : null}
             </>}
-          />
+          />}
           <ValidationPanel
             draft={draft}
             errors={combinedValidationErrors}

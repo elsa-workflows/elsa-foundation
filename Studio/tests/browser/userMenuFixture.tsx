@@ -1,4 +1,5 @@
 import React from "react";
+import { UserMenu } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/UserMenu";
 import { ShellFrame, getStudioNavigation } from "../../src/apps/Elsa.Studio.Web/Client/src/app/App";
 import { StudioAuthBoundary, createStudioAuthManager } from "../../src/apps/Elsa.Studio.Web/Client/src/app/auth/studioAuth";
 import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/components/ThemeProvider";
@@ -24,6 +25,7 @@ export function UserMenuFixture() {
     <StudioAuthBoundary manager={authManager}>
       <ThemeProvider>
         <ShellFrame
+          accountAction={<UserMenu />}
           navigation={getStudioNavigation(moduleNavigation, { includeThemeBuilder: false })}
           panels={[]}
           path="/dashboard"

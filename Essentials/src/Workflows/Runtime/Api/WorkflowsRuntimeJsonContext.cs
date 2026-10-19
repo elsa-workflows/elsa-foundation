@@ -12,6 +12,8 @@ namespace Elsa.Workflows.Runtime.Api;
 
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, DictionaryKeyPolicy = JsonKnownNamingPolicy.CamelCase, WriteIndented = false, GenerationMode = JsonSourceGenerationMode.Metadata)]
 [JsonSerializable(typeof(GetWorkflowInstance))]
+[JsonSerializable(typeof(DeleteWorkflowInstance))]
+[JsonSerializable(typeof(WorkflowInstanceDeletionView))]
 [JsonSerializable(typeof(ListWorkflowInstances))]
 [JsonSerializable(typeof(ListWorkflowExecutables))]
 [JsonSerializable(typeof(GetWorkflowExecutable))]

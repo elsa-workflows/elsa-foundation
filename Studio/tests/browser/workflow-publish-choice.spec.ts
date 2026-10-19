@@ -65,7 +65,11 @@ test("falls back to review when the direct publication preflight finds a trigger
   const review = page.getByRole("dialog", { name: "Publish workflow" });
   await expect(review).toBeVisible();
   await expect(review.getByRole("alert")).toContainText("These triggers are already in use");
-  await expect(review.getByRole("alert")).toContainText("Conflict with default: http:GET:/orders");
+  await expect(review.getByRole("alert")).toContainText("1 trigger conflicts with channel default.");
+  await expect(review.getByText("http:GET:/orders", { exact: true })).not.toBeVisible();
+  await review.locator("summary").filter({ hasText: "Technical details" }).click();
+  await expect(review.getByText("http:GET:/orders", { exact: true })).toBeVisible();
+  await expect(review).toContainText("channel default");
   const calls = await readApiCalls(page);
   expect(calls.filter(call => call.method === "PUT")).toHaveLength(0);
   expect(calls.filter(call => call.method === "POST" && call.path.endsWith("/promote"))).toHaveLength(0);
