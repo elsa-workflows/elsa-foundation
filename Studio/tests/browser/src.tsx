@@ -95,6 +95,7 @@ const activityInspectorTabsFixture = searchParams.get("mode") === "activity-insp
 const validationLabelsFixture = searchParams.get("mode") === "validation-labels"
   || searchParams.get("mode") === "validation-labels-before";
 const publicationReviewFixture = searchParams.get("mode") === "publication-review";
+const workflowPublishChoiceFixture = searchParams.get("mode") === "workflow-publish-choice";
 const activityGraphAuthoringFixture = searchParams.get("mode") === "activity-definition-graph-authoring";
 const activityIconsFixture = searchParams.get("mode") === "activity-icons";
 const activityDuplicateFixture = searchParams.get("mode") === "activity-duplicate";
@@ -138,7 +139,7 @@ function WorkflowToolbarFixture() {
         onAutoLayout={selectAction("Auto-layout")}
         onBack={selectAction("Definitions")}
         onSave={selectAction("Save")}
-        onPublish={selectAction("Review & publish")}
+        onPublish={mode => selectAction(mode === "publish" ? "Publish" : "Review and Publish")()}
         onRun={selectAction("Run")}
         canRun
         runTitle="Run a transient test of the current design"
@@ -1674,6 +1675,11 @@ if (activityIconsFixture && searchParams.get("host-override") === "1") {
 const root = createRoot(document.getElementById("root")!);
 
 async function renderRequestedFixture() {
+  if (workflowPublishChoiceFixture) {
+    const { WorkflowPublishChoiceFixture } = await import("./workflowPublishChoiceFixture");
+    root.render(<WorkflowPublishChoiceFixture />);
+    return;
+  }
   if (searchParams.get("mode") === "activity-authoring") {
     const { ActivityAuthoringFixture } = await import("./activityAuthoringFixture");
     root.render(<ActivityAuthoringFixture />);
