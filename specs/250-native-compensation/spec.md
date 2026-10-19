@@ -129,7 +129,7 @@ An authorized operator retries a failed handler, marks an entry resolved manuall
 - **FR-016**: Handler input editing offers the paired forward step's outputs as captured values.
 - **FR-017**: Publish validation errors for scope rows use the existing path grammar (`{scopeNodeId}/steps/{stepName}/…`), so "Go to" lands on the row.
 - **FR-018**: Run inspection shows the paired list read-only, with forward and recovery state per row as text and icon. It also shows a Recovery panel for the scope and, on a handler occurrence, a "Compensates" link to its forward occurrence. Handler occurrences are labelled as compensation in the timeline.
-- **FR-019**: The inspection data comes from one read endpoint per scope execution, guarded by the existing activity-execution read permission and payload disclosure policy. It exposes step names, activity execution ids, statuses, ordinals and the cause, but not raw private state.
+- **FR-019**: Inspection adds no endpoint. Studio derives each row from the run data it already reads under the existing activity-execution permission and payload disclosure policy: the scope's latest execution, its children matched by the steps' node ids, handler executions recognised by scheduling cause `compensation`, and the absorbed incident for the cause (research R13). Raw private state is never exposed.
 - **FR-020**: Every new Studio control is keyboard operable and has an accessible name, and every state is conveyed by text as well as color. The axe check in the browser test passes.
 
 ### Key Entities

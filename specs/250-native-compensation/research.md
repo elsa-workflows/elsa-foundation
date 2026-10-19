@@ -122,3 +122,11 @@ outputs (`Workflows/Runtime/Core/Models/RuntimeStructuralContinuation.cs`). The 
 through its own completion-checkpoint preparation path, which is specific to graph boundaries. M1 therefore
 exposes the recovery cause through the inspection projection and the `Compensated` outcome. Making the cause
 an expression-readable output is an M3 item that needs a structural-output seam, reviewed by the runtime owner.
+
+## R13 — Inspection needs no endpoint
+
+The run view already loads every activity execution summary (status, authored and executable node ids, scheduling
+provenance with cause and parent, outcomes) and every incident for a run. A scope's rows are fully derivable from
+those: forward and handler executions are distinct nodes, handlers carry scheduling cause `compensation`, and the
+step fault's incident is the cause. Deriving in Studio keeps the API surface unchanged (ADR 0080 D3) and works after
+the scope completes, when the runtime has cleared its private state (see `CompensationScope` remarks).
