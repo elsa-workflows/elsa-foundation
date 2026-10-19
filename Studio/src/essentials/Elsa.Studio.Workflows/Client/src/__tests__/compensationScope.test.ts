@@ -4,6 +4,7 @@ import {
   compensationScopeStructureKind,
   compensationStepProblems,
   compensationStepsSlotId,
+  compensationValidationTarget,
   moveCompensationStep,
   nextCompensationStepName,
   readCompensationSteps,
@@ -12,7 +13,7 @@ import {
 } from "../compensationScope";
 import { buildExecutableActivityGraph } from "../executableGraph";
 import { deriveCompensationRuntime, isCompensationHandlerExecution, ordinalLabel } from "../compensationRuntime";
-import { buildCanvas, findActivityNode, getActivityDesignerSupport, getChildSlots, replaceSlotActivities, updateActivity } from "../workflowAdapter";
+import { buildCanvas, findActivityNode, findNodeScopePath, getActivityDesignerSupport, getChildSlots, replaceSlotActivities, updateActivity } from "../workflowAdapter";
 import type { ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary } from "../workflowTypes";
 
 describe("compensation scope model", () => {
@@ -90,6 +91,31 @@ describe("compensation scope model", () => {
       [2, "Step needs a name."],
       [3, 'Step "Confirm" has no activity.']
     ]);
+  });
+});
+
+describe("compensation scope validation targets", () => {
+  it("lands a row's validation path on that row's activity, inside the scope's Steps designer", () => {
+    const scope = reservationScope();
+
+    expect(compensationValidationTarget(scope, "scope/steps/1")).toBe("confirm");
+    const root: ActivityNode = {
+      nodeId: "root",
+      activityVersionId: "sequence-v1",
+      inputs: [],
+      outputs: [],
+      structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { activities: [scope] } }
+    };
+    expect(findNodeScopePath(root, "confirm")).toEqual([{ ownerNodeId: "scope", slotId: compensationStepsSlotId, label: expect.any(String) }]);
+  });
+
+  it("falls back to the scope for a row without an activity, an unrelated path or another node", () => {
+    const scope = scopeNode([{ name: "Empty", activity: null, compensation: null }]);
+
+    expect(compensationValidationTarget(scope, "scope/steps/0")).toBeNull();
+    expect(compensationValidationTarget(scope, "scope/inputs/faultAfterCompensation")).toBeNull();
+    expect(compensationValidationTarget(reservationScope(), "other/steps/0")).toBeNull();
+    expect(compensationValidationTarget(leaf("plain"), "plain/steps/0")).toBeNull();
   });
 });
 

@@ -78,6 +78,7 @@ import { CompensationScopeDesigner, type CompensationActivityTarget } from "../g
 import {
   addCompensationStep,
   compensationStepsSlotId,
+  compensationValidationTarget,
   readCompensationSteps,
   updateCompensationStep,
   withCompensationSteps,
@@ -905,6 +906,13 @@ export function WorkflowEditor({
     setInspectorCollapsed(false);
   }, [draft?.state.rootActivity, catalogByVersion, setInspectorCollapsed, navigateToScope]);
 
+  // "Go to" for a validation error: a compensation scope row's path selects that row's activity inside the scope.
+  const goToValidationNode = useCallback((nodeId: string, path?: string) => {
+    const currentRoot = draft?.state.rootActivity;
+    const scope = currentRoot ? findActivityNode(currentRoot, nodeId, catalogByVersion) : null;
+    repairVariableReference(compensationValidationTarget(scope, path) ?? nodeId);
+  }, [draft?.state.rootActivity, catalogByVersion, repairVariableReference]);
+
   const togglePaletteCategory = (category: string) => {
     setExpandedPaletteCategories(current => {
       const next = new Set(current);
@@ -1450,7 +1458,7 @@ export function WorkflowEditor({
             draft={draft}
             errors={combinedValidationErrors}
             onRepair={repairVariableReference}
-            onSelectNode={repairVariableReference}
+            onSelectNode={goToValidationNode}
             onSetAsStartNode={isFlowchartScope ? setStartNode : undefined}
             unavailable={draftValidations.available === false}
           />
