@@ -27,6 +27,8 @@ Root and independent review identified stale report wording and missing durable 
 
 The successful concurrent-routing cases originally checked their actual IDs but did not retain them after owned journal cleanup. The same commit adds a structured successful-run receipt without changing assertions, timing limits or production behavior. Both receipt orders passed again, **2/2, zero failures/skips**, in `native-final-routing-receipts`. [Their retained record](../../specs/249-native-hosting-conformance/evidence/native-routing-receipts-20261019.json) contains the exact source/build and TRX identities, actual process and host IDs, package hash, receipt digest, correlated send/lease/ack, placement release, execution fences and native completion. This focused follow-up is separate from the earlier 11-case matrix.
 
+Final acceptance review clarified FR-008: the shared recovery/cancellation scenarios are reusable through host-profile selection, while the separately scoped Orleans adapter must add its own composition and provider-specific routing/fencing proof. This changes no runtime code or qualification scope. The implementation PR carries terminal spec status and checklist cleanup for their atomic landing; the open delivery gates below remain explicit.
+
 ## Executed process evidence
 
 | Scenario | Evidence | Boundary |

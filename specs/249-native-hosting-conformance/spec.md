@@ -85,7 +85,7 @@ As a workflow author, I retain result and cancellation behavior when execution m
 - **FR-005**: Preserve duplicate, conflicting-result and cancellation acceptance; distinguish logical continuation from at-least-once physical effects.
 - **FR-006**: Cover tenant/persistence scope, capability-aware placement, draining, incarnation changes and single-provider registration at their owning layers, naming modeled versus actual-process coverage.
 - **FR-007**: Reuse existing fixtures and membership conformance; introduce no second membership/persistence authority or universal execution abstraction.
-- **FR-008**: Preserve the library's in-process default and explicit clustered opt-in. Provide narrowly parameterized qualification scenarios for the separately scoped Orleans adapter.
+- **FR-008**: Preserve the library's in-process default and explicit clustered opt-in. Keep the shared REST-authored recovery and cancellation scenarios parameterized by host profile so the separately scoped Orleans adapter can reuse their workflow semantics. Its provider-specific composition, routing and fencing qualification remain adapter-owned.
 - **FR-009**: Retain reproducible commands, source pins, process identities, durable observations, failure diagnostics and a negative control against a real fencing/recovery safeguard.
 - **FR-010**: Preserve published definitions and accepted instances; document safe admission rollback, implementation retention and untested conditions.
 - **FR-011**: Complete affected validation, independent review, map freshness, exact-head CI and post-merge verification, recording skips honestly.
