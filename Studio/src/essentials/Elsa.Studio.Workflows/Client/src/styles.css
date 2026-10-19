@@ -3070,6 +3070,12 @@
   box-sizing: border-box;
 }
 
+.wf-create-dialog {
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
 .wf-dialog form {
   display: grid;
   gap: 18px;
@@ -3195,11 +3201,22 @@
   transition: border-color 0.12s ease, background 0.12s ease;
 }
 
-.wf-root-card:hover {
+.wf-root-card:not([aria-disabled="true"]):hover {
   border-color: color-mix(in srgb, var(--wf-accent) 32%, var(--wf-border));
   background:
     linear-gradient(color-mix(in srgb, var(--wf-accent) 6%, transparent) 0 0),
     var(--wf-panel-muted);
+}
+
+.wf-root-card[aria-disabled="true"] {
+  border-style: dashed;
+  cursor: not-allowed;
+}
+
+.wf-root-card-unavailable {
+  color: var(--wf-muted-text);
+  font-size: 0.85rem;
+  line-height: 1.35;
 }
 
 .wf-root-card[data-checked] {

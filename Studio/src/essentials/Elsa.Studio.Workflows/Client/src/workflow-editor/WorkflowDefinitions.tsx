@@ -46,6 +46,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
   const [catalog, setCatalog] = useState<ActivityCatalogItem[]>([]);
   const [catalogState, setCatalogState] = useState<"idle" | "loading" | "ready" | "failed">("idle");
   const [catalogError, setCatalogError] = useState("");
+  const createInFlightRef = useRef(false);
   const [folderCapability, setFolderCapability] = useState<"unknown" | "available" | "unavailable">("unknown");
   const [moveCapabilityAvailable, setMoveCapabilityAvailable] = useState(false);
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
@@ -212,7 +213,8 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
   };
 
   const submitCreate = async () => {
-    if (!createDraft?.name.trim() || catalogState !== "ready") return;
+    if (createInFlightRef.current || !createDraft?.name.trim() || catalogState !== "ready") return;
+    createInFlightRef.current = true;
     setCreating(true);
     setError("");
     setStatus("");
@@ -234,6 +236,7 @@ export function WorkflowDefinitions({ context, ai, onOpen }: { context: StudioEn
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
+      createInFlightRef.current = false;
       setCreating(false);
     }
   };
