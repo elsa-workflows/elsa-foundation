@@ -575,7 +575,10 @@ test("Activity Definition provider contract proposals require review and apply a
   await createBrowserActivity(page);
 
   await page.getByRole("tab", { name: "Inputs & outputs" }).click();
-  await page.locator("details.ad-interface-suggestions summary").click();
+  const suggestions = page.locator("details.ad-interface-suggestions");
+  await expect(suggestions.getByText("Technical details", { exact: true })).toBeAttached();
+  await expect(suggestions.getByText("Technical comparison", { exact: true })).toBeAttached();
+  await page.locator("details.ad-interface-suggestions > summary").click();
   await expect(page.getByText("Add input Currency")).toBeVisible();
   await expect(page.getByText("1 of 1 changes selected")).toBeVisible();
   expect(state.proposalApplies).toBe(0);
