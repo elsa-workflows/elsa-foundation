@@ -315,6 +315,9 @@ class CockpitServerIntegrationTests(unittest.TestCase):
             cockpit_server.make_server(0, FAKE_CREDENTIALS, "https://workflow.example/workflows/http/quotes")
         with self.assertRaises(ValueError):
             cockpit_server.make_server(0, FAKE_CREDENTIALS, self.workflow_url.replace("/workflows/http/quotes", "/other"))
+        for invalid_port in ("abc", "0", "-1", "65536"):
+            with self.subTest(port=invalid_port), self.assertRaises(ValueError):
+                cockpit_server.make_server(0, FAKE_CREDENTIALS, f"http://localhost:{invalid_port}/workflows/http/quotes")
 
     def test_fresh_package_copy_starts_without_the_original_demo_checkout(self):
         source_dir = Path(__file__).resolve().parent

@@ -159,7 +159,7 @@ class CockpitHandler(demo.DemoApiHandler):
 
 def make_server(port, credentials, workflow_url):
     parsed = urllib.parse.urlsplit(workflow_url)
-    if parsed.scheme != 'http' or parsed.hostname not in {'127.0.0.1', 'localhost'} or parsed.path != '/workflows/http/quotes' or parsed.username or parsed.password or parsed.query or parsed.fragment:
+    if parsed.scheme != 'http' or parsed.hostname not in {'127.0.0.1', 'localhost'} or parsed.path != '/workflows/http/quotes' or parsed.username or parsed.password or parsed.query or parsed.fragment or (parsed.port is not None and not 1 <= parsed.port <= 65535):
         raise ValueError('The quote target must be the local demo workflow URL.')
     server = demo.DemoApiServer(('127.0.0.1', port), CockpitHandler)
     server.credential_versions = credentials
