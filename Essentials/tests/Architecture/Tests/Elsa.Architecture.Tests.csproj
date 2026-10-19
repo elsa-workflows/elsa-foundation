@@ -94,6 +94,7 @@
     <ProjectReference Include="..\..\..\src\Workflows\ExecutionEvidence\Elsa.Workflows.ExecutionEvidence.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Dashboard\Elsa.Workflows.Dashboard\Elsa.Workflows.Dashboard.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Activities\Design\Import\Elsa3.Activities.Design.Import\Elsa3.Activities.Design.Import.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Activities\Design\Import\Publishing\Elsa3.Activities.Design.Import.Publishing.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Mapping\Elsa3.Mapping.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Models\Elsa3.Models.csproj" />
     <!-- PinnedTransitivePackTests runs the maps generator's own pinned-transitive reader over a real fixture,

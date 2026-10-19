@@ -39,18 +39,18 @@ shared files (R-15).
 
 ## Phase 1: Setup
 
-- [ ] T001 Create the bridge project `BR/Elsa3.Activities.Design.Import.Publishing.csproj`, modelled on
+- [X] T001 Create the bridge project `BR/Elsa3.Activities.Design.Import.Publishing.csproj`, modelled on
   `IMP/Elsa3.Activities.Design.Import.csproj`: same SDK, properties and packaging, no literal version. It references
   `IMP/Elsa3.Activities.Design.Import.csproj` and `PUB/Api/Elsa.Workflows.Publishing.Api.csproj`. Add it to
   `Elsa.Server.slnx` beside the other Elsa3 import projects. Add `BR/README.md` with one sentence on why it is its own
   project: "Adapter at the Elsa 3 migration boundary; merging it into the import would make the import reference
   Publishing's API implementation (framework §2.1, §2.16.1 classes 4–5)."
-- [ ] T002 Create the test project `IT/Elsa3.Activities.Design.Import.Integration.Tests.csproj`, modelled on
+- [X] T002 Create the test project `IT/Elsa3.Activities.Design.Import.Integration.Tests.csproj`, modelled on
   `Essentials/tests/Secrets/Workflows/Tests/*.csproj`: TestHost, `Microsoft.EntityFrameworkCore.Sqlite`, the EF
   adapters for activities design, workflows design, publishing and runtime, plus `IEF/` and `BR/`. Copy
   `Fixtures/**/*.json` to the output. Add it to `Elsa.Server.slnx` under the Elsa3 tests folder. Run
   `dotnet build IT/` once.
-- [ ] T003 Create `IT/Support/Elsa3ImportHost.cs`, trimmed from
+- [X] T003 Create `IT/Support/Elsa3ImportHost.cs`, trimmed from
   `Essentials/tests/Secrets/Workflows/Tests/Support/SecretsCanaryWorkflowHost.cs`.
   - `WebApplication` with `UseTestServer()`, a CShells shell, SQLite for activities design, workflows design,
     publishing, runtime and `Elsa3ImportDbContext`, and the fake auth scheme with configurable permissions and tenant
@@ -62,20 +62,18 @@ shared files (R-15).
     `PublishWorkflowAsync`, `RunWorkflowAsync` (execute, poll the instance, return its outputs and the executed node
     ids).
   - Fail fast if built-in reconciliation has not published Sequence, Flowchart and graph `Complete`.
-- [ ] T004 [P] Add the test-owned Elsa 3 exports under `IT/Fixtures/`, in the JSON shape of
+- [X] T004 [P] Add the test-owned Elsa 3 exports under `IT/Fixtures/`, in the JSON shape of
   `MT/Fixtures/Flowcharts/*.json`:
-  - `reusable-sets-output.json`: reusable, input `message`, sets output `result` from it, ends.
   - `reusable-two-outcomes.json`: reusable flowchart body that completes with `Approved` or `Rejected` based on an
-    input.
+    input (no intrinsic: D-7).
   - `reusable-calls-reusable.json`: reusable `outer` calling reusable `inner`; `inner` has two selected versions
     (v1, v2).
-  - `caller-reads-output.json`: non-reusable workflow calling `reusable-sets-output` and writing its output to a
-    workflow output.
   - `caller-routes-outcome.json`: non-reusable flowchart calling `reusable-two-outcomes`, with one branch per outcome
     that each set a distinct workflow output.
   - `reusable-refused-body.json`: reusable whose body the graph provider refuses at publish (e.g. an unpublished
     custom activity type), plus `reusable-depends-on-refused.json`.
   - `reusable-with-behaviour-warning.json`: reusable that converts with one `ELS3-BEHAVIOUR-*` warning.
+  - `reusable-sets-variable.json`: reusable whose body uses SetVariable (refused, D-7).
   - `reusable-leaf-start-trigger.json`: reusable with a leaf `HttpEndpoint` marked `canStartWorkflow`.
 
 ---
@@ -84,16 +82,16 @@ shared files (R-15).
 
 ### Publisher: requested version id (R-2, FR-006, SC-006)
 
-- [ ] T005 In `PUB/Api/Services/ActivityDefinitionPublisher.cs`:
+- [X] T005 In `PUB/Api/Services/ActivityDefinitionPublisher.cs`:
   - Add the trailing `string? RequestedVersionId = null` to `PublishActivityDefinitionRequest` (:27-33).
   - Validate it in the request validation (:926): when present it must be non-blank and fit the version id column
     length (reuse the existing length constant), else `RequestInvalid`.
   - At :298, use `request.RequestedVersionId ?? NewId("activity-ver")`.
   - Leave preflight unchanged.
-- [ ] T006 In `PUB/Core/Services/ActivityPublicationRequestFingerprint.cs`, include `RequestedVersionId` (null and
+- [X] T006 In `PUB/Core/Services/ActivityPublicationRequestFingerprint.cs`, include `RequestedVersionId` (null and
   absent hash the same, so existing receipts keep their fingerprint). Update the receipt record if it carries the
   request fields, and keep `EfActivityPublicationCommand.ValidateCommit` (:151-156) consistent.
-- [ ] T007 [P] Add `PUBT/ActivityDefinitionPublisherRequestedVersionTests.cs`, built like
+- [X] T007 [P] Add `PUBT/ActivityDefinitionPublisherRequestedVersionTests.cs`, built like
   `ActivityPublicationPreflightParityTests.cs:139-155` (same fakes). Cases:
   - a requested id is used for the catalog version, publication, layout, edges and source reference;
   - absent → a generated `activity-ver-*` id (unchanged);
@@ -107,38 +105,38 @@ shared files (R-15).
 
 ### Import models, codes and port
 
-- [ ] T008 [P] In `IMP/Models/ReusableActivityImportPlan.cs` (`ReusableActivityImportDiagnosticCodes`, append at the
+- [X] T008 [P] In `IMP/Models/ReusableActivityImportPlan.cs` (`ReusableActivityImportDiagnosticCodes`, append at the
   end): add `UnsupportedStartTrigger = "ELS3-REUSABLE-UNSUPPORTED-START-TRIGGER"` and
   `PublishingUnavailable = "ELS3-REUSABLE-PUBLISHING-UNAVAILABLE"`, with XML docs per
   `contracts/diagnostic-codes.md`.
-- [ ] T009 [P] Create `IMP/Models/ReusableActivityPublicationState.cs` with the record
+- [X] T009 [P] Create `IMP/Models/ReusableActivityPublicationState.cs` with the record
   `ReusableActivityPublicationState` and the enum `ReusableActivityPublicationStatus` (`Published`,
   `AlreadyPublished`, `Refused`, `NotPublishedDependency`, `NotPublished`) per data-model.md. Add the never-stored
   `Publications` property to `ReusableActivityImportReceipt` (`JsonIgnore(WhenWritingNull)`, as `Warnings`).
-- [ ] T010 [P] Create `IMP/Contracts/IReusableActivityImportPublisher.cs` with the port,
+- [X] T010 [P] Create `IMP/Contracts/IReusableActivityImportPublisher.cs` with the port,
   `ReusableActivityImportPublishRequest` and `ReusableActivityImportPublishOutcome`, exactly as in
   `contracts/import-publisher-port.md`. Use the `ActivityDiagnostic` type Imp already reaches through
   `Elsa.Activities.Design.Core`; if it is not reachable, stop and report rather than add a reference.
 
 ### Mapping: contract builder, conversion order, outcome source
 
-- [ ] T011 Create `M/Services/Elsa3ImportedActivityContract.cs` (internal static `Build(Elsa3ConvertedDefinition)`):
+- [X] T011 Create `M/Services/Elsa3ImportedActivityContract.cs` (internal static `Build(Elsa3ConvertedDefinition)`):
   move the body of `MT/Support/GraphProviderProof.cs` `Contract(converted)` (:50-58) there. Make
   `GraphProviderProof.ValidateAsync` call it and delete the helper. Mapping tests reach it through the existing
   `InternalsVisibleTo` to its own test assembly; check it exists.
-- [ ] T012 [P] Add `MT/Elsa3ImportedActivityContractTests.cs` covering:
+- [X] T012 [P] Add `MT/Elsa3ImportedActivityContractTests.cs` covering:
   - inputs and outputs keep reference key, name and type, with `elsa.json` as the default storage driver;
   - outcomes equal `BoundaryOutcomes` (`done` first, then the converted names);
   - a body with no Complete gives only `done`.
-- [ ] T013 Create `M/Services/Elsa3ReusableImportOrder.cs` (internal static, in Mapping, because Mapping references
+- [X] T013 Create `M/Services/Elsa3ReusableImportOrder.cs` (internal static, in Mapping, because Mapping references
   Imp and Imp has no `InternalsVisibleTo` to it): given the selected reusable
   items and the plan's `ReusableActivityDependency` edges, return the versions in dependency order. Within one
   definition, ascending `Version`; ties broken by `SourceVersionId` ordinal. A cycle throws
   `InvalidOperationException`; the analyzer has already refused cycles.
-- [ ] T014 [P] Add `MT/Elsa3ReusableImportOrderTests.cs`:
+- [X] T014 [P] Add `MT/Elsa3ReusableImportOrderTests.cs`:
   chain, diamond, two versions of one definition with a dependant, independent items in stable order, and a cycle
   throwing.
-- [ ] T015 In `M/Services/Elsa3ReusableActivityImportMaterializer.cs` (R-9):
+- [X] T015 In `M/Services/Elsa3ReusableActivityImportMaterializer.cs` (R-9):
   - Convert the selected reusable items in `Elsa3ReusableImportOrder` order, then the non-reusable ones in their
     current order. The mutation's imported activities keep that order: it is the publish order Imp consumes, so Imp
     needs no ordering code of its own.
@@ -146,7 +144,7 @@ shared files (R-15).
     `BoundaryOutcomes` names (:116-136). A target that failed conversion leaves its caller with the existing
     dependency diagnostic.
   - Delete `CompletionOutcomes` (:144-177).
-- [ ] T016 Adapt the spec 239 outcome tests in `MT/` that asserted the JSON-scan behaviour (grep `OutcomeNames` and
+- [X] T016 Adapt the spec 239 outcome tests in `MT/` that asserted the JSON-scan behaviour (grep `OutcomeNames` and
   `CompletionOutcomes`). Add cases in `MT/Elsa3ReusableOutcomeSourceTests.cs`:
   - a PascalCase `Outcomes` key now routes;
   - a Complete-shaped object nested in a property is no longer counted;
@@ -158,11 +156,11 @@ shared files (R-15).
 
 ### Analyzer: leaf start triggers refused (D-6, FR-019)
 
-- [ ] T017 In `IMP/Services/ReusableActivityCollectionAnalyzer.cs` (:113-127), for a reusable source whose
+- [X] T017 In `IMP/Services/ReusableActivityCollectionAnalyzer.cs` (:113-127), for a reusable source whose
   `CanStartWorkflow` node owns no nested behaviour, add a blocking `UnsupportedStartTrigger` diagnostic (message,
   guidance and metadata `nodeId`, `activityType` per `contracts/diagnostic-codes.md`, at the node's path). Keep
   recording `DirectStarts`. A node that owns nested behaviour keeps only `UnsupportedTrigger`.
-- [ ] T018 Update the tests:
+- [X] T018 Update the tests:
   - In `MT/ReusableActivityCollectionApplyTests.cs`, make `ValidCollection()` (:166) use `directStart: false` for
     `a-root`, so the five apply tests keep testing materialization.
   - In `MT/ReusableActivityCollectionImportTests.cs`,
@@ -175,14 +173,14 @@ shared files (R-15).
 
 ### Commit: no catalog versions, null head, first draft (R-4, FR-004)
 
-- [ ] T019 In `M/Services/Elsa3ReusableActivityImportMaterializer.cs`, stop building the `ActivityDefinitionVersion`
+- [X] T019 In `M/Services/Elsa3ReusableActivityImportMaterializer.cs`, stop building the `ActivityDefinitionVersion`
   in `BuildActivity` (:179-229). Instead the `ImportedActivity` carries:
   - `ActivityDefinitionVersionId`, `Version` (`"{n}.0.0"`), `SourceVersionId`;
   - `Contract` (T011), `GraphManifest` (`BuildGraphManifest`) and `DependsOn` (version ids).
 
   The authoring row for a new definition gets `HeadVersionId = null`. Adjust `ReusableActivityImportMutation` and
   every consumer the compiler flags.
-- [ ] T020 In `IEF/Stores/EfReusableActivityImportCommand.cs`:
+- [X] T020 In `IEF/Stores/EfReusableActivityImportCommand.cs`:
   - Remove the version preflight, the orphan rule, the `ActivityVersionKind` dispositions and the
     `ResolveAuthoringUpdate` head comparison (:167-297, :246-265, :469).
   - Create each new definition through `EfActivityDesignStores.ExecuteAsync(CreateActivityDefinitionRequest)` with:
@@ -197,7 +195,7 @@ shared files (R-15).
   - Keep the binding, receipt and workflow writes as they are.
   - If `CreateActivityDefinitionRequest`'s operation key (`create:{id}`) is not replay-safe under the command's
     retry, pass the command's commit-attempt key the way `Execute(key, …)` does, and say so in the PR.
-- [ ] T021 Update `IEFT/` tests (grep `ActivityVersionKind`, `HeadVersionId`, `NewVersions`). Assert:
+- [X] T021 Update `IEFT/` tests (grep `ActivityVersionKind`, `HeadVersionId`, `NewVersions`). Assert:
   - after commit there is no catalog version for a reusable item;
   - a new definition has a null head and one active draft with its layout;
   - a reapply of the same plan writes no activity row;
@@ -214,21 +212,30 @@ no versions. Nothing publishes yet.
 
 **Goal**: after apply, each imported reusable version is published, and a caller and the wrapper run it.
 
-**Independent test**: `IT/ImportedReusableRunsTests.cs` passes against `reusable-sets-output`,
-`reusable-two-outcomes`, `caller-reads-output` and `caller-routes-outcome`.
+**Independent test**: `IT/ImportedReusableRunsTests.cs` passes against `reusable-two-outcomes` and
+`caller-routes-outcome`.
 
-- [ ] T022 [US1] Create `BR/Services/PublisherReusableActivityImportPublisher.cs` (internal sealed), implementing
+- [X] T021b [US1] D-8 (added 2026-10-19): in `M/Services/Elsa3ValueFlowLowerer.cs`, refuse input, variable and
+  result reads and memory references in a reusable body with `ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED`; Mapping
+  tests in `MT/Elsa3ReusableValueReadTests.cs`; Essentials side fix `DescriptorPayloadSerializer.Options`
+  (`AllowOutOfOrderMetadataProperties`). Integration fixtures route on literal logic.
+- [X] T021a [US1] D-7 (added 2026-10-19): in `M/Conversion/Elsa3DefinitionConverter.cs`, refuse every node of a
+  reusable body that resolves to an engine intrinsic with the new `ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED`
+  (`MO/Elsa3ActivityDiagnosticCodes.cs`). Fix the root natural-outcome key the compile proof found (`Done` for a
+  built-in root, `done` for an imported one). Update the 236 SetOutput/SetVariable reusable tests to expect the refusal.
+
+- [X] T022 [US1] Create `BR/Services/PublisherReusableActivityImportPublisher.cs` (internal sealed), implementing
   `IReusableActivityImportPublisher` per `contracts/import-publisher-port.md`:
   - tenant check against `IActivityPublishingAuthorizationContext`;
   - `PreflightAsync`, then `PublishReviewedAsync` with `RequestedVersionId`;
   - map `ActivityPublicationRejectedException` and a non-`Applied` receipt to an outcome;
   - let infrastructure exceptions propagate.
-- [ ] T023 [US1] Create `BR/Elsa3ImportActivitiesPublishingFeature.cs`:
+- [X] T023 [US1] Create `BR/Elsa3ImportActivitiesPublishingFeature.cs`:
   `[ShellFeature("Elsa3ImportActivitiesPublishing", DisplayName = …, Description = …, DependsOn = new object[] {
   "Elsa3ImportJsonActivities", "WorkflowsPublishingApi" })]`, public, not sealed, virtual `ConfigureServices`
   registering the port as scoped (replacement contract: `Replace`, not `TryAdd`). Model it on
   `IEF/Elsa3ImportActivitiesEntityFrameworkCoreFeature.cs`.
-- [ ] T024 [US1] Create `IMP/Services/ReusableActivityImportPublishPhase.cs` (internal sealed, scoped, registered in
+- [X] T024 [US1] Create `IMP/Services/ReusableActivityImportPublishPhase.cs` (internal sealed, scoped, registered in
   `IMP/Elsa3ImportActivitiesFeature.cs`). For each imported activity in the mutation's order (R-5, T015):
   1. An active publication for the plan's version id with the plan's version → `AlreadyPublished`. With another
      version → `Refused(ELS3-REUSABLE-IDENTITY-COLLISION)`.
@@ -240,15 +247,15 @@ no versions. Nothing publishes yet.
 
   It returns the list of states. The dependency gate is added in US3 (T033); until then, a version follows its
   predecessors.
-- [ ] T025 [US1] In `IMP/Services/ReusableActivityCollectionImporter.cs`:
+- [X] T025 [US1] In `IMP/Services/ReusableActivityCollectionImporter.cs`:
   - Before materializing, if the selection holds a reusable item and no `IReusableActivityImportPublisher` is
     registered (resolve it optionally), throw the import's blocking diagnostic exception with
     `PublishingUnavailable`. Nothing is written.
   - After `command.CommitAsync` (:147), run the publish phase.
   - Put the states on the returned receipt's `Publications`.
-- [ ] T026 [US1] In `IEF/Stores/Elsa3ImportRecordCodec.cs` (:81-82), strip `Publications` when writing a receipt.
+- [X] T026 [US1] In `IEF/Stores/Elsa3ImportRecordCodec.cs` (:81-82), strip `Publications` when writing a receipt.
   Never store it. (`Warnings` is handled in US4.)
-- [ ] T027 [US1] Add the compile proof (FR-015, SC-003):
+- [X] T027 [US1] Add the compile proof (FR-015, SC-003):
   - `MT/Support/CatalogResolvedDependencies.cs` maps each occurrence from `GraphActivityProvider.DiscoverDependenciesAsync`
     to `ActivityResolvedDependency` via `RealActivityCatalog.FindVersion`, with a test-local copy of
     `SourceOwnedActivityVersionPublisher.ToContract` (:231-293; outcomes from `elsa.outcomes`, default `Done`) and
@@ -256,17 +263,18 @@ no versions. Nothing publishes yet.
   - `MT/Support/GraphProviderProof.cs` gets `CompileAsync(catalog, converted, siblings?)`, which builds an
     `ActivityTemplateCompilationRequest` and asserts zero error diagnostics, a non-null executable root and outcome
     mappings. Remove the "compile waits for #2796" remark (:23-26).
-- [ ] T028 [US1] Call `GraphProviderProof.CompileAsync` wherever `ValidateAsync` is called for a reusable conversion
+- [X] T028 [US1] Call `GraphProviderProof.CompileAsync` wherever `ValidateAsync` is called for a reusable conversion
   in `MT/Elsa3ReusableTerminalTests.cs`, `MT/Elsa3CollectionLoweringTests.cs` and the reusable cases of
   `MT/Elsa3FlowchartConversionTests.cs`. Run `dotnet test MT`. Every reusable fixture validated today compiles.
-- [ ] T029 [US1] Add `IT/ImportedReusableRunsTests.cs`:
+- [X] T029 [US1] Add `IT/ImportedReusableRunsTests.cs`:
   - `Applied_reusable_has_an_active_publication_contract_outcomes_facet_and_template` (scenario 1, SC-001);
-  - `Caller_receives_the_output_the_reusable_set` (scenario 2, SC-002, spec 236 SC-006);
+  - `Caller_runs_the_published_activity_with_its_input` (scenario 2, SC-002);
   - `Direct_start_wrapper_runs_the_published_activity` (scenario 3);
+  - `Reusable_using_an_intrinsic_is_refused_and_nothing_is_written` (scenario 7, D-7);
   - `Contract_and_facet_carry_done_and_each_converted_outcome` (scenario 4);
   - `Flowchart_bodied_reusable_publishes_and_runs` (scenario 5);
   - `Flowchart_caller_follows_the_non_done_outcome` (scenario 6: run once per outcome and assert the branch output).
-- [ ] T030 [P] [US1] Add `IT/PublisherBridgeTests.cs`:
+- [X] T030 [P] [US1] Add `IT/PublisherBridgeTests.cs`:
   - a tenant mismatch → refused, the publisher is not called;
   - a preflight that is not publishable → refused with its diagnostics;
   - a rejected publish → refused with its code;

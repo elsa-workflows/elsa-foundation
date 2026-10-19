@@ -19,3 +19,17 @@ it gets only that code, not both.
 Publisher refusals during the publish phase are **not** wrapped in new codes. Each `ReusableActivityPublicationState`
 carries the publisher's own code (`activity.*`) and diagnostics. The exception is a version id held by a publication of
 a different version, which reuses `ELS3-REUSABLE-IDENTITY-COLLISION`.
+
+## Added during implementation (D-7, 2026-10-19)
+
+Defined in `Elsa3ActivityDiagnosticCodes` (`Extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs`), also a file
+#2717 may touch.
+
+| Code | Severity | Raised by | Message (shape) | Guidance |
+|---|---|---|---|---|
+| `ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED` | error, blocks apply | conversion of a reusable workflow, per node that resolves to an engine intrinsic (SetVariable, SetOutput, Correlate, SetName) | "Reusable workflow node '{nodeId}' ({type}) becomes an Elsa 4 engine intrinsic, which a graph activity cannot hold yet." | "Import this workflow as a non-reusable workflow, or wait for engine intrinsics in graph activities." |
+
+| `ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED` | error, blocks apply | value-flow lowering of a reusable workflow, per property that reads an input, a variable or another activity's result, or carries an Elsa 3 memory reference (D-8) | "The reusable workflow body reads {kind} '{name}', which an Elsa 4 graph activity body cannot reach yet." | "Import this workflow as a non-reusable workflow, or keep the reusable body to literal values until graph activity bodies can read inputs, variables and results." |
+
+Metadata: `ActivityNodeId`, `ActivityType`, at the node's JSON path. A node already refused for its own reason (for
+example an End outside the root flowchart) is not reported twice.

@@ -45,6 +45,8 @@ public sealed class ReusableActivityCollectionImportTests
 
         Assert.Contains(first.Diagnostics, x => x.Code == ReusableActivityImportDiagnosticCodes.MissingReference && x.Path == "/root");
         Assert.Contains(first.Diagnostics, x => x.Code == ReusableActivityImportDiagnosticCodes.UnsupportedTrigger && x.Metadata["nodeId"] == "trigger");
+        // Spec 246 D-6: a leaf start trigger in a reusable workflow is inventoried and refused.
+        Assert.Contains(first.Diagnostics, x => x.Code == ReusableActivityImportDiagnosticCodes.UnsupportedStartTrigger && x.Metadata["nodeId"] == "a-root");
         var cycle = Assert.Single(first.Diagnostics.Where(x => x.Code == ReusableActivityImportDiagnosticCodes.DependencyCycle));
         Assert.Equal("c-v1|d-v1|e-v1|c-v1", cycle.Metadata["cyclePath"]);
         Assert.False(first.CanApply);
@@ -91,6 +93,36 @@ public sealed class ReusableActivityCollectionImportTests
         Assert.Contains(plan.Diagnostics, x => x.Code == ReusableActivityImportDiagnosticCodes.DuplicateNodeId && x.Path == "/root/activities/0");
         Assert.Contains(plan.Diagnostics, x => x.Code == ReusableActivityImportDiagnosticCodes.UnsupportedReference && x.Metadata["nodeId"] == "reference");
         Assert.Contains(plan.Diagnostics, x => x.Code == ReusableActivityImportDiagnosticCodes.InvalidSource && x.Path == "/root");
+    }
+
+    [Fact]
+    public async Task Analysis_refuses_a_reusable_with_a_leaf_start_trigger()
+    {
+        var trigger = ReusableActivityImportFixtures.Leaf("http", "Elsa.HttpEndpoint", directStart: true);
+        var reusable = ReusableActivityImportFixtures.Workflow("reusable", "reusable-v1", 1, true, trigger);
+
+        var plan = await analyzer.AnalyzeAsync(ReusableActivityImportFixtures.Collection(reusable));
+
+        var item = Assert.Single(plan.Items);
+        Assert.Single(item.DirectStarts);
+        var diagnostic = Assert.Single(item.Diagnostics);
+        Assert.Equal(ReusableActivityImportDiagnosticCodes.UnsupportedStartTrigger, diagnostic.Code);
+        Assert.True(diagnostic.IsError);
+        Assert.Equal("http", diagnostic.Metadata["nodeId"]);
+        Assert.Equal("Elsa.HttpEndpoint", diagnostic.Metadata["activityType"]);
+        Assert.False(plan.CanApply);
+    }
+
+    [Fact]
+    public async Task A_trigger_owning_nested_behaviour_reports_only_unsupported_trigger()
+    {
+        var trigger = ReusableActivityImportFixtures.Leaf("http", "Elsa.HttpEndpoint", directStart: true);
+        trigger.Activities = [ReusableActivityImportFixtures.Leaf("nested")];
+        var reusable = ReusableActivityImportFixtures.Workflow("reusable", "reusable-v1", 1, true, trigger);
+
+        var plan = await analyzer.AnalyzeAsync(ReusableActivityImportFixtures.Collection(reusable));
+
+        Assert.Equal(ReusableActivityImportDiagnosticCodes.UnsupportedTrigger, Assert.Single(Assert.Single(plan.Items).Diagnostics).Code);
     }
 
     [Fact]

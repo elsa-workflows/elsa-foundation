@@ -26,9 +26,10 @@ public static class ReusableActivityImportCommitRules
             if (!StringComparer.Ordinal.Equals(activity.Version.DefinitionId, activity.Definition.Id) ||
                 !StringComparer.Ordinal.Equals(activity.AuthoringState.DefinitionId, activity.Definition.Id))
                 throw new ArgumentException("Imported activity definition/version/authoring identities do not align.", nameof(mutation));
-            if (!StringComparer.Ordinal.Equals(activity.Version.SourceKind, Elsa3WorkflowDefinitionSourceKind) ||
-                string.IsNullOrWhiteSpace(activity.Version.SourceId))
+            if (string.IsNullOrWhiteSpace(activity.Version.SourceVersionId))
                 throw new ArgumentException("Imported activity versions must identify their Elsa 3 source version.", nameof(mutation));
+            if (activity.AuthoringState.HeadVersionId is not null)
+                throw new ArgumentException("An imported activity definition gets its head from the publish phase, never from the commit.", nameof(mutation));
         }
         foreach (var workflow in mutation.Workflows)
         {
@@ -60,9 +61,9 @@ public static class ReusableActivityImportCommitRules
                 workflow.Definition.CreatedAt))
             .Concat(mutation.Activities.Select(activity =>
             {
-                if (!sourceDefinitionsByVersion.TryGetValue(activity.Version.SourceId!, out var sourceDefinitionId))
+                if (!sourceDefinitionsByVersion.TryGetValue(activity.Version.SourceVersionId, out var sourceDefinitionId))
                     throw new ArgumentException(
-                        $"Imported activity source version '{activity.Version.SourceId}' has no matching workflow lineage.",
+                        $"Imported activity source version '{activity.Version.SourceVersionId}' has no matching workflow lineage.",
                         nameof(mutation));
                 return new ReusableActivityImportDefinitionBinding(
                     ReusableActivityImportIdentity.DefinitionBinding(ActivityDefinitionKind, activity.Definition.Id),
@@ -92,7 +93,7 @@ public static class ReusableActivityImportCommitRules
         var sources = mutation.SourceVersionIds.Order(StringComparer.Ordinal).Select(sourceVersionId =>
         {
             var workflow = mutation.Workflows.Single(x => StringComparer.Ordinal.Equals(x.SourceVersionId, sourceVersionId));
-            var activity = mutation.Activities.SingleOrDefault(x => StringComparer.Ordinal.Equals(x.Version.SourceId, sourceVersionId));
+            var activity = mutation.Activities.SingleOrDefault(x => StringComparer.Ordinal.Equals(x.Version.SourceVersionId, sourceVersionId));
             return new ReusableActivityImportSourceReceipt(
                 workflow.SourceDefinitionId,
                 sourceVersionId,

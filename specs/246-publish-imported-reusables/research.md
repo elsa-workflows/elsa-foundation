@@ -300,3 +300,45 @@ for the Design, Publishing and Runtime lanes with a fake auth scheme. Guards kee
   - `Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/EXTENSION_POINTS.md`: the new port.
   - The generated maps: a new project and a new test project.
 - Whichever unit merges second rebases and resolves these. No other coordination.
+
+## R-16 Engine intrinsics cannot be published in a graph activity (D-7, found during implementation)
+
+**Finding.** The compile proof (R-11) showed that a converted reusable body holding an engine intrinsic node
+(`elsa.intrinsic.set@1` and the others SetVariable, SetOutput, Correlate and SetName map to) does not compile:
+`GraphActivityProvider.ValidateDependencies` requires a resolved dependency for every node, the template compiler resolves
+dependencies only from publications, and intrinsics have neither a catalog row nor a publication. Neither the graph
+provider nor the graph runtime has intrinsic support.
+
+**Decision (maintainer, 2026-10-19).** Conversion refuses such a reusable with
+`ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED`. Intrinsic support in graph activities, and spec 236's SC-006 output test
+it enables, move to a follow-up spec ([#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023)).
+
+## R-18 Graph body nodes cannot read graph-scoped values (D-8, found during implementation)
+
+**Finding.** The integration tests showed that an imported reusable whose body uses `getInput("x")` reads the started
+workflow's input `x`. A body node's portable parameters resolve through `RuntimeInputBindingResolutionContext`, built only
+from the started workflow's request and variable frames. Graph inputs and variables live in `GraphActivityScope` durable
+values, read only by the boundary's own expressions (input defaults, variable initial values, output mappings). A body
+`ActivityResult` reference keeps its template-local producer id after placement and is refused at workflow publish
+(`VF-COER-001`), verified with a probe fixture.
+
+**Tried and dropped.** Lowering `getInput` to a graph variable initialized from the boundary input: body nodes cannot
+read graph variables either (`references unavailable variable … in scope 'workflow'`).
+
+**Decision (maintainer, 2026-10-19).** Refuse such reusable bodies at conversion with
+`ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED`; the Essentials gap is
+[#3027](https://github.com/elsa-workflows/elsa-foundation/issues/3027).
+
+**Side fix kept.** `GraphActivityProvider.Canonicalize` sorts payload keys, so a `Variable` or `ActivityResult`
+parameter's `kind` discriminator came after other properties, and `RuntimeInputBindingCompiler` failed to read it (a 500
+on workflow publish). `DescriptorPayloadSerializer.Options` now sets `AllowOutOfOrderMetadataProperties`.
+
+## R-17 The graph manifest's natural-outcome source key (found during implementation)
+
+**Finding.** Spec 236 wrote the schema-2 manifest's outcome mapping as `done → done`. A built-in root (Sequence,
+Flowchart, a leaf) emits `Done` (`ActivityOutcomes.Done`, no separate reference key), so the compile's
+`ValidateOutcomeMappings` refused every imported reusable (`activity.graph.outcome-mapping-source-unknown`). Validation
+alone cannot see it because it has no resolved dependencies.
+
+**Decision.** The source key is the root's own: `Done` for a built-in root, `done` (the Elsa 3 import's reference key)
+for a root that is itself an imported reusable. The boundary key stays `done`.
