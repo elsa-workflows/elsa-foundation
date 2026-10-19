@@ -324,7 +324,7 @@
   gap: 1.25rem;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: var(--spacing-xl);
+  padding: var(--spacing-xl, var(--spacing-lg));
 }
 
 .connections-create-actions {
@@ -332,7 +332,7 @@
   flex: 0 0 auto;
   justify-content: flex-end;
   gap: var(--spacing-sm);
-  padding: var(--spacing-lg) var(--spacing-xl);
+  padding: var(--spacing-lg) var(--spacing-xl, var(--spacing-lg));
   border-top: 1px solid var(--connections-border);
   background: var(--studio-material-panel-bg-soft);
 }
@@ -367,7 +367,7 @@
   }
 }
 .connections-dialog-header,
-.connections-create-header { display: flex; flex: 0 0 auto; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: var(--spacing-xl); border-bottom: 1px solid var(--connections-border); }
+.connections-create-header { display: flex; flex: 0 0 auto; align-items: flex-start; justify-content: space-between; gap: 1rem; padding: var(--spacing-xl, var(--spacing-lg)); border-bottom: 1px solid var(--connections-border); }
 .connections-modal .connections-create-error { flex: 0 0 auto; margin: 0; padding: var(--spacing-md); border: 1px solid color-mix(in srgb, var(--studio-danger-fg) 25%, var(--connections-border)); border-radius: var(--connections-radius); background: color-mix(in srgb, var(--studio-danger-fg) 8%, var(--connections-surface)); }
 .connections-dialog-title { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
 .connections-dialog-title > div { min-width: 0; }
