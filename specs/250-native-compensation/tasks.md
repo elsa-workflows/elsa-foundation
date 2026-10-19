@@ -17,7 +17,7 @@
 
 ## Inspection and Studio (PR 3)
 
-- [ ] T009 Inspection projector and endpoint, capability link `activity-execution-compensation`, with
+- [ ] T009 Inspection view model derived in Studio from run executions and incidents (no endpoint, FR-019), with
   authorization and disclosure tests.
 - [ ] T010 Studio `compensation` designer mode and `CompensationScopeDesigner` (rows, add/rename/move/delete,
   add/replace/remove compensation, drill-in), with keyboard and accessible names.
