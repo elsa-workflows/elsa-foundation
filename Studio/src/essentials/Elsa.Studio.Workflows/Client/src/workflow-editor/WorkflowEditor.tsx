@@ -392,7 +392,6 @@ export function WorkflowEditor({
     openSequenceInsertMenu,
     insertSequenceActivity,
     moveSequenceActivity,
-    queueCanvasNodeFocus,
     onConnectMenuPick,
     addActivity,
     addBpmnShape,
@@ -427,6 +426,13 @@ export function WorkflowEditor({
     setStatus
   });
 
+  const deleteCanvasNode = useCallback((nodeId: string) => {
+    const node = nodes.find(candidate => candidate.id === nodeId);
+    if (!node) return;
+    onNodesDelete([node]);
+    if (nodes.length === 1) canvasRef.current?.focus({ preventScroll: true });
+  }, [nodes, onNodesDelete, canvasRef]);
+
   const nodeActions = useMemo<WorkflowNodeActions | null>(() => {
     if (isUnsupportedDesigner || isBpmnDesigner || !canAddActivitiesToCanvas) return null;
     return {
@@ -437,24 +443,15 @@ export function WorkflowEditor({
         openAddStepMenu(anchor, { nodeId, handleId: portName });
       },
       duplicate: nodeId => { duplicateSelectedActivities([nodeId]); },
-      delete: nodeId => {
-        const node = nodes.find(candidate => candidate.id === nodeId);
-        if (node) {
-          onNodesDelete([node]);
-          // Existing deletion focuses the next node; the empty canvas needs a focus destination too.
-          if (nodes.length === 1) canvasRef.current?.focus({ preventScroll: true });
-        }
-      }
+      delete: deleteCanvasNode
     };
   }, [
     canAddActivitiesToCanvas,
     canCreateActivityFromPort,
-    canvasRef,
+    deleteCanvasNode,
     duplicateSelectedActivities,
     isBpmnDesigner,
     isUnsupportedDesigner,
-    nodes,
-    onNodesDelete,
     openAddStepMenu,
     selectedCanvasNodeIds
   ]);
@@ -1313,13 +1310,7 @@ export function WorkflowEditor({
                 if (activity) insertSequenceActivity(activity, index);
               }}
               onMove={moveSequenceActivity}
-              onDelete={nodeId => {
-                const node = nodes.find(item => item.id === nodeId);
-                if (node) {
-                  onNodesDelete([node]);
-                  if (nodes.length === 1) canvasRef.current?.focus({ preventScroll: true });
-                }
-              }}
+              onDelete={deleteCanvasNode}
               onDuplicate={nodeId => duplicateSelectedActivities([nodeId])}
               onOpenSlot={(ownerId, label, slot) => enterSlotScope(ownerId, slot, slotCrumbLabel(label, slot))}
             >
