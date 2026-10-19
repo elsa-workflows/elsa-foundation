@@ -7975,4 +7975,10 @@ html[data-theme-material] .availability-search .wf-search {
 
 .wf-instance-canvas > .wf-sequence-designer {
   height: 100%;
+  scroll-padding-block-start: 3rem;
+}
+
+.wf-instance-canvas .wf-sequence-heading {
+  padding-bottom: .75rem;
+  background: var(--studio-bg);
 }
