@@ -66,7 +66,8 @@ public static class RuntimeWorkflowStateSeed
         DateTimeOffset capturedAt,
         JsonElement? stimulusInput = null,
         string? triggerNodeId = null,
-        IReadOnlyDictionary<string, string>? triggerMetadata = null)
+        IReadOnlyDictionary<string, string>? triggerMetadata = null,
+        string? correlationId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
 
@@ -93,6 +94,11 @@ public static class RuntimeWorkflowStateSeed
                 TriggerMetadataSlotName,
                 triggerMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal),
                 capturedAt));
+
+        // The start correlation id seeds the identity projection, so an expression's WorkflowInstance binding reads it
+        // from committed state before any Correlate runs (spec 247). A later Correlate upserts the same value id.
+        if (!string.IsNullOrWhiteSpace(correlationId))
+            changes.Add(NewSeedChange(workflowExecutionId, RuntimeMetadataKeys.IdentityName, IdentityValueIdPrefix, IdentityCorrelationIdName, correlationId, capturedAt));
 
         return changes;
     }

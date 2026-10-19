@@ -17,17 +17,14 @@ namespace Elsa3.Mapping.Conversion;
 /// sibling nodes resolves.
 /// </para>
 /// <para>
-/// A graph-level node a later conversion stage owns would not stop the rest of the definition from being prepared: it
-/// is deferred, reported in <see cref="Elsa3NodeConversionContext.Deferred"/>, and its children are prepared like any
-/// other node. No built-in shape is deferred since graph conversion runs during preparation (spec 239). Never throws
-/// for input or catalog content.
+/// Flowchart graph conversion runs during preparation (spec 239). Never throws for input or catalog content.
 /// </para>
 /// </remarks>
 public interface IElsa3NodeConverter
 {
     /// <summary>
     /// Prepares <paramref name="request"/>'s definition for node conversion. Fails with every diagnostic when anything
-    /// other than a deferred graph-level node is unconvertible; on success the diagnostics are the warnings.
+    /// is unconvertible; on success the diagnostics are the warnings.
     /// </summary>
     ValueTask<Elsa3MigrationResult<Elsa3NodeConversionContext>> PrepareAsync(
         Elsa3ConversionRequest request,
@@ -56,21 +53,13 @@ public interface IElsa3NodeConverter
 /// </summary>
 public abstract class Elsa3NodeConversionContext
 {
-    /// <summary>Creates a context for <paramref name="request"/> with the graph-level nodes left to the caller.</summary>
-    protected Elsa3NodeConversionContext(Elsa3ConversionRequest request, IReadOnlyList<Elsa3MigrationDiagnostic> deferred)
+    /// <summary>Creates a context for <paramref name="request"/>.</summary>
+    protected Elsa3NodeConversionContext(Elsa3ConversionRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        ArgumentNullException.ThrowIfNull(deferred);
         Request = request;
-        Deferred = deferred;
     }
 
     /// <summary>The request the definition was prepared from.</summary>
     public Elsa3ConversionRequest Request { get; }
-
-    /// <summary>
-    /// The graph-level nodes left to the caller, one <c>ELS3-ACTIVITY-GRAPH-CONVERSION-PENDING</c> diagnostic each, with
-    /// the node id in its metadata. Empty for every built-in shape since flowchart graph conversion (spec 239).
-    /// </summary>
-    public IReadOnlyList<Elsa3MigrationDiagnostic> Deferred { get; }
 }

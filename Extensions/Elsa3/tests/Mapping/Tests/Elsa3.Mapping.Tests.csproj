@@ -19,6 +19,14 @@
     <ProjectReference Include="..\..\..\..\..\Essentials\tests\Serialization\Testing\Elsa.Serialization.Testing.csproj" />
   </ItemGroup>
 
+  <!-- The Elsa 4 portable JavaScript evaluator, so converted expressions are run and compared with Elsa 3's results
+       (spec 247 SC-003). Test-only. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Expressions\Elsa.Expressions\Elsa.Expressions.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Expressions\JavaScript\Elsa.Expressions.JavaScript\Elsa.Expressions.JavaScript.csproj" />
+    <ProjectReference Include="..\..\..\..\..\Essentials\src\Expressions\JavaScript\Jint\Elsa.Expressions.JavaScript.Jint.csproj" />
+  </ItemGroup>
+
   <!-- The real activity catalog the map is tested against (spec 236 SC-002): the CLR scanner over the shipped Elsa 4
        activity assemblies the map targets, and the graph provider that proves converted reusable output (R-10).
        Test-only; the production Mapping project references none of these. -->

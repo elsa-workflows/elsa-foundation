@@ -197,39 +197,6 @@ export function WorkflowEditor({
     recommendation?: RecommendedActivityDefinition | null;
   } | null>(null);
 
-  const {
-    paletteWidth,
-    inspectorWidth,
-    paletteCollapsed,
-    inspectorCollapsed,
-    maximizedSidePanel,
-    setInspectorCollapsed,
-    paletteExpanded,
-    inspectorExpanded,
-    editorBodyClassName,
-    editorBodyStyle,
-    toggleSidePanelCollapsed,
-    toggleSidePanelMaximized,
-    startSidePanelResize,
-    handleSidePanelResizeKeyDown
-  } = useSidePanelLayout();
-  const sidePanelLayout = {
-    paletteWidth,
-    inspectorWidth,
-    paletteCollapsed,
-    inspectorCollapsed,
-    maximizedSidePanel,
-    setInspectorCollapsed,
-    paletteExpanded,
-    inspectorExpanded,
-    editorBodyClassName,
-    editorBodyStyle,
-    toggleSidePanelCollapsed,
-    toggleSidePanelMaximized,
-    startSidePanelResize,
-    handleSidePanelResizeKeyDown
-  };
-
   const { resetHistory, undo, redo, canUndoNow, canRedoNow } = useDraftHistory({ draft, restoreDraft: loadDraft });
 
   // Draft persistence (serialised save queue + debounced autosave) and the definition data load both live
@@ -275,6 +242,12 @@ export function WorkflowEditor({
     selectedBpmnElement,
     canAddActivitiesToCanvas
   } = useWorkflowScope({ context, draft, frames, selectedNodeId, catalog, activityDescriptors, availabilityDiagnostics });
+  const inlineSteps = authorsInline(themeLayout, isBpmnDesigner);
+  const availableDesignerPanels = filterGraphAuthoringContributions(workflowDesignerPanels, "workflow-definition");
+  const sidePanelLayout = useSidePanelLayout(undefined, {
+    palettePresent: !inlineSteps || availableDesignerPanels.some(panel => panel.side === "left")
+  });
+  const { setInspectorCollapsed } = sidePanelLayout;
   useEffect(() => {
     setActiveInspectorTabId(current =>
       resolveActivityInspectorTabId(current, inspectedSupportsScopedVariables, inspectedSlots.length > 0));
@@ -945,8 +918,7 @@ export function WorkflowEditor({
     window.history.pushState({}, "", `/workflows/instances/${encodeURIComponent(workflowExecutionId)}${tabQuery}`);
     window.dispatchEvent(new PopStateEvent("popstate"));
   };
-  const inlineSteps = authorsInline(themeLayout, isBpmnDesigner);
-  const contributedPanelTabs = filterGraphAuthoringContributions(workflowDesignerPanels, "workflow-definition")
+  const contributedPanelTabs = availableDesignerPanels
     .map(panel => {
       const ContributedPanel = panel.component;
       return {

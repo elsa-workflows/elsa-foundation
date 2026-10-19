@@ -95,8 +95,10 @@ jobs:
       - name: Check Studio asset gate
         run: python3 tools/ci/verify-studio-assets.py --self-test
 
-      - name: Check Studio image tag generation
-        run: python3 tools/ci/studio_image_tags.py --self-test
+      - name: Check Studio image publishing guards
+        run: |
+          python3 tools/ci/studio_image_tags.py --self-test
+          python3 tools/ci/test_studio_docker_publish.py
 
       - uses: actions/setup-dotnet@v4
         with:

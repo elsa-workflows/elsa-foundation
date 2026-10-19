@@ -16,8 +16,13 @@ the unpinned `:latest` commands here are not that recorded run.
 
 > **Image tags.** Both images use `latest`, `4.0.0-preview.<n>` and `sha-<short-commit>`. Workbench
 > is published by `.github/workflows/docker.yml` after a successful Packages run on `main`, not on
-> every push, so Hub tags can lag `main`. Studio is published separately
-> (`.github/workflows/studio-docker.yml`, manual). There are no `4` / `4.0` / `4.0.0` release tags
+> every push, so Hub tags can lag `main`. Studio is published automatically after successful
+> `Studio CI` runs for pushes to `main` (`.github/workflows/studio-docker.yml`). Both chains start
+> after merges to `main`; neither publishes from a PR. Studio assigns the next available preview
+> image number from Docker Hub and also publishes a full-SHA tag. The counters are independent:
+> the same preview number does not identify a matching backend/Studio pair. `latest` is promoted
+> only while the source is still the main tip; rapid merges can supersede queued builds.
+> Studio NuGet/npm releases remain manual. There are no `4` / `4.0` / `4.0.0` release tags
 > yet; to pin a version, use a preview or commit tag.
 
 > **Development posture.** The `docker run` examples below set `ASPNETCORE_ENVIRONMENT=Development`
