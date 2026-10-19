@@ -94,10 +94,6 @@
   white-space: nowrap;
 }
 
-.wf-editor-toolbar .wf-review-button {
-  border-color: color-mix(in srgb, var(--studio-accent) 40%, var(--studio-border));
-}
-
 .wf-editor-toolbar .wf-run-button {
   border-color: var(--studio-accent);
   background: var(--studio-accent);

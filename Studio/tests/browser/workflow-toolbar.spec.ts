@@ -48,7 +48,7 @@ for (const width of [320, 768, 1024, 1440]) {
       expect(await definitions.boundingBox()).toEqual(initialDefinitions);
       expect(await breadcrumbChevron.boundingBox()).toEqual(initialChevron);
     }
-    await expect(toolbar.getByRole("button", { name: "Review & publish" })).toBeVisible();
+    await expect(toolbar.getByRole("button", { name: "Review and Publish" })).toBeVisible();
   });
 }
 
@@ -110,7 +110,7 @@ test("keeps the overflow menu inside a narrow viewport and primary commands dire
   await page.setViewportSize({ width: 320, height: 600 });
   await page.goto("/?mode=workflow-toolbar&theme=dark");
   const toolbar = page.locator(".wf-editor-toolbar");
-  for (const name of ["Save", "Review & publish", "Run"]) {
+  for (const name of ["Save", "Review and Publish", "Run"]) {
     await toolbar.getByRole("button", { name, exact: true }).click();
     await expect(page.getByText(`Selected action: ${name}`, { exact: true })).toBeVisible();
   }
@@ -121,4 +121,42 @@ test("keeps the overflow menu inside a narrow viewport and primary commands dire
   expect(box!.x).toBeGreaterThanOrEqual(0);
   expect(box!.x + box!.width).toBeLessThanOrEqual(320);
   expect(box!.y + box!.height).toBeLessThanOrEqual(600);
+});
+
+test("supports keyboard publish-mode selection and repeats the remembered mode at narrow widths", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 600 });
+  await page.goto("/?mode=workflow-toolbar&theme=dark");
+  const toolbar = page.locator(".wf-editor-toolbar");
+  const trigger = toolbar.getByRole("button", { name: "Publish options", exact: true });
+
+  await trigger.focus();
+  await trigger.press("ArrowDown");
+  const menu = page.getByRole("menu", { name: "Publish action" });
+  const review = menu.getByRole("menuitemradio", { name: "Review and Publish", exact: true });
+  const publish = menu.getByRole("menuitemradio", { name: "Publish", exact: true });
+  await expect(review).toBeFocused();
+  await expect(review).toHaveAttribute("aria-checked", "true");
+  await review.press("ArrowDown");
+  await expect(publish).toBeFocused();
+  await publish.press("Enter");
+  await expect(menu).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  await expect(page.getByText("Selected action: Publish", { exact: true })).toBeVisible();
+
+  const rememberedPrimary = toolbar.getByRole("button", { name: "Publish", exact: true });
+  await expect(rememberedPrimary).toBeVisible();
+  await rememberedPrimary.click();
+  await expect(page.getByText("Selected action: Publish", { exact: true })).toBeVisible();
+
+  await trigger.click();
+  await expect(publish).toHaveAttribute("aria-checked", "true");
+  const box = await menu.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(320);
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(600);
+  await publish.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await expect(trigger).toBeFocused();
 });
