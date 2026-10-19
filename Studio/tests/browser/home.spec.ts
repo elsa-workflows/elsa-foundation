@@ -164,6 +164,66 @@ test.describe("customizable Home", () => {
     await expect(page.locator('[data-widget-id="workflows.run-health"] tbody tr')).toHaveCount(7);
   });
 
+  test("contains widget settings focus and keeps an invalid draft until a valid save", async ({ page }) => {
+    await page.goto("/?mode=home-dashboard&state=settings");
+    const widget = page.locator('[data-widget-id="fixture.settings"]');
+    await expect(widget.getByText("This widget needs configuration.")).toBeVisible();
+
+    const menuTrigger = widget.getByRole("button", { name: "Fixture settings actions" });
+    await menuTrigger.focus();
+    await page.keyboard.press("Enter");
+    const menu = page.getByRole("menu", { name: "Fixture settings actions" });
+    await expect(menu.getByRole("menuitem", { name: "Options…" })).toBeFocused();
+    await page.keyboard.press("Enter");
+
+    const dialog = page.getByRole("dialog", { name: "Fixture settings settings" });
+    const message = dialog.getByLabel("Message");
+    await expect(message).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(dialog.getByRole("button", { name: "Save" })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(message).toBeFocused();
+
+    const editHome = page.getByRole("button", { name: "Edit home" });
+    const bounds = await editHome.boundingBox();
+    if (!bounds) throw new Error("Edit Home control was not measurable behind the settings dialog.");
+    await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    await expect(dialog).toBeVisible();
+    await expect(editHome).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(menuTrigger).toBeFocused();
+
+    await editHome.click();
+    const settingsButton = widget.getByRole("button", { name: "Settings for Fixture settings" });
+    await settingsButton.click();
+    const editDialog = page.getByRole("dialog", { name: "Fixture settings settings" });
+    await expect(editDialog.getByLabel("Message")).toBeFocused();
+    await editDialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(editDialog).toHaveCount(0);
+    await expect(settingsButton).toBeFocused();
+
+    await settingsButton.click();
+    const saveDialog = page.getByRole("dialog", { name: "Fixture settings settings" });
+    await saveDialog.getByLabel("Message").fill("not ready");
+    await saveDialog.getByRole("button", { name: "Save" }).click();
+    await expect(saveDialog.getByRole("alert")).toHaveText("Review the settings and try again.");
+    await expect(saveDialog.getByLabel("Message")).toHaveValue("not ready");
+    expect(await page.evaluate(() => window.__homeDashboardLayouts?.length ?? 0)).toBe(0);
+
+    await saveDialog.getByLabel("Message").fill("ready");
+    await saveDialog.getByRole("button", { name: "Save" }).click();
+    await expect(saveDialog).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => window.__homeDashboardLayouts?.length ?? 0)).toBe(1);
+    const options = await page.evaluate(() => {
+      const layouts = window.__homeDashboardLayouts ?? [];
+      const layout = layouts.at(-1) as { widgets?: Array<{ id: string; options?: unknown }> } | undefined;
+      return layout?.widgets?.find(entry => entry.id === "fixture.settings")?.options;
+    });
+    expect(options).toEqual({ message: "ready" });
+  });
+
   test("captures Classic light and dark before/after screenshots when asked", async ({ page }) => {
     test.skip(!process.env.HOME_SCREENSHOTS, "Screenshot capture is opt-in.");
     await mkdir(screenshotDir, { recursive: true });
