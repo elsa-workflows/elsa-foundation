@@ -154,7 +154,7 @@ Notes come only from explicit `**Notes**:` metadata; see [Spec status metadata](
 | [143-expression-code-intelligence](../../specs/143-expression-code-intelligence/spec.md) | Expression Code Intelligence Foundation | Implemented | - | 25 | 0 | - |
 | [144-zero-ef-final-removal](../../specs/144-zero-ef-final-removal/spec.md) | Zero-EF Final Removal | Superseded by [ADR 0073](../../docs/adr/0073-ef-core-is-the-only-first-party-persistence-family.md) | - | 19 | 77 | - |
 | [145-publishing-engine-split](../../specs/145-publishing-engine-split/spec.md) | Publishing engine / API split | Draft | - | 28 | 1 | - |
-| [146-javascript-binding-grammar](../../specs/146-javascript-binding-grammar/spec.md) | JavaScript Binding Grammar Selection | Draft | - | 0 | 0 | - |
+| [146-javascript-binding-grammar](../../specs/146-javascript-binding-grammar/spec.md) | JavaScript Binding Grammar Selection | Superseded before implementation (2026-10-19) | - | 0 | 0 | - |
 | [147-file-workflow-deployment](../../specs/147-file-workflow-deployment/spec.md) | File-based workflow deployment at startup | Implemented — merged in PR #1161 | - | 38 | 0 | - |
 | [148-authoring-schema-endpoints](../../specs/148-authoring-schema-endpoints/spec.md) | Authoring-Schema Endpoints for Headless Clients | Retrofit — documents behavior shipped in PR #1170 (issue #1164); source of truth for review and future evolution, not a driver of new implementation. | - | 0 | 0 | - |
 | [149-canonical-dependency-map](../../specs/149-canonical-dependency-map/spec.md) | Canonical Dependency Map | Draft | - | 0 | 0 | - |
