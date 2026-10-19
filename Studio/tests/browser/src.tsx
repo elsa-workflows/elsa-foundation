@@ -56,6 +56,7 @@ import { createPublicationReview, type PublicationReviewState, type PublicationV
 import type { PublicationIntent } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/publishing";
 import { JavaScriptExpandedEditor, JavaScriptInlineEditor } from "../../../Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/module";
 import { LiquidExpandedEditor, LiquidInlineEditor } from "../../../Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Client/src/module";
+import { ConnectionPickerEditor } from "../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/ConnectionPickerEditor";
 import { SecretPickerEditor } from "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretPickerEditor";
 import {
   applyActivityVersionChange,
@@ -71,6 +72,7 @@ import { getTheme, themeTokenNames } from "../../src/apps/Elsa.Studio.Web/Client
 import "../../src/apps/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
 import "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/styles.css";
+import "../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/styles.css";
 import "./fixture.css";
 
 const searchParams = new URLSearchParams(window.location.search);
@@ -78,6 +80,8 @@ const scrollingFixture = searchParams.get("mode") === "scroll";
 const dictionaryFixture = searchParams.get("mode") === "dictionary";
 const scalarInputsFixture = searchParams.get("mode") === "scalar-inputs";
 const secretReferenceFixture = searchParams.get("mode") === "secret-reference";
+const connectionReferenceFixture = searchParams.get("mode") === "connection-reference";
+const referenceFixture = secretReferenceFixture || connectionReferenceFixture;
 const lazyBoundaryFixture = searchParams.get("mode") === "lazy-boundary";
 const inputEvidenceFixture = searchParams.get("mode") === "input-evidence";
 const runDetailFixture = searchParams.get("mode") === "run-detail" || inputEvidenceFixture;
@@ -591,6 +595,22 @@ const secretReferenceDescriptor: StudioActivityDescriptor = {
   ]
 };
 
+const connectionReferenceDescriptor: StudioActivityDescriptor = {
+  ...scalarInputDescriptor,
+  displayName: "Send HTTP Request",
+  inputs: [{ name: "Connection", displayName: "Connection", typeName: "ConnectionReference", uiHint: "connection-picker",
+    connectionType: "http", isWrapped: true, defaultSyntax: "Connection", isBrowsable: true }]
+};
+
+const connectionPickerContext = createEndpointContext(searchParams.get("backend") ?? window.location.origin);
+const connectionPickerExpressionEditor: StudioExpressionEditorContribution = {
+  id: "browser.connection-reference-editor",
+  order: 100,
+  supports: context => context.syntax === "Connection" || context.descriptor.uiHint === "connection-picker",
+  surfaces: { inline: props => <ConnectionPickerEditor {...props} endpointContext={connectionPickerContext} /> },
+  createDefaultValue: () => null
+};
+
 const scalarInputValues: Record<string, unknown> = {
   PolicyReference: "abc", ProposedPremium: 100.5, RenewalCount: 1, Rate: 0.5,
   Duration: "00:00:30", Priority: "normal", Identifier: "", Notes: "", References: []
@@ -607,17 +627,20 @@ const secretPickerExpressionEditor: StudioExpressionEditorContribution = {
 };
 
 function Fixture() {
-  const activeScalarDescriptor = secretReferenceFixture ? secretReferenceDescriptor : scalarInputDescriptor;
+  const activeScalarDescriptor = connectionReferenceFixture ? connectionReferenceDescriptor
+    : secretReferenceFixture ? secretReferenceDescriptor : scalarInputDescriptor;
   const [activity, setActivity] = useState<ActivityNode>({
     nodeId: "http-endpoint-1",
     activityVersionId: "http-endpoint-v1",
-    ...(scalarInputsFixture || secretReferenceFixture ? Object.fromEntries(activeScalarDescriptor.inputs.map(input => [
+    ...(scalarInputsFixture || referenceFixture ? Object.fromEntries(activeScalarDescriptor.inputs.map(input => [
       input.name[0]!.toLowerCase() + input.name.slice(1),
-      { typeName: input.typeName, expression: input.name === "ApiToken"
-        ? { type: "Secret", value: null }
-        : { type: "Literal", value: scalarInputValues[input.name] } }
+      { typeName: input.typeName, expression: input.name === "Connection"
+        ? { type: "Connection", value: null }
+        : input.name === "ApiToken"
+          ? { type: "Secret", value: null }
+          : { type: "Literal", value: scalarInputValues[input.name] } }
     ])) : {}),
-    inputs: scalarInputsFixture || secretReferenceFixture ? [] : [{ referenceKey: "Path", value: { value: "/orders", expressionType: "Literal" } }],
+    inputs: scalarInputsFixture || referenceFixture ? [] : [{ referenceKey: "Path", value: { value: "/orders", expressionType: "Literal" } }],
     outputs: [],
     structure: null,
     ...(dictionaryFixture ? {
@@ -640,11 +663,13 @@ function Fixture() {
 
   const activeDescriptor = scalarInputsFixture
     ? scalarInputDescriptor
-    : secretReferenceFixture
-      ? secretReferenceDescriptor
-      : dictionaryFixture
-        ? dictionaryDescriptor
-        : descriptor;
+    : connectionReferenceFixture
+      ? connectionReferenceDescriptor
+      : secretReferenceFixture
+        ? secretReferenceDescriptor
+        : dictionaryFixture
+          ? dictionaryDescriptor
+          : descriptor;
 
   return (
     <main className="wf-editor browser-fixture">
@@ -652,15 +677,18 @@ function Fixture() {
         <h1>Workflow designer</h1>
         <p>The inspector intentionally clips its own content to reproduce the original stacking defect.</p>
       </div>
-      <aside className={`wf-inspector browser-inspector${scalarInputsFixture || secretReferenceFixture ? " browser-inspector--scalar" : ""}${scrollingFixture ? " browser-inspector--scroll" : ""}`} aria-label="Activity inspector">
+      <aside className={`wf-inspector browser-inspector${scalarInputsFixture || referenceFixture ? " browser-inspector--scalar" : ""}${scrollingFixture ? " browser-inspector--scroll" : ""}`} aria-label="Activity inspector">
         <h2>{activeDescriptor.displayName}</h2>
         {scalarInputsFixture ? null : <div className="browser-inspector-spacer" aria-hidden="true" />}
         <ActivityPropertiesPanel
           activity={activity}
           descriptor={activeDescriptor}
-          editors={scalarInputsFixture || secretReferenceFixture ? builtInPropertyEditors : []}
-          expressionEditors={secretReferenceFixture ? [secretPickerExpressionEditor] : []}
-          expressionDescriptors={expressionDescriptors}
+          editors={scalarInputsFixture || referenceFixture ? builtInPropertyEditors : []}
+          expressionEditors={connectionReferenceFixture ? [connectionPickerExpressionEditor]
+            : secretReferenceFixture ? [secretPickerExpressionEditor] : []}
+          expressionDescriptors={connectionReferenceFixture
+            ? [{ type: "Connection", displayName: "Connection", editingMode: "reference" }, ...expressionDescriptors]
+            : expressionDescriptors}
           expressionDescriptorStatus="ready"
           descriptorStatus="ready"
           visibleVariables={[]}
