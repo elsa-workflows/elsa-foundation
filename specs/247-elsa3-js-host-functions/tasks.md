@@ -184,16 +184,16 @@ converted Elsa 3 calls lower to it.
 
 **Independent test**: one definition per refused construct gives its code and guidance.
 
-- [ ] T028 [US5] In `Elsa3ExpressionRewriter.JavaScriptAnalyzer`, add a private static `FrozenDictionary<string, (string Code, string Message, string Guidance)> RefusedHostFunctions` with every "Refused" row of the contract that is keyed by a function name. Look it up before the generic "unknown or unapproved host function" fallback
-- [ ] T029 [US5] Make `UnavailableGlobal` and `IsNondeterministicCall` use specific guidance:
+- [X] T028 [US5] In `Elsa3ExpressionRewriter.JavaScriptAnalyzer`, add a private static `FrozenDictionary<string, (string Code, string Message, string Guidance)> RefusedHostFunctions` with every "Refused" row of the contract that is keyed by a function name. Look it up before the generic "unknown or unapproved host function" fallback
+- [X] T029 [US5] Make `UnavailableGlobal` and `IsNondeterministicCall` use specific guidance:
   - `Date` (including `Date.now`): Delay activity and inputs
   - `Math.random` / `crypto.randomUUID`: inputs
   - Keep the codes
-- [ ] T030 [P] [US5] Tests in `Elsa3JavaScriptHostFunctionTests.cs`:
+- [X] T030 [P] [US5] Tests in `Elsa3JavaScriptHostFunctionTests.cs`:
   - A theory over every refusal-table row asserting code, message and guidance substrings (FR-017 to FR-019, SC-004)
   - `setOutcome('x')` inside RunJavaScript refuses the whole definition (`result.Succeeded == false`, no `Value`)
   - Every spec 236 refusal row in `Elsa3JavaScriptConversionTests.cs` keeps its code (FR-020)
-- [ ] T031 [US5] Rewrite the JavaScript section of `Extensions/Elsa3/src/Mapping/README.md` as the migration story (FR-021, SC-005):
+- [X] T031 [US5] Rewrite the JavaScript section of `Extensions/Elsa3/src/Mapping/README.md` as the migration story (FR-021, SC-005):
   - What converts
   - The refusal table with each Elsa 3 rewrite
   - The statement that workflows which need the current time or a fresh unique value cannot migrate until Elsa 4 has an explicit capability, linking the follow-up issue (T040) once it is filed
@@ -210,11 +210,11 @@ refused (FR-015, FR-016, research R-6).
 **Independent test**: the converted helpers return Elsa 3's results on `null`, `""`, `"  "`, `"a"`, `"\u0085"` and
 `"\uFEFF"`.
 
-- [ ] T032 [US4] In `Elsa3ExpressionRewriter`, replace undeclared `isNullOrEmpty(x)` / `isNullOrWhiteSpace(x)` (exactly one argument) with `__elsa3IsNullOrEmpty(x)` / `__elsa3IsNullOrWhiteSpace(x)`. Then:
+- [X] T032 [US4] In `Elsa3ExpressionRewriter`, replace undeclared `isNullOrEmpty(x)` / `isNullOrWhiteSpace(x)` (exactly one argument) with `__elsa3IsNullOrEmpty(x)` / `__elsa3IsNullOrWhiteSpace(x)`. Then:
   - Prepend the prelude functions from the contract once per expression. This forces the wrapped form `(function () {\n<prelude>\n…\n})()` in Expression mode, and a leading statement in Script mode
   - Refuse with VF-IMP-002 if the script declares either name
   - Any other argument count stays refused
-- [ ] T033 [P] [US4] Tests in `Elsa3JavaScriptHostFunctionTests.cs`:
+- [X] T033 [P] [US4] Tests in `Elsa3JavaScriptHostFunctionTests.cs`:
   - The truth tables above, evaluated with T002, against the values .NET's `string.IsNullOrEmpty` / `IsNullOrWhiteSpace` give for the same strings (computed in the test)
   - The argument is evaluated once (an argument with a side effect on a local array)
   - `toJson`, `parseGuid` and `bytesToString` give their refusal rows (covered by T030; here, assert only that they are not lowered)

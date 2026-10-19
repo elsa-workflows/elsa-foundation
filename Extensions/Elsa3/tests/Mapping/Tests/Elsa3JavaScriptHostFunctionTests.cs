@@ -70,6 +70,142 @@ public sealed class Elsa3JavaScriptHostFunctionTests
         Assert.Empty(ReadExpression(result).Parameters);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData("a")]
+    [InlineData(" a ")]
+    [InlineData("\t\r\n")]
+    [InlineData("\u0085")]
+    [InlineData("  　")]
+    [InlineData("﻿")]
+    [InlineData("\u001C")]
+    public async Task String_helpers_return_what_dotnet_returned(string? value)
+    {
+        var result = await ConvertTextAsync(
+            "return { empty: isNullOrEmpty(getVariable('s')), blank: isNullOrWhiteSpace(getVariable('s')) }",
+            new Elsa3Variable { Id = "s", Name = "s", TypeName = "String" });
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var evaluated = await PortableJavaScript.EvaluateAsync(ReadExpression(result), new Dictionary<string, JsonElement>
+        {
+            ["s"] = JsonSerializer.SerializeToElement(value),
+        });
+        Assert.Equal(string.IsNullOrEmpty(value), evaluated.GetProperty("empty").GetBoolean());
+        Assert.Equal(string.IsNullOrWhiteSpace(value), evaluated.GetProperty("blank").GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_string_helper_in_a_single_expression_is_wrapped_with_its_prelude()
+    {
+        var result = await ConvertTextAsync("isNullOrEmpty('') && isNullOrEmpty('')");
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var source = ReadExpression(result).Source;
+        Assert.StartsWith("(function () {\nfunction __elsa3IsNullOrEmpty(v)", source, StringComparison.Ordinal);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(source, "function __elsa3IsNullOrEmpty"));
+        Assert.True((await PortableJavaScript.EvaluateAsync(ReadExpression(result))).GetBoolean());
+    }
+
+    [Fact]
+    public async Task A_string_helper_evaluates_its_argument_once()
+    {
+        var result = await ConvertTextAsync("var calls = []; isNullOrWhiteSpace((calls.push(1), ' ')); calls.length");
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal(1, (await PortableJavaScript.EvaluateAsync(ReadExpression(result))).GetInt32());
+    }
+
+    [Fact]
+    public async Task A_string_helper_in_a_script_gets_its_prelude()
+    {
+        var root = Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal("isNullOrEmpty('')"))));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal(
+            "function __elsa3IsNullOrEmpty(v) { return v == null || v === \"\"; }\nreturn __elsa3IsNullOrEmpty('')",
+            Text(Input(Node(result.Value!.State, "node"), "script")));
+    }
+
+    [Theory]
+    [InlineData("isNullOrEmpty()")]
+    [InlineData("isNullOrEmpty('a', 'b')")]
+    public async Task A_string_helper_with_other_than_one_argument_is_refused(string expression)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+    }
+
+    [Fact]
+    public async Task A_script_declaring_the_prelude_name_is_ambiguous()
+    {
+        var result = await ConvertTextAsync("var __elsa3IsNullOrEmpty = 1; isNullOrEmpty('')");
+
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.AmbiguousReference);
+    }
+
+    [Theory]
+    [InlineData("newGuid()", "newGuid", "getWorkflowInstanceId()")]
+    [InlineData("newGuidString()", "newGuidString", "getWorkflowInstanceId()")]
+    [InlineData("newShortGuid()", "newShortGuid", "getWorkflowInstanceId()")]
+    [InlineData("getGuidString()", "getGuidString", "getWorkflowInstanceId()")]
+    [InlineData("new Date()", "Date", "Delay activity")]
+    [InlineData("new Date('2026-01-01').toISOString()", "Date", "Delay activity")]
+    [InlineData("Date.now()", "Date.now", "Delay activity")]
+    [InlineData("DateTime.Now", "DateTime", "Delay activity")]
+    [InlineData("Math.random()", "Math.random", "getWorkflowInstanceId()")]
+    [InlineData("Guid.NewGuid()", "Guid", "getWorkflowInstanceId()")]
+    [InlineData("toJson({ a: 1 })", "toJson", "JSON.stringify")]
+    [InlineData("parseGuid('00000000-0000-0000-0000-000000000000')", "parseGuid", "as a string")]
+    [InlineData("bytesToString(x)", "bytesToString", "activity")]
+    [InlineData("streamToBytes(x)", "streamToBytes", "activity")]
+    [InlineData("stringToBase64('a')", "stringToBase64", "activity")]
+    [InlineData("getConfig('Key')", "getConfig", "workflow input")]
+    [InlineData("getWorkflowDefinitionId()", "getWorkflowDefinitionId", "correlation ID and the instance ID")]
+    [InlineData("setCorrelationId('x')", "setCorrelationId", "Correlate activity")]
+    [InlineData("setWorkflowInstanceName('x')", "setWorkflowInstanceName", "Set Name activity")]
+    [InlineData("getLastResult()", "getLastResult", "variable")]
+    public async Task A_refused_construct_names_itself_and_the_elsa3_rewrite(string expression, string named, string guidance)
+    {
+        var result = await ConvertTextAsync(expression);
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+        Assert.Contains($"'{named}'", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains(guidance, diagnostic.Guidance, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("setOutcome('Approved')")]
+    [InlineData("setOutcomes(['Approved', 'Logged'])")]
+    public async Task A_script_setting_an_outcome_refuses_the_whole_definition(string script)
+    {
+        var root = Sequence("root",
+            Activity("before", "Elsa.WriteLine", ("text", Literal("a"))),
+            Activity("node", "Elsa.RunJavaScript", ("script", Literal(script))));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root));
+
+        Assert.False(result.Succeeded);
+        Assert.Null(result.Value);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability);
+        Assert.Contains("Decision or Switch", diagnostic.Guidance, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task An_unknown_host_function_keeps_the_generic_refusal()
+    {
+        var result = await ConvertTextAsync("getConfiguration('Key')");
+
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Code == Elsa3ImportDiagnosticCodes.ForbiddenCapability &&
+            diagnostic.Message.Contains("unknown or unapproved host function 'getConfiguration'", StringComparison.Ordinal));
+    }
+
     private static Task<Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition>> ConvertTextAsync(string expression, params Elsa3Variable[] variables) =>
         ConversionServices.ConvertAsync(
             RealActivityCatalog.Create(),
