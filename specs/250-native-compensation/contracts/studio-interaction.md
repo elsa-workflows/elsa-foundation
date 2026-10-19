@@ -85,6 +85,5 @@ Recovery started because "Confirm order" failed: order.rejected — Order reject
 
 - Authoring: the existing structure facet (kind, slots), plus a `compensation` designer mode in
   `getActivityDesignerSupport`.
-- Inspection: the projection in [data-model.md](../data-model.md), through capability link
-  `activity-execution-compensation`. Handler labelling in the timeline uses activity execution metadata
-  `compensation.role` / `compensation.step`, so it works without the projection.
+- Inspection: the derived view model in [data-model.md](../data-model.md), from the run's executions and incidents.
+  Handler labelling in the timeline uses the execution's scheduling cause `compensation`.

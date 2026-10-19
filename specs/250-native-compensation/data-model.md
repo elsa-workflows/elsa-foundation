@@ -68,30 +68,19 @@ activity input that publication pins.
   state.
 - A version bump needs an upcaster before any state written by the previous version can be read.
 
-## Inspection projection — `GET …/activity-executions/{scopeActivityExecutionId}/compensation`
+## Inspection view model (Studio, derived)
 
-```json
-{
-  "scopeActivityExecutionId": "ae-1",
-  "phase": "Compensated",
-  "outcome": "Compensated",
-  "cause": { "kind": "fault", "step": "Confirm order", "activityExecutionId": "ae-7", "incidentId": "inc-2",
-             "faultCode": "order.rejected", "message": { "presence": "Present", "value": "Order rejected" } },
-  "steps": [
-    { "name": "Reserve inventory", "forward": { "state": "Completed", "activityExecutionId": "ae-3" },
-      "recovery": { "state": "Compensated", "ordinal": 1, "activityExecutionIds": ["ae-11"] } },
-    { "name": "Reserve delivery", "forward": { "state": "Completed", "activityExecutionId": "ae-5" },
-      "recovery": { "state": "Compensated", "ordinal": 2, "activityExecutionIds": ["ae-9"] } },
-    { "name": "Confirm order", "forward": { "state": "Faulted", "activityExecutionId": "ae-7" },
-      "recovery": { "state": "NotApplicable" } }
-  ],
-  "recoveryOrder": ["Reserve delivery", "Reserve inventory"]
-}
-```
+Studio derives this view from the run data it already loads; there is no inspection endpoint (FR-019).
 
-- `forward.state`: `NotRun` | `Running` | `Completed` | `Faulted`.
-- `recovery.state`: `NotApplicable` (did not complete) | `NotNeeded` (no handler) | `Pending` (`Registered`
-  during recovery) | `Registered` (not recovering) | `Running` (`Compensating`) | `Compensated`, plus the M2+
-  statuses.
-- 404 when the activity execution is not a compensation scope; 403 under the same rule as the activity
-  execution read.
+| Field | Source |
+|---|---|
+| Scope execution | latest execution whose authored or executable node id is the scope's |
+| Forward state per step | latest child of that execution matching the step's forward node, excluding handlers |
+| Recovery state per step | latest handler execution (scheduling cause `compensation`) matching the step's handler node; `Pending` when the scope is compensating and none exists yet |
+| Recovery order | handler executions ordered by `scheduledAt` |
+| Phase | scope status; `Compensated` when its outcomes include `Compensated` |
+| Cause | the faulted forward step and the incident on its execution (failure type and message, under the incident disclosure policy) |
+
+`forward.state`: `NotRun` | `Running` | `Completed` | `Faulted` | `Cancelled`. `recovery.state`: `NotApplicable` (did not
+complete) | `NotNeeded` (no handler) | `Registered` (eligible, not recovering) | `Pending` | `Running` | `Compensated` |
+`Failed`. Run lists carry the parent execution inside `provenance`, so matching reads it there.
