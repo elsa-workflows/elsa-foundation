@@ -55,7 +55,7 @@ activity input that publication pins.
       "handlerActivityExecutionIds": [] },
     { "id": "e2", "step": "Reserve delivery", "ordinal": 2, "status": "Compensating",
       "forwardActivityExecutionId": "ae-5", "forwardIterationId": null,
-      "handlerActivityExecutionIds": ["ae-9"] }
+      "handlerActivityExecutionIds": [] }
   ]
 }
 ```

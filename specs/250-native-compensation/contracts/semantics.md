@@ -21,7 +21,7 @@ states and transitions marked **M1**. Later milestones add states without changi
 |---|---|---|---|
 | `Registered` | Forward occurrence completed and has a handler. | yes | M1 |
 | `NoHandler` | Forward occurrence completed; the step has no handler. | no (shown as "Not needed") | M1 |
-| `Compensating` | Handler scheduled; its activity execution id is recorded. | in progress | M1 |
+| `Compensating` | Handler's schedule request committed with this status; its execution id is recorded on completion. | in progress | M1 |
 | `Compensated` | Handler completed. | no | M1 |
 | `Failed` | Handler faulted; awaiting retry or intervention. | after intervention | M2 |
 | `Uncertain` | Forward outcome unknown (lost response). Recovery runs its reconcile-or-compensate handler. | yes | M2 |
@@ -46,10 +46,10 @@ OnChildCompleted(child)
                             if i is last -> phase Completed, complete Done
                             else schedule step[i+1], Defer
   phase Compensating:
-    child is handler of the entry in Compensating whose handlerAei == child AEI
+    child is the handler of the entry in Compensating (matched by compensation.entryId metadata and node id)
                          -> entry Compensated
                             next = highest-ordinal Registered entry
-                            next exists -> entry(next) Compensating(handlerAei = new), schedule handler, Defer
+                            next exists -> entry(next) Compensating, schedule handler, Defer
                             none        -> phase Compensated, complete Compensated (or Fault, see afterCompensation)
   any other child        -> ignore (repeat delivery or stale), Defer   [FR-009]
 
@@ -90,7 +90,7 @@ nested scopes (M3) keep "newest first" without a new rule.
 | Handler completion delivered twice | Second delivery finds the entry already `Compensated` | Ignored (FR-009) |
 | Between two handlers | Next entry is either still `Registered` (nothing scheduled) or `Compensating` with its handler owed | Exactly one handler per entry |
 
-The scope never schedules a handler without committing `Compensating` and the handler id in the same
+The scope never schedules a handler without committing `Compensating` and the schedule request in the same
 checkpoint. A restart therefore never needs to guess whether a handler was started.
 
 ## Persistence modes
@@ -98,7 +98,7 @@ checkpoint. A restart therefore never needs to guess whether a handler was start
 The pre-effect boundary (the `ActivityAttemptClaimed` flush for `External` activities) applies in all three
 modes, so the table above holds in each. What differs is how much replays: in Balanced and Ephemeral,
 `ReplaySafe` work since the last commit runs again. That never schedules a second handler for an entry,
-because entry status and handler id commit with the schedule. Each mode is claimed only with its restart tests
+because the entry status commits together with the schedule request. Each mode is claimed only with its restart tests
 passing (FR-013).
 
 ## Recovery cause
