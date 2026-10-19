@@ -55,6 +55,15 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Preserve trusted image validators
+        run: |
+          STUDIO_IMAGE_VALIDATORS="$RUNNER_TEMP/studio-image-validation"
+          mkdir -p "$STUDIO_IMAGE_VALIDATORS"
+          cp tools/ci/studio_docker_publish.py tools/ci/studio_image_tags.py \
+            tools/ci/verify_studio_nuget_packages.py tools/ci/studio-package-identities.json \
+            "$STUDIO_IMAGE_VALIDATORS/"
+          echo "STUDIO_IMAGE_VALIDATORS=$STUDIO_IMAGE_VALIDATORS" >> "$GITHUB_ENV"
+
       - name: Verify the triggering main CI run
         if: github.event_name == 'workflow_run'
         id: ci_source
@@ -65,7 +74,7 @@ jobs:
         run: |
           set -euo pipefail
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID" |
-            python3 tools/ci/studio_docker_publish.py validate-source
+            python3 "$STUDIO_IMAGE_VALIDATORS/studio_docker_publish.py" validate-source
 
       - name: Verify the selected Studio Packages run
         if: github.event_name == 'workflow_dispatch'
@@ -136,7 +145,7 @@ jobs:
           MAIN_SHA=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
           SOURCE_SHA=$(git rev-parse HEAD)
           export MAIN_SHA SOURCE_SHA
-          python3 tools/ci/studio_docker_publish.py is-current
+          python3 "$STUDIO_IMAGE_VALIDATORS/studio_docker_publish.py" is-current
 
       - name: Download that run's Studio package artifact
         if: github.event_name == 'workflow_dispatch'
@@ -168,7 +177,7 @@ jobs:
           import sys
           from pathlib import Path
 
-          sys.path.insert(0, "tools/ci")
+          sys.path.insert(0, os.environ["STUDIO_IMAGE_VALIDATORS"])
           from studio_image_tags import derive_tags
           from verify_studio_nuget_packages import verify_packages
 
@@ -206,7 +215,6 @@ jobs:
           tags = derive_tags(ref, version, sha, publish_requested, os.environ["PREVIEW_IMAGE_TAG"])
 
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-              output.write(f"publish_image={'true' if publish_requested else 'false'}\n")
               output.write(f"studio_version={version}\n")
               output.write("image_tags<<TAGS\n" + "\n".join(tag for tag in tags if tag != "elsaworkflows/elsa-studio:latest") + "\nTAGS\n")
           print(f"Verified the exact {len(package_ids)} Studio package IDs at version {version} from {sha}.")
@@ -217,7 +225,7 @@ jobs:
         id: automatic
         env:
           SOURCE_SHA: ${{ steps.ci_source.outputs.source_sha }}
-        run: python3 tools/ci/studio_docker_publish.py preview-version
+        run: python3 "$STUDIO_IMAGE_VALIDATORS/studio_docker_publish.py" preview-version
 
       - name: Resolve image build settings
         id: image
@@ -226,11 +234,9 @@ jobs:
           MANUAL_VERSION: ${{ steps.manifest.outputs.studio_version }}
           AUTO_TAGS: ${{ steps.automatic.outputs.image_tags }}
           MANUAL_TAGS: ${{ steps.manifest.outputs.image_tags }}
-          MANUAL_PUBLISH: ${{ steps.manifest.outputs.publish_image }}
         run: |
           {
             echo "version=${AUTO_VERSION:-$MANUAL_VERSION}"
-            echo "publish=$([[ "$GITHUB_EVENT_NAME" == 'workflow_run' ]] && echo true || echo "$MANUAL_PUBLISH")"
             echo 'tags<<TAGS'
             printf '%s\n' "${AUTO_TAGS:-$MANUAL_TAGS}"
             echo TAGS
@@ -260,14 +266,14 @@ jobs:
         run: python3 tools/ci/verify-studio-assets.py
 
       - name: Set up QEMU for the multi-platform publisher
-        if: ${{ steps.image.outputs.publish == 'true' }}
+        if: ${{ github.event_name == 'workflow_run' || inputs.publish == true }}
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
-        if: ${{ steps.image.outputs.publish == 'true' }}
+        if: ${{ github.event_name == 'workflow_run' || inputs.publish == true }}
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
@@ -279,8 +285,8 @@ jobs:
         with:
           context: .
           file: Studio/src/apps/Elsa.Studio.Web/Dockerfile
-          platforms: ${{ steps.image.outputs.publish == 'true' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
-          push: ${{ steps.image.outputs.publish == 'true' }}
+          platforms: ${{ (github.event_name == 'workflow_run' || inputs.publish == true) && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          push: ${{ github.event_name == 'workflow_run' || inputs.publish == true }}
           tags: ${{ steps.image.outputs.tags }}
           build-args: STUDIO_VERSION=${{ steps.image.outputs.version }}
           labels: |
@@ -294,7 +300,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Promote the verified main digest to latest
-        if: steps.image.outputs.publish == 'true' && (github.event_name == 'workflow_run' || steps.source.outputs.head_branch == 'main')
+        if: (github.event_name == 'workflow_run' || inputs.publish == true) && (github.event_name == 'workflow_run' || steps.source.outputs.head_branch == 'main')
         env:
           GH_TOKEN: ${{ github.token }}
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
@@ -304,7 +310,7 @@ jobs:
           SOURCE_SHA=$(git rev-parse HEAD)
           export MAIN_SHA SOURCE_SHA
           current_status=0
-          python3 tools/ci/studio_docker_publish.py is-current || current_status=$?
+          python3 "$STUDIO_IMAGE_VALIDATORS/studio_docker_publish.py" is-current || current_status=$?
           if [[ "$current_status" == 1 ]]; then
             echo "Main advanced while building. Versioned tags were published; latest remains unchanged." >> "$GITHUB_STEP_SUMMARY"
             exit 0
