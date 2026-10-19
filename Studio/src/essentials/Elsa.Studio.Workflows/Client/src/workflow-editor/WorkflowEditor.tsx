@@ -73,6 +73,7 @@ import { useDraftEquivalence } from "./useDraftEquivalence";
 import { useWorkflowScope } from "./useWorkflowScope";
 import { useWorkflowContextBridge } from "./useWorkflowContextBridge";
 import { ActivityPalettePanel } from "./ActivityPalettePanel";
+import { SequenceDesigner } from "../graph-authoring/SequenceDesigner";
 import { GraphAuthoringCanvas } from "../graph-authoring/GraphAuthoringCanvas";
 import { GraphAuthoringWorkbench } from "../graph-authoring/GraphAuthoringWorkbench";
 import { AddStepButton, authorsInline } from "../graph-authoring/AddStepButton";
@@ -388,6 +389,10 @@ export function WorkflowEditor({
     onCanvasDrop,
     openEmptyConnectMenu,
     openAddStepMenu,
+    openSequenceInsertMenu,
+    insertSequenceActivity,
+    moveSequenceActivity,
+    queueCanvasNodeFocus,
     onConnectMenuPick,
     addActivity,
     addBpmnShape,
@@ -1294,7 +1299,33 @@ export function WorkflowEditor({
           ) : (
           <>
           <ScopeBreadcrumb frames={visibleFrames} onNavigate={next => navigateToScope(next, null)} />
-          <GraphAuthoringCanvas
+          {scope?.slot.mode === "sequence" && scope.slot.cardinality === "many" && !isUnsupportedDesigner ? (
+            <SequenceDesigner
+              nodes={nodes}
+              selectedNodeId={selectedNodeId}
+              readOnly={!canAddActivitiesToCanvas}
+              canvasRef={canvasRef}
+              availabilityLookup={availabilityLookup}
+              onSelect={select}
+              onInsert={openSequenceInsertMenu}
+              onDropActivity={(versionId, index) => {
+                const activity = paletteCatalog.find(item => item.activityVersionId === versionId);
+                if (activity) insertSequenceActivity(activity, index);
+              }}
+              onMove={moveSequenceActivity}
+              onDelete={nodeId => {
+                const node = nodes.find(item => item.id === nodeId);
+                if (node) {
+                  onNodesDelete([node]);
+                  if (nodes.length === 1) canvasRef.current?.focus({ preventScroll: true });
+                }
+              }}
+              onDuplicate={nodeId => duplicateSelectedActivities([nodeId])}
+              onOpenSlot={(ownerId, label, slot) => enterSlotScope(ownerId, slot, slotCrumbLabel(label, slot))}
+            >
+              {connectMenu ? <ConnectMenu clientX={connectMenu.clientX} clientY={connectMenu.clientY} activities={paletteCatalog} onPick={onConnectMenuPick} onClose={() => setConnectMenu(null)} /> : null}
+            </SequenceDesigner>
+          ) : <GraphAuthoringCanvas
             canvasRef={canvasRef}
             nodeActions={nodeActions}
             canvasProps={{
@@ -1381,7 +1412,7 @@ export function WorkflowEditor({
               />
             ) : null}
             </>}
-          />
+          />}
           <ValidationPanel
             draft={draft}
             errors={combinedValidationErrors}

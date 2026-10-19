@@ -414,7 +414,7 @@ describe("workflow adapter", () => {
     expect(canvas.nodes[0].data.catalogIcon).toBe("trigger");
   });
 
-  it("uses the Sequence adapter to preserve ordered child activities", () => {
+  it("preserves authored Sequence order regardless of saved horizontal positions", () => {
     const root = sequenceRoot([node("b"), node("a")]);
     const scope = firstScope(root);
     const canvas = buildCanvas(scope, [writeLine], [
@@ -425,7 +425,7 @@ describe("workflow adapter", () => {
     const updated = syncCanvasToScope(scope, canvas.nodes, canvas.edges);
     const activities = getChildSlots(updated)[0].activities;
 
-    expect(activities.map(activity => activity.nodeId)).toEqual(["a", "b"]);
+    expect(activities.map(activity => activity.nodeId)).toEqual(["b", "a"]);
   });
 
   it("replaces nested slot activities through the generic scope path", () => {

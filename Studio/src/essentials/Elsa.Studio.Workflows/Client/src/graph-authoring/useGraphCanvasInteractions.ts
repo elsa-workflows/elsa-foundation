@@ -222,7 +222,7 @@ export function useGraphCanvasInteractions({
   }, [selectedNodeId, setNodes]);
 
   const focusCanvasNode = useCallback((nodeId: string) => {
-    const element = Array.from(canvasRef.current?.querySelectorAll<HTMLElement>(".react-flow__node") ?? [])
+    const element = Array.from(canvasRef.current?.querySelectorAll<HTMLElement>(".react-flow__node, .wf-sequence-step") ?? [])
       .find(candidate => candidate.dataset.id === nodeId);
     if (!element) return false;
     element.focus({ preventScroll: true });
@@ -339,6 +339,20 @@ export function useGraphCanvasInteractions({
     onActivityPlaced?.(activity);
   }, [edgeFactory, edges, nodes, onActivityPlaced, placeOnCanvas, placementFactory]);
 
+  const insertSequenceActivity = useCallback((activity: ActivityCatalogItem, index: number) => {
+    if (mode !== "sequence" || !canAddActivities || activity.available === false || !Number.isInteger(index) || index < 0 || index > nodes.length) return;
+    if (nativePaletteDragRef.current?.activityVersionId === activity.activityVersionId) nativePaletteDragRef.current.handledDrop = true;
+    pointerDragRef.current = null;
+    const placement = placementFactory(activity, { x: 0, y: 0 });
+    if (!placement) return;
+    stampCanvasNode(placement.node, {
+      createdActivities: [placement.activityNode],
+      order: current => [...current.slice(0, index), placement.node, ...current.slice(index)],
+      wire: current => buildSequenceEdges(current) as WorkflowEdge[]
+    });
+    onActivityPlaced?.(activity);
+  }, [canAddActivities, mode, nodes.length, onActivityPlaced, placementFactory, stampCanvasNode]);
+
   const tryAddActivityAtClientPoint = useCallback((activity: ActivityCatalogItem, clientX: number, clientY: number) => {
     if (!canAddActivities) return false;
     if (!canvasRef.current) return false;
@@ -351,6 +365,13 @@ export function useGraphCanvasInteractions({
       clientY <= canvasRect.bottom;
 
     if (!isOverCanvas) return false;
+
+    if (mode === "sequence") {
+      const boundary = document.elementFromPoint?.(clientX, clientY)?.closest<HTMLElement>("[data-sequence-insert-index]");
+      if (!boundary || !canvasRef.current.contains(boundary)) return false;
+      insertSequenceActivity(activity, Number(boundary.dataset.sequenceInsertIndex));
+      return true;
+    }
 
     const position = toCanvasPosition(clientX, clientY);
     if (!position) return false;
@@ -366,7 +387,7 @@ export function useGraphCanvasInteractions({
 
     placeActivity(activity, position);
     return true;
-  }, [canAddActivities, edges, findEdgeUnderCursor, isGraphMode, placeActivity, spliceActivityIntoEdge, toCanvasPosition]);
+  }, [canAddActivities, edges, findEdgeUnderCursor, insertSequenceActivity, isGraphMode, mode, placeActivity, spliceActivityIntoEdge, toCanvasPosition]);
 
   // Pointer-based palette drag. Runs alongside the native HTML5 drag so a palette press that never
   // produces a dragstart (touch, or a browser that suppresses it) still lands an activity.
@@ -580,10 +601,10 @@ export function useGraphCanvasInteractions({
     commitCanvas(nextNodes, edges);
   };
 
-  const canAutoLayout = !isUnsupported && nodes.length > 0;
+  const canAutoLayout = !isUnsupported && mode !== "sequence" && nodes.length > 0;
   const autoLayout = useCallback(() => {
-    if (isUnsupported || nodes.length === 0) return;
-    const positions = computeAutoLayout(nodes, edges, mode === "sequence" ? "sequence" : "flowchart");
+    if (isUnsupported || mode === "sequence" || nodes.length === 0) return;
+    const positions = computeAutoLayout(nodes, edges, "flowchart");
     const nextNodes = nodes.map(node => {
       const position = positions.get(node.id);
       return position ? { ...node, position } : node;
@@ -642,7 +663,7 @@ export function useGraphCanvasInteractions({
     // by canvas node id, which in a BPMN scope is the element id rather than the resolved activity id.
     const removedNodeIds = new Set([...deletedIds, ...(resolveRemovedActivityNodeIds?.(deletedNodes) ?? [])]);
     const nextNodes = nodes.filter(node => !deletedIds.has(node.id));
-    const nextEdges = edges.filter(edge => !deletedIds.has(edge.source) && !deletedIds.has(edge.target));
+    const nextEdges = mode === "sequence" ? buildSequenceEdges(nextNodes) : edges.filter(edge => !deletedIds.has(edge.source) && !deletedIds.has(edge.target));
     setNodes(nextNodes);
     setEdges(nextEdges);
     if (selectedNodeId && deletedIds.has(selectedNodeId)) {
@@ -685,10 +706,35 @@ export function useGraphCanvasInteractions({
     setConnectMenu({ kind: "spliceEdge", edgeId, clientX, clientY });
   }, [isGraphMode]);
 
+  const openSequenceInsertMenu = (index: number, anchor: { clientX: number; clientY: number }) => {
+    if (mode !== "sequence" || !canAddActivities || !Number.isInteger(index) || index < 0 || index > nodes.length) return;
+    setConnectMenu({ kind: "sequenceInsert", index, scopeKey, ...anchor });
+  };
+
+  const moveSequenceActivity = (nodeId: string, boundary: number) => {
+    if (mode !== "sequence" || !canAddActivities || !Number.isInteger(boundary) || boundary < 0 || boundary > nodes.length) return;
+    const from = nodes.findIndex(node => node.id === nodeId);
+    if (from < 0 || boundary === from || boundary === from + 1) return;
+    const next = [...nodes];
+    const [node] = next.splice(from, 1);
+    next.splice(boundary > from ? boundary - 1 : boundary, 0, node);
+    const nextEdges = buildSequenceEdges(next) as WorkflowEdge[];
+    setNodes(next);
+    setEdges(nextEdges);
+    select(nodeId);
+    commitCanvas(next, nextEdges);
+    queueCanvasNodeFocus(nodeId);
+    onStatus?.(`Moved ${node.data.label} to step ${next.findIndex(item => item.id === nodeId) + 1}.`);
+  };
+
   const onConnectMenuPick = (activity: ActivityCatalogItem) => {
     const menu = connectMenu;
     if (!menu) return;
     setConnectMenu(null);
+    if (menu.kind === "sequenceInsert") {
+      if (menu.scopeKey === scopeKey) insertSequenceActivity(activity, menu.index);
+      return;
+    }
 
     const fallbackPosition = toCanvasPosition(menu.clientX, menu.clientY) ?? { x: 0, y: 0 };
 
@@ -761,6 +807,9 @@ export function useGraphCanvasInteractions({
     onCanvasDrop,
     openEmptyConnectMenu,
     openAddStepMenu,
+    openSequenceInsertMenu,
+    insertSequenceActivity,
+    moveSequenceActivity,
     onConnectMenuPick,
     onPaletteClick,
     onPaletteDragStart,

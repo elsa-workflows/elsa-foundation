@@ -105,8 +105,8 @@ export function useWorkflowCanvas({
   const [nodes, setNodes] = useState<Node<WorkflowNodeData>[]>([]);
   const [edges, setEdges] = useState<WorkflowEdge[]>([]);
   const scopeViewportKey = useMemo(
-    () => `${draft?.definitionId ?? ""}:${getScopeViewportKey(frames)}`,
-    [draft?.definitionId, frames]);
+    () => `${draft?.definitionId ?? ""}:${scopeOwner?.nodeId ?? ""}:${scopeOwner?.activityVersionId ?? ""}:${getScopeViewportKey(frames)}`,
+    [draft?.definitionId, frames, scopeOwner?.nodeId, scopeOwner?.activityVersionId]);
   const mode: GraphCanvasMode = isUnsupportedDesigner
     ? "unsupported"
     : scope?.slot.mode === "bpmn"
@@ -171,7 +171,7 @@ export function useWorkflowCanvas({
       // Prune the departed nodes' side tables before upserting the survivors' positions: updateLayout
       // only ever upserts, so a deleted node's record would otherwise outlive it in the saved draft.
       const forgotten = forgetRemovedNodes(current, options?.removedNodeIds ?? []);
-      const nextLayout = updateLayout(forgotten.layout, nextNodes);
+      const nextLayout = mode === "sequence" ? forgotten.layout : updateLayout(forgotten.layout, nextNodes);
       const nextPresentation = forgotten.activityPresentation;
       const rootActivity = current.state.rootActivity;
       if (!rootActivity) return { ...current, layout: nextLayout, activityPresentation: nextPresentation };
@@ -200,7 +200,7 @@ export function useWorkflowCanvas({
         }
       };
     });
-  }, [catalogByVersion, isUnsupportedDesigner, editDraft]);
+  }, [catalogByVersion, isUnsupportedDesigner, editDraft, mode]);
 
   const observeReusablePlacement = useCallback((activity: ActivityCatalogItem) => {
     if (!activity.activityDefinitionVersionId) return;
