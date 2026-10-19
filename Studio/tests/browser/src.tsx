@@ -1583,8 +1583,8 @@ function publicationReview(): PublicationReviewState {
       policySource: "host",
       policyRevision: 12,
       canActivate: true,
-      claims: [{ key: "http:/orders", cardinality: "exclusive" }],
-      triggers: [{ change: "added", key: "http:/orders", cardinality: "exclusive" }],
+      claims: [{ key: "httpendpoint:sha256:4191f265b8b2d2152d4056ed3d616d32f7c2953e7ae41c4f8b184244b830e4f7", cardinality: "exclusive" }],
+      triggers: [{ change: "added", key: "httpendpoint:sha256:4191f265b8b2d2152d4056ed3d616d32f7c2953e7ae41c4f8b184244b830e4f7", cardinality: "exclusive" }],
       conflicts: []
     },
     versionPreflight: {

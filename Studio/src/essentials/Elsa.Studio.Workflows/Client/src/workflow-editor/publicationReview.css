@@ -314,3 +314,13 @@
     padding-right: 16px;
   }
 }
+
+.wf-publication-overview {
+  display: grid;
+  gap: 6px;
+  padding: 2px 0 6px;
+}
+
+.wf-publication-overview .wf-publication-selection {
+  font-size: 14px;
+}
