@@ -6,9 +6,9 @@
     "source_projects": 146,
     "test_projects": 148,
     "direct_project_references": 1604,
-    "direct_package_references": 1386,
+    "direct_package_references": 1387,
     "feature_classes": 113,
-    "specs": 246
+    "specs": 247
   },
   "generated_files": [
     "docs/maps/project-reference-map.md",

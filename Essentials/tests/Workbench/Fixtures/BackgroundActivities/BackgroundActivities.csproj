@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" PrivateAssets="all" />
     <ProjectReference Include="../../../../src/Activities/Runtime/Core/Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="../../../../src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj" PrivateAssets="all" />
     <ProjectReference Include="../../../../src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj" PrivateAssets="all" />

@@ -37,6 +37,8 @@ Essentials/tests/Workbench/
   Tests/WorkbenchProcess.cs
   Tests/WorkbenchBackgroundActivityRecoveryTests.cs
   Tests/NativeHostingScenario.cs
+  Tests/NativeHostingFixture.cs
+  Tests/WorkbenchProcessTests.cs
   Tests/NativeHostingConformanceTests.cs
   Fixtures/BackgroundActivities/
     BackgroundProbe.cs, ReceiptDeliveryBarrier.cs
@@ -86,6 +88,8 @@ The fixture is opt-in, configured for exact role and journal. It cannot synthesi
 The report maps concrete test names/results to every row, including skips and missing coverage. Diagnose a failing existing witness before changing timing or semantics.
 
 ## Delivery and rollback
+
+The demonstrated activation/task lifetime defect is delivered as a focused prerequisite in [PR #3077](https://github.com/elsa-workflows/elsa-foundation/pull/3077), on `agent/codex/3056-shell-task-lifetime`. Its six source/test files and generated test inventory are isolated from the process-fixture work. The local gate passed (Tasks 68, ShellReadiness 25, Events 13, Architecture 578, map freshness), and the exact-head hosted gate is pending. The clean self-review is recorded on head `435574a3adcef7ffa097b712603b8b21d0168300`. This prerequisite does not close #3056 or qualify the multi-host scenarios. Historical receipt-timeout attribution remains unproven. The same #3056 claim owns both the prerequisite and remaining qualification work.
 
 Implement fixture/profile setup first, then real takeover/fence controls, then integrated scenarios and evidence. Keep existing fixture users working at each step. For deployment rollback, stop new admission to the candidate provider, drain or explicitly recover accepted work with a readable compatible host, and retain published definitions, packages and durable state. Do not delete accepted instances or switch to a provider unable to read them. Orleans, other models, multi-machine partitions/clock skew and other databases remain unqualified here.
 

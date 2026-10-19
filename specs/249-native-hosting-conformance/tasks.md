@@ -11,17 +11,21 @@ Test cadence: this extends an existing test fixture and production path, not gre
 
 ## Phase 2: Shared fixture
 
-- [ ] T003 Extract shared REST definition/publish/state, package assembly and journal observations into `Essentials/tests/Workbench/Tests/NativeHostingScenario.cs`, adapting `Essentials/tests/Workbench/Tests/WorkbenchBackgroundActivityRecoveryTests.cs` without removing assertions.
-- [ ] T004 [P] Add owned PID, hard-kill, suspend/resume and safe cleanup controls in `Essentials/tests/Workbench/Tests/WorkbenchProcess.cs`; preserve restart directory transfer.
-- [ ] T005 Add explicit provider profiles, one immutable package copied to both feeds, shared absolute persistence/key/lock paths and bounded diagnostics in `Essentials/tests/Workbench/Tests/NativeHostingScenario.cs`; add shared journal configuration to `Essentials/tests/Workbench/Fixtures/BackgroundActivities/ReceiptDeliveryBarrier.cs` and overlap-safe observations in `Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundProbe.cs`.
+- [x] T003 Extract shared REST definition/publish/state, package assembly and journal observations into `Essentials/tests/Workbench/Tests/NativeHostingScenario.cs`, adapting `Essentials/tests/Workbench/Tests/WorkbenchBackgroundActivityRecoveryTests.cs` without removing assertions.
+- [x] T004 [P] Add owned PID, hard-kill, suspend/resume and safe cleanup controls in `Essentials/tests/Workbench/Tests/WorkbenchProcess.cs`; preserve restart directory transfer.
+- [ ] T005 Add explicit provider profiles, one immutable package copied to both feeds, shared absolute persistence/key/lock paths and bounded diagnostics in `Essentials/tests/Workbench/Tests/NativeHostingFixture.cs` and `Essentials/tests/Workbench/Tests/NativeHostingScenario.cs`; add shared journal configuration to `Essentials/tests/Workbench/Fixtures/BackgroundActivities/ReceiptDeliveryBarrier.cs` and overlap-safe observations in `Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundProbe.cs`.
 
-Checkpoint: root reviews the integrated fixture, builds the Workbench tests and runs preserved recovery assertions before adding takeover cases. No fixture is accepted from a subagent without root review.
+- [ ] T005a Repair the activation-token lifetime defect exposed by the preserved recovery baseline: separate startup cancellation from shell-owned background/recurring execution in `Essentials/src/Tasks/Elsa.Tasks/Services/TaskManager.cs`; prove cancellation during startup, survival after completed activation, shared shutdown joining and graceful event draining in Tasks/Events and real CShells warmup tests. Retain activation/body cancellation diagnostics in the Workbench witness. Do not attribute historical timeouts without matching evidence.
+
+T005a delivery: focused [PR #3077](https://github.com/elsa-workflows/elsa-foundation/pull/3077), reviewed head `435574a3a`; local Tasks/Readiness/Events/Architecture and map gates pass. Hosted gate and post-merge verification remain pending. Retain this task unchecked until delivery is verified. The diagnostic fixture remains part of the conformance branch.
+
+Checkpoint: root reviewed the shared fixture and explicit profile adaptation. The 19 October focused process run passed 7/7 (both profiles × both receipt orders, cancellation under both profiles, and lease-wait arithmetic), with no failures/skips. This establishes T003/T006/T016; it does not qualify concurrent survivor ownership or the stale-write fence. T005 remains under qualification until the two-host fixture is exercised. Earlier owned-process controls passed 8/8 combined recovery/shutdown/process cases before the profile adaptation. No fixture is accepted from a subagent without root review.
 
 ## Phase 3: US1 — Recover accepted work (P1)
 
 Independent test: the same REST-authored definition and pinned package recover admission, live bodies and committed receipts; both completion orders produce one native final step.
 
-- [ ] T006 [US1] Run the preserved crash-boundary and terminal-history scenario under explicit single-host/clustered profiles in `Essentials/tests/Workbench/Tests/WorkbenchBackgroundActivityRecoveryTests.cs`, retaining the published artifact rather than re-resolving catalog heads on another host.
+- [x] T006 [US1] Run the preserved crash-boundary and terminal-history scenario under explicit single-host/clustered profiles in `Essentials/tests/Workbench/Tests/WorkbenchBackgroundActivityRecoveryTests.cs`, retaining the published artifact rather than re-resolving catalog heads on another host.
 - [ ] T007 [US1] Add concurrent-owner/survivor recovery in `Essentials/tests/Workbench/Tests/NativeHostingConformanceTests.cs`, gating only test worker claims before takeover; assert both real PIDs, stable invocation/attempt, both receipt orders and no lost or duplicate native continuation.
 - [ ] T008 [US1] Run focused process cases from `specs/249-native-hosting-conformance/quickstart.md`; record logs/TRX and source/configuration identity for the final report.
 
@@ -46,14 +50,14 @@ Independent test: composition selects the intended provider, real graceful hando
 
 Independent test: identical/conflicting delivery retains existing outcomes and cancelled work stays terminal after late receipts and process loss.
 
-- [ ] T016 [US4] Run/extend cancellation and late-receipt process scenarios for applicable profiles in `Essentials/tests/Workbench/Tests/WorkbenchBackgroundActivityRecoveryTests.cs` and `Essentials/tests/Workbench/Tests/NativeHostingConformanceTests.cs`.
+- [x] T016 [US4] Run/extend cancellation and late-receipt process scenarios for applicable profiles in `Essentials/tests/Workbench/Tests/WorkbenchBackgroundActivityRecoveryTests.cs` and `Essentials/tests/Workbench/Tests/NativeHostingConformanceTests.cs`.
 - [ ] T017 [US4] Verify duplicate/conflicting acceptance using `Essentials/tests/Workflows/Runtime/Persistence/EntityFrameworkCore/Tests/BackgroundActivityWorkTests.cs`, `BackgroundActivityWorkCheckpointAtomicityTests.cs` and `NativeBackgroundActivityFlowchartEfTests.cs`; retain their contract/EF label and add process delivery observations where needed in `NativeHostingConformanceTests.cs`.
 
 ## Phase 7: Integrated review and delivery
 
 - [ ] T018 Review integrated behavior/DRY/cleanup and obtain independent review; complete the scenario evidence, limitations and source pins in `docs/reports/native-hosting-conformance.md` and runnable commands in `specs/249-native-hosting-conformance/quickstart.md`.
 - [ ] T019 Update affected lock files/maps if needed, including `docs/maps/manifest.json`; run architecture, map freshness, diff checks and relevant e2e for any production behavior change, recording exact commands/results in `docs/reports/native-hosting-conformance.md`.
-- [ ] T020 Recheck claims/open PRs; commit/push as the App, open one scoped PR linked to #3056, post validation and review receipts, then require exact-current-head CI and Maps before normal authorized merge. Update terminal spec status in `specs/249-native-hosting-conformance/spec.md` only when implemented.
+- [ ] T020 Recheck claims/open PRs; commit/push as the App, open scoped qualification PRs linked to #3056, following the separately delivered T005a prerequisite, post validation and review receipts, then require exact-current-head CI and Maps before normal authorized merge. Update terminal spec status in `specs/249-native-hosting-conformance/spec.md` only when implemented.
 - [ ] T021 Verify post-merge CI/Maps, reconcile #3056/#2905/#2892 and `docs/reports/native-hosting-conformance.md` evidence, and release the exact claim. Keep the broader program and successor work open.
 
 ## Dependencies and parallel work
