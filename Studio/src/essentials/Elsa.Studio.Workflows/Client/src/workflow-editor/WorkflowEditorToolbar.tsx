@@ -1,7 +1,8 @@
 import "./WorkflowEditorToolbar.css";
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { Check, ChevronRight, GitBranch, LoaderCircle, MoreHorizontal, Network, Play, Redo2, Save, Undo2 } from "lucide-react";
+import { Check, ChevronRight, LoaderCircle, MoreHorizontal, Network, Play, Redo2, Save, Undo2 } from "lucide-react";
 import { AnchoredPopover } from "@elsa-workflows/studio-ui";
+import { PublishActionButton, type WorkflowPublishMode } from "./PublishActionButton";
 
 export interface WorkflowToolbarActionGroup {
   label: string;
@@ -29,7 +30,7 @@ interface WorkflowEditorToolbarProps {
   onAutoLayout(): void;
   onBack(): void;
   onSave(): void;
-  onPublish(): void;
+  onPublish(mode: WorkflowPublishMode): void;
   onRun(): void;
   canRun: boolean;
   runTitle: string;
@@ -102,7 +103,7 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
           <button type="button" className="wf-icon-button" aria-label="Auto-layout" title="Auto-layout the canvas" disabled={!props.canAutoLayout} onClick={props.onAutoLayout}><Network size={16} /></button>
         </div>
         <button type="button" disabled={props.busy} onClick={props.onSave}><Save size={15} /> Save</button>
-        <button type="button" className="wf-review-button" disabled={props.busy} title={props.saving ? "Finishing the current save; the review will open once it settles." : undefined} onClick={props.onPublish}><GitBranch size={15} /> Review &amp; publish</button>
+        <PublishActionButton busy={props.busy} saving={props.saving} onPublish={props.onPublish} />
         {props.runStatus}
         <button type="button" className="wf-run-button" disabled={!props.canRun} title={props.runTitle} onClick={props.onRun}><Play size={15} /> Run</button>
         <button

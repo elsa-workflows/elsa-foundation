@@ -1,8 +1,10 @@
-import React from "react";
+import React, { useLayoutEffect } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createContributionRegistry, type StudioEndpointContext, type StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
+import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError, capabilityIds } from "../api/capabilities";
+import * as capabilities from "../api/capabilities";
 import type { WorkflowDraft, WorkflowExecutionInputs, WorkflowTestRunView } from "../workflowTypes";
 import type { WorkflowTestDriveSetupState } from "../workflow-editor/editorTypes";
 
@@ -31,6 +33,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   if (active) {
     flushSync(() => active!.root.unmount());
     active.container.remove();
@@ -39,6 +42,71 @@ afterEach(() => {
 });
 
 describe("workflow Test Run setup", () => {
+  it("withholds start on the first commit before setup loading effects run", async () => {
+    const onStart = vi.fn(async () => testRunView);
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    active = { root, container };
+    let initiallyDisabled = false;
+    function FirstCommitProbe() {
+      useLayoutEffect(() => {
+        initiallyDisabled = container.querySelector<HTMLButtonElement>("button[type='submit']")!.disabled;
+        container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      }, []);
+      return <WorkflowTestDrivePanel {...panelProps({ onStart, draft: draft({ state: { rootActivity: draft().state.rootActivity } }) })} />;
+    }
+    flushSync(() => root.render(<FirstCommitProbe />));
+    await settle();
+    expect(initiallyDisabled).toBe(true);
+    expect(onStart).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    new ApiCapabilityUnavailableError(capabilityIds.publishing, "workflow-draft-test-run-options"),
+    new ApiCapabilityUnavailableError(capabilityIds.publishing),
+    new ApiCapabilityVersionMismatchError(capabilityIds.publishing, "1", "2")
+  ])("explains unsupported setup, blocks starts, and retries successfully: %s", async error => {
+    const invalidate = vi.spyOn(capabilities, "invalidateApiCapabilityCache");
+    publishingMocks.getOptions.mockRejectedValueOnce(error);
+    const onStart = vi.fn(async () => testRunView);
+    const container = renderPanel({ onStart });
+    await settle();
+
+    expect(container.textContent).toContain("Test Run setup is unavailable on this backend. Use compatible Studio and backend versions, restart it, then select Refresh setup.");
+    expect(container.textContent).not.toContain("API capability 'elsa.api.publishing'");
+    expect(container.querySelector<HTMLButtonElement>("button[type='submit']")?.disabled).toBe(true);
+    flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    await settle();
+    expect(onStart).not.toHaveBeenCalled();
+
+    const refresh = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Refresh setup")!;
+    flushSync(() => refresh.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    await settle();
+
+    expect(invalidate).toHaveBeenCalledOnce();
+    expect(publishingMocks.getOptions).toHaveBeenCalledTimes(2);
+    expect(container.textContent).not.toContain("Test Run setup is unavailable");
+    expect(container.querySelector<HTMLButtonElement>("button[type='submit']")?.disabled).toBe(false);
+    changeValue(container.querySelector<HTMLInputElement>(".wf-run-input-list input")!, "order-1");
+    flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    await settle();
+    expect(onStart).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves the actual start-options request error", async () => {
+    publishingMocks.getOptions.mockRejectedValueOnce(new Error("HTTP 503 Service Unavailable"));
+    const onStart = vi.fn(async () => testRunView);
+    const container = renderPanel({ onStart });
+    await settle();
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("HTTP 503 Service Unavailable");
+    expect(container.querySelector<HTMLButtonElement>("button[type='submit']")?.disabled).toBe(true);
+    flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    await settle();
+    expect(onStart).not.toHaveBeenCalled();
+  });
+
   it("withholds submission until a lazy built-in stimulus editor loads", async () => {
     const httpOption = {
       optionId: "http-option",

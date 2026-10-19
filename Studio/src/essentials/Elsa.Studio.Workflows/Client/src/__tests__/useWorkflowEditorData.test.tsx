@@ -22,9 +22,11 @@ function createApi(
   options: {
     activities?: unknown[];
     recommended?: unknown[];
+    definitionResponses?: Array<unknown | Error | Promise<unknown>>;
   } = {}
 ) {
   let expressionAttempt = 0;
+  let definitionAttempt = 0;
   const getJson = vi.fn(async (path: string) => {
     if (path === "/capabilities") {
       return {
@@ -39,6 +41,9 @@ function createApi(
       };
     }
     if (path.endsWith("/definitions/definition-1")) {
+      const response = options.definitionResponses?.[Math.min(definitionAttempt++, options.definitionResponses.length - 1)];
+      if (response instanceof Error) throw response;
+      if (response !== undefined) return await response;
       return {
         definition: { id: "definition-1", name: "Test", createdAt: "", lastModifiedAt: "", versionCount: 0 },
         versions: []
@@ -63,10 +68,11 @@ const callbacks = {
   setError: vi.fn()
 };
 
-function Probe({ context }: { context: StudioEndpointContext }) {
+function Probe({ context, shouldLoadDraft }: { context: StudioEndpointContext; shouldLoadDraft?: () => boolean }) {
   const data = useWorkflowEditorData({ context, definitionId: "definition-1", ...callbacks });
   return (
     <div>
+      <output data-testid="definition-name">{data.details?.definition.name}</output>
       <output data-testid="expressions" data-status={data.expressionDescriptorStatus}>
         {data.expressionDescriptors.map(descriptor => descriptor.type).join(",")}
       </output>
@@ -74,23 +80,23 @@ function Probe({ context }: { context: StudioEndpointContext }) {
       <output data-testid="catalog">
         {data.catalog.map(activity => `${activity.activityVersionId}:${activity.activityDefinitionVersion ?? "-"}`).join(",")}
       </output>
-      <button type="button" onClick={() => void data.reload()}>Reload definition</button>
+      <button type="button" onClick={() => void data.reload(shouldLoadDraft ? { shouldLoadDraft } : undefined)}>Reload definition</button>
       <button type="button" onClick={() => void data.reloadExpressionDescriptors()}>Retry descriptors</button>
     </div>
   );
 }
 
-function render(context: StudioEndpointContext) {
+function render(context: StudioEndpointContext, shouldLoadDraft?: () => boolean) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
   active = { root, container };
-  flushSync(() => root.render(<Probe context={context} />));
+  flushSync(() => root.render(<Probe context={context} shouldLoadDraft={shouldLoadDraft} />));
   return container;
 }
 
-function rerender(context: StudioEndpointContext) {
-  flushSync(() => active!.root.render(<Probe context={context} />));
+function rerender(context: StudioEndpointContext, shouldLoadDraft?: () => boolean) {
+  flushSync(() => active!.root.render(<Probe context={context} shouldLoadDraft={shouldLoadDraft} />));
 }
 
 describe("useWorkflowEditorData expression descriptor contract", () => {
@@ -143,6 +149,39 @@ describe("useWorkflowEditorData expression descriptor contract", () => {
     flushSync(() => [...container.querySelectorAll<HTMLButtonElement>("button")]
       .find(button => button.textContent === "Retry descriptors")!.click());
     await waitFor(() => expect(output.dataset.status).toBe("failed"));
+
+    expect(callbacks.resetHistory).not.toHaveBeenCalled();
+    expect(callbacks.loadDraft).not.toHaveBeenCalled();
+    expect(callbacks.markSaved).not.toHaveBeenCalled();
+  });
+
+  it("refreshes definition details but preserves draft and baselines when the reload guard changes while awaiting", async () => {
+    let resolveRefresh!: (value: unknown) => void;
+    const refresh = new Promise<unknown>(resolve => { resolveRefresh = resolve; });
+    const definition = (name: string, draftId: string) => ({
+      definition: { id: "definition-1", name, createdAt: "", lastModifiedAt: "", versionCount: 0 },
+      draft: { id: draftId, definitionId: "definition-1", state: { rootActivity: null }, layout: [], validationErrors: [] },
+      versions: []
+    });
+    let mayLoadDraft = true;
+    const shouldLoadDraft = () => mayLoadDraft;
+    const api = createApi([[]], {
+      definitionResponses: [definition("Before refresh", "draft-before"), refresh]
+    });
+    const container = render(api.context, shouldLoadDraft);
+    const name = container.querySelector<HTMLOutputElement>("[data-testid='definition-name']")!;
+    await waitFor(() => expect(name.textContent).toBe("Before refresh"));
+
+    callbacks.resetHistory.mockClear();
+    callbacks.loadDraft.mockClear();
+    callbacks.markSaved.mockClear();
+    flushSync(() => [...container.querySelectorAll<HTMLButtonElement>("button")]
+      .find(button => button.textContent === "Reload definition")!.click());
+    await waitFor(() => expect(api.getJson.mock.calls.filter(([path]) => path.endsWith("/definitions/definition-1"))).toHaveLength(2));
+
+    mayLoadDraft = false;
+    resolveRefresh(definition("After refresh", "draft-after"));
+    await waitFor(() => expect(name.textContent).toBe("After refresh"));
 
     expect(callbacks.resetHistory).not.toHaveBeenCalled();
     expect(callbacks.loadDraft).not.toHaveBeenCalled();

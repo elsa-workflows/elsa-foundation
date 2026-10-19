@@ -34,7 +34,7 @@ function ProposalChange({
   onDecision(selected: boolean): void;
 }) {
   const title = review.supported
-    ? `${review.operation} ${review.memberKind} ${review.referenceKey}`
+    ? `${review.operation} ${review.memberKind} ${review.proposed?.name || review.current?.name || review.referenceKey}`
     : "Unsupported provider proposal change";
   const impactClass = review.impact === "Compatible" ? "nonbehavioral" :
     review.impact === "Unknown" ? "warning" :
@@ -46,9 +46,13 @@ function ProposalChange({
     </header>
     <p>{review.impactReasons.join(" ")}</p>
     {review.supported ? <dl className="ad-impact-facts" aria-label={`${title} structured comparison`}>
-      <ContractFacts title="Current" facts={contractMemberFacts(review.current)} />
-      <ContractFacts title="Proposed" facts={contractMemberFacts(review.proposed)} />
+      <ContractFacts title="Current" facts={contractMemberFacts(review.current).filter(isCommonFact)} />
+      <ContractFacts title="Proposed" facts={contractMemberFacts(review.proposed).filter(isCommonFact)} />
     </dl> : <div className="ad-unavailable-note"><strong>Unknown structured kind</strong><span>The opaque provider payload is intentionally not rendered. This change cannot be selected.</span></div>}
+    {review.supported ? <details className="ad-proposal-technical"><summary>Technical comparison</summary><dl className="ad-impact-facts">
+      <ContractFacts title="Current" facts={contractMemberFacts(review.current).filter(fact => !isCommonFact(fact))} />
+      <ContractFacts title="Proposed" facts={contractMemberFacts(review.proposed).filter(fact => !isCommonFact(fact))} />
+    </dl></details> : null}
     <div className="ad-publication-actions" role="group" aria-label={`Review ${title}`}>
       <button type="button" aria-pressed={selected} onClick={() => onDecision(true)} disabled={!review.supported}><Check size={15} aria-hidden /> Accept</button>
       <button type="button" aria-pressed={!selected} onClick={() => onDecision(false)}><X size={15} aria-hidden /> Reject</button>
@@ -58,4 +62,8 @@ function ProposalChange({
 
 function ContractFacts({ title, facts }: { title: string; facts: string[] }) {
   return <div><dt>{title}</dt>{facts.map(fact => <dd key={fact}>{fact}</dd>)}</div>;
+}
+
+function isCommonFact(fact: string) {
+  return !fact.startsWith("Reference key:") && !fact.startsWith("Durability:");
 }

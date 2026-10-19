@@ -53,6 +53,7 @@ export function JavaScriptExpandedEditor(props: StudioExpressionEditorProps) {
         <span>JavaScript</span>
       </div>
       <MemoizedJavaScriptCodeEditor {...props} profile="expanded" />
+      <p className="js-expression-help">Use an expression, or write statements and return a value.</p>
     </div>
   );
 }

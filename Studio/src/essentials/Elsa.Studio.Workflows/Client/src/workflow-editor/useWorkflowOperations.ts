@@ -56,7 +56,7 @@ interface WorkflowOperationsParams {
   publishedExecutable?: PublishedExecutableTarget | null;
   saveDraft(draft: WorkflowDraft, savedStatus: string): Promise<WorkflowDraft>;
   flushPendingSave(): Promise<void>;
-  reload(): Promise<void>;
+  reload(options?: { shouldLoadDraft(): boolean }): Promise<void>;
   startTestRun(testRun: WorkflowTestRunState): void;
   setPublishedArtifact(id: string | null): void;
   setOperation(operation: WorkflowEditorOperation): void;
@@ -89,8 +89,12 @@ export function useWorkflowOperations({
   setAutosavePaused
 }: WorkflowOperationsParams) {
   const [publicationReview, setPublicationReview] = useState<PublicationReviewState | null>(null);
+  const latestDraftRef = useRef(draft);
+  latestDraftRef.current = draft;
   const publicationReviewRequest = useRef(0);
   const publicationMutationInFlight = useRef(false);
+  const publicationPreparationInFlight = useRef(false);
+  const [quickPublishing, setQuickPublishing] = useState(false);
   const [expressionValidationWarning, setExpressionValidationWarning] = useState<{
     draft: WorkflowDraft;
     inputs: WorkflowExecutionInputs;
@@ -145,77 +149,6 @@ export function useWorkflowOperations({
       setOperation("idle");
     }
   }, [draft, busy, saveDraft, setOperation, setStatus]);
-
-  const preparePublication = useCallback(async () => {
-    if (!draft || busy) return;
-    setAutosavePaused(true);
-    setOperation("publicationPreflight");
-    setError("");
-    // Settle any in-flight or pending autosave before capturing the review snapshot. Previously a save
-    // racing the review left "Review & publish" appearing to do nothing; now it awaits (with feedback).
-    setStatus("Saving before review...");
-    await flushPendingSave();
-    const draftSnapshot = structuredClone(draft);
-    setStatus("Preparing publication review...");
-    try {
-      // Review preparation is deliberately read-only. The captured draft is not saved or promoted
-      // until the author explicitly presses Publish.
-      const [policy, slotsView, versionCapabilities] = await Promise.all([
-        getPublicationPolicy(context, draftSnapshot.definitionId),
-        listPublicationSlots(context, draftSnapshot.definitionId),
-        getWorkflowPromotionVersionCapabilities(context)
-      ]);
-      const slots = slotsView.available ? slotsView.slots : [];
-      // Only a publishing-sourced activation has a design version. A slot occupied by another activation
-      // source stays in the review as occupied, without a version, rather than failing the review.
-      const publishedSlots = slots.filter(isPublishingActivation);
-      const incompleteSlot = publishedSlots.find(slot => !slot.publication?.versionId);
-      if (incompleteSlot) throw new Error(`Publication slot '${incompleteSlot.slotName}' did not include its active version.`);
-      const versionsById = new Map<string, Awaited<ReturnType<typeof getWorkflowDefinitionVersion>>>();
-      await Promise.all(publishedSlots.map(async slot => {
-        const versionId = slot.publication!.versionId;
-        if (!versionsById.has(versionId)) versionsById.set(versionId, await getWorkflowDefinitionVersion(context, versionId));
-      }));
-      const slotVersions = Object.fromEntries(publishedSlots.map(slot => [slot.slotName, versionsById.get(slot.publication!.versionId)!]));
-      const review = createPublicationReview({
-        draft: draftSnapshot,
-        details,
-        policy,
-        slots,
-        slotsUnavailableReason: slotsView.available ? undefined : slotsView.reason,
-        slotVersions,
-        catalog
-      });
-      review.versionPreflightSupported = versionCapabilities.preflight;
-      review.exactVersionSupported = versionCapabilities.exact;
-      if (review.validationErrors.length || review.intent.action === "sideBySide" && !review.intent.slotName) {
-        setPublicationReview(review);
-      } else {
-        const intent = publicationIntentFor(review, review.intent.action ?? "replace", review.intent.slotName ?? review.policy.defaultSlotName);
-        const [preflight, versionPreflight] = await Promise.all([
-          preflightSnapshot(context, review, intent),
-          review.versionPreflightSupported
-            ? preflightDraftPromotion(context, review.draftSnapshot.id)
-            : Promise.resolve(undefined)
-        ]);
-        setPublicationReview({
-          ...review,
-          intent,
-          preflight,
-          versionPreflight,
-          proposedVersion: versionPreflight?.resolvedVersion ?? review.proposedVersion
-        });
-      }
-      setStatus("");
-    } catch (error) {
-      setPublicationReview(null);
-      setAutosavePaused(false);
-      setStatus("");
-      setError(`Could not prepare a trustworthy publication review. No changes were saved, promoted, or published. ${error instanceof Error ? error.message : String(error)}`);
-    } finally {
-      setOperation("idle");
-    }
-  }, [draft, details, catalog, busy, context, flushPendingSave, setAutosavePaused, setError, setOperation, setStatus]);
 
   const reviewPublication = useCallback(async (
     review: PublicationReviewState,
@@ -276,9 +209,11 @@ export function useWorkflowOperations({
     }
   }, [context, setError]);
 
-  const confirmPublication = useCallback(async (
+  const executePublication = useCallback(async (
+    publicationReview: PublicationReviewState,
     intent: PublicationIntent,
-    versionSelection: PublicationVersionSelection = publicationReview?.versionSelection ?? { mode: "automatic" }
+    versionSelection: PublicationVersionSelection,
+    direct = false
   ) => {
     if (!publicationReview || publicationReview.phase === "success") return;
     if (intent.action === "sideBySide" && !intent.slotName?.trim()) {
@@ -369,7 +304,7 @@ export function useWorkflowOperations({
         preflightToken: reviewedPreflight.preflightToken
       });
       setPublishedArtifact(published.artifactId);
-      setPublicationReview(current => current ? {
+      setPublicationReview(current => direct ? null : current ? {
         ...current,
         phase: "success",
         progressStep: undefined,
@@ -380,7 +315,19 @@ export function useWorkflowOperations({
       } : current);
       setStatus(`Published to ${published.slotName}`);
       try {
-        await reload();
+        // Direct publication leaves the editor usable. Refresh only if the author has not made
+        // newer edits since the published snapshot; autosave will persist those edits after resuming.
+        const shouldLoadDraft = () => {
+          const currentDraft = latestDraftRef.current;
+          const currentSignature = currentDraft && getDraftSignature(currentDraft);
+          return currentDraft?.id === publicationReview.draftSnapshot.id
+            && (currentSignature === getDraftSignature(publicationReview.draftSnapshot)
+              || Boolean(savedDraft && currentSignature === getDraftSignature(savedDraft)));
+        };
+        await reload({ shouldLoadDraft });
+        if (!shouldLoadDraft()) {
+          setStatus(`Published to ${published.slotName}; newer edits remain in your draft.`);
+        }
       } catch (reloadError) {
         setError(`Publication succeeded, but the editor could not refresh: ${reloadError instanceof Error ? reloadError.message : String(reloadError)}`);
       }
@@ -440,7 +387,98 @@ export function useWorkflowOperations({
       publicationMutationInFlight.current = false;
       setOperation("idle");
     }
-  }, [context, publicationReview, reload, reviewPublication, saveDraft, setAutosavePaused, setError, setOperation, setPublishedArtifact, setStatus]);
+  }, [context, reload, reviewPublication, saveDraft, setAutosavePaused, setError, setOperation, setPublishedArtifact, setStatus]);
+
+  const confirmPublication = useCallback(async (
+    intent: PublicationIntent,
+    versionSelection: PublicationVersionSelection = publicationReview?.versionSelection ?? { mode: "automatic" }
+  ) => {
+    if (publicationReview) await executePublication(publicationReview, intent, versionSelection);
+  }, [executePublication, publicationReview]);
+
+  const preparePublication = useCallback(async (mode: "publish" | "review" = "review") => {
+    if (!draft || busy || publicationPreparationInFlight.current || publicationMutationInFlight.current) return;
+    publicationPreparationInFlight.current = true;
+    setAutosavePaused(true);
+    setOperation("publicationPreflight");
+    setError("");
+    // Settle any in-flight or pending autosave before capturing the review snapshot. Previously a save
+    // racing the review left "Review & publish" appearing to do nothing; now it awaits (with feedback).
+    setStatus(mode === "publish" ? "Saving before publication..." : "Saving before review...");
+    try {
+      await flushPendingSave();
+      const draftSnapshot = structuredClone(draft);
+      setStatus(mode === "publish" ? "Preparing publication..." : "Preparing publication review...");
+      // Policy and preflight reads never promote a version. Both actions use the same snapshot
+      // and authoritative evidence; only direct Publish proceeds without an author review dialog.
+      const [policy, slotsView, versionCapabilities] = await Promise.all([
+        getPublicationPolicy(context, draftSnapshot.definitionId),
+        listPublicationSlots(context, draftSnapshot.definitionId),
+        getWorkflowPromotionVersionCapabilities(context)
+      ]);
+      const slots = slotsView.available ? slotsView.slots : [];
+      // Only a publishing-sourced activation has a design version. A slot occupied by another activation
+      // source stays in the review as occupied, without a version, rather than failing the review.
+      const publishedSlots = slots.filter(isPublishingActivation);
+      const incompleteSlot = publishedSlots.find(slot => !slot.publication?.versionId);
+      if (incompleteSlot) throw new Error(`Publication slot '${incompleteSlot.slotName}' did not include its active version.`);
+      const versionsById = new Map<string, Awaited<ReturnType<typeof getWorkflowDefinitionVersion>>>();
+      await Promise.all(publishedSlots.map(async slot => {
+        const versionId = slot.publication!.versionId;
+        if (!versionsById.has(versionId)) versionsById.set(versionId, await getWorkflowDefinitionVersion(context, versionId));
+      }));
+      const slotVersions = Object.fromEntries(publishedSlots.map(slot => [slot.slotName, versionsById.get(slot.publication!.versionId)!]));
+      let review = createPublicationReview({
+        draft: draftSnapshot,
+        details,
+        policy,
+        slots,
+        slotsUnavailableReason: slotsView.available ? undefined : slotsView.reason,
+        slotVersions,
+        catalog
+      });
+      review.versionPreflightSupported = versionCapabilities.preflight;
+      review.exactVersionSupported = versionCapabilities.exact;
+      if (!review.validationErrors.length && !(review.intent.action === "sideBySide" && !review.intent.slotName)) {
+        const intent = publicationIntentFor(review, review.intent.action ?? "replace", review.intent.slotName ?? review.policy.defaultSlotName);
+        const [preflight, versionPreflight] = await Promise.all([
+          preflightSnapshot(context, review, intent),
+          review.versionPreflightSupported
+            ? preflightDraftPromotion(context, review.draftSnapshot.id)
+            : Promise.resolve(undefined)
+        ]);
+        review = {
+          ...review,
+          intent,
+          preflight,
+          versionPreflight,
+          proposedVersion: versionPreflight?.resolvedVersion ?? review.proposedVersion
+        };
+      }
+      const canPublishDirectly = mode === "publish"
+        && !review.validationErrors.length
+        && !review.slotsUnavailableReason
+        && publicationPreflightMatchesIntent(review.preflight, review.intent)
+        && review.preflight.canActivate
+        && (!review.versionPreflight || review.versionPreflight.isReady);
+      if (canPublishDirectly) setQuickPublishing(true);
+      setPublicationReview(review);
+      if (canPublishDirectly) {
+        await executePublication(review, review.intent, review.versionSelection, true);
+      } else {
+        setStatus(mode === "publish" ? "Publication needs review." : "");
+      }
+    } catch (error) {
+      setPublicationReview(null);
+      setAutosavePaused(false);
+      setStatus("");
+      setError(`Could not prepare a trustworthy publication review. No version was promoted or published. ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      publicationPreparationInFlight.current = false;
+      setQuickPublishing(false);
+      setOperation("idle");
+    }
+  }, [draft, details, catalog, busy, context, executePublication, flushPendingSave, setAutosavePaused, setError, setOperation, setStatus]);
 
   const cancelPublication = useCallback(() => {
     publicationReviewRequest.current += 1;
@@ -550,7 +588,7 @@ export function useWorkflowOperations({
     exportExecutableArtifact,
     save,
     preparePublication,
-    publicationReview,
+    publicationReview: quickPublishing ? null : publicationReview,
     reviewPublication,
     confirmPublication,
     cancelPublication,

@@ -15,6 +15,7 @@ import type {
   WorkflowTestRunView
 } from "../workflowTypes";
 import { getWorkflowDraftTestRunOptions, getWorkflowTestRun } from "../api/publishing";
+import { ApiCapabilityUnavailableError, ApiCapabilityVersionMismatchError, capabilityIds, invalidateApiCapabilityCache } from "../api/capabilities";
 import { readWorkflowInputs } from "../workflowReferenceAuthoring";
 import { readArgumentType } from "../workflowProperties";
 import { createDraftSnapshotId, getDraftSignature } from "./editorHelpers";
@@ -23,6 +24,8 @@ import { parseWorkflowRunInputs, type WorkflowRunInputDrafts } from "../workflow
 import type { WorkflowTestDriveSetupState } from "./editorTypes";
 
 type TestDriveSnapshot = { draft: WorkflowDraft; signature: string; snapshotId: string };
+const testRunOptionsRelation = "workflow-draft-test-run-options";
+const testRunSetupUnavailableMessage = "Test Run setup is unavailable on this backend. Use compatible Studio and backend versions, restart it, then select Refresh setup.";
 
 export function WorkflowTestDrivePanel({
   context,
@@ -49,8 +52,9 @@ export function WorkflowTestDrivePanel({
   const [options, setOptions] = useState<WorkflowTestRunOption[]>([]);
   const [inputContract, setInputContract] = useState<WorkflowTestRunInputContract | null>(null);
   const [optionDiagnostics, setOptionDiagnostics] = useState<{ code: string; message: string; nodeId?: string | null }[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [testRunSetupUnavailable, setTestRunSetupUnavailable] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [selectedOptionId, setSelectedOptionId] = useState(() => setupState?.selectedOptionId ?? "");
   const [selectedModeId, setSelectedModeId] = useState(() => setupState?.selectedModeId ?? "");
@@ -90,6 +94,7 @@ export function WorkflowTestDrivePanel({
     let current = true;
     setLoading(true);
     setLoadError("");
+    setTestRunSetupUnavailable(false);
     getWorkflowDraftTestRunOptions(context, {
       definitionId: snapshot.draft.definitionId,
       snapshotId: snapshot.snapshotId,
@@ -117,12 +122,21 @@ export function WorkflowTestDrivePanel({
       setOptions([]);
       setInputContract(null);
       setOptionDiagnostics([]);
-      setLoadError(error instanceof Error ? error.message : "Start options could not be loaded.");
+      const unsupportedTestRunSetup = (error instanceof ApiCapabilityUnavailableError
+        && error.capabilityId === capabilityIds.publishing
+        && (!error.relation || error.relation === testRunOptionsRelation))
+        || (error instanceof ApiCapabilityVersionMismatchError && error.capabilityId === capabilityIds.publishing);
+      setTestRunSetupUnavailable(unsupportedTestRunSetup);
+      setLoadError(unsupportedTestRunSetup
+        ? testRunSetupUnavailableMessage
+        : error instanceof Error ? error.message : "Start options could not be loaded.");
     }).finally(() => current && setLoading(false));
     return () => { current = false; };
   }, [context, reloadKey, snapshot]);
 
   const refresh = () => {
+    setLoading(true);
+    if (testRunSetupUnavailable) invalidateApiCapabilityCache(context);
     setSnapshot(capture(draft));
     setReloadKey(value => value + 1);
   };
@@ -130,6 +144,7 @@ export function WorkflowTestDrivePanel({
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setActionError("");
+    if (loading || loadError) return;
     if (isStale) {
       setLoadError("The draft changed. Refresh the setup to use its latest snapshot.");
       return;
@@ -310,7 +325,7 @@ export function WorkflowTestDrivePanel({
         ) : null}
         {actionError ? <div className="wf-test-drive-error" role="alert">{actionError}</div> : null}
         <div className="wf-test-drive-actions">
-          <button type="submit" disabled={busy || loading || isStale || triggerUnavailable || !snapshot.draft.state.rootActivity}>{busy ? "Starting…" : editor?.startLabel ?? "Run workflow"}</button>
+          <button type="submit" disabled={busy || loading || isStale || Boolean(loadError) || triggerUnavailable || !snapshot.draft.state.rootActivity}>{busy ? "Starting…" : editor?.startLabel ?? "Run workflow"}</button>
         </div>
       </form>
       </Suspense>
