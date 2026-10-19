@@ -396,6 +396,18 @@ describe("Activity Definition authoring", () => {
       JSON.stringify((body as { contract: { inputs: Array<{ default: unknown }> } }).contract.inputs[0]?.default) === JSON.stringify({ syntax: "Literal", value: "present", futureDefaultField: "retained" })
     )).toBe(true));
 
+    change(controlByLabel<HTMLSelectElement>(customerNote, "Default"), "null");
+    click(buttonByText(customerNote, "Apply default"));
+    await waitFor(() => expect(putJson.mock.calls.some(([, body]) =>
+      JSON.stringify((body as { contract: { inputs: Array<{ default: unknown }> } }).contract.inputs[0]?.default) === JSON.stringify({ syntax: "Literal", value: null, futureDefaultField: "retained" })
+    )).toBe(true));
+    change(controlByLabel<HTMLSelectElement>(customerNote, "Default"), "literal");
+    change(controlByLabel<HTMLInputElement>(customerNote, "Value"), "present again");
+    click(buttonByText(customerNote, "Apply default"));
+    await waitFor(() => expect(putJson.mock.calls.some(([, body]) =>
+      JSON.stringify((body as { contract: { inputs: Array<{ default: unknown }> } }).contract.inputs[0]?.default) === JSON.stringify({ syntax: "Literal", value: "present again", futureDefaultField: "retained" })
+    )).toBe(true));
+
     change(controlByLabel<HTMLSelectElement>(customerNote, "Default"), "none");
     click(buttonByText(customerNote, "Apply default"));
     await waitFor(() => expect(putJson.mock.calls.some(([, body]) =>
@@ -706,7 +718,7 @@ describe("Activity Definition authoring", () => {
     click(buttonByText(quantityPane, "Apply default"));
     await waitForText(rendered.container, "Saved revision 4");
     expect(putJson).toHaveBeenCalledTimes(1);
-    expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(true);
+    await waitFor(() => expect(requestStudioNavigation(window.location.pathname, "/dashboard")).toBe(true));
     selectContractMember(rendered.container, "input", "message");
     await rendered.unmount();
   });

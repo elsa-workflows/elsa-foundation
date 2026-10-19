@@ -670,6 +670,7 @@ function DefaultEditor({ member, type, expressions, readOnly, onStatusChange, on
     setCandidate(next);
     setCandidateValidity(true);
   };
+  const literalCandidate = (value: unknown) => ({ ...(candidate?.syntax === "Literal" ? candidate : {}), syntax: "Literal", value });
   const initialLiteral = () => primitiveEditor
     ? primitiveEditor === "text" ? "" : primitiveEditor === "number" ? 0 : false
     : supportsNull ? null : "";
@@ -678,8 +679,8 @@ function DefaultEditor({ member, type, expressions, readOnly, onStatusChange, on
     <label><span>Default</span><select data-contract-field="default" aria-label="Default" value={selectedMode} onChange={event => {
       const next = event.target.value;
       if (next === "none") updateCandidate(null);
-      if (next === "literal") updateCandidate({ syntax: "Literal", value: initialLiteral() });
-      if (next === "null") updateCandidate({ syntax: "Literal", value: null });
+      if (next === "literal") updateCandidate(literalCandidate(initialLiteral()));
+      if (next === "null") updateCandidate(literalCandidate(null));
       if (next === "expression" && expressions[0]) updateCandidate({ syntax: expressions[0].type, value: "" });
     }} disabled={readOnly}>
       <option value="none">No default</option>
