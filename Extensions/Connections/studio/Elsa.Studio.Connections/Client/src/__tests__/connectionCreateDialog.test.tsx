@@ -215,10 +215,12 @@ describe("connection credential creation", () => {
     await waitFor(() => container.textContent?.includes("Payments API") === true);
     expect(postJson).toHaveBeenCalledTimes(3);
 
+    const close = container.querySelector<HTMLButtonElement>('[aria-label="Close create connection dialog"]')!;
+    close.focus();
     document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true }));
     expect(document.activeElement).toBe(button(container, "Cancel"));
     document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
-    expect(document.activeElement).toBe(control<HTMLInputElement>(container, "Name"));
+    expect(document.activeElement).toBe(close);
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
@@ -347,6 +349,7 @@ describe("connection credential creation", () => {
     const { container: host, rerender } = renderConnectionsPage(endpointA, dialogs);
 
     await waitFor(() => host.textContent?.includes("Endpoint A Connection") === true);
+    clickButton(host, "Details");
     clickButton(host, action);
     expect(dialogs.confirm).toHaveBeenCalledWith({ message: `${action} a.connection?`, tone: "danger" });
 
@@ -370,6 +373,7 @@ describe("connection credential creation", () => {
     const { container: host, rerender } = renderConnectionsPage(endpointA);
 
     await waitFor(() => host.textContent?.includes("Endpoint A Connection") === true);
+    clickButton(host, "Details");
     clickButton(host, "Test");
     expect(endpointA.http.postJson).toHaveBeenCalledWith("/connections/a.connection/test", {});
 
@@ -393,6 +397,7 @@ describe("connection credential creation", () => {
     const { container: host, rerender } = renderConnectionsPage(endpointA);
 
     await waitFor(() => host.textContent?.includes("Endpoint A Connection") === true);
+    clickButton(host, "Details");
     clickButton(host, "Test");
 
     rerender(endpointB);

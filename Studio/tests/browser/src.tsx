@@ -1703,6 +1703,11 @@ if (activityIconsFixture && searchParams.get("host-override") === "1") {
 const root = createRoot(document.getElementById("root")!);
 
 async function renderRequestedFixture() {
+  if (searchParams.get("mode") === "connections") {
+    const { ConnectionsFixture } = await import("./connectionsFixture");
+    root.render(<ConnectionsFixture />);
+    return;
+  }
   if (workflowPublishChoiceFixture) {
     const { WorkflowPublishChoiceFixture } = await import("./workflowPublishChoiceFixture");
     root.render(<WorkflowPublishChoiceFixture />);
@@ -1716,6 +1721,7 @@ async function renderRequestedFixture() {
   if (searchParams.get("mode") === "studio-scroll-containment") {
     const { StudioScrollContainmentFixture } = await import("./studioScrollContainmentFixture");
     root.render(<StudioScrollContainmentFixture />);
+
     return;
   }
   if (searchParams.get("mode") === "incident-diagnostics") {
