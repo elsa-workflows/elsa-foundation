@@ -77,9 +77,15 @@ public sealed class StatementBindingTests
     [Theory]
     [InlineData("")]
     [InlineData(" \n\t")]
+    public async Task Empty_binding_is_rejected_by_the_definition_contract(string source)
+    {
+        await Assert.ThrowsAnyAsync<ArgumentException>(() => EvaluateAsync(source));
+    }
+
+    [Theory]
     [InlineData("// A comment is not a value.")]
     [InlineData("/* A comment is not a value. */")]
-    public async Task Empty_binding_is_rejected_before_execution(string source)
+    public async Task Comment_only_binding_is_rejected_before_execution(string source)
     {
         await Assert.ThrowsAnyAsync<ParseErrorException>(() => EvaluateAsync(source));
     }
