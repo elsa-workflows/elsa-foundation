@@ -100,7 +100,7 @@ not automatic constitution violations.
 
 | Domain | Catalog |
 |---|---|
-| Secrets core (contracts — manager, resolver, repository, store, type provider, audit sink) | [`Essentials/src/Secrets/Core/EXTENSION_POINTS.md`](Essentials/src/Secrets/Core/EXTENSION_POINTS.md) |
+| Secrets core (contracts — manager, resolver, repository, store, type and scope providers, audit sink) | [`Essentials/src/Secrets/Core/EXTENSION_POINTS.md`](Essentials/src/Secrets/Core/EXTENSION_POINTS.md) |
 | Secrets (default services + shell feature registration) | [`Essentials/src/Secrets/Elsa.Secrets/EXTENSION_POINTS.md`](Essentials/src/Secrets/Elsa.Secrets/EXTENSION_POINTS.md) |
 | Secrets Entity Framework Core persistence (the Secrets persistence family under ADR 0073) | [`Essentials/src/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](Essentials/src/Secrets/Persistence/EntityFrameworkCore/EXTENSION_POINTS.md) |
 

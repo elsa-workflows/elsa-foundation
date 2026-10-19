@@ -2,6 +2,7 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { SecretsPage } from "../SecretsPage";
 
 const cleanup = new Set<() => void>();
@@ -60,12 +61,52 @@ describe("secrets page", () => {
     await waitForText(container, "Payments API");
     openEditor(container);
     flushSync(() => change(container.querySelector<HTMLInputElement>(".secrets-edit-form input")!, "Updated payments"));
-    clickButton(container, "Save metadata");
+    clickButton(container, "Save changes");
     await waitForText(container, "Secret metadata updated.");
     expect(container.querySelector("[role=dialog]")).toBeNull();
     expect(container.querySelector("table")?.textContent).toContain("Updated payments");
-    expect(document.activeElement?.getAttribute("data-secret-open")).toBe("payments.api");
+    expect(document.activeElement?.getAttribute("data-secret-edit")).toBe("payments.api");
     expect(putJson).toHaveBeenCalledWith("/secrets/payments.api", { displayName: "Updated payments", description: "Token for payment provider" });
+  });
+
+  it("keeps Scope read-only and tucks secondary metadata behind native details", async () => {
+    const { container } = render({ getItems: () => [paymentSecret({
+      scope: "module.payments",
+      tags: ["billing"],
+      updatedAt: "2026-06-25T00:00:00Z",
+      expiresAt: "2026-12-31T00:00:00Z"
+    })] });
+    await waitForText(container, "Payments API");
+    openEditor(container);
+    const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
+
+    expect(dialog.querySelector("h3")?.textContent).toBe("Edit secret");
+    expect(dialog.querySelector<HTMLInputElement>("[data-dialog-initial-focus]")?.value).toBe("Payments API");
+    expect(document.activeElement?.getAttribute("data-dialog-initial-focus")).not.toBeNull();
+    const description = dialog.querySelector<HTMLTextAreaElement>(".secrets-edit-form textarea")!;
+    expect(description.id).toBeTruthy();
+    expect(description.labels?.[0]?.htmlFor).toBe(description.id);
+    expect(description.labels?.[0]?.textContent).toBe("Description");
+    expect(description.labels?.[0]?.contains(description)).toBe(false);
+    const scopeInput = dialog.querySelector<HTMLInputElement>(".secrets-editor-scope input")!;
+    expect(scopeInput.labels?.[0]?.textContent).toBe("Scope");
+    expect(scopeInput.readOnly).toBe(true);
+    expect(scopeInput.value).toBe("module.payments");
+    const scopeHelp = dialog.querySelector(`#${scopeInput.getAttribute("aria-describedby")}`)!;
+    expect(scopeHelp.textContent).toContain("match it (ignoring case)");
+    expect(scopeHelp.textContent).toContain("Scope does not grant access.");
+    expect(scopeHelp.textContent).toContain("Scope is read-only in this editor.");
+
+    const disclosure = dialog.querySelector<HTMLDetailsElement>("details")!;
+    expect(disclosure.open).toBe(false);
+    expect(disclosure.querySelector("summary")?.textContent).toBe("Details");
+    flushSync(() => disclosure.querySelector("summary")?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    expect(disclosure.open).toBe(true);
+    expect(disclosure.textContent).toContain("Created");
+    expect(disclosure.textContent).toContain("Updated");
+    expect(disclosure.textContent).toContain("Store capability");
+    expect(dialog.querySelector(".secrets-tags")?.textContent).toContain("billing");
+    expect([...dialog.querySelectorAll(".secrets-dialog-actions button")].map(button => button.textContent).join(" ")).toContain("Save changes");
   });
 
   it("waits for a pending save before allowing dismissal", async () => {
@@ -75,7 +116,7 @@ describe("secrets page", () => {
     await waitForText(container, "Payments API");
     openEditor(container);
     flushSync(() => change(container.querySelector<HTMLInputElement>(".secrets-edit-form input")!, "Pending save"));
-    clickButton(container, "Save metadata");
+    clickButton(container, "Save changes");
     await waitFor(() => putJson.mock.calls.length === 1);
     const editor = container.querySelector<HTMLElement>("[role=dialog]")!;
     flushSync(() => editor.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
@@ -92,13 +133,13 @@ describe("secrets page", () => {
     await waitForText(container, "Payments API");
     openEditor(container);
     flushSync(() => change(container.querySelector<HTMLInputElement>(".secrets-edit-form input")!, "Retry payments"));
-    clickButton(container, "Save metadata");
+    clickButton(container, "Save changes");
     await waitForText(container, "Metadata save unavailable.");
     const editor = container.querySelector<HTMLElement>("[role=dialog]")!;
     expect(editor).not.toBeNull();
     expect(editor.querySelector("[role=alert]")?.textContent).toContain("Metadata save unavailable.");
     expect(editor.querySelector<HTMLInputElement>(".secrets-edit-form input")?.value).toBe("Retry payments");
-    clickButton(container, "Save metadata");
+    clickButton(container, "Save changes");
     await waitForText(container, "Secret metadata updated.");
     expect(container.querySelector("[role=dialog]")).toBeNull();
     expect(putJson).toHaveBeenCalledTimes(2);
@@ -152,6 +193,100 @@ describe("secrets page", () => {
     await waitFor(() => !!container.querySelector("[role=dialog][aria-label='Create secret']"));
   });
 
+  it("keeps an open create form and loaded secrets when descriptor refresh fails, then retries in place", async () => {
+    let descriptorRequests = 0;
+    const descriptors = () => {
+      descriptorRequests++;
+      if (descriptorRequests === 2) throw new Error("private catalog failure");
+      return {
+        types: [{ name: "text", displayName: "Text", description: "", editorHint: "text", supportedStoreNames: ["encrypted"] }],
+        stores: [{ name: "encrypted", displayName: "Encrypted", description: "", capabilities: 1, isReadOnly: false }],
+        scopes: [{ name: "module.payments", displayName: "Payments module", description: "Payment credentials", source: "Payments module" }]
+      };
+    };
+    const { container } = render({ getDescriptors: descriptors });
+    await waitForText(container, "Payments API");
+    await waitFor(() => !container.querySelector<HTMLButtonElement>(".secrets-toolbar-actions button:last-child")?.disabled);
+    clickButton(container, "Create");
+    await waitFor(() => !!container.querySelector("[aria-label='Create secret']"));
+    const dialog = container.querySelector<HTMLElement>("[aria-label='Create secret']")!;
+    change(dialog.querySelector<HTMLInputElement>("input")!, "kept-secret");
+    change(dialog.querySelector<HTMLTextAreaElement>("textarea")!, "Keep this description during refresh.");
+    change(dialog.querySelector<HTMLInputElement>(".secrets-value-input input")!, "kept-value");
+    selectValue(dialog.querySelector<HTMLSelectElement>("select[id^='scope-select-']")!, "module.payments");
+
+    clickButton(dialog, "Refresh scope suggestions");
+    await waitForText(container, "Scope suggestions could not be refreshed.");
+    expect(container.textContent).toContain("Payments API");
+    expect(dialog.querySelector<HTMLInputElement>("input")?.value).toBe("kept-secret");
+    expect(dialog.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Keep this description during refresh.");
+    expect(dialog.querySelector<HTMLInputElement>(".secrets-value-input input")?.value).toBe("kept-value");
+    expect(dialog.querySelector<HTMLSelectElement>("select[id^='scope-select-']")?.value).toBe("module.payments");
+    expect(container.textContent).not.toContain("private catalog failure");
+
+    clickButton(dialog, "Retry scope suggestions");
+    await waitFor(() => descriptorRequests === 3 && !dialog.querySelector("[role='alert']"));
+    expect(dialog.querySelector<HTMLInputElement>("input")?.value).toBe("kept-secret");
+    expect(dialog.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Keep this description during refresh.");
+    expect(dialog.querySelector<HTMLInputElement>(".secrets-value-input input")?.value).toBe("kept-value");
+    expect(dialog.querySelector<HTMLSelectElement>("select[id^='scope-select-']")?.value).toBe("module.payments");
+  });
+
+  it("ignores an older descriptor failure after the endpoint changes and a newer request succeeds", async () => {
+    let endpoint = "old";
+    let obsoleteRequests = 0;
+    let finishObsolete!: (reason: Error) => void;
+    const obsoleteResponse = new Promise((_resolve, reject) => { finishObsolete = reject; });
+    const { container, changeEndpoint } = render({ getDescriptors: () => {
+      if (endpoint === "old") {
+        obsoleteRequests++;
+        return obsoleteResponse;
+      }
+      return {
+        types: [{ name: "text", displayName: "Text", description: "", editorHint: "text", supportedStoreNames: ["encrypted"] }],
+        stores: [{ name: "encrypted", displayName: "Encrypted", description: "", capabilities: 1, isReadOnly: false }],
+        scopes: [{ name: "module.current", displayName: "Current module scope" }]
+      };
+    } });
+    await waitFor(() => obsoleteRequests === 1);
+
+    endpoint = "new";
+    changeEndpoint("/new-endpoint");
+    await waitFor(() => !container.querySelector<HTMLButtonElement>(".secrets-toolbar-actions button:last-child")?.disabled);
+    clickButton(container, "Create");
+    await waitFor(() => !!container.querySelector("[aria-label='Create secret'] select[id^='scope-select-']"));
+    const scopeSelect = container.querySelector<HTMLSelectElement>("[aria-label='Create secret'] select[id^='scope-select-']")!;
+    await waitFor(() => [...scopeSelect.options].some(option => option.value === "module.current"));
+
+    finishObsolete(new Error("old endpoint failed"));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(container.querySelector("[role='alert']")).toBeNull();
+    expect([...scopeSelect.options].map(option => option.value)).toContain("module.current");
+  });
+
+  it("disables the page-level descriptor retry while its request is pending", async () => {
+    let descriptorRequests = 0;
+    let finishRetry!: (value: unknown) => void;
+    const pendingRetry = new Promise(resolve => { finishRetry = resolve; });
+    const { container } = render({ getDescriptors: () => {
+      descriptorRequests++;
+      if (descriptorRequests === 1) throw new Error("initial catalog failure");
+      return pendingRetry;
+    } });
+    await waitFor(() => !!container.querySelector<HTMLButtonElement>("button") && container.textContent?.includes("Retry secret options"));
+    const retry = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.includes("Retry secret options"))!;
+
+    retry.click();
+    await waitFor(() => descriptorRequests === 2);
+    expect(retry.disabled).toBe(true);
+    finishRetry({
+      types: [{ name: "text", displayName: "Text", description: "", editorHint: "text", supportedStoreNames: ["encrypted"] }],
+      stores: [{ name: "encrypted", displayName: "Encrypted", description: "", capabilities: 1, isReadOnly: false }]
+    });
+    await waitFor(() => !container.textContent?.includes("Retry secret options"));
+    expect(container.textContent).not.toContain("Secret options could not be refreshed.");
+  });
+
   it("shows a filtered empty state and returns to the list when filters are cleared", async () => {
     const { container } = render();
     await waitForText(container, "Payments API");
@@ -163,6 +298,21 @@ describe("secrets page", () => {
     selectValue(status, "");
     await waitForText(container, "Payments API");
     expect(container.querySelector(".secrets-detail")).toBeNull();
+  });
+
+  it("explains that scope filter options come from loaded secrets", async () => {
+    const { container } = render({ getItems: () => [paymentSecret({ scope: "module.payments" })] });
+    await waitForText(container, "Payments API");
+    const scopeFilter = [...container.querySelectorAll<HTMLSelectElement>(".secrets-filter select")]
+      .find(select => select.labels?.[0]?.textContent === "Scope")!;
+
+    expect([...scopeFilter.options].map(option => option.value)).toContain("module.payments");
+    expect(scopeFilter.getAttribute("aria-describedby")).toContain("help");
+    expect(scopeFilter.labels?.[0]?.textContent).toBe("Scope");
+    expect(scopeFilter.parentElement?.textContent).toContain("Scopes in loaded results");
+    const describedBy = scopeFilter.getAttribute("aria-describedby")?.split(" ") ?? [];
+    expect(describedBy.map(id => container.querySelector(`#${id}`)?.textContent).join(" ")).toContain("up to 100 secrets");
+    expect(describedBy.map(id => container.querySelector(`#${id}`)?.textContent).join(" ")).toContain("other scopes may exist");
   });
 
   it("keeps unavailable results distinct from an empty collection and retries", async () => {
@@ -186,7 +336,7 @@ describe("secrets page", () => {
     await waitForText(container, "Payments API");
 
     expect(container.textContent).toContain("payments.api");
-    expect(container.querySelector("button[aria-label='Open payments.api']")).not.toBeNull();
+    expect(container.querySelector("button[aria-label='Edit payments.api']")).not.toBeNull();
     expect(container.textContent).not.toContain("raw-secret-value");
     unmount();
   });
@@ -236,7 +386,7 @@ describe("secrets page", () => {
     const inputs = Array.from(container.querySelectorAll<HTMLInputElement>(".secrets-modal input"));
     change(inputs[0], "smtp-password");
     change(inputs[1], "SMTP Password");
-    change(inputs[4], "secret-value");
+    change(container.querySelector<HTMLInputElement>(".secrets-value-input input")!, "secret-value");
     clickButton(container, "Create", ".secrets-modal");
 
     await waitForText(container, "Secret created.");
@@ -255,7 +405,7 @@ describe("secrets page", () => {
     openEditor(container);
     await waitFor(() => container.querySelector<HTMLInputElement>(".secrets-edit-form input")?.value === "Payments API");
     change(container.querySelector<HTMLTextAreaElement>(".secrets-edit-form textarea")!, "");
-    clickButton(container, "Save metadata");
+    clickButton(container, "Save changes");
 
     await waitFor(() => putJson.mock.calls.length > 0);
     expect(putJson).toHaveBeenCalledWith("/secrets/payments.api", { displayName: "Payments API", description: "" });
@@ -265,45 +415,47 @@ describe("secrets page", () => {
 
 function render(options: {
   getItems?(): unknown[];
+  getDescriptors?(): unknown | Promise<unknown>;
   postJson?: ReturnType<typeof vi.fn>;
   putJson?: ReturnType<typeof vi.fn>;
 } = {}) {
   const host = document.createElement("div");
   document.body.appendChild(host);
   const root = createRoot(host);
-  flushSync(() => root.render(
-    <SecretsPage
-      context={{
-        baseUrl: "",
-        http: {
-          requestJson: vi.fn(),
-          getJson: vi.fn(async (url: string) => {
-            if (url.includes("descriptors")) {
-              return {
-                types: [{ name: "text", displayName: "Text", description: "", editorHint: "text", supportedStoreNames: ["encrypted"] }],
-                stores: [{ name: "encrypted", displayName: "Encrypted", description: "", capabilities: 1, isReadOnly: false }]
-              };
-            }
-            const items = options.getItems?.() ?? [paymentSecret()];
-            return {
-              items,
-              totalCount: items.length,
-              rawValue: "raw-secret-value"
-            };
-          }),
-          postJson: options.postJson ?? vi.fn(),
-          putJson: options.putJson ?? vi.fn(),
-          deleteJson: vi.fn(),
-          postForm: vi.fn()
+  const dialogs = {
+    confirm: vi.fn(async () => true),
+    prompt: vi.fn(async () => null),
+    alert: vi.fn(async () => {})
+  };
+  const createContext = (baseUrl = ""): StudioEndpointContext => ({
+    baseUrl,
+    http: {
+      requestJson: vi.fn(),
+      getJson: async <T,>(url: string): Promise<T> => {
+        if (url.includes("descriptors")) {
+          if (options.getDescriptors) return await options.getDescriptors() as T;
+          return {
+            types: [{ name: "text", displayName: "Text", description: "", editorHint: "text", supportedStoreNames: ["encrypted"] }],
+            stores: [{ name: "encrypted", displayName: "Encrypted", description: "", capabilities: 1, isReadOnly: false }]
+          } as T;
         }
-      }}
-      dialogs={{
-        confirm: vi.fn(async () => true),
-        prompt: vi.fn(async () => null),
-        alert: vi.fn(async () => {})
-      }}
-    />
-  ));
+        const items = options.getItems?.() ?? [paymentSecret()];
+        return {
+          items,
+          totalCount: items.length,
+          rawValue: "raw-secret-value"
+        } as T;
+      },
+      postJson: options.postJson ?? vi.fn(),
+      putJson: options.putJson ?? vi.fn(),
+      deleteJson: vi.fn(),
+      postForm: vi.fn()
+    }
+  });
+  const renderPage = (context = createContext()) => {
+    flushSync(() => root.render(<SecretsPage context={context} dialogs={dialogs} />));
+  };
+  renderPage();
 
   const unmount = () => {
     flushSync(() => root.unmount());
@@ -311,7 +463,7 @@ function render(options: {
     cleanup.delete(unmount);
   };
   cleanup.add(unmount);
-  return { container: host, unmount };
+  return { container: host, unmount, changeEndpoint: (baseUrl: string) => renderPage(createContext(baseUrl)) };
 }
 
 function paymentSecret(overrides: Partial<ReturnType<typeof secret>> = {}) {
@@ -329,6 +481,12 @@ function secret(overrides: {
   name: string;
   displayName: string;
   description?: string;
+  scope?: string;
+  tags?: string[];
+  currentVersion?: number | null;
+  createdAt?: string;
+  updatedAt?: string | null;
+  expiresAt?: string | null;
 }) {
   return {
     id: overrides.id,
@@ -336,11 +494,14 @@ function secret(overrides: {
     displayName: overrides.displayName,
     typeName: "text",
     storeName: "encrypted",
-    tags: [],
+    tags: overrides.tags ?? [],
     status: "Active",
-    currentVersion: 1,
-    createdAt: "2026-06-24T00:00:00Z",
-    description: overrides.description ?? ""
+    currentVersion: overrides.currentVersion ?? 1,
+    createdAt: overrides.createdAt ?? "2026-06-24T00:00:00Z",
+    updatedAt: overrides.updatedAt,
+    expiresAt: overrides.expiresAt,
+    description: overrides.description ?? "",
+    scope: overrides.scope
   };
 }
 
@@ -378,7 +539,7 @@ function selectValue(element: HTMLSelectElement, value: string) {
 }
 
 function openEditor(container: HTMLElement) {
-  const trigger = container.querySelector<HTMLButtonElement>("button[aria-label='Open payments.api']")!;
+  const trigger = container.querySelector<HTMLButtonElement>("button[aria-label='Edit payments.api']")!;
   trigger.focus();
   flushSync(() => trigger.click());
   return trigger;

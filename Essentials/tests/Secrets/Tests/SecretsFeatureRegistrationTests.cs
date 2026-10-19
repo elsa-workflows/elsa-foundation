@@ -1,3 +1,4 @@
+using CShells.Features;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Secrets.Core.Contracts;
@@ -8,6 +9,7 @@ using Elsa.Secrets.Options;
 using Elsa.Secrets.Services;
 using Elsa.Secrets.Stores;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Elsa.Secrets.Tests;
@@ -41,6 +43,16 @@ public sealed class SecretsFeatureRegistrationTests
 
         Assert.IsType<CustomValueResolver>(provider.GetRequiredService<ISecretValueResolver>());
         Assert.IsType<DefaultSecretManager>(provider.GetRequiredService<ISecretManager>());
+    }
+
+    [Fact]
+    public void Scope_suggestions_follow_enabled_shell_module_composition()
+    {
+        using var enabled = ComposeShell(new ScopeCatalogFeature(), new SecretsFeature());
+        using var disabled = ComposeShell(new SecretsFeature());
+
+        Assert.Equal("billing", Assert.Single(enabled.GetRequiredService<ISecretScopeRegistry>().List()).Name);
+        Assert.Empty(disabled.GetRequiredService<ISecretScopeRegistry>().List());
     }
 
     private sealed class CustomValueResolver : ISecretValueResolver
@@ -102,5 +114,28 @@ public sealed class SecretsFeatureRegistrationTests
 
         feature.ConfigureServices(services);
         return services.BuildServiceProvider();
+    }
+
+    private static ServiceProvider ComposeShell(params IShellFeature[] features)
+    {
+        var services = new ServiceCollection();
+        foreach (var feature in features)
+            feature.ConfigureServices(services);
+
+        return services.BuildServiceProvider();
+    }
+
+    private sealed class ScopeCatalogFeature : IShellFeature
+    {
+        public void ConfigureServices(IServiceCollection services) =>
+            services.TryAddEnumerable(ServiceDescriptor.Singleton<ISecretScopeProvider, BillingScopeProvider>());
+    }
+
+    private sealed class BillingScopeProvider : ISecretScopeProvider
+    {
+        public IEnumerable<SecretScopeDescriptor> GetScopes() =>
+        [
+            new("billing", "Billing")
+        ];
     }
 }

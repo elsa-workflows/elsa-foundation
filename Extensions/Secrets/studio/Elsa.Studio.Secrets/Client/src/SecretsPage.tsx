@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AlertCircle, Ban, CheckCircle2, KeyRound, Pencil, Plus, RefreshCw, RotateCcw, Search, ShieldCheck, Trash2, X } from "lucide-react";
 import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
 import { createSecret, deleteSecret, getSecretDescriptors, listSecrets, revokeSecret, rotateSecret, testSecret, updateSecret } from "./secretsApi";
@@ -21,11 +21,14 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
   const [statusFilter, setStatusFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [descriptorsLoading, setDescriptorsLoading] = useState(true);
+  const [descriptorError, setDescriptorError] = useState(false);
   const [busyName, setBusyName] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const descriptorRequestSequence = useRef(0);
 
-  const scopes = useMemo(() => Array.from(new Set(secrets.map(secret => secret.scope?.trim()).filter((scope): scope is string => !!scope))).sort(), [secrets]);
+  const scopes = useMemo(() => Array.from(new Set(secrets.map(secret => secret.scope).filter((scope): scope is string => !!scope))).sort(), [secrets]);
   const filteredSecrets = useMemo(() => {
     return secrets.filter(secret => {
       if (typeFilter && secret.typeName !== typeFilter) return false;
@@ -40,15 +43,14 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
     : null;
   const hasActiveFilters = Boolean(search.trim() || typeFilter || storeFilter || scopeFilter || statusFilter);
 
-  const load = useCallback(async (searchTerm: string) => {
+  const loadSecrets = useCallback(async (searchTerm: string) => {
     setLoading(true);
     setLoadError(false);
     setError(null);
     try {
-      const [list, descriptorResponse] = await Promise.all([listSecrets(context, { search: searchTerm, activeOnly: false, pageSize: 100 }), getSecretDescriptors(context)]);
+      const list = await listSecrets(context, { search: searchTerm, activeOnly: false, pageSize: 100 });
       setSecrets(list.items);
       setTotalCount(list.totalCount);
-      setDescriptors(descriptorResponse);
       setDialog(current => {
         if (current?.kind === "edit" && !list.items.some(secret => secret.name === current.name)) return null;
         if (current?.kind === "rotate" && !list.items.some(secret => secret.name === current.name)) return null;
@@ -58,15 +60,36 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
       setLoadError(true);
       setError(null);
       setSecrets([]);
-      setDescriptors(null);
       setDialog(current => current?.kind === "create" ? current : null);
     } finally {
       setLoading(false);
     }
   }, [context]);
 
+  const loadDescriptors = useCallback(async () => {
+    const requestSequence = ++descriptorRequestSequence.current;
+    setDescriptorsLoading(true);
+    try {
+      const response = await getSecretDescriptors(context);
+      if (requestSequence !== descriptorRequestSequence.current) return;
+      setDescriptors(response);
+      setDescriptorError(false);
+    } catch {
+      if (requestSequence !== descriptorRequestSequence.current) return;
+      setDescriptorError(true);
+    } finally {
+      if (requestSequence === descriptorRequestSequence.current) setDescriptorsLoading(false);
+    }
+  }, [context]);
+
+  const load = useCallback(async (searchTerm: string) => {
+    await Promise.all([loadSecrets(searchTerm), loadDescriptors()]);
+  }, [loadDescriptors, loadSecrets]);
+
   useEffect(() => {
+    const requestSequence = descriptorRequestSequence;
     void load("");
+    return () => { requestSequence.current++; };
   }, [load]);
 
   async function refreshWithStatus(message: string) {
@@ -185,14 +208,27 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
         </div>
         <FilterSelect label="Type" value={typeFilter} onChange={setTypeFilter} options={descriptors?.types.map(type => ({ value: type.name, label: type.displayName || type.name })) ?? []} />
         <FilterSelect label="Store" value={storeFilter} onChange={setStoreFilter} options={descriptors?.stores.map(store => ({ value: store.name, label: store.displayName || store.name })) ?? []} />
-        <FilterSelect label="Scope" value={scopeFilter} onChange={setScopeFilter} options={scopes.map(scope => ({ value: scope, label: scope }))} />
+        <FilterSelect
+          label="Scope"
+          value={scopeFilter}
+          onChange={setScopeFilter}
+          options={scopes.map(scope => ({ value: scope, label: scope }))}
+          helpText="Scopes in loaded results"
+          description="The list loads up to 100 secrets, so other scopes may exist."
+        />
         <FilterSelect label="Status" value={statusFilter} onChange={setStatusFilter} options={secretStatuses.map(value => ({ value, label: value }))} />
         <div className="secrets-toolbar-actions">
-          <button type="button" onClick={() => void load(search)} disabled={loading}><RefreshCw size={15} aria-hidden /> Refresh</button>
+          <button type="button" onClick={() => void load(search)} disabled={loading || descriptorsLoading}><RefreshCw size={15} aria-hidden /> Refresh</button>
           <button type="button" onClick={() => setDialog({ kind: "create" })} disabled={!descriptors}><Plus size={15} aria-hidden /> Create</button>
         </div>
       </section>
 
+      {descriptorError && dialog?.kind !== "create" ? (
+        <p className="secrets-field-error" role="alert">
+          Secret options could not be refreshed.{descriptors ? " Previously loaded options remain available." : " Create a secret after retrying."}
+          {" "}<button type="button" onClick={() => void loadDescriptors()} disabled={descriptorsLoading}>Retry secret options</button>
+        </p>
+      ) : null}
       {error ? <SecretNotification message={error} error onDismiss={() => setError(null)} /> : null}
       {status ? <SecretNotification message={status} onDismiss={() => setStatus(null)} /> : null}
 
@@ -251,7 +287,7 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
                   <td>{formatDate(secret.updatedAt ?? secret.createdAt)}</td>
                   <td>
                     <div className="secrets-row-actions">
-                      <button type="button" className="secrets-open-action" data-secret-open={secret.name} aria-label={`Open ${secret.name}`} title={`Open ${secret.displayName || secret.name}`} onClick={() => setDialog({ kind: "edit", name: secret.name })}><Pencil size={14} aria-hidden /> Open</button>
+                      <button type="button" className="secrets-edit-action" data-secret-edit={secret.name} aria-label={`Edit ${secret.name}`} title={`Edit ${secret.displayName || secret.name}`} onClick={() => setDialog({ kind: "edit", name: secret.name })}><Pencil size={14} aria-hidden /> Edit</button>
                       <button type="button" title="Rotate" aria-label={`Rotate ${secret.name}`} disabled={secret.status === "Deleted" || busyName === secret.name} onClick={() => rotateSelected(secret)}><RotateCcw size={14} /></button>
                       <button type="button" title="Test" aria-label={`Test ${secret.name}`} disabled={busyName === secret.name || secret.status === "Deleted"} onClick={() => void runTest(secret)}><ShieldCheck size={14} /></button>
                       <button type="button" title="Revoke" aria-label={`Revoke ${secret.name}`} disabled={busyName === secret.name || secret.status === "Revoked" || secret.status === "Deleted"} onClick={() => void revoke(secret)}><Ban size={14} /></button>
@@ -277,6 +313,9 @@ export function SecretsPage({ context, dialogs }: { context: StudioEndpointConte
       {dialog?.kind === "create" && descriptors ? (
         <CreateSecretDialog
           descriptors={descriptors}
+          scopeCatalogLoading={descriptorsLoading}
+          scopeCatalogError={descriptorError}
+          onRetryScopeCatalog={() => void loadDescriptors()}
           onCancel={() => setDialog(null)}
           onSave={saveCreatedSecret}
         />
@@ -309,15 +348,22 @@ function SecretNotification({ message, error = false, onDismiss }: { message: st
   );
 }
 
-function FilterSelect({ label, value, options, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; onChange(value: string): void }) {
+function FilterSelect({ label, value, options, helpText, description, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; helpText?: string; description?: string; onChange(value: string): void }) {
+  const id = useId();
+  const helpId = helpText ? `${id}-help` : undefined;
+  const descriptionId = description ? `${id}-description` : undefined;
   return (
-    <label className="secrets-filter">
-      <span>{label}</span>
-      <select value={value} onChange={event => onChange(event.target.value)}>
+    <div className="secrets-filter">
+      <div className="secrets-filter-heading">
+        <label htmlFor={id}>{label}</label>
+        {helpText ? <small className="secrets-filter-hint" id={helpId}>{helpText}</small> : null}
+      </div>
+      <select id={id} value={value} aria-describedby={[helpId, descriptionId].filter(Boolean).join(" ") || undefined} onChange={event => onChange(event.target.value)}>
         <option value="">All</option>
         {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
-    </label>
+      {description ? <span className="secrets-visually-hidden" id={descriptionId}>{description}</span> : null}
+    </div>
   );
 }
 

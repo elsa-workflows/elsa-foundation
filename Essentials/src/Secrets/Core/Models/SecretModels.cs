@@ -80,6 +80,13 @@ public sealed record SecretTypeDescriptor(
     string EditorHint,
     IReadOnlyCollection<string> SupportedStoreNames);
 
+/// <summary>Advisory metadata for a scope that a host or module can suggest when creating a secret.</summary>
+public sealed record SecretScopeDescriptor(
+    string Name,
+    string DisplayName,
+    string? Description = null,
+    string? Source = null);
+
 public sealed class SecretMetadata
 {
     public string Id { get; set; } = "";
@@ -163,6 +170,7 @@ public sealed class SecretDescriptorsResponse
 {
     public ICollection<SecretTypeDescriptor> Types { get; set; } = [];
     public ICollection<SecretStoreDescriptor> Stores { get; set; } = [];
+    public ICollection<SecretScopeDescriptor> Scopes { get; set; } = [];
 }
 
 public sealed class SecretPickerRequest
