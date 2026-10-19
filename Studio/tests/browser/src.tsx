@@ -1685,6 +1685,11 @@ async function renderRequestedFixture() {
     root.render(<ActivityAuthoringFixture />);
     return;
   }
+  if (searchParams.get("mode") === "studio-scroll-containment") {
+    const { StudioScrollContainmentFixture } = await import("./studioScrollContainmentFixture");
+    root.render(<StudioScrollContainmentFixture />);
+    return;
+  }
   if (searchParams.get("mode") === "incident-diagnostics") {
     const { IncidentDiagnosticsFixture } = await import("./incidentDiagnosticsFixture");
     root.render(<IncidentDiagnosticsFixture />);
