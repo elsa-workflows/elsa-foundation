@@ -161,3 +161,63 @@ test("activity duplicate menu has no critical or serious automated accessibility
   });
   expect(violations).toEqual([]);
 });
+
+test("Sequence uses authored order, step commands, undo and nested body navigation", async ({ page }) => {
+  await page.goto("/?mode=activity-duplicate-editor&composition=sequence&theme=dark");
+  const steps = page.locator(".wf-sequence-step");
+  const ids = () => steps.evaluateAll(elements => elements.map(element => element.getAttribute("data-id")));
+  await expect(steps).toHaveCount(3);
+  expect(await ids()).toEqual(["write-one", "loop", "write-two"]);
+  await page.getByRole("button", { name: "1. Notify buyer", exact: true }).click();
+  await page.getByRole("button", { name: "Move Notify buyer down", exact: true }).click();
+  expect(await ids()).toEqual(["loop", "write-one", "write-two"]);
+  await expect(page.locator('.wf-sequence-step[data-id="write-one"]')).toBeFocused();
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  expect(await ids()).toEqual(["write-one", "loop", "write-two"]);
+  await page.getByRole("button", { name: "1. Notify buyer", exact: true }).click();
+  await page.getByRole("button", { name: "Duplicate Notify buyer", exact: true }).click();
+  await expect(steps).toHaveCount(4);
+  await expect(steps.nth(1)).toContainText("Notify buyer (copy)");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await page.getByRole("button", { name: "Open Body, 1 activity", exact: true }).click();
+  await expect(steps).toHaveCount(1);
+  await expect(steps).toHaveAttribute("data-id", "nested");
+  await page.getByRole("button", { name: "Root", exact: true }).click();
+  await expect(steps).toHaveCount(3);
+});
+
+test("Sequence insertion works before an existing step without manual connections", async ({ page }) => {
+  await page.goto("/?mode=activity-duplicate-editor&composition=sequence&theme=light");
+  await page.getByRole("button", { name: "Insert step before Notify buyer", exact: true }).click();
+  await page.getByRole("searchbox", { name: "Search activities", exact: true }).fill("Write Line");
+  await page.getByRole("option", { name: /Write Line/ }).click();
+  const steps = page.locator(".wf-sequence-step");
+  await expect(steps).toHaveCount(4);
+  await expect(steps.nth(0)).toContainText("Write Line");
+  await expect(steps.nth(1)).toContainText("Notify buyer");
+  await expect(page.locator(".react-flow__edge")).toHaveCount(0);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(steps).toHaveCount(3);
+});
+
+test("Sequence drag gestures reorder and insert exactly once at an explicit boundary", async ({ page }) => {
+  await page.goto("/?mode=activity-duplicate-editor&composition=sequence&theme=dark");
+  const steps = page.locator(".wf-sequence-step");
+  await expect(steps).toHaveCount(3);
+  await page.locator('.wf-sequence-step[data-id="write-one"]').dragTo(
+    page.getByRole("button", { name: "Insert step after Write Line", exact: true })
+  );
+  // Order is authored by the drop boundary, not saved XY.
+  await expect.poll(() => steps.evaluateAll(items => items.map(item => item.getAttribute("data-id"))))
+    .toEqual(["loop", "write-two", "write-one"]);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await page.getByRole("treeitem", { name: "Write Line, Exact version 1.0.0", exact: true }).dragTo(
+    page.getByRole("button", { name: "Insert step between Notify buyer and For Each", exact: true })
+  );
+  await expect(steps).toHaveCount(4);
+  await expect(steps.nth(0)).toHaveAttribute("data-id", "write-one");
+  await expect(steps.nth(1)).toHaveAccessibleName("2. Write Line");
+  await expect(steps.nth(2)).toHaveAttribute("data-id", "loop");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(steps).toHaveCount(3);
+});

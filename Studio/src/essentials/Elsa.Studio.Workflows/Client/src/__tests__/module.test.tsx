@@ -1048,7 +1048,7 @@ describe("workflows module", () => {
     await unmount();
   });
 
-  it("makes Sequence output handles available for drag-to-add gestures", async () => {
+  it("renders Sequence insertion boundaries instead of manual connection handles", async () => {
     vi.stubGlobal("ResizeObserver", class {
       observe() {}
       unobserve() {}
@@ -1101,10 +1101,12 @@ describe("workflows module", () => {
     }));
     const { container, unmount } = await renderRegisteredRoute("/workflows/definitions?definition=definition-1");
 
-    await waitForCanvasNode(container, "Write Line");
-
-    const outputHandle = container.querySelector(".wf-canvas .react-flow__handle.source");
-    expect(outputHandle?.classList.contains("connectablestart")).toBe(true);
+    await waitForButtonByLabel(container, "Insert step after Write Line");
+    expect(container.querySelector(".react-flow__handle.source")).toBeNull();
+    await click(buttonByLabel(container, "Insert step after Write Line"));
+    await click(optionByText(container, "Write Line"));
+    await flushPromises();
+    expect(container.querySelectorAll(".wf-sequence-step")).toHaveLength(2);
 
     await unmount();
   });

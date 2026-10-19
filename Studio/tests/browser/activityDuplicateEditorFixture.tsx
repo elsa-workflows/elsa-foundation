@@ -5,6 +5,10 @@ import { WorkflowEditor } from "../../src/essentials/Elsa.Studio.Workflows/Clien
 import {
   flowchartActivity,
   flowchartNode,
+  sequenceActivity,
+  sequenceNode,
+  forEachActivity,
+  forEachNode,
   leafNode,
   writeLine
 } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/fixtures";
@@ -41,8 +45,11 @@ const notifyBuyer: ActivityNode = {
 };
 
 function editorDraft(): WorkflowDraft {
-  const root = flowchartNode("flow-root", [notifyBuyer, leafNode("write-two")]);
-  root.structure!.payload.connections = [{
+  const sequence = new URLSearchParams(window.location.search).get("composition") === "sequence";
+  const root = sequence
+    ? sequenceNode("sequence-root", [notifyBuyer, forEachNode("loop", sequenceNode("body", [leafNode("nested")])), leafNode("write-two")])
+    : flowchartNode("flow-root", [notifyBuyer, leafNode("write-two")]);
+  if (!sequence) root.structure!.payload.connections = [{
     id: "flow-write-one-write-two",
     source: { nodeId: "write-one", port: "Done" },
     target: { nodeId: "write-two" }
@@ -139,7 +146,7 @@ function createEditorContext(): StudioEndpointContext {
           };
         }
         if (url === "/design/activities/catalog") {
-          return { activities: [writeLineCatalog, flowchartActivity] };
+          return { activities: [writeLineCatalog, flowchartActivity, sequenceActivity, forEachActivity] };
         }
         if (url === "/expressions/descriptors") {
           return {

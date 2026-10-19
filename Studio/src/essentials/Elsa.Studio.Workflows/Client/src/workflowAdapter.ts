@@ -765,13 +765,7 @@ export function syncCanvasToScope(scope: CanvasScope, nodes: Node<WorkflowNodeDa
   }
   const activities = nodes.map(node => existing.get(node.id)).filter((activity): activity is ActivityNode => !!activity);
 
-  if (scope.slot.mode === "sequence") {
-    activities.sort((left, right) => {
-      const leftNode = nodes.find(node => node.id === left.nodeId);
-      const rightNode = nodes.find(node => node.id === right.nodeId);
-      return (leftNode?.position.x ?? 0) - (rightNode?.position.x ?? 0);
-    });
-  }
+  // Sequence execution follows authored child order, never saved diagram coordinates.
 
   return replaceSlotActivities(scope.owner, scope.slot, activities);
 }

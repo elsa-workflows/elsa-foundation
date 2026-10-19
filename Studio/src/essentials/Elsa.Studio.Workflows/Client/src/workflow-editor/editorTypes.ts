@@ -81,6 +81,7 @@ export interface ExecutableRunState {
 export type WorkflowConnectSource = { nodeId: string; handleId: string | null };
 
 export type ConnectMenuState =
+  | { kind: "sequenceInsert"; index: number; scopeKey: string; clientX: number; clientY: number }
   | { kind: "fromPort"; sourceNodeId: string; sourceHandleId: string | null; clientX: number; clientY: number }
   | { kind: "spliceEdge"; edgeId: string; clientX: number; clientY: number }
   | { kind: "fromEmpty"; clientX: number; clientY: number };
