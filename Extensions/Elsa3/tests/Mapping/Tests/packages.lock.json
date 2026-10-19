@@ -295,16 +295,47 @@
           "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.10, )"
         }
       },
+      "elsa.expressions": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.Core": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )"
+        }
+      },
       "elsa.expressions.core": {
         "type": "Project",
         "dependencies": {
           "Elsa.Primitives": "[4.0.0-dev, )"
         }
       },
+      "elsa.expressions.javascript": {
+        "type": "Project",
+        "dependencies": {
+          "Acornima": "[1.6.1, )",
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Events.Core": "[4.0.0-dev, )",
+          "Elsa.Expressions.JavaScript.Core": "[4.0.0-dev, )",
+          "Elsa.Serialization.Core": "[4.0.0-dev, )",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "[10.0.10, )"
+        }
+      },
       "elsa.expressions.javascript.core": {
         "type": "Project",
         "dependencies": {
           "Elsa.Expressions.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.expressions.javascript.jint": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Expressions.JavaScript.Core": "[4.0.0-dev, )",
+          "Jint": "[4.9.1, )",
+          "Microsoft.Extensions.Options": "[10.0.10, )"
         }
       },
       "elsa.foundation.identity": {
@@ -537,6 +568,15 @@
           "Microsoft.Extensions.FileProviders.Abstractions": "9.0.0",
           "Parlot": "1.5.2",
           "TimeZoneConverter": "7.2.0"
+        }
+      },
+      "Jint": {
+        "type": "CentralTransitive",
+        "requested": "[4.9.1, )",
+        "resolved": "4.9.1",
+        "contentHash": "y878epycKuwyksZZOhB9LkuQed4P/v4yDdYK3H6lYJObGzhya6Saa9smWOLFscRDhgB4CVaXIYKPQEpNscwbNg==",
+        "dependencies": {
+          "Acornima": "1.6.1"
         }
       },
       "Microsoft.Extensions.Configuration": {

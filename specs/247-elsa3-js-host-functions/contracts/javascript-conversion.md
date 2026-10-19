@@ -10,6 +10,7 @@ Every refusal is an Error, and a refused construct anywhere in a definition stop
 | Elsa 3 | Elsa 4 | Notes |
 |---|---|---|
 | Top-level `return x` (expression) | `(function () {\n…\n})()` | The body runs as a function. The last statement must be a `return`, or an expression, which is prefixed with `return` |
+| Bare top-level `return;` | `return null;` | Elsa 3 gave `null`; Elsa 4 refuses an undefined result |
 | Top-level `return x` (RunJavaScript) | The body is unchanged apart from reads | Elsa 4 already runs a script as a function body |
 | `get{Name}()`, where `{Name}` is a workflow input name exactly (standalone) or `Pascalize(input)` (reusable) | The same binding as `getInput("{input}")` | In a reusable conversion Elsa 3 declares inputs as variables, so only the Pascal-cased accessor exists (R-2) |
 | `get{Name}()`, where `{Name}` is `Pascalize(variable)` exactly | The same binding as `getVariable("{variable}")` | Only variables whose name is all letters and digits get an accessor |

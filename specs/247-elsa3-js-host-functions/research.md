@@ -22,6 +22,10 @@ function):
 - In Expression mode, wrap the body in `(function () {\n…\n})()`. If the last top-level statement is an expression,
   prefix it with `return` (Elsa 3's completion value). If it is a `return`, keep it. Otherwise refuse with `VF-IMP-006`.
 - In Script mode, Elsa 4 already runs the body as a function. The same last-statement rule applies.
+- A bare top-level `return;` becomes `return null;`. Elsa 3 turned undefined into `null`, while the Elsa 4 evaluator
+  refuses an undefined result (found by the US1 equivalence tests).
+- In Script mode, a body that ends with another statement converts with `CompletionValueLost`, as spec 236 does for
+  scripts. It is refused only when something reads the script's result.
 
 **Why faithful.** Every path ends in a `return` whose value Elsa 3 would return:
 - If the last statement is a `return`, any earlier path falls through to it.

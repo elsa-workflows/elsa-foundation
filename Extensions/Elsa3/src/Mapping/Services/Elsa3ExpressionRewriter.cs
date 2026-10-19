@@ -63,7 +63,8 @@ public sealed class Elsa3ExpressionRewriter
         Script script;
         try
         {
-            script = new Parser().ParseScript(source);
+            // Elsa 3 parsed with return allowed outside a function, so `return x` at the top level is its result.
+            script = new Parser(new ParserOptions { AllowReturnOutsideFunction = true }).ParseScript(source);
         }
         catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
         {
@@ -82,6 +83,39 @@ public sealed class Elsa3ExpressionRewriter
         // expression as one parenthesized expression and a script as a function body that must return.
         var edits = analyzer.Edits.ToList();
         var body = script.Body;
+        var topLevelReturns = new List<ReturnStatement>();
+        CollectTopLevelReturns(script, topLevelReturns);
+        if (topLevelReturns.Count > 0)
+        {
+            // Elsa 3 turned a bare `return;` (undefined) into null; Elsa 4 refuses an undefined result.
+            foreach (var bare in topLevelReturns.Where(statement => statement.Argument is null))
+                edits.Add(new SourceEdit(bare.Start + "return".Length, bare.Start + "return".Length, " null"));
+
+            // Every path ends in a return Elsa 3 would have returned: a trailing return keeps its value, a trailing
+            // expression is Elsa 3's completion value and gets a return. Any other trailing statement could carry a
+            // completion value that a return cannot reproduce (spec 247 research R-1).
+            // A script's lost value only matters when its result is read, which the caller decides (as below).
+            var preserved = body[^1] is ExpressionStatement or ReturnStatement;
+            if (body[^1] is ExpressionStatement trailing)
+                edits.Add(new SourceEdit(trailing.Start, trailing.Start, "return "));
+
+            if (mode == Elsa3JavaScriptMode.Script)
+            {
+                return Elsa3ExpressionRewriteResult.Success(
+                    CreateDefinition("JavaScript", ApplyEdits(source, edits), resultType, analyzer.Parameters),
+                    completionValueLost: !preserved);
+            }
+
+            if (!preserved)
+            {
+                return Elsa3ExpressionRewriteResult.Failure(DynamicIssue(
+                    "JavaScript returns at the top level but ends with a statement that is neither a return nor an expression, so its Elsa 3 result cannot be preserved as one Elsa 4 expression."));
+            }
+
+            return Elsa3ExpressionRewriteResult.Success(CreateDefinition(
+                "JavaScript", $"(function () {{\n{ApplyEdits(source, edits)}\n}})()", resultType, analyzer.Parameters));
+        }
+
         if (mode == Elsa3JavaScriptMode.Script)
         {
             var hasCompletion = body.Count > 0 && body[^1] is ExpressionStatement;
@@ -222,6 +256,19 @@ public sealed class Elsa3ExpressionRewriter
 
         return Elsa3ExpressionRewriteResult.Success(
             CreateDefinition("Liquid", ApplyEdits(source, edits), resultType, parameters));
+    }
+
+    /// <summary>The <c>return</c> statements outside every function, which Elsa 3 allowed and evaluated as the result.</summary>
+    private static void CollectTopLevelReturns(Node node, List<ReturnStatement> returns)
+    {
+        foreach (var child in node.ChildNodes)
+        {
+            if (child is IFunction)
+                continue;
+            if (child is ReturnStatement statement)
+                returns.Add(statement);
+            CollectTopLevelReturns(child, returns);
+        }
     }
 
     private static ExpressionDefinition CreateDefinition(

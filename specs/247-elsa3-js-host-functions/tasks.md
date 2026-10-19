@@ -30,18 +30,18 @@ phase is checked off. Tests use xunit only (no FluentAssertions). Converter test
 
 ## Phase 1: Setup
 
-- [ ] T001 Add a test-only `ProjectReference` to `Essentials/src/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj` in `Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj`, so equivalence tests (SC-003) can evaluate a converted `ExpressionDefinition` through the real portable JavaScript evaluator. Refresh `packages.lock.json` with `dotnet restore --force-evaluate` for that project only
-- [ ] T002 Create the test helper `Extensions/Elsa3/tests/Mapping/Tests/Support/PortableJavaScript.cs` (internal static). `EvaluateAsync(ExpressionDefinition definition, IReadOnlyDictionary<string, JsonElement> args)` evaluates through the Jint portable evaluator, with the binding-pure-v1 profile and explicit parameter values (no runtime), and returns the `JsonElement` result
+- [X] T001 Add a test-only `ProjectReference` to `Essentials/src/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj` in `Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj`, so equivalence tests (SC-003) can evaluate a converted `ExpressionDefinition` through the real portable JavaScript evaluator. Refresh `packages.lock.json` with `dotnet restore --force-evaluate` for that project only
+- [X] T002 Create the test helper `Extensions/Elsa3/tests/Mapping/Tests/Support/PortableJavaScript.cs` (internal static). `EvaluateAsync(ExpressionDefinition definition, IReadOnlyDictionary<string, JsonElement> args)` evaluates through the Jint portable evaluator, with the binding-pure-v1 profile and explicit parameter values (no runtime), and returns the `JsonElement` result
 
 ---
 
 ## Phase 2: Foundational
 
-- [ ] T003 Create `Extensions/Elsa3/src/Mapping/Internal/Elsa3JavaScriptNames.cs` (internal static) with:
+- [X] T003 Create `Extensions/Elsa3/src/Mapping/Internal/Elsa3JavaScriptNames.cs` (internal static) with:
   - `Pascalize(string)`: upper-case the first character with `CultureInfo.InvariantCulture`. Callers pass only accessor-valid names (research R-3)
   - `IsAccessorName(string)`: non-empty, and every character satisfies `char.IsLetterOrDigit`
   - `BuiltIns`: a `FrozenSet<string>` of every Elsa 3 built-in function name from research R-6/R-7, plus `getVariable`, `getInput`, `getOutputFrom`, `setVariable` and `getLastResult`
-- [ ] T004 [P] Unit tests for T003 in `Extensions/Elsa3/tests/Mapping/Tests/Elsa3JavaScriptNamesTests.cs`:
+- [X] T004 [P] Unit tests for T003 in `Extensions/Elsa3/tests/Mapping/Tests/Elsa3JavaScriptNamesTests.cs`:
   - `httpRequestBody` → `HttpRequestBody`, `RequestBody` unchanged, `x1` → `X1`
   - `IsAccessorName` rejects `""`, `a_b` and `a$`
 
@@ -56,18 +56,18 @@ phase is checked off. Tests use xunit only (no FluentAssertions). Converter test
 **Independent test**: `return false`, `return { a: 1 }` and `if (x) { return 1 } return 2` convert, and evaluate to
 Elsa 3's values.
 
-- [ ] T005 [US1] In `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs` `RewriteJavaScript`:
+- [X] T005 [US1] In `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs` `RewriteJavaScript`:
   - Parse with `new Parser(new ParserOptions { AllowReturnOutsideFunction = true })`
   - Add a private static `HasTopLevelReturn(Script)` that walks statements, skipping nested `IFunction` nodes
-- [ ] T006 [US1] In the same method, when `HasTopLevelReturn`:
+- [X] T006 [US1] In the same method, when `HasTopLevelReturn`:
   - **Expression mode**: if the last top-level statement is an `ExpressionStatement`, insert `return `; if it is a `ReturnStatement`, keep it; otherwise fail with `DynamicIssue` (VF-IMP-006, message "ends with a statement that is neither a return nor an expression"). Wrap the result in `(function () {\n…\n})()`, the same wrapper the existing statements branch uses
   - **Script mode**: apply the same last-statement rule. Set `completionValueLost: false` when the body ends in a `ReturnStatement`
   - Bodies without a top-level return keep today's path unchanged
-- [ ] T007 [P] [US1] Tests in a new `Extensions/Elsa3/tests/Mapping/Tests/Elsa3TopLevelReturnTests.cs`, through `ConversionServices.ConvertAsync` and `RealActivityCatalog`:
+- [X] T007 [P] [US1] Tests in a new `Extensions/Elsa3/tests/Mapping/Tests/Elsa3TopLevelReturnTests.cs`, through `ConversionServices.ConvertAsync` and `RealActivityCatalog`:
   - US1 scenarios 1–5: a FlowDecision condition `return false`, an object return, branch returns, an earlier return plus a trailing expression, a trailing `if` refused with VF-IMP-006, and a RunJavaScript body with `return`
   - `return` inside a nested function stays legal and unwrapped (edge case)
   - Evaluate the converted sources with T002 and assert Elsa 3's values (SC-003)
-- [ ] T008 [US1] Update `Extensions/Elsa3/tests/Mapping/Tests/Elsa3JavaScriptConversionTests.cs` and `Elsa3ExpressionRewriterTests.cs` where they assert that a top-level `return` is refused. Keep every other spec 236 assertion
+- [X] T008 [US1] Update `Extensions/Elsa3/tests/Mapping/Tests/Elsa3JavaScriptConversionTests.cs` and `Elsa3ExpressionRewriterTests.cs` where they assert that a top-level `return` is refused. Keep every other spec 236 assertion. (No such assertion existed; nothing changed.)
 
 **Checkpoint**: run `dotnet test Extensions/Elsa3/tests/Mapping/Tests`; it is green.
 
