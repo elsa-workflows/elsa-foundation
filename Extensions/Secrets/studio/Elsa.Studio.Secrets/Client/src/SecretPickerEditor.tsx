@@ -114,7 +114,7 @@ export function toReference(value: unknown): SecretReference | null {
 
 function allowlistMetadata(items: SecretMetadata[]): SecretPickerMetadata[] {
   return items
-    .filter(secret => !secret.status || secret.status === "Active")
+    .filter(secret => !secret.status || secret.status.toLowerCase() === "active")
     .map(secret => ({
       id: secret.id,
       name: secret.name,
