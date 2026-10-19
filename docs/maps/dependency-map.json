@@ -18449,8 +18449,8 @@
       ]
     },
     {
-      "path": "Essentials/tests/Workbench/Fixtures/BackgroundActivities.Tests/Elsa.Workbench.Tests.BackgroundActivities.Tests.csproj",
-      "name": "Elsa.Workbench.Tests.BackgroundActivities.Tests",
+      "path": "Essentials/tests/Workbench/BackgroundActivities/Tests/Elsa.Workbench.BackgroundActivities.Tests.csproj",
+      "name": "Elsa.Workbench.BackgroundActivities.Tests",
       "kind": "test",
       "domain": "Elsa.Workbench",
       "sub_domain": "-",

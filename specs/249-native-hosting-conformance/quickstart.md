@@ -4,8 +4,10 @@ Run from the repository root on .NET 10 with local NuGet dependencies available.
 
 ```bash
 uptime
-dotnet test Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603 --filter 'FullyQualifiedName~WorkbenchBackgroundActivityRecoveryTests|FullyQualifiedName~NativeHostingConformanceTests|FullyQualifiedName~NativeHostingGracefulHandoffTests'
+dotnet test Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603 --filter 'FullyQualifiedName~WorkbenchBackgroundActivityRecoveryTests|FullyQualifiedName~NativeHostingConformanceTests|FullyQualifiedName~NativeHostingGracefulHandoffTests' --logger 'trx;LogFileName=native-integrated-matrix.trx' --results-directory /tmp/elsa-native-hosting-results
 ```
+
+For a new run, record `git rev-parse HEAD`, any source/configuration diff, the command output and build-artifact hashes beside the TRX. The [integrated source record](../../docs/reports/native-hosting-conformance.md#integrated-source-and-retained-artifacts) identifies the recorded run; do not assign its identity to a later build.
 
 The implemented recovery subset covers both completion orders, accepted-work recovery and cancellation. Concurrent clustered cases identify two actual PIDs and actual scoped EF connections. See the [evidence report](../../docs/reports/native-hosting-conformance.md) for the current boundary.
 
@@ -14,7 +16,7 @@ The stale-write scenario captures the original engine-generated checkpoint at bo
 Fixture registration and disposal tests run separately:
 
 ```bash
-dotnet test Essentials/tests/Workbench/Fixtures/BackgroundActivities.Tests/Elsa.Workbench.Tests.BackgroundActivities.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
+dotnet test Essentials/tests/Workbench/BackgroundActivities/Tests/Elsa.Workbench.BackgroundActivities.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603
 ```
 
 The graceful-handoff case uses SIGTERM and an opt-in bounded stop gate. It observes the real owner's `Draining` membership and successful placement release, directs a new request to the active survivor, and requires both the new and already accepted workflows to complete. Automatic exclusion of a draining member is covered by the owning-layer `DrainingTests`, not by that directly addressed request.

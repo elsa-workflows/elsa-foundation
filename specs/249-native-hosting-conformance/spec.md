@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3056-native-hosting-conformance`
 **Created**: 2026-10-19
-**Status**: In Progress
+**Status**: Implemented
 **Input**: Qualify built-in native execution hosting with real-process recovery and stale-owner evidence. [Task #3056](https://github.com/elsa-workflows/elsa-foundation/issues/3056), [feature #2905](https://github.com/elsa-workflows/elsa-foundation/issues/2905), [program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892).
 
 ## User Scenarios & Testing
