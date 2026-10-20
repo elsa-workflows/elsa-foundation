@@ -182,7 +182,7 @@ An operator opens a run with nested scopes and a loop. The run view shows which 
 
 **Cancellation**
 
-- **FR-315**: Cancelling a run or a scope never runs a handler. Running steps and handlers are cancelled, no new work starts, and the private state is kept so the journal stays readable. Host shutdown is never cancellation.
+- **FR-315**: Cancelling a run or a scope never starts a handler. A handler already running when the cancellation arrives may finish (research R20); running steps are cancelled, no new work starts, and the private state is kept so the journal stays readable. Host shutdown is never cancellation.
 
 **Composition matrix**
 
