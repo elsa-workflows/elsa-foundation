@@ -4,7 +4,7 @@ Run focused checks from the `Studio/` directory after the RED assertions are add
 
 ## Prerequisites
 
-- Use the repository's existing installed Studio dependencies and lockfile. This feature requires no install or dependency change.
+- Use the existing workspace versions. OpenTelemetry declares the same `react-dom` and `@types/react-dom` test dev dependencies as Structured Logs; after the offline lockfile update, verify installation with `pnpm install --offline --frozen-lockfile` from `Studio/`. No runtime dependency or new library version is added.
 - Keep the baseline comparison at the approved product source revision, `e656cc6042fd86d15d61c7278d846222054eb535`.
 - Use stubbed API responses for component tests so page-state coverage is deterministic.
 - For the Playwright fixture, use the actual Studio host/navigation components in the bounded Vite fixture. The fixture does not boot Elsa Workbench or prove a composed host's module registration, session, or backend.

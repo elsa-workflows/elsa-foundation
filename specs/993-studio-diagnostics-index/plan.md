@@ -10,13 +10,13 @@
 
 Add a task-oriented Diagnostics index over diagnostic destinations registered and exposed by Studio's filtered navigation. In `App.tsx`, apply the existing `filterAccessibleNavigation` helper to the navigation and access values already computed there, then pass the filtered list to Diagnostics. Keep ShellFrame's sidebar/dock filtering and direct-route resolution unchanged; do not refactor the surrounding App or change the SDK. Describe built-in tasks locally and use neutral wording for custom entries without task semantics. Keep backend, permission, loading, failure, and empty-data outcomes in their destination pages. Explain unsupported OpenTelemetry Metrics and Logs both in the index and on the OpenTelemetry page. Offer a direct application-log link only when its destination is confirmed registered and accessible; otherwise use neutral Diagnostics handoff wording. Rename capture-policy discovery to Runtime evidence settings while preserving its route, view access, save gate, policy, and payload. Preserve contributed widgets and their states.
 
-No API, SDK, storage, dependency, backend capability, telemetry ingestion, deployment, or module-composition contract changes are planned.
+No API, SDK, storage, runtime dependency, backend capability, telemetry ingestion, deployment, or module-composition contract changes are planned. The OpenTelemetry package's new DOM tests use the same existing workspace `react-dom` and `@types/react-dom` dev dependencies as Structured Logs; no new library version is introduced.
 
 ## Technical Context
 
 **Language/Version**: TypeScript with the repository's existing React and Studio toolchain.
 
-**Primary Dependencies**: Existing Elsa Studio host, navigation contributions and access-filtering helpers, OpenTelemetry and Structured Logs destination modules, Workflows settings page, Vitest, and Playwright. No new dependency.
+**Primary Dependencies**: Existing Elsa Studio host, navigation contributions and access-filtering helpers, OpenTelemetry and Structured Logs destination modules, Workflows settings page, Vitest, and Playwright. OpenTelemetry adds only the two existing workspace DOM test dev dependencies, with the lockfile updated offline.
 
 **Storage**: None added or changed. Existing capture-policy storage and APIs remain unchanged.
 
@@ -44,7 +44,7 @@ No API, SDK, storage, dependency, backend capability, telemetry ingestion, deplo
 | Framework §2.22 | No catalog or extension-point changes are planned; existing contributions and their published contracts remain unchanged. |
 | Framework §2.24 | Draft and excluded from ratification; no new pattern is introduced. |
 | Elsa §E2.2.3, §E2.6 | Pass. Normal and baseline behavior is checked with isolated copied host configurations; no tracked module composition or runtime behavior is changed. No design/runtime coupling is introduced. |
-| Elsa §E5 | Pass. No packages, package versions, or public contracts change. |
+| Elsa §E5 | Pass. No shipped dependency, new third-party library version, or public contract changes. Two existing workspace test dev dependencies are declared for OpenTelemetry DOM coverage. |
 | Elsa §E6 | Pass. No Elsa-owned types are added or renamed. |
 
 No gate violation or complexity exception is identified. The live-host launch and cleanup procedure is still a validation-preparation item, not a product-design clarification. The required normal/baseline composed-host gate is pending until that procedure is source-backed, reviewed, and executed. If the procedure remains unresolved, acceptance remains unproven; this does not waive the composed-host check and fixture evidence cannot substitute.
@@ -100,3 +100,9 @@ The host access rule at `Studio/src/apps/Elsa.Studio.Web/Client/src/app/navigati
 ## Complexity Tracking
 
 No constitution exceptions or additional architectural complexity are proposed.
+
+## Test-first refinements
+
+[Root's pre-product refinement](https://github.com/elsa-workflows/elsa-foundation/issues/3073#issuecomment-6297578742) records two findings from the actual DOM tests. OpenTelemetry needs only the existing workspace React DOM test dev dependencies to render its page. Structured Logs currently uses successful-empty copy while connecting and on a server failure; correct only that row-region presentation to use the existing destination state/detail. Preserve requests, classification, buffers, subscriptions, permissions and backend contracts. The RED checkpoint must show the user-visible failure after test setup is valid, and must preserve existing green guards.
+
+Console is an existing built-in Diagnostics child (`console`, `/diagnostics/console`), present in both supplied frontend compositions. Give it an accurate console-output task description and retain it with Runtime evidence settings in baseline; neither link establishes backend connectivity. No Console module behavior change is included.

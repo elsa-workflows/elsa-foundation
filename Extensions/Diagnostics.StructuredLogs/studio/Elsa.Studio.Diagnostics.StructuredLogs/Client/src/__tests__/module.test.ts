@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -13,10 +13,24 @@ import {
   normalizeLogLevel,
   normalizeStructuredLogEntry,
   register,
+  StructuredLogsPage,
   StructuredLogsPanel,
   type StructuredLogEntry
 } from "../module";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+
+const mountedPages = new Set<() => void>();
+let originalEventSource: typeof EventSource | undefined;
+let eventSourceCaptured = false;
+
+afterEach(() => {
+  for (const unmount of [...mountedPages]) unmount();
+  if (eventSourceCaptured) {
+    globalThis.EventSource = originalEventSource as typeof EventSource;
+    originalEventSource = undefined;
+    eventSourceCaptured = false;
+  }
+});
 
 describe("structured logs module", () => {
   it("registers navigation, route, and bottom panel contributions", () => {
@@ -188,7 +202,59 @@ describe("structured logs module", () => {
     expect(classifyStructuredLogError(new Error("Status code '404'"))).toMatchObject({ status: "unavailable" });
     expect(classifyStructuredLogError(new Error("Status code '500'"))).toMatchObject({ status: "failed" });
   });
+
+  it("renders loading separately from an empty live result", async () => {
+    const loading = renderPage(() => new Promise(() => {}));
+    await flushPromises();
+
+    expect(loading.container.textContent).toContain("Loading recent structured logs.");
+    expect(loading.container.textContent).not.toContain("No structured logs received yet.");
+    loading.unmount();
+
+    const empty = renderPage(async () => []);
+    await flushPromises();
+    StubEventSource.latest()?.open();
+    await flushPromises();
+
+    expect(empty.container.textContent).toContain("live");
+    expect(empty.container.querySelector(".structured-logs-empty")?.textContent).toContain("No structured logs received yet.");
+    empty.unmount();
+  });
+
+  it.each([
+    ["permission", "Status code '401'", /You do not have permission to view structured logs/],
+    ["permission", "Status code '403'", /You do not have permission to view structured logs/],
+    ["unavailable", "Status code '404'", /Structured logs are not available on this backend/],
+    ["failure", "Status code '500'", /Structured logs failed:/]
+  ])("renders a distinct structured logs %s state for %s", async (_state, message, expected) => {
+    const { container } = renderPage(async () => { throw new Error(message); });
+    await flushPromises();
+
+    expect(container.textContent).toMatch(expected);
+    expect(container.querySelector(".structured-logs-empty")?.textContent).not.toContain("No structured logs received yet.");
+  });
 });
+
+function renderPage(getJson: (url: string, init?: RequestInit) => Promise<unknown>) {
+  if (!eventSourceCaptured) {
+    originalEventSource = globalThis.EventSource;
+    eventSourceCaptured = true;
+  }
+  StubEventSource.clear();
+  globalThis.EventSource = StubEventSource as unknown as typeof EventSource;
+  register(stubApi({ getJson }));
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  flushSync(() => root.render(React.createElement(StructuredLogsPage)));
+  const unmount = () => {
+    if (!mountedPages.delete(unmount)) return;
+    flushSync(() => root.unmount());
+    container.remove();
+  };
+  mountedPages.add(unmount);
+  return { container, unmount };
+}
 
 function stubApi(http?: {
   getJson?: (url: string, init?: RequestInit) => Promise<unknown>;
@@ -232,6 +298,7 @@ async function flushPromises() {
 }
 
 class StubEventSource extends EventTarget {
+  static instances: StubEventSource[] = [];
   static readonly CONNECTING = 0;
   static readonly OPEN = 1;
   static readonly CLOSED = 2;
@@ -248,6 +315,19 @@ class StubEventSource extends EventTarget {
   constructor(url: string | URL) {
     super();
     this.url = String(url);
+    StubEventSource.instances.push(this);
+  }
+
+  static latest() {
+    return StubEventSource.instances.at(-1);
+  }
+
+  static clear() {
+    StubEventSource.instances = [];
+  }
+
+  open() {
+    this.onopen?.call(this as unknown as EventSource, new Event("open"));
   }
 
   close() {
