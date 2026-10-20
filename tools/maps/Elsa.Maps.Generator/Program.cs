@@ -8,7 +8,7 @@ using Elsa.Maps.Generator;
 //   solution-filters | solution-filters-check | solution-filters-self-test
 //   solution-filter-roots <filter-path> | solution-filter <filter-path>
 //   ef-suites-select | ef-suites-self-test
-//   project-facts-self-test | feature-facts-self-test | repo-layout-self-test
+//   project-facts-self-test | feature-facts-self-test | repo-layout-self-test | project-graph-self-test
 //   publish <out-dir> --source-commit <sha> --repo-url <url> | publish-self-test
 //
 // Only dependency-map.json is committed and checked. The documentation maps are generated locally with "all" and
@@ -72,6 +72,12 @@ try
         return 0;
     }
 
+    if (layers.SequenceEqual(["project-graph-self-test"], StringComparer.Ordinal))
+    {
+        ProjectGraphContractTests.Run();
+        return 0;
+    }
+
     if (layers.SequenceEqual(["repo-layout-self-test"], StringComparer.Ordinal))
     {
         RepoLayoutContractTests.Run();
@@ -118,7 +124,7 @@ try
     // writing part of the maps and then throwing.
     var requested = layers.Contains("all", StringComparer.Ordinal) ? knownLayers : layers;
     if (requested.FirstOrDefault(layer => !knownLayers.Contains(layer, StringComparer.Ordinal)) is { } unknown)
-        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test, solution-filter-roots <filter-path>, solution-filter <filter-path>, ef-suites-select, ef-suites-self-test, project-facts-self-test, feature-facts-self-test, repo-layout-self-test, publish <out-dir> --source-commit <sha> --repo-url <url>, publish-self-test.");
+        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test, solution-filter-roots <filter-path>, solution-filter <filter-path>, ef-suites-select, ef-suites-self-test, project-facts-self-test, feature-facts-self-test, repo-layout-self-test, project-graph-self-test, publish <out-dir> --source-commit <sha> --repo-url <url>, publish-self-test.");
 
     var projects = ProjectGraph.Read(repo);
     var written = new List<string>();

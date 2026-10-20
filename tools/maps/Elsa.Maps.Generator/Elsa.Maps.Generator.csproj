@@ -5,4 +5,12 @@
     <RootNamespace>Elsa.Maps.Generator</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Using Include="Elsa.Maps.Projects" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Elsa.Maps.Projects\Elsa.Maps.Projects.csproj" />
+  </ItemGroup>
+
 </Project>

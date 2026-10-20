@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Elsa.Maps.Generator;
+namespace Elsa.Maps.Projects;
 
 /// <summary>
 /// The dependency map's pinned-transitive edges (spec 149 FR-012): for each packable project, the packages central
@@ -37,22 +37,22 @@ public static class PinnedTransitiveDependencies
     private const string UpdateLockFiles = "dotnet restore Elsa.Server.slnx";
 
     /// <summary>The projects, each packable one with its pinned-transitive edges after its direct ones.</summary>
-    public static IReadOnlyList<ProjectFacts> Attach(RepoContext repo, IReadOnlyList<ProjectFacts> projects)
+    public static IReadOnlyList<ProjectFacts> Attach(IRepositoryTree tree, IReadOnlyList<ProjectFacts> projects)
     {
-        var packages = PackageVersions.Load(repo);
+        var packages = PackageVersions.Load(tree);
         return projects
-            .Select(project => project.Packable ? project with { Edges = [.. project.Edges, .. Read(repo, project, projects, packages)] } : project)
+            .Select(project => project.Packable ? project with { Edges = [.. project.Edges, .. Read(tree, project, projects, packages)] } : project)
             .ToArray();
     }
 
     /// <summary>One project's pinned-transitive edges, with <paramref name="graph"/> the projects its references resolve in.</summary>
-    internal static PinnedTransitiveEdge[] Read(RepoContext repo, ProjectFacts project, IReadOnlyList<ProjectFacts> graph, PackageVersions packages)
+    public static PinnedTransitiveEdge[] Read(IRepositoryTree tree, ProjectFacts project, IReadOnlyList<ProjectFacts> graph, PackageVersions packages)
     {
         var lockPath = project.RelativePath[..(project.RelativePath.LastIndexOf('/') + 1)] + LockFileName;
-        if (!File.Exists(repo.Absolute(lockPath)))
+        if (!tree.Exists(lockPath))
             throw Unreadable(project, $"it has no NuGet lock file ({lockPath})");
 
-        using var lockFile = JsonDocument.Parse(File.ReadAllBytes(repo.Absolute(lockPath)));
+        using var lockFile = JsonDocument.Parse(tree.Read(lockPath));
         if (!lockFile.RootElement.TryGetProperty("version", out var version) || version.ValueKind != JsonValueKind.Number || version.GetInt32() != 2)
             throw Unreadable(project, $"{lockPath} is not a version 2 lock file, the version central package management writes");
 

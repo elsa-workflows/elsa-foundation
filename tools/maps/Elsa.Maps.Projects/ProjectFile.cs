@@ -1,6 +1,6 @@
 using System.Xml.Linq;
 
-namespace Elsa.Maps.Generator;
+namespace Elsa.Maps.Projects;
 
 /// <summary>
 /// One parsed MSBuild file, read for its evaluation-time properties and items, plus the packable
@@ -11,7 +11,7 @@ public sealed record ProjectFile(string RelativePath, XDocument Document)
     /// <summary>SDKs whose props default <c>IsPackable</c> to false, as the Web and Worker SDKs do.</summary>
     private static readonly string[] NonPackableSdks = ["Microsoft.NET.Sdk.Web", "Microsoft.NET.Sdk.Worker"];
 
-    public static ProjectFile Load(RepoContext repo, string relativePath) => new(relativePath, XDocument.Load(repo.Absolute(relativePath)));
+    public static ProjectFile Load(IRepositoryTree tree, string relativePath) => new(relativePath, tree.ReadXml(relativePath));
 
     public string Name => Path.GetFileNameWithoutExtension(RelativePath);
 
@@ -55,9 +55,9 @@ public sealed record ProjectFile(string RelativePath, XDocument Document)
     /// <c>Microsoft.NET.Test.Sdk</c> sets <c>IsTestProject</c> for the projects that reference it. Pack
     /// compares the value to <c>true</c> case-insensitively, so anything else counts as not packable.
     /// </remarks>
-    public static bool IsPackable(RepoContext repo, ProjectFile file, Dictionary<string, XDocument?> inheritedProperties)
+    public static bool IsPackable(IRepositoryTree tree, ProjectFile file, Dictionary<string, XDocument?> inheritedProperties)
     {
-        var declared = file.Property("IsPackable") ?? InheritedProperty(repo, file.RelativePath, "IsPackable", inheritedProperties);
+        var declared = file.Property("IsPackable") ?? InheritedProperty(tree, file.RelativePath, "IsPackable", inheritedProperties);
         if (declared is not null)
             return string.Equals(declared, "true", StringComparison.OrdinalIgnoreCase);
 
@@ -74,7 +74,7 @@ public sealed record ProjectFile(string RelativePath, XDocument Document)
     /// A property from the nearest <c>Directory.Build.props</c> above the project, which is the only one MSBuild
     /// imports automatically.
     /// </summary>
-    private static string? InheritedProperty(RepoContext repo, string relativePath, string name, Dictionary<string, XDocument?> cache)
+    private static string? InheritedProperty(IRepositoryTree tree, string relativePath, string name, Dictionary<string, XDocument?> cache)
     {
         var directory = relativePath;
         do
@@ -84,7 +84,7 @@ public sealed record ProjectFile(string RelativePath, XDocument Document)
             var props = directory.Length == 0 ? "Directory.Build.props" : $"{directory}/Directory.Build.props";
 
             if (!cache.TryGetValue(props, out var document))
-                cache[props] = document = File.Exists(repo.Absolute(props)) ? XDocument.Load(repo.Absolute(props)) : null;
+                cache[props] = document = tree.Exists(props) ? tree.ReadXml(props) : null;
 
             if (document is not null)
                 return new ProjectFile(props, document).Property(name);
@@ -97,13 +97,13 @@ public sealed record ProjectFile(string RelativePath, XDocument Document)
     /// The raw <c>ElsaVersionLineAMembers</c> text from <c>VersionLines.props</c>, the one reviewed Line A list
     /// (ADR 0067) that <c>Directory.Build.props</c> also reads.
     /// </summary>
-    public static string ReadLineAMembers(RepoContext repo)
+    public static string ReadLineAMembers(IRepositoryTree tree)
     {
         const string path = "VersionLines.props";
-        if (!File.Exists(repo.Absolute(path)))
+        if (!tree.Exists(path))
             throw new InvalidOperationException($"{path} is missing; the dependency map reads Line A membership from it.");
 
-        return new ProjectFile(path, XDocument.Load(repo.Absolute(path))).Property("ElsaVersionLineAMembers")
+        return new ProjectFile(path, tree.ReadXml(path)).Property("ElsaVersionLineAMembers")
                ?? throw new InvalidOperationException($"{path} declares no ElsaVersionLineAMembers.");
     }
 

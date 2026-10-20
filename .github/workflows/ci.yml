@@ -551,6 +551,12 @@ jobs:
         if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
         run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- project-facts-self-test
 
+      # The one project-discovery rule the generator and the versioning calculator share (spec 259).
+      - name: Exercise project graph contract
+        id: project-graph
+        if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- project-graph-self-test
+
       - name: Exercise feature facts contract
         id: feature-facts
         if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
