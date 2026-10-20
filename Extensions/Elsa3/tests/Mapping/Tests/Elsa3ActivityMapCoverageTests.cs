@@ -106,6 +106,46 @@ public sealed class Elsa3ActivityMapCoverageTests
                 $"'{elsa3Type}' maps an outcome to '{outcome}', which '{typeKey}' does not declare.");
     }
 
+    /// <summary>
+    /// Spec 248 D-3: an entry without a <c>canStartWorkflow</c> rule drops the flag, because Elsa 3 only uses it there to
+    /// pick a flowchart's start. That is faithful only for non-triggers, so exactly the Elsa 3 triggers declare one.
+    /// </summary>
+    [Fact]
+    public void Exactly_the_elsa3_triggers_with_a_counterpart_classify_canStartWorkflow()
+    {
+        string[] triggers = ["Elsa.Cron", "Elsa.Event", "Elsa.HttpEndpoint", "Elsa.StartAt", "Elsa.Timer"];
+        var classifying = Map.Entries
+            .Where(entry => entry.Members.Any(rule =>
+                rule.Kind == Elsa3MemberKind.CustomProperty && StringComparer.OrdinalIgnoreCase.Equals(rule.Elsa3Name, "CanStartWorkflow")))
+            .Select(entry => entry.Elsa3TypeName)
+            .Order(StringComparer.Ordinal);
+        var expected = triggers.Where(type => Map.Find(type) is { Target: not Elsa3ActivityTarget.NoCounterpart });
+
+        Assert.Equal(expected, classifying);
+    }
+
+    /// <summary>
+    /// The member map's "Elsa 4 required members with no Elsa 3 source": these have no R2 default, so an unset member is
+    /// refused. WriteLine.text left the list in spec 248: Elsa 3 writes an empty line, so it defaults to "".
+    /// </summary>
+    [Fact]
+    public void Required_members_with_no_elsa3_source_have_no_default_and_WriteLine_text_defaults_to_empty()
+    {
+        (string Type, string Elsa4Key)[] unsourced =
+        [
+            ("Elsa.SendHttpRequest", "Url"), ("Elsa.HttpEndpoint", "Path"), ("Elsa.Event", "EventName"),
+            ("Elsa.PublishEvent", "EventName"), ("Elsa.Cron", "Expression"), ("Elsa.DispatchWorkflow", "WorkflowDefinitionId"),
+            ("Elsa.RunJavaScript", "script")
+        ];
+
+        Assert.All(unsourced, member => Assert.DoesNotContain(Map.Find(member.Type)!.Members, rule =>
+            rule.Rule == Elsa3MemberRuleKind.DefaultFlip && rule.Elsa4Key == member.Elsa4Key));
+        var text = Assert.Single(Map.Find("Elsa.WriteLine")!.Members);
+        Assert.Equal(Elsa3MemberRuleKind.DefaultFlip, text.Rule);
+        Assert.Equal("text", text.Elsa4Key);
+        Assert.Equal(string.Empty, text.Elsa3Default?.GetString());
+    }
+
     [Fact]
     public void Every_intrinsic_target_and_key_exists()
     {
