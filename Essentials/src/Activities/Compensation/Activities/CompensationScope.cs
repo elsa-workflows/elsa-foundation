@@ -31,6 +31,11 @@ namespace Elsa.Activities.Compensation.Activities;
 /// <c>specs/250-native-compensation</c> and <c>specs/251-compensation-uncertainty</c>.
 /// </para>
 /// <para>
+/// A waiting scope offers an operator three decisions through <c>DecideIntervention/1</c> (spec 260): resolve the
+/// waiting entry as effect absent or effect accepted, which settles it as <c>ResolvedManually</c> and lets the scope go
+/// on, or abandon the recovery, which faults the scope with <see cref="AbandonedFaultCode"/>.
+/// </para>
+/// <para>
 /// Scopes nest (spec 258). A scope that completes <c>Done</c> hands its unconfirmed entries to the nearest enclosing
 /// scope, which journals them and can later run their handlers; <c>confirmOnComplete</c> confirms them instead. A
 /// <see cref="Confirm"/> activity confirms entries, and a <see cref="Compensate"/> activity starts recovery explicitly.
@@ -66,7 +71,8 @@ public sealed class CompensationScope : StructuralActivity,
     IRuntimeActivityChildFaultHandler,
     IRuntimeActivityChildOutcomeHandler,
     IRuntimeActivityChildNotificationHandler,
-    IRuntimeActivityDescendantFaultHandler
+    IRuntimeActivityDescendantFaultHandler,
+    IRuntimeActivityInterventionDecisionHandler
 {
     public const string StructureKind = "elsa.compensation-scope.structure";
     public const string StructureSchemaVersion = "1.0.0";
@@ -91,6 +97,29 @@ public sealed class CompensationScope : StructuralActivity,
     /// R9). It carries <see cref="OutcomeUnknownCategory"/>, so an enclosing scope treats the scope as an uncertain step.
     /// </summary>
     public const string UncertainUnhandledFaultCode = "compensation.scope.uncertain-unhandled";
+
+    /// <summary>
+    /// The fault code of a scope whose recovery an operator abandoned (spec 260 FR-410). It carries
+    /// <see cref="OutcomeUnknownCategory"/>, so an enclosing scope treats the abandoned scope as an uncertain step, never as
+    /// undone.
+    /// </summary>
+    public const string AbandonedFaultCode = "compensation.scope.abandoned";
+
+    /// <summary>The operator decisions a waiting scope offers on its intervention incident (spec 260 FR-407).</summary>
+    public static class Decisions
+    {
+        /// <summary>The effect does not exist: it never happened, or it was undone outside Elsa.</summary>
+        public const string ResolveEffectAbsent = "compensation.resolve.effect-absent";
+
+        /// <summary>The effect exists and the business keeps it.</summary>
+        public const string ResolveEffectAccepted = "compensation.resolve.effect-accepted";
+
+        /// <summary>Stop the scope's recovery; the scope faults with <see cref="AbandonedFaultCode"/>.</summary>
+        public const string Abandon = "compensation.abandon";
+
+        /// <summary>The offer, in the order an operator sees it.</summary>
+        public static IReadOnlyList<string> Offer { get; } = [ResolveEffectAbsent, ResolveEffectAccepted, Abandon];
+    }
 
     /// <summary>The fault category prefix that names the outer scope a cascading Compensate aims at.</summary>
     public const string TargetCategoryPrefix = "compensation.target:";
@@ -430,6 +459,97 @@ public sealed class CompensationScope : StructuralActivity,
         return ScheduleNextHandlerOrFinish(runtimeContext, navigator, compensating);
     }
 
+    /// <summary>
+    /// An operator's decision on the incident the scope waits on (spec 260): resolve the waiting entry with an outcome,
+    /// or abandon the recovery. A decision for an incident no entry waits on, or one that reaches a scope that no longer
+    /// waits, is a repeat and changes nothing.
+    /// </summary>
+    public ValueTask<RuntimeStructuralContinuation> OnInterventionDecidedAsync(IRuntimeActivityExecutionContext context, ActivityInterventionDecidedContext decision)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(decision);
+        var navigator = Navigator(context);
+        var state = LoadState(context);
+
+        if (state.Phase != CompensationScopePhase.AwaitingIntervention)
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+
+        var entry = state.Entries.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(candidate.InterventionIncidentId, decision.IncidentId));
+        if (entry is null)
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+
+        var continuation = decision.Decision switch
+        {
+            Decisions.Abandon => OnAbandoned(context, state, entry, decision),
+            Decisions.ResolveEffectAbsent => OnResolved(context, navigator, state, entry, decision, CompensationResolutionOutcome.EffectAbsent),
+            Decisions.ResolveEffectAccepted => OnResolved(context, navigator, state, entry, decision, CompensationResolutionOutcome.EffectAccepted),
+            // The scope offers only its own codes, and the runtime delivers only an offered one.
+            _ => throw new CompensationScopeExecutionException(
+                $"Compensation scope '{context.ExecutableNode.ExecutableNodeId}' received decision '{decision.Decision}', which it does not offer.")
+        };
+        return ValueTask.FromResult(continuation);
+    }
+
+    // Abandon (FR-410): no further handler runs, every entry keeps its status, and the scope faults with a coded,
+    // outcome-unknown fault. It cancels nothing, because a fault cannot ride a subtree cancellation (spec 258 R13).
+    private static RuntimeStructuralContinuation OnAbandoned(
+        IRuntimeActivityExecutionContext runtimeContext,
+        CompensationScopeState state,
+        CompensationEntry entry,
+        ActivityInterventionDecidedContext decision)
+    {
+        var fromPhase = entry.Status == CompensationEntryStatus.Failed ? CompensationScopePhase.Compensating : CompensationScopePhase.Running;
+        var abandoned = Replace(state, entry with { InterventionIncidentId = null }) with
+        {
+            Phase = CompensationScopePhase.Abandoned,
+            Abandonment = new CompensationAbandonment(decision.IncidentId, entry.Id, fromPhase)
+        };
+        var notUndone = abandoned.Entries.Count(candidate => candidate.Status is
+            CompensationEntryStatus.Registered or CompensationEntryStatus.Uncertain or CompensationEntryStatus.Failed or CompensationEntryStatus.Compensating);
+        return CompensationScopeStatePersister.Stage(
+            RuntimeStructuralContinuation.Faulted(AbandonedFault(runtimeContext.ExecutableNode.AuthoredActivityId, notUndone)),
+            abandoned);
+    }
+
+    // Resolve (FR-408, FR-409): the entry is settled as the operator declared, without running anything. A waiting handler
+    // lets recovery continue; a waiting uncertain step either starts recovery (effect absent) or lets the scope run on
+    // (effect accepted). A suspended subtree under the step or handler (a descendant's fault) is cancelled with it.
+    private RuntimeStructuralContinuation OnResolved(
+        IRuntimeActivityExecutionContext runtimeContext,
+        CompensationScopeNavigator navigator,
+        CompensationScopeState state,
+        CompensationEntry entry,
+        ActivityInterventionDecidedContext decision,
+        CompensationResolutionOutcome outcome)
+    {
+        var resolved = entry with
+        {
+            Status = CompensationEntryStatus.ResolvedManually,
+            Resolution = new CompensationEntryResolution(outcome, decision.IncidentId),
+            InterventionIncidentId = null
+        };
+
+        RuntimeStructuralContinuation continuation;
+        if (entry.Status == CompensationEntryStatus.Failed)
+            continuation = ScheduleNextHandlerOrFinish(runtimeContext, navigator, Replace(state, resolved) with { Phase = CompensationScopePhase.Compensating });
+        else if (outcome == CompensationResolutionOutcome.EffectAbsent)
+            // The step failed with no effect: recover the steps before it, as after a definite fault (the cause stays).
+            continuation = ScheduleNextHandlerOrFinish(runtimeContext, navigator, Replace(state, resolved) with { Phase = CompensationScopePhase.Compensating });
+        else
+            // The step's effect happened: run the next step, scheduled by the occurrence that stood for the step.
+            continuation = ContinueForward(runtimeContext, navigator, Replace(state, resolved) with { Phase = CompensationScopePhase.Running }, decision.ViaChildActivityExecutionId);
+
+        // The via child of a descendant's fault is still suspended; a fault cannot ride its cancellation, so a finish that
+        // faults leaves it to the next scope out or the run's end (spec 258 R13).
+        if (!StringComparer.Ordinal.Equals(decision.ViaChildActivityExecutionId, decision.FaultedActivityExecutionId) &&
+            continuation.Kind != RuntimeStructuralContinuationKind.Fault)
+            runtimeContext.RequestChildSubtreeCancellation(
+                decision.ViaChildActivityExecutionId,
+                $"Compensation scope stopped '{entry.Step}' because an operator resolved it.");
+
+        return continuation;
+    }
+
     private RuntimeStructuralContinuation? OnStepFaulted(
         IRuntimeActivityExecutionContext runtimeContext,
         CompensationScopeNavigator navigator,
@@ -579,8 +699,9 @@ public sealed class CompensationScope : StructuralActivity,
         metadataForOperator[MetadataKeys.Step] = entry.Step;
         runtimeContext.RequestChildFaultIntervention(
             incidentId,
-            $"The compensation of step '{entry.Step}' failed on all {MaxAttempts} attempts; an operator must retry it.",
-            metadataForOperator);
+            $"The compensation of step '{entry.Step}' failed on all {MaxAttempts} attempts; an operator must retry, resolve or abandon it.",
+            metadataForOperator,
+            Decisions.Offer);
         return CompensationScopeStatePersister.Stage(
             RuntimeStructuralContinuation.Defer,
             Replace(state, failed) with { Phase = CompensationScopePhase.AwaitingIntervention });
@@ -807,7 +928,7 @@ public sealed class CompensationScope : StructuralActivity,
 
     // A handed-over entry names its own handler node; the scope's own entries resolve it from their step. A handed-over
     // entry is never resolved by step name, which can repeat across scopes.
-    private static string? HandlerNodeOf(CompensationScopeNavigator navigator, CompensationEntry entry) =>
+    internal static string? HandlerNodeOf(CompensationScopeNavigator navigator, CompensationEntry entry) =>
         entry.Origin is not null
             ? entry.HandlerExecutableNodeId
             : entry.HandlerExecutableNodeId ?? navigator.FindStep(entry.Step)?.Handler?.ExecutableNodeId;
@@ -905,7 +1026,8 @@ public sealed class CompensationScope : StructuralActivity,
                 [MetadataKeys.Scope] = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId,
                 [MetadataKeys.Entry] = entry.Id,
                 [MetadataKeys.Step] = entry.Step
-            });
+            },
+            Decisions.Offer);
         var waiting = entry with { InterventionIncidentId = incidentId };
         return CompensationScopeStatePersister.Stage(
             RuntimeStructuralContinuation.Defer,
@@ -986,6 +1108,9 @@ public sealed class CompensationScope : StructuralActivity,
 
     private static ActivityFault UncertainUnhandledFault(string stepName) =>
         new(UncertainUnhandledFaultCode, $"A Compensate activity stopped step '{stepName}', which has no handler; its effect is unknown.", category: OutcomeUnknownCategory);
+
+    private static ActivityFault AbandonedFault(string scope, int notUndone) =>
+        new(AbandonedFaultCode, $"An operator abandoned the recovery of compensation scope '{scope}'; {notUndone} step(s) were not undone.", category: OutcomeUnknownCategory);
 
     private static ActivityFault CompensateRequestedFault(string target) =>
         new(CompensateRequestedFaultCode, $"A Compensate activity asked scope '{target}' to recover; this scope compensated itself first.", category: TargetCategoryPrefix + target);

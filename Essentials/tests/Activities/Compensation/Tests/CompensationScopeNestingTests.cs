@@ -55,9 +55,9 @@ public sealed class CompensationScopeNestingTests
         Assert.Null(entry.Origin);
         Assert.Null(entry.HandlerExecutableNodeId);
 
-        // Written back as version 3, never downgraded.
+        // Written back as the current version (4 since spec 260), never downgraded.
         var staged = CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Defer, state);
-        Assert.Equal(3, staged.StateUpdate!.StateVersion);
+        Assert.Equal(4, staged.StateUpdate!.StateVersion);
     }
 
     [Fact]
