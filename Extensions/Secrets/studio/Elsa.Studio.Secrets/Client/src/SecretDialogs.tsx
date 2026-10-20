@@ -1,8 +1,9 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useDialogFocus } from "@elsa-workflows/studio-sdk";
+import { AdvancedSection } from "@elsa-workflows/studio-ui";
 import type { CreateSecretRequest, RotateSecretRequest, SecretDescriptorsResponse, SecretMetadata } from "./secretTypes";
-import { SecretScopePicker } from "./SecretScopePicker";
+import { ScopeMatchingHint, SecretScopePicker } from "./SecretScopePicker";
 
 const technicalNamePattern = /^[a-z0-9._:-]+$/;
 
@@ -22,7 +23,7 @@ export function CreateSecretDialog({
   onSave(request: CreateSecretRequest): Promise<void>;
 }) {
   const initialTypeName = descriptors.types[0]?.name ?? "text";
-  const initialStoreName = firstSupportedStoreName(descriptors, initialTypeName) ?? descriptors.stores[0]?.name ?? "encrypted";
+  const initialStoreName = defaultStoreNameForType(descriptors, initialTypeName);
   const [name, setName] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [description, setDescription] = useState("");
@@ -38,11 +39,20 @@ export function CreateSecretDialog({
   const dialogRef = useRef<HTMLElement>(null);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const descriptionInputId = useId();
+  const scopeMatchingHintId = useId();
   const normalizedName = normalizeTechnicalName(name);
   const nameInvalid = normalizedName.length > 0 && !technicalNamePattern.test(normalizedName);
   const selectedType = descriptors.types.find(type => type.name === typeName);
   const supportedStores = useMemo(() => storesForType(descriptors, typeName), [descriptors, typeName]);
   const selectedStore = descriptors.stores.find(store => store.name === storeName);
+  const defaultStoreName = defaultStoreNameForType(descriptors, typeName);
+  const configuredOptionalCount = [
+    displayName.trim().length > 0,
+    description.trim().length > 0,
+    parseTags(tags).length > 0,
+    scope.length > 0,
+    storeName.length > 0 && storeName !== defaultStoreName
+  ].filter(Boolean).length;
   const usesConfigurationKey = storeName === "configuration";
   const canSubmit = normalizedName.length > 0 && !nameInvalid && typeName.length > 0 && storeName.length > 0 && (usesConfigurationKey ? configurationKey.trim().length > 0 : value.length > 0);
   useDialogFocus(dialogRef, submitting ? null : onCancel);
@@ -96,27 +106,34 @@ export function CreateSecretDialog({
             {error ? <p ref={errorRef} className="secrets-alert" role="alert" tabIndex={0}>{error}</p> : null}
             <Field label="Technical name" value={name} onChange={setName} onBlur={() => setName(normalizedName)} autoComplete="off" />
             <p className={nameInvalid ? "secrets-field-error" : "secrets-field-hint"}>Trimmed and lowercased. Use letters, numbers, dot, dash, underscore, or colon.</p>
-            <Field label="Display name" value={displayName} onChange={setDisplayName} />
-            <div className="secrets-description-field"><label htmlFor={descriptionInputId}>Description</label><textarea id={descriptionInputId} value={description} onChange={event => setDescription(event.target.value)} rows={3} /></div>
             <label>Type<select value={typeName} onChange={event => changeType(event.target.value)}>{descriptors.types.map(type => <option key={type.name} value={type.name}>{type.displayName || type.name}</option>)}</select></label>
-            {selectedType?.description ? <p className="secrets-field-hint">{selectedType.description}</p> : null}
-            <label>Store<select value={storeName} onChange={event => setStoreName(event.target.value)}>{supportedStores.map(store => <option key={store.name} value={store.name}>{store.displayName || store.name}</option>)}</select></label>
-            {selectedStore?.description ? <p className="secrets-field-hint">{selectedStore.description}</p> : null}
-            <SecretScopePicker
-              value={scope}
-              options={descriptors.scopes}
-              loading={scopeCatalogLoading}
-              error={scopeCatalogError}
-              onChange={setScope}
-              onRetry={onRetryScopeCatalog}
-            />
-            <Field label="Tags" value={tags} onChange={setTags} placeholder="comma-separated" />
             {usesConfigurationKey ? (
               <Field label="Configuration key" value={configurationKey} onChange={setConfigurationKey} autoComplete="off" />
             ) : (
               <SecretValueField key={typeName} label="Value" value={value} typeName={typeName} editorHint={selectedType?.editorHint ?? null} onChange={setValue} />
             )}
             <label>Expires<input type="datetime-local" value={expiresAt} onChange={event => setExpiresAt(event.target.value)} /></label>
+            {selectedType?.description ? <p className="secrets-field-hint">{selectedType.description}</p> : null}
+            <p className="secrets-field-hint">Store: {selectedStore?.displayName || selectedStore?.name || storeName || "Unavailable"}</p>
+            {selectedStore?.description ? <p className="secrets-field-hint">{selectedStore.description}</p> : null}
+            <ScopeMatchingHint id={scopeMatchingHintId} />
+            <AdvancedSection label="More options" setCount={configuredOptionalCount} allowCollapseWhenSet forceOpen={!storeName || scopeCatalogError}>
+              <div className="secrets-create-options">
+                <Field label="Display name" value={displayName} onChange={setDisplayName} />
+                <div className="secrets-description-field"><label htmlFor={descriptionInputId}>Description</label><textarea id={descriptionInputId} value={description} onChange={event => setDescription(event.target.value)} rows={3} /></div>
+                <Field label="Tags" value={tags} onChange={setTags} placeholder="comma-separated" />
+                <label>Store<select value={storeName} onChange={event => setStoreName(event.target.value)}>{supportedStores.map(store => <option key={store.name} value={store.name}>{store.displayName || store.name}</option>)}</select></label>
+                <SecretScopePicker
+                  value={scope}
+                  options={descriptors.scopes}
+                  loading={scopeCatalogLoading}
+                  error={scopeCatalogError}
+                  onChange={setScope}
+                  onRetry={onRetryScopeCatalog}
+                  externalMatchingHintId={scopeMatchingHintId}
+                />
+              </div>
+            </AdvancedSection>
           </div>
           <div className="secrets-dialog-actions secrets-create-actions">
             <button type="button" onClick={onCancel} disabled={submitting}>Cancel</button>
@@ -244,8 +261,8 @@ function storesForType(descriptors: SecretDescriptorsResponse, typeName: string)
   return descriptors.stores.filter(store => supportedNames.includes(store.name));
 }
 
-function firstSupportedStoreName(descriptors: SecretDescriptorsResponse, typeName: string) {
-  return storesForType(descriptors, typeName)[0]?.name;
+function defaultStoreNameForType(descriptors: SecretDescriptorsResponse, typeName: string) {
+  return storesForType(descriptors, typeName)[0]?.name ?? descriptors.stores[0]?.name ?? "encrypted";
 }
 
 function normalizeTechnicalName(value: string) {
