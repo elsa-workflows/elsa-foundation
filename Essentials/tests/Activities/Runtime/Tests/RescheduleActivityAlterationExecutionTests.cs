@@ -3,6 +3,7 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Testing;
+using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
@@ -17,10 +18,10 @@ using Xunit;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// <c>RescheduleActivity/1</c> end to end. A structural parent that deferred on a child fault it did not handle, under
-/// the <c>ContinueWithIncidents</c> strategy, keeps the run running and keeps waiting for that child; rescheduling the
-/// faulted child through a submitted alteration plan lets the parent receive and route the successor's completion. A
-/// fault the parent absorbed is a consumed outcome, so rescheduling its source is refused.
+/// <c>RescheduleActivity/1</c> end to end under a structural parent that routes on its children's command metadata. A
+/// rescheduled suspended child's successor reaches the parent as an ordinary, routable child completion. A rescheduled
+/// faulted child whose fault the parent already evaluated still runs, but the parent is not told: whether it should be
+/// is open (#3135).
 /// </summary>
 public sealed class RescheduleActivityAlterationExecutionTests
 {
@@ -28,24 +29,18 @@ public sealed class RescheduleActivityAlterationExecutionTests
         new(WorkflowExecutionHarness.Partition.Value, "activity-behavioural-drive", "activity-behavioural-drive");
 
     [Fact]
-    public async Task RescheduledLeafWhoseFaultTheParentLeftOpen_Completes_AndTheParentRoutesItsCompletion()
+    public async Task RescheduledSuspendedLeaf_Completes_AndTheParentRoutesItsCompletion()
     {
-        await using var fixture = await RescheduleFixture.StartAsync(absorbFault: false);
+        await using var fixture = await RescheduleFixture.StartAsync(typeof(SuspendOnceActivity));
         var source = fixture.Run.State("node-f");
-        Assert.Equal(ActivityExecutionStatus.Faulted, source.Status);
-        Assert.True(source.Metadata.ContainsKey(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId));
-        Assert.Equal(WorkflowExecutionStatus.Running, fixture.Run.WorkflowState!.Status);
-        Assert.Equal(IncidentStatus.Open, Assert.Single(await fixture.ListIncidentsAsync()).Status);
+        Assert.Equal(ActivityExecutionStatus.Suspended, source.Status);
 
-        var job = await fixture.RescheduleAsync(source.Execution.ActivityExecutionId, "reschedule-1");
+        var job = await fixture.RescheduleAsync(source.Execution.ActivityExecutionId, "reschedule-suspended");
 
         Assert.Equal(WorkflowAlterationJobStatus.Succeeded, job.Status);
         var run = await fixture.ReadRunAsync();
         var successor = Assert.Single(run.States("node-f"), state => state.Status == ActivityExecutionStatus.Completed);
         Assert.Equal(source.Execution.ActivityExecutionId, successor.Metadata[RuntimeMetadataKeys.SupersedesActivityExecutionId]);
-
-        var fault = Assert.Single(fixture.Log.Faults);
-        Assert.Equal(source.Execution.ActivityExecutionId, fault.ChildActivityExecutionId);
         var completion = Assert.Single(fixture.Log.Completions);
         Assert.Equal(successor.Execution.ActivityExecutionId, completion.ChildActivityExecutionId);
         // The parent routes the successor's completion with the scheduling metadata it gave the source.
@@ -53,39 +48,40 @@ public sealed class RescheduleActivityAlterationExecutionTests
         Assert.Equal("marker-node-f", completion.Marker);
         run.AssertCompleted("node-parent");
         run.AssertWorkflowCompleted();
+    }
 
-        // The successor is a fresh invocation: none of the source's per-invocation markers or fault metadata carry over.
+    [Fact]
+    public async Task RescheduledFaultedLeafWhoseFaultTheParentEvaluated_Completes_ButTheParentIsNotTold()
+    {
+        // The parent deferred on the fault without handling it, and ContinueWithIncidents keeps the run running.
+        await using var fixture = await RescheduleFixture.StartAsync(typeof(OutcomeUnknownActivity));
+        var source = fixture.Run.State("node-f");
+        Assert.Equal(ActivityExecutionStatus.Faulted, source.Status);
+        Assert.True(source.Metadata.ContainsKey(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId));
+        Assert.Equal(IncidentStatus.Open, Assert.Single(await fixture.ListIncidentsAsync()).Status);
+
+        var job = await fixture.RescheduleAsync(source.Execution.ActivityExecutionId, "reschedule-faulted");
+
+        Assert.Equal(WorkflowAlterationJobStatus.Succeeded, job.Status);
+        var run = await fixture.ReadRunAsync();
+        var successor = Assert.Single(run.States("node-f"), state => state.Status == ActivityExecutionStatus.Completed);
+        Assert.Single(fixture.Log.Faults);
+        Assert.Empty(fixture.Log.Completions);
+        Assert.Equal(ActivityExecutionStatus.Running, run.State("node-parent").Status);
+        // The successor keeps only the parent-completion marker among the source's per-invocation metadata.
+        Assert.Equal(
+            source.Metadata[RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId],
+            successor.Metadata[RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId]);
         Assert.DoesNotContain(successor.Metadata.Keys, key => key.StartsWith("runtime.fault", StringComparison.Ordinal));
         Assert.DoesNotContain(RuntimeMetadataKeys.IncidentId, successor.Metadata.Keys);
     }
 
-    [Fact]
-    public async Task LeafWhoseFaultTheParentAbsorbed_IsRejectedSourceFaultAbsorbed()
-    {
-        await using var fixture = await RescheduleFixture.StartAsync(absorbFault: true);
-        var source = fixture.Run.State("node-f");
-        Assert.Equal(ActivityExecutionStatus.Faulted, source.Status);
-        Assert.Equal(IncidentStatus.Resolved, Assert.Single(await fixture.ListIncidentsAsync()).Status);
-
-        var job = await fixture.RescheduleAsync(source.Execution.ActivityExecutionId, "reschedule-absorbed");
-
-        Assert.Equal(WorkflowAlterationJobStatus.Failed, job.Status);
-        Assert.Equal("SourceFaultAbsorbed", Assert.Single(job.Outcomes).Code);
-        var run = await fixture.ReadRunAsync();
-        Assert.Equal(ActivityExecutionStatus.Faulted, Assert.Single(run.States("node-f")).Status);
-        Assert.Equal(WorkflowExecutionStatus.Running, run.WorkflowState!.Status);
-        Assert.Empty(fixture.Log.Completions);
-    }
-
-    /// <summary>What the <see cref="RoutingParentActivity"/> does with a child fault.</summary>
-    public sealed record RescheduleParentDirective(bool AbsorbFault);
-
     /// <summary>
     /// Schedules its slot children with a marker in their scheduling metadata; on a child fault it records the fault and
-    /// defers, absorbing it when directed. It records each child completion and, like a parent that routes on its
-    /// children's command metadata, completes only on a completion that carries a marker.
+    /// defers without handling it. It records each child completion and, like a parent that routes on its children's
+    /// command metadata, completes only on a completion that carries a marker.
     /// </summary>
-    public sealed class RoutingParentActivity(ChildEvaluationLog log, RescheduleParentDirective directive) : StructuralActivity,
+    public sealed class RoutingParentActivity(ChildEvaluationLog log) : StructuralActivity,
         IRuntimeStructuralActivity,
         IRuntimeActivityChildCompletionHandler,
         IRuntimeActivityChildFaultHandler
@@ -108,8 +104,6 @@ public sealed class RescheduleActivityAlterationExecutionTests
                 context.IncidentId,
                 context.FaultCode,
                 context.FaultCategory));
-            if (directive.AbsorbFault)
-                ((IRuntimeActivityExecutionContext)context.ParentContext).RequestChildFaultAbsorption(context.IncidentId!, "test-absorb");
             return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
         }
 
@@ -124,8 +118,33 @@ public sealed class RescheduleActivityAlterationExecutionTests
         }
     }
 
+    /// <summary>How many more times a <see cref="SuspendOnceActivity"/> suspends before it completes.</summary>
+    public sealed class SuspensionBudget(int suspensions)
+    {
+        public int Remaining { get; private set; } = suspensions;
+        public bool TakeSuspension()
+        {
+            if (Remaining <= 0)
+                return false;
+            Remaining--;
+            return true;
+        }
+    }
+
+    /// <summary>Suspends on a trigger while its <see cref="SuspensionBudget"/> lasts, then completes when executed again.</summary>
+    public sealed class SuspendOnceActivity(SuspensionBudget budget) : StatefulActivity<ActivityUnit, WaitState, WaitTrigger>
+    {
+        protected override ValueTask<ActivityTransition<ActivityUnit, WaitState>> ExecuteAsync(ActivityExecutionContext context) =>
+            ValueTask.FromResult(budget.TakeSuspension()
+                ? Suspend(new WaitState("waiting"), [new ActivityTriggerRegistration<WaitTrigger>(WaitingActivity.ResumeTargetKey, "TestWait", "wait:42")])
+                : Complete(ActivityUnit.Value, ActivityOutcomes.Done));
+
+        protected override ValueTask<ActivityTransition<ActivityUnit, WaitState>> ResumeAsync(ActivityResumeContext<WaitState, WaitTrigger> context) =>
+            ValueTask.FromResult(Complete(ActivityUnit.Value, ActivityOutcomes.Done));
+    }
+
     /// <summary>
-    /// One workflow under test: a routing structural parent over a leaf that faults once, plus the operator-side
+    /// One workflow under test: a routing structural parent over a leaf that faults or suspends once, plus the operator-side
     /// plan submission and orchestration that a host's alteration pump and resumption sweep perform.
     /// </summary>
     private sealed class RescheduleFixture : IAsyncDisposable
@@ -142,14 +161,14 @@ public sealed class RescheduleActivityAlterationExecutionTests
         public ChildEvaluationLog Log { get; }
         public WorkflowExecutionRun Run { get; }
 
-        public static async Task<RescheduleFixture> StartAsync(bool absorbFault)
+        public static async Task<RescheduleFixture> StartAsync(Type leafType)
         {
             var log = new ChildEvaluationLog();
             var harness = WorkflowExecutionHarness.Create()
                 .ConfigureServices(services =>
                 {
                     services.AddSingleton(log);
-                    services.AddSingleton(new RescheduleParentDirective(absorbFault));
+                    services.AddSingleton(new SuspensionBudget(1));
                     services.AddSingleton(new OperationKeyLog());
                     services.AddSingleton(new FailureBudget(1));
                     services.TryAddScoped<IRuntimeResumptionService, RuntimeResumptionService>();
@@ -157,7 +176,8 @@ public sealed class RescheduleActivityAlterationExecutionTests
                 .Build("actexec-parent", "actexec-f");
             var executable = StructuralExecutionTestSupport.NewExecutable(
                 StructuralExecutionTestSupport.NewStructuralNode("node-parent", typeof(RoutingParentActivity),
-                    InterventionTestSupport.NewLeafNode("node-f", typeof(OutcomeUnknownActivity))),
+                    InterventionTestSupport.NewLeafNode("node-f", leafType)),
+                waitingNodeIds: ["node-f"],
                 incidentStrategy: IncidentStrategyBuiltIns.ContinueWithIncidentsReference);
             var reference = await harness.PublishAsync(executable, "reschedule-source");
             await harness.StartPublishedAsync(reference, harness.ExecutionId, tenantId: WorkflowExecutionHarness.Partition.Value);

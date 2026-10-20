@@ -289,8 +289,7 @@ sensitive result material are rejected.
   NOT reuse the historical activity execution identity.
 - **FR-029**: Rescheduling a faulted source MUST require a non-terminal workflow and a source incident
   that is already non-blocking. It MUST NOT resolve any incident; incident recovery/redrive is a
-  separate explicit operation. A source whose fault its parent absorbed MUST be rejected
-  (`SourceFaultAbsorbed`), because the parent has consumed that outcome.
+  separate explicit operation.
 - **FR-030**: Activity rescheduling MUST NOT implicitly recover or reopen a terminal workflow.
 - **FR-031**: `Migrate` MUST appear at most once and, when present, MUST be the first alteration in its
   job.

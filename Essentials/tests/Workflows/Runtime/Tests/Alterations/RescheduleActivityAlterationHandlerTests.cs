@@ -97,7 +97,7 @@ public sealed class RescheduleActivityAlterationHandlerTests
     }
 
     [Fact]
-    public async Task PreflightAsync_SuccessorDropsTheSourcesPerInvocationMetadata()
+    public async Task PreflightAsync_SuccessorDropsTheSourcesPerInvocationMetadata_ExceptTheParentCompletionMarker()
     {
         // Named explicitly rather than read from the list under test, so a key dropped from that list fails here.
         string[] perInvocationKeys =
@@ -138,6 +138,8 @@ public sealed class RescheduleActivityAlterationHandlerTests
             new Dictionary<string, string>
             {
                 ["custom.kept"] = "kept",
+                // Kept until #3135 decides whether a parent that already evaluated the source's fault gets the outcome.
+                [RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId] = "source-value",
                 [RuntimeMetadataKeys.SupersedesActivityExecutionId] = source.Execution.ActivityExecutionId
             },
             successor.Metadata);
@@ -280,33 +282,6 @@ public sealed class RescheduleActivityAlterationHandlerTests
         Assert.False(result.IsAccepted);
         Assert.Equal("BlockingIncident", result.Failure!.Code);
         Assert.Empty(staging.StagedChanges);
-    }
-
-    [Theory]
-    [InlineData(IncidentResolutionActionKinds.AbsorbFault, "SourceFaultAbsorbed")]
-    [InlineData(IncidentResolutionActionKinds.ContinueWithIncidents, null)]
-    public async Task PreflightAsync_RejectsAFaultedSourceOnlyWhenItsParentAbsorbedTheFault(string actionKind, string? expectedCode)
-    {
-        var source = Source(ActivityExecutionStatus.Faulted);
-        var incidents = new InMemoryIncidentStateStore();
-        await incidents.SaveAsync(new IncidentState(
-            "incident", "workflow", source.Execution.ActivityExecutionId, source.Execution.ExecutableNodeId,
-            IncidentSeverity.Error,
-            actionKind == IncidentResolutionActionKinds.AbsorbFault ? IncidentStatus.Resolved : IncidentStatus.Open,
-            actionKind == IncidentResolutionActionKinds.AbsorbFault
-                ? new IncidentResolutionOutcome(actionKind, DateTimeOffset.UnixEpoch, strategy: null, systemSource: IncidentResolutionSystemSources.StructuralFaultAbsorption)
-                : new IncidentResolutionOutcome(actionKind, DateTimeOffset.UnixEpoch, IncidentStrategyBuiltIns.ContinueWithIncidentsReference, systemSource: null),
-            "TestFailure", "The source faulted.", DateTimeOffset.UnixEpoch,
-            actionKind == IncidentResolutionActionKinds.AbsorbFault ? DateTimeOffset.UnixEpoch : null));
-        var executableStore = new InMemoryWorkflowExecutableStore();
-        await executableStore.SaveAsync(Executable());
-        var staging = new Staging();
-
-        var result = await Handler(executableStore, incidentStore: incidents).PreflightAsync(Context(source, staging));
-
-        Assert.Equal(expectedCode is null, result.IsAccepted);
-        Assert.Equal(expectedCode, result.Failure?.Code);
-        Assert.Equal(expectedCode is null ? 1 : 0, staging.StagedChanges.Count);
     }
 
     [Fact]

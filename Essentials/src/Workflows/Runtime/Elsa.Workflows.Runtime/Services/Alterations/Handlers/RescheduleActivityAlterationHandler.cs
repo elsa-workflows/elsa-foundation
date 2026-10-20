@@ -57,13 +57,6 @@ public sealed class RescheduleActivityAlterationHandler(
         var blockingIncidents = await _incidentStateStore.ListBlockingAsync(workflow.WorkflowExecutionId, cancellationToken);
         if (blockingIncidents.Any(incident => incident.ActivityExecutionId is { } activityExecutionId && supersededSubtreeIds.Contains(activityExecutionId)))
             return WorkflowAlterationPreflightResult.Rejected("BlockingIncident", "The source activity has incident evidence and must be resolved through recovery before rescheduling.");
-        // A parent that absorbed the source's fault has consumed its outcome and no longer tracks it (a BPMN error
-        // boundary drops the child and routes the error path), so it has nowhere to route a successor's outcome.
-        if (source.Status == ActivityExecutionStatus.Faulted &&
-            (await _incidentStateStore.ListAsync(workflow.WorkflowExecutionId, cancellationToken)).Any(incident =>
-                StringComparer.Ordinal.Equals(incident.ActivityExecutionId, source.Execution.ActivityExecutionId) &&
-                StringComparer.Ordinal.Equals(incident.ResolutionOutcome?.ActionKind, IncidentResolutionActionKinds.AbsorbFault)))
-            return WorkflowAlterationPreflightResult.Rejected("SourceFaultAbsorbed", "The source activity's fault was absorbed by its parent, which no longer expects its outcome.");
 
         var executable = await _executableStore.FindAsync(workflow.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null || !Equals(executable.Identity, workflow.PinnedExecutable) || !executable.NodesById.TryGetValue(source.Execution.ExecutableNodeId, out var sourceNode))
@@ -89,7 +82,7 @@ public sealed class RescheduleActivityAlterationHandler(
             successorId,
             scopeId,
             provenance,
-            ActivitySuccessorStaging.SuccessorMetadata(source.Metadata, source.Execution.ActivityExecutionId),
+            NewMetadata(source),
             now);
         var superseded = ActivitySuccessorStaging.Supersede(source, successorId, now);
 
@@ -106,6 +99,17 @@ public sealed class RescheduleActivityAlterationHandler(
             continuation,
             Incidents: []));
         return WorkflowAlterationPreflightResult.Accepted();
+    }
+
+    // A parent that already evaluated the source's fault may have stopped tracking the child (a BPMN error boundary or
+    // late-fault guard drops it), and the runtime cannot tell whether it still expects an outcome. Until that is
+    // decided (#3135), the successor keeps the source's parent-completion marker, so its outcome is not delivered.
+    private static Dictionary<string, string> NewMetadata(ActivityExecutionState source)
+    {
+        var metadata = ActivitySuccessorStaging.SuccessorMetadata(source.Metadata, source.Execution.ActivityExecutionId);
+        if (source.Metadata.TryGetValue(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId, out var processedWorkItemId))
+            metadata[RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId] = processedWorkItemId;
+        return metadata;
     }
 
     private static bool TryReadPayload(JsonElement payload, out string sourceId)
