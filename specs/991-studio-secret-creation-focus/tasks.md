@@ -62,8 +62,8 @@
 
 ### Implementation and verification
 
-- [ ] T011 [US1] Reorder the existing controls in `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretDialogs.tsx` so Technical name and Type precede the selected required source and Expires; place verbose descriptor help after the source and retain existing state and submit-handler wiring.
-- [ ] T012 [US1] Run the focused source-selection cases in `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/__tests__/secretDialogs.test.tsx` and the root-owned 1280×800 actual-styles test in `Studio/tests/browser/secret-scopes.spec.ts`; verify both source paths without scrolling before measurement.
+- [x] T011 [US1] Reorder the existing controls in `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretDialogs.tsx` so Technical name and Type precede the selected required source and Expires; place verbose descriptor help after the source and retain existing state and submit-handler wiring.
+- [x] T012 [US1] Run the focused source-selection cases in `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/__tests__/secretDialogs.test.tsx` and the root-owned 1280×800 actual-styles test in `Studio/tests/browser/secret-scopes.spec.ts`; verify both source paths without scrolling before measurement.
 
 **Checkpoint**: User Story 1 meets SC-001 and keeps current source-selection and submission semantics.
 
@@ -77,8 +77,8 @@
 
 ### Implementation and verification
 
-- [ ] T013 [US2] Use the existing `AdvancedSection` in `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretDialogs.tsx` to group Display name, Description, Tags, Store, and Scope; keep empty Store directly reachable, keep selected-Store context and one accessible canonical Scope hint outside the fold, and use a bounded caller-hint association in `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretScopePicker.tsx` only if needed; do not edit `Studio/src/apps/Elsa.Studio.Web/Client/src/app/ui/disclosure/AdvancedSection.tsx`.
-- [ ] T014 [US2] Implement a generic optional count in `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretDialogs.tsx` that counts authored optional metadata and a Store changed from its default while excluding the default Store, Technical name, Value, Configuration key, and Expires; then run US2 unit and browser cases in `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/__tests__/secretDialogs.test.tsx` and `Studio/tests/browser/secret-scopes.spec.ts` for count, context, collapse/reopen, and empty-Store recovery.
+- [x] T013 [US2] Use the existing `AdvancedSection` in `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretDialogs.tsx` to group Display name, Description, Tags, Store, and Scope; keep empty Store directly reachable, keep selected-Store context and one accessible canonical Scope hint outside the fold, and use a bounded caller-hint association in `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretScopePicker.tsx` only if needed; do not edit `Studio/src/apps/Elsa.Studio.Web/Client/src/app/ui/disclosure/AdvancedSection.tsx`.
+- [x] T014 [US2] Implement a generic optional count in `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretDialogs.tsx` that counts authored optional metadata and a Store changed from its default while excluding the default Store, Technical name, Value, Configuration key, and Expires; then run US2 unit and browser cases in `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/__tests__/secretDialogs.test.tsx` and `Studio/tests/browser/secret-scopes.spec.ts` for count, context, collapse/reopen, and empty-Store recovery.
 
 **Checkpoint**: User Story 2 meets SC-002 and preserves all authored optional values without exposing their contents in disclosure copy.
 
@@ -92,8 +92,8 @@
 
 ### Implementation and verification
 
-- [ ] T015 [US3] Wire the existing Scope suggestion error state in `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretDialogs.tsx` to force More options open only while the error is active, then rely on the shared disclosure latch to keep it open after recovery until user dismissal; preserve the focused custom Scope, eligibility, request construction, Show/Hide remasking, and do not add a stored-value read or existing-Secret selector.
-- [ ] T016 [US3] Run the focused preservation and recovery cases in `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/__tests__/secretDialogs.test.tsx` and `Studio/tests/browser/secret-scopes.spec.ts`, including metadata-only fixture assertions in `Studio/tests/browser/secretScopesFixture.tsx` and the revised below-fold tall-error case.
+- [x] T015 [US3] Wire the existing Scope suggestion error state in `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/SecretDialogs.tsx` to force More options open only while the error is active, then rely on the shared disclosure latch to keep it open after recovery until user dismissal; preserve the focused custom Scope, eligibility, request construction, Show/Hide remasking, and do not add a stored-value read or existing-Secret selector.
+- [x] T016 [US3] Run the focused preservation and recovery cases in `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/__tests__/secretDialogs.test.tsx` and `Studio/tests/browser/secret-scopes.spec.ts`, including metadata-only fixture assertions in `Studio/tests/browser/secretScopesFixture.tsx` and the revised below-fold tall-error case.
 
 **Checkpoint**: User Story 3 meets SC-003 and SC-004 with unchanged creation outcome and no stored-value exposure.
 

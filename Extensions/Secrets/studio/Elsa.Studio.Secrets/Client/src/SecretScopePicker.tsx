@@ -105,6 +105,7 @@ export function SecretScopePicker({
           <input
             id={`scope-custom-${id}`}
             value={value}
+            aria-describedby={describedBy}
             onChange={event => onChange(event.target.value)}
             placeholder="Enter a scope value"
             autoComplete="off"

@@ -26,7 +26,7 @@ Reorder the existing Secrets Create dialog so Technical name, Type, and the requ
 
 **Constraints**: Presentation-only. Preserve existing requiredness, normalization, defaults, Store and Type switching, Scope matching, expiry conversion, request shape and optional-field omissions, entered text, error and focus behavior, Show/Hide and remasking. Keep empty-Store recovery directly reachable. Preserve the no-stored-value-read boundary and do not expose authored Value or Configuration key in summaries or fixture metadata. Do not add name-generation, validation policy, provider, SDK/backend change, or public contract.
 
-**Scale/Scope**: One existing Secret creation dialog, its focused unit tests, actual-styles browser fixture, and the direct dependency on the existing UI package. The new direct package typecheck also requires removing the obsolete ambient SDK copy and accurately typing four existing generic API test doubles and the module-registration fixture; use the current workspace SDK without changing it. Add the package typecheck script so existing workspace CI enforces this coverage. No new module or backend work.
+**Scale/Scope**: One existing Secret creation dialog, its focused unit tests, actual-styles browser fixture, and the direct dependency on the existing UI package. The new direct package typecheck also requires removing the obsolete ambient SDK copy and accurately typing four existing generic API test doubles and the module-registration fixture; use the current workspace SDK without changing it. Remove the retired Secrets-copy input from the host's SDK-copy guard while retaining canonical SDK and all remaining copy checks. Add the package typecheck script so existing workspace CI enforces this coverage. No new module or backend work.
 
 ## Constitution Check
 
@@ -60,11 +60,14 @@ Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/
 ├── src/styles.css                                    # reuse existing form spacing inside options
 └── src/__tests__/
     ├── secretDialogs.test.tsx                       # creation behavior regressions
+    ├── secretScopePicker.test.tsx                   # local and external hint associations
     ├── secretsApi.test.ts                           # generic fixture typing for direct tsc
     └── module.test.tsx                              # real SDK registry/API fixture
 
 Studio/
 ├── pnpm-lock.yaml                                    # Secrets importer only
+├── src/apps/Elsa.Studio.Web/Client/src/__tests__/
+│   └── sdk-typing-copies.test.ts                     # retire only removed Secrets copy
 ├── src/apps/Elsa.Studio.Web/Client/src/app/ui/disclosure/
 │   └── AdvancedSection.tsx                            # reuse unchanged
 └── tests/browser/

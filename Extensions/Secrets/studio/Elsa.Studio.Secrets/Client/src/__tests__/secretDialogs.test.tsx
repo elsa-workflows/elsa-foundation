@@ -237,7 +237,11 @@ describe("Create dialog regression contract", () => {
     const scopeHint = [...dialog.querySelectorAll<HTMLParagraphElement>("p")].filter(paragraph => paragraph.textContent?.trim() === SECRET_SCOPE_MATCHING_HINT);
     expect(scopeHint).toHaveLength(1);
     expect(body.contains(scopeHint[0])).toBe(false);
-    expect(fieldControl<HTMLSelectElement>(dialog, "Scope").getAttribute("aria-describedby")?.split(/\s+/)).toContain(scopeHint[0].id);
+    const scopeSelect = fieldControl<HTMLSelectElement>(dialog, "Scope");
+    const scopeDescriptionIds = scopeSelect.getAttribute("aria-describedby")!.split(/\s+/);
+    expect(scopeDescriptionIds).toHaveLength(2);
+    expect(scopeDescriptionIds).toContain(scopeHint[0].id);
+    expect(document.getElementById(scopeDescriptionIds.find(id => id !== scopeHint[0].id)!)).not.toBeNull();
 
     change(name, "authored.name");
     change(value, "authored-source");
@@ -247,6 +251,9 @@ describe("Create dialog regression contract", () => {
     flushSync(() => options.click());
     expect(options.getAttribute("aria-expanded")).toBe("true");
     expect(body.hidden).toBe(false);
+    selectOption(scopeSelect, "Custom…");
+    const customScope = fieldControl<HTMLInputElement>(dialog, "Custom scope value");
+    expect(customScope.getAttribute("aria-describedby")).toBe(scopeDescriptionIds.join(" "));
     change(fieldControl<HTMLInputElement>(dialog, "Display name"), "Private title");
     expect(options.textContent).toContain("1 set");
     expect(options.textContent).not.toContain("Private title");
