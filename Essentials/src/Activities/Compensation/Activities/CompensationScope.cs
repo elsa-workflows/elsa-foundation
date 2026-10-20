@@ -23,8 +23,11 @@ namespace Elsa.Activities.Compensation.Activities;
 /// its handler's schedule request, so a restart never runs a handler twice for one entry.
 /// </para>
 /// <para>
-/// A handler fault is not absorbed: it stays a blocking incident and the run's incident strategy decides, while the
-/// entry stays compensating. Workflow cancellation runs no handler. See <c>specs/250-native-compensation</c>.
+/// A step that faults with category <see cref="OutcomeUnknownCategory"/> may have had its effect: it is journaled as
+/// uncertain and undone like a completed step. A failed handler is retried with the same operation key up to
+/// <see cref="HandlerMaxAttempts"/> times; after that its incident stays blocking with Wait for intervention and an
+/// operator resumes it with the <c>RetryFaultedActivity/1</c> alteration. Workflow cancellation runs no handler. See
+/// <c>specs/250-native-compensation</c> and <c>specs/251-compensation-uncertainty</c>.
 /// </para>
 /// </remarks>
 [Activity(Icon = "Undo2")]
@@ -72,9 +75,20 @@ public sealed class CompensationScope : StructuralActivity, IRuntimeStructuralAc
         public const string Step = "compensation.step";
         public const string Entry = "compensation.entryId";
         public const string Forward = "compensation.forwardActivityExecutionId";
+        public const string Attempt = "compensation.attempt";
+        public const string MaxAttempts = "compensation.maxAttempts";
+        public const string ForwardOutcome = "compensation.forwardOutcome";
+        public const string UnknownForwardOutcome = "unknown";
         public const string StepRole = "step";
         public const string HandlerRole = "handler";
+
+        // The runtime gives an assigned operation key to the child's activity context (spec 251 FR-201).
+        public const string OperationKey = "runtime.operationKey";
+        public const string TargetOperationKey = "runtime.targetOperationKey";
     }
+
+    /// <summary>The reserved fault category an activity reports when it cannot tell whether its effect happened.</summary>
+    public const string OutcomeUnknownCategory = "outcome-unknown";
 
     /// <summary>The scheduling cause recorded on handler executions.</summary>
     public const string HandlerSchedulingCause = "compensation";
@@ -91,6 +105,15 @@ public sealed class CompensationScope : StructuralActivity, IRuntimeStructuralAc
     /// </summary>
     [ActivityInput(Key = "faultAfterCompensation", DefaultValue = "false")]
     public bool FaultAfterCompensation { get; set; }
+
+    /// <summary>
+    /// How many times a handler runs for one entry, operator retries included, before the scope waits for an operator.
+    /// Values below 1 count as 1.
+    /// </summary>
+    [ActivityInput(Key = "handlerMaxAttempts", DefaultValue = "3")]
+    public int HandlerMaxAttempts { get; set; } = 3;
+
+    private int MaxAttempts => Math.Max(1, HandlerMaxAttempts);
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
@@ -122,7 +145,9 @@ public sealed class CompensationScope : StructuralActivity, IRuntimeStructuralAc
         var continuation = (state.Phase, role) switch
         {
             (CompensationScopePhase.Running, MetadataKeys.StepRole) => OnStepCompleted(runtimeContext, navigator, state, context),
-            (CompensationScopePhase.Compensating, MetadataKeys.HandlerRole) => OnHandlerCompleted(runtimeContext, navigator, state, context, metadata),
+            (CompensationScopePhase.AwaitingIntervention, MetadataKeys.StepRole) => OnRetriedStepCompleted(runtimeContext, navigator, state, context),
+            (CompensationScopePhase.Compensating or CompensationScopePhase.AwaitingIntervention, MetadataKeys.HandlerRole) =>
+                OnHandlerCompleted(runtimeContext, navigator, state, context, metadata),
             _ => null
         };
 
@@ -138,38 +163,143 @@ public sealed class CompensationScope : StructuralActivity, IRuntimeStructuralAc
         var state = LoadState(runtimeContext);
         var metadata = runtimeContext.SchedulerWorkItem.CommandMetadata;
 
-        var isRunningStep = IsOwnChild(runtimeContext, metadata)
-                            && state.Phase == CompensationScopePhase.Running
-                            && StringComparer.Ordinal.Equals(metadata.GetValueOrDefault(MetadataKeys.Role), MetadataKeys.StepRole)
-                            && navigator.StepIndexOfForward(context.FaultedChildExecutableNodeId) == state.NextStepIndex - 1;
-
-        // A handler fault, or any fault the scope does not own, stays a blocking incident; the run's incident
-        // strategy decides. The entry stays compensating, so it is never reported as compensated.
-        if (!isRunningStep)
+        // Any fault the scope does not own stays a blocking incident; the run's incident strategy decides.
+        if (!IsOwnChild(runtimeContext, metadata))
             return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
 
-        var step = navigator.Steps[state.NextStepIndex - 1];
-        var cause = new CompensationRecoveryCause(
-            CompensationRecoveryCause.FaultKind,
-            step.Name,
-            context.FaultedChildActivityExecutionId,
-            context.IncidentId);
-        var compensating = state with { Phase = CompensationScopePhase.Compensating, Cause = cause };
+        var role = metadata.GetValueOrDefault(MetadataKeys.Role);
+        var continuation = (state.Phase, role) switch
+        {
+            (CompensationScopePhase.Running, MetadataKeys.StepRole) => OnStepFaulted(runtimeContext, navigator, state, context),
+            (CompensationScopePhase.AwaitingIntervention, MetadataKeys.StepRole) => OnRetriedStepFaulted(runtimeContext, navigator, state, context),
+            (CompensationScopePhase.Compensating or CompensationScopePhase.AwaitingIntervention, MetadataKeys.HandlerRole) =>
+                OnHandlerFaulted(runtimeContext, navigator, state, context, metadata),
+            _ => null
+        };
+
+        return ValueTask.FromResult(continuation ?? RuntimeStructuralContinuation.Defer);
+    }
+
+    private RuntimeStructuralContinuation? OnStepFaulted(
+        IRuntimeActivityExecutionContext runtimeContext,
+        CompensationScopeNavigator navigator,
+        CompensationScopeState state,
+        ActivityChildFaultedContext context)
+    {
+        var stepIndex = state.NextStepIndex - 1;
+        if (navigator.StepIndexOfForward(context.FaultedChildExecutableNodeId) != stepIndex)
+            return null;
+
+        var step = navigator.Steps[stepIndex];
+        var incidentId = RequireIncident(runtimeContext, context, step.Name);
+
+        if (IsOutcomeUnknown(context))
+        {
+            // The effect may exist: journal the step as uncertain so it is undone, never treated as "no effect".
+            var entry = NewEntry(runtimeContext, state, stepIndex, step.Name, context.FaultedChildActivityExecutionId, context.FaultedChildIterationId,
+                CompensationEntryStatus.Uncertain, CompensationForwardOutcome.Uncertain);
+            var cause = new CompensationRecoveryCause(CompensationRecoveryCause.UncertainKind, step.Name, context.FaultedChildActivityExecutionId, incidentId);
+            var journaled = state with { NextOrdinal = state.NextOrdinal + 1, Entries = [.. state.Entries, entry], Cause = cause };
+
+            if (step.Handler is null)
+                return WaitForStep(runtimeContext, journaled, entry, incidentId);
+
+            runtimeContext.RequestChildFaultAbsorption(
+                incidentId,
+                $"Compensation scope started recovery because step '{step.Name}' could not confirm its outcome.",
+                new Dictionary<string, string>(StringComparer.Ordinal) { [MetadataKeys.ForwardOutcome] = MetadataKeys.UnknownForwardOutcome });
+            return ScheduleNextHandlerOrFinish(runtimeContext, navigator, journaled with { Phase = CompensationScopePhase.Compensating });
+        }
+
+        var faultCause = new CompensationRecoveryCause(CompensationRecoveryCause.FaultKind, step.Name, context.FaultedChildActivityExecutionId, incidentId);
+        var compensating = state with { Phase = CompensationScopePhase.Compensating, Cause = state.Cause ?? faultCause };
 
         // A fault continuation cannot also absorb the fault. A scope that re-raises the fault and has nothing to undo
         // therefore leaves the incident as it is and faults; otherwise it absorbs the fault and starts recovery.
-        var hasWork = compensating.Entries.Any(entry => entry.Status == CompensationEntryStatus.Registered);
-        if (!hasWork && FaultAfterCompensation)
+        if (NextEligible(navigator, compensating) is null && FaultAfterCompensation)
         {
             var finished = compensating with { Phase = CompensationScopePhase.Compensated };
-            return ValueTask.FromResult(CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Faulted(CompensatedFault(step.Name)), finished));
+            return CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Faulted(CompensatedFault(step.Name)), finished);
         }
 
-        if (context.IncidentId is not { } incidentId)
-            throw new CompensationScopeExecutionException($"Compensation scope '{runtimeContext.ExecutableNode.ExecutableNodeId}' cannot start recovery: step '{step.Name}' faulted without an incident.");
-
         runtimeContext.RequestChildFaultAbsorption(incidentId, $"Compensation scope started recovery because step '{step.Name}' faulted.");
-        return ValueTask.FromResult(ScheduleNextHandlerOrFinish(runtimeContext, navigator, compensating));
+        return ScheduleNextHandlerOrFinish(runtimeContext, navigator, compensating);
+    }
+
+    // An uncertain step without a handler, retried by an operator (spec 251 FR-213), faulted again.
+    private RuntimeStructuralContinuation? OnRetriedStepFaulted(
+        IRuntimeActivityExecutionContext runtimeContext,
+        CompensationScopeNavigator navigator,
+        CompensationScopeState state,
+        ActivityChildFaultedContext context)
+    {
+        if (WaitingStepEntry(navigator, state, context.FaultedChildExecutableNodeId, context.FaultedChildActivityExecutionId) is not { } entry)
+            return null;
+
+        var resumed = Replace(state, entry with { ForwardActivityExecutionId = context.FaultedChildActivityExecutionId, InterventionIncidentId = null })
+                      with { Phase = CompensationScopePhase.Running };
+        return OnStepFaultedAfterRetry(runtimeContext, navigator, resumed, context, entry.Id);
+    }
+
+    private RuntimeStructuralContinuation OnStepFaultedAfterRetry(
+        IRuntimeActivityExecutionContext runtimeContext,
+        CompensationScopeNavigator navigator,
+        CompensationScopeState state,
+        ActivityChildFaultedContext context,
+        string entryId)
+    {
+        var entry = state.Entries.Single(candidate => StringComparer.Ordinal.Equals(candidate.Id, entryId));
+        var step = navigator.Steps[state.NextStepIndex - 1];
+        var incidentId = RequireIncident(runtimeContext, context, step.Name);
+
+        // Still uncertain: wait again. A definite fault starts recovery of the steps before it, as in M1; the entry stays
+        // uncertain, because the earlier attempt's effect is still unknown.
+        if (IsOutcomeUnknown(context))
+            return WaitForStep(runtimeContext, state, entry, incidentId);
+
+        var compensating = state with { Phase = CompensationScopePhase.Compensating };
+        runtimeContext.RequestChildFaultAbsorption(incidentId, $"Compensation scope started recovery because step '{step.Name}' faulted.");
+        return ScheduleNextHandlerOrFinish(runtimeContext, navigator, compensating);
+    }
+
+    private RuntimeStructuralContinuation? OnHandlerFaulted(
+        IRuntimeActivityExecutionContext runtimeContext,
+        CompensationScopeNavigator navigator,
+        CompensationScopeState state,
+        ActivityChildFaultedContext context,
+        IReadOnlyDictionary<string, string> metadata)
+    {
+        if (HandlerEntry(runtimeContext, navigator, state, metadata, context.FaultedChildExecutableNodeId, context.FaultedChildActivityExecutionId) is not { } entry)
+            return null;
+
+        var incidentId = RequireIncident(runtimeContext, context, entry.Step);
+        var faulted = new CompensationHandlerAttempt(CompensationAttemptResult.Faulted, context.FaultedChildActivityExecutionId, incidentId);
+        var recorded = RecordAttempt(entry, faulted);
+
+        if (recorded.HandlerAttempts.Count < MaxAttempts)
+        {
+            // Attempts left: absorb this fault and run the same handler again, with the same keys, in one commit.
+            runtimeContext.RequestChildFaultAbsorption(
+                incidentId,
+                $"Compensation scope retries the compensation of step '{entry.Step}'.",
+                AttemptMetadata(recorded.HandlerAttempts.Count));
+            var retrying = Replace(state, recorded with { InterventionIncidentId = null }) with { Phase = CompensationScopePhase.Compensating };
+            return ScheduleHandler(runtimeContext, navigator, retrying, recorded);
+        }
+
+        // Every attempt failed: the incident stays blocking for an operator, and nothing is reported as compensated.
+        var failed = recorded with { Status = CompensationEntryStatus.Failed, InterventionIncidentId = incidentId };
+        var metadataForOperator = AttemptMetadata(recorded.HandlerAttempts.Count);
+        metadataForOperator[MetadataKeys.Scope] = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId;
+        metadataForOperator[MetadataKeys.Entry] = entry.Id;
+        metadataForOperator[MetadataKeys.Step] = entry.Step;
+        runtimeContext.RequestChildFaultIntervention(
+            incidentId,
+            $"The compensation of step '{entry.Step}' failed on all {MaxAttempts} attempts; an operator must retry it.",
+            metadataForOperator);
+        return CompensationScopeStatePersister.Stage(
+            RuntimeStructuralContinuation.Defer,
+            Replace(state, failed) with { Phase = CompensationScopePhase.AwaitingIntervention });
     }
 
     private RuntimeStructuralContinuation? OnStepCompleted(
@@ -187,22 +317,46 @@ public sealed class CompensationScope : StructuralActivity, IRuntimeStructuralAc
                 $"Compensation scope '{runtimeContext.ExecutableNode.ExecutableNodeId}' received a completion of node '{context.CompletedChildExecutableNodeId}', which is not its running step.");
 
         var step = navigator.Steps[stepIndex.Value];
-        var entry = new CompensationEntry(
-            $"e{state.NextOrdinal}",
-            step.Name,
-            state.NextOrdinal,
+        var entry = NewEntry(runtimeContext, state, stepIndex.Value, step.Name, context.CompletedChildActivityExecutionId, context.CompletedChildIterationId,
             step.Handler is null ? CompensationEntryStatus.NoHandler : CompensationEntryStatus.Registered,
-            context.CompletedChildActivityExecutionId,
-            context.CompletedChildIterationId);
+            CompensationForwardOutcome.Completed);
         var journaled = state with { NextOrdinal = state.NextOrdinal + 1, Entries = [.. state.Entries, entry] };
+        return ContinueForward(runtimeContext, navigator, journaled, context.CompletedChildActivityExecutionId);
+    }
 
-        if (journaled.NextStepIndex >= navigator.Steps.Count)
+    // An uncertain step without a handler, retried by an operator (spec 251 FR-213), completed: the scope moves on.
+    private RuntimeStructuralContinuation? OnRetriedStepCompleted(
+        IRuntimeActivityExecutionContext runtimeContext,
+        CompensationScopeNavigator navigator,
+        CompensationScopeState state,
+        ActivityChildCompletedContext context)
+    {
+        if (WaitingStepEntry(navigator, state, context.CompletedChildExecutableNodeId, context.CompletedChildActivityExecutionId) is not { } entry)
+            return null;
+
+        var settled = entry with
         {
-            var completed = journaled with { Phase = CompensationScopePhase.Completed };
+            Status = CompensationEntryStatus.NoHandler,
+            ForwardActivityExecutionId = context.CompletedChildActivityExecutionId,
+            InterventionIncidentId = null
+        };
+        var running = Replace(state, settled) with { Phase = CompensationScopePhase.Running };
+        return ContinueForward(runtimeContext, navigator, running, context.CompletedChildActivityExecutionId);
+    }
+
+    private static RuntimeStructuralContinuation ContinueForward(
+        IRuntimeActivityExecutionContext runtimeContext,
+        CompensationScopeNavigator navigator,
+        CompensationScopeState state,
+        string completedActivityExecutionId)
+    {
+        if (state.NextStepIndex >= navigator.Steps.Count)
+        {
+            var completed = state with { Phase = CompensationScopePhase.Completed };
             return CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Complete(), completed);
         }
 
-        var next = ScheduleStep(runtimeContext, navigator, journaled, context.CompletedChildActivityExecutionId);
+        var next = ScheduleStep(runtimeContext, navigator, state, completedActivityExecutionId);
         return CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Defer, next);
     }
 
@@ -213,25 +367,13 @@ public sealed class CompensationScope : StructuralActivity, IRuntimeStructuralAc
         ActivityChildCompletedContext context,
         IReadOnlyDictionary<string, string> metadata)
     {
-        var entryId = metadata.GetValueOrDefault(MetadataKeys.Entry);
-        var entryIndex = state.Entries.ToList().FindIndex(entry => StringComparer.Ordinal.Equals(entry.Id, entryId));
-        if (entryIndex < 0 || state.Entries[entryIndex].Status != CompensationEntryStatus.Compensating)
+        if (HandlerEntry(runtimeContext, navigator, state, metadata, context.CompletedChildExecutableNodeId, context.CompletedChildActivityExecutionId) is not { } entry)
             return null;
 
-        var entry = state.Entries[entryIndex];
-        var handlerNodeId = navigator.FindStep(entry.Step)?.Handler?.ExecutableNodeId;
-        if (!StringComparer.Ordinal.Equals(handlerNodeId, context.CompletedChildExecutableNodeId))
-            throw new CompensationScopeExecutionException(
-                $"Compensation scope '{runtimeContext.ExecutableNode.ExecutableNodeId}' received a handler completion of node '{context.CompletedChildExecutableNodeId}' for entry '{entry.Id}', whose handler is '{handlerNodeId}'.");
-
-        var compensated = entry with
-        {
-            Status = CompensationEntryStatus.Compensated,
-            HandlerActivityExecutionIds = [.. entry.HandlerActivityExecutionIds, context.CompletedChildActivityExecutionId]
-        };
-        var entries = state.Entries.ToArray();
-        entries[entryIndex] = compensated;
-        return ScheduleNextHandlerOrFinish(runtimeContext, navigator, state with { Entries = entries });
+        var compensated = RecordAttempt(entry, new CompensationHandlerAttempt(CompensationAttemptResult.Completed, context.CompletedChildActivityExecutionId))
+            with { Status = CompensationEntryStatus.Compensated, InterventionIncidentId = null };
+        var resumed = Replace(state, compensated) with { Phase = CompensationScopePhase.Compensating };
+        return ScheduleNextHandlerOrFinish(runtimeContext, navigator, resumed);
     }
 
     private RuntimeStructuralContinuation ScheduleNextHandlerOrFinish(
@@ -239,12 +381,7 @@ public sealed class CompensationScope : StructuralActivity, IRuntimeStructuralAc
         CompensationScopeNavigator navigator,
         CompensationScopeState state)
     {
-        var next = state.Entries
-            .Where(entry => entry.Status == CompensationEntryStatus.Registered)
-            .OrderByDescending(entry => entry.Ordinal)
-            .FirstOrDefault();
-
-        if (next is null)
+        if (NextEligible(navigator, state) is not { } next)
         {
             var finished = state with { Phase = CompensationScopePhase.Compensated };
             var continuation = FaultAfterCompensation
@@ -253,27 +390,43 @@ public sealed class CompensationScope : StructuralActivity, IRuntimeStructuralAc
             return CompensationScopeStatePersister.Stage(continuation, finished);
         }
 
-        var handler = navigator.FindStep(next.Step)?.Handler
-                      ?? throw new CompensationScopeExecutionException(
-                          $"Compensation scope '{runtimeContext.ExecutableNode.ExecutableNodeId}' entry '{next.Id}' names step '{next.Step}', which has no handler in the pinned structure.");
+        return ScheduleHandler(runtimeContext, navigator, state, next);
+    }
 
+    // Schedules the next attempt of an entry's handler and marks the entry compensating, in one commit (FR-008).
+    private RuntimeStructuralContinuation ScheduleHandler(
+        IRuntimeActivityExecutionContext runtimeContext,
+        CompensationScopeNavigator navigator,
+        CompensationScopeState state,
+        CompensationEntry entry)
+    {
+        var handler = navigator.FindStep(entry.Step)?.Handler
+                      ?? throw new CompensationScopeExecutionException(
+                          $"Compensation scope '{runtimeContext.ExecutableNode.ExecutableNodeId}' entry '{entry.Id}' names step '{entry.Step}', which has no handler in the pinned structure.");
+
+        var attempt = entry.HandlerAttempts.Count + 1;
         var scopeActivityExecutionId = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId;
         var metadata = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             [MetadataKeys.Role] = MetadataKeys.HandlerRole,
             [MetadataKeys.Scope] = scopeActivityExecutionId,
-            [MetadataKeys.Step] = next.Step,
-            [MetadataKeys.Entry] = next.Id,
-            [MetadataKeys.Forward] = next.ForwardActivityExecutionId
+            [MetadataKeys.Step] = entry.Step,
+            [MetadataKeys.Entry] = entry.Id,
+            [MetadataKeys.Forward] = entry.ForwardActivityExecutionId,
+            [MetadataKeys.Attempt] = attempt.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            [MetadataKeys.MaxAttempts] = MaxAttempts.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            // Every attempt, an operator retry included, sends the participant the same keys (spec 251 FR-202).
+            [MetadataKeys.OperationKey] = $"{entry.OperationKey}/compensate",
+            [MetadataKeys.TargetOperationKey] = entry.OperationKey
         };
         runtimeContext.ScheduleChildActivity(
             handler.ExecutableNodeId,
-            next.ForwardActivityExecutionId,
+            entry.ForwardActivityExecutionId,
             metadata,
             ActivitySchedulingProvenance.From(
                 runtimeContext.WorkflowExecutionId,
                 scopeActivityExecutionId,
-                next.ForwardActivityExecutionId,
+                entry.ForwardActivityExecutionId,
                 branchId: null,
                 iterationId: null,
                 executionPathId: null,
@@ -281,11 +434,140 @@ public sealed class CompensationScope : StructuralActivity, IRuntimeStructuralAc
                 schedulingCause: HandlerSchedulingCause,
                 metadata: metadata));
 
-        var entries = state.Entries
-            .Select(entry => StringComparer.Ordinal.Equals(entry.Id, next.Id) ? entry with { Status = CompensationEntryStatus.Compensating } : entry)
-            .ToArray();
-        return CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Defer, state with { Entries = entries });
+        var compensating = entry with
+        {
+            Status = CompensationEntryStatus.Compensating,
+            HandlerAttempts = [.. entry.HandlerAttempts, new CompensationHandlerAttempt(CompensationAttemptResult.Running)]
+        };
+        return CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Defer, Replace(state, compensating));
     }
+
+    // Recovery undoes completed entries and uncertain entries that have a handler, newest first (spec 251 FR-207).
+    private static CompensationEntry? NextEligible(CompensationScopeNavigator navigator, CompensationScopeState state) =>
+        state.Entries
+            .Where(entry => entry.Status == CompensationEntryStatus.Registered
+                            || entry.Status == CompensationEntryStatus.Uncertain && navigator.FindStep(entry.Step)?.Handler is not null)
+            .OrderByDescending(entry => entry.Ordinal)
+            .FirstOrDefault();
+
+    // The entry a handler outcome belongs to, when it is the latest attempt: the running attempt of a compensating
+    // entry, or an operator retry of a failed entry. Anything else is a repeat delivery or a stale attempt (FR-215).
+    private static CompensationEntry? HandlerEntry(
+        IRuntimeActivityExecutionContext runtimeContext,
+        CompensationScopeNavigator navigator,
+        CompensationScopeState state,
+        IReadOnlyDictionary<string, string> metadata,
+        string childExecutableNodeId,
+        string childActivityExecutionId)
+    {
+        var entryId = metadata.GetValueOrDefault(MetadataKeys.Entry);
+        var entry = state.Entries.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(candidate.Id, entryId));
+        if (entry is null || entry.HandlerAttempts.Any(attempt => StringComparer.Ordinal.Equals(attempt.ActivityExecutionId, childActivityExecutionId)))
+            return null;
+
+        var isLatest = entry.Status switch
+        {
+            CompensationEntryStatus.Compensating => entry.HandlerAttempts.LastOrDefault()?.Result == CompensationAttemptResult.Running
+                                                    && StringComparer.Ordinal.Equals(metadata.GetValueOrDefault(MetadataKeys.Attempt), entry.HandlerAttempts.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            CompensationEntryStatus.Failed => state.Phase == CompensationScopePhase.AwaitingIntervention,
+            _ => false
+        };
+        if (!isLatest)
+            return null;
+
+        var handlerNodeId = navigator.FindStep(entry.Step)?.Handler?.ExecutableNodeId;
+        if (!StringComparer.Ordinal.Equals(handlerNodeId, childExecutableNodeId))
+            throw new CompensationScopeExecutionException(
+                $"Compensation scope '{runtimeContext.ExecutableNode.ExecutableNodeId}' received a handler outcome of node '{childExecutableNodeId}' for entry '{entry.Id}', whose handler is '{handlerNodeId}'.");
+        return entry;
+    }
+
+    // The uncertain entry without a handler that the scope waits on, when the child is an operator retry of its step.
+    private static CompensationEntry? WaitingStepEntry(
+        CompensationScopeNavigator navigator,
+        CompensationScopeState state,
+        string childExecutableNodeId,
+        string childActivityExecutionId)
+    {
+        var stepIndex = state.NextStepIndex - 1;
+        if (stepIndex < 0 || navigator.StepIndexOfForward(childExecutableNodeId) != stepIndex)
+            return null;
+
+        var step = navigator.Steps[stepIndex];
+        return state.Entries.LastOrDefault(entry =>
+            StringComparer.Ordinal.Equals(entry.Step, step.Name)
+            && entry.Status == CompensationEntryStatus.Uncertain
+            && entry.InterventionIncidentId is not null
+            && step.Handler is null
+            && !StringComparer.Ordinal.Equals(entry.ForwardActivityExecutionId, childActivityExecutionId));
+    }
+
+    private RuntimeStructuralContinuation WaitForStep(
+        IRuntimeActivityExecutionContext runtimeContext,
+        CompensationScopeState state,
+        CompensationEntry entry,
+        string incidentId)
+    {
+        runtimeContext.RequestChildFaultIntervention(
+            incidentId,
+            $"Step '{entry.Step}' could not confirm its outcome and has no compensation; an operator must decide.",
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [MetadataKeys.ForwardOutcome] = MetadataKeys.UnknownForwardOutcome,
+                [MetadataKeys.Scope] = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId,
+                [MetadataKeys.Entry] = entry.Id,
+                [MetadataKeys.Step] = entry.Step
+            });
+        var waiting = entry with { InterventionIncidentId = incidentId };
+        return CompensationScopeStatePersister.Stage(
+            RuntimeStructuralContinuation.Defer,
+            Replace(state, waiting) with { Phase = CompensationScopePhase.AwaitingIntervention });
+    }
+
+    private Dictionary<string, string> AttemptMetadata(int attempt) => new(StringComparer.Ordinal)
+    {
+        [MetadataKeys.Attempt] = attempt.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        [MetadataKeys.MaxAttempts] = MaxAttempts.ToString(System.Globalization.CultureInfo.InvariantCulture)
+    };
+
+    // Completes the running attempt, or appends the attempt of an operator retry of a failed entry.
+    private static CompensationEntry RecordAttempt(CompensationEntry entry, CompensationHandlerAttempt attempt) =>
+        entry.Status == CompensationEntryStatus.Compensating && entry.HandlerAttempts.Count > 0
+            ? entry with { HandlerAttempts = [.. entry.HandlerAttempts.Take(entry.HandlerAttempts.Count - 1), attempt] }
+            : entry with { HandlerAttempts = [.. entry.HandlerAttempts, attempt] };
+
+    private static CompensationScopeState Replace(CompensationScopeState state, CompensationEntry entry) =>
+        state with { Entries = state.Entries.Select(candidate => StringComparer.Ordinal.Equals(candidate.Id, entry.Id) ? entry : candidate).ToArray() };
+
+    private static CompensationEntry NewEntry(
+        IRuntimeActivityExecutionContext runtimeContext,
+        CompensationScopeState state,
+        int stepIndex,
+        string stepName,
+        string forwardActivityExecutionId,
+        string? forwardIterationId,
+        CompensationEntryStatus status,
+        CompensationForwardOutcome forwardOutcome) =>
+        new(
+            $"e{state.NextOrdinal}",
+            stepName,
+            state.NextOrdinal,
+            status,
+            forwardActivityExecutionId,
+            StepOperationKey(runtimeContext, stepIndex),
+            forwardOutcome,
+            forwardIterationId);
+
+    private static string StepOperationKey(IRuntimeActivityExecutionContext runtimeContext, int stepIndex) =>
+        $"{runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId}/step/{stepIndex}";
+
+    private static bool IsOutcomeUnknown(ActivityChildFaultedContext context) =>
+        StringComparer.Ordinal.Equals(context.FaultCategory, OutcomeUnknownCategory);
+
+    private static string RequireIncident(IRuntimeActivityExecutionContext runtimeContext, ActivityChildFaultedContext context, string stepName) =>
+        context.IncidentId
+        ?? throw new CompensationScopeExecutionException(
+            $"Compensation scope '{runtimeContext.ExecutableNode.ExecutableNodeId}' cannot handle the fault of step '{stepName}': it carries no incident.");
 
     private static CompensationScopeState ScheduleStep(
         IRuntimeActivityExecutionContext runtimeContext,
@@ -301,7 +583,8 @@ public sealed class CompensationScope : StructuralActivity, IRuntimeStructuralAc
             {
                 [MetadataKeys.Role] = MetadataKeys.StepRole,
                 [MetadataKeys.Scope] = runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId,
-                [MetadataKeys.Step] = step.Name
+                [MetadataKeys.Step] = step.Name,
+                [MetadataKeys.OperationKey] = StepOperationKey(runtimeContext, state.NextStepIndex)
             });
 
         return state with { NextStepIndex = state.NextStepIndex + 1 };
