@@ -133,7 +133,9 @@ internal static class NativeHostingScenario
 
     internal static async Task<string> ActivityVersionAsync(WorkbenchProcess host, string type)
     {
-        var catalog = await host.Client.GetFromJsonAsync<JsonNode>($"/design/activities/definitions?search={Uri.EscapeDataString(type)}");
+        var catalog = await SendJsonAsync(host.Client,
+            new HttpRequestMessage(HttpMethod.Get, $"/design/activities/definitions?search={Uri.EscapeDataString(type)}"),
+            () => host.Output);
         Assert.True(catalog?["items"]?.AsArray().Count > 0, $"Activity {type} was not reconciled: {catalog}\n{host.Output}");
         var match = Assert.Single(catalog!["items"]!.AsArray(), item => item?["definition"]?["activityTypeKey"]?.GetValue<string>() == type);
         return match!["definition"]!["headVersionId"]!.GetValue<string>();
@@ -141,13 +143,32 @@ internal static class NativeHostingScenario
 
     internal static async Task<JsonNode> PostAsync(WorkbenchProcess host, string path, object body, string? idempotencyKey = null)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) };
+        var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) };
         if (idempotencyKey is not null)
             request.Headers.Add("Idempotency-Key", idempotencyKey);
-        using var response = await host.Client.SendAsync(request);
-        var text = await response.Content.ReadAsStringAsync();
-        Assert.True(response.IsSuccessStatusCode, $"POST {path}: {(int)response.StatusCode} {text}\n{host.Output}");
-        return JsonNode.Parse(text)!;
+        return await SendJsonAsync(host.Client, request, () => host.Output)
+            ?? throw new InvalidOperationException($"POST {path} returned JSON null.\n{host.Output}");
+    }
+
+    internal static async Task<JsonNode?> SendJsonAsync(HttpClient client, HttpRequestMessage request, Func<string> hostOutput)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(hostOutput);
+
+        using (request)
+        {
+            var method = request.Method.Method;
+            var path = request.RequestUri is { } uri
+                ? uri.IsAbsoluteUri ? uri.PathAndQuery : uri.OriginalString
+                : "<unknown path>";
+            using var response = await client.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+                throw new InvalidOperationException($"{method} {path}: {(int)response.StatusCode} {body}\n{hostOutput()}");
+
+            return JsonNode.Parse(body);
+        }
     }
 
     internal static string? ActivityStatus(JsonNode instance, string nodeId) => instance["activities"]!.AsArray()
@@ -163,7 +184,9 @@ internal static class NativeHostingScenario
         var deadline = DateTimeOffset.UtcNow + (timeout ?? Patience);
         while (DateTimeOffset.UtcNow < deadline)
         {
-            last = await host.Client.GetFromJsonAsync<JsonNode>($"/runtime/workflows/instances/{executionId}");
+            last = await SendJsonAsync(host.Client,
+                new HttpRequestMessage(HttpMethod.Get, $"/runtime/workflows/instances/{executionId}"),
+                () => host.Output);
             if (last is not null && predicate(last)) return last;
             if (last?["instance"]?["status"]?.GetValue<string>() is "Faulted" or "Cancelled") break;
             await Task.Delay(100);

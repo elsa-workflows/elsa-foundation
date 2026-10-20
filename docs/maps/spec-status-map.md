@@ -255,4 +255,4 @@ Notes come only from explicit `**Notes**:` metadata; see [Spec status metadata](
 | [244-secret-scope-catalog](../../specs/244-secret-scope-catalog/spec.md) | Secret scope catalogue and picker | Implemented | - | 0 | 0 | - |
 | [245-workflow-run-deletion](../../specs/245-workflow-run-deletion/spec.md) | Individual and bulk workflow-run deletion | Implemented; PR verification pending | - | 0 | 0 | - |
 | [247-elsa3-js-host-functions](../../specs/247-elsa3-js-host-functions/spec.md) | Elsa 3 JavaScript host functions: convert what Elsa 4 runs the same, refuse the rest clearly | In progress — draft PR [#3028](https://github.com/elsa-workflows/elsa-foundation/pull/3028) | - | 41 | 0 | - |
-| [249-native-hosting-conformance](../../specs/249-native-hosting-conformance/spec.md) | Native hosting conformance | Implemented | - | 20 | 2 | - |
+| [249-native-hosting-conformance](../../specs/249-native-hosting-conformance/spec.md) | Native hosting conformance | Implemented | - | 20 | 3 | - |
