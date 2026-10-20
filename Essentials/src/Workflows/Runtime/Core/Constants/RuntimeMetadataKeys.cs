@@ -292,10 +292,18 @@ public static class RuntimeMetadataKeys
     public const string OperationKey = "runtime.operationKey";
     /// <summary>Operation key of the effect a child acts on, assigned by its structural parent like <see cref="OperationKey"/>.</summary>
     public const string TargetOperationKey = "runtime.targetOperationKey";
+    /// <summary>Set on a successor that replaced a source activity execution through an alteration.</summary>
+    public const string SupersedesActivityExecutionId = "runtime.supersedesActivityExecutionId";
+    /// <summary>Set on the successor a <c>RetryFaultedActivity</c> alteration scheduled for a faulted source.</summary>
+    public const string RetryOfActivityExecutionId = "runtime.retryOfActivityExecutionId";
     /// <summary>Activity execution id of the structural parent that kept a child fault's incident blocking for intervention.</summary>
     public const string InterventionRequestedBy = "runtime.interventionRequestedBy";
     /// <summary>Author-supplied reason a structural parent kept a child fault's incident blocking for intervention.</summary>
     public const string InterventionReason = "runtime.interventionReason";
+    /// <summary>Action kind of the wait-for-intervention outcome an operator retry replaced on an incident.</summary>
+    public const string PriorResolutionActionKind = "runtime.priorResolutionActionKind";
+    /// <summary>System source of the wait-for-intervention outcome an operator retry replaced on an incident.</summary>
+    public const string PriorResolutionSystemSource = "runtime.priorResolutionSystemSource";
     public const string ScopeCancellationReason = "runtime.scopeCancellationReason";
     /// <summary>Activity execution id of the structural parent that staged a child-subtree cancellation.</summary>
     public const string SubtreeCancellationRequestedBy = "runtime.subtreeCancellationRequestedBy";

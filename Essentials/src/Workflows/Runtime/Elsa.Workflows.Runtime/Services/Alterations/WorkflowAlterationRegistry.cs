@@ -12,6 +12,7 @@ public sealed class WorkflowAlterationRegistry : IWorkflowAlterationRegistry
         "ModifyVariable",
         "ScheduleActivity",
         "RescheduleActivity",
+        "RetryFaultedActivity",
         "Migrate"
     };
 
