@@ -186,6 +186,7 @@ public sealed class WorkflowAlterationTargetCaptureTask
             {
                 "ScheduleActivity" => "parentActivityExecutionId",
                 "RescheduleActivity" => "sourceActivityExecutionId",
+                "RetryFaultedActivity" => "sourceActivityExecutionId",
                 _ => null
             };
             if (propertyName is not null &&

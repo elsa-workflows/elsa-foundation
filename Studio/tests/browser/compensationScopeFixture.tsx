@@ -49,7 +49,19 @@ const runtime: CompensationScopeRuntime = {
     { step: "Reserve delivery", forward: { state: "Completed", activityExecutionId: "ae-2" }, recovery: { state: "Compensated", activityExecutionId: "ae-4", order: 1 } },
     { step: "Confirm order", forward: { state: "Faulted", activityExecutionId: "ae-3" }, recovery: { state: "NotApplicable" } }
   ],
-  cause: { step: "Confirm order", activityExecutionId: "ae-3", failureType: "order.rejected", message: "The order was rejected." }
+  cause: { kind: "fault", step: "Confirm order", activityExecutionId: "ae-3", failureType: "order.rejected", message: "The order was rejected." }
+};
+
+// Spec 251: delivery's response was lost, and its cancel failed on every attempt, so recovery waits for an operator.
+const waitingRuntime: CompensationScopeRuntime = {
+  scopeActivityExecutionId: "ae-scope",
+  phase: "AwaitingIntervention",
+  rows: [
+    { step: "Reserve inventory", forward: { state: "Completed", activityExecutionId: "ae-1" }, recovery: { state: "Pending" } },
+    { step: "Reserve delivery", forward: { state: "Uncertain", activityExecutionId: "ae-2" }, recovery: { state: "NeedsAction", activityExecutionId: "ae-6", order: 1, attempts: { count: 3, max: 3 }, incidentId: "inc-6" } },
+    { step: "Confirm order", forward: { state: "NotRun" }, recovery: { state: "NotApplicable" } }
+  ],
+  cause: { kind: "uncertain", step: "Reserve delivery", activityExecutionId: "ae-2", failureType: "delivery.timeout", message: "No response from the delivery service." }
 };
 
 function canvasNodes(): Node<WorkflowNodeData>[] {
@@ -61,12 +73,13 @@ function canvasNodes(): Node<WorkflowNodeData>[] {
   }));
 }
 
-export function CompensationScopeFixture({ view }: { view: "author" | "run" }) {
+export function CompensationScopeFixture({ view }: { view: "author" | "run" | "waiting" }) {
   const [scope, setScope] = useState(initialScope);
   const [selected, setSelected] = useState<string | null>(null);
   const [status, setStatus] = useState("");
   const [lastSelectedExecution, setLastSelectedExecution] = useState("");
   const [requested, setRequested] = useState("");
+  const [openedIncident, setOpenedIncident] = useState("");
 
   return <main className="wf-tokens" style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--studio-bg)" }}>
     <h1 style={{ position: "absolute", left: -10000 }}>Compensation scope fixture</h1>
@@ -74,21 +87,23 @@ export function CompensationScopeFixture({ view }: { view: "author" | "run" }) {
       owner={scope}
       nodes={canvasNodes()}
       selectedNodeId={selected}
-      readOnly={view === "run"}
+      readOnly={view !== "author"}
       onSelect={setSelected}
       onChangeSteps={(edit, nextStatus) => {
         setScope(current => withCompensationSteps(current, edit(readCompensationSteps(current))));
         setStatus(nextStatus);
       }}
       onRequestActivity={target => setRequested(`${target.kind}:${target.index}`)}
-      runtime={view === "run" ? runtime : undefined}
+      runtime={view === "run" ? runtime : view === "waiting" ? waitingRuntime : undefined}
       onSelectExecution={setLastSelectedExecution}
+      onOpenIncident={setOpenedIncident}
     />
     {/* What the host received, for the spec to read; hidden, so it is not part of the page under test. */}
     <div hidden>
       <output data-testid="fixture-status">{status}</output>
       <output data-testid="fixture-requested">{requested}</output>
       <output data-testid="fixture-execution">{lastSelectedExecution}</output>
+      <output data-testid="fixture-incident">{openedIncident}</output>
       <output data-testid="fixture-steps">{readCompensationSteps(scope).map(step => step.name).join("|")}</output>
     </div>
   </main>;

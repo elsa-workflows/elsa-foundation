@@ -307,7 +307,8 @@ internal static class StructuralParentEvaluationSupport
     /// Commits a structural parent that stays running after evaluating a child: persists the parent (and any
     /// <paramref name="processedChildStates"/> the evaluation marked), captures its inspection projection, and
     /// enqueues the newly scheduled children followed by <paramref name="followUpWorkItems"/> after the commit
-    /// lands, all in one checkpoint alongside the staged subtree cancellations.
+    /// lands, all in one checkpoint alongside the staged subtree cancellations and <paramref name="incidentChanges"/>
+    /// (a structural intervention's incident outcome).
     /// </summary>
     public static async ValueTask CommitDeferredParentActivityAsync(
         RuntimeCheckpointCommitter checkpointCommitter,
@@ -321,7 +322,8 @@ internal static class StructuralParentEvaluationSupport
         IReadOnlyCollection<RuntimeSchedulerWorkItem> followUpWorkItems,
         IReadOnlyCollection<ActivitySubtreeCancellationPlan> subtreeCancellations,
         IReadOnlyCollection<ActivityExecutionInspectionValueSnapshot> valueSnapshots,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyCollection<IncidentState>? incidentChanges = null)
     {
         var occurredAt = timeProvider.GetUtcNow();
         var (workItem, activityExecutionId, metadata) = (source.WorkItem, source.Payload.ActivityExecutionId, source.Metadata);
@@ -381,7 +383,15 @@ internal static class StructuralParentEvaluationSupport
                 ],
                 bookmarks: [],
                 durableValues: [],
-                incidents: cancellationChanges.Incidents,
+                incidents:
+                [
+                    .. cancellationChanges.Incidents,
+                    .. (incidentChanges ?? []).Select(incident => new RuntimeStateChange<IncidentState>(
+                        incident.IncidentId,
+                        RuntimeStateChangeOperation.Upsert,
+                        incident,
+                        metadata))
+                ],
                 operational: [],
                 activityExecutionInspections: [.. inspectionChanges, .. cancellationChanges.Inspections],
                 activityScopeCleanups: cancellationChanges.Cleanups),

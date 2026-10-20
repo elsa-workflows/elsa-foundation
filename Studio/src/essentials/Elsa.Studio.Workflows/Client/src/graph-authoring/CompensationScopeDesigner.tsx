@@ -1,6 +1,6 @@
 import { useId, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject } from "react";
 import type { Node } from "@xyflow/react";
-import { AlertTriangle, ArrowDown, ArrowUp, Check, ChevronRight, CircleDashed, CircleDot, Hourglass, Minus, Plus, Trash2, Undo2, X } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Check, ChevronRight, CircleDashed, CircleDot, Hand, Hourglass, Minus, Plus, Trash2, Undo2, X } from "lucide-react";
 import { renderActivityIcon } from "../activityIconView";
 import {
   compensationStepProblems,
@@ -49,6 +49,8 @@ export interface CompensationScopeDesignerProps {
   runtime?: CompensationScopeRuntime;
   /** Run inspection only: selects an occurrence by activity execution id. */
   onSelectExecution?(activityExecutionId: string): void;
+  /** Run inspection only: opens the blocking incident a row waits on (spec 251 FR-217). */
+  onOpenIncident?(incidentId: string): void;
   children?: ReactNode;
 }
 
@@ -68,6 +70,7 @@ export function CompensationScopeDesigner({
   onOpenSlot,
   runtime,
   onSelectExecution,
+  onOpenIncident,
   children
 }: CompensationScopeDesignerProps) {
   const steps = readCompensationSteps(owner);
@@ -106,7 +109,7 @@ export function CompensationScopeDesigner({
         <p className="wf-compensation-cause" role="note">
           <AlertTriangle size={14} aria-hidden="true" />
           <span>
-            Recovery started because <strong>{runtime.cause.step}</strong> failed
+            Recovery started because <strong>{runtime.cause.step}</strong> {runtime.cause.kind === "uncertain" ? "could not confirm its outcome" : "failed"}
             {runtime.cause.failureType ? <>: <code>{runtime.cause.failureType}</code></> : null}
             {runtime.cause.message ? <> — {runtime.cause.message}</> : null}.
           </span>
@@ -226,9 +229,14 @@ export function CompensationScopeDesigner({
                     <StateChip
                       kind="recovery"
                       state={row.recovery.state}
-                      label={`${recoveryStateLabel(row.recovery.state)}${row.recovery.order ? ` (${ordinalLabel(row.recovery.order)})` : ""}`}
+                      label={`${recoveryStateLabel(row.recovery.state)}${row.recovery.order ? ` (${ordinalLabel(row.recovery.order)})` : ""}${attemptLabel(row.recovery.attempts)}`}
                       onSelect={row.recovery.activityExecutionId && onSelectExecution ? () => onSelectExecution(row.recovery.activityExecutionId!) : undefined}
                     />
+                  ) : null}
+                  {row?.recovery.incidentId && onOpenIncident ? (
+                    <button type="button" className="wf-compensation-link" aria-label={`Show the incident ${name} is waiting on`} onClick={() => onOpenIncident(row.recovery.incidentId!)}>
+                      Show incident
+                    </button>
                   ) : null}
                 </div>
 
@@ -362,6 +370,8 @@ function StateIcon({ state }: { state: CompensationForwardState | CompensationRe
     case "Running": return <CircleDot size={12} aria-hidden="true" />;
     case "Compensated": return <Undo2 size={12} aria-hidden="true" />;
     case "Pending": return <Hourglass size={12} aria-hidden="true" />;
+    case "Uncertain": return <AlertTriangle size={12} aria-hidden="true" />;
+    case "NeedsAction": return <Hand size={12} aria-hidden="true" />;
     case "NotRun":
     case "Registered": return <CircleDashed size={12} aria-hidden="true" />;
     default: return <Minus size={12} aria-hidden="true" />;
@@ -374,8 +384,15 @@ function PhaseIcon({ phase }: { phase: CompensationScopeRuntime["phase"] }) {
     case "Compensating": return <Undo2 size={14} aria-hidden="true" />;
     case "Completed": return <Check size={14} aria-hidden="true" />;
     case "Faulted": return <X size={14} aria-hidden="true" />;
+    case "AwaitingIntervention": return <Hand size={14} aria-hidden="true" />;
     default: return <CircleDot size={14} aria-hidden="true" />;
   }
+}
+
+// "Attempt 2 of 3" once a handler ran more than once or its limit is known; nothing for a single run.
+function attemptLabel(attempts: { count: number; max?: number } | undefined) {
+  if (!attempts) return "";
+  return attempts.max ? ` · Attempt ${attempts.count} of ${attempts.max}` : ` · Attempt ${attempts.count}`;
 }
 
 // Arrow keys move between the same cell of neighbouring rows; Home and End jump to the first and last row.

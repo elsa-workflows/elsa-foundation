@@ -98,6 +98,23 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
     IReadOnlyCollection<RuntimeChildFaultAbsorptionRequest> GetChildFaultAbsorptionRequests();
 
     /// <summary>
+    /// Stages a request to keep the child fault this evaluation is processing blocking until an operator intervenes,
+    /// for example through the <c>RetryFaultedActivity</c> alteration. Only valid during a child-fault evaluation with a
+    /// <c>Defer</c> continuation, at most once, and never together with
+    /// <see cref="RequestChildFaultAbsorption"/>; <paramref name="incidentId"/> must name the evaluation's incident. In
+    /// the same checkpoint commit as the continuation the incident stays blocking and gets a
+    /// <c>WaitForIntervention</c> outcome from the <c>StructuralIntervention</c> source carrying
+    /// <paramref name="metadata"/>, so no incident strategy acts on it and the run stays running. The faulted child's
+    /// subtree is not cancelled. A violation faults the evaluation.
+    /// </summary>
+    void RequestChildFaultIntervention(
+        string incidentId,
+        string reason,
+        IReadOnlyDictionary<string, string>? metadata = null);
+
+    IReadOnlyCollection<RuntimeChildFaultInterventionRequest> GetChildFaultInterventionRequests();
+
+    /// <summary>
     /// Stages a non-terminal, coded notification from this still-running structural child to its own
     /// committed parent. The notification always and only reaches the notifying child's
     /// committed parent — there is no target parameter (spoof-proofing). Valid during any of the child's own

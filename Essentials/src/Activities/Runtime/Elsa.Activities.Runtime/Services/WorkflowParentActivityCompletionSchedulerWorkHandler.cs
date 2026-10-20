@@ -159,6 +159,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         RuntimeStructuralContinuation? continuation = null;
         IReadOnlyList<ActivityChildNotifiedContext> parentOutcomeNotifications = [];
         IReadOnlyCollection<ActivitySubtreeCancellationPlan> subtreeCancellationPlans = [];
+        IReadOnlyCollection<IncidentState> interventionIncidents = [];
         IReadOnlyCollection<RuntimeSchedulerWorkItem> parentNotificationWorkItems = [];
         ActivityExecutionState? callbackBypassParentState = null;
         IReadOnlyCollection<RuntimeSchedulerWorkItem> callbackBypassContinuationWorkItems = [];
@@ -281,12 +282,15 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                     }
                     else
                     {
+                        var childFault = completedChildState.Fault;
                         var childFaultedContext = new ActivityChildFaultedContext(
                             context,
                             completedChildActivityExecutionId,
                             completedChildState.Execution.ExecutableNodeId,
                             ReadIncidentId(workItem),
-                            completedChildState.IterationId);
+                            completedChildState.IterationId,
+                            childFault?.Code,
+                            childFault?.Metadata.GetValueOrDefault(ActivityFault.CategoryMetadataKey));
 
                         continuation = await ((IRuntimeActivityChildFaultHandler)parentActivity).OnChildFaultedAsync(childFaultedContext);
                     }
@@ -329,6 +333,18 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                     cancellationToken);
                 if (absorptionPlan is not null)
                     subtreeCancellationPlans = [.. subtreeCancellationPlans, absorptionPlan];
+
+                var interventionIncident = await PlanChildFaultInterventionAsync(
+                    serviceProvider,
+                    workItem,
+                    payload,
+                    context.GetChildFaultInterventionRequests(),
+                    context.GetChildFaultAbsorptionRequests().Count > 0,
+                    continuation,
+                    childFaulted,
+                    cancellationToken);
+                if (interventionIncident is not null)
+                    interventionIncidents = [interventionIncident];
 
                 // An ancestor notification is an initial-execution-only power.
                 if (context.GetAncestorNotificationRequests().Count > 0)
@@ -527,7 +543,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 parentNotificationWorkItems,
                 subtreeCancellationPlans,
                 valueSnapshots,
-                cancellationToken);
+                cancellationToken,
+                interventionIncidents);
             return;
         }
 
@@ -746,6 +763,71 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         return plan with { IncidentChanges = incidentChanges };
     }
 
+    /// <summary>
+    /// Validates the intervention request the structural callback staged and returns the evaluation's incident, kept
+    /// blocking with a wait-for-intervention outcome, to ride the deferred continuation's commit. Unlike absorption it
+    /// reclaims nothing: the faulted child stays faulted so an operator can retry it. Returns <see langword="null"/>
+    /// when nothing was staged; an incident that already carries an outcome is a legal redelivery race and is left
+    /// unchanged.
+    /// </summary>
+    private async ValueTask<IncidentState?> PlanChildFaultInterventionAsync(
+        IServiceProvider serviceProvider,
+        RuntimeSchedulerWorkItem workItem,
+        RuntimeCompleteActivityCommandPayload payload,
+        IReadOnlyCollection<RuntimeChildFaultInterventionRequest> requests,
+        bool absorptionRequested,
+        RuntimeStructuralContinuation continuation,
+        bool childFaulted,
+        CancellationToken cancellationToken)
+    {
+        if (requests.Count == 0)
+            return null;
+
+        if (!childFaulted)
+            throw new InvalidOperationException("A child-fault intervention is only valid in a child-fault evaluation.");
+        if (requests.Count > 1)
+            throw new InvalidOperationException("A child-fault evaluation cannot request intervention more than once.");
+        if (absorptionRequested)
+            throw new InvalidOperationException("A child-fault evaluation cannot both absorb the child fault and request intervention for it.");
+        if (!continuation.IsDeferred)
+            throw new InvalidOperationException("A child-fault intervention requires a Defer continuation: the parent keeps waiting for the retried child.");
+
+        var request = requests.Single();
+        var evaluationIncidentId = ReadIncidentId(workItem);
+        if (evaluationIncidentId is null || !StringComparer.Ordinal.Equals(request.IncidentId, evaluationIncidentId))
+            throw new InvalidOperationException($"Child-fault intervention names incident '{request.IncidentId}', but this evaluation carries incident '{evaluationIncidentId ?? "<none>"}'.");
+
+        var incident = await serviceProvider.GetRequiredService<IIncidentStateStore>()
+                           .FindAsync(workItem.WorkflowExecutionId, request.IncidentId, cancellationToken)
+                       ?? throw new InvalidOperationException($"Child-fault intervention references missing incident '{request.IncidentId}'.");
+        if (incident.Status is IncidentStatus.Resolved or IncidentStatus.Suppressed || incident.ResolutionOutcome is not null)
+            return null;
+
+        var metadata = incident.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        metadata[RuntimeMetadataKeys.InterventionRequestedBy] = payload.ActivityExecutionId;
+        metadata[RuntimeMetadataKeys.InterventionReason] = request.Reason;
+        metadata[RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId;
+
+        return new IncidentState(
+            incident.IncidentId,
+            incident.WorkflowExecutionId,
+            incident.ActivityExecutionId,
+            incident.ExecutableNodeId,
+            incident.Severity,
+            IncidentStatus.Blocking,
+            new IncidentResolutionOutcome(
+                IncidentResolutionActionKinds.WaitForIntervention,
+                TimeProvider.GetUtcNow(),
+                strategy: null,
+                systemSource: IncidentResolutionSystemSources.StructuralIntervention,
+                metadata: request.Metadata),
+            incident.FailureType,
+            incident.Message,
+            incident.CreatedAt,
+            resolvedAt: null,
+            metadata);
+    }
+
     private static IncidentState ResolveAbsorbedIncident(
         IncidentState incident,
         RuntimeChildFaultAbsorptionRequest request,
@@ -769,7 +851,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 IncidentResolutionActionKinds.AbsorbFault,
                 resolvedAt,
                 strategy: null,
-                systemSource: IncidentResolutionSystemSources.StructuralFaultAbsorption),
+                systemSource: IncidentResolutionSystemSources.StructuralFaultAbsorption,
+                metadata: request.Metadata),
             incident.FailureType,
             incident.Message,
             incident.CreatedAt,
