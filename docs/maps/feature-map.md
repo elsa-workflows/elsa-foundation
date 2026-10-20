@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 114
+- Discovered feature classes: 115
 
 ## Features
 
@@ -125,4 +125,5 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | WorkflowsRuntimeSchedulingFeature | direct IShellFeature | Elsa.Workflows.Runtime.Scheduling | IShellFeature | [WorkflowsRuntimeSchedulingFeature.cs](../../Essentials/src/Workflows/Runtime/Scheduling/WorkflowsRuntimeSchedulingFeature.cs) |
 | Elsa3ImportActivitiesFeature | direct IWebShellFeature | Elsa3.Activities.Design.Import | IWebShellFeature | [Elsa3ImportActivitiesFeature.cs](../../Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/Elsa3ImportActivitiesFeature.cs) |
 | Elsa3ImportActivitiesEntityFrameworkCoreFeature | direct IShellFeature | Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore | IShellFeature | [Elsa3ImportActivitiesEntityFrameworkCoreFeature.cs](../../Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3ImportActivitiesEntityFrameworkCoreFeature.cs) |
+| Elsa3ImportActivitiesPublishingFeature | direct IShellFeature | Elsa3.Activities.Design.Import.Publishing | IShellFeature | [Elsa3ImportActivitiesPublishingFeature.cs](../../Extensions/Elsa3/src/Activities/Design/Import/Publishing/Elsa3ImportActivitiesPublishingFeature.cs) |
 | Elsa3MappingFeature | direct IShellFeature | Elsa3.Mapping | IShellFeature | [Elsa3MappingFeature.cs](../../Extensions/Elsa3/src/Mapping/Elsa3MappingFeature.cs) |

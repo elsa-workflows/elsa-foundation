@@ -10,8 +10,9 @@ using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Services;
 using Elsa3.Mapping.Conversion;
 using Elsa3.Mapping.Services;
+using Elsa.Workflows.Publishing.Core.Models;
+using Xunit;
 using Microsoft.Extensions.DependencyInjection;
-using DesignActivityContract = Elsa.Activities.Design.Core.Models.ActivityContract;
 
 namespace Elsa3.Mapping.Tests.Support;
 
@@ -21,41 +22,71 @@ namespace Elsa3.Mapping.Tests.Support;
 /// native structure handlers registered and Complete nodes detected through the real catalog.
 /// </summary>
 /// <remarks>
-/// Compilation is not run: <c>CompileAsync</c> needs every dependency published (publication and template), which is
-/// what #2796 adds for imported activities. Validation applies the same graph, mapping and Complete rules.
+/// <see cref="CompileAsync"/> also compiles it (spec 246 FR-015), with each dependency resolved as the template compiler
+/// resolves a published one (<see cref="CatalogResolvedDependencies"/>), so a converted workflow that validates also
+/// compiles to an executable graph boundary.
 /// </remarks>
 internal static class GraphProviderProof
 {
     public static async Task<IReadOnlyList<ActivityDiagnostic>> ValidateAsync(RealActivityCatalog catalog, Elsa3ConvertedDefinition converted)
+    {
+        await using var provider = Services(catalog);
+        return await GraphProvider(provider).ValidateAsync(Manifest(converted), Elsa3ImportedActivityContract.Build(converted));
+    }
+
+    /// <summary>
+    /// Compiles the converted workflow as the publisher would after preflight. Returns the compilation; a successful one
+    /// has an executable root and no error diagnostic.
+    /// </summary>
+    public static async Task<ActivityTemplateCompilation> CompileAsync(
+        RealActivityCatalog catalog,
+        Elsa3ConvertedDefinition converted,
+        IReadOnlyDictionary<string, ImportedSibling>? siblings = null)
+    {
+        await using var provider = Services(catalog);
+        var graphProvider = GraphProvider(provider);
+        var manifest = Manifest(converted);
+        var discovery = await graphProvider.DiscoverDependenciesAsync(new("imported-definition", "imported-draft", 1, manifest));
+        Assert.DoesNotContain(discovery.Diagnostics, diagnostic => diagnostic.Severity == ActivityDiagnosticSeverity.Error);
+        var dependencies = await CatalogResolvedDependencies.ResolveAsync(catalog, discovery.Dependencies, siblings);
+        return await graphProvider.CompileAsync(new(
+            "imported-definition",
+            "elsa3.imported",
+            "imported-draft",
+            1,
+            "1.0.0",
+            Elsa3ImportedActivityContract.Build(converted),
+            manifest,
+            dependencies,
+            "test-provider-fingerprint"));
+    }
+
+    /// <summary>Asserts the compilation produced an executable graph boundary without errors.</summary>
+    public static void AssertCompiled(ActivityTemplateCompilation compilation)
+    {
+        Assert.DoesNotContain(compilation.Diagnostics, diagnostic => diagnostic.Severity == ActivityDiagnosticSeverity.Error);
+        Assert.NotNull(compilation.ExecutableRoot);
+    }
+
+    private static ActivityProviderManifest Manifest(Elsa3ConvertedDefinition converted) => new(
+        GraphActivityProvider.Key,
+        "2",
+        Elsa3ReusableActivityImportMaterializer.BuildGraphManifest(converted));
+
+    private static GraphActivityProvider GraphProvider(IServiceProvider provider) => new(
+        new DefaultActivityStructureService(provider.GetServices<IActivityStructureHandler>()),
+        new ActivityContractAuthoringValidator(new ConvertedTypeCapabilities()),
+        provider.GetRequiredService<IServiceScopeFactory>());
+
+    private static ServiceProvider Services(RealActivityCatalog catalog)
     {
         var services = new ServiceCollection();
         services.AddSingleton<IActivityDefinitionLookup>(catalog);
         new ActivitiesSequenceFeature().ConfigureServices(services);
         new ActivitiesControlFlowFeature().ConfigureServices(services);
         new ActivitiesFlowchartFeature().ConfigureServices(services);
-        await using var provider = services.BuildServiceProvider();
-
-        var graphProvider = new GraphActivityProvider(
-            new DefaultActivityStructureService(provider.GetServices<IActivityStructureHandler>()),
-            new ActivityContractAuthoringValidator(new ConvertedTypeCapabilities()),
-            provider.GetRequiredService<IServiceScopeFactory>());
-        var manifest = new ActivityProviderManifest(
-            GraphActivityProvider.Key,
-            "2",
-            Elsa3ReusableActivityImportMaterializer.BuildGraphManifest(converted));
-        return await graphProvider.ValidateAsync(manifest, Contract(converted));
+        return services.BuildServiceProvider();
     }
-
-    /// <summary>The activity contract a published import would carry: the workflow's inputs and outputs and the converted outcomes.</summary>
-    public static DesignActivityContract Contract(Elsa3ConvertedDefinition converted) => new(
-        "1",
-        converted.State.Inputs
-            .Select(input => new ActivityInputContract(input.ReferenceKey, input.Name, input.Type, false, true, null, input.StorageDriverType ?? "elsa.json"))
-            .ToArray(),
-        converted.State.Outputs
-            .Select(output => new ActivityOutputContract(output.ReferenceKey, output.Name, output.Type, false, true, output.StorageDriverType ?? "elsa.json"))
-            .ToArray(),
-        converted.BoundaryOutcomes.ToArray());
 
     /// <summary>The type aliases converted Elsa 3 definitions use, all storable as JSON.</summary>
     private sealed class ConvertedTypeCapabilities : IActivityContractCapabilityCatalog

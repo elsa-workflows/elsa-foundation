@@ -147,7 +147,7 @@ public sealed class ReusableActivityCollectionCredentialLiteralTests : IAsyncDis
         var serializer = ReusableActivityImportFixtures.PayloadSerializer();
         Assert.All(mutation.Workflows, workflow =>
             Assert.NotNull(serializer.Deserialize<WorkflowDefinitionState>(serializer.Serialize(workflow.Version.State))));
-        Assert.All(mutation.Activities, activity => JsonDocument.Parse(activity.Version.DescriptorPayload.GetRawText()).Dispose());
+        Assert.All(mutation.Activities, activity => JsonDocument.Parse(activity.Version.GraphManifest.GetRawText()).Dispose());
         Assert.Equal([CredentialInput], StoredBindingKeys());
     }
 
@@ -174,7 +174,7 @@ public sealed class ReusableActivityCollectionCredentialLiteralTests : IAsyncDis
         var activity = Assert.Single(Assert.IsType<ReusableActivityImportMutation>(_command.Mutation).Activities);
         Assert.Equal(
             JsonSerializer.Serialize(activity.Body.RootActivity, new JsonSerializerOptions(JsonSerializerDefaults.Web)),
-            activity.Version.DescriptorPayload.GetProperty("rootActivity").GetRawText());
+            activity.Version.GraphManifest.GetProperty("rootActivity").GetRawText());
     }
 
     [Fact]

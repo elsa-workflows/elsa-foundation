@@ -474,8 +474,11 @@ internal sealed class Elsa3ActivityNormalizer(
     /// Whether the node's map entry says it is not an Elsa 3 trigger, so its <c>canStartWorkflow</c> flag can only pick
     /// a flowchart's start. A node without an entry (alias, catalog key, replacement) is not known to be a non-trigger.
     /// </summary>
-    internal static bool IsNonTrigger(Elsa3NodePlan? node) =>
-        node?.Resolved?.Entry is { } entry && CanStartWorkflowRule(entry) is null;
+    internal static bool IsNonTrigger(Elsa3NodePlan? node) => IsNonTrigger(node?.Resolved?.Entry);
+
+    /// <summary>Whether a map entry is for a non-trigger: it declares no <c>canStartWorkflow</c> rule.</summary>
+    internal static bool IsNonTrigger(Elsa3ActivityMapEntry? entry) =>
+        entry is not null && CanStartWorkflowRule(entry) is null;
 
     private static void ApplyEntryWarnings(Elsa3RewriteContext context, Elsa3ActivityMapEntry entry)
     {

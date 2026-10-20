@@ -283,6 +283,25 @@ public sealed class RequireAnyPermissionAttribute : AuthorizeAttribute, NativeEn
         builder.RequireAnyPermission([.. Permissions]);
 }
 
+/// <summary>
+/// The attribute form of <c>RequireAllPermissions</c> for endpoint classes: the caller must hold every permission, and
+/// the applied convention carries the full all-mode policy plus the security-disposition metadata the endpoint inventory
+/// asserts on.
+/// </summary>
+public sealed class RequireAllPermissionsAttribute : AuthorizeAttribute, NativeEndpoints.IEndpointConventionAttribute
+{
+    public RequireAllPermissionsAttribute(params string[] permissions)
+    {
+        Permissions = permissions;
+        Policy = new PermissionPolicyCodec().Format(PermissionPolicyDescriptor.All(permissions));
+    }
+
+    public IReadOnlyList<string> Permissions { get; }
+
+    public void Apply(Microsoft.AspNetCore.Builder.IEndpointConventionBuilder builder) =>
+        builder.RequireAllPermissions([.. Permissions]);
+}
+
 internal sealed record NormalizedPermissionPrincipalRequirement : IAuthorizationRequirement;
 
 public sealed class RequirePermissionPolicyProvider(
