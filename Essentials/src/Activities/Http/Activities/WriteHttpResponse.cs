@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Elsa.Activities.Http.Models;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
@@ -21,11 +22,17 @@ public sealed class WriteHttpResponse : Activity<HttpResponseInstruction>
     [ActivityInput(Key = nameof(StatusCode), DefaultValue = "200", DefaultSyntax = "Literal")]
     public int StatusCode { get; set; } = StatusCodes.Status200OK;
 
-    /// <summary>The response body to return.</summary>
+    /// <summary>
+    /// The response body to return: any JSON value. Text is sent as is; any other value is sent as JSON. A literal binds
+    /// as text and is never parsed.
+    /// </summary>
     [ActivityInput(Key = nameof(Body))]
-    public string? Body { get; set; }
+    public JsonElement? Body { get; set; }
 
-    /// <summary>The response content type (media type) to return.</summary>
+    /// <summary>
+    /// The response content type (media type) to return. When blank, it is inferred from the body: <c>text/plain</c> for
+    /// text, <c>application/json</c> for any other value.
+    /// </summary>
     [ActivityInput(Key = nameof(ContentType))]
     public string? ContentType { get; set; }
 

@@ -67,7 +67,15 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   Timer require it.
 - **Declared types.** Value-flow lowering compares a value with the Elsa 4 member in the shape normalization gave it:
   `HttpStatusCode` is an integer, `HttpHeaders` a dictionary of string arrays, `ObjectDictionary` a dictionary, and
-  `List<T>` a list of `T`. A declared type that still does not fit is `VF-IMP-008`.
+  `List<T>` a list of `T`. A declared type that still does not fit is `VF-IMP-008`. A lowered expression declares the
+  Elsa 3 type as its result type, except for a JSON member (`JsonElement`, `Object`, `Any`): it accepts any value, so
+  the expression declares the member's own type, which publication requires verbatim.
+- **HTTP response body.** Elsa 4's `WriteHttpResponse.Body` is a JSON value: text is sent as is, anything else as JSON,
+  and an unset content type is inferred as Elsa 3 did (`text/plain` for text, `application/json` otherwise). Elsa 3
+  `Content` therefore converts when it is a literal or a string, or when the content type is unset, blank or exactly
+  `application/json` or `text/json`. Elsa 3 matched its JSON writer by exact media type and sent any other value's
+  type name as text, so an object with another literal content type, with a computed content type, or binary content
+  is `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`. A content type expression with a blank script is dropped.
 - **JavaScript** converts when Elsa 4 runs it the same, and is refused otherwise. See
   [Migrating Elsa 3 JavaScript](#migrating-elsa-3-javascript).
 - **Reusable workflows** (collection import, `IsReusable`):

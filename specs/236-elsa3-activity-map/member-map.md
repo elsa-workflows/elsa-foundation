@@ -147,8 +147,8 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 | outcomes `Failed to connect`, `Done` co-firing with status outcomes | `Failed`; single outcome | R8 + **W** | 0 |
 | non-flow .ExpectedStatusCodes[].Activity, UnmatchedStatusCode / FailedToConnect / Timeout ports | — (leaf activity) | R6 when any port holds an activity | 0 |
 | WriteHttpResponse.StatusCode | `StatusCode` (int) | R5 (enum name literal → int) | 71 |
-| WriteHttpResponse.Content | `Body` (string) | R1 rename + R5 (string) | 71 |
-| WriteHttpResponse.ContentType | same | R1 | 71 |
+| WriteHttpResponse.Content | `Body` (JSON value) | R1 rename + R5: a literal or a `String` value converts with any content type; any other value converts when `ContentType` is unset, blank, or exactly `application/json` or `text/json` (Elsa 3 sent JSON then, inferring `application/json`; Elsa 4 does the same). A non-JSON literal content type (Elsa 3 sent the value's type name), a computed content type, or `Byte[]`/`Stream` content → unconvertible (spec 254, #3050; was R5 string only, amended 2026-10-20 with the maintainer) | 71 |
+| WriteHttpResponse.ContentType | same | R1; an expression with a blank script is dropped (Elsa 3 evaluates it to null and infers the type; Elsa 4 infers it when unset) (spec 254) | 71 |
 | WriteHttpResponse.ResponseHeaders | `Headers` | R1 rename | 71 |
 | DownloadHttpFile, WriteFileHttpResponse | — | R6 | 0 |
 
