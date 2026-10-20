@@ -1,7 +1,7 @@
 <!--
 SYNC IMPACT REPORT — 6.0.2 -> 6.0.3 (2026-10-20)
 PATCH: link only; the domain map is published on the generated-maps branch, not committed (spec 257). No Elsa rule changed.
-Approval: pending owner.
+Approval: Joey Barten, 2026-10-20 (spec 257, #3116).
 -->
 <!--
 SYNC IMPACT REPORT — 6.0.1 -> 6.0.2 (2026-10-14)
