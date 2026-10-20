@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "f7c417d0f0ed34b876537a50a7697a36743a971f",
+  "last_publish_commit": "7a95893176bbaa75afb4b12fc3d69e3f815320b8",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -11,6 +11,11 @@
       "package_id": "Elsa.Activities.Bpmn.Interchange",
       "version": "4.0.12-preview",
       "commit": "6b3ad8c3dbee6c4b62f9dcc295c6cf3d5450708b"
+    },
+    {
+      "package_id": "Elsa.Activities.Compensation",
+      "version": "4.0.0-preview",
+      "commit": "7a95893176bbaa75afb4b12fc3d69e3f815320b8"
     },
     {
       "package_id": "Elsa.Activities.ControlFlow",
@@ -549,8 +554,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Design.Api",
-      "version": "4.0.16-preview",
-      "commit": "73451fd575d0e595a79603568896101184887805"
+      "version": "4.0.17-preview",
+      "commit": "7a95893176bbaa75afb4b12fc3d69e3f815320b8"
     },
     {
       "package_id": "Elsa.Workflows.Design.CodeGeneration",
@@ -559,8 +564,8 @@
     },
     {
       "package_id": "Elsa.Workflows.Design.Core",
-      "version": "4.0.10-preview",
-      "commit": "6bcce9fdcc291684a396b80d6c2f7ce3f3e25e53"
+      "version": "4.0.11-preview",
+      "commit": "7a95893176bbaa75afb4b12fc3d69e3f815320b8"
     },
     {
       "package_id": "Elsa.Workflows.Design.JavaScript",
