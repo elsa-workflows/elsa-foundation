@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Activities.Primitives;
+using Elsa.Activities.Primitives.Activities;
 using Elsa.Activities.Testing;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -52,5 +53,27 @@ public sealed class EventTestDriveTests : IDisposable
         Assert.Equal(TestRunPreparationKind.Immediate, preparation.Kind);
         Assert.Equal("order-42", preparation.StimulusInput!.Value.GetProperty("orderId").GetString());
         Assert.False(driver.Validate(trigger, "unknown", data).IsValid);
+    }
+
+    /// <summary>A delivery with no payload or a scalar one becomes the stimulus input, which the Event's trigger accepts (#3107).</summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("""{"payload":"text"}""")]
+    public async Task WaitDriver_DeliversInputTheEventTriggerAccepts(string? dataJson)
+    {
+        var driver = Assert.Single(_provider.GetServices<ITestRunWaitDriver>());
+        var trigger = TestRunTriggerFixture.Create("Elsa.Event", "EventName", "ApprovalReceived");
+        var wait = new BookmarkState("wait", "execution", "activity", trigger.Node.ExecutableNodeId,
+            WorkflowExecutableResumeTarget.ComposeScopedId(trigger.Node.ExecutableNodeId, "resume-target:event"),
+            "Event", "hash", null, new Dictionary<string, string>(), TestRunTriggerFixture.Now, null);
+        var context = new TestRunWaitContext(trigger.Executable, trigger.Node, wait);
+        var data = dataJson is null ? (JsonElement?)null : JsonDocument.Parse(dataJson).RootElement.Clone();
+
+        var stimulus = await driver.PrepareAsync(new(context, "event", data));
+
+        var input = stimulus ?? JsonSerializer.SerializeToElement<object?>(null);
+        var received = input.Deserialize<EventReceived>();
+        Assert.NotNull(received);
+        Assert.Equal(stimulus?.GetRawText(), received.Payload?.GetRawText());
     }
 }

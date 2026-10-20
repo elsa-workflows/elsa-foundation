@@ -7,6 +7,10 @@ export interface WorkflowDefinitionBrowseLocation {
   search: string;
 }
 
+export function workflowFolderSelectionKey(selection: WorkflowFolderSelection) {
+  return typeof selection === "object" ? `folder:${selection.id}` : selection;
+}
+
 export function parseWorkflowDefinitionBrowseLocation(search: string): WorkflowDefinitionBrowseLocation {
   const parameters = new URLSearchParams(search);
   const folderId = parameters.get("folderId") ?? "";

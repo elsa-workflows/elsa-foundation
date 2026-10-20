@@ -23,7 +23,7 @@ export function CreateSecretDialog({
   onSave(request: CreateSecretRequest): Promise<void>;
 }) {
   const initialTypeName = descriptors.types[0]?.name ?? "text";
-  const initialStoreName = firstSupportedStoreName(descriptors, initialTypeName) ?? descriptors.stores[0]?.name ?? "encrypted";
+  const initialStoreName = defaultStoreNameForType(descriptors, initialTypeName);
   const [name, setName] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [description, setDescription] = useState("");
@@ -45,7 +45,7 @@ export function CreateSecretDialog({
   const selectedType = descriptors.types.find(type => type.name === typeName);
   const supportedStores = useMemo(() => storesForType(descriptors, typeName), [descriptors, typeName]);
   const selectedStore = descriptors.stores.find(store => store.name === storeName);
-  const defaultStoreName = firstSupportedStoreName(descriptors, typeName) ?? descriptors.stores[0]?.name ?? "encrypted";
+  const defaultStoreName = defaultStoreNameForType(descriptors, typeName);
   const configuredOptionalCount = [
     displayName.trim().length > 0,
     description.trim().length > 0,
@@ -261,8 +261,8 @@ function storesForType(descriptors: SecretDescriptorsResponse, typeName: string)
   return descriptors.stores.filter(store => supportedNames.includes(store.name));
 }
 
-function firstSupportedStoreName(descriptors: SecretDescriptorsResponse, typeName: string) {
-  return storesForType(descriptors, typeName)[0]?.name;
+function defaultStoreNameForType(descriptors: SecretDescriptorsResponse, typeName: string) {
+  return storesForType(descriptors, typeName)[0]?.name ?? descriptors.stores[0]?.name ?? "encrypted";
 }
 
 function normalizeTechnicalName(value: string) {

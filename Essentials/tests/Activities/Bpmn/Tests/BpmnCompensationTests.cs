@@ -349,7 +349,7 @@ public sealed class BpmnCompensationTests
         Assert.Equal(BpmnCompensableStatus.Claimed, Assert.Single(stateBefore.Compensables).Status);
 
         var killBookmark = Assert.Single(await fixture.BookmarksAsync(), candidate => candidate.ExecutableNodeId == "node-kill");
-        await fixture.ResumeAsync(killBookmark, JsonSerializer.SerializeToElement(new EventReceived("kill")));
+        await fixture.ResumeAsync(killBookmark, JsonSerializer.SerializeToElement(new { eventName = "kill" }));
 
         // Terminate is logical-only: the run record and its Claimed compensable are retained as-is (no cascade).
         var stateAfter = await fixture.GetBpmnStateAsync();
