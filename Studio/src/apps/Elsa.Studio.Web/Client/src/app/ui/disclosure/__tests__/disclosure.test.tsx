@@ -77,6 +77,31 @@ describe("never-hide invariant", () => {
     expect(isAdvancedSectionForced({ setCount: 0 })).toBe(false);
   });
 
+  it("allows an opted-in configured section to collapse with its badge, but keeps errors forced visible", () => {
+    function Harness() {
+      const [hasError, setError] = useState(false);
+      return <>
+        <button onClick={() => setError(true)}>Introduce error</button>
+        <AdvancedSection setCount={2} defaultOpen allowCollapseWhenSet hasError={hasError}>
+          <input aria-label="Configured value" defaultValue="preserved" />
+        </AdvancedSection>
+      </>;
+    }
+    const host = mount(<Harness />);
+    const trigger = host.querySelector<HTMLButtonElement>(".studio-disclosure-fold-trigger")!;
+    const input = host.querySelector<HTMLInputElement>("input")!;
+    flushSync(() => trigger.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(trigger.textContent).toContain("2 set");
+    expect(host.querySelector("input")).toBe(input);
+    expect(input.value).toBe("preserved");
+    flushSync(() => host.querySelector<HTMLButtonElement>("button")!.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    flushSync(() => trigger.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector(".studio-status-pill")?.getAttribute("data-tone")).toBe("danger");
+  });
+
   it("keeps ExpressionToggle visible in Expression or when the value is non-default", () => {
     expect(isExpressionToggleVisible({ value: "expression" })).toBe(true);
     expect(isExpressionToggleVisible({ value: "fixed", isNonDefault: true })).toBe(true);
