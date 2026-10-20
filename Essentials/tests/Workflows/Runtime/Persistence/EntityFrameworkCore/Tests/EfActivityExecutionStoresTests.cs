@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Data;
 using System.Data.Common;
+using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -59,6 +61,165 @@ public sealed class EfActivityExecutionStoresTests
         var second = await fixture.Inspection.ListSummariesPageAsync(new ActivityExecutionInspectionSummaryPageQuery("wf", 1, first.NextContinuationToken));
         Assert.Equal("b", second.Items[0].ActivityExecutionId);
         Assert.NotNull(await fixture.Inspection.FindAsync("wf", "a"));
+    }
+
+    [Fact]
+    public async Task Inspection_summary_page_keeps_empty_view_consistent_when_a_row_is_inserted()
+    {
+        await using var fixture = await InspectionPageRaceFixture.CreateAsync("tenant-inspection-page-empty", "wf-inspection-page-empty");
+
+        var interleaved = await fixture.ReadPageWithMutationAsync(10, null,
+            cancellationToken => fixture.InsertAsync("final", 1, cancellationToken));
+        AssertMutationWasApplied(interleaved.Mutation);
+
+        Assert.Null(interleaved.Page.NextContinuationToken);
+        if (interleaved.Page.TotalCount == 0)
+            Assert.Empty(interleaved.Page.Items);
+        else
+        {
+            Assert.Equal(1, interleaved.Page.TotalCount);
+            Assert.Equal(["final"], ActivityIds(interleaved.Page));
+        }
+
+        var current = await fixture.ReadPageAsync(10);
+        Assert.Equal(1, current.TotalCount);
+        Assert.Equal(["final"], ActivityIds(current));
+        Assert.Null(current.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task Inspection_summary_page_keeps_nonempty_insert_and_continuation_consistent()
+    {
+        await using var fixture = await InspectionPageRaceFixture.CreateAsync("tenant-inspection-page-insert", "wf-inspection-page-insert");
+        await fixture.InsertAsync("existing", 1);
+
+        var interleaved = await fixture.ReadPageWithMutationAsync(1, null,
+            cancellationToken => fixture.InsertAsync("final", 2, cancellationToken));
+        AssertMutationWasApplied(interleaved.Mutation);
+
+        Assert.Equal(["existing"], ActivityIds(interleaved.Page));
+        if (interleaved.Page.NextContinuationToken is null)
+            Assert.Equal(1, interleaved.Page.TotalCount);
+        else
+        {
+            Assert.Equal(2, interleaved.Page.TotalCount);
+            var continuation = await fixture.ReadPageAsync(1, interleaved.Page.NextContinuationToken);
+            Assert.Equal(2, continuation.TotalCount);
+            Assert.Equal(["final"], ActivityIds(continuation));
+            Assert.Null(continuation.NextContinuationToken);
+        }
+
+        var current = await fixture.ReadPageAsync(1);
+        Assert.Equal(2, current.TotalCount);
+        Assert.Equal(["existing"], ActivityIds(current));
+        Assert.NotNull(current.NextContinuationToken);
+        var currentContinuation = await fixture.ReadPageAsync(1, current.NextContinuationToken);
+        Assert.Equal(2, currentContinuation.TotalCount);
+        Assert.Equal(["final"], ActivityIds(currentContinuation));
+        Assert.Null(currentContinuation.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task Inspection_summary_page_keeps_first_page_consistent_when_its_first_row_is_deleted()
+    {
+        await using var fixture = await InspectionPageRaceFixture.CreateAsync("tenant-inspection-page-delete-first", "wf-inspection-page-delete-first");
+        await fixture.InsertAsync("first", 1);
+        await fixture.InsertAsync("second", 2);
+
+        var interleaved = await fixture.ReadPageWithMutationAsync(1, null,
+            cancellationToken => fixture.DeleteAsync("first", cancellationToken));
+        AssertMutationWasApplied(interleaved.Mutation);
+
+        var ids = ActivityIds(interleaved.Page);
+        if (ids.Length == 1 && ids[0] == "first")
+        {
+            Assert.Equal(2, interleaved.Page.TotalCount);
+            Assert.NotNull(interleaved.Page.NextContinuationToken);
+            var continuation = await fixture.ReadPageAsync(1, interleaved.Page.NextContinuationToken);
+            Assert.Equal(1, continuation.TotalCount);
+            Assert.Equal(["second"], ActivityIds(continuation));
+            Assert.Null(continuation.NextContinuationToken);
+        }
+        else
+        {
+            Assert.Equal(["second"], ids);
+            Assert.Equal(1, interleaved.Page.TotalCount);
+            Assert.Null(interleaved.Page.NextContinuationToken);
+        }
+
+        var current = await fixture.ReadPageAsync(1);
+        Assert.Equal(1, current.TotalCount);
+        Assert.Equal(["second"], ActivityIds(current));
+        Assert.Null(current.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task Inspection_summary_page_keeps_continuation_consistent_when_its_row_is_deleted()
+    {
+        await using var fixture = await InspectionPageRaceFixture.CreateAsync("tenant-inspection-page-delete-continuation", "wf-inspection-page-delete-continuation");
+        await fixture.InsertAsync("first", 1);
+        await fixture.InsertAsync("second", 2);
+        var first = await fixture.ReadPageAsync(1);
+        Assert.Equal(2, first.TotalCount);
+        Assert.Equal(["first"], ActivityIds(first));
+        var cursor = Assert.IsType<string>(first.NextContinuationToken);
+
+        var interleaved = await fixture.ReadPageWithMutationAsync(1, cursor,
+            cancellationToken => fixture.DeleteAsync("second", cancellationToken));
+        AssertMutationWasApplied(interleaved.Mutation);
+
+        var ids = ActivityIds(interleaved.Page);
+        if (ids.Length == 0)
+        {
+            Assert.Equal(1, interleaved.Page.TotalCount);
+            Assert.Null(interleaved.Page.NextContinuationToken);
+        }
+        else
+        {
+            Assert.Equal(["second"], ids);
+            Assert.Equal(2, interleaved.Page.TotalCount);
+            Assert.Null(interleaved.Page.NextContinuationToken);
+        }
+
+        var emptiedContinuation = await fixture.ReadPageAsync(1, cursor);
+        Assert.Equal(1, emptiedContinuation.TotalCount);
+        Assert.Empty(emptiedContinuation.Items);
+        Assert.Null(emptiedContinuation.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task Inspection_summary_page_does_not_commit_or_dispose_a_caller_serializable_transaction()
+    {
+        await using var fixture = await InspectionPageRaceFixture.CreateAsync("tenant-inspection-page-caller-transaction", "wf-inspection-page-caller-transaction");
+        await fixture.InsertAsync("existing", 1);
+        await using var context = fixture.OpenContext();
+        var store = fixture.CreateStore(context);
+        await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+
+        var page = await store.ListSummariesPageAsync(new ActivityExecutionInspectionSummaryPageQuery(fixture.WorkflowExecutionId));
+        Assert.Equal(["existing"], ActivityIds(page));
+        Assert.Same(transaction, context.Database.CurrentTransaction);
+
+        await store.SaveAsync(Projection(fixture.WorkflowExecutionId, "rolled-back", 2, fixture.Scope));
+        Assert.Same(transaction, context.Database.CurrentTransaction);
+        await transaction.RollbackAsync();
+
+        var afterRollback = await fixture.ReadPageAsync(10);
+        Assert.Equal(1, afterRollback.TotalCount);
+        Assert.Equal(["existing"], ActivityIds(afterRollback));
+        Assert.Null(afterRollback.NextContinuationToken);
+    }
+
+    [Fact]
+    public async Task Inspection_summary_page_rejects_an_ambient_transaction()
+    {
+        await using var fixture = await InspectionPageRaceFixture.CreateAsync("tenant-inspection-page-ambient", "wf-inspection-page-ambient");
+        await using var context = fixture.OpenContext();
+        var store = fixture.CreateStore(context);
+        using var transaction = new System.Transactions.TransactionScope(System.Transactions.TransactionScopeAsyncFlowOption.Enabled);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => store.ListSummariesPageAsync(
+            new ActivityExecutionInspectionSummaryPageQuery(fixture.WorkflowExecutionId)).AsTask());
     }
 
     [Fact]
@@ -761,6 +922,171 @@ public sealed class EfActivityExecutionStoresTests
                 await bothReadersArrived.Task.WaitAsync(TimeSpan.FromSeconds(30), cancellationToken);
             }
             return result;
+        }
+    }
+
+    private sealed class InspectionPageRaceFixture : IAsyncDisposable
+    {
+        private readonly TemporarySqliteDatabase database;
+        private readonly string connectionString;
+
+        public string Scope { get; }
+        public string WorkflowExecutionId { get; }
+
+        private InspectionPageRaceFixture(TemporarySqliteDatabase database, string scope, string workflowExecutionId)
+        {
+            this.database = database;
+            Scope = scope;
+            WorkflowExecutionId = workflowExecutionId;
+            connectionString = new SqliteConnectionStringBuilder
+            {
+                DataSource = database.Path,
+                DefaultTimeout = 1,
+                Pooling = false
+            }.ToString();
+        }
+
+        public static async Task<InspectionPageRaceFixture> CreateAsync(string scope, string workflowExecutionId)
+        {
+            var database = new TemporarySqliteDatabase("runtime-inspection-page-race");
+            var fixture = new InspectionPageRaceFixture(database, scope, workflowExecutionId);
+            await using var context = fixture.OpenContext();
+            await context.Database.EnsureCreatedAsync();
+            return fixture;
+        }
+
+        public RuntimeSqliteDbContext OpenContext(DbCommandInterceptor? interceptor = null)
+        {
+            var options = new DbContextOptionsBuilder<RuntimeSqliteDbContext>().UseSqlite(connectionString);
+            if (interceptor is not null)
+                options.AddInterceptors(interceptor);
+            return new RuntimeSqliteDbContext(options.Options);
+        }
+
+        public EfActivityExecutionInspectionStore CreateStore(RuntimeDbContext context) =>
+            new(context, new Accessor(Scope), RecoveryCodec());
+
+        public async Task InsertAsync(string activityExecutionId, long sequence, CancellationToken cancellationToken = default)
+        {
+            await using var context = OpenContext();
+            await CreateStore(context).SaveAsync(Projection(WorkflowExecutionId, activityExecutionId, sequence, Scope), cancellationToken);
+        }
+
+        public async Task DeleteAsync(string activityExecutionId, CancellationToken cancellationToken = default)
+        {
+            await using var context = OpenContext();
+            var row = await context.ActivityExecutionInspections.SingleAsync(candidate =>
+                candidate.ScopeKey == EfRelationalIdentity.Encode(Scope) &&
+                candidate.WorkflowExecutionId == EfRelationalIdentity.Encode(WorkflowExecutionId) &&
+                candidate.ActivityExecutionId == EfRelationalIdentity.Encode(activityExecutionId), cancellationToken);
+            context.ActivityExecutionInspections.Remove(row);
+            await context.SaveChangesAsync(cancellationToken);
+        }
+
+        public async Task<ActivityExecutionInspectionSummaryPage> ReadPageAsync(int limit, string? continuationToken = null)
+        {
+            await using var context = OpenContext();
+            return await CreateStore(context).ListSummariesPageAsync(
+                new ActivityExecutionInspectionSummaryPageQuery(WorkflowExecutionId, limit, continuationToken));
+        }
+
+        public async Task<InterleavedInspectionPage> ReadPageWithMutationAsync(
+            int limit,
+            string? continuationToken,
+            Func<CancellationToken, Task> mutation)
+        {
+            var interleaver = new InspectionPageMutationInterceptor(mutation);
+            ActivityExecutionInspectionSummaryPage page;
+            await using (var context = OpenContext(interleaver))
+                page = await CreateStore(context).ListSummariesPageAsync(
+                    new ActivityExecutionInspectionSummaryPageQuery(WorkflowExecutionId, limit, continuationToken));
+
+            if (interleaver.Mutation.WasBlocked)
+            {
+                await mutation(CancellationToken.None);
+                interleaver.Mutation.DeferredMutationCommitted = true;
+            }
+
+            return new InterleavedInspectionPage(page, interleaver.Mutation);
+        }
+
+        public ValueTask DisposeAsync() => database.DisposeAsync();
+    }
+
+    private sealed class InspectionPageMutationInterceptor(Func<CancellationToken, Task> mutation) : DbCommandInterceptor
+    {
+        private int attempted;
+        public MutationAttempt Mutation { get; } = new();
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains("elsa_runtime_activity_execution_inspection", StringComparison.OrdinalIgnoreCase) &&
+                command.CommandText.Contains("ORDER BY", StringComparison.OrdinalIgnoreCase) &&
+                Interlocked.Exchange(ref attempted, 1) == 0)
+            {
+                Mutation.Attempted = true;
+                try
+                {
+                    await mutation(cancellationToken);
+                    Mutation.InitialMutationCommitted = true;
+                }
+                catch (Exception exception) when (FindSqliteLockFailure(exception) is { } sqliteException)
+                {
+                    Mutation.SqliteErrorCode = sqliteException.SqliteErrorCode;
+                    Mutation.SqliteExtendedErrorCode = sqliteException.SqliteExtendedErrorCode;
+                    Mutation.LockFailureMessage = sqliteException.Message;
+                    Mutation.WasBlocked = true;
+                }
+            }
+
+            return result;
+        }
+
+        private static SqliteException? FindSqliteLockFailure(Exception exception)
+        {
+            for (var candidate = exception; candidate is not null; candidate = candidate.InnerException!)
+            {
+                if (candidate is SqliteException sqliteException && sqliteException.SqliteErrorCode is 5 or 6)
+                    return sqliteException;
+            }
+            return null;
+        }
+    }
+
+    private sealed record InterleavedInspectionPage(ActivityExecutionInspectionSummaryPage Page, MutationAttempt Mutation);
+
+    private sealed class MutationAttempt
+    {
+        public bool Attempted { get; set; }
+        public bool InitialMutationCommitted { get; set; }
+        public bool WasBlocked { get; set; }
+        public bool DeferredMutationCommitted { get; set; }
+        public int? SqliteErrorCode { get; set; }
+        public int? SqliteExtendedErrorCode { get; set; }
+        public string? LockFailureMessage { get; set; }
+    }
+
+    private static string[] ActivityIds(ActivityExecutionInspectionSummaryPage page) =>
+        page.Items.Select(item => item.ActivityExecutionId).ToArray();
+
+    private static void AssertMutationWasApplied(MutationAttempt mutation)
+    {
+        Assert.True(mutation.Attempted);
+        Assert.True(mutation.InitialMutationCommitted || mutation.WasBlocked);
+        if (mutation.WasBlocked)
+        {
+            Assert.Contains(mutation.SqliteErrorCode, new int?[] { 5, 6 });
+            Assert.False(string.IsNullOrWhiteSpace(mutation.LockFailureMessage));
+            Assert.True(mutation.DeferredMutationCommitted);
+        }
+        else
+        {
+            Assert.Null(mutation.SqliteErrorCode);
+            Assert.False(mutation.DeferredMutationCommitted);
         }
     }
 
