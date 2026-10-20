@@ -232,7 +232,7 @@ public sealed class EmbeddedFixtureHostEvidenceTests : IDisposable
                 workflowExecutionId: started.WorkflowExecutionId,
                 stimulusType: bookmark.StimulusType,
                 stimulusHash: bookmark.StimulusHash,
-                input: JsonSerializer.SerializeToElement(new EventReceived("embedded-ready"))));
+                input: JsonSerializer.SerializeToElement(new { eventName = "embedded-ready" })));
         Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, resumed.Status);
 
         Assert.Empty(await bookmarks.ListAllBookmarkStatesAsync(started.WorkflowExecutionId));

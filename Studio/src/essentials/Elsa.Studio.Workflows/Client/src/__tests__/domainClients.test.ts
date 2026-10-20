@@ -72,6 +72,18 @@ const pagedDefinitionCapabilities = {
 };
 
 describe("canonical domain clients", () => {
+  it.each([
+    { name: "paged", discovery: pagedDefinitionCapabilities, path: "/design/workflows/definition-pages?state=active&pageSize=10" },
+    { name: "legacy", discovery: capabilities, path: "/design/workflows/definitions?state=active" }
+  ])("forwards cancellation to the advertised $name definition list", async ({ discovery, path }) => {
+    const getJson = vi.fn(async (url: string) => url === "/capabilities" ? discovery : { items: [] });
+    const controller = new AbortController();
+
+    await listDefinitions(createContext({ getJson }), { search: "", page: 1, pageSize: 10 }, controller.signal);
+
+    expect(getJson).toHaveBeenLastCalledWith(path, { signal: controller.signal });
+  });
+
   it("discovers incident strategies only through the advertised publishing relation", async () => {
     const response = {
       items: [{
