@@ -106,6 +106,27 @@ public sealed class Elsa3StrictModeTests
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
     }
 
+    [Fact]
+    public async Task A_script_ending_in_a_line_comment_still_runs()
+    {
+        var result = await ConvertAsync(Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal("var x = 1; x + 1 // Expected output: 2")))));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        var script = Text(Input(Node(result.Value!.State, "node"), "script"))!;
+        Assert.Equal("var x = 1; return x + 1 // Expected output: 2\n", script);
+        var value = await PortableJavaScript.RunScriptAsync(script);
+        Assert.Equal(2, value!.Value.GetInt32());
+    }
+
+    [Fact]
+    public async Task A_script_without_a_trailing_line_comment_is_unchanged()
+    {
+        var result = await ConvertAsync(Sequence("root", Activity("node", "Elsa.RunJavaScript", ("script", Literal("var x = 1; x + 1 /* note */")))));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Equal("var x = 1; return x + 1 /* note */", Text(Input(Node(result.Value!.State, "node"), "script")));
+    }
+
     private static async Task<Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition>[]> ConvertBothAsync(string source) =>
     [
         await ConvertTextAsync(source),

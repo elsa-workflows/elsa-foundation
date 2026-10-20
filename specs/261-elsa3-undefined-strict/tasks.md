@@ -142,8 +142,8 @@ to Elsa 3's result.
 
 **Independent test**: a script ending in `// comment` converts and runs in Elsa 4's script evaluator.
 
-- [ ] T018 [US4] In `Elsa3StrictModeTests.cs`, add a fact. A RunJavaScript body `var x = 1; x + 1 // Expected output: 2` converts, its script ends with `\n`, and Elsa 4's script evaluator runs it to `2`. Run it through `JintJavaScriptScriptEvaluator` with a helper beside `PortableJavaScript` in `Extensions/Elsa3/tests/Mapping/Tests/Support/`, or through the existing script test path if there is one. Also add a fact that a body without a trailing comment is byte-identical to before.
-- [ ] T019 [US4] Implement D-6 in the two Script-mode `Success` paths of `RewriteJavaScript` in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs`. Append `\n` when the last line of the output contains `//`, before `StrictCheck` runs.
+- [x] T018 [US4] In `Elsa3StrictModeTests.cs`, add a fact. A RunJavaScript body `var x = 1; x + 1 // Expected output: 2` converts, its script ends with `\n`, and Elsa 4's script evaluator runs it to `2`. Run it through `JintJavaScriptScriptEvaluator` with a helper beside `PortableJavaScript` in `Extensions/Elsa3/tests/Mapping/Tests/Support/`, or through the existing script test path if there is one. Also add a fact that a body without a trailing comment is byte-identical to before.
+- [x] T019 [US4] Implement D-6 in the two Script-mode `Success` paths of `RewriteJavaScript` in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs`. Append `\n` when the last line of the output contains `//`, before `StrictCheck` runs.
 
 ## Phase 7: Polish & cross-cutting
 

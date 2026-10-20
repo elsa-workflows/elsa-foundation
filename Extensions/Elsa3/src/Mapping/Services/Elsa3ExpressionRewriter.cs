@@ -123,7 +123,7 @@ public sealed class Elsa3ExpressionRewriter
             if (mode == Elsa3JavaScriptMode.Script)
             {
                 return Elsa3ExpressionRewriteResult.Success(
-                    CreateDefinition("JavaScript", prelude + ApplyEdits(source, edits), resultType, analyzer.Parameters),
+                    CreateDefinition("JavaScript", EndScript(prelude + ApplyEdits(source, edits)), resultType, analyzer.Parameters),
                     completionValueLost: !preserved);
             }
 
@@ -143,7 +143,7 @@ public sealed class Elsa3ExpressionRewriter
             if (hasCompletion)
                 edits.Add(new SourceEdit(body[^1].Start, body[^1].Start, "return "));
             return Elsa3ExpressionRewriteResult.Success(
-                CreateDefinition("JavaScript", prelude + ApplyEdits(source, edits), resultType, analyzer.Parameters),
+                CreateDefinition("JavaScript", EndScript(prelude + ApplyEdits(source, edits)), resultType, analyzer.Parameters),
                 completionValueLost: body.Count > 0 && !hasCompletion);
         }
 
@@ -342,6 +342,14 @@ public sealed class Elsa3ExpressionRewriter
     /// </summary>
     private static int ExpressionEnd(string source, ExpressionStatement statement) =>
         statement.End > statement.Expression.End && source[statement.End - 1] == ';' ? statement.End - 1 : statement.End;
+
+    /// <summary>
+    /// Ends a RunJavaScript body with a newline when its last line holds a <c>//</c>. Elsa 4 wraps the body on one line, so
+    /// a trailing line comment would swallow the end of the wrapper; Elsa 3 ran the body as is (spec 261 R-5). A
+    /// <c>//</c> inside a string on that line also gets the newline, which is harmless.
+    /// </summary>
+    private static string EndScript(string script) =>
+        script.AsSpan(script.LastIndexOf('\n') + 1).Contains("//", StringComparison.Ordinal) ? script + "\n" : script;
 
     private static ExpressionDefinition CreateDefinition(
         string language,
