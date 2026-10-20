@@ -91,12 +91,12 @@ public enum Elsa3ValueContract
     HttpMethodSupported,
 
     /// <summary>
-    /// A WriteHttpResponse body (spec 254): text always fits; any other value fits when the response content type is
+    /// A WriteHttpResponse body (spec 256): text always fits; any other value fits when the response content type is
     /// unset or exactly a JSON type Elsa 3 serialized it for, so Elsa 4 sends the same JSON and content type.
     /// </summary>
     HttpResponseBody,
 
-    /// <summary>A WriteHttpResponse content type (spec 254): an expression with a blank script is unset, as in Elsa 3.</summary>
+    /// <summary>A WriteHttpResponse content type (spec 256): an expression with a blank script is unset, as in Elsa 3.</summary>
     HttpResponseContentType,
 
     /// <summary>

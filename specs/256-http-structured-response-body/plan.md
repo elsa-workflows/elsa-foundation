@@ -2,7 +2,7 @@
 
 **Branch**: `agent/claude/3050-http-structured-body` | **Date**: 2026-10-20 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `specs/254-http-structured-response-body/spec.md`
+**Input**: Feature specification from `specs/256-http-structured-response-body/spec.md`
 
 ## Summary
 
@@ -71,7 +71,7 @@ baseline change in the same unit.
 ### Documentation (this feature)
 
 ```text
-specs/254-http-structured-response-body/
+specs/256-http-structured-response-body/
 ├── spec.md
 ├── plan.md
 ├── research.md

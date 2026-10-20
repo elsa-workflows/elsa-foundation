@@ -8,7 +8,7 @@ using static Elsa3.Mapping.Tests.Elsa3BuiltInConversionTests;
 namespace Elsa3.Mapping.Tests;
 
 /// <summary>
-/// Spec 254 (#3050): Elsa 3 WriteHttpResponse content converts when Elsa 4 sends the same body and content type. Elsa 3
+/// Spec 256 (#3050): Elsa 3 WriteHttpResponse content converts when Elsa 4 sends the same body and content type. Elsa 3
 /// sent text as is and serialized any other value as JSON when the content type was unset or exactly a JSON type its
 /// writer handled; otherwise it sent the value's type name. Elsa 4's body is any JSON value.
 /// </summary>

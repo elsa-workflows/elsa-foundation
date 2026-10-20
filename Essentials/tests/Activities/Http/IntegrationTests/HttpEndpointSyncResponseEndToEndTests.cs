@@ -63,7 +63,7 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
     [Fact]
     public async Task SyncEndpoint_StructuredBodyWithoutContentType_IsSentAsJson_AndRecordedAsStructure()
     {
-        // Spec 254 (#3050): an object body with no content type is sent as JSON with application/json, as in Elsa 3.
+        // Spec 256 (#3050): an object body with no content type is sent as JSON with application/json, as in Elsa 3.
         using var body = JsonDocument.Parse("""{ "Name": "Zoë", "items": [1, 2] }""");
         await _fixture.PublishSyncEndpointWithWriteResponseWorkflowAsync(
             artifactId: "artifact-sync-structured",

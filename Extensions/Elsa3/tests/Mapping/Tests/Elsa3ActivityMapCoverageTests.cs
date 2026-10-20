@@ -147,7 +147,7 @@ public sealed class Elsa3ActivityMapCoverageTests
     }
 
     /// <summary>
-    /// Spec 254: WriteHttpResponse.Content carries any value Elsa 4 sends the same (the body is a JSON value), and its
+    /// Spec 256: WriteHttpResponse.Content carries any value Elsa 4 sends the same (the body is a JSON value), and its
     /// content type drops a blank expression. These contracts read the WriteHttpResponse siblings, so no other member uses them.
     /// </summary>
     [Fact]

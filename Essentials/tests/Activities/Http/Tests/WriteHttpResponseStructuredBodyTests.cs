@@ -11,7 +11,7 @@ using static Elsa.Activities.Http.Tests.HttpResponseInstructionFixture;
 namespace Elsa.Activities.Http.Tests;
 
 /// <summary>
-/// Spec 254 (#3050): a response body is any JSON value. Text is sent as is; any other value is sent as compact JSON.
+/// Spec 256 (#3050): a response body is any JSON value. Text is sent as is; any other value is sent as compact JSON.
 /// With no content type, delivery infers one as Elsa 3 did: <c>text/plain</c> for text, <c>application/json</c> otherwise.
 /// </summary>
 public sealed class WriteHttpResponseStructuredBodyTests

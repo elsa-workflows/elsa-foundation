@@ -1,4 +1,4 @@
-# Quickstart: verify spec 254
+# Quickstart: verify spec 256
 
 Run from the worktree root. Build and test only these projects (shared machine; a build-slot wrapper may queue them).
 

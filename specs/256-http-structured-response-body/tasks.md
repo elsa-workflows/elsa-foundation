@@ -1,6 +1,6 @@
 # Tasks: WriteHttpResponse structured body (Elsa 3 parity)
 
-**Input**: Design documents from `specs/254-http-structured-response-body/`
+**Input**: Design documents from `specs/256-http-structured-response-body/`
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/write-http-response.md, quickstart.md
 
@@ -50,9 +50,9 @@ No setup: existing projects only.
 
 ## Phase 6: Polish & cross-cutting
 
-- [X] T014 Run the touched test projects listed in specs/254-http-structured-response-body/quickstart.md
+- [X] T014 Run the touched test projects listed in specs/256-http-structured-response-body/quickstart.md
 - [X] T015 Throwaway JTest check (not committed): `javascript-array-methods` and `javascript-object-methods` convert end to end and the only remaining `content` refusal is the computed content type; record the result in the PR evidence
-- [X] T016 Set this spec's `**Status**:` to `Implemented` with the PR link, before the PR merges (spec-lifecycle transition rule; never a separate status PR) in specs/254-http-structured-response-body/spec.md
+- [X] T016 Set this spec's `**Status**:` to `Implemented` with the PR link, before the PR merges (spec-lifecycle transition rule; never a separate status PR) in specs/256-http-structured-response-body/spec.md
 - [X] T017 Regenerate the maps with `Elsa.Maps.Generator -- all` after ticking this file; stage only the files whose content really changed (CRLF caveat)
 
 ## Dependencies

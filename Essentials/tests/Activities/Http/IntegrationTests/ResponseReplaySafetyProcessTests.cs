@@ -1150,7 +1150,7 @@ public sealed class ResponseReplaySafetyProcessTests
     }
 
     /// <summary>
-    /// Reviewed allowance for spec 254 (#3050): the frozen baseline predates WriteHttpResponse.Body becoming a JSON value.
+    /// Reviewed allowance for spec 256 (#3050): the frozen baseline predates WriteHttpResponse.Body becoming a JSON value.
     /// Only its <c>String</c> Body type is upgraded to the current contract; any other difference still fails.
     /// </summary>
     private static void ApplyStructuredBodyContractChange(JsonObject artifact)
