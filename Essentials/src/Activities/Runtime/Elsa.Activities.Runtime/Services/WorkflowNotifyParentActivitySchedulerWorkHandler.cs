@@ -162,7 +162,9 @@ public sealed class WorkflowNotifyParentActivitySchedulerWorkHandler : RuntimeSc
                     payload.NotifyingChildExecutableNodeId,
                     payload.Code,
                     payload.NotifyingChildIterationId,
-                    payload.Payload);
+                    payload.Payload,
+                    payload.ViaChildActivityExecutionId,
+                    payload.ViaChildExecutableNodeId);
 
                 continuation = await notificationHandler.OnChildNotifiedAsync(context, notifiedContext);
 

@@ -177,6 +177,11 @@ public sealed class SimpleActivityExecutionContext(
         _ancestorNotificationRequests.Add(new RuntimeAncestorNotificationRequest(ancestorConsumerKey, code, payload));
     }
 
+    public void RequestAncestorNotification(RuntimeAncestorSelector selector, string code, JsonElement? payload = null)
+    {
+        _ancestorNotificationRequests.Add(new RuntimeAncestorNotificationRequest(selector, code, payload));
+    }
+
     public IReadOnlyCollection<RuntimeAncestorNotificationRequest> GetAncestorNotificationRequests() =>
         _ancestorNotificationRequests.ToArray();
 
