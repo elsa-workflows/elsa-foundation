@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-20
 
-**Status**: Approved — root reviewed the source-backed eligibility, label and geometry boundaries on 2026-10-20; implementation and verification remain pending.
+**Status**: Implemented
 
 **Input**: User description: "#3072: make Studio authoring actions truthful and consistent across workflow and activity authoring while preserving existing action eligibility and lifecycle behavior."
 

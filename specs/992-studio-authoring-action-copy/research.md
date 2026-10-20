@@ -62,7 +62,7 @@ All source pointers below refer to revision 3255701dcd9ed231d718aea0945dc3a6332c
 
 ## Validation baseline provenance
 
-Root reports a pre-change Workflows client Vitest baseline at source revision 3255701dcd9ed231d718aea0945dc3a6332c3866: 2124 passed across 167 files, zero skips, 56.74 seconds. The external execution log is [/Users/sipke/Documents/Codex/2026-10-19/studio-ux-audit/execution/3072-unit-baseline.log](/Users/sipke/Documents/Codex/2026-10-19/studio-ux-audit/execution/3072-unit-baseline.log). This is a unit-suite baseline only. New copy regressions, actual conditional-status geometry, themes, and the expanded browser matrix remain unmeasured and must be verified by root before delivery.
+Root reports a pre-change Workflows client Vitest baseline at source revision 3255701dcd9ed231d718aea0945dc3a6332c3866: 2124 passed across 167 files, zero skips, 56.74 seconds. The external execution log is [/Users/sipke/Documents/Codex/2026-10-19/studio-ux-audit/execution/3072-unit-baseline.log](/Users/sipke/Documents/Codex/2026-10-19/studio-ux-audit/execution/3072-unit-baseline.log). This unit baseline preceded the new copy regressions and conditional-status geometry; the completed local qualification is recorded below.
 
 
 
@@ -82,3 +82,10 @@ Move the existing workflow result node into a separate full-width action row aft
 Give the Activity publication entry a stable footprint sized for the measured longest continuation label and a reserved single-line status area. Top-align its authoring actions and wrap the graph toolbar's Back/header composition at the existing narrow breakpoint. Keep publication phase text and primary actions fully visible. These are scoped presentation changes; tests must still verify all measured states, permissions, exact identities and action callbacks. Root received an independent read-only layout proposal and owns final implementation, visual review and QA.
 
 The copy-only checkpoint passes all 134 tests in the seven targeted files. Root reconciled existing module/browser expectations only where they select the renamed transient test or workflow review entry; published Executable Run and its Run workflow dialog retain their existing labels and behavior.
+
+
+## Completed local qualification
+
+On the tree integrating main e656cc6042fd86d15d61c7278d846222054eb535, all 2133 Workflows tests across 167 files pass (nine cases added to the original 2124 baseline). Canonical workspace types/lint and the Workflows build/bundle budgets pass; lint retains 48 existing warnings and zero errors. All 63 targeted Chromium journeys pass with zero skips or flaky cases. The sixteen expanded geometry cases measure zero x/y movement of primary actions across the recorded status states at 320/768/1024/1440 in light and dark. The Activity matrix includes queued/saving/failed/retried saves and preparing/failed/ready publication review; workflow covers thirty save/result combinations per width/theme, full status text and natural Tab/Enter access to details. Root reviewed eight 320/1440 light/dark workflow/Activity screenshots. Fixture-only controls are outside the product surface.
+
+Locked architecture restore, all 578 architecture tests with zero skips and the dependency-map check pass. No documentation-map refresh is required or committed. These results establish local qualification only. The terminal lifecycle marker is included in the implementation PR as required by spec-lifecycle.md and becomes true on merge; independent review, exact-head hosted checks, resulting-main qualification and the composed Workbench checkpoint remain separate delivery gates.

@@ -190,7 +190,11 @@ for (const theme of ["light", "dark"]) {
         if (state) {
           await expect(status).toBeVisible();
           await expect(status).toHaveText(state === "rejected" ? /Test Run rejected/ : state === "incidents" ? /Test Run accepted with incidents/ : state === "runtime-issue" ? /Test Run accepted with a runtime issue/ : state === "stale" ? /Earlier draft · Test Run dispatched/ : /Test Run dispatched/);
-          await status.focus();
+          await toolbar.locator(".wf-run-button").focus();
+          await page.keyboard.press("Tab");
+          await expect(toolbar.getByRole("button", { name: "More workflow actions" })).toBeFocused();
+          await page.keyboard.press("Tab");
+          await expect(status).toBeFocused();
           await status.press("Enter");
           await expect(page.getByText("Selected action: Runtime details", { exact: true })).toBeVisible();
         } else await expect(status).toHaveCount(0);
@@ -199,6 +203,7 @@ for (const theme of ["light", "dark"]) {
           await expect(toolbar.locator(".wf-editor-save-status")).toHaveText(saveStatus);
           const boxes = await Promise.all(actions.map(action => action.boundingBox()));
           observations.push({ state, saveStatus, boxes });
+          if (state === "stale" && saveStatus === "") await page.screenshot({ path: testInfo.outputPath("workflow-authoring-toolbar.png"), fullPage: true });
           for (let index = 0; index < actions.length; index++) {
             await expect(actions[index]).toBeVisible();
             expect(boxes[index]!.x).toBeGreaterThanOrEqual(0);

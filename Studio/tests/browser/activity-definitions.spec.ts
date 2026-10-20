@@ -745,6 +745,7 @@ for (const theme of ["light", "dark"]) {
       await expect(actions[0]).toHaveText("Continue publication review");
       await expect(toolbar.getByRole("status")).toBeVisible();
       observations.push({ state: "review", boxes: await Promise.all(actions.map(action => action.boundingBox())) });
+      await page.screenshot({ path: testInfo.outputPath("activity-authoring-toolbar.png"), fullPage: true });
       await testInfo.attach("activity-publication-geometry", { body: JSON.stringify({ initial, observations }), contentType: "application/json" });
       expect(state.publicationWrites).toBe(0);
       for (const action of actions) await expect(action).toBeVisible();
