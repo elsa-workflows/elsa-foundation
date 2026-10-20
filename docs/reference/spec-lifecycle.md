@@ -50,6 +50,11 @@ spec sitting in a non-terminal status after its work has merged as a bug in the 
 that merges the implementation is the PR that sets `**Status**: Implemented`. The PR that lands a
 replacement sets the old spec to `Superseded` and names the successor.
 
+Set the terminal status before that PR merges, in its own diff: the status becomes true the moment
+the PR merges. Do not leave `In progress` until after the merge, and never open a separate PR only
+to change a status line. Such a PR also rewrites the generated spec-status map, so it conflicts with
+nearly every other merge while it waits.
+
 This is the whole policy. Everything else here is vocabulary in service of it.
 
 Where a spec's outcome was a decision not to build — a refuted hypothesis, a kill verdict — use

@@ -18,6 +18,7 @@ Every PR carries this evidence. It is what a reviewer checks, not permission to 
 - The architecture guard passes: run `bash tools/architecture/restore-ci-project-graph.sh`, then `dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj`.
 - The generated-maps check passes: `dotnet run --project tools/maps/Elsa.Maps.Generator -- check`. See [Generated maps](generated-maps.md).
 - When a `ProjectReference` changed, `dotnet restore Elsa.Server.slnx --locked-mode` passes.
+- A PR that finishes a spec sets its `**Status**:` to `Implemented` (or `Superseded`/`Abandoned`) in the same PR, with the regenerated spec-status map, per the [transition rule](../reference/spec-lifecycle.md#transition-rule). There is no follow-up status PR.
 - A diff review is done, and a revert or mutation bite-proof shows red then green wherever a behavioral change is claimed.
 - The evidence is posted as a PR comment, because that comment is the notification of record.
 
