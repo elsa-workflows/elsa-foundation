@@ -32,22 +32,26 @@ function api(calls: unknown[][]): StudioEndpointContext {
     baseUrl: "https://server.example",
     http: {
       requestJson: vi.fn(),
-      getJson: vi.fn(async (url: string) => {
+      getJson: async <T,>(url: string): Promise<T> => {
         calls.push(["get", url]);
-        return url.includes("descriptors") ? { types: [], stores: [] } : { items: [], totalCount: 0 };
-      }),
-      postJson: vi.fn(async (url: string, body: unknown) => {
+        const response: unknown = url.includes("descriptors") ? { types: [], stores: [] } : { items: [], totalCount: 0 };
+        return response as T;
+      },
+      postJson: async <T,>(url: string, body: unknown): Promise<T> => {
         calls.push(["post", url, body]);
-        return url.includes("picker") ? { items: [], canCreateInline: true } : {};
-      }),
-      putJson: vi.fn(async (url: string, body: unknown) => {
+        const response: unknown = url.includes("picker") ? { items: [], canCreateInline: true } : {};
+        return response as T;
+      },
+      putJson: async <T,>(url: string, body: unknown): Promise<T> => {
         calls.push(["put", url, body]);
-        return {};
-      }),
-      deleteJson: vi.fn(async (url: string) => {
+        const response: unknown = {};
+        return response as T;
+      },
+      deleteJson: async <T,>(url: string): Promise<T> => {
         calls.push(["delete", url]);
-        return {};
-      }),
+        const response: unknown = {};
+        return response as T;
+      },
       postForm: vi.fn()
     }
   };

@@ -355,6 +355,9 @@ importers:
       '@elsa-workflows/studio-sdk':
         specifier: workspace:*
         version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioSdk
+      '@elsa-workflows/studio-ui':
+        specifier: workspace:*
+        version: link:../../../../../Studio/src/apps/Elsa.Studio.Web/StudioUi
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@19.2.7)
