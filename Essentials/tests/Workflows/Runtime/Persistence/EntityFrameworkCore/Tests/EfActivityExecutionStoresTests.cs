@@ -64,6 +64,33 @@ public sealed class EfActivityExecutionStoresTests
     }
 
     [Fact]
+    public async Task Inspection_summary_page_scopes_count_items_and_cursor_to_one_workflow()
+    {
+        await using var fixture = await Fixture.CreateAsync("tenant-a");
+        await fixture.Inspection.SaveAsync(Projection("wf", "a", 1, "a"));
+        await fixture.Inspection.SaveAsync(Projection("wf", "b", 1, "b"));
+        await fixture.Inspection.SaveAsync(Projection("other-wf", "a", 1, "a"));
+        var foreignScope = new EfActivityExecutionInspectionStore(fixture.Context, new Accessor("tenant-b"), fixture.RecoveryContinuationCodec);
+        await foreignScope.SaveAsync(Projection("wf", "a", 1, "a"));
+
+        var first = await fixture.Inspection.ListSummariesPageAsync(new ActivityExecutionInspectionSummaryPageQuery("wf", 1));
+        Assert.Equal(2, first.TotalCount);
+        Assert.Equal(["a"], ActivityIds(first));
+        var cursor = Assert.IsType<string>(first.NextContinuationToken);
+        var second = await fixture.Inspection.ListSummariesPageAsync(new ActivityExecutionInspectionSummaryPageQuery("wf", 1, cursor));
+        Assert.Equal(2, second.TotalCount);
+        Assert.Equal(["b"], ActivityIds(second));
+        Assert.Null(second.NextContinuationToken);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Inspection.ListSummariesPageAsync(
+            new ActivityExecutionInspectionSummaryPageQuery("other-wf", 1, cursor)).AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => foreignScope.ListSummariesPageAsync(
+            new ActivityExecutionInspectionSummaryPageQuery("wf", 1, cursor)).AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => fixture.Inspection.ListSummariesPageAsync(
+            new ActivityExecutionInspectionSummaryPageQuery("wf", 1, cursor + "tampered")).AsTask());
+    }
+
+    [Fact]
     public async Task Inspection_summary_page_keeps_empty_view_consistent_when_a_row_is_inserted()
     {
         await using var fixture = await InspectionPageRaceFixture.CreateAsync("tenant-inspection-page-empty", "wf-inspection-page-empty");
@@ -218,8 +245,9 @@ public sealed class EfActivityExecutionStoresTests
         var store = fixture.CreateStore(context);
         using var transaction = new System.Transactions.TransactionScope(System.Transactions.TransactionScopeAsyncFlowOption.Enabled);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => store.ListSummariesPageAsync(
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => store.ListSummariesPageAsync(
             new ActivityExecutionInspectionSummaryPageQuery(fixture.WorkflowExecutionId)).AsTask());
+        Assert.Contains("ambient or externally enlisted", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1119,14 +1147,16 @@ public sealed class EfActivityExecutionStoresTests
         public EfActivityExecutionHierarchyStore Hierarchy { get; }
         public RuntimeDbContext Context => context;
         public IActivityExecutionHierarchyCursorCodec HierarchyCursorCodec { get; }
+        public IRuntimeRecoveryContinuationCodec RecoveryContinuationCodec { get; }
 
         private Fixture(SqliteConnection connection, RuntimeDbContext context, Accessor accessor)
         {
             this.connection = connection;
             this.context = context;
             this.accessor = accessor;
-            State = new EfActivityExecutionStateStore(context, accessor, new HmacRuntimeRecoveryContinuationCodec(Microsoft.Extensions.Options.Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "ef-r07-r09-test-signing-key-32-bytes" })));
-            Inspection = new EfActivityExecutionInspectionStore(context, accessor, new HmacRuntimeRecoveryContinuationCodec(Microsoft.Extensions.Options.Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "ef-r07-r09-test-signing-key-32-bytes" })));
+            RecoveryContinuationCodec = new HmacRuntimeRecoveryContinuationCodec(Microsoft.Extensions.Options.Options.Create(new RuntimeRecoveryContinuationOptions { SigningKey = "ef-r07-r09-test-signing-key-32-bytes" }));
+            State = new EfActivityExecutionStateStore(context, accessor, RecoveryContinuationCodec);
+            Inspection = new EfActivityExecutionInspectionStore(context, accessor, RecoveryContinuationCodec);
             HierarchyCursorCodec = new Elsa.Workflows.Runtime.Services.ActivityExecutions.HmacActivityExecutionHierarchyCursorCodec(Microsoft.Extensions.Options.Options.Create(new Elsa.Workflows.Runtime.Services.ActivityExecutions.ActivityExecutionHierarchyCursorOptions { SigningKey = "ef-r07-r09-test-hierarchy-signing-key-32-bytes" }));
             Hierarchy = new EfActivityExecutionHierarchyStore(context, accessor, HierarchyCursorCodec);
         }
