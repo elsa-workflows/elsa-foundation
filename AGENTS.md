@@ -29,7 +29,7 @@ Use the narrowest source that answers the task.
 | Repo contributor notes: claim detail, PR gate evidence, generated maps, task paths, review checklist | `docs/contributing/` |
 | Personal workflow/model preferences | `.agent-prefs/` for local selections; `docs/reference/` for committed catalogs/templates |
 | Shared backlog, program-goal bucket registry, stewardship, active objectives, roadmap notes | `docs/program-goals/` |
-| Repo navigation, extension points, dependency/test maps | `docs/maps/` and `EXTENSION_POINTS.md` |
+| Repo navigation, extension points, dependency/test maps | [docs/maps/README.md](docs/maps/README.md) (the generated maps are published on the [`generated-maps` branch](https://github.com/elsa-workflows/elsa-foundation/tree/generated-maps/docs/maps)) and `EXTENSION_POINTS.md` |
 | Current gaps, draft decisions, draft history, inventory findings | `docs/reports/` |
 | Feature/work-unit specifications | `specs/` ([lifecycle and numbering](docs/reference/spec-lifecycle.md)) |
 | AI-provider-specific adapters | `.claude/`, `.specify/integrations/`, and provider shim files |
@@ -73,7 +73,7 @@ Comment on the program issue at every state transition. Every PR carries this re
 
 ## Refresh generated maps
 
-`dotnet run --project tools/maps/Elsa.Maps.Generator -- check` is the only authoritative freshness answer, and `-- all` refreshes every map. Refreshing is a deliberate act; afterwards stage every changed map by explicit path, `docs/maps/manifest.json` included. See [Generated maps](docs/contributing/generated-maps.md).
+The documentation maps are not committed to `main`. Generate them locally with `dotnet run --project tools/maps/Elsa.Maps.Generator -- all` (same paths, git-ignored), or read the set CI publishes after each merge: browse <https://github.com/elsa-workflows/elsa-foundation/tree/generated-maps/docs/maps>, fetch raw files from `https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/generated-maps/docs/maps/<file>`, or run `git fetch origin generated-maps` and `git show origin/generated-maps:docs/maps/<file>`. `-- check` guards only the committed `docs/maps/dependency-map.json`; commit it and the solution filters only when they change. See [Generated maps](docs/contributing/generated-maps.md).
 
 ## Personal operating preferences
 
@@ -94,7 +94,7 @@ Maintainers publish organization-repository branches and contributors use fork P
 
 ## Constitution boundary
 
-Both constitutions are ratified at the document level (2026-08-08; now framework v6.1.0 and Elsa v6.0.2, after #2578 and #2591); sections marked draft or provisional, framework §2.24 and Elsa §E2.8 activity versioning, Model X and §E2.9, are excluded from that ratification. Warn users when a section's draft or provisional status matters to their task, and route unratified material through [Constitution Readiness](docs/program-goals/constitution-readiness.md). Draft history: [docs/reports/archive/constitution-draft-history.md](docs/reports/archive/constitution-draft-history.md); current gaps: [docs/reports/knowledge-inventory.md](docs/reports/knowledge-inventory.md) and [docs/reports/unfinished-work.md](docs/reports/unfinished-work.md).
+Both constitutions are ratified at the document level (2026-08-08; now framework v6.1.0 and Elsa v6.0.3, after #2578, #2591 and spec 257); sections marked draft or provisional, framework §2.24 and Elsa §E2.8 activity versioning, Model X and §E2.9, are excluded from that ratification. Warn users when a section's draft or provisional status matters to their task, and route unratified material through [Constitution Readiness](docs/program-goals/constitution-readiness.md). Draft history: [docs/reports/archive/constitution-draft-history.md](docs/reports/archive/constitution-draft-history.md); current gaps: [docs/reports/knowledge-inventory.md](docs/reports/knowledge-inventory.md) and [docs/reports/unfinished-work.md](docs/reports/unfinished-work.md).
 
 New work moves toward this rule: constitution for gates and governance, glossary for meanings, skills for executable workflows, maps and catalogs for navigation and generated facts, reports for current findings and unfinished work.
 

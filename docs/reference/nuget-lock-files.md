@@ -10,9 +10,10 @@ with its version and content hash, and every project its references reach. Two t
   `NU1004` when a lock file no longer matches its project: a version changed in `Directory.Packages.props`, a pin added
   or removed, a `PackageReference` or `ProjectReference` added or removed. A dependency change therefore lands only as a
   reviewed lock-file diff, and a version the feed has since removed fails the restore rather than resolving to another.
-- **Generating and checking the maps needs no restore.** The dependency map's pinned-transitive edges
+- **Generating and checking the dependency map needs no restore.** Its pinned-transitive edges
   ([spec 149](../../specs/149-canonical-dependency-map/spec.md) FR-012) are read from each packable project's lock file,
-  so `dotnet run --project tools/maps/Elsa.Maps.Generator -- check` is a scan of the checkout alone.
+  so `dotnet run --project tools/maps/Elsa.Maps.Generator -- check`, which compares the committed
+  `docs/maps/dependency-map.json`, is a scan of the checkout alone.
 
 ## Updating lock files on a package bump
 
@@ -28,9 +29,9 @@ with its version and content hash, and every project its references reach. Two t
    untouched.
 3. Review the `packages.lock.json` diffs and commit them with the change. They name every project the change reaches,
    test projects and transitive packages included.
-4. Regenerate the maps, `dotnet run --project tools/maps/Elsa.Maps.Generator -- all`: a pin moving moves the dependency
-   map's edges to it. The generator refuses a lock file the tree has moved past, naming the project, so running it
-   before step 2 says what to do.
+4. Regenerate the dependency map, `dotnet run --project tools/maps/Elsa.Maps.Generator -- dependency-map`, and commit
+   `docs/maps/dependency-map.json`: a pin moving moves its edges. The generator refuses a lock file the tree has moved
+   past, naming the project, so running it before step 2 says what to do.
 
 A plain restore leaves a lock file that still matches its project as it is. `dotnet restore Elsa.Server.slnx
 --force-evaluate` resolves every project afresh and rewrites every lock file; it is for deliberately taking whatever

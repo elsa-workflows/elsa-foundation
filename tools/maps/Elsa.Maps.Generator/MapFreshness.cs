@@ -1,25 +1,25 @@
 namespace Elsa.Maps.Generator;
 
 /// <summary>
-/// Reports whether the committed maps still describe the tree.
+/// Reports whether the committed dependency-map dataset still describes the tree.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The check regenerates every map into a scratch directory and compares the bytes with what is
-/// committed. It deliberately does <b>not</b> gate on any fingerprint over the inputs: that would change
-/// on every source edit, obliging every code PR to regenerate and commit thirteen map files even though
-/// most source edits change no map at all. Comparing outputs asks the question that actually matters —
-/// are the committed maps still true? — and stays quiet otherwise. That is also why the manifest carries
-/// no input fingerprint any more.
+/// Only <c>docs/maps/dependency-map.json</c> is committed: the versioning calculator reads it from each commit's
+/// tree, so it has to be true at every commit. The documentation maps, their manifest and the findings reports are
+/// not committed (spec 257). They are generated locally with <c>-- all</c> and published by CI after each merge, so
+/// there is nothing of theirs to hold fresh, and committing them made concurrent PRs conflict.
 /// </para>
 /// <para>
-/// It exists because the committed maps went three projects stale and carried 25 corrupted rows with
-/// nothing objecting. Generation itself stays manually initiated; this only reports.
+/// The check regenerates the dataset into a scratch directory and compares the bytes with what is committed. It
+/// deliberately does <b>not</b> gate on a fingerprint over the inputs, which would move on every source edit; most
+/// source edits change no project-graph fact, and comparing outputs stays quiet for them. The solution filters have
+/// their own check, <c>solution-filters-check</c>.
 /// </para>
 /// </remarks>
 public static class MapFreshness
 {
-    /// <summary>Returns 0 when the committed maps match freshly generated ones, 1 otherwise.</summary>
+    /// <summary>Returns 0 when the committed dataset matches a freshly generated one, 1 otherwise.</summary>
     public static int Check(RepoContext repo)
     {
         var scratch = Path.Combine(Path.GetTempPath(), $"elsa-maps-check-{Environment.ProcessId}");
@@ -29,38 +29,26 @@ public static class MapFreshness
             Directory.CreateDirectory(scratch);
             MarkdownTable.Redirect = (repo.Root, scratch);
 
-            var projects = ProjectGraph.Read(repo);
-            var generated = new List<string>();
-            generated.AddRange(DependencyMap.Generate(repo, projects));
-            generated.AddRange(CoreMapsGenerator.Generate(repo, projects));
-            generated.AddRange(DomainMapGenerator.Generate(repo, projects));
-            generated.AddRange(ExtensionPointMapGenerator.Generate(repo, projects));
-            generated.AddRange(ArchitectureReferenceMapGenerator.Generate(repo, projects));
-            generated.AddRange(FeatureDependencyMapGenerator.Generate(repo, projects));
-
-            // manifest.json is compared like every other generated file. It used to be excluded, because it
-            // carried git metadata and an input fingerprint that moved on every commit; those fields are
-            // gone, so what is left is a description of the tree and is worth holding to the same bar.
-            var stale = generated
+            var stale = DependencyMap.Generate(repo, ProjectGraph.Read(repo))
                 .Where(path => !SameBytes(Path.Combine(repo.Root, path), Path.Combine(scratch, path)))
                 .Order(StringComparer.Ordinal)
                 .ToArray();
 
             if (stale.Length == 0)
             {
-                Console.WriteLine("Generated maps still describe the tree.");
+                Console.WriteLine("The committed dependency map still describes the tree.");
                 return 0;
             }
 
             Console.Error.WriteLine(
                 $"""
-                 Generated maps no longer describe the tree. {stale.Length} file(s) would change:
+                 The committed dependency map no longer describes the tree. {stale.Length} file(s) would change:
 
                  {string.Join(Environment.NewLine, stale.Select(path => "  " + path))}
 
-                 Refresh them and commit the result:
+                 Refresh it and commit the result:
 
-                   dotnet run --project tools/maps/Elsa.Maps.Generator -- all
+                   dotnet run --project tools/maps/Elsa.Maps.Generator -- dependency-map
                  """);
             return 1;
         }
