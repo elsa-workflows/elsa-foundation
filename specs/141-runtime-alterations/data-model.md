@@ -266,8 +266,10 @@ Rules:
 
 The source transitions to `Superseded`; the replacement retains pinned inputs and records lineage.
 It is a fresh invocation: it keeps the source's metadata except the per-invocation runtime markers
-(activation claims, parent-completion and parent-outcome markers, background work id, incident,
-fault and causation metadata), so its structural parent receives its outcome as a new child outcome.
+(activation claims, the attempt-ordinal watermark, parent-completion, parent-outcome and
+descendant-fault markers, background work id, incident, fault and causation metadata). It keeps the
+scheduling metadata the parent gave the source, and its schedule command carries that metadata, so the
+parent receives and routes its outcome as a new child outcome.
 
 ### Migrate/1
 

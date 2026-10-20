@@ -125,6 +125,20 @@ internal static class ActivitySuccessorStaging
         RuntimeMetadataKeys.BackgroundActivityWorkId
     ];
 
+    /// <summary>The successor's scheduling command metadata, rebuilt from its durable scheduling provenance.</summary>
+    // The source's own schedule command is gone, so its successor's command is rebuilt from the durable scheduling
+    // provenance, the way an ordinary child schedule carries the parent's request metadata. A structural parent reads
+    // its routing data from the child's command metadata, so this is what lets it receive the successor's outcome as
+    // an ordinary child outcome. Routing data a parent kept only in its command metadata is not durable and is lost.
+    public static Dictionary<string, string> SchedulingMetadata(ActivityExecutionState successor)
+    {
+        var metadata = successor.Provenance.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        if (successor.ParentActivityExecutionId is { } parentActivityExecutionId)
+            metadata[RuntimeMetadataKeys.ParentActivityExecutionId] = parentActivityExecutionId;
+        metadata[RuntimeMetadataKeys.ChildExecutableNodeId] = successor.Execution.ExecutableNodeId;
+        return metadata;
+    }
+
     /// <summary>
     /// The post-commit intent that starts (or schedules) the successor once the alteration checkpoint lands. Its command
     /// metadata names the alteration; <paramref name="schedulingMetadata"/>, when given, is laid underneath it.

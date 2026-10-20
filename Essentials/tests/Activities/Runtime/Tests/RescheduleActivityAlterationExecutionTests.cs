@@ -19,7 +19,8 @@ namespace Elsa.Activities.Runtime.Tests;
 /// <summary>
 /// <c>RescheduleActivity/1</c> end to end: a faulted leaf whose fault its structural parent already absorbed (the
 /// incident is resolved, the parent deferred and keeps running) is rescheduled through a submitted alteration plan, and
-/// the parent receives the successor's completion as an ordinary child completion.
+/// the parent receives the successor's completion as an ordinary child completion, with the scheduling metadata it gave
+/// the source.
 /// </summary>
 public sealed class RescheduleActivityAlterationExecutionTests
 {
@@ -47,6 +48,9 @@ public sealed class RescheduleActivityAlterationExecutionTests
         Assert.Equal(source.Execution.ActivityExecutionId, fault.ChildActivityExecutionId);
         var completion = Assert.Single(fixture.Log.Completions);
         Assert.Equal(successor.Execution.ActivityExecutionId, completion.ChildActivityExecutionId);
+        // The parent routes the successor's completion with the scheduling metadata it gave the source.
+        Assert.Equal("marker-node-f", successor.Provenance.Metadata[InterventionParentActivity.MarkerKey]);
+        Assert.Equal("marker-node-f", completion.Marker);
         run.AssertCompleted("node-parent");
         run.AssertWorkflowCompleted();
 
@@ -56,8 +60,9 @@ public sealed class RescheduleActivityAlterationExecutionTests
     }
 
     /// <summary>
-    /// Schedules its slot children; absorbs a child fault and defers, so the run keeps running with the faulted child's
-    /// incident resolved; records each child outcome it is told about and completes on a child completion.
+    /// Schedules its slot children with a marker in their scheduling metadata; absorbs a child fault and defers, so the
+    /// run keeps running with the faulted child's incident resolved; records each child outcome it is told about and, like
+    /// a parent that routes on its children's command metadata, completes only on a completion that carries a marker.
     /// </summary>
     public sealed class AbsorbingParentActivity(ChildEvaluationLog log) : StructuralActivity,
         IRuntimeStructuralActivity,
@@ -67,7 +72,10 @@ public sealed class RescheduleActivityAlterationExecutionTests
         public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
         {
             foreach (var child in Assert.Single(context.ExecutableNode.ChildSlots).Activities)
-                context.ScheduleChildActivity(child.ExecutableNodeId, context.ActivityExecutionState.InvocationId);
+                context.ScheduleChildActivity(
+                    child.ExecutableNodeId,
+                    context.ActivityExecutionState.InvocationId,
+                    new Dictionary<string, string> { [InterventionParentActivity.MarkerKey] = $"marker-{child.ExecutableNodeId}" });
             return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
         }
 
@@ -85,8 +93,12 @@ public sealed class RescheduleActivityAlterationExecutionTests
 
         public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
         {
-            log.Add(new ChildCompletionEvaluation(context.CompletedChildActivityExecutionId, context.CompletedChildExecutableNodeId));
-            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+            var marker = ((IRuntimeActivityExecutionContext)context.ParentContext).SchedulerWorkItem.CommandMetadata
+                .GetValueOrDefault(InterventionParentActivity.MarkerKey);
+            log.Add(new ChildCompletionEvaluation(context.CompletedChildActivityExecutionId, context.CompletedChildExecutableNodeId, marker));
+            return ValueTask.FromResult(marker is null
+                ? RuntimeStructuralContinuation.Defer
+                : RuntimeStructuralContinuation.Complete());
         }
     }
 

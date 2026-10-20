@@ -34,10 +34,10 @@ Submitted through the existing alteration plan endpoints. It has the same author
 2. The source becomes `Superseded`, as in `RescheduleActivity`. A successor is created with:
    - the source's inputs, parent, scheduling activity execution id, branch, iteration and execution path;
    - the source's **scheduling cause**;
-   - the source's metadata without its per-invocation runtime markers (activation claims, parent-completion and parent-outcome markers, background work id, incident, fault and causation metadata), plus `runtime.supersedesActivityExecutionId` and `runtime.retryOfActivityExecutionId`.
+   - the source's metadata without its per-invocation runtime markers (activation claims, the attempt-ordinal watermark, parent-completion, parent-outcome and descendant-fault markers, background work id, incident, fault and causation metadata), plus `runtime.supersedesActivityExecutionId` and `runtime.retryOfActivityExecutionId`.
 3. The successor's schedule or start work item is enqueued as a post-commit intent.
 
-The successor's activity context resolves the same `OperationKey` and `TargetOperationKey` as the source, because the assigned keys travel in the copied metadata.
+The successor's activity context resolves the same `OperationKey` and `TargetOperationKey` as the source, because the handler writes the source's resolved keys into the successor's scheduling provenance metadata.
 
 ## Idempotency
 

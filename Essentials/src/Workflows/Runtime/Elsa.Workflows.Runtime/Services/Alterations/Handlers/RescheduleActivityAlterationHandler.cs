@@ -64,6 +64,7 @@ public sealed class RescheduleActivityAlterationHandler(
         var successorId = ActivitySuccessorStaging.SuccessorId(context, Slug, source);
         var scopeId = ActivitySuccessorStaging.SuccessorScopeId(successorId);
         var now = _timeProvider.GetUtcNow();
+        // The successor keeps the scheduling metadata its parent gave the source, so the parent still routes its outcome.
         var provenance = ActivitySchedulingProvenance.From(
             workflow.WorkflowExecutionId,
             source.ParentActivityExecutionId,
@@ -72,7 +73,8 @@ public sealed class RescheduleActivityAlterationHandler(
             source.IterationId,
             source.Provenance.ExecutionPathId,
             scopeId,
-            Reason);
+            Reason,
+            source.Provenance.Metadata);
         var successor = ActivitySuccessorStaging.NewSuccessor(
             source,
             sourceNode,
@@ -83,7 +85,7 @@ public sealed class RescheduleActivityAlterationHandler(
             now);
         var superseded = ActivitySuccessorStaging.Supersede(source, successorId, now);
 
-        var continuation = ActivitySuccessorStaging.NewContinuation(workflow, successor, context, now, Slug, Reason);
+        var continuation = ActivitySuccessorStaging.NewContinuation(workflow, successor, context, now, Slug, Reason, ActivitySuccessorStaging.SchedulingMetadata(successor));
         var supersession = await _supersessionPlanner.PlanAsync(workflow.WorkflowExecutionId, source, activities, now, cancellationToken);
         context.Staging.Stage(new ActivitySuccessorStaging.SupersessionStagedChange(
             $"runtime.alteration.reschedule:{superseded.Execution.ActivityExecutionId}",

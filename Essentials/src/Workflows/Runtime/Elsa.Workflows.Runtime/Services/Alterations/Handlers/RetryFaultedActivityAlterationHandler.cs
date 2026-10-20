@@ -113,7 +113,7 @@ public sealed class RetryFaultedActivityAlterationHandler(
             .Select(incident => ResolveRetriedIncident(incident, context, plan?.SubmittedBy.Subject, operatorReason, now))
             .ToArray();
 
-        var continuation = ActivitySuccessorStaging.NewContinuation(workflow, successor, context, now, Slug, Reason, SchedulingMetadata(successor));
+        var continuation = ActivitySuccessorStaging.NewContinuation(workflow, successor, context, now, Slug, Reason, ActivitySuccessorStaging.SchedulingMetadata(successor));
         var supersession = await _supersessionPlanner.PlanAsync(workflow.WorkflowExecutionId, source, activities, now, cancellationToken);
         context.Staging.Stage(new ActivitySuccessorStaging.SupersessionStagedChange(
             $"runtime.alteration.retry:{superseded.Execution.ActivityExecutionId}",
@@ -150,19 +150,6 @@ public sealed class RetryFaultedActivityAlterationHandler(
             scopeId,
             source.Provenance.SchedulingCause ?? Reason,
             metadata);
-    }
-
-    // The source's own schedule command is gone, so its successor's command is rebuilt from the durable scheduling
-    // provenance, the way an ordinary child schedule carries the parent's request metadata. A structural parent reads
-    // its routing data from the child's command metadata, so this is what lets it receive the successor's outcome as
-    // an ordinary child outcome. Routing data a parent kept only in its command metadata is not durable and is lost.
-    private static Dictionary<string, string> SchedulingMetadata(ActivityExecutionState successor)
-    {
-        var metadata = successor.Provenance.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
-        if (successor.ParentActivityExecutionId is { } parentActivityExecutionId)
-            metadata[RuntimeMetadataKeys.ParentActivityExecutionId] = parentActivityExecutionId;
-        metadata[RuntimeMetadataKeys.ChildExecutableNodeId] = successor.Execution.ExecutableNodeId;
-        return metadata;
     }
 
     private static Dictionary<string, string> NewMetadata(ActivityExecutionState source)
