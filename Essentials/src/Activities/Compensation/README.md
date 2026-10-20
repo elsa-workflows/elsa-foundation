@@ -15,7 +15,8 @@ While the scope is active, its journal of completed steps lives in its private s
 child evaluation; an entry is marked compensating in the same commit as its handler's schedule request, so a restart
 never runs a handler twice for one entry. The runtime clears structural private state when the scope completes; the
 forward and handler executions keep the scope's `compensation.*` scheduling metadata, which is the completed
-record.
+record. Completion and fault callbacks read that metadata from the child's committed scheduling provenance,
+so a bookmark resume uses the same scope/step identity as a synchronous child.
 
 Limits in this version: a handler fault stays a blocking incident and the run's incident strategy decides; workflow
 cancellation runs no handler; a fault inside a `Sequence` step does not reach the scope because `Sequence` does not

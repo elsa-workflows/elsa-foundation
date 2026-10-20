@@ -286,7 +286,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                             completedChildActivityExecutionId,
                             completedChildState.Execution.ExecutableNodeId,
                             ReadIncidentId(workItem),
-                            completedChildState.IterationId);
+                            completedChildState.IterationId,
+                            completedChildState.Provenance.Metadata);
 
                         continuation = await ((IRuntimeActivityChildFaultHandler)parentActivity).OnChildFaultedAsync(childFaultedContext);
                     }
@@ -298,7 +299,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                         completedChildActivityExecutionId,
                         completedChildState.Execution.ExecutableNodeId,
                         payload.OutcomeNames,
-                        completedChildState.IterationId);
+                        completedChildState.IterationId,
+                        completedChildState.Provenance.Metadata);
 
                     continuation = await ((IRuntimeActivityChildCompletionHandler)parentActivity).OnChildCompletedAsync(childCompletedContext);
                 }

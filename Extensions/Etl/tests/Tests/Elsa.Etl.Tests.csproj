@@ -21,6 +21,12 @@
     <ProjectReference Include="../../src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Locking/FileSystem/Elsa.Locking.FileSystem.csproj" />
+    <ProjectReference Include="../../../../Essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj" />
     <Using Include="Xunit" />
   </ItemGroup>
   <ItemGroup>

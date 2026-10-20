@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using Elsa.Activities.Runtime.Core.Contracts;
 
 namespace Elsa.Activities.Runtime.Core.Models;
@@ -16,8 +17,21 @@ public sealed class ActivityChildFaultedContext
         string faultedChildExecutableNodeId,
         string? incidentId = null,
         string? faultedChildIterationId = null)
+        : this(parentContext, faultedChildActivityExecutionId, faultedChildExecutableNodeId, incidentId,
+            faultedChildIterationId, FrozenDictionary<string, string>.Empty)
+    {
+    }
+
+    public ActivityChildFaultedContext(
+        IActivityExecutionContext parentContext,
+        string faultedChildActivityExecutionId,
+        string faultedChildExecutableNodeId,
+        string? incidentId,
+        string? faultedChildIterationId,
+        IReadOnlyDictionary<string, string> childSchedulingMetadata)
     {
         ArgumentNullException.ThrowIfNull(parentContext);
+        ArgumentNullException.ThrowIfNull(childSchedulingMetadata);
         ArgumentException.ThrowIfNullOrWhiteSpace(faultedChildActivityExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(faultedChildExecutableNodeId);
 
@@ -32,7 +46,14 @@ public sealed class ActivityChildFaultedContext
         FaultedChildExecutableNodeId = faultedChildExecutableNodeId;
         IncidentId = incidentId;
         FaultedChildIterationId = faultedChildIterationId;
+        ChildSchedulingMetadata = childSchedulingMetadata.ToFrozenDictionary(StringComparer.Ordinal);
     }
+
+    /// <summary>
+    /// Immutable metadata from the faulted child's committed scheduling provenance, independent of the
+    /// command that delivered its fault. Mirrors <see cref="ActivityChildCompletedContext.ChildSchedulingMetadata"/>.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> ChildSchedulingMetadata { get; }
 
     public IActivityExecutionContext ParentContext { get; }
     public string FaultedChildActivityExecutionId { get; }

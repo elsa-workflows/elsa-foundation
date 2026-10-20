@@ -113,7 +113,7 @@ public sealed class CompensationScope : StructuralActivity, IRuntimeStructuralAc
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
         var navigator = Navigator(runtimeContext);
         var state = LoadState(runtimeContext);
-        var metadata = runtimeContext.SchedulerWorkItem.CommandMetadata;
+        var metadata = context.ChildSchedulingMetadata;
 
         if (!IsOwnChild(runtimeContext, metadata))
             return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
@@ -136,7 +136,7 @@ public sealed class CompensationScope : StructuralActivity, IRuntimeStructuralAc
         var runtimeContext = RequireRuntimeContext(context.ParentContext);
         var navigator = Navigator(runtimeContext);
         var state = LoadState(runtimeContext);
-        var metadata = runtimeContext.SchedulerWorkItem.CommandMetadata;
+        var metadata = context.ChildSchedulingMetadata;
 
         var isRunningStep = IsOwnChild(runtimeContext, metadata)
                             && state.Phase == CompensationScopePhase.Running

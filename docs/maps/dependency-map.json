@@ -23068,6 +23068,21 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Activities.Compensation",
+          "path": "Essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Flowchart",
+          "path": "Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Sequence",
+          "path": "Essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Locking.FileSystem",
           "path": "Essentials/src/Locking/FileSystem/Elsa.Locking.FileSystem.csproj"
         },
@@ -23080,6 +23095,21 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime",
           "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore",
+          "path": "Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Resumption",
+          "path": "Essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Testing",
+          "path": "Essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj"
         },
         {
           "type": "internal",
