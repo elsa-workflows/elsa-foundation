@@ -17,6 +17,8 @@ internal sealed class EtlWorkerProcess(string root, string configurationPath, st
     public int ProcessId => _process.Id;
     public bool HasExited => !_started || _process.HasExited;
     public string AcceptancePath => EtlWorkerProtocol.AcceptancePath(root, role);
+    public string CommittedAcceptancePath => EtlWorkerProtocol.CommittedAcceptancePath(root, role);
+    public string ReservationPath => EtlWorkerProtocol.ReservationPath(root, role);
     public string ReleasePath => EtlWorkerProtocol.ReleasePath(root, role);
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
@@ -43,22 +45,35 @@ internal sealed class EtlWorkerProcess(string root, string configurationPath, st
     }
 
     public Task<EtlWorkerAcceptance> WaitForAcceptanceAsync(CancellationToken cancellationToken) =>
-        WaitForJournalAsync<EtlWorkerAcceptance>(AcceptancePath, cancellationToken);
+        WaitForJournalAsync<EtlWorkerAcceptance>(AcceptancePath, cancellationToken, CommittedAcceptancePath, ReservationPath);
+
+    public Task<EtlWorkerCommittedAcceptance> WaitForCommittedAcceptanceAsync(CancellationToken cancellationToken) =>
+        WaitForJournalAsync<EtlWorkerCommittedAcceptance>(CommittedAcceptancePath, cancellationToken, AcceptancePath, ReservationPath);
+
+    public Task<EtlWorkerReservation> WaitForReservationAsync(CancellationToken cancellationToken) =>
+        WaitForJournalAsync<EtlWorkerReservation>(ReservationPath, cancellationToken, AcceptancePath, CommittedAcceptancePath);
 
     public Task<EtlWorkerWrite> WaitForWriteAsync(CancellationToken cancellationToken) =>
-        WaitForJournalAsync<EtlWorkerWrite>(EtlWorkerProtocol.WritePath(root, role), cancellationToken, AcceptancePath);
+        WaitForJournalAsync<EtlWorkerWrite>(EtlWorkerProtocol.WritePath(root, role), cancellationToken,
+            AcceptancePath, CommittedAcceptancePath, ReservationPath);
 
     private async Task<T> WaitForJournalAsync<T>(string path, CancellationToken cancellationToken,
-        string? prematureAcceptancePath = null) where T : class
+        params string[] prematurePaths) where T : class
     {
-        while (!File.Exists(path))
+        while (true)
         {
+            var prematurePath = prematurePaths.FirstOrDefault(File.Exists);
+            if (prematurePath is not null)
+                throw new InvalidOperationException($"ETL worker {role} reached an unexpected journal barrier: {Path.GetFileName(prematurePath)}.");
+            if (File.Exists(path))
+                break;
             if (HasExited)
                 throw new InvalidOperationException($"ETL worker {role} exited before its journal barrier. {Output}");
-            if (prematureAcceptancePath is not null && File.Exists(prematureAcceptancePath))
-                throw new InvalidOperationException("The actual worker reached acceptance before its required staged-write barrier.");
             await Task.Delay(25, cancellationToken);
         }
+        var unexpectedPath = prematurePaths.FirstOrDefault(File.Exists);
+        if (unexpectedPath is not null)
+            throw new InvalidOperationException($"ETL worker {role} reached an unexpected journal barrier: {Path.GetFileName(unexpectedPath)}.");
         return JsonSerializer.Deserialize<T>(await File.ReadAllTextAsync(path, cancellationToken), EtlWorkerProtocol.JsonOptions)
             ?? throw new InvalidDataException("The fixture worker journal is empty.");
     }

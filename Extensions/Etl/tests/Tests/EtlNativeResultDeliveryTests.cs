@@ -37,20 +37,7 @@ public sealed class EtlNativeResultDeliveryTests
         await using var fixture = await EtlNativeTestFixture.CreateAsync();
         fixture.Dispatches.Respond = async (_, cancellationToken) =>
         {
-            await fixture.Bookmarks.DeleteAsync(fixture.Invocation.ResultAddress.WorkflowExecutionId,
-                fixture.Invocation.ResultAddress.BookmarkId, cancellationToken);
-            var activity = await fixture.Activities.FindAsync(fixture.Invocation.ResultAddress.WorkflowExecutionId,
-                fixture.Invocation.ResultAddress.ActivityExecutionId, cancellationToken)
-                ?? throw new InvalidOperationException("The fixture activity is missing.");
-            var completion = new RunEtlCompletion(EtlNativeBoundary.FormatVersion,
-                EtlRuntimeJson.WriteElement(fixture.Invocation), EtlRuntimeJson.WriteElement(fixture.Delivery.Result));
-            var type = EtlNativeBoundary.CompletionType;
-            var receipt = new ActivityTriggerDelivery(fixture.Delivery.DeliveryId,
-                fixture.Invocation.ResultAddress.RegistrationId, type,
-                ValueEnvelope.Inline(type, System.Text.Json.JsonSerializer.SerializeToElement(completion), ValueProtectionPolicy.InstanceInline),
-                fixture.Invocation.ResultAddress.ProviderId, EtlNativeTestFixture.Now, fixture.Delivery.DeliveryId,
-                ActivityTriggerDeliveryStatus.Consumed);
-            await fixture.Activities.SaveAsync(activity with { TriggerRegistrations = [], TriggerDeliveries = [receipt] }, cancellationToken);
+            await RecordConsumedReceiptAsync(fixture, cancellationToken: cancellationToken);
             return fixture.DispatchResult(BookmarkResumeDispatchStatus.Dispatched);
         };
 
@@ -60,6 +47,46 @@ public sealed class EtlNativeResultDeliveryTests
         Assert.Null((await fixture.ReadOutboxAsync()).Disposition);
         Assert.Equal(EtlStoreStatus.Applied, await fixture.Store.AcknowledgeDeliveryAsync(fixture.Delivery, disposition!.Value));
         Assert.NotNull((await fixture.ReadOutboxAsync()).AcknowledgedAtUtcTicks);
+    }
+
+    [Fact]
+    public async Task Preexisting_matching_consumed_receipt_proves_duplicate_delivery_without_dispatch()
+    {
+        await using var fixture = await EtlNativeTestFixture.CreateAsync();
+
+        // Seed the persisted ActivityTriggerDelivery shape at the adapter boundary; this does not run the native scheduler.
+        var receipt = await RecordConsumedReceiptAsync(fixture);
+        Assert.Equal(fixture.Delivery.DeliveryId, receipt.DeliveryId);
+        Assert.Equal(fixture.Invocation.ResultAddress.RegistrationId, receipt.RegistrationId);
+        Assert.Equal(fixture.Invocation.ResultAddress.ProviderId, receipt.ProviderId);
+        Assert.Equal(EtlNativeBoundary.CompletionType, receipt.PayloadType);
+        Assert.Equal(ActivityTriggerDeliveryStatus.Consumed, receipt.Status);
+
+        var disposition = await fixture.DeliverAsync();
+
+        Assert.Equal(EtlDeliveryDisposition.AlreadyConsumed, disposition);
+        Assert.Empty(fixture.Dispatches.Requests);
+        Assert.Equal(EtlStoreStatus.Applied,
+            await fixture.Store.AcknowledgeDeliveryAsync(fixture.Delivery, disposition!.Value));
+        var outbox = await fixture.ReadOutboxAsync();
+        Assert.Equal((int)EtlDeliveryDisposition.AlreadyConsumed, outbox.Disposition);
+        Assert.NotNull(outbox.AcknowledgedAtUtcTicks);
+    }
+
+    [Fact]
+    public async Task Preexisting_consumed_receipt_for_another_registration_leaves_delivery_owed()
+    {
+        await using var fixture = await EtlNativeTestFixture.CreateAsync();
+        var receipt = await RecordConsumedReceiptAsync(fixture, registrationId: "another-registration");
+        Assert.NotEqual(fixture.Invocation.ResultAddress.RegistrationId, receipt.RegistrationId);
+
+        var disposition = await fixture.DeliverAsync();
+
+        Assert.Null(disposition);
+        Assert.Empty(fixture.Dispatches.Requests);
+        var outbox = await fixture.ReadOutboxAsync();
+        Assert.Null(outbox.Disposition);
+        Assert.Null(outbox.AcknowledgedAtUtcTicks);
     }
 
     [Theory]
@@ -204,6 +231,24 @@ public sealed class EtlNativeResultDeliveryTests
             EtlNativeBoundary.Intent(conflictingInvocation, cancel: false, EtlNativeTestFixture.Now)));
         Assert.Equal(0, admission.Calls);
         Assert.Null((await fixture.ReadOutboxAsync()).Disposition);
+    }
+
+    private static async Task<ActivityTriggerDelivery> RecordConsumedReceiptAsync(EtlNativeTestFixture fixture,
+        string? registrationId = null, CancellationToken cancellationToken = default)
+    {
+        var address = fixture.Invocation.ResultAddress;
+        await fixture.Bookmarks.DeleteAsync(address.WorkflowExecutionId, address.BookmarkId, cancellationToken);
+        var activity = await fixture.Activities.FindAsync(address.WorkflowExecutionId, address.ActivityExecutionId, cancellationToken)
+            ?? throw new InvalidOperationException("The fixture activity is missing.");
+        var type = EtlNativeBoundary.CompletionType;
+        var completion = new RunEtlCompletion(EtlNativeBoundary.FormatVersion,
+            EtlRuntimeJson.WriteElement(fixture.Invocation), EtlRuntimeJson.WriteElement(fixture.Delivery.Result));
+        var receipt = new ActivityTriggerDelivery(fixture.Delivery.DeliveryId,
+            registrationId ?? address.RegistrationId, type,
+            ValueEnvelope.Inline(type, System.Text.Json.JsonSerializer.SerializeToElement(completion), ValueProtectionPolicy.InstanceInline),
+            address.ProviderId, EtlNativeTestFixture.Now, fixture.Delivery.DeliveryId, ActivityTriggerDeliveryStatus.Consumed);
+        await fixture.Activities.SaveAsync(activity with { TriggerRegistrations = [], TriggerDeliveries = [receipt] }, cancellationToken);
+        return receipt;
     }
 
     private sealed class NeverAdmissionService : IEtlRunAdmissionService

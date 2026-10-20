@@ -343,7 +343,8 @@ public sealed partial class EtlRuntimeJourneyTests
             AdmitAsync(host.Services, invocation, expected);
 
         public async Task<EtlWorkerProcess> StartWorkerAsync(string role, CancellationToken cancellationToken,
-            EtlWorkerWritePause writePause = EtlWorkerWritePause.None)
+            EtlWorkerWritePause writePause = EtlWorkerWritePause.None,
+            EtlWorkerStoreGate storeGate = EtlWorkerStoreGate.BeforeAcceptance)
         {
             EtlWorkerProtocol.ValidateRole(role);
             if (!_workerRoles.Add(role))
@@ -352,7 +353,7 @@ public sealed partial class EtlRuntimeJourneyTests
             var configurationPath = EtlWorkerProtocol.ConfigurationPath(_directory, role);
             var configuration = new EtlWorkerConfiguration(_directory, Scope,
                 [Binding("source", "Source", _source, "v1"), Binding("lookup", "Lookup", _lookup, "v1"),
-                    Binding("output", "MainOutput", OutputRoot, "v1"), Binding("errors", "ErrorOutput", ErrorRoot, "v1")], writePause);
+                    Binding("output", "MainOutput", OutputRoot, "v1"), Binding("errors", "ErrorOutput", ErrorRoot, "v1")], writePause, storeGate);
             await EtlWorkerProtocol.WriteConfigurationAsync(_directory, role, configuration, cancellationToken);
             var worker = new EtlWorkerProcess(_directory, configurationPath, role);
             _workers.Add(worker); // Retain ownership even when startup/readiness fails.

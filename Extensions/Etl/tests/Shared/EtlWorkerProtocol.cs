@@ -6,11 +6,16 @@ using Elsa.Etl.Runtime;
 namespace Elsa.Etl.Tests.Support;
 
 internal enum EtlWorkerWritePause { None, SourceSnapshot, OutputChunk }
+internal enum EtlWorkerStoreGate { BeforeAcceptance, BeforeReservation, AfterAcceptanceCommit }
 
 internal sealed record EtlWorkerConfiguration(string Root, EtlScope Scope, List<EtlHostFileBindingOptions> Bindings,
-    EtlWorkerWritePause WritePause = EtlWorkerWritePause.None);
+    EtlWorkerWritePause WritePause = EtlWorkerWritePause.None,
+    EtlWorkerStoreGate StoreGate = EtlWorkerStoreGate.BeforeAcceptance);
 
 internal sealed record EtlWorkerAcceptance(EtlPartitionLease Lease, EtlBatchAcceptance Acceptance, int ProcessId);
+internal sealed record EtlWorkerCommittedAcceptance(EtlPartitionLease Lease, EtlBatchAcceptance Acceptance,
+    EtlAcceptanceResult Result, int ProcessId);
+internal sealed record EtlWorkerReservation(EtlPartitionLease Lease, EtlBatchDescriptor Batch, int ProcessId);
 
 internal sealed record EtlWorkerWrite(string OutputRoot, string EffectIdentity, string Extension,
     int PrefixBytes, int WriteBytes, int ProcessId);
@@ -33,6 +38,18 @@ internal static class EtlWorkerProtocol
     {
         ValidateRole(role);
         return Path.Combine(JournalDirectory(root), $"{role}.acceptance.json");
+    }
+
+    public static string CommittedAcceptancePath(string root, string role)
+    {
+        ValidateRole(role);
+        return Path.Combine(JournalDirectory(root), $"{role}.committed-acceptance.json");
+    }
+
+    public static string ReservationPath(string root, string role)
+    {
+        ValidateRole(role);
+        return Path.Combine(JournalDirectory(root), $"{role}.reservation.json");
     }
 
     public static string ReleasePath(string root, string role)
@@ -73,14 +90,17 @@ internal static class EtlWorkerProtocol
             ?? throw new InvalidDataException("The ETL worker configuration is empty.");
     }
 
-    public static async Task WriteAcceptanceAsync(string root, string role, EtlWorkerAcceptance acceptance,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(root);
-        ArgumentNullException.ThrowIfNull(acceptance);
-        Directory.CreateDirectory(JournalDirectory(root));
-        await WriteAtomicallyAsync(AcceptancePath(root, role), acceptance, overwrite: false, cancellationToken);
-    }
+    public static Task WriteAcceptanceAsync(string root, string role, EtlWorkerAcceptance acceptance,
+        CancellationToken cancellationToken = default) =>
+        WriteJournalAsync(root, AcceptancePath(root, role), acceptance, cancellationToken);
+
+    public static Task WriteCommittedAcceptanceAsync(string root, string role, EtlWorkerCommittedAcceptance acceptance,
+        CancellationToken cancellationToken = default) =>
+        WriteJournalAsync(root, CommittedAcceptancePath(root, role), acceptance, cancellationToken);
+
+    public static Task WriteReservationAsync(string root, string role, EtlWorkerReservation reservation,
+        CancellationToken cancellationToken = default) =>
+        WriteJournalAsync(root, ReservationPath(root, role), reservation, cancellationToken);
 
     public static Task WriteStagingAsync(string root, string role, EtlWorkerWrite write, CancellationToken cancellationToken) =>
         WriteAtomicallyAsync(WritePath(root, role), write, overwrite: false, cancellationToken);
@@ -108,5 +128,13 @@ internal static class EtlWorkerProtocol
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
         }
+    }
+
+    private static Task WriteJournalAsync<T>(string root, string path, T value, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(root);
+        ArgumentNullException.ThrowIfNull(value);
+        Directory.CreateDirectory(JournalDirectory(root));
+        return WriteAtomicallyAsync(path, value, overwrite: false, cancellationToken);
     }
 }

@@ -1,0 +1,9 @@
+# CI merge-graph restore integration
+
+CI run [39468605293](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39468605293) for branch head `51302776b4040f68477094cc832a3fdc9fd3ac15` failed at **Restore**, before backend tests. Generated maps passed; downstream tests/architecture/core/provider jobs were skipped, not passed.
+
+The checkout log identifies the tested tree exactly: `662cdb0b1bd5aae506e8ee1f39a1e8d5010b3448`, the temporary merge of that branch into newer main `e9a3d18aa25ab30e57e6c6a1afdf6dc7fb63fdc0`. That main includes native compensation M3, whose Compensation project gained a reference to `Elsa.Activities.Design.Core`. Its normal main lock updates could not include the ETL test project, which exists only in this feature branch. The merged ETL test graph therefore contains a project dependency absent from its branch lock entry, producing NU1004 for `elsa.activities.compensation`.
+
+Fresh forced-evaluation and isolated Release locked restores of the unmerged feature branch succeeded; the original local pass was valid for that tree. They do not validate GitHub's different temporary merge tree. This is an integration graph mismatch, not evidence of a runtime test failure or a cache-only causal diagnosis. Earlier backend run 39464916391 on b6cd was cancelled after new work; it is not green evidence.
+
+The repair scope is a normal merge of the landed main behavior into the existing ETL branch, followed by focused ETL lock evaluation, explicit dependency/version diff review, map/filter validation and affected runtime/native/compensation checks. No reference removal, relaxed locked restore, package-pin upgrade or workflow change is required. Integration claim [6297374624](https://github.com/elsa-workflows/elsa-foundation/issues/3109#issuecomment-6297374624) records ownership. Final executed repair checks and exact-head CI belong to the subsequent checkpoint receipt.

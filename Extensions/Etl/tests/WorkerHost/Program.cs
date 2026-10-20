@@ -18,6 +18,8 @@ EtlWorkerProtocol.ValidateRole(role);
 var configuration = await EtlWorkerProtocol.ReadConfigurationAsync(configurationPath);
 if (!Enum.IsDefined(configuration.WritePause))
     throw new InvalidDataException("Unsupported fixture write-pause stage.");
+if (!Enum.IsDefined(configuration.StoreGate))
+    throw new InvalidDataException("Unsupported fixture runtime-store gate.");
 ArgumentNullException.ThrowIfNull(configuration.Scope);
 ArgumentNullException.ThrowIfNull(configuration.Bindings);
 if (configuration.Bindings.Any(binding => binding.TenantId != configuration.Scope.TenantId ||
@@ -52,7 +54,7 @@ var persistence = new EtlRuntimeEntityFrameworkCoreFeature
 };
 persistence.ConfigureServices(builder.Services);
 builder.Services.Configure<EfMigrateOptions>(options => options.Policy = EfMigratePolicy.Validate);
-var acceptanceGate = new AcceptanceGate(root, role);
+var acceptanceGate = new AcceptanceGate(root, role, configuration.StoreGate);
 
 var storeDescriptor = builder.Services.LastOrDefault(descriptor => descriptor.ServiceType == typeof(IEtlRuntimeStore))
     ?? throw new InvalidOperationException("The ETL EF persistence feature did not register IEtlRuntimeStore.");
@@ -71,20 +73,47 @@ Console.WriteLine($"{EtlWorkerProtocol.ReadyPrefix}{Environment.ProcessId}");
 await host.WaitForShutdownAsync();
 return 0;
 
-internal sealed class AcceptanceGate(string root, string role)
+internal sealed class AcceptanceGate(string root, string role, EtlWorkerStoreGate storeGate)
 {
     private readonly TaskCompletionSource _markerPublication = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _publicationStarted;
 
-    public async Task WaitBeforeAcceptanceAsync(EtlPartitionLease lease, EtlBatchAcceptance acceptance,
+    public Task WaitBeforeAcceptanceAsync(EtlPartitionLease lease, EtlBatchAcceptance acceptance,
+        CancellationToken cancellationToken) =>
+        WaitAsync(EtlWorkerStoreGate.BeforeAcceptance,
+            token => EtlWorkerProtocol.WriteAcceptanceAsync(root, role,
+                new EtlWorkerAcceptance(lease, acceptance, Environment.ProcessId), token), cancellationToken);
+
+    public Task WaitBeforeReservationAsync(EtlPartitionLease lease, EtlBatchDescriptor batch,
+        CancellationToken cancellationToken) =>
+        WaitAsync(EtlWorkerStoreGate.BeforeReservation,
+            token => EtlWorkerProtocol.WriteReservationAsync(root, role,
+                new EtlWorkerReservation(lease, batch, Environment.ProcessId), token), cancellationToken);
+
+    public async Task WaitAfterAcceptanceCommitAsync(EtlPartitionLease lease, EtlBatchAcceptance acceptance,
+        EtlAcceptanceResult result, CancellationToken cancellationToken)
+    {
+        if (storeGate != EtlWorkerStoreGate.AfterAcceptanceCommit)
+            return;
+        if (result.Status != EtlStoreStatus.Applied)
+            throw new InvalidOperationException($"The after-acceptance fixture gate requires an Applied result, received {result.Status}.");
+
+        await WaitAsync(EtlWorkerStoreGate.AfterAcceptanceCommit,
+            token => EtlWorkerProtocol.WriteCommittedAcceptanceAsync(root, role,
+                new EtlWorkerCommittedAcceptance(lease, acceptance, result, Environment.ProcessId), token), cancellationToken);
+    }
+
+    private async Task WaitAsync(EtlWorkerStoreGate selectedStage, Func<CancellationToken, Task> publish,
         CancellationToken cancellationToken)
     {
+        if (storeGate != selectedStage)
+            return;
+
         if (Interlocked.CompareExchange(ref _publicationStarted, 1, 0) == 0)
         {
             try
             {
-                await EtlWorkerProtocol.WriteAcceptanceAsync(root, role,
-                    new EtlWorkerAcceptance(lease, acceptance, Environment.ProcessId), cancellationToken);
+                await publish(cancellationToken);
                 _markerPublication.TrySetResult();
             }
             catch (OperationCanceledException exception)
@@ -98,7 +127,11 @@ internal sealed class AcceptanceGate(string root, string role)
         }
 
         await _markerPublication.Task.WaitAsync(cancellationToken);
+        await WaitForReleaseAsync(cancellationToken);
+    }
 
+    private async Task WaitForReleaseAsync(CancellationToken cancellationToken)
+    {
         var releasePath = EtlWorkerProtocol.ReleasePath(root, role);
         while (!File.Exists(releasePath))
             await Task.Delay(TimeSpan.FromMilliseconds(25), cancellationToken);
@@ -112,6 +145,15 @@ internal sealed class AcceptanceGateStore(IEtlRuntimeStore inner, AcceptanceGate
         EtlBatchAcceptance acceptance, CancellationToken cancellationToken = default)
     {
         await gate.WaitBeforeAcceptanceAsync(lease, acceptance, cancellationToken);
-        return await Inner.AcceptBatchAsync(lease, acceptance, cancellationToken);
+        var result = await Inner.AcceptBatchAsync(lease, acceptance, cancellationToken);
+        await gate.WaitAfterAcceptanceCommitAsync(lease, acceptance, result, cancellationToken);
+        return result;
+    }
+
+    public override async ValueTask<EtlReservationResult> ReserveBatchAsync(EtlPartitionLease lease,
+        EtlBatchDescriptor batch, CancellationToken cancellationToken = default)
+    {
+        await gate.WaitBeforeReservationAsync(lease, batch, cancellationToken);
+        return await Inner.ReserveBatchAsync(lease, batch, cancellationToken);
     }
 }
