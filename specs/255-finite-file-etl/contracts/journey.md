@@ -1,0 +1,45 @@
+# First finite ETL contracts
+
+Version 1 is feature-owned and pre-GA, not a neutral execution-model API. Reject unsupported persisted formats before admitting work; do not reinterpret saved cursors with defaults.
+
+## Artifact and bindings
+
+The supported topology is ordered: CSV parsing/schema validation → exact-key lookup → mapping → equality/inequality filtering → accepted/error JSONL routing. Studio exposes those stages. Arbitrary code, paths and general graph nodes are not accepted.
+
+An artifact contains its format version, behavioral ID/hash, definition/version provenance, schema, operations, ordered output fields, binding aliases, finite partition/batch/admission limits and diagnostic policy. Layout/timestamps do not affect behavioral identity. Native publication embeds the bounded artifact/hash in ETL-owned executable metadata, not a workflow-typed dependency row. Runtime never resolves a mutable draft. The ETL runtime retains its own artifact copy with the admitted run.
+
+A host supplies role-specific named file bindings with tenant scope. Input revisions identify immutable content with an expected digest. Authors select aliases; they cannot set paths, storage roots, digests, credentials or tenant authority. Listings return safe names/roles, not paths. Admission resolves input revisions once; preparation verifies and retains their snapshots before partition dispatch. Editing an original binding does not replace accepted snapshots. Workers require the declared shared storage topology.
+
+Output is run-owned. Admission pins destination revisions as well as input revisions; retargeting an alias cannot redirect an existing run's replay. Chunk identity includes run/partition/fixed batch range, independent of attempt/lease. Write to attempt-private staging, flush/close/verify, then atomically publish a complete chunk without overwriting. Interrupted staging never occupies the final key; unsupported publication semantics refuse the binding. Accepted/rejected records have separate chunks. The authoritative manifest lists only accepted identities/hashes in partition/range order. Deterministic JSONL materialization uses that manifest, never concurrent append. Partial/cancelled output remains visibly partial.
+
+## Native invocation
+
+`RunEtl` selects a published definition; workflow publication pins an exact artifact/hash/schema. Immutable private state records stable run identity, pin, supported state version and trusted parent/scope address. Validate the actual bookmark registration instead of guessing its ID from user input.
+
+The admission intent is added to the actual bookmark-created checkpoint. Identical replay converges; conflicting parent/pin/scope refuses. Input/binding validation refusal must still settle a durable business-error or fault result and terminal outbox, not acknowledge the start and orphan its wait. Storage unavailability leaves the start intent owed. Cancellation has its own stable identity and may create a tombstone before admission. The ETL store and native store use separate transactions; their outboxes bridge them.
+
+Completion carries run/pin, expected parent/activity/bookmark, terminal status, safe output references/counts, diagnostic code and result version. Its typed delivery uses the frozen payload alias/schema and stable version-1 ETL completion provider ID, the explicit bookmark ID and an unchanged idempotency/delivery identity. Resume validates the complete address and durable accepted result. Success/business error are authored outcomes; execution fault and cancellation use normal native transitions. Existing composites decide continuation. A Sequence must reach its next sibling and a Flowchart must complete normally; root-only execution is insufficient.
+
+The terminal outbox retains delivery until bookmark consumption or demonstrated parent/activity termination. Queueing a resume alone is insufficient acknowledgement. Repeated delivery cannot produce another accepted continuation.
+
+## API and Studio
+
+Use existing endpoint/capability/permission conventions. All lookups are scope-filtered; cross-tenant IDs disclose neither existence nor binding details. Logical routes under the host API prefix:
+
+| Route | Purpose | Required permission role |
+|---|---|---|
+| `GET /etl/bindings` | Safe allowed aliases/roles | Author/read |
+| `GET /etl/definitions` | Paginated summaries | Definition/read |
+| `POST /etl/definitions` | Create definition/draft | Definition/write |
+| `GET /etl/definitions/{id}` | Draft/published inspection | Definition/read |
+| `PUT /etl/definitions/{id}/draft` | Desired state plus concurrency revision | Definition/write |
+| `POST /etl/definitions/{id}/validate` | Structured diagnostics | Definition/write |
+| `POST /etl/definitions/{id}/publish` | Immutable version/artifact | Definition/publish |
+| `GET /etl/runs` | Paginated summaries | Run/read |
+| `GET /etl/runs/{id}` | Pin, outcome, counts, diagnostics | Run/read |
+| `GET /etl/runs/{id}/partitions` | Paginated cursor/owed-batch/claim inspection | Run/read |
+| `POST /etl/runs/{id}/cancel` | Idempotent durable cancellation | Run/cancel |
+
+Implement identifiers with repository permission conventions. Authoring routes require the design feature; runtime inspection/cancellation requires no design database. No arbitrary worker/result posting API belongs to this slice.
+
+Studio provides a structured stage editor, binding/schema validation, publication, run list/detail and partition progress. Loading, empty, unavailable feature, forbidden, error and recovery states remain distinct. Diagnostics expose stable codes and safe record ordinals/field names, never raw row values or host paths. Logical reservations and expired claims are not presented as physical-memory reclamation or worker termination.
