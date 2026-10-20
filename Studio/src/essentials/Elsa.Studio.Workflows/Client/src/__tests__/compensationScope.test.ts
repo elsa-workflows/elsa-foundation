@@ -360,7 +360,7 @@ function incident(incidentId: string, activityExecutionId: string, failureType: 
     activityExecutionId,
     severity: "Error",
     status: "Resolved",
-    resolutionAction: "AbsorbFault",
+    resolutionOutcome: { actionKind: "AbsorbFault", metadata: {} },
     failureType,
     message,
     createdAt: "2026-10-19T10:00:13Z",

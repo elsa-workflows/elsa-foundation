@@ -369,7 +369,7 @@ describe("Runtime-pinned workflow instance rendering", () => {
         incidentId: "incident-1",
         severity: "Error",
         status: "Open",
-        resolutionAction: "None",
+        resolutionOutcome: null,
         failureType: "ActivityInputFailed",
         message: "Wrapper failure",
         createdAt: "2026-10-01T12:00:00Z",
@@ -718,6 +718,16 @@ describe("Incident diagnostic presentation", () => {
     expect(container.querySelector(".wf-instance-incident-cause")?.textContent).toBe("Cannot read the requested item.");
   });
 
+  it("shows the resolution the runtime applied, with the source that applied it", () => {
+    const waiting = incident({
+      resolutionOutcome: { actionKind: "WaitForIntervention", systemSource: "PoisonedSchedulerWork", metadata: {} }
+    });
+    renderIncidentList([waiting], [activityExecution()], vi.fn(), vi.fn());
+    const technicalDetails = mounted!.container.querySelector<HTMLDetailsElement>(".wf-incident-technical-details")!;
+    expect(technicalDetails.textContent).toContain("Resolution action");
+    expect(technicalDetails.textContent).toContain("WaitForIntervention (PoisonedSchedulerWork)");
+  });
+
   it("copies the complete report including direct stack trace evidence", async () => {
     const clipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
     const writeText = vi.fn().mockResolvedValue(undefined);
@@ -831,7 +841,7 @@ function incident(overrides: Partial<IncidentStateSummary> = {}): IncidentStateS
     executableNodeId: "exec-node",
     severity: "Error",
     status: "Open",
-    resolutionAction: "None",
+    resolutionOutcome: null,
     failureType: "ActivityInputFailed",
     message: "Wrapper failure",
     createdAt: "2026-10-01T12:00:00Z",

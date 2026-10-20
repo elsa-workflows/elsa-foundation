@@ -425,7 +425,7 @@ describe("ReusableBoundaryInspector", () => {
         incidentId: "incident-attempt-2",
         severity: "Error",
         status: "Blocking",
-        resolutionAction: "Retry",
+        resolutionOutcome: { actionKind: "Retry", metadata: {} },
         failureType: "Fault",
         message: "The first fault remains visible.",
         createdAt: "2026-07-19T00:00:02Z",
