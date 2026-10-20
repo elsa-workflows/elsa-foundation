@@ -56,7 +56,7 @@ Compensation scope keys:
 | `entries[].status` | `Registered`, `NoHandler`, `Uncertain`, `Compensating`, `Compensated` or `Failed` |
 | `entries[].forwardOutcome` | `Completed` or `Uncertain`. It keeps its value when `status` changes. |
 | `entries[].operationKey` | The key the forward step was given. For entries upgraded from version 1, it is `forwardActivityExecutionId`, which is what M1 participants received as the invocation id. |
-| `entries[].handlerAttempts` | Append-only. Each item is `{ activityExecutionId, incidentId?, result: Running \| Completed \| Faulted }`. Only the last item may be `Running`. Its length is never above `handlerMaxAttempts`. |
+| `entries[].handlerAttempts` | Append-only. Each item is `{ activityExecutionId, incidentId?, result: Running \| Completed \| Faulted }`. Only the last item may be `Running`. Automatic attempts never exceed `handlerMaxAttempts`; each operator retry appends one more attempt beyond that limit. |
 | `entries[].interventionIncidentId` | Set while the entry is `Failed` and waiting; cleared when its handler is retried. |
 
 ## Upcast from version 1
