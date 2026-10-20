@@ -86,7 +86,7 @@ A contributor opens a PR that only changes documentation, specs or agent-instruc
 - Two pushes to main land close together. Branch updates happen in main-commit order, an older run never overwrites a newer set, and a cancelled run leaves the branch at the last good set.
 - The branch update fails, for example on a permission or network error. Main stays green; the failure is reported like other post-merge publication failures, and the next main push catches the branch up.
 - Main sees no merges for longer than the hygiene sweep's idle threshold (14 days), so `generated-maps` looks like an idle branch with no open PR. The sweep skips it because it is explicitly exempt. The stale-PR workflow and delete-branch-on-merge only remove PR head branches, which `generated-maps` never is.
-- Someone opens a PR against `generated-maps`, or pushes to it by hand. The branch is protected so that only the workflow writes to it.
+- Someone opens a PR against `generated-maps`, or pushes to it by hand. The ruleset blocks deletion and history rewrites. The next CI publish adds a correct set on top, because the ordering rule reads the tip's `Source-Commit` trailer, and a hand commit without one is treated as superseded (research R5).
 - `tools/consolidation/foundation-path-map.json` lists the removed map paths. Whatever reads it must not fail because those files are now absent.
 
 ## Requirements
@@ -98,7 +98,7 @@ A contributor opens a PR that only changes documentation, specs or agent-instruc
 - **FR-003**: One documented command MUST generate the full removed set locally at its usual paths, without changing any tracked file in a fresh checkout.
 - **FR-004**: Every CI run on main MUST generate the full map set and publish it as a build artifact identified by the commit it describes.
 - **FR-004a**: Every successful CI run on main MUST also commit that set to the `generated-maps` branch, in main-commit order, with the commit message naming the main commit it describes. The branch's file layout MUST match the paths the maps had on main, so existing relative links inside the maps still resolve.
-- **FR-004b**: Only the CI workflow MUST be able to write `generated-maps`. A ruleset MUST prevent deleting it and non-fast-forward updates to it, as for `publish-state`.
+- **FR-004b**: A ruleset MUST prevent deleting `generated-maps` and non-fast-forward updates to it, identical to `publish-state`'s. Only the CI workflow writes it; as for `publish-state`, this is a convention stated in the branch README, not a mechanical restriction (research R6).
 - **FR-004d**: The weekly repository-hygiene branch sweep MUST never delete `generated-maps`. The branch MUST be named in the sweep's explicit exempt list, beside `main` and `publish-state`, and not exempted only through the ruleset. `docs/contributing/repository-hygiene.md` MUST list it under "Never swept".
 - **FR-004c**: `docs/maps/README.md` and `AGENTS.md` on `main` MUST link to the `generated-maps` branch's browse URL and describe the raw-URL and `git fetch origin generated-maps` routes, so an agent without CI access or the SDK finds the maps from main in one step.
 - **FR-005**: The required `Generated maps fresh` check MUST keep its name and keep its generator self-tests (project facts, feature facts, solution filters, EF suite manifest). It MUST stop comparing the removed files.
