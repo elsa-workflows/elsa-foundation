@@ -171,6 +171,7 @@ not automatic constitution violations.
 | Domain | Catalog |
 |---|---|
 | Elsa3 activities import (JSON source for legacy activity definitions) | [`Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/EXTENSION_POINTS.md`](Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/EXTENSION_POINTS.md) |
+| Elsa3 activities import publishing (adapter to the activity publisher) | [`Extensions/Elsa3/src/Activities/Design/Import/Publishing/EXTENSION_POINTS.md`](Extensions/Elsa3/src/Activities/Design/Import/Publishing/EXTENSION_POINTS.md) |
 | Elsa3 mapping (workflow definition import boundary) | [`Extensions/Elsa3/src/Mapping/EXTENSION_POINTS.md`](Extensions/Elsa3/src/Mapping/EXTENSION_POINTS.md) |
 
 ### Diagnostics
