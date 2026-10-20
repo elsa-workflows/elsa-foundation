@@ -18,6 +18,7 @@
 | OD13 | Who sees the actions? | Studio hides them unless a **server-provided, per-user signal** says the caller has `workflows/runtime:manage` for the run (the `permissions.canManage` shape). Studio still handles 401 and 403. |
 | OD14 | Where does action history come from? | From **incident resolution outcome metadata**: actor, reason, time and outcome, as `RetryFaultedActivity/1` already records them. No plans-by-run endpoint. |
 | OD15 | How does Studio read the journal? | A **read-only journal projection endpoint** per scope occurrence: entries, statuses, attempts with incident ids, operation keys, origin and hand-over, confirmations, cause and remaining handlers. Captured values honour `CanInspectSensitiveValuesAsync`. Permission `workflows/runtime:read`, tenant-scoped. Studio uses it instead of inferring where it can. |
+| OD16 | Which runs can an operator alter by id? | **Every run of the caller's tenant**, whatever execution authority started it, for alterations that name runs by id (FR-406). This matches run deletion. It applies to all alteration kinds. The run's authority is still captured for the concurrency check, and query targets keep the authority filter. |
 
 Choices made in this packet under OD12, recorded so they can be challenged ([research](research.md)):
 

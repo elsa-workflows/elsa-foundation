@@ -54,5 +54,5 @@ PR 2 starts once PR 1 is merged on `main`. The spec 258 FR-315 wording fix ("nev
 |---|---|
 | The delivery handler duplicates notify-parent plumbing | Extract the shared reactivation and commit into a helper first, with the notify suites unchanged (T405). |
 | A decision lands on a scope that was cancelled in between | Acked unapplied; journal and Studio show it (edge case); covered by O5c and a delivery unit test. |
-| FR-406 is a policy change | Called out as the one open question; limited to explicit targets; reverting it is one method. |
+| FR-406 is a policy change | Decided by the owner as OD16; limited to explicit targets; reverting it is one method. |
 | Studio fallback and journal disagree | Vitest runs both paths over the same fixtures and compares the shown states. |
