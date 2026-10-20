@@ -89,11 +89,11 @@ Studio derives this view from the run data it already loads; there is no inspect
 |---|---|
 | Scope execution | latest execution whose authored or executable node id is the scope's |
 | Forward state per step | latest child of that execution matching the step's forward node, excluding handlers |
-| Recovery state per step | `NotNeeded` when the step has no handler; otherwise the latest handler execution among the scope execution's children (scheduling cause `compensation`) matching the step's handler node, `Pending` when the scope is compensating and none exists yet, `Kept` when the scope completed or was cancelled without recovery, or `Registered` |
+| Recovery state per step | `NotNeeded` when the step has no handler; otherwise the latest handler execution among the scope execution's children (scheduling cause `compensation`) matching the step's handler node, `Pending` when the scope is compensating and none exists yet, `Kept` when the scope has ended (completed, cancelled, compensated or faulted) without running it, or `Registered` |
 | Recovery order | handler executions ordered by `scheduledAt` |
 | Phase | scope status; `Compensated` when its outcomes include `Compensated` |
 | Cause | the faulted forward step and the incident on its execution (failure type and message, under the incident disclosure policy) |
 
 `forward.state`: `NotRun` | `Running` | `Completed` | `Faulted` | `Cancelled`. `recovery.state`: `NotApplicable` (did not
-complete) | `NotNeeded` (no handler) | `Registered` (eligible, scope still running) | `Kept` (scope finished without recovery) | `Pending` | `Running` | `Compensated` |
+complete) | `NotNeeded` (no handler) | `Registered` (eligible, scope still running) | `Kept` (scope ended without undoing it) | `Pending` | `Running` | `Compensated` |
 `Failed`. Run lists carry the parent execution inside `provenance`, so matching reads it there.
