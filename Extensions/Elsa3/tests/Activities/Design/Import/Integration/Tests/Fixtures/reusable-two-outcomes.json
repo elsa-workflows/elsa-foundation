@@ -1,0 +1,170 @@
+{
+  "id": "approval-v1",
+  "definitionId": "approval",
+  "name": "approval",
+  "description": "Test-owned reusable flowchart declaring Approved and Rejected; its decision is constant true, so it completes with Approved. It declares an approve input it does not read (spec 246 D-8).",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [],
+  "inputs": [
+    {
+      "type": "Boolean",
+      "name": "approve",
+      "displayName": "Approve"
+    }
+  ],
+  "outputs": [],
+  "outcomes": [
+    "Approved",
+    "Rejected"
+  ],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": true
+  },
+  "root": {
+    "id": "approval-root",
+    "nodeId": "approval-root",
+    "name": "approval-root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "size": {
+          "width": 100,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "decide",
+        "nodeId": "decide",
+        "name": "decide",
+        "type": "Elsa.FlowDecision",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "condition": {
+          "typeName": "Boolean",
+          "expression": {
+            "type": "JavaScript",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "approved",
+        "nodeId": "approved",
+        "name": "approved",
+        "type": "Elsa.Complete",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "outcomes": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "Approved"
+          }
+        }
+      },
+      {
+        "id": "rejected",
+        "nodeId": "rejected",
+        "name": "rejected",
+        "type": "Elsa.Complete",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "outcomes": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "Rejected"
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "decide",
+          "port": "True"
+        },
+        "target": {
+          "activity": "approved",
+          "port": "In"
+        },
+        "vertices": []
+      },
+      {
+        "source": {
+          "activity": "decide",
+          "port": "False"
+        },
+        "target": {
+          "activity": "rejected",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ],
+    "variables": []
+  }
+}
