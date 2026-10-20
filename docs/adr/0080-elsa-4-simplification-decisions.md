@@ -109,7 +109,8 @@ The same amendment widens #3035 from establishment to **end-to-end delivery of i
 clean it up, then deliver the program end to end"). Sequencing: it runs beside #2892 and consumes existing
 runtime contracts instead of waiting on #2892; see
 [its relationship to other programs](../program-goals/native-compensation.md#relationship-to-other-programs).
-Releases and deployment are not included, and D7's human merge for runtime and persistence code still applies.
+Releases and deployment are not included. Merging follows D7 as amended on 15 October: the Code Review app
+merges once a review round leaves nothing actionable and CI is green, runtime and persistence PRs included.
 The separate Elsa 3 compensation program (elsa-workflows/elsa-core#8884) is paused until the Elsa 4 design
 packet #3043 is reviewed.
 
