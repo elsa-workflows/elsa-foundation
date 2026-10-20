@@ -147,12 +147,12 @@ to Elsa 3's result.
 
 ## Phase 7: Polish & cross-cutting
 
-- [ ] T020 Update "Migrating Elsa 3 JavaScript" in `Extensions/Elsa3/src/Mapping/README.md` (FR-010):
+- [x] T020 Update "Migrating Elsa 3 JavaScript" in `Extensions/Elsa3/src/Mapping/README.md` (FR-010):
   - **What converts:** add an `undefined` result row (the result becomes `null`).
   - **What is refused:** add rows for sloppy-only syntax, an undeclared write, top-level `this`/`arguments` and `arguments` aliasing, all `VF-IMP-007`, with the contract's guidance.
   - **Known differences:** replace that paragraph with the remaining ones: `this` in a plainly called function; a nested `undefined` key dropped from an object result; a `null` result bound to a non-nullable input (Elsa 3 used the default, Elsa 4 refuses with `VF-ACT-004`); frozen values.
-- [ ] T021 Add a "Behaviour" note to `specs/247-elsa3-js-host-functions/contracts/javascript-conversion.md` pointing to spec 261's contract, only if that contract lists the Expression-mode output shapes. Otherwise skip.
-- [ ] T022 Run `Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj` in full. Confirm that the build adds no new warnings in `Extensions/Elsa3/src/Mapping`.
+- [x] T021 Add a "Behaviour" note to `specs/247-elsa3-js-host-functions/contracts/javascript-conversion.md` pointing to spec 261's contract, only if that contract lists the Expression-mode output shapes. Otherwise skip.
+- [x] T022 Run `Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj` in full. Confirm that the build adds no new warnings in `Extensions/Elsa3/src/Mapping`.
 - [ ] T023 Throwaway JTest check per `quickstart.md`. Record the numbers in a "Measured after" section in `specs/261-elsa3-undefined-strict/spec.md` (SC-004, SC-005, FR-012), delete the probe, and check that `git status` is clean.
 - [ ] T024 Draft the three Elsa 4 issues (FR-014): nested-`undefined` key loss, the one-line script wrapper, and `null` into a non-nullable input (research R-8). Show the texts to the maintainer. File each as `needs-triage` only after approval, then link the first and third from the README.
 - [ ] T025 Re-check #3012 and its open PRs for competing work. Merge `origin/main` again if it moved, and regenerate `docs/maps/dependency-map.json`/solution filters only if `-- check` says they changed (CRLF caveat: use `git diff --stat`).

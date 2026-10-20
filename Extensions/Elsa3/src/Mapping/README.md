@@ -139,7 +139,8 @@ refusal says what to change in the Elsa 3 workflow so that it converts. Specs 23
 | `isNullOrEmpty(x)`, `isNullOrWhiteSpace(x)` | An inline function with .NET's semantics, including .NET's whitespace characters |
 | A top-level `return` | The body runs as a function. A trailing expression gets a `return`; a bare `return;` returns `null` |
 | A statement-form expression | A function that returns its last expression |
-| A RunJavaScript body | Reads go through the `arguments` input, and the completion value becomes a `return` |
+| A RunJavaScript body | Reads go through the `arguments` input, and the completion value becomes a `return`. A body whose last line is a `//` comment ends with a newline, so the comment cannot break Elsa 4's script wrapper |
+| An expression whose value is `undefined` (a missing property, a function that returns nothing) | `null`, as in Elsa 3: every value that leaves a bound expression ends in `?? null`, which leaves `0`, `""` and `false` alone. A RunJavaScript body needs nothing, because Elsa 4 already turns its `undefined` into `null` |
 
 ### What is refused, and what to change in Elsa 3
 
@@ -158,13 +159,21 @@ refusal says what to change in the Elsa 3 workflow so that it converts. Specs 23
 | A variable or input whose accessor is a built-in name (`CorrelationId`) | `VF-IMP-002` | Rename it |
 | lodash `_`, `moment`, CLR globals, Elsa 3 `args` | `VF-IMP-005` | Rewrite with plain JavaScript and declared reads |
 | Any other undeclared function | `VF-IMP-005` | Replace it with plain JavaScript, or move it into an activity |
+| Syntax that only parses in sloppy mode: `with`, a legacy octal literal such as `010`, duplicate parameter names, `delete` of a variable, a reserved word such as `let`, `static` or `yield` as a name | `VF-IMP-007` | Rewrite it without that syntax (write `0o10` or `8` for an octal literal). Elsa 4 runs JavaScript in strict mode |
+| An assignment to a name the script never declares (`total = 1`) | `VF-IMP-007` | Declare it with `let` first. Elsa 3 created a global; Elsa 4's strict mode fails |
+| `this` or `arguments` outside a function | `VF-IMP-007` | Read the value through `getVariable`, `getInput` or a local variable |
+| Changing `arguments[i]`, or a parameter, in a function that reads `arguments` | `VF-IMP-007` | Copy the value into a local `let` variable and change that. Elsa 3 kept them linked; Elsa 4 does not |
 
 A workflow that genuinely needs the current time or a fresh unique value cannot migrate until Elsa 4 has an explicit
 capability for them (#3026). Elsa 4 deliberately strips them from expressions to keep them deterministic.
 
-Known differences that convert without a diagnostic today: Elsa 4 evaluates in strict mode, and it rejects an
-`undefined` result where Elsa 3 returned `null` (#3012). Elsa 3 handed scripts mutable .NET values; Elsa 4 hands them
-frozen JSON values.
+Known differences that convert without a diagnostic, because they depend on how the script is called or on the data:
+- `this` in a function called without a receiver was Elsa 3's global object; in Elsa 4 it is `undefined`.
+- An `undefined` value inside an object result (`{ discount: undefined }`) kept its key as `null` in Elsa 3; Elsa 4
+  drops the key, which shows in serialized bodies and in `in` or `Object.keys`.
+- A `null` result bound to a non-nullable input (`Int32`, `Boolean`, an enum) became the type's default in Elsa 3
+  (`0`, `false`); Elsa 4 refuses it at run time with `VF-ACT-004`.
+- Elsa 3 handed scripts mutable .NET values; Elsa 4 hands them frozen JSON values.
 
 ## Nesting budget
 
