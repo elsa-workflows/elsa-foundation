@@ -6,9 +6,9 @@ import { describe, expect, it } from "vitest";
 
 // Compiler-backed architecture guard for the type-only module boundary. Each extension's ambient
 // declaration is checked in isolation, so another copy cannot silently supply a missing member.
+// Secrets consumes the canonical SDK directly and runs its own package typecheck.
 const typingSources = [
   { label: "canonical SDK", path: "../sdk/index.ts", hasPropertyEditors: true },
-  { label: "Secrets copy", path: "../../../../../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/studio-sdk.d.ts", hasPropertyEditors: true },
   { label: "JavaScript copy", path: "../../../../../../../Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Client/src/studio-sdk.d.ts", hasPropertyEditors: false },
   { label: "Liquid copy", path: "../../../../../../../Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Client/src/studio-sdk.d.ts", hasPropertyEditors: false },
   { label: "Connections copy", path: "../../../../../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/studio-sdk.d.ts", hasPropertyEditors: true }
