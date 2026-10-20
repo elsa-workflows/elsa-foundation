@@ -92,15 +92,25 @@ internal static class ActivitySuccessorStaging
         return metadata;
     }
 
-    /// <summary>The post-commit intent that starts (or schedules) the successor once the alteration checkpoint lands.</summary>
+    /// <summary>
+    /// The post-commit intent that starts (or schedules) the successor once the alteration checkpoint lands. Its command
+    /// metadata names the alteration; <paramref name="schedulingMetadata"/>, when given, is laid underneath it.
+    /// </summary>
     public static RuntimePostCommitIntent NewContinuation(
         WorkflowExecutionState workflow,
         ActivityExecutionState successor,
         WorkflowAlterationPreflightContext context,
         DateTimeOffset now,
         string slug,
-        string reason)
+        string reason,
+        IReadOnlyDictionary<string, string>? schedulingMetadata = null)
     {
+        var commandMetadata = schedulingMetadata is null
+            ? new Dictionary<string, string>(StringComparer.Ordinal)
+            : schedulingMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        commandMetadata["runtime.alteration.jobId"] = context.Job.JobId;
+        commandMetadata["runtime.alteration.planId"] = context.Job.PlanId;
+        commandMetadata["runtime.alteration.kind"] = context.Envelope.Kind;
         var commandKind = successor.Status == ActivityExecutionStatus.Running
             ? WorkflowExecutionCommandKind.StartActivity
             : WorkflowExecutionCommandKind.ScheduleActivity;
@@ -117,12 +127,7 @@ internal static class ActivitySuccessorStaging
             now,
             now,
             payload: JsonSerializer.SerializeToElement(payload),
-            commandMetadata: new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                ["runtime.alteration.jobId"] = context.Job.JobId,
-                ["runtime.alteration.planId"] = context.Job.PlanId,
-                ["runtime.alteration.kind"] = context.Envelope.Kind
-            },
+            commandMetadata: commandMetadata,
             envelopeMetadata: new Dictionary<string, string>(),
             executionScopeId: successor.ExecutionScopeId);
         return new RuntimePostCommitIntent(

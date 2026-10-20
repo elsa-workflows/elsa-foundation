@@ -270,7 +270,7 @@ public sealed record ChildFaultEvaluation(
     string? FaultCode,
     string? FaultCategory);
 
-public sealed record ChildCompletionEvaluation(string ChildActivityExecutionId, string ChildExecutableNodeId);
+public sealed record ChildCompletionEvaluation(string ChildActivityExecutionId, string ChildExecutableNodeId, string? Marker = null);
 
 /// <summary>Records what the structural parent was told about its children, in order.</summary>
 public sealed class ChildEvaluationLog
@@ -372,7 +372,9 @@ public sealed class InterventionParentActivity(InterventionDirective directive, 
 
     public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
     {
-        log.Add(new ChildCompletionEvaluation(context.CompletedChildActivityExecutionId, context.CompletedChildExecutableNodeId));
+        var commandMetadata = ((IRuntimeActivityExecutionContext)context.ParentContext).SchedulerWorkItem.CommandMetadata;
+        log.Add(new ChildCompletionEvaluation(context.CompletedChildActivityExecutionId, context.CompletedChildExecutableNodeId,
+            commandMetadata.GetValueOrDefault(MarkerKey)));
         if (directive.InterveneOnCompletion)
             ((IRuntimeActivityExecutionContext)context.ParentContext).RequestChildFaultIntervention("incident-any", "test-intervene");
         return ValueTask.FromResult(directive.KeepParentRunning

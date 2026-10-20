@@ -61,6 +61,8 @@ public sealed class RetryFaultedActivityAlterationExecutionTests
         var completion = Assert.Single(fixture.Log.Completions);
         Assert.Equal(successor.Execution.ActivityExecutionId, completion.ChildActivityExecutionId);
         Assert.Equal("node-f", completion.ChildExecutableNodeId);
+        // The parent routes the successor's completion with the scheduling metadata it gave the source (FR-211).
+        Assert.Equal("marker-node-f", completion.Marker);
 
         var incident = Assert.Single(await fixture.ListIncidentsAsync());
         Assert.Equal(IncidentStatus.Resolved, incident.Status);
