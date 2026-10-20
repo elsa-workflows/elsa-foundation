@@ -31,7 +31,7 @@ A branch lives as long as its pull request.
 
   Branches deleted on merge are not restored; their work is in `main`.
 
-- **Never swept:** `main`, `publish-state`, `release/*`, `rc/*` and any protected branch. A branch that
+- **Never swept:** `main`, `publish-state`, `generated-maps`, `release/*`, `rc/*` and any protected branch. A branch that
   must live longer than its PR (a demo, an integration line) needs an open PR or one of those patterns.
 - Agents name branches `agent/<worker>/<issue>-<slug>`, per
   [Issue Bus Lite][org-agents-work]. The sweep does not

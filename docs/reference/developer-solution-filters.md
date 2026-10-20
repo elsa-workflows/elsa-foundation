@@ -122,3 +122,5 @@ dotnet build Elsa.Server.slnx
 dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj
 dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 ```
+
+`-- check` compares the committed `docs/maps/dependency-map.json`; the filters have their own check above.

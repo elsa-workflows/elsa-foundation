@@ -140,14 +140,14 @@ public static class VersionCalculator
             throw new InvalidOperationException(
                 $"{DependencyMapDataset.RelativePath} at {built.Commit} does not describe the projects in that commit" +
                 Listed("; projects it lacks", unmapped) + Listed("; nodes with no project", missing) +
-                ". Regenerate it with: dotnet run --project tools/maps/Elsa.Maps.Generator -- all");
+                ". Regenerate it with: dotnet run --project tools/maps/Elsa.Maps.Generator -- dependency-map");
 
         var lineA = built.Map.Packable.Values.Where(node => node.Line == "A").Select(node => node.Name).ToHashSet(StringComparer.Ordinal);
         if (!lineA.SetEquals(lines.LineAMembers))
             throw new InvalidOperationException(
                 $"{DependencyMapDataset.RelativePath} at {built.Commit} puts {Listed(string.Empty, [.. lineA.Order(StringComparer.Ordinal)])} on Line A, " +
                 $"but {VersionLineSettings.RelativePath} lists {Listed(string.Empty, [.. lines.LineAMembers.Order(StringComparer.Ordinal)])}. " +
-                "Regenerate it with: dotnet run --project tools/maps/Elsa.Maps.Generator -- all");
+                "Regenerate it with: dotnet run --project tools/maps/Elsa.Maps.Generator -- dependency-map");
     }
 
     /// <summary>
