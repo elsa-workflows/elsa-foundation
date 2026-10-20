@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/claude/259-derived-dependency-map`
 **Created**: 2026-10-20
-**Status**: Draft
+**Status**: Implemented
 **Input**: Follow-up to spec 257 ([#3116](https://github.com/elsa-workflows/elsa-foundation/pull/3116), merged as `d628fc0da`): "the versioning calculator derives the dependency-map dataset from each commit's own tree, so `docs/maps/dependency-map.json` no longer has to be committed." Spec 257 kept the file committed (its Decision 2 and research R10) because the calculator reads it from every commit it compares.
 
 ## Evidence and Context
