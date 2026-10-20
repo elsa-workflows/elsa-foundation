@@ -208,12 +208,31 @@ describe("compensation runtime", () => {
     ], [], { complete: false });
 
     expect(runtime.incomplete).toBe(true);
+    // A running scope with no visible recovery may have handlers on a later page.
+    expect(runtime.phase).toBe("NotLoaded");
     expect(runtime.rows.map(row => [row.forward.state, row.recovery.state])).toEqual([
-      ["Completed", "Registered"],
+      ["Completed", "NotLoaded"],
       ["NotLoaded", "NotLoaded"],
       ["NotLoaded", "NotLoaded"]
     ]);
     expect(deriveCompensationRuntime(journeyScope(), [], [], { complete: false }).phase).toBe("NotLoaded");
+  });
+
+  it("keeps what a partial page does prove: visible recovery, and a scope that completed without undoing", () => {
+    const recovering = deriveCompensationRuntime(journeyScope(), [
+      execution("ae-scope", "scope", "Running", "10"),
+      execution("ae-1", "reserve", "Completed", "11", { parent: "ae-scope" }),
+      execution("ae-2", "deliver", "Faulted", "12", { parent: "ae-scope" })
+    ], [], { complete: false });
+    expect(recovering.phase).toBe("Compensating");
+    expect(recovering.rows[0].recovery.state).toBe("NotLoaded");
+
+    const completed = deriveCompensationRuntime(journeyScope(), [
+      execution("ae-scope", "scope", "Completed", "10", { outcomeNames: ["Done"] }),
+      execution("ae-1", "reserve", "Completed", "11", { parent: "ae-scope" })
+    ], [], { complete: false });
+    expect(completed.phase).toBe("Completed");
+    expect(completed.rows[0].recovery.state).toBe("Registered");
   });
 
   it("finds the recovery cause's incident through its runtime metadata when it carries no execution id", () => {

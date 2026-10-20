@@ -69,7 +69,7 @@ An operator opens the run in Studio. The scope shows "Compensated" with text and
 
 1. **Given** a compensated run, **when** the operator opens the scope, **then** each row shows forward state (Completed/Faulted/Not run) and recovery state (Compensated/Not needed/Pending/Running/Failed), each as text plus icon, never color alone.
 2. **Given** a handler occurrence, **when** it is selected, **then** the inspector shows "Compensates *Reserve delivery*", and links to the exact forward occurrence; the scope's step list shows the recovery cause.
-3. **Given** the scope selected, **then** a recovery summary shows the cause (step, fault code and message, subject to the existing payload disclosure policy) and each row shows its place in the recovery order.
+3. **Given** the scope selected, **then** a recovery summary shows the cause (step, the incident's failure type and message, subject to the existing payload disclosure policy) and each row shows its place in the recovery order.
 4. **Given** the run timeline, **then** handler occurrences are labelled as compensation and are distinguishable from forward work.
 
 ### User Story 4 - Uncertain effects and intervention (Priority: P2, M2)

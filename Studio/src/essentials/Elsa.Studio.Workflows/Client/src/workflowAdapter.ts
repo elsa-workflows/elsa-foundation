@@ -94,6 +94,8 @@ export interface WorkflowRuntimeNodeOverlay {
   containedAffectedActivityCount?: number;
   containedPrimaryIncidentId?: string;
   containsBlockingIncident?: boolean;
+  /** The latest execution completed through compensation (a compensation scope's `Compensated` outcome). */
+  compensated?: boolean;
   selected: boolean;
 }
 
