@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Copy, Maximize2, Plus, Trash2 } from "lucide-react";
 import { StudioActionNotice, StudioButton, StudioSearchInput, useTablistKeyboard } from "@elsa-workflows/studio-ui";
 import {
@@ -12,6 +12,7 @@ import type {
   StudioActivityPropertyEditorContribution,
   StudioActivityPropertyEditorContext
 } from "@elsa-workflows/studio-sdk";
+import { ReportedPropertyEditor } from "./ReportedPropertyEditor";
 import {
   defaultDictionaryValue,
   dictionaryEntries,
@@ -53,6 +54,9 @@ export interface DictionaryValueEditorProps {
   context: StudioActivityPropertyEditorContext;
   disabled: boolean;
   sessionScopeKey?: string;
+  validationScopeKey?: string;
+  onValidationChange?(instanceKey: string, hasError: boolean): void;
+  onDisclosureFallbackChange?(instanceKey: string, shouldForceOpen: boolean): void;
   variant?: "inline" | "expanded";
   onOpenExpanded?(): void;
   onChange(value: unknown): void;
@@ -66,6 +70,9 @@ export function DictionaryValueEditor({
   context,
   disabled,
   sessionScopeKey,
+  validationScopeKey = "standalone",
+  onValidationChange,
+  onDisclosureFallbackChange,
   variant = "inline",
   onOpenExpanded,
   onChange
@@ -73,6 +80,13 @@ export function DictionaryValueEditor({
   const configuration = readDictionaryConfiguration(input);
   const effectiveSessionScope = sessionScopeKey ?? readStandaloneSessionScope(context.activity);
   const sessionKey = `${effectiveSessionScope}:${readActivityIdentity(context.activity)}:${input.name}`;
+  const validationInstanceScope = useId();
+  const reportValidationChange = useCallback((instanceKey: string, hasError: boolean) => {
+    onValidationChange?.(`${validationInstanceScope}\u001f${instanceKey}`, hasError);
+  }, [onValidationChange, validationInstanceScope]);
+  const reportDisclosureFallback = useCallback((instanceKey: string, shouldForceOpen: boolean) => {
+    onDisclosureFallbackChange?.(`${validationInstanceScope}\u001f${instanceKey}`, shouldForceOpen);
+  }, [onDisclosureFallbackChange, validationInstanceScope]);
   const externalValue = useMemo(() => normalizeDictionaryValue(value), [value]);
   const externalSignature = dictionaryValueSignature(externalValue);
   const initialSession = readDictionaryEditorSession<EditorRow>(sessionKey);
@@ -108,6 +122,14 @@ export function DictionaryValueEditor({
     () => new Set(Object.entries(complexDrafts).flatMap(([id, draft]) => parseComplexDraft(draft).valid ? [] : [id])),
     [complexDrafts]
   );
+  const hasPrivateError = effectiveTab === "table"
+    ? !tableValidation.valid || invalidComplexDraftIds.size > 0
+    : !jsonValidation.valid;
+
+  useEffect(() => {
+    reportValidationChange("dictionary", hasPrivateError);
+    return () => reportValidationChange("dictionary", false);
+  }, [hasPrivateError, reportValidationChange]);
 
   useEffect(() => {
     if (variant !== "expanded") return;
@@ -336,6 +358,9 @@ export function DictionaryValueEditor({
                     editors={editors}
                     context={context}
                     disabled={disabled}
+                    validationScopeKey={validationScopeKey}
+                    onValidationChange={reportValidationChange}
+                    onDisclosureFallbackChange={reportDisclosureFallback}
                     expanded={variant === "expanded"}
                     configuration={configuration}
                     errors={errorMap.get(row.id) ?? []}
@@ -424,6 +449,9 @@ function DictionaryRowEditor({
   editors,
   context,
   disabled,
+  validationScopeKey,
+  onValidationChange,
+  onDisclosureFallbackChange,
   expanded,
   configuration,
   errors,
@@ -442,6 +470,9 @@ function DictionaryRowEditor({
   editors: StudioActivityPropertyEditorContribution[];
   context: StudioActivityPropertyEditorContext;
   disabled: boolean;
+  validationScopeKey: string;
+  onValidationChange?(instanceKey: string, hasError: boolean): void;
+  onDisclosureFallbackChange?(instanceKey: string, shouldForceOpen: boolean): void;
   expanded: boolean;
   configuration: DictionaryConfiguration;
   errors: DictionaryValidationError[];
@@ -463,7 +494,7 @@ function DictionaryRowEditor({
     isWrapped: false
   };
   const valueContext: StudioActivityPropertyEditorContext = { ...context, scope: "element" };
-  const ValueEditor = resolveEditor(editors, valueDescriptor, valueContext)?.component;
+  const valueEditor = resolveEditor(editors, valueDescriptor, valueContext);
   const keyError = errors.find(error => error.code === "blank-key" || error.code === "duplicate-key");
   const valueError = errors.find(error => error.code === "invalid-value");
   const label = row.key || `row ${rowNumber}`;
@@ -491,8 +522,19 @@ function DictionaryRowEditor({
       </label>
       <div role="cell" className="wf-dictionary-cell value">
         <span>{configuration.valueLabel}</span>
-        {ValueEditor ? (
-          <ValueEditor descriptor={valueDescriptor} value={row.value} disabled={disabled} context={valueContext} onChange={onValueChange} />
+        {valueEditor ? (
+          <ReportedPropertyEditor
+            key={`${validationScopeKey}\u001f${row.id}\u001f${valueEditor.id}`}
+            editor={valueEditor}
+            descriptor={valueDescriptor}
+            value={row.value}
+            disabled={disabled}
+            context={valueContext}
+            onChange={onValueChange}
+            validationInstanceKey={`dictionary:${row.id}`}
+            onValidationChange={onValidationChange}
+            onDisclosureFallbackChange={onDisclosureFallbackChange}
+          />
         ) : isComplexType(valueTypeName) ? (
           <ComplexValueEditor
             label={`${configuration.valueLabel} ${rowNumber}`}

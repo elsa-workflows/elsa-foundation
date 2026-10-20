@@ -50,6 +50,10 @@ declare module "@elsa-workflows/studio-sdk" {
     name: string;
     displayName?: string | null;
     typeName: string;
+    /** Presentation tier from the activity catalog; unknown values remain forward-compatible. */
+    tier?: string | null;
+    /** Whether the activity requires this input at runtime; independent of its presentation tier. */
+    isRequired?: boolean | null;
     uiHint?: string | null;
     defaultSyntax?: string | null;
     /** Activity-declared: the value must not be shown or logged. Absent on older backends. */
@@ -80,11 +84,15 @@ declare module "@elsa-workflows/studio-sdk" {
     disabled?: boolean;
     context: StudioActivityPropertyEditorContext;
     onChange(value: unknown): void;
+    /** Reports only whether this mounted editor currently has a local blocking error. */
+    onValidationChange?: (hasError: boolean) => void;
   }
 
   export interface StudioActivityPropertyEditorContribution {
     id: string;
     order?: number;
+    /** Declares that all local blocking errors are reported through onValidationChange, or that none exist. */
+    supportsValidationReporting?: true;
     supports(descriptor: StudioActivityInputDescriptor, context: StudioActivityPropertyEditorContext): boolean;
     component: ComponentType<StudioActivityPropertyEditorProps>;
   }
