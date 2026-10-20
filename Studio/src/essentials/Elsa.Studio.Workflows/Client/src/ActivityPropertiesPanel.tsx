@@ -265,6 +265,7 @@ export function ActivityPropertiesPanel({
       {renderGroups(directGroups)}
       {optionalGroups.length > 0 ? (
         <AdvancedSection
+          key={[draftId, activity.activityVersionId, activity.nodeId].join("\u001f")}
           label="More options"
           setCount={configuredOptionalCount}
           defaultOpen={configuredOptionalCount > 0}
