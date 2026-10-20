@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Publishes imported Elsa 3 reusable activities through the Workflows Publishing activity publisher.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The bridge's mapping tests drive the internal publisher directly. -->
+    <InternalsVisibleTo Include="Elsa3.Activities.Design.Import.Integration.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Elsa3.Activities.Design.Import\Elsa3.Activities.Design.Import.csproj" />
+    <!-- The one reference the import itself must not take (framework §2.1): this project is the adapter. -->
+    <ProjectReference Include="..\..\..\..\..\..\..\Essentials\src\Workflows\Publishing\Api\Elsa.Workflows.Publishing.Api.csproj" />
+  </ItemGroup>
+
+</Project>

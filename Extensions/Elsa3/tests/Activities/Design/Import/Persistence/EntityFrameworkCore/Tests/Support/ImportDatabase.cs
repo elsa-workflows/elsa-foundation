@@ -88,7 +88,8 @@ internal sealed partial class ImportDatabase(
             await activitiesDb.ActivityDesignOperations.CountAsync(),
             await workflowsDb.Definitions.CountAsync(),
             await workflowsDb.Versions.CountAsync(),
-            await workflowsDb.Operations.CountAsync());
+            await workflowsDb.Operations.CountAsync(),
+            await activitiesDb.ActivityDefinitionDrafts.CountAsync());
     }
 
     /// <summary>
@@ -130,13 +131,14 @@ internal sealed record LedgerCounts(
     int ActivityOperations,
     int WorkflowDefinitions,
     int WorkflowVersions,
-    int WorkflowOperations)
+    int WorkflowOperations,
+    int Drafts)
 {
     /// <summary>Everything except the collection upload, which is written before and outside an apply.</summary>
     public bool HasNoImportWrites =>
         Receipts == 0 && Bindings == 0 && ActivityDefinitions == 0 && ActivityVersions == 0 && Authoring == 0 &&
         DefinitionProjections == 0 && ActivityOperations == 0 && WorkflowDefinitions == 0 && WorkflowVersions == 0 &&
-        WorkflowOperations == 0;
+        WorkflowOperations == 0 && Drafts == 0;
 }
 
 /// <summary>Fails the shared transaction's commit before or after the provider applies it.</summary>

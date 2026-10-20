@@ -21,6 +21,7 @@
   <Folder Name="/Extensions/Elsa3/src/Activities/Design/" />
   <Folder Name="/Extensions/Elsa3/src/Activities/Design/Import/">
     <Project Path="Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/Elsa3.Activities.Design.Import.csproj" />
+    <Project Path="Extensions/Elsa3/src/Activities/Design/Import/Publishing/Elsa3.Activities.Design.Import.Publishing.csproj" />
   </Folder>
   <Folder Name="/Extensions/Elsa3/src/Activities/Design/Import/Persistence/">
     <Project Path="Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.csproj" />
@@ -29,6 +30,9 @@
   <Folder Name="/Extensions/Elsa3/tests/Activities/" />
   <Folder Name="/Extensions/Elsa3/tests/Activities/Design/" />
   <Folder Name="/Extensions/Elsa3/tests/Activities/Design/Import/" />
+  <Folder Name="/Extensions/Elsa3/tests/Activities/Design/Import/Integration/">
+    <Project Path="Extensions/Elsa3/tests/Activities/Design/Import/Integration/Tests/Elsa3.Activities.Design.Import.Integration.Tests.csproj" />
+  </Folder>
   <Folder Name="/Extensions/Elsa3/tests/Activities/Design/Import/Persistence/" />
   <Folder Name="/Extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/">
     <Project Path="Extensions/Elsa3/tests/Activities/Design/Import/Persistence/EntityFrameworkCore/ProviderTests/Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore.ProviderTests.csproj" />

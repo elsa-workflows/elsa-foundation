@@ -1,0 +1,127 @@
+{
+  "id": "execute-caller-v1",
+  "definitionId": "execute-caller",
+  "name": "execute-caller",
+  "description": "Test-owned workflow: executes dispatch-target and waits for it.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": false
+  },
+  "root": {
+    "id": "execute-caller-root",
+    "nodeId": "execute-caller-root",
+    "name": "execute-caller-root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "size": {
+          "width": 100,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "start-target",
+        "nodeId": "start-target",
+        "name": "start-target",
+        "type": "Elsa.ExecuteWorkflow",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "workflowDefinitionId": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "dispatch-target"
+          }
+        },
+        "waitForCompletion": {
+          "typeName": "Boolean",
+          "expression": {
+            "type": "Literal",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "after",
+        "nodeId": "after",
+        "name": "after",
+        "type": "Elsa.WriteLine",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "text": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "after"
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "start-target",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "after",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ],
+    "variables": []
+  }
+}

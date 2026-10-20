@@ -4,6 +4,8 @@ using Elsa3.Mapping.Mappings;
 using Elsa3.Mapping.Services;
 using Elsa3.Models;
 
+using Elsa3.Mapping.Resolution;
+
 namespace Elsa3.Mapping.Conversion;
 
 /// <summary>
@@ -36,9 +38,11 @@ internal sealed class Elsa3DefinitionConverter(
                 return Elsa3MigrationResult<Elsa3ConvertedDefinition>.Failure(Ordered(plan.Diagnostics));
 
             var state = stateMapper.Map(plan);
-            // A reusable workflow is a schema-2 graph: Done stays its natural completion (D-5).
+            // A reusable workflow is a schema-2 graph: the root's natural completion is its boundary's done (D-5). The
+            // source is the reference key the root's own contract emits: a built-in's Done, or an imported reusable's
+            // done (spec 246: compiling against the published contracts is what checks it).
             IReadOnlyList<Elsa3GraphOutcomeMapping> outcomeMappings = request.IsReusable
-                ? [new Elsa3GraphOutcomeMapping(Elsa3OutcomeKey.DoneKey, Elsa3OutcomeKey.DoneKey)]
+                ? [new Elsa3GraphOutcomeMapping(RootDoneKey(plan), Elsa3OutcomeKey.DoneKey)]
                 : [];
             return Elsa3MigrationResult<Elsa3ConvertedDefinition>.Success(
                 new Elsa3ConvertedDefinition(state, plan.OutputMappings.ToArray(), boundaryOutcomes, outcomeMappings),
@@ -49,6 +53,54 @@ internal sealed class Elsa3DefinitionConverter(
             return Elsa3MigrationResult<Elsa3ConvertedDefinition>.Failure(MappingFailed(request, exception));
         }
     }
+
+    /// <summary>
+    /// A graph activity resolves every node to a published activity version, and engine intrinsics have none, so a
+    /// reusable body that uses one cannot be published (spec 246 D-7). Refusing it here names the Elsa 3 node, where the
+    /// publisher would only report an unresolved dependency.
+    /// </summary>
+    private static void RefuseIntrinsics(Elsa3ConversionPlan plan)
+    {
+        // A node already refused for its own reason (an End outside the root flowchart) is reported once.
+        var refused = plan.Diagnostics
+            .Where(diagnostic => diagnostic.IsError && diagnostic.Metadata.ContainsKey("ActivityNodeId"))
+            .Select(diagnostic => diagnostic.Metadata["ActivityNodeId"])
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var node in plan.Nodes.Values
+                     .Where(node => node.Intrinsic is not null || node.Resolved?.Source == Elsa3ResolvedSource.Intrinsic)
+                     .Where(node => !refused.Contains(node.Node.NodeId))
+                     .OrderBy(node => node.JsonPath, StringComparer.Ordinal))
+        {
+            // A step conversion synthesized after an HTTP Endpoint (plan D-12) is reported on the endpoint the engineer
+            // knows, with the capture that caused it.
+            if (node.SynthesizedFrom is var (endpoint, output))
+            {
+                plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(
+                    plan,
+                    Elsa3MigrationDiagnosticSeverity.Error,
+                    Elsa3ActivityDiagnosticCodes.ReusableIntrinsicUnsupported,
+                    $"Reusable workflow node '{endpoint.NodeId}' ({endpoint.Type}) captures its '{output}' output, which needs a step a graph activity cannot hold yet.",
+                    Elsa3ReusableGuidance.HttpProjection(output),
+                    node.JsonPath,
+                    new Dictionary<string, string> { ["ActivityNodeId"] = endpoint.NodeId, ["ActivityType"] = endpoint.Type }));
+                continue;
+            }
+
+            plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(
+                plan,
+                Elsa3MigrationDiagnosticSeverity.Error,
+                Elsa3ActivityDiagnosticCodes.ReusableIntrinsicUnsupported,
+                $"Reusable workflow node '{node.Node.NodeId}' ({node.Node.Type}) becomes an Elsa 4 engine intrinsic, which a graph activity cannot hold yet.",
+                Elsa3ReusableGuidance.Intrinsic(node.Node.Type),
+                node.JsonPath,
+                new Dictionary<string, string> { ["ActivityNodeId"] = node.Node.NodeId, ["ActivityType"] = node.Node.Type }));
+        }
+    }
+
+    private static string RootDoneKey(Elsa3ConversionPlan plan) =>
+        plan.Definition.Root is { } root && plan.Find(root)?.Resolved?.Source == Elsa3ResolvedSource.Replacement
+            ? Elsa3OutcomeKey.DoneKey
+            : Elsa3ActivityOutcomes.Done;
 
     public async ValueTask<Elsa3MigrationResult<Elsa3NodeConversionContext>> PrepareAsync(
         Elsa3ConversionRequest request,
@@ -132,6 +184,8 @@ internal sealed class Elsa3DefinitionConverter(
         var plan = await normalizer.NormalizeAsync(request, clone, cancellationToken);
         var boundaryOutcomes = request.IsReusable ? Elsa3OutcomeKey.Assemble(plan) : [];
         await LowerAsync(plan, cancellationToken);
+        if (request.IsReusable)
+            RefuseIntrinsics(plan);
         return (plan, boundaryOutcomes);
     }
 
