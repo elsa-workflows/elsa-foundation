@@ -124,8 +124,9 @@ with the strict-mode diagnostic. Convert sources that are valid in both modes; t
 2. **Given** a source that parses in both modes, **When** it is converted, **Then** the result is the same as before this feature.
 3. **Given** a source that does not parse even in sloppy mode, **When** it is converted, **Then** the existing parse refusal is reported, not the strict-mode one.
 4. **Given** `this` outside every non-arrow function (top-level `this`, including inside a top-level arrow function), **When** it is converted, **Then** the definition is refused with guidance to read the value through a variable or input instead.
-5. **Given** a function that reads `arguments` and writes to `arguments[…]` or to one of its parameters, **When** it is converted, **Then** the definition is refused with guidance to copy the value into a local `let` instead.
-6. **Given** `this` inside a non-arrow function, or `arguments` that is only read, **When** it is converted, **Then** it converts; the README documents that `this` in a plainly called function is the Elsa 3 global object in Elsa 3 and `undefined` in Elsa 4.
+5. **Given** `arguments` outside every non-arrow function, where it is not declared, **When** it is converted, **Then** the definition is refused (Elsa 3 threw a ReferenceError there; the wrapped Elsa 4 source would return an empty value).
+6. **Given** a function that reads `arguments` and writes to `arguments[…]` or to one of its parameters, **When** it is converted, **Then** the definition is refused with guidance to copy the value into a local `let` instead.
+7. **Given** `this` inside a non-arrow function, or `arguments` that is only read, **When** it is converted, **Then** it converts; the README documents that `this` in a plainly called function is the Elsa 3 global object in Elsa 3 and `undefined` in Elsa 4.
 
 ---
 
@@ -198,11 +199,11 @@ runs it with the same result as without the comment.
 - **FR-007**: The converter MUST NOT change Elsa 4's evaluators, the binding grammar, or the `undefined` rule of ADR 0083.
 - **FR-008**: Every behaviour of FR-001 MUST be proven by an equivalence test that evaluates the converted expression in the real Elsa 4 evaluator: a missing property, a function that falls through, `void x`, `a || b`, a comma expression, an explicit `null`, and the falsy values `0`, `""` and `false`.
 - **FR-009**: Every construct of FR-005, FR-006 and FR-013 MUST have a refusal test, and every counterpart that still converts (a declared name, `this` in a function, read-only `arguments`) a conversion test.
-- **FR-010**: The Mapping README's migration story MUST move the two differences from "known differences that convert without a diagnostic" into the "what converts" and "what is refused" tables in the same unit, and MUST keep two remaining differences documented: `this` in a plainly called function, and an `undefined` value nested in an object result (the key is dropped in Elsa 4, kept as `null` in Elsa 3).
+- **FR-010**: The Mapping README's migration story MUST move the two differences from "known differences that convert without a diagnostic" into the "what converts" and "what is refused" tables in the same unit, and MUST keep two remaining differences documented: `this` in a plainly called function, an `undefined` value nested in an object result (the key is dropped in Elsa 4, kept as `null` in Elsa 3), and a `null` result bound to a non-nullable input (Elsa 3 used the type's default; Elsa 4 refuses it at run time).
 - **FR-011**: A converted RunJavaScript body MUST end so that a trailing line comment cannot swallow the end of Elsa 4's script wrapper (for example, by ending with a newline).
 - **FR-012**: The JTest corpus MUST be measured before and after with the spec 247/248 method, and the results recorded in this spec.
-- **FR-013**: The converter MUST refuse `this` outside every non-arrow function, and a write to `arguments[…]` or to a parameter inside a function that reads `arguments`, with a stable diagnostic and guidance in Elsa 3 terms. `this` inside a non-arrow function and read-only `arguments` MUST still convert.
-- **FR-014**: Two Elsa 4 issues MUST be drafted and shown to the maintainer, and filed as `needs-triage` only after approval: the nested-`undefined` difference (the README links it once filed), and the script wrapper that a trailing line comment breaks.
+- **FR-013**: The converter MUST refuse `this` and an undeclared `arguments` outside every non-arrow function, and a write to `arguments[…]` or to a parameter inside a function that reads `arguments`, with a stable diagnostic and guidance in Elsa 3 terms. `this` inside a non-arrow function and read-only `arguments` MUST still convert.
+- **FR-014**: Three Elsa 4 issues MUST be drafted and shown to the maintainer, and filed as `needs-triage` only after approval: the nested-`undefined` difference, the script wrapper that a trailing line comment breaks, and a `null` bound to a non-nullable input (Elsa 3 used the type's default; Elsa 4 refuses at run time, research R-8). The README links the first and third once filed.
 
 ### Key Entities
 
@@ -225,8 +226,9 @@ runs it with the same result as without the comment.
   has no `undefined`, and Elsa 3's `ToObject()` returned `null`. This is why FR-001 is faithful. It is about the
   top-level result only; `undefined` nested inside an object or array is a documented
   difference (Clarifications, FR-010).
-- How a `null` result reaches a typed, non-nullable input is not changed or tested by this unit; plan research records
-  the Elsa 3 and Elsa 4 behaviour.
+- How a `null` result reaches a typed, non-nullable input is not changed or tested by this unit. Plan research R-8
+  found that they differ (Elsa 3: the type's default; Elsa 4: `VF-ACT-004` at run time); that gap applies to every `null`
+  binding and goes to its own issue (FR-014).
 - Elsa 3 (3.5, the corpus's tool version) ran JavaScript in sloppy mode with top-level `return` allowed.
 - Diagnostics reuse the existing `VF-IMP-*` codes; no code is added, removed or renamed (to be confirmed in planning).
 - Elsa 4's one-line script wrapper breaks for any RunJavaScript body that ends in a line comment, not only converted
