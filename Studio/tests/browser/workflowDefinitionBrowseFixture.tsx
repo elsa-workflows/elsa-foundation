@@ -41,6 +41,27 @@ function recordDefinitionPageRequest(url: string) {
     .workflowDefinitionPageRequests = requests;
 }
 
+type DefinitionPage = { items: ReturnType<typeof definition>[]; nextContinuationToken: string | null };
+type DeferredPageRequest = {
+  searchTerm: string;
+  reject(error: Error): void;
+};
+
+const deferredSearchTerms = new Set<string>();
+const deferredPageRequests: DeferredPageRequest[] = [];
+const browseTestControl = {
+  deferNext(searchTerm: string) {
+    deferredSearchTerms.add(searchTerm);
+  },
+  rejectPending(searchTerm: string, message: string) {
+    const index = deferredPageRequests.findIndex(request => request.searchTerm === searchTerm);
+    if (index < 0) throw new Error(`No deferred workflow-definition request for "${searchTerm}"`);
+    deferredPageRequests.splice(index, 1)[0].reject(new Error(message));
+  }
+};
+
+(window as Window & { workflowBrowseTestControl?: typeof browseTestControl }).workflowBrowseTestControl = browseTestControl;
+
 const ai = {
   promptActions: { list: () => [] },
   dispatchPrompt: () => undefined,
@@ -72,9 +93,23 @@ const context = {
       if (url.startsWith("/browser/definition-pages")) {
         recordDefinitionPageRequest(url);
         const query = new URL(url, window.location.origin).searchParams;
-        return query.get("continuationToken") === continuationToken
-          ? { items: [definition("workflow-page-two", "Second page renewal")], nextContinuationToken: null }
-          : { items: [definition("workflow-page-one", "First page renewal")], nextContinuationToken: continuationToken };
+        const searchTerm = query.get("searchTerm") ?? "";
+        const response: DefinitionPage = searchTerm === "renewal"
+          ? query.get("continuationToken") === continuationToken
+            ? { items: [definition("workflow-page-two", "Second page renewal")], nextContinuationToken: null }
+            : { items: [definition("workflow-page-one", "First page renewal")], nextContinuationToken: continuationToken }
+          : searchTerm === "empty"
+            ? { items: [], nextContinuationToken: null }
+            : searchTerm
+              ? { items: [definition(`workflow-search-${searchTerm}`, "Latest workflow result")], nextContinuationToken: null }
+              : { items: [definition("workflow-page-one", "First page renewal")], nextContinuationToken: continuationToken };
+
+        if (deferredSearchTerms.delete(searchTerm)) {
+          return await new Promise<DefinitionPage>((_, reject) => {
+            deferredPageRequests.push({ searchTerm, reject });
+          });
+        }
+        return response;
       }
       if (url === "/browser/folders?pageSize=100") return { items: [folder], nextContinuationToken: null };
       if (url === "/browser/folders/folder-operations") return { folder, ancestors: [] };

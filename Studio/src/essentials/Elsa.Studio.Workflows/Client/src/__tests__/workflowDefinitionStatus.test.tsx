@@ -14,6 +14,45 @@ import {
 } from "./workflowDefinitionTestHelpers";
 
 describe("workflow definition request status", () => {
+  it.each([true, false])("treats text entered after a failed search as pending, with previous data: %s", async hasPreviousData => {
+    const requests: URL[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (!url.pathname.endsWith("/definition-pages")) return response({ items: [] });
+      requests.push(url);
+      const search = url.searchParams.get("searchTerm");
+      if (search === "failed") return response("Temporary search failure.", 503);
+      return response({ items: [definition({ name: search === "latest" ? "Latest workflow" : "Previous workflow" })], nextContinuationToken: null });
+    });
+    const { container } = await renderWorkflowRoute(
+      `/workflows/definitions?search=${hasPreviousData ? "initial" : "failed"}`,
+      fetchMock,
+      pagedDefinitionCapabilities()
+    );
+    if (hasPreviousData) {
+      await waitForText(container, "Previous workflow");
+      await fill(input(container, "Search all workflows"), "failed");
+      await click(button(container, "Refresh"));
+    }
+    await waitForCondition(() => expect(container.querySelector("[role='alert']")).not.toBeNull());
+
+    vi.useFakeTimers();
+    onTestFinished(() => { vi.useRealTimers(); });
+    await fill(input(container, "Search all workflows"), "latest");
+    expect(container.querySelector("[role='alert']")).toBeNull();
+    expect(requests.some(url => url.searchParams.get("searchTerm") === "latest")).toBe(false);
+    if (hasPreviousData) {
+      expect(row(container, "Previous workflow")).not.toBeNull();
+      expect(container.querySelector("[role='status']")?.textContent).toContain("“latest” waits to refresh");
+      expect(container.querySelector("[role='status']")?.textContent).not.toContain("failed");
+    } else {
+      expect(container.querySelector(".wf-grid[aria-busy='true']")).not.toBeNull();
+    }
+    await vi.advanceTimersByTimeAsync(250);
+    vi.useRealTimers();
+    await waitForText(container, "Latest workflow");
+  });
+
   it("keeps the current rows visible during same-view refresh and marks them stale after a failed refresh", async () => {
     const requests: string[] = [];
     let resolveRefresh: ((value: Response) => void) | undefined;
@@ -111,6 +150,7 @@ describe("workflow definition request status", () => {
     expect(row(container, "Second-page first-query workflow")).not.toBeNull();
     expect(container.querySelector("[role='status']")?.textContent ?? "").toContain("first query");
     await vi.advanceTimersByTimeAsync(250);
+    await waitForCondition(() => expect(requests.some(url => new URL(url).searchParams.get("searchTerm") === "new query")).toBe(true));
     vi.useRealTimers();
 
     const failedRequest = requests.map(url => new URL(url)).find(url => url.searchParams.get("searchTerm") === "new query");
@@ -118,6 +158,7 @@ describe("workflow definition request status", () => {
     expect(failedRequest?.searchParams.has("continuationToken")).toBe(false);
     expect(row(container, "Second-page first-query workflow")).not.toBeNull();
     expect(container.querySelector("[role='alert']")?.textContent).toContain("Couldn't load workflow definitions");
+    expect(container.querySelector("[role='status']")?.textContent).toContain("The latest search “new query” failed.");
     expect(button(container, "Refresh")).not.toBeNull();
 
     await click(button(container, "Refresh"));

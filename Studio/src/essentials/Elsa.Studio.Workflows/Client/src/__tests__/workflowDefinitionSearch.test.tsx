@@ -107,6 +107,58 @@ describe("workflow definition search refresh", () => {
     });
   });
 
+  it("keeps the debounce when text returns to the already-settled search", async () => {
+    const requests: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      requests.push(url.toString());
+      return response({ items: [definition({ name: "Settled workflow" })], nextContinuationToken: null });
+    });
+    const { container } = await renderWorkflowRoute("/workflows/definitions?search=settled", fetchMock, pagedDefinitionCapabilities());
+    await waitForText(container, "Settled workflow");
+
+    vi.useFakeTimers();
+    onTestFinished(() => { vi.useRealTimers(); });
+    const search = input(container, "Search all workflows");
+    await fill(search, "temporary");
+    await fill(search, "settled");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(requests.filter(url => new URL(url).searchParams.get("searchTerm") === "settled")).toHaveLength(1);
+    expect(row(container, "Settled workflow")?.querySelector("a")).toBeNull();
+    expect(container.querySelector("[role='status']")?.textContent).toContain("waits to refresh");
+
+    await vi.advanceTimersByTimeAsync(249);
+    expect(requests.filter(url => new URL(url).searchParams.get("searchTerm") === "settled")).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await waitForCondition(() => expect(
+      requests.filter(url => new URL(url).searchParams.get("searchTerm") === "settled")
+    ).toHaveLength(2));
+  });
+
+  it("lets an explicit refresh flush a pending search immediately without a duplicate delayed request", async () => {
+    const requests: string[] = [];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      requests.push(url.toString());
+      return response({ items: [definition({ name: "Refreshed workflow" })], nextContinuationToken: null });
+    });
+    const { container } = await renderWorkflowRoute("/workflows/definitions", fetchMock, pagedDefinitionCapabilities());
+    await waitForText(container, "Refreshed workflow");
+
+    vi.useFakeTimers();
+    onTestFinished(() => { vi.useRealTimers(); });
+    await fill(input(container, "Search all workflows"), "invoice");
+    expect(requests.filter(url => new URL(url).searchParams.get("searchTerm") === "invoice")).toHaveLength(0);
+
+    await click(button(container, "Refresh"));
+    await waitForCondition(() => expect(
+      requests.filter(url => new URL(url).searchParams.get("searchTerm") === "invoice")
+    ).toHaveLength(1));
+    await vi.advanceTimersByTimeAsync(300);
+    expect(requests.filter(url => new URL(url).searchParams.get("searchTerm") === "invoice")).toHaveLength(1);
+    await waitForText(container, "Refreshed workflow");
+  });
+
   it.each(["during the newer query's delay", "after the newer result"])("ignores an older response %s", async completion => {
     const requests: string[] = [];
     let resolveAlpha: ((value: Response) => void) | undefined;

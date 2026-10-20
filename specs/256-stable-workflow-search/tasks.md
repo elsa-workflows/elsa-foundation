@@ -66,7 +66,7 @@
 
 **Independent Test**: Rerun `workflowDefinitionSearch.test.tsx` after implementation; input/address remain immediate, requests settle once, and eligible prior rows stay labelled and non-actionable.
 
-- [ ] T008 [US1] Create the private `useWorkflowDefinitionBrowseSession` and controlled list contract in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/workflowDefinitionBrowseSession.ts`, `pages.tsx`, and `WorkflowDefinitions.tsx`; make the route the sole owner of browse key/page/page size/cursors/invalidation revision, then implement immediate search supersession, the 250 ms text-only delay, and labelled display-only prior results without old counts/pager/empty state/selection/actions; rerun `workflowDefinitionSearch.test.tsx` and record RED/GREEN.
+- [x] T008 [US1] Create the private `useWorkflowDefinitionBrowseSession` and controlled list contract in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/workflowDefinitionBrowseSession.ts`, `pages.tsx`, and `WorkflowDefinitions.tsx`; make the route the sole owner of browse key/page/page size/cursors/invalidation revision, then implement immediate search supersession, the 250 ms text-only delay, and labelled display-only prior results without old counts/pager/empty state/selection/actions; rerun `workflowDefinitionSearch.test.tsx` and record RED/GREEN.
 
 ## Phase 7: User Story 2 - Implement Truthful Status and Invalidation (Priority: P1)
 
@@ -74,7 +74,7 @@
 
 **Independent Test**: Rerun `workflowDefinitionStatus.test.tsx` and `workflowDefinitionRoute.test.tsx`; current results/status match the latest view and endpoint/session/typed-denial changes clear protected state even while the editor replaces the list.
 
-- [ ] T009 [US2] Implement same-view retained refresh, distinct current empty/failure/retry status, and stale labeling after failed search in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowDefinitions.tsx`; implement baseUrl/public auth-session/remount invalidation in `workflowDefinitionBrowseSession.ts` and `pages.tsx`, and typed `StudioHttpError.status` 401/403 clearing in the list callback; rerun both US2 test files and record RED/GREEN without token inspection, message parsing, or new auth APIs.
+- [x] T009 [US2] Implement same-view retained refresh, distinct current empty/failure/retry status, and stale labeling after failed search in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowDefinitions.tsx`; implement baseUrl/public auth-session/remount invalidation in `workflowDefinitionBrowseSession.ts` and `pages.tsx`, and typed `StudioHttpError.status` 401/403 clearing in the list callback; rerun both US2 test files and record RED/GREEN without token inspection, message parsing, or new auth APIs.
 
 ## Phase 8: User Story 3 - Implement Browse-Page Return (Priority: P2)
 
@@ -82,9 +82,9 @@
 
 **Independent Test**: Rerun `workflowDefinitionRoute.test.tsx` and the real-route Playwright spec; explicit page navigation remains on the selected page with its actual cursor, Back restores the same visit, and remount starts at defaults.
 
-- [ ] T010 [US3] Implement route-owned page/page-size/cursor transitions and `popstate` key comparison in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/workflowDefinitionBrowseSession.ts` and `pages.tsx`; keep definition-only/same-browse transitions, rebase only changed search/folder/lifecycle keys, preserve explicit-page cursors, and defer effective-folder comparison until capability settles.
-- [ ] T011 [US3] Adapt both direct `WorkflowDefinitions` browser fixtures at `Studio/tests/browser/src.tsx:978,1126` to the route-owned controlled session and keep the return scenario on the real `WorkflowManagementPage` in `Studio/tests/browser/workflow-definition-browse-context.spec.ts`.
-- [ ] T012 [US3] Rerun `workflowDefinitionRoute.test.tsx` and `pnpm exec playwright test tests/browser/workflow-definition-browse-context.spec.ts --workers=1` after route integration; record RED/GREEN for editor Back, browser Back, synthetic-popstate-before-unmount, explicit cursor use, and full-remount defaults.
+- [x] T010 [US3] Implement route-owned page/page-size/cursor transitions and `popstate` key comparison in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/workflowDefinitionBrowseSession.ts` and `pages.tsx`; keep definition-only/same-browse transitions, rebase only changed search/folder/lifecycle keys, preserve explicit-page cursors, and defer effective-folder comparison until capability settles.
+- [x] T011 [US3] Adapt both direct `WorkflowDefinitions` browser fixtures at `Studio/tests/browser/src.tsx:978,1126` to the route-owned controlled session and keep the return scenario on the real `WorkflowManagementPage` in `Studio/tests/browser/workflow-definition-browse-context.spec.ts`.
+- [x] T012 [US3] Rerun `workflowDefinitionRoute.test.tsx` and `pnpm exec playwright test tests/browser/workflow-definition-browse-context.spec.ts --workers=1` after route integration; record RED/GREEN for editor Back, browser Back, synthetic-popstate-before-unmount, explicit cursor use, and full-remount defaults.
 
 **Checkpoint**: Same-visit Back restores search, filters, size, page, and observed cursor; ordinary page navigation honors its selected page; changed browse keys and cold remounts follow the spec.
 

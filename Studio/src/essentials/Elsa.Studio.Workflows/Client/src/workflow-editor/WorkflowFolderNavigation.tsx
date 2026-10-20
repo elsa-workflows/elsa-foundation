@@ -39,6 +39,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   const folderPickerButtonRef = useRef<HTMLButtonElement>(null);
   const renameButtonRef = useRef<HTMLButtonElement>(null);
   const moveButtonRef = useRef<HTMLButtonElement>(null);
+  const breadcrumbIdentityRef = useRef<string | null>(null);
   const {
     roots,
     children,
@@ -75,9 +76,17 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
 
   useEffect(() => {
     const id = selectedFolderId(selection);
-    setCrumbs([]);
-    setBreadcrumbError(null);
-    if (!id || !available) { setBreadcrumbState("idle"); return; }
+    const identity = `${context.baseUrl}\u0000${id ?? ""}`;
+    const identityChanged = breadcrumbIdentityRef.current !== identity;
+    breadcrumbIdentityRef.current = identity;
+    if (identityChanged || !available) {
+      setCrumbs([]);
+      setBreadcrumbError(null);
+    }
+    if (!id || !available) {
+      setBreadcrumbState("idle");
+      return;
+    }
     setBreadcrumbState("loading");
     let cancelled = false;
     void getWorkflowFolder(context, id)

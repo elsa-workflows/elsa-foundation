@@ -148,9 +148,11 @@ describe("workflow definition route browse session", () => {
     await click(button(container, "Definitions"));
 
     await waitForCondition(() => expect(requests.some(url => url.startsWith("https://new-server.example/") && url.includes("definition-pages"))).toBe(true));
-    const returnedRequest = new URL(requests.filter(url => url.includes("definition-pages")).at(-1)!);
-    expect(returnedRequest.origin).toBe("https://new-server.example");
-    expect(returnedRequest.searchParams.has("continuationToken")).toBe(false);
+    const newEndpointRequests = requests
+      .filter(url => url.startsWith("https://new-server.example/") && url.includes("definition-pages"))
+      .map(url => new URL(url));
+    expect(newEndpointRequests.length).toBeGreaterThan(0);
+    expect(newEndpointRequests.every(request => !request.searchParams.has("continuationToken"))).toBe(true);
     expect(row(container, "Second page workflow")).toBeNull();
     await waitForText(container, "First page workflow");
   });

@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-20
 
-**Status**: Approved
+**Status**: Implemented
 
 **Input**: User outcome for Foundation #3068: keep workflow-definition search useful and predictable while results refresh, and return to the same browse context after opening a definition.
 
