@@ -201,6 +201,31 @@ describe("compensation runtime", () => {
     expect(runtime.rows.every(row => row.forward.state === "NotRun" && row.recovery.state === "NotApplicable")).toBe(true);
   });
 
+  it("says not loaded, never not run, when the run's activity list is a bounded page", () => {
+    const runtime = deriveCompensationRuntime(journeyScope(), [
+      execution("ae-scope", "scope", "Running", "10"),
+      execution("ae-1", "reserve", "Completed", "11", { parent: "ae-scope" })
+    ], [], { complete: false });
+
+    expect(runtime.incomplete).toBe(true);
+    expect(runtime.rows.map(row => [row.forward.state, row.recovery.state])).toEqual([
+      ["Completed", "Registered"],
+      ["NotLoaded", "NotLoaded"],
+      ["NotLoaded", "NotLoaded"]
+    ]);
+    expect(deriveCompensationRuntime(journeyScope(), [], [], { complete: false }).phase).toBe("NotLoaded");
+  });
+
+  it("finds the recovery cause's incident through its runtime metadata when it carries no execution id", () => {
+    const linked = { ...incident("inc-1", "ae-3", "order.rejected", "Order rejected"), activityExecutionId: null, metadata: { "runtime.activityExecutionId": " ae-3 " } };
+    const runtime = deriveCompensationRuntime(journeyScope(), [
+      execution("ae-scope", "scope", "Completed", "10", { outcomeNames: ["Compensated"] }),
+      execution("ae-3", "confirm", "Faulted", "13", { parent: "ae-scope" })
+    ], [linked as IncidentStateSummary]);
+
+    expect(runtime.cause?.failureType).toBe("order.rejected");
+  });
+
   it("recognises handler executions by their scheduling cause", () => {
     expect(isCompensationHandlerExecution({ provenance: { schedulingCause: "compensation" } })).toBe(true);
     expect(isCompensationHandlerExecution({ provenance: { schedulingCause: "ActivityCompletion" } })).toBe(false);

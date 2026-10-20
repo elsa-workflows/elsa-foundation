@@ -8,9 +8,9 @@ import type { ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary 
 export const compensationSchedulingCause = "compensation";
 export const compensatedOutcome = "Compensated";
 
-export type CompensationForwardState = "NotRun" | "Running" | "Completed" | "Faulted" | "Cancelled";
-export type CompensationRecoveryState = "NotApplicable" | "NotNeeded" | "Registered" | "Pending" | "Running" | "Compensated" | "Failed";
-export type CompensationScopeRunPhase = "NotStarted" | "Running" | "Compensating" | "Completed" | "Compensated" | "Faulted" | "Cancelled";
+export type CompensationForwardState = "NotLoaded" | "NotRun" | "Running" | "Completed" | "Faulted" | "Cancelled";
+export type CompensationRecoveryState = "NotLoaded" | "NotApplicable" | "NotNeeded" | "Registered" | "Pending" | "Running" | "Compensated" | "Failed";
+export type CompensationScopeRunPhase = "NotLoaded" | "NotStarted" | "Running" | "Compensating" | "Completed" | "Compensated" | "Faulted" | "Cancelled";
 
 export interface CompensationRowRuntime {
   step: string;
@@ -31,16 +31,21 @@ export interface CompensationScopeRuntime {
   phase: CompensationScopeRunPhase;
   rows: CompensationRowRuntime[];
   cause?: CompensationRecoveryCause;
+  /** The run's activity list was a bounded page, so a missing execution may exist on a later page. */
+  incomplete?: boolean;
 }
 
 export function isCompensationHandlerExecution(activity: Pick<ActivityExecutionStateSummary, "provenance">): boolean {
   return activity.provenance?.schedulingCause === compensationSchedulingCause;
 }
 
+// When `complete` is false the activities are one bounded page of the run: an execution that is not on it is
+// reported as not loaded, never as not run, so a partial page cannot claim the scope or a step did not happen.
 export function deriveCompensationRuntime(
   scope: ActivityNode,
   activities: ActivityExecutionStateSummary[],
-  incidents: IncidentStateSummary[]
+  incidents: IncidentStateSummary[],
+  { complete = true }: { complete?: boolean } = {}
 ): CompensationScopeRuntime {
   const steps = readCompensationSteps(scope);
   const scopeExecution = latest(activities.filter(activity => matchesNode(activity, scope.nodeId)));
@@ -57,14 +62,14 @@ export function deriveCompensationRuntime(
     const forward = step.activity ? latest(children.filter(activity => matchesNode(activity, step.activity!.nodeId) && !isCompensationHandlerExecution(activity))) : undefined;
     return forward && forward.status === "Faulted" ? [{ index, forward }] : [];
   });
-  const phase = runPhase(scopeExecution, handlerExecutions.length > 0 || forwardFaulted.length > 0);
+  const phase = !scopeExecution && !complete ? "NotLoaded" : runPhase(scopeExecution, handlerExecutions.length > 0 || forwardFaulted.length > 0);
   const recovering = phase === "Compensating" || phase === "Compensated" || (phase === "Faulted" && handlerExecutions.length > 0);
 
   const rows = steps.map((step): CompensationRowRuntime => {
     const forward = step.activity
       ? latest(children.filter(activity => matchesNode(activity, step.activity!.nodeId) && !isCompensationHandlerExecution(activity)))
       : undefined;
-    const forwardState = forwardStateOf(forward);
+    const forwardState = !forward && !complete ? "NotLoaded" : forwardStateOf(forward);
     const handler = step.compensation
       ? latest(handlerExecutions.filter(activity => matchesNode(activity, step.compensation!.nodeId)))
       : undefined;
@@ -85,11 +90,12 @@ export function deriveCompensationRuntime(
     ? causeOf(steps[faulted.index].name, faulted.forward, incidents)
     : undefined;
 
-  return { scopeActivityExecutionId: scopeExecution?.activityExecutionId, phase, rows, cause };
+  return { scopeActivityExecutionId: scopeExecution?.activityExecutionId, phase, rows, cause, ...(complete ? {} : { incomplete: true }) };
 }
 
 export function forwardStateLabel(state: CompensationForwardState): string {
   switch (state) {
+    case "NotLoaded": return "Not loaded";
     case "NotRun": return "Not run";
     case "Running": return "Running";
     case "Completed": return "Completed";
@@ -100,6 +106,7 @@ export function forwardStateLabel(state: CompensationForwardState): string {
 
 export function recoveryStateLabel(state: CompensationRecoveryState): string {
   switch (state) {
+    case "NotLoaded": return "Not loaded";
     case "NotApplicable": return "Not applicable";
     case "NotNeeded": return "Not needed";
     case "Registered": return "Can be undone";
@@ -112,6 +119,7 @@ export function recoveryStateLabel(state: CompensationRecoveryState): string {
 
 export function scopePhaseLabel(phase: CompensationScopeRunPhase): string {
   switch (phase) {
+    case "NotLoaded": return "Not loaded";
     case "NotStarted": return "Not started";
     case "Running": return "Running steps";
     case "Compensating": return "Compensating";
@@ -152,6 +160,7 @@ function recoveryStateOf(
   handler: ActivityExecutionStateSummary | undefined,
   recovering: boolean
 ): CompensationRecoveryState {
+  if (forward === "NotLoaded") return "NotLoaded";
   if (forward !== "Completed") return "NotApplicable";
   if (!hasHandler) return "NotNeeded";
   if (handler?.status === "Completed") return "Compensated";
@@ -161,7 +170,9 @@ function recoveryStateOf(
 }
 
 function causeOf(step: string, forward: ActivityExecutionStateSummary, incidents: IncidentStateSummary[]): CompensationRecoveryCause {
-  const incident = incidents.find(candidate => candidate.activityExecutionId === forward.activityExecutionId);
+  // The same association the run view uses: the incident's own execution id, or the runtime metadata copy of it.
+  const incident = incidents.find(candidate =>
+    (candidate.activityExecutionId?.trim() || candidate.metadata?.["runtime.activityExecutionId"]?.trim()) === forward.activityExecutionId);
   return {
     step,
     activityExecutionId: forward.activityExecutionId,
