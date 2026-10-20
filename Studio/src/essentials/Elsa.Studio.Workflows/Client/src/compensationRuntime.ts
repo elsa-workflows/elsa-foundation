@@ -45,10 +45,16 @@ export function deriveCompensationRuntime(
   scope: ActivityNode,
   activities: ActivityExecutionStateSummary[],
   incidents: IncidentStateSummary[],
-  { complete = true }: { complete?: boolean } = {}
+  { complete = true, selectedActivityExecutionId }: { complete?: boolean; selectedActivityExecutionId?: string | null } = {}
 ): CompensationScopeRuntime {
   const steps = readCompensationSteps(scope);
-  const scopeExecution = latest(activities.filter(activity => matchesNode(activity, scope.nodeId)));
+  // A scope inside a loop runs more than once: show the occurrence the operator selected (the scope itself, or one of
+  // its steps or handlers), and the latest one otherwise.
+  const scopeExecutions = activities.filter(activity => matchesNode(activity, scope.nodeId));
+  const selected = selectedActivityExecutionId ? activities.find(activity => activity.activityExecutionId === selectedActivityExecutionId) : undefined;
+  const scopeExecution = (selected && scopeExecutions.find(execution =>
+      execution.activityExecutionId === selected.activityExecutionId || execution.activityExecutionId === parentOf(selected)))
+    ?? latest(scopeExecutions);
   const children = scopeExecution
     ? activities.filter(activity => parentOf(activity) === scopeExecution.activityExecutionId)
     : [];

@@ -218,6 +218,23 @@ describe("compensation runtime", () => {
     expect(deriveCompensationRuntime(journeyScope(), [], [], { complete: false }).phase).toBe("NotLoaded");
   });
 
+  it("shows the scope occurrence the operator selected when the scope ran more than once", () => {
+    const activities = [
+      execution("ae-scope-1", "scope", "Completed", "10", { outcomeNames: ["Compensated"] }),
+      execution("ae-1", "reserve", "Completed", "11", { parent: "ae-scope-1" }),
+      execution("ae-3", "confirm", "Faulted", "13", { parent: "ae-scope-1" }),
+      execution("ae-scope-2", "scope", "Completed", "20", { outcomeNames: ["Done"] }),
+      execution("ae-21", "reserve", "Completed", "21", { parent: "ae-scope-2" })
+    ];
+
+    expect(deriveCompensationRuntime(journeyScope(), activities, []).scopeActivityExecutionId).toBe("ae-scope-2");
+    expect(deriveCompensationRuntime(journeyScope(), activities, [], { selectedActivityExecutionId: "ae-scope-1" }).phase).toBe("Compensated");
+    // Selecting one of the older occurrence's steps selects its scope too.
+    expect(deriveCompensationRuntime(journeyScope(), activities, [], { selectedActivityExecutionId: "ae-3" }).scopeActivityExecutionId).toBe("ae-scope-1");
+    // A selection elsewhere keeps the latest occurrence.
+    expect(deriveCompensationRuntime(journeyScope(), activities, [], { selectedActivityExecutionId: "elsewhere" }).scopeActivityExecutionId).toBe("ae-scope-2");
+  });
+
   it("keeps what a partial page does prove: visible recovery, and a scope that completed without undoing", () => {
     const recovering = deriveCompensationRuntime(journeyScope(), [
       execution("ae-scope", "scope", "Running", "10"),
