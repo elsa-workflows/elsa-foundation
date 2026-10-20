@@ -99,6 +99,40 @@ html[data-theme-mode="dark"] .otel-panel {
   color: var(--otel-text);
 }
 
+.otel-capability-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--otel-border);
+  border-radius: 6px;
+  background: var(--otel-surface-subtle);
+  padding: 10px 12px;
+}
+
+.otel-capability-note p {
+  flex: 1 1 15rem;
+  margin: 0;
+  color: var(--otel-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.otel-capability-note a {
+  flex: none;
+  color: var(--otel-accent-text);
+  font-size: 12px;
+  font-weight: 760;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.otel-capability-note a:focus-visible {
+  outline: 2px solid var(--otel-accent);
+  outline-offset: 2px;
+}
+
 .otel-tabs,
 .otel-toolbar,
 .otel-trace-detail-header {
