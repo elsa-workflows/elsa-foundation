@@ -1,0 +1,27 @@
+{
+  "source": "Extensions/Etl/src/Workflows/Runtime/Activities/RunEtl.cs",
+  "restoredSha256": "a3851fe75cf1d6113ccabdac47874ea42eb5c0bd77a139aced08316c24f91c7d",
+  "changedSha256": "0238d9b8263385bfce8f1dbb0ae01164bec987b6acc32d257270c27506e47269",
+  "change": "Drop the BusinessError completion outcome while retaining the real ETL terminal result.",
+  "command": [
+    "dotnet",
+    "test",
+    "Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj",
+    "--configuration",
+    "Release",
+    "--no-restore",
+    "--filter",
+    "FullyQualifiedName~Published_ETL_terminal_outcome&DisplayName~Sequence&DisplayName~BusinessError",
+    "--logger",
+    "console;verbosity=normal"
+  ],
+  "changedExitCode": 1,
+  "restoredExitCode": 0,
+  "retainedFailureDirectory": "/var/folders/63/lbnh2n0n6dv9dzm8bks0854c0000gn/T/Elsa.Etl.NativeCompositeJourney/9cac0dabbfab404887c3dcd951942fd5",
+  "retainedDiagnosticSha256": "6083d364996abd043083ce037e1ff1f4d5abab77d1d465063c3e9f38949a2860",
+  "retainedDatabases": [
+    "etl-design.db",
+    "etl-runtime.db",
+    "workflow.db"
+  ]
+}

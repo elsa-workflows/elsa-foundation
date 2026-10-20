@@ -1,6 +1,6 @@
 # Tasks: Finite CSV-to-JSONL ETL
 
-**State:** Approved execution checklist for [#3109](https://github.com/elsa-workflows/elsa-foundation/issues/3109). Domain admission/design review and existing-runtime coverage are complete; component/design-persistence and bounded runtime execution are implemented; native admission/result delivery and durable composite success are implemented; outcome/cancellation, API/Studio and recovery acceptance remain in progress. The [foundation checkpoint](evidence/finite-file-foundations.md) records executed evidence and the remaining product gate. This is the one active program leaf; do not turn its checkboxes into competing issue claims.
+**State:** Approved execution checklist for [#3109](https://github.com/elsa-workflows/elsa-foundation/issues/3109). Domain admission/design review and existing-runtime coverage are complete; component/design-persistence and bounded runtime execution are implemented; native admission/result delivery and durable composite success are implemented; native-initiated cancellation, API/Studio and recovery acceptance remain in progress. The [foundation checkpoint](evidence/finite-file-foundations.md) records executed evidence and the remaining product gate. This is the one active program leaf; do not turn its checkboxes into competing issue claims.
 
 ## Phase 1 — Admission and source verification
 
@@ -38,9 +38,9 @@
 - [x] T017 [US2] Implement `RunEtl` and immutable typed invocation/result state in `Extensions/Etl/src/Workflows/Runtime`; derive admission from real `BookmarkCreated` commits using the existing enricher/outbox seam, with no kernel switch or mutable staging buffer.
 - [ ] T018 [US2] Implement publication pinning/picker contribution in `Extensions/Etl/src/Workflows/Design`; retain the exact ETL artifact/hash and expose the activity only through the existing catalog.
 - [x] T019 [US2] Implement durable terminal compare-and-set/outbox and idempotent bookmark result delivery in the ETL runtime/native adapter; acknowledge consumption or demonstrated parent termination, not merely queueing.
-- [ ] T020 [US2] Prove native Sequence sibling continuation, Flowchart completion and normal child completion inside the now-landed CompensationScope, plus business-error/fault/cancellation behavior in `Extensions/Etl/tests/Tests`, using real durable state and normal composite semantics. Do not imply automatic reversal of ETL physical effects; compensation remains explicitly authored.
+- [x] T020 [US2] Prove native Sequence sibling continuation, Flowchart completion and normal child completion inside the now-landed CompensationScope, plus business-error/fault/cancellation behavior in `Extensions/Etl/tests/Tests`, using real durable state and normal composite semantics. Do not imply automatic reversal of ETL physical effects; compensation remains explicitly authored.
 
-**Native checkpoint:** T017/T019 now have actual SQLite scheduler/worker evidence, including matching consumed receipts and acknowledged terminal results. Sequence, Flowchart and CompensationScope continue; a later scope fault preserves the ETL output and continues its outer Sequence. T020 remains open for native ETL business-error/fault/cancellation cases. [Composite evidence and boundaries](evidence/native-composite-checkpoint.md).
+**Native checkpoint:** T017/T019 now have actual SQLite scheduler/worker evidence, including matching consumed receipts and acknowledged terminal results. Sequence, Flowchart and CompensationScope continue; a later scope fault preserves the ETL output and continues its outer Sequence. T020 is complete: the [terminal matrix](evidence/native-terminal-outcomes.md) covers business-error/fault/cancellation in all three composites through real SQLite/native execution. T022 native-initiated cancellation and pre-admission ordering remain open. [Composite evidence and boundaries](evidence/native-composite-checkpoint.md).
 
 ## Phase 5 — US3: Recover and fence work
 
