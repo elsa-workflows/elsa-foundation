@@ -1,6 +1,6 @@
 # Quickstart: Stable workflow search
 
-This is the proposed implementation verification sequence. Commands have **not** been run for this feature. The browser return-context scenario requires the planned fixture to compose the real `WorkflowManagementPage`; the current direct-list fixture cannot verify editor replacement and Back behavior.
+This is the repeatable implementation verification sequence. Executed, source-qualified results are recorded in [PR #3118](https://github.com/elsa-workflows/elsa-foundation/pull/3118); listing a command here does not claim a pass. The browser fixture composes the real `WorkflowManagementPage` and exercises editor replacement and Back behavior.
 
 ## Focused Workflows Client checks
 
@@ -8,11 +8,14 @@ Run from `Studio/src/essentials/Elsa.Studio.Workflows/Client`:
 
 ```bash
 pnpm exec vitest run
+for seed in 1 11 29; do
+  pnpm exec vitest run --sequence.shuffle --sequence.seed="$seed" || exit 1
+done
 pnpm typecheck
 pnpm build
 ```
 
-These use the package’s existing `test`, `typecheck`, and `build` scripts; `build` runs Vite and the existing bundle-size check. The added focused session tests should cover route-owner transitions and cursor preservation without creating a second test-only paging state.
+These use the package’s existing `test`, `typecheck`, and `build` scripts; `build` runs Vite and the existing bundle-size check. The focused route, search, status and browse-boundary tests cover session transitions and cursor preservation without a second test-only paging state. Before interacting with a current-result control, wait for the current response to render: request dispatch alone is insufficient while prior rows are deliberately display-only.
 
 ## Studio browser and integration checks
 
@@ -32,12 +35,13 @@ The browser scenario should run against the default Studio Playwright configurat
 Run from the repository root:
 
 ```bash
+bash tools/architecture/restore-ci-project-graph.sh --locked-mode
 dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj
 dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 ```
 
-No backend source or dependency boundary is expected to change; these remain the repository’s standing architecture/map checks. Review hosted `Build & test` and `Maps` results for the exact implementation commit and check fresh-main CI and maps after merge under the repository’s post-merge gate.
+The feature changes no backend behavior or dependency boundary. Under main PR #3116, `-- check` compares the tracked dependency map; documentation maps are generated locally or published to `generated-maps` and must not be staged. Review exact-head hosted checks and verify resulting-main CI/dependency-map checks after merge. See [current map policy](../../docs/contributing/generated-maps.md).
 
 ## RED/GREEN evidence to record
 
-Before implementation, run the new behavioral tests against the baseline and record each result. The critical RED scenarios are immediate supersession after search entry but before the delayed request starts, retained/labelled previous rows across a search from a later page, the selected-page request using an observed cursor, the synthetic definition-only `popstate` before list unmount, route-owner invalidation while the editor is open, and editor/browser Back restoration through the real route. Then rerun the same tests after implementation and record the GREEN results. Existing generation guards and the distinct empty/error render branches may already pass their baseline cases; report that honestly rather than claiming they were newly fixed. All commands above remain unrun and are not evidence of a pass or a production latency guarantee.
+Baseline and before/after results are recorded in `tasks.md` and the PR receipts. Some original generation/empty-state guards already passed before implementation; they are preservation evidence, not newly reproduced defects. The retained-results and Back-restoration failures were observed before their implementation. Preserve the original assertions when correcting asynchronous test readiness, and retain failed logs separately from later passing runs. None of this is a production latency guarantee.
