@@ -42,6 +42,13 @@ internal static class Elsa3ImportPermissions
 {
     public const string Read = "elsa3-import:read";
     public const string Manage = "elsa3-import:manage";
+
+    /// <summary>
+    /// Workflows Publishing's manage permission, which applying an import also needs because the apply publishes the
+    /// imported reusable activities (spec 246 D-4). Duplicated rather than referenced: the import does not depend on
+    /// Publishing (framework §2.17); the bridge's tests pin it to <c>WorkflowPublishingPermissions.Manage</c>.
+    /// </summary>
+    public const string PublishingManage = "workflows/publishing:manage";
 }
 
 public static class ReusableActivityImportHttp

@@ -1,0 +1,122 @@
+{
+  "id": "waits-v1",
+  "definitionId": "waits",
+  "name": "waits",
+  "description": "Test-owned reusable flowchart: waits two seconds with a Delay, then completes with Approved.",
+  "createdAt": "1970-01-01T00:00:00Z",
+  "version": 1,
+  "toolVersion": "3.6.0",
+  "variables": [],
+  "inputs": [],
+  "outputs": [],
+  "outcomes": [
+    "Approved"
+  ],
+  "customProperties": {},
+  "isReadonly": false,
+  "isSystem": false,
+  "isLatest": true,
+  "isPublished": true,
+  "options": {
+    "usableAsActivity": true
+  },
+  "root": {
+    "id": "waits-root",
+    "nodeId": "waits-root",
+    "name": "waits-root",
+    "type": "Elsa.Flowchart",
+    "version": 1,
+    "customProperties": {
+      "canStartWorkflow": false,
+      "runAsynchronously": false
+    },
+    "metadata": {
+      "designer": {
+        "position": {
+          "x": 0,
+          "y": 0
+        },
+        "size": {
+          "width": 100,
+          "height": 50
+        }
+      }
+    },
+    "activities": [
+      {
+        "id": "wait",
+        "nodeId": "wait",
+        "name": "wait",
+        "type": "Elsa.Delay",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "timeSpan": {
+          "typeName": "TimeSpan",
+          "expression": {
+            "type": "Literal",
+            "value": "00:00:02"
+          }
+        }
+      },
+      {
+        "id": "approved",
+        "nodeId": "approved",
+        "name": "approved",
+        "type": "Elsa.Complete",
+        "version": 1,
+        "customProperties": {
+          "canStartWorkflow": false,
+          "runAsynchronously": false
+        },
+        "metadata": {
+          "designer": {
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "width": 100,
+              "height": 50
+            }
+          }
+        },
+        "outcomes": {
+          "typeName": "String",
+          "expression": {
+            "type": "Literal",
+            "value": "Approved"
+          }
+        }
+      }
+    ],
+    "connections": [
+      {
+        "source": {
+          "activity": "wait",
+          "port": "Done"
+        },
+        "target": {
+          "activity": "approved",
+          "port": "In"
+        },
+        "vertices": []
+      }
+    ],
+    "variables": []
+  }
+}
