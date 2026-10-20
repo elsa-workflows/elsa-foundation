@@ -254,7 +254,7 @@ Notes come only from explicit `**Notes**:` metadata; see [Spec status metadata](
 | [243-connection-secret-picker](../../specs/243-connection-secret-picker/spec.md) | Connection credential Secret selection | Implemented | - | 7 | 0 | - |
 | [244-secret-scope-catalog](../../specs/244-secret-scope-catalog/spec.md) | Secret scope catalogue and picker | Implemented | - | 0 | 0 | - |
 | [245-workflow-run-deletion](../../specs/245-workflow-run-deletion/spec.md) | Individual and bulk workflow-run deletion | Implemented; PR verification pending | - | 0 | 0 | - |
-| [246-publish-imported-reusables](../../specs/246-publish-imported-reusables/spec.md) | Publish imported Elsa 3 reusable activities so they run as graph activities | Draft | - | 54 | 0 | - |
+| [246-publish-imported-reusables](../../specs/246-publish-imported-reusables/spec.md) | Publish imported Elsa 3 reusable activities so they run as graph activities | Draft | - | 55 | 0 | - |
 | [247-elsa3-js-host-functions](../../specs/247-elsa3-js-host-functions/spec.md) | Elsa 3 JavaScript host functions: convert what Elsa 4 runs the same, refuse the rest clearly | Implemented — merged as [#3028](https://github.com/elsa-workflows/elsa-foundation/pull/3028) (`88e513b7e`), 2026-10-19 | - | 41 | 0 | - |
 | [248-elsa3-faithful-fixes](../../specs/248-elsa3-faithful-fixes/spec.md) | Elsa 3 converter faithful fixes from the JTest measurement | In progress | - | 15 | 1 | - |
 | [249-native-hosting-conformance](../../specs/249-native-hosting-conformance/spec.md) | Native hosting conformance | Implemented | - | 23 | 0 | - |

@@ -372,7 +372,10 @@ source (`elsa-core`, `WorkflowDefinitionActivity`, `Correlate`, `SetName`, `Fini
   (`ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`), but a waited Elsa 4 Dispatch Workflow returns the child's outputs in
   `Result.outputs` (`WorkflowDispatchCompletionEnricher`). The guidance now says so.
 - An outcome named `done` is told to update its callers too.
-- A Delay in a reusable body suspends and resumes (`ReusableBodyWaitTests`, with the scheduling activities composed). Waits
-  are not refused. Event and mid-flow HTTP waits use the same resume mechanism but are not proven here: the test host
-  composes neither module.
+- Waits in a reusable body suspend and resume (`ReusableBodyWaitTests`): a Delay (scheduling activities composed), a
+  mid-flow Event raised through `POST runtime/workflows/stimuli`, and a mid-flow HTTP Endpoint (HTTP activities composed,
+  request to `/workflows/http/{path}`). Waits are not refused.
+- Not a reusable gap, found on the way: an Event wait woken by an imported Publish Event faults on resume in every
+  workflow, regular ones included, because `PublishStimulusExecutor` sends the authored payload (usually none) as the
+  Event's `EventReceived` trigger. Filed as elsa-foundation#3107; the readiness guide names it.
 

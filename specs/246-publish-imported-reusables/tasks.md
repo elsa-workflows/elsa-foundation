@@ -416,6 +416,8 @@ no versions. Nothing publishes yet.
 - [X] T052 Guidance review against Elsa 3 semantics (R-19): per-type intrinsic advice including Finish, HTTP projection
   refusals on the endpoint, capture vs read, the regular-workflow route's outputs, `done` callers, and the Delay proof
   (`Elsa3ReusableGuidanceTests`, `ReusableBodyWaitTests`); readiness guide updated.
+- [X] T053 Prove Event and mid-flow HTTP Endpoint waits in a reusable body (`ReusableBodyWaitTests`); file the
+  Publish Event resume fault found on the way (#3107) and name it in the readiness guide.
 
 ---
 
