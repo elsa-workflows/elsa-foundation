@@ -197,8 +197,7 @@ public sealed class RetryFaultedActivityAlterationHandler(
         RuntimeMetadataKeys.CausalActivityExecutionId,
         RuntimeMetadataKeys.CausalExecutableNodeId,
         RuntimeMetadataKeys.CausationKind,
-        // The background coordinator's admitted-work marker (BackgroundActivityEligibility.WorkIdMetadataKey).
-        "runtime.backgroundActivityWorkId"
+        RuntimeMetadataKeys.BackgroundActivityWorkId
     ];
 
     private static IncidentState ResolveRetriedIncident(

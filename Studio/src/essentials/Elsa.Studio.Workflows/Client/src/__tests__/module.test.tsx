@@ -5376,7 +5376,7 @@ function incidentState(overrides: Partial<Record<string, unknown>> = {}) {
     executableNodeId: "write-line-1",
     severity: "Error",
     status: "Blocking",
-    resolutionAction: "None",
+    resolutionOutcome: null,
     failureType: "InputMaterializationFailed",
     message: "Input failed.",
     createdAt: "2026-06-18T01:00:02Z",

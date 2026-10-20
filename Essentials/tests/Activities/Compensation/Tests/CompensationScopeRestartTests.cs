@@ -111,6 +111,134 @@ public sealed class CompensationScopeRestartTests : IDisposable
     }
 
     /// <summary>
+    /// Spec 251 injection point 1: the host stops after a forward effect whose response was lost, before the fault commits.
+    /// The step runs again with its operation key; the participant applies nothing twice and recovery leaves no reservation.
+    /// </summary>
+    [Theory]
+    [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Ephemeral)]
+    public async Task A_crash_after_a_lost_response_reapplies_nothing_and_recovery_leaves_no_reservation(PersistenceMode mode)
+    {
+        var participant = new Participant().Rejecting("confirm-order")
+            .LosingResponseAfterEffectOf("reserve-delivery").KillingHostAfterEffectOf("reserve-delivery");
+
+        await using (var first = await StartHostAsync(participant, mode))
+        {
+            var reference = await first.PublishAsync(Executable(ReservationJourney()), "source-compensation-restart");
+            await StartUntilTheHostStopsAsync(first, reference);
+        }
+
+        await using var second = await StartHostAsync(participant, mode);
+        await RecoverAsync(second);
+
+        var run = await second.ReadRunAsync(WorkflowExecutionId);
+        run.AssertWorkflowCompleted();
+        run.AssertOutcomes(ScopeNodeId, CompensationScope.CompensatedOutcome);
+        Assert.Equal(ExpectedEffects, participant.EffectOrder);
+        Assert.Empty(participant.Present);
+        Assert.Single(participant.Calls.Where(call => call.NodeId == "reserve-delivery").Select(call => call.OperationKey).Distinct());
+    }
+
+    /// <summary>Spec 251 injection point 2: the host stops after a failed handler attempt commits and before the next runs.</summary>
+    [Theory]
+    [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Ephemeral)]
+    public async Task A_crash_between_handler_attempts_runs_the_next_attempt_once_with_the_same_operation_key(PersistenceMode mode)
+    {
+        var participant = new Participant().Rejecting("confirm-order")
+            .FailingTimes("cancel-delivery", 1).KillingHostBeforeCall("cancel-delivery", 2);
+
+        await using (var first = await StartHostAsync(participant, mode))
+        {
+            var reference = await first.PublishAsync(Executable(ReservationJourney()), "source-compensation-restart");
+            await StartUntilTheHostStopsAsync(first, reference);
+            Assert.DoesNotContain("cancel-delivery", participant.EffectOrder);
+        }
+
+        await using var second = await StartHostAsync(participant, mode);
+        await RecoverAsync(second);
+
+        var run = await second.ReadRunAsync(WorkflowExecutionId);
+        run.AssertWorkflowCompleted();
+        run.AssertOutcomes(ScopeNodeId, CompensationScope.CompensatedOutcome);
+        Assert.Equal(ExpectedEffects, participant.EffectOrder);
+        var cancels = participant.Calls.Where(call => call.NodeId == "cancel-delivery").ToArray();
+        Assert.Equal(2, cancels.Length);
+        Assert.Single(cancels.Select(call => call.OperationKey).Distinct());
+        Assert.Equal(2, run.States("cancel-delivery").Count);
+    }
+
+    /// <summary>Spec 251 injection point 3: a scope waiting for intervention survives a restart without another attempt.</summary>
+    [Theory]
+    [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Ephemeral)]
+    public async Task A_scope_waiting_for_intervention_stays_waiting_across_a_restart(PersistenceMode mode)
+    {
+        var participant = new Participant().Rejecting("confirm-order", "cancel-delivery");
+
+        await using (var first = await StartHostAsync(participant, mode))
+        {
+            var reference = await first.PublishAsync(Executable(ReservationJourney()), "source-compensation-restart");
+            await StartUntilTheHostStopsAsync(first, reference);
+        }
+
+        await using var second = await StartHostAsync(participant, mode);
+        await RecoverAsync(second);
+
+        var run = await second.ReadRunAsync(WorkflowExecutionId);
+        Assert.Equal(WorkflowExecutionStatus.Running, run.WorkflowState?.Status);
+        // The three attempts from before the restart, and no fourth after it.
+        Assert.Equal(3, run.States("cancel-delivery").Count);
+        Assert.DoesNotContain(participant.Calls, call => call.NodeId == "release-inventory");
+    }
+
+    /// <summary>
+    /// Spec 251 injection point 4: the host stops after an operator retry committed and the retried handler applied its
+    /// effect, before its completion commits. The restarted host runs the handler again with the same operation key and
+    /// recovery finishes once.
+    /// </summary>
+    [Theory]
+    [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Ephemeral)]
+    public async Task A_crash_after_an_operator_retry_finishes_the_recovery_once(PersistenceMode mode)
+    {
+        // Three failed attempts leave the scope waiting; the retried fourth call applies the effect and the host stops.
+        var participant = new Participant().Rejecting("confirm-order").FailingTimes("cancel-delivery", 3).KillingHostAfterEffectOf("cancel-delivery");
+
+        await using (var first = await StartHostAsync(participant, mode))
+        {
+            var reference = await first.PublishAsync(Executable(ReservationJourney()), "source-compensation-restart");
+            await StartUntilTheHostStopsAsync(first, reference);
+            var waiting = Assert.Single(await first.Services.GetRequiredService<IIncidentStateStore>().ListBlockingAsync(WorkflowExecutionId));
+            try
+            {
+                await OperatorRetry.RetryAsync(first, WorkflowExecutionId, waiting.ActivityExecutionId!, "retry-restart", DefaultPartition);
+            }
+            catch (Exception exception) when (exception is OperationCanceledException or InvalidOperationException)
+            {
+                // The host stopped while the retried handler ran.
+            }
+        }
+
+        Assert.Contains("cancel-delivery", participant.EffectOrder);
+        await using var second = await StartHostAsync(participant, mode);
+        await RecoverAsync(second);
+
+        var run = await second.ReadRunAsync(WorkflowExecutionId);
+        Assert.Equal(WorkflowExecutionStatus.Completed, run.WorkflowState?.Status);
+        run.AssertOutcomes(ScopeNodeId, CompensationScope.CompensatedOutcome);
+        Assert.Equal(ExpectedEffects, participant.EffectOrder);
+        var cancelCalls = participant.Calls.Where(call => call.NodeId == "cancel-delivery").ToArray();
+        Assert.Equal(5, cancelCalls.Length);
+        Assert.Single(cancelCalls.Select(call => call.OperationKey).Distinct());
+        Assert.Empty(participant.Present);
+    }
+
+    /// <summary>
     /// A republish while recovery is in flight does not change the run's handlers: recovery finishes with the handler
     /// of the executable the run started on, not the one published since.
     /// </summary>
