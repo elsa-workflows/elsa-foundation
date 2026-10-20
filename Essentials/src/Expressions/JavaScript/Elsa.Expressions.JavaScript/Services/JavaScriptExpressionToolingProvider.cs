@@ -179,7 +179,7 @@ internal sealed partial class JavaScriptExpressionToolingProvider : IExpressionT
         {
             // Share grammar selection with runtime without evaluating authored code.
             JavaScriptBindingSyntax.IsExpression(source);
-            return [];
+            return ClocklessDateValidator.Validate(source, revision);
         }
         catch (ParseErrorException exception)
         {

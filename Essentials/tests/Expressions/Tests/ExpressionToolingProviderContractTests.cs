@@ -227,6 +227,42 @@ public sealed class ExpressionToolingProviderContractTests
         Assert.Equal("JavaScript/Syntax", Assert.Single(result.Payload!.Diagnostics).Code);
     }
 
+    [Theory]
+    [InlineData("new Date()", "new Date() with no argument reads the clock", false, 0)]
+    [InlineData("const label = 'x';\nreturn Date();", "Date() called as a function reads the clock", false, 1)]
+    [InlineData("Date.now() - 1", "Date.now() reads the clock", false, 0)]
+    [InlineData("new Date(args.now).toLocaleString()", "toLocaleString() depends on a locale", true, 0)]
+    [InlineData("args.value.toLocaleDateString()", "toLocaleDateString() depends on a locale", true, 0)]
+    [InlineData("new Date(0).toLocaleTimeString()", "toLocaleTimeString() depends on a locale", true, 0)]
+    public async Task JavaScript_validation_reports_a_removed_date_form_with_its_guidance(string source, string messageStart, bool warning, int line)
+    {
+        // Spec 260 FR-019: the same text the binding-pure-v2 sandbox throws, at the authored position, without evaluating.
+        var provider = new JavaScriptExpressionToolingProvider();
+
+        var result = await provider.ValidateAsync(new(CreateScope("JavaScript", []), source), CancellationToken.None);
+
+        var diagnostic = Assert.Single(result.Payload!.Diagnostics);
+        Assert.Equal("JavaScript/ClocklessDate", diagnostic.Code);
+        Assert.StartsWith(messageStart, diagnostic.Message, StringComparison.Ordinal);
+        Assert.Equal(warning ? ExpressionDiagnosticSeverity.Warning : ExpressionDiagnosticSeverity.Error, diagnostic.Severity);
+        Assert.Equal(line, diagnostic.Range!.Value.Start.Line);
+    }
+
+    [Theory]
+    [InlineData("new Date(args.now).toISOString()")]
+    [InlineData("Date.parse(args.now)")]
+    [InlineData("new Date(2026, 9, 20).getTime()")]
+    [InlineData("args.clock.now()")]
+    [InlineData("Date.UTC(2026, 9, 20)")]
+    public async Task JavaScript_validation_accepts_the_allowed_date_surface(string source)
+    {
+        var provider = new JavaScriptExpressionToolingProvider();
+
+        var result = await provider.ValidateAsync(new(CreateScope("JavaScript", []), source), CancellationToken.None);
+
+        Assert.Empty(result.Payload!.Diagnostics);
+    }
+
     [Fact]
     public async Task JavaScript_statement_diagnostics_use_authored_line_positions_and_never_execute()
     {
