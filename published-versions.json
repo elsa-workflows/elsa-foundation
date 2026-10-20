@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "f8c6a8114679cc2b2b23dfb1f5b09833df4fe5c9",
+  "last_publish_commit": "7fb745f8604b6ed67a2eae60266976c98bce949e",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -14,8 +14,8 @@
     },
     {
       "package_id": "Elsa.Activities.Compensation",
-      "version": "4.0.3-preview",
-      "commit": "e9a3d18aa25ab30e57e6c6a1afdf6dc7fb63fdc0"
+      "version": "4.0.4-preview",
+      "commit": "7fb745f8604b6ed67a2eae60266976c98bce949e"
     },
     {
       "package_id": "Elsa.Activities.ControlFlow",
@@ -94,13 +94,13 @@
     },
     {
       "package_id": "Elsa.Activities.Runtime",
-      "version": "4.0.25-preview",
-      "commit": "422da67f51e254b7f8f8041f773905cc145494fe"
+      "version": "4.0.26-preview",
+      "commit": "7fb745f8604b6ed67a2eae60266976c98bce949e"
     },
     {
       "package_id": "Elsa.Activities.Runtime.Core",
-      "version": "4.0.19-preview",
-      "commit": "422da67f51e254b7f8f8041f773905cc145494fe"
+      "version": "4.0.20-preview",
+      "commit": "7fb745f8604b6ed67a2eae60266976c98bce949e"
     },
     {
       "package_id": "Elsa.Activities.Scheduling",
@@ -634,18 +634,18 @@
     },
     {
       "package_id": "Elsa.Workflows.Runtime",
-      "version": "4.0.56-preview",
-      "commit": "f8c6a8114679cc2b2b23dfb1f5b09833df4fe5c9"
+      "version": "4.0.57-preview",
+      "commit": "7fb745f8604b6ed67a2eae60266976c98bce949e"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Api",
-      "version": "4.0.24-preview",
-      "commit": "a9aa2aba8ca15d7403c07422e711b7771f7162fa"
+      "version": "4.0.25-preview",
+      "commit": "7fb745f8604b6ed67a2eae60266976c98bce949e"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Core",
-      "version": "4.0.42-preview",
-      "commit": "422da67f51e254b7f8f8041f773905cc145494fe"
+      "version": "4.0.43-preview",
+      "commit": "7fb745f8604b6ed67a2eae60266976c98bce949e"
     },
     {
       "package_id": "Elsa.Workflows.Runtime.Distributed",
