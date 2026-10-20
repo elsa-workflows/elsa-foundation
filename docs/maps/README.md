@@ -120,3 +120,4 @@ dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 ## Map rule
 
 Maps answer "what exists and how it connects." If a map needs to explain a concept, link to the glossary instead.
+
