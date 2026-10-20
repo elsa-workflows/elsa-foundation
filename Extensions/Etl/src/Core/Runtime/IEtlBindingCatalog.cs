@@ -4,6 +4,9 @@ namespace Elsa.Etl.Core.Runtime;
 /// <remarks>Neither file paths, revision handles nor digests are authoring metadata.</remarks>
 public interface IEtlBindingCatalog
 {
+    /// <summary>Checks current host approval for an exact scoped alias and role without opening its resource.</summary>
+    bool ContainsBinding(EtlScope scope, string alias, string role);
+
     /// <summary>Returns at most <paramref name="take"/> entries in ordinal alias/role order after an exclusive pair.</summary>
     /// <remarks>The boundary pair must be both null or both present; take is between 1 and 1000.</remarks>
     IReadOnlyList<EtlBindingSummary> ListBindings(EtlScope scope, string? afterAlias, string? afterRole, int take);

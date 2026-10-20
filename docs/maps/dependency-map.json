@@ -670,6 +670,36 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Etl.Design.Api",
+          "path": "Extensions/Etl/src/Design/Api/Elsa.Etl.Design.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Etl.Persistence.EntityFrameworkCore",
+          "path": "Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Etl.Runtime.Api",
+          "path": "Extensions/Etl/src/Runtime/Api/Elsa.Etl.Runtime.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Etl.Runtime",
+          "path": "Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Elsa.Etl.Runtime.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Etl.Workflows.Design",
+          "path": "Extensions/Etl/src/Workflows/Design/Elsa.Etl.Workflows.Design.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Etl.Workflows.Runtime",
+          "path": "Extensions/Etl/src/Workflows/Runtime/Elsa.Etl.Workflows.Runtime.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.ExtensionBuilder.Api",
           "path": "Extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj"
         },

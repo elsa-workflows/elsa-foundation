@@ -47,6 +47,8 @@ using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection
 using Elsa.Workflows.Runtime.Resumption;
 using Elsa.Workflows.Runtime.Scheduling;
 using Elsa.Activities.Design.Api;
+using Elsa.Activities.Design.Api.Services;
+using Elsa.Activities.Design.Api.Requests;
 using Microsoft.Extensions.DependencyInjection;
 using Elsa.Tasks.Core;
 using WorkflowSequence = Elsa.Activities.Sequence.Activities.Sequence;
@@ -176,6 +178,14 @@ internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
             await using (var operation = await OpenPartitionScopeAsync(authoring.Services, scope))
             {
                 var services = operation.ServiceProvider;
+                var catalog = await services.GetRequiredService<IActivityAuthoringCatalogReader>()
+                    .ListAsync(new ListActivityAuthoringCatalog(ActivityCatalogAvailability.All), CancellationToken.None);
+                var etlDescriptor = Assert.Single(catalog.Activities, item => item.ActivityTypeKey == RunEtl.ActivityType);
+                var pipelineInput = Assert.Single(etlDescriptor.Inputs, input => input.ReferenceKey == ActivityPipelineInput);
+                Assert.Equal(nameof(RunEtl.Pipeline), pipelineInput.Name);
+                Assert.Equal("etl-published-selection", pipelineInput.UiHint);
+                Assert.True(pipelineInput.IsRequired);
+
                 var published = await services.GetRequiredService<IRequestSender>()
                     .Send(new PublishWorkflow(parentVersionId, TenantId: scope.TenantId), CancellationToken.None);
                 Assert.Equal(PublicationStatusView.Active, published.Status);

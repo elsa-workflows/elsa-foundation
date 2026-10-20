@@ -189,6 +189,41 @@ public sealed class EtlNativeCheckpointTests
                 Commit(changed, RuntimeCheckpointNames.BookmarkCreated, Bookmark(original))));
     }
 
+    [Theory]
+    [InlineData("invocation")]
+    [InlineData("registration-id")]
+    [InlineData("payload-alias")]
+    [InlineData("payload-schema")]
+    [InlineData("stimulus-type")]
+    [InlineData("stimulus-hash")]
+    [InlineData("deduplication")]
+    public async Task Bookmark_checkpoint_rejects_a_registration_with_changed_typed_delivery_identity(string field)
+    {
+        var original = Activity(resumeTarget: PlacedResumeTarget);
+        var registration = Assert.Single(original.TriggerRegistrations!);
+        var payloadType = registration.PayloadType;
+        if (field == "payload-alias")
+            payloadType = new(payloadType.Alias + ".Changed", payloadType.CollectionKind, payloadType.Schema, payloadType.SchemaVersion);
+        else if (field == "payload-schema")
+            payloadType = new(payloadType.Alias, payloadType.CollectionKind, payloadType.Schema, payloadType.SchemaVersion + 1);
+
+        var changed = original with
+        {
+            TriggerRegistrations = [new(
+                field == "registration-id" ? "other-registration" : registration.RegistrationId,
+                field == "invocation" ? "other-activity" : registration.InvocationId,
+                registration.ResumeTargetKey,
+                payloadType,
+                field == "stimulus-type" ? "other-stimulus" : registration.StimulusType,
+                field == "stimulus-hash" ? "other-run" : registration.StimulusHash,
+                field == "deduplication" ? ActivityTriggerDeduplicationPolicy.IdempotencyKey : registration.DeduplicationPolicy)]
+        };
+
+        await Assert.ThrowsAsync<InvalidDataException>(async () =>
+            await new EtlCheckpointEnricher(_activities).EnrichAsync(
+                Commit(changed, RuntimeCheckpointNames.BookmarkCreated, Bookmark(original))));
+    }
+
     [Fact]
     public async Task A_missing_registration_without_a_consumed_receipt_cannot_be_reconstructed()
     {

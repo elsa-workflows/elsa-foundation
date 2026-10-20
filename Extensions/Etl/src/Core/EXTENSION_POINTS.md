@@ -10,6 +10,10 @@ alias/role boundary and finite limit allow authoring hosts to discover permitted
 paths, revision handles, digests or credentials. The default `HostFileBindings` adapter lives in the runtime
 implementation; another host may implement this metadata-only contract without starting runtime workers.
 
+`ContainsBinding(scope, alias, role)` checks current approval for one exact role in that same scope without
+opening a file. Authoring validation and new publication use it; an exact replay of an existing immutable
+publication does not depend on today's catalog. This check does not reserve a revision or replace runtime admission.
+
 This port does not resolve file paths, admit runs, select input revisions or provide arbitrary storage access.
 The finite runtime owns those operations and preserves the existing pinned revision/publication rules.
 

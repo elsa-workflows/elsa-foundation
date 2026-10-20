@@ -175,6 +175,7 @@ not automatic constitution violations.
 | Shared ETL API transport | [`Extensions/Etl/src/Api/EXTENSION_POINTS.md`](Extensions/Etl/src/Api/EXTENSION_POINTS.md) |
 | Runtime inspection and cancellation API | [`Extensions/Etl/src/Runtime/Api/EXTENSION_POINTS.md`](Extensions/Etl/src/Runtime/Api/EXTENSION_POINTS.md) |
 | Authoring API operations and host composition | [`Extensions/Etl/src/Design/Api/EXTENSION_POINTS.md`](Extensions/Etl/src/Design/Api/EXTENSION_POINTS.md) |
+| Studio authoring, inspection and published selection | [`Extensions/Etl/studio/Elsa.Studio.Etl/EXTENSION_POINTS.md`](Extensions/Etl/studio/Elsa.Studio.Etl/EXTENSION_POINTS.md) |
 
 ### Legacy
 

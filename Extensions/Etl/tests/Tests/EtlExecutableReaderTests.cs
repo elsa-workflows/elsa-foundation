@@ -25,6 +25,19 @@ public sealed class EtlExecutableReaderTests
     }
 
     [Fact]
+    public void Reader_refuses_an_artifact_envelope_with_an_unknown_saved_format()
+    {
+        var artifact = Assert.IsType<EtlArtifact>(CreateCompiler().Compile("orders", 1, EtlTestPipelines.Create()).Artifact);
+        var unsupported = new EtlArtifact(EtlArtifact.CurrentFormatVersion + 1, artifact.ArtifactId, artifact.ContentHash,
+            artifact.DefinitionId, artifact.DefinitionVersion, artifact.Pipeline);
+        using var runtime = CreateRuntime();
+
+        var exception = Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(unsupported));
+
+        Assert.Equal("etl.executable.invalid-envelope", exception.Code);
+    }
+
+    [Fact]
     public void Reader_rejects_a_noncanonical_pipeline_even_when_its_content_hash_matches()
     {
         var artifact = CreateArtifact(EtlTestPipelines.Create());

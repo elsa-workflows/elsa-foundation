@@ -50,6 +50,15 @@ internal sealed class HostFileBindings : IEtlBindingCatalog
         .Select(x => new FileBindingInfo(x.Binding.Alias, x.Binding.Role))
         .OrderBy(x => x.Alias, StringComparer.Ordinal).ThenBy(x => x.Role).ToArray();
 
+    public bool ContainsBinding(EtlScope scope, string alias, string role)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        ArgumentNullException.ThrowIfNull(alias);
+        ArgumentNullException.ThrowIfNull(role);
+        return _bindings.Any(item => item.Binding.IsCurrent && item.Binding.Scope == scope &&
+            item.Binding.Alias == alias && item.Binding.Role.ToString() == role);
+    }
+
     public IReadOnlyList<EtlBindingSummary> ListBindings(EtlScope scope, string? afterAlias, string? afterRole, int take)
     {
         ArgumentNullException.ThrowIfNull(scope);

@@ -1,6 +1,6 @@
 # Finite file ETL
 
-Optional `Elsa.Etl` implements the execution domain admitted by [ADR 0087](../../docs/adr/0087-etl-owns-its-execution-domain.md). [Spec 255](../../specs/255-finite-file-etl/spec.md) and [issue #3109](https://github.com/elsa-workflows/elsa-foundation/issues/3109) own the complete delivery scope. The native runtime journey is exercised through durable fixtures; the complete Studio author/publish/invoke/inspect journey remains unfinished.
+Optional `Elsa.Etl` implements the execution domain admitted by [ADR 0087](../../docs/adr/0087-etl-owns-its-execution-domain.md). [Spec 255](../../specs/255-finite-file-etl/spec.md) and [issue #3109](https://github.com/elsa-workflows/elsa-foundation/issues/3109) own the complete delivery scope. Durable fixtures and the [rebuilt Workbench HTTP journey](../../specs/255-finite-file-etl/evidence/workbench-http.md) exercise native invocation and continuation. Integrated Studio browser acceptance remains unfinished.
 
 ## Implemented boundaries
 
@@ -12,13 +12,46 @@ Optional `Elsa.Etl` implements the execution domain admitted by [ADR 0087](../..
 
 - `EtlRuntime`: bounded background attempts, retained executable validation, independently leased preparation/partitions and process-local record/input/lookup/output allowances. The Tasks lifecycle starts/stops shell workers; plain hosts use the same instance as a hosted service. Host configuration supplies exact scopes, retained binding revisions and lookup row/cell ceilings; no default partition or global tenant scan is invented.
 - `EtlRuntimeEntityFrameworkCore`: separate SQLite runtime context, schema and migration history; short idempotent admission, pinned bindings, immutable preparation metadata, durable batch reservations, fenced manifest/cursor/quota settlement, first-wins terminal result and recoverable delivery outbox. Runtime DI/database composition does not require design services or design tables. The shared persistence package still references the design assembly.
-- [Native workflow adapter](src/Workflows/Runtime/README.md): typed `RunEtl` wait, actual-bookmark admission, private-state/consumed-receipt cancellation, scoped terminal delivery and durable acknowledgement proofs. The [publication contributor](src/Workflows/Design/README.md) binds the full artifact hash through a literal selection and embeds the artifact without workflow dependency edges. The [native evidence](../../specs/255-finite-file-etl/evidence/native-subtree-cancellation.md) proves durable composite continuation and whole-workflow/placed-subtree cancellation. Full persisted publication and Studio acceptance remain open.
+- [Native workflow adapter](src/Workflows/Runtime/README.md): typed `RunEtl` wait, actual-bookmark admission, private-state/consumed-receipt cancellation, scoped terminal delivery and durable acknowledgement proofs. The [publication contributor](src/Workflows/Design/README.md) binds the full artifact hash through a literal selection and embeds the artifact without workflow dependency edges. [Persisted parent publication](../../specs/255-finite-file-etl/evidence/persisted-parent-publication.md) and [native cancellation evidence](../../specs/255-finite-file-etl/evidence/native-subtree-cancellation.md) cover the ordinary catalog/compiler and native composite boundaries.
+- `EtlDesignApi` and `EtlRuntimeApi`: independently composed, permission-checked operations for authoring/publication and runtime inspection/cancellation. Bounded signed cursors preserve scope and query identity. Responses expose safe binding aliases and retained facts, not host paths. New publication rechecks current binding approval; replay of an existing immutable publication does not. Runtime inspection does not require design services or active workers.
+- [EtlStudio](studio/Elsa.Studio.Etl/EXTENSION_POINTS.md): structured finite-stage authoring, saved-revision validation/publication, exact published selection through the public `RunEtl` property editor, and run/partition inspection. [Component evidence](../../specs/255-finite-file-etl/evidence/studio-components.md) records executed checks without substituting them for browser acceptance.
 
 A compiler-produced valid/filtered/rejected fixture runs through two real hosts sharing SQLite/filesystem storage, then a separate host reopens accepted output and the owed terminal delivery. These hosts run inside one test process. This is not two-process recovery qualification. Native parent delivery has separate durable fixture evidence linked above.
 
+## Host composition and operation
+
+Enable only the responsibilities a host needs:
+
+| Responsibility | Features / prerequisites |
+|---|---|
+| Author and publish ETL | `EtlDesign`, `EtlDesignEntityFrameworkCore`, `EtlDesignApi`; Foundation Identity, API capabilities, host persistence scope and a scoped `IEtlBindingCatalog` |
+| Execute accepted runs | `EtlRuntime`, `EtlRuntimeEntityFrameworkCore`; Tasks lifecycle, shared input/snapshot/output storage and explicit file-binding revisions |
+| Inspect or cancel runs | `EtlRuntimeApi`, `EtlRuntimeEntityFrameworkCore`; Foundation Identity, API capabilities and host persistence scope; no compute worker required |
+| Invoke from native workflows | `EtlWorkflowsDesign` on the native publication host, `EtlWorkflowsRuntime` on the native execution host, plus the applicable ETL/runtime stores |
+| Author and inspect in Studio | `EtlStudio` with the ordinary Studio authenticated backend configuration; backend authoring/runtime capabilities must be available |
+
+The Workbench references the modules for discovery but does not enable ETL in its default shell. The reproducible
+[HTTP/browser fixtures](../../e2e-tests/etl/README.md) show opt-in configuration with isolated databases and file
+bindings. They use SQLite, the qualified provider for this slice; they are not production deployment templates.
+Set API cursor signing keys consistently across replicas. Set tenant and persistence partition explicitly;
+`null` tenant is a distinct global scope, not an alias for `default`.
+
+Before accepting work, configure immutable source/lookup revisions and SHA-256 pins, output roots supporting
+the required atomic publication, snapshot capacity and bounded worker allowances. Replicas participating in the
+same run must see its retained revisions, database and storage. Changing a current alias affects later admission;
+retain older revisions until their admitted runs no longer need them. Inspect terminal diagnostics and partition
+cursors before taking recovery action. A successful HTTP cancellation reports the durable terminal outcome; it
+does not establish that every physical operation has stopped.
+
+For rollback, stop new ETL authoring/publication and invocation admission first, while retaining compatible
+readers, workers, bindings and result delivery for accepted work. Do not delete ETL tables, snapshots, chunks or
+native waiting state as a rollback shortcut. The initial ETL schemas have no previous ETL release to demonstrate
+a downgrade or historical upgrade against; unknown saved formats must be refused rather than reinterpreted.
+There is no general pause/resume, automatic orphan collection or retry/reset administration surface in this slice.
+
 ## Remaining delivery
 
-Native invocation/result delivery and native cancellation now have real durable Sequence, Flowchart and CompensationScope evidence, including placed boundaries and delayed admission. The terminal outbox is acknowledged only after demonstrated consumption or terminal parent/activity state, never merely queueing. [Live-attempt replacement](../../specs/255-finite-file-etl/evidence/live-attempt-replacement.md) proves real SQLite takeover, cancellation, retained record/byte allowances through cleanup and successor replay under its own permit. The [owned two-process fixture](../../specs/255-finite-file-etl/evidence/two-process-recovery.md) proves survivor recovery after a predecessor exits with a published, unaccepted chunk. The [interruption matrix](../../specs/255-finite-file-etl/evidence/interruption-matrix.md) also proves real read/reservation, source/JSONL staging, committed-cursor and result-claim interruption, plus conflict refusal after takeover. Store/native tests separately establish stale cursor/disposition and consumed-receipt semantics. API/Studio exposure, the wider cancellation/address/corrupt-format matrix, schema-provider qualification, ETL rebuilt-server/browser acceptance and resulting-main checks remain owed.
+Native invocation/result delivery and native cancellation now have real durable Sequence, Flowchart and CompensationScope evidence, including placed boundaries and delayed admission. The terminal outbox is acknowledged only after demonstrated consumption or terminal parent/activity state, never merely queueing. [Live-attempt replacement](../../specs/255-finite-file-etl/evidence/live-attempt-replacement.md) proves real SQLite takeover, cancellation, retained record/byte allowances through cleanup and successor replay under its own permit. The [owned two-process fixture](../../specs/255-finite-file-etl/evidence/two-process-recovery.md) proves survivor recovery after a predecessor exits with a published, unaccepted chunk. The [interruption matrix](../../specs/255-finite-file-etl/evidence/interruption-matrix.md) also proves real read/reservation, source/JSONL staging, committed-cursor and result-claim interruption, plus conflict refusal after takeover. Store/native tests separately establish stale cursor/disposition and consumed-receipt semantics. The wider cancellation/address/corrupt-format matrix, provider evidence reconciliation, integrated Studio browser acceptance and resulting-main checks remain owed. The rebuilt-server HTTP journey has passed.
 
 Host bindings are trusted configuration, never authored paths. Admission retains exact source/lookup and output revisions before acknowledging work. Preparation accepts those pins and cannot re-resolve the current alias. Removed revisions refuse continuation; they do not redirect it. Runtime-only execution must not require the design database.
 

@@ -21,6 +21,7 @@
     <Project Path="../Extensions/Samples.WeatherForecast/studio/Elsa.Studio.Samples.WeatherForecast/Elsa.Studio.Samples.WeatherForecast.csproj" />
     <Project Path="../Extensions/Secrets/studio/Elsa.Studio.Secrets/Elsa.Studio.Secrets.csproj" />
     <Project Path="../Extensions/Connections/studio/Elsa.Studio.Connections/Elsa.Studio.Connections.csproj" />
+    <Project Path="../Extensions/Etl/studio/Elsa.Studio.Etl/Elsa.Studio.Etl.csproj" />
     <Project Path="../Extensions/Weaver/studio/Elsa.Studio.Weaver.Core/Elsa.Studio.Weaver.Core.csproj" />
     <Project Path="../Extensions/Weaver/studio/Elsa.Studio.Weaver.Workflows/Elsa.Studio.Weaver.Workflows.csproj" />
     <Project Path="src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj" />

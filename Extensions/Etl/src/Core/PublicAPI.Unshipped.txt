@@ -745,6 +745,7 @@ Elsa.Etl.Core.Runtime.EtlBindingSummary.EtlBindingSummary(string! Alias, string!
 Elsa.Etl.Core.Runtime.EtlBindingSummary.Role.get -> string!
 Elsa.Etl.Core.Runtime.EtlBindingSummary.Role.init -> void
 Elsa.Etl.Core.Runtime.IEtlBindingCatalog
+Elsa.Etl.Core.Runtime.IEtlBindingCatalog.ContainsBinding(Elsa.Etl.Core.EtlScope! scope, string! alias, string! role) -> bool
 Elsa.Etl.Core.Runtime.IEtlBindingCatalog.ListBindings(Elsa.Etl.Core.EtlScope! scope, string? afterAlias, string? afterRole, int take) -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlBindingSummary!>!
 override Elsa.Etl.Core.Runtime.EtlBindingSummary.Equals(object? obj) -> bool
 override Elsa.Etl.Core.Runtime.EtlBindingSummary.GetHashCode() -> int

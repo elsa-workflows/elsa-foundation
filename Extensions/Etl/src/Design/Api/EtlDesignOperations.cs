@@ -53,11 +53,14 @@ internal sealed class EtlDesignOperations(IServiceProvider services, EtlRequestS
 
     public async Task<EtlValidationView> ValidateAsync(EtlValidateRequest request, CancellationToken cancellationToken)
     {
-        var draft = await FindDraftAsync(requestScope.Get(), request.Id, cancellationToken);
+        var scope = requestScope.Get();
+        var draft = await FindDraftAsync(scope, request.Id, cancellationToken);
         Revision(request.ExpectedRevision);
         if (draft.Revision != request.ExpectedRevision) throw Conflict();
         var version = NextVersion(draft);
         var result = Required<IEtlArtifactCompiler>().Compile(draft.DefinitionId, version, draft.Pipeline);
+        if (result.Artifact is not null && BindingDiagnostics(scope, draft.Pipeline.Bindings) is { Length: > 0 } diagnostics)
+            return new(draft.Revision, version, null, diagnostics);
         return new(draft.Revision, version, result.Artifact?.ContentHash, result.Diagnostics);
     }
 
@@ -78,6 +81,10 @@ internal sealed class EtlDesignOperations(IServiceProvider services, EtlRequestS
         var compiled = Required<IEtlArtifactCompiler>().Compile(request.Id, request.DefinitionVersion, draft.Pipeline);
         if (compiled.Artifact is not { } artifact) throw new EtlApiException(400, "etl.validation-failed");
         if (artifact.ContentHash != request.ContentHash) throw Conflict();
+        // Approval can change after validation. This metadata check is independent of runtime admission,
+        // which still resolves and pins the approved resources when a run is accepted.
+        if (BindingDiagnostics(scope, draft.Pipeline.Bindings).Length > 0)
+            return await FindReplayAsync(store, scope, request, cancellationToken) ?? throw new EtlApiException(400, "etl.validation-failed");
         var result = await store.PublishAsync(scope, request.Id, request.ExpectedRevision, artifact, cancellationToken);
         return result.Status switch
         {
@@ -145,6 +152,22 @@ internal sealed class EtlDesignOperations(IServiceProvider services, EtlRequestS
             _ => false
         };
         return validBoundary && state.LastOrdinal is null ? state : throw InvalidCursor();
+    }
+
+    private EtlDiagnostic[] BindingDiagnostics(EtlScope scope, EtlFileBindings bindings)
+    {
+        var catalog = Required<IEtlBindingCatalog>();
+        (string Alias, string Role, string Path)[] required =
+        [
+            (bindings.Source, "Source", "bindings.source"),
+            (bindings.Lookup, "Lookup", "bindings.lookup"),
+            (bindings.Output, "MainOutput", "bindings.output"),
+            (bindings.Errors, "ErrorOutput", "bindings.errors")
+        ];
+        return required.Where(binding => !catalog.ContainsBinding(scope, binding.Alias, binding.Role))
+            .Select(binding => new EtlDiagnostic("binding.alias.unavailable", binding.Path,
+                "The host does not currently approve this binding for the required role in this scope."))
+            .ToArray();
     }
 
     private T Required<T>() where T : class => services.GetService<T>() ?? throw new EtlApiException(503, "etl.provider-unavailable");

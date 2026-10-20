@@ -4,4 +4,4 @@
 
 The selection token includes the full ETL content hash. Because ordinary literal inputs are already hashed, changing the selected artifact changes the parent executable identity even though node metadata itself is not behavioral hash input. Runtime validates the metadata against this literal and executes without the design store.
 
-The structured Studio picker and its paginated published-definition source remain part of [spec 255](../../../../../specs/255-finite-file-etl/tasks.md). The current contributor accepts exact canonical literal selections; it refuses dynamic and secret bindings.
+The ETL-owned [Studio picker](../../../studio/Elsa.Studio.Etl/EXTENSION_POINTS.md) uses the public property-editor slot and paginated authoring API. It retains the exact canonical literal selection; the contributor refuses dynamic and secret bindings. Component verification and remaining integrated browser acceptance are tracked in [spec 255](../../../../../specs/255-finite-file-etl/tasks.md).

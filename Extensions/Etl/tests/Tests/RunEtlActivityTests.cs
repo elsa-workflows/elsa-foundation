@@ -93,7 +93,9 @@ public sealed class RunEtlActivityTests
     [InlineData("node")]
     [InlineData("provider")]
     [InlineData("counts")]
-    public async Task Resume_refuses_changed_result_or_address_before_returning_an_outcome(string change)
+    [InlineData("state-format")]
+    [InlineData("completion-format")]
+    public async Task Resume_refuses_changed_or_unsupported_result_and_saved_state_before_returning_an_outcome(string change)
     {
         await using var fixture = await EtlNativeTestFixture.CreateAsync();
         await using var scope = await fixture.OpenNativeScopeAsync();
@@ -105,7 +107,10 @@ public sealed class RunEtlActivityTests
             _ => fixture.Invocation
         };
         var result = change == "counts" ? fixture.Delivery.Result with { AcceptedRecords = 1 } : fixture.Delivery.Result;
-        var context = ResumeContext(fixture, invocation, result, change == "registration" ? "other-registration" : null);
+        var context = ResumeContext(fixture, invocation, result,
+            change == "registration" ? "other-registration" : null,
+            stateFormatVersion: change == "state-format" ? EtlNativeBoundary.FormatVersion + 1 : EtlNativeBoundary.FormatVersion,
+            completionFormatVersion: change == "completion-format" ? EtlNativeBoundary.FormatVersion + 1 : EtlNativeBoundary.FormatVersion);
 
         await Assert.ThrowsAsync<InvalidDataException>(async () =>
             await ((IStatefulActivity<RunEtlResult, RunEtlState, RunEtlCompletion>)activity).ResumeAsync(context));
@@ -125,11 +130,12 @@ public sealed class RunEtlActivityTests
     }
 
     private static ActivityResumeContext<RunEtlState, RunEtlCompletion> ResumeContext(EtlNativeTestFixture fixture,
-        EtlInvocation? invocation = null, EtlTerminalResult? result = null, string? registrationId = null)
+        EtlInvocation? invocation = null, EtlTerminalResult? result = null, string? registrationId = null,
+        int stateFormatVersion = 1, int completionFormatVersion = 1)
     {
         var stored = EtlNativeCheckpointTests.Activity(fixture.Scope);
-        var state = stored.PrivateState!.Value.InlineValue!.Value.Deserialize<RunEtlState>()!;
-        var completion = new RunEtlCompletion(1, EtlRuntimeJson.WriteElement(invocation ?? fixture.Invocation),
+        var state = stored.PrivateState!.Value.InlineValue!.Value.Deserialize<RunEtlState>()! with { FormatVersion = stateFormatVersion };
+        var completion = new RunEtlCompletion(completionFormatVersion, EtlRuntimeJson.WriteElement(invocation ?? fixture.Invocation),
             EtlRuntimeJson.WriteElement(result ?? fixture.Delivery.Result));
         return new(Context(fixture), state, completion, registrationId ?? fixture.Invocation.ResultAddress.RegistrationId,
             fixture.Delivery.DeliveryId);

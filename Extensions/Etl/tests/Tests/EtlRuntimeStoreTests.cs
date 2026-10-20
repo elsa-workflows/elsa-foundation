@@ -81,6 +81,245 @@ public sealed class EtlRuntimeStoreTests
         Assert.NotNull(await store.ClaimDeliveryAsync(scope, "delivery-worker"));
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Final_batch_acceptance_and_cancellation_settle_once_in_either_store_order(bool acceptanceWins)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var scope = new EtlScope("tenant-a", "partition-final-race");
+        var pipeline = EtlTestPipelines.Create() with
+        {
+            Limits = EtlTestPipelines.Create().Limits with { PartitionCount = 1, MaxBatchRecords = 2 }
+        };
+        var admission = CreateAdmission($"run-final-race-{acceptanceWins}", scope, pipeline);
+        var clock = new MutableTimeProvider();
+        var (lease, acceptance) = await SeedFinalBatchAsync(database, admission, clock);
+
+        await using var acceptanceContext = database.CreateContext();
+        await using var cancellationContext = database.CreateContext();
+        var acceptanceStore = database.CreateStore(acceptanceContext, clock);
+        var cancellationStore = database.CreateStore(cancellationContext, clock);
+        EtlAcceptanceResult accepted;
+        EtlTerminalSettlementResult cancelled;
+        if (acceptanceWins)
+        {
+            accepted = await acceptanceStore.AcceptBatchAsync(lease, acceptance);
+            cancelled = await cancellationStore.CancelAsync(admission.Invocation);
+        }
+        else
+        {
+            cancelled = await cancellationStore.CancelAsync(admission.Invocation);
+            accepted = await acceptanceStore.AcceptBatchAsync(lease, acceptance);
+        }
+
+        await AssertFinalBatchRaceStateAsync(database, admission, acceptance, accepted, cancelled, acceptanceWins, clock);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Concurrent_final_batch_acceptance_and_cancellation_serialize_real_transactions(bool acceptanceWins)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var scope = new EtlScope("tenant-a", "partition-overlap-race");
+        var pipeline = EtlTestPipelines.Create() with
+        {
+            Limits = EtlTestPipelines.Create().Limits with { PartitionCount = 1, MaxBatchRecords = 2 }
+        };
+        var admission = CreateAdmission($"run-overlap-race-{acceptanceWins}", scope, pipeline);
+        var clock = new MutableTimeProvider();
+        var (lease, acceptance) = await SeedFinalBatchAsync(database, admission, clock);
+
+        var acquiredTransaction = new AcquiredTransactionGate();
+        var secondStartAttempt = new TransactionStartAttemptObserver();
+        await using var firstContext = database.CreateContext(acquiredTransaction);
+        await using var secondContext = database.CreateContext(secondStartAttempt);
+        var firstStore = database.CreateStore(firstContext, clock);
+        var secondStore = database.CreateStore(secondContext, clock);
+        using var operationTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
+        Task<EtlAcceptanceResult>? acceptanceTask = null;
+        Task<EtlTerminalSettlementResult>? cancellationTask = null;
+        if (acceptanceWins)
+            acceptanceTask = Task.Run(async () => await firstStore.AcceptBatchAsync(lease, acceptance, operationTimeout.Token));
+        else
+            cancellationTask = Task.Run(async () => await firstStore.CancelAsync(admission.Invocation, operationTimeout.Token));
+
+        Exception? synchronizationFailure = null;
+        try
+        {
+            await acquiredTransaction.Acquired.WaitAsync(TimeSpan.FromSeconds(30));
+            if (acceptanceWins)
+                cancellationTask = Task.Run(async () => await secondStore.CancelAsync(admission.Invocation, operationTimeout.Token));
+            else
+                acceptanceTask = Task.Run(async () => await secondStore.AcceptBatchAsync(lease, acceptance, operationTimeout.Token));
+
+            // The first SQLite transaction is already open and held at TransactionStartedAsync.
+            // Observe the competing EF transaction-start path before allowing the first to commit.
+            await secondStartAttempt.Attempted.WaitAsync(TimeSpan.FromSeconds(30));
+        }
+        catch (Exception exception)
+        {
+            synchronizationFailure = exception;
+        }
+        finally
+        {
+            acquiredTransaction.Release();
+            var operations = new List<Task>(2);
+            if (acceptanceTask is not null) operations.Add(acceptanceTask);
+            if (cancellationTask is not null) operations.Add(cancellationTask);
+            if (operations.Count > 0)
+                await Task.WhenAll(operations).WaitAsync(TimeSpan.FromSeconds(60));
+        }
+
+        if (synchronizationFailure is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(synchronizationFailure).Throw();
+
+        await AssertFinalBatchRaceStateAsync(database, admission, acceptance,
+            await acceptanceTask!, await cancellationTask!, acceptanceWins, clock);
+    }
+
+    private static async Task<(EtlPartitionLease Lease, EtlBatchAcceptance Acceptance)> SeedFinalBatchAsync(
+        TestDatabase database, EtlRunAdmission admission, TimeProvider clock)
+    {
+        await using var seedContext = database.CreateContext();
+        var seedStore = database.CreateStore(seedContext, clock);
+        await StartAsync(seedStore, admission, 2);
+        var lease = Assert.IsType<EtlPartitionLease>(await seedStore.ClaimPartitionAsync(
+            admission.Invocation.Scope, admission.Invocation.RunId, "race-worker"));
+        var batch = CreateBatch(admission, EtlRuntimeFixtures.Prepared(2), lease.PartitionOrdinal,
+            lease.StartOrdinal, lease.EndOrdinalExclusive, "final-race-input");
+        Assert.Equal(EtlStoreStatus.Applied, (await seedStore.ReserveBatchAsync(lease, batch)).Status);
+        return (lease, CreateAcceptance(admission, batch, 2, 0, 0));
+    }
+
+    private static async Task AssertFinalBatchRaceStateAsync(TestDatabase database, EtlRunAdmission admission,
+        EtlBatchAcceptance acceptance, EtlAcceptanceResult accepted,
+        EtlTerminalSettlementResult cancelled, bool acceptanceWins, TimeProvider clock)
+    {
+        await using var verificationContext = database.CreateContext();
+        var verificationStore = database.CreateStore(verificationContext, clock);
+        var run = Assert.IsType<EtlRunView>(await verificationStore.FindRunAsync(admission.Invocation.Scope, admission.Invocation.RunId));
+        var partition = Assert.Single(await verificationStore.ListPartitionsAsync(admission.Invocation.Scope, admission.Invocation.RunId, -1, 10));
+        var reservation = await verificationContext.Reservations.SingleAsync();
+        var manifest = await verificationStore.ListManifestAsync(admission.Invocation.Scope, admission.Invocation.RunId, null, 10);
+        var outbox = await verificationContext.Outbox.ToListAsync();
+        var terminal = await verificationContext.Terminals.SingleAsync();
+        var terminalResult = Assert.IsType<EtlTerminalResult>(run.TerminalResult);
+
+        Assert.Single(outbox);
+        if (acceptanceWins)
+        {
+            Assert.Equal(EtlStoreStatus.Applied, accepted.Status);
+            Assert.Equal(EtlStoreStatus.Conflict, cancelled.Status);
+            Assert.Equal(terminalResult, cancelled.Result);
+            Assert.Equal(EtlRunStatus.Succeeded, run.Status);
+            Assert.Equal(EtlTerminalOutcome.Succeeded, terminalResult.Outcome);
+            Assert.Equal(2, run.AcceptedRecords);
+            Assert.Equal(0, run.RejectedRecords);
+            Assert.Equal(0, run.FilteredRecords);
+            Assert.Equal(0, run.OutstandingRecords);
+            Assert.Equal(0, run.OutstandingBytes);
+            Assert.Equal(partition.EndOrdinalExclusive, partition.NextOrdinal);
+            Assert.True(reservation.Settled);
+            Assert.Single(manifest);
+            Assert.Equal(EtlOutputRoute.Main, manifest[0].Position.Route);
+            Assert.Equal((int)EtlTerminalOutcome.Succeeded, terminal.Outcome);
+            Assert.Null(outbox[0].Disposition);
+        }
+        else
+        {
+            Assert.Equal(EtlStoreStatus.Applied, cancelled.Status);
+            Assert.Equal(EtlStoreStatus.Terminal, accepted.Status);
+            Assert.Equal(EtlRunStatus.Cancelled, run.Status);
+            Assert.Equal(EtlTerminalOutcome.Cancelled, terminalResult.Outcome);
+            Assert.Equal(0, run.AcceptedRecords);
+            Assert.Equal(0, run.RejectedRecords);
+            Assert.Equal(0, run.FilteredRecords);
+            Assert.Equal(2, run.OutstandingRecords);
+            Assert.Equal(acceptance.Batch.InputBytes, run.OutstandingBytes);
+            Assert.Equal(partition.StartOrdinal, partition.NextOrdinal);
+            Assert.False(reservation.Settled);
+            Assert.Empty(manifest);
+            Assert.Equal(terminalResult, cancelled.Result);
+            Assert.Equal((int)EtlTerminalOutcome.Cancelled, terminal.Outcome);
+            Assert.Null(outbox[0].Disposition);
+        }
+    }
+
+    [Fact]
+    public async Task Reopened_runtime_refuses_a_saved_artifact_with_an_unknown_format()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var scope = new EtlScope("tenant-a", "partition-unknown-artifact");
+        var admission = CreateAdmission("unknown-saved-artifact", scope);
+        var artifact = admission.Invocation.Artifact;
+        var unsupported = new EtlArtifact(artifact.FormatVersion + 1, artifact.ArtifactId, artifact.ContentHash,
+            artifact.DefinitionId, artifact.DefinitionVersion, artifact.Pipeline);
+
+        await using (var context = database.CreateContext())
+        {
+            var store = database.CreateStore(context);
+            Assert.Equal(EtlStoreStatus.Applied, (await store.AdmitAsync(admission)).Status);
+            var row = await context.Runs.SingleAsync();
+            row.InvocationJson = EtlRuntimeRecordCodec.Write(admission.Invocation with { Artifact = unsupported });
+            await context.SaveChangesAsync();
+        }
+
+        await using var reopenedContext = database.CreateContext();
+        var reopened = database.CreateStore(reopenedContext);
+        await Assert.ThrowsAsync<InvalidDataException>(async () =>
+            await reopened.FindRunAsync(scope, admission.Invocation.RunId));
+
+        await using var persistedContext = database.CreateContext();
+        var persisted = await persistedContext.Runs.AsNoTracking().SingleAsync();
+        Assert.Equal((int)EtlRunStatus.Preparing, persisted.Status);
+        Assert.Null(persisted.PreparationOwner);
+        Assert.Equal(0, persisted.PreparationFence);
+        Assert.Empty(await persistedContext.Partitions.AsNoTracking().ToListAsync());
+        Assert.Empty(await persistedContext.Manifest.AsNoTracking().ToListAsync());
+        Assert.Empty(await persistedContext.Outbox.AsNoTracking().ToListAsync());
+    }
+
+    [Fact]
+    public async Task Reopened_runtime_refuses_a_prepared_descriptor_with_an_unknown_format()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var scope = new EtlScope("tenant-a", "partition-unknown-prepared");
+        var admission = CreateAdmission("unknown-saved-prepared", scope);
+        await using (var context = database.CreateContext())
+        {
+            var store = database.CreateStore(context);
+            await StartAsync(store, admission, 2);
+            var savedPreparation = await context.PreparedRuns.SingleAsync();
+            savedPreparation.FormatVersion = EtlPreparedRun.CurrentFormatVersion + 1;
+            await context.SaveChangesAsync();
+        }
+
+        await using var reopenedContext = database.CreateContext();
+        var reopened = database.CreateStore(reopenedContext);
+        await Assert.ThrowsAsync<InvalidDataException>(async () =>
+            await reopened.FindRunAsync(scope, admission.Invocation.RunId));
+
+        await using var persistedContext = database.CreateContext();
+        var run = await persistedContext.Runs.AsNoTracking().SingleAsync();
+        var partitions = await persistedContext.Partitions.AsNoTracking().ToListAsync();
+        var prepared = await persistedContext.PreparedRuns.AsNoTracking().SingleAsync();
+        Assert.Equal((int)EtlRunStatus.Running, run.Status);
+        Assert.Equal(2, partitions.Count);
+        Assert.All(partitions, partition =>
+        {
+            Assert.Null(partition.Owner);
+            Assert.Equal(0, partition.Fence);
+            Assert.Equal(partition.StartOrdinal, partition.NextOrdinal);
+        });
+        Assert.Equal(EtlPreparedRun.CurrentFormatVersion + 1, prepared.FormatVersion);
+        Assert.Empty(await persistedContext.Reservations.AsNoTracking().ToListAsync());
+        Assert.Empty(await persistedContext.Manifest.AsNoTracking().ToListAsync());
+        Assert.Empty(await persistedContext.Outbox.AsNoTracking().ToListAsync());
+    }
+
     [Fact]
     public async Task Partition_claims_reserve_before_dispatch_reuse_owed_work_and_fence_released_attempts()
     {
@@ -831,6 +1070,39 @@ public sealed class EtlRuntimeStoreTests
             InterceptionResult result, CancellationToken cancellationToken = default)
         {
             _commitStarted.TrySetResult();
+            return ValueTask.FromResult(result);
+        }
+    }
+
+    private sealed class AcquiredTransactionGate : DbTransactionInterceptor
+    {
+        private readonly TaskCompletionSource _acquired = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Acquired => _acquired.Task;
+
+        public void Release() => _release.TrySetResult();
+
+        public override async ValueTask<DbTransaction> TransactionStartedAsync(DbConnection connection, TransactionEndEventData eventData,
+            DbTransaction transaction, CancellationToken cancellationToken = default)
+        {
+            _acquired.TrySetResult();
+            await _release.Task.WaitAsync(cancellationToken);
+            return transaction;
+        }
+    }
+
+    private sealed class TransactionStartAttemptObserver : DbTransactionInterceptor
+    {
+        private readonly TaskCompletionSource _attempted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Attempted => _attempted.Task;
+
+        public override ValueTask<InterceptionResult<DbTransaction>> TransactionStartingAsync(DbConnection connection,
+            TransactionStartingEventData eventData, InterceptionResult<DbTransaction> result,
+            CancellationToken cancellationToken = default)
+        {
+            _attempted.TrySetResult();
             return ValueTask.FromResult(result);
         }
     }

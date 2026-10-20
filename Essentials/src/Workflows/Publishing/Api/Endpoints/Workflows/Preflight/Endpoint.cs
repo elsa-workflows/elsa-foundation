@@ -4,6 +4,7 @@ using Elsa.Foundation.Identity.Authorization;
 using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Workflows.Publishing.Api.Models;
 using Elsa.Workflows.Publishing.Api.Requests;
+using Elsa.Workflows.Publishing.Api.Services;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Services;
 using Elsa.Workflows.Publishing.Core.Models;
@@ -40,7 +41,8 @@ public sealed class Endpoint(
                 now,
                 ExpiresAt: null,
                 "artifact-",
-                new Dictionary<string, string> { ["slice"] = "workflow-execution-vertical-slice" }),
+                new Dictionary<string, string> { ["slice"] = "workflow-execution-vertical-slice" },
+                TenantId: PublicationRequestTenant.Resolve(HttpContext.User)),
             cancellationToken);
         var plan = await preflightReader.EvaluateAsync(
             executable,

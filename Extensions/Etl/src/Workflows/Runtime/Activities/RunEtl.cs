@@ -21,7 +21,7 @@ public sealed class RunEtl(IWorkflowExecutionStateStore workflows, IWorkflowExec
 {
     public const string ActivityType = "Elsa.Etl.Workflows.Runtime.Activities.RunEtl";
 
-    [ActivityInput(Key = nameof(Pipeline), Order = 0)]
+    [ActivityInput(Key = nameof(Pipeline), Order = 0, UIHint = "etl-published-selection")]
     [Required]
     public string Pipeline { get; set; } = string.Empty;
 
