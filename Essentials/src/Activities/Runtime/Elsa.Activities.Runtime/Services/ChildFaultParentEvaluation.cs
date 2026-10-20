@@ -97,7 +97,7 @@ internal static class ChildFaultParentEvaluation
             parentOutcome);
 
         var now = timeProvider.GetUtcNow();
-        var commandMetadata = sourceWorkItem.CommandMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        var commandMetadata = SchedulerWorkItems.WithSchedulingMetadata(sourceWorkItem.CommandMetadata, faultedChildState);
         commandMetadata[RuntimeMetadataKeys.ChildFaulted] = bool.TrueString;
         commandMetadata[RuntimeMetadataKeys.IncidentId] = incidentId;
         commandMetadata[RuntimeMetadataKeys.ParentActivityExecutionId] = parentActivityExecutionId;
