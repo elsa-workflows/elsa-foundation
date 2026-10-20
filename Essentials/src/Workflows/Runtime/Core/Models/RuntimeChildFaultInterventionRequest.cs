@@ -73,6 +73,7 @@ public sealed partial class RuntimeChildFaultInterventionRequest
         !decision.StartsWith(ReservedDecisionPrefix, StringComparison.Ordinal) &&
         DecisionCodePattern().IsMatch(decision);
 
-    [GeneratedRegex(@"^[a-z0-9]+(\.[a-z0-9-]+)+$", RegexOptions.CultureInvariant)]
+    // \A and \z, not ^ and $: $ also matches before a trailing newline, which would admit "test.ok\n".
+    [GeneratedRegex(@"\A[a-z0-9]+(\.[a-z0-9-]+)+\z", RegexOptions.CultureInvariant)]
     private static partial Regex DecisionCodePattern();
 }

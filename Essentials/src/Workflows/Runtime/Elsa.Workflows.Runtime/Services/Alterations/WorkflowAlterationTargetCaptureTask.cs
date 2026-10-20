@@ -102,9 +102,14 @@ public sealed class WorkflowAlterationTargetCaptureTask
         var start = DecodeExplicitCursor(plan.CaptureCursor);
         var executionIds = plan.Target.ExecutionIds.Skip(start).Take(pageSize).ToArray();
         var targets = new List<WorkflowAlterationCapturedTarget>(executionIds.Length);
+        var authorized = plan.AuthorizedExecutionIds is { } ids ? new HashSet<string>(ids, StringComparer.Ordinal) : null;
         foreach (var executionId in executionIds)
         {
-            var state = await _workflowExecutions.FindAsync(executionId, cancellationToken);
+            // A run the submitter was not authorized to manage, run by run at admission, is never read or captured and
+            // fails exactly like a missing run, as run deletion reports a refusal (spec 260 FR-406).
+            var state = authorized is not null && !authorized.Contains(executionId)
+                ? null
+                : await _workflowExecutions.FindAsync(executionId, cancellationToken);
             // An explicit target names one run of the caller's tenant, whatever execution authority started it, as
             // run deletion does (spec 260 FR-406, owner decision OD16). The run's authority is still captured below for
             // the concurrency check, so a run whose authority changes after capture fails. Query targets keep the

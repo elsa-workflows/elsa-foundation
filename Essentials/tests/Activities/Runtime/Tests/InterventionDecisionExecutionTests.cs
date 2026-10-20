@@ -80,7 +80,8 @@ public sealed class InterventionDecisionExecutionTests
         ["Upper.case"],
         ["runtime.retry"],
         ["test." + new string('x', 70)],
-        ["test.same", "test.same"]
+        ["test.same", "test.same"],
+        ["test.ok\n"]
     ];
 
     [Theory]
