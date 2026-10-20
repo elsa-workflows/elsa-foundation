@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "422da67f51e254b7f8f8041f773905cc145494fe",
+  "last_publish_commit": "e9a3d18aa25ab30e57e6c6a1afdf6dc7fb63fdc0",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -14,8 +14,8 @@
     },
     {
       "package_id": "Elsa.Activities.Compensation",
-      "version": "4.0.2-preview",
-      "commit": "422da67f51e254b7f8f8041f773905cc145494fe"
+      "version": "4.0.3-preview",
+      "commit": "e9a3d18aa25ab30e57e6c6a1afdf6dc7fb63fdc0"
     },
     {
       "package_id": "Elsa.Activities.ControlFlow",
