@@ -2,7 +2,7 @@
 
 **Branch**: `agent/codex/3109-finite-etl` | **Date**: 2026-10-20 | **Spec**: [spec.md](spec.md)
 
-**State**: Proposed design. [ADR 0087](../../docs/adr/0087-etl-owns-its-execution-domain.md) awaits the owner's domain-admission decision. Independent regression coverage for existing runtime behavior can proceed; this document does not report the constitution gate as passed.
+**State**: Approved for incremental implementation after source/contract review and the owner's reaffirmed self-review/PR approval delegation on 20 October 2026. [ADR 0087](../../docs/adr/0087-etl-owns-its-execution-domain.md) adopts optional Elsa.Etl under that owner exception. Product acceptance is not complete.
 
 ## Summary
 
@@ -19,11 +19,11 @@ Deliver [#3109](https://github.com/elsa-workflows/elsa-foundation/issues/3109) a
 
 ## Constitution Check
 
-Read framework v6.1.0, Elsa v6.0.2 and `docs/contributing/review-checklist.md` at baseline `29b7636385b773c6d53da3e3081d1e548b40e0e9`.
+Read framework v6.1.0, Elsa v6.1.0 and `docs/contributing/review-checklist.md` at baseline `29b7636385b773c6d53da3e3081d1e548b40e0e9`.
 
 | Gate | Design disposition |
 |---|---|
-| Framework §2.1/§2.2/§2.18; Elsa §E2.1 | Optional `Elsa.Etl` purpose. **Pending** domain-list ratification, ADR 0087; do not broaden middleware silently. |
+| Framework §2.1/§2.2/§2.18; Elsa §E2.1 | Optional `Elsa.Etl` purpose. Adopted by ADR 0087 under delegated owner authority; middleware purpose is unchanged. |
 | §2.6.4; Elsa §E2.2/§E2.6 | Separate design/runtime interfaces. Runtime reads only retained artifacts and configured bindings. Native adapters have separate design/runtime packages. |
 | §2.9/§2.10/§2.20 | EF-free domain-owned state/store contracts, separate command/query methods, provider-only EF. Add reviewed EF admission and migration inventory. |
 | §2.5/§2.6/§2.23.3 | Scoped logic, internal sealed implementations, feature shape and public API tracking. Public contracts serve actual host/provider/API/native consumers; no cross-feature implementation references. |
@@ -33,7 +33,7 @@ Read framework v6.1.0, Elsa v6.0.2 and `docs/contributing/review-checklist.md` a
 | §2.24/§E2.9 | Draft/provisional sections are not ratified here. Preserve activity-specific composition and artifact separation; no universal edges/joins. |
 | §4/Elsa §E5 | Computed pre-GA package versions. Persisted ETL formats version 1 reject unknown versions. No existing wire/reader change. |
 
-Recheck after design review and before production code. The domain decision is a specific pending amendment, not a new general approval flow.
+Both gate indexes and the review checklist pass for this design; recheck the actual implementation before delivery. The owner exception for this additive domain decision does not change general framework governance.
 
 ## Execution and Durability
 
@@ -70,7 +70,7 @@ Compose optional features through existing host manifests. Register the `Elsa.Et
 
 ## Delivery Order
 
-1. Ratify the domain addition and review these artifacts. Independently test the existing bookmark/cancellation seam.
+1. Adopt the reviewed domain decision under owner delegation; preserve the independently tested existing bookmark/cancellation seam.
 2. Establish versioned artifact/state contracts and bounded parser/transform tests. Add only store contracts needed by real consumers.
 3. Implement durable admission, partition claims, bounded batches, chunk acceptance, terminal outbox and cancellation tombstones. Prove recovery before UI.
 4. Integrate native publication pins and suspend/resume; prove Sequence/Flowchart and business-error/fault/cancellation with real persistence.
@@ -88,4 +88,4 @@ Compose optional features through existing host manifests. Register the `Elsa.Et
 
 ## Complexity Tracking
 
-No complexity exception is requested. Domain admission is explicitly pending; this proposed design is not production acceptance evidence.
+No complexity exception is requested. Domain admission is recorded in ADR 0087; this approved design is not production acceptance evidence.

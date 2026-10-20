@@ -1,6 +1,6 @@
 # Finite file ETL data model
 
-**Status:** Draft for implementation planning. Names are logical model names, not frozen public CLR or storage contracts. Domain admission remains proposed in [ADR-0087](../../docs/adr/0087-etl-owns-its-execution-domain.md).
+**Status:** Approved design for implementation. Names are logical model names, not frozen public CLR or storage contracts. [ADR-0087](../../docs/adr/0087-etl-owns-its-execution-domain.md) records the owner-delegated domain adoption.
 
 This model supports only the finite topology in [spec.md](spec.md). The ETL feature owns its runtime persistence and transaction boundaries. The workflow runtime stores only the small typed invocation state and its ordinary checkpoint/outbox records; it does not store ETL rows, batches, partitions, or cursors.
 

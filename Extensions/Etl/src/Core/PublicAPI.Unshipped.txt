@@ -1,0 +1,158 @@
+#nullable enable
+Elsa.Etl.Core.EtlScope
+Elsa.Etl.Core.EtlScope.EtlScope(string! tenantId, string! persistencePartition) -> void
+Elsa.Etl.Core.EtlScope.TenantId.get -> string!
+Elsa.Etl.Core.EtlScope.PersistencePartition.get -> string!
+Elsa.Etl.Core.EtlScope.<Clone>$() -> Elsa.Etl.Core.EtlScope!
+Elsa.Etl.Core.EtlScope.Equals(Elsa.Etl.Core.EtlScope? other) -> bool
+override Elsa.Etl.Core.EtlScope.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlScope.GetHashCode() -> int
+override Elsa.Etl.Core.EtlScope.ToString() -> string!
+static Elsa.Etl.Core.EtlScope.operator !=(Elsa.Etl.Core.EtlScope? left, Elsa.Etl.Core.EtlScope? right) -> bool
+static Elsa.Etl.Core.EtlScope.operator ==(Elsa.Etl.Core.EtlScope? left, Elsa.Etl.Core.EtlScope? right) -> bool
+Elsa.Etl.Core.EtlArtifact
+Elsa.Etl.Core.EtlArtifact.ArtifactId.get -> string!
+Elsa.Etl.Core.EtlArtifact.ContentHash.get -> string!
+Elsa.Etl.Core.EtlArtifact.DefinitionId.get -> string!
+Elsa.Etl.Core.EtlArtifact.DefinitionVersion.get -> int
+Elsa.Etl.Core.EtlArtifact.EtlArtifact(int formatVersion, string! artifactId, string! contentHash, string! definitionId, int definitionVersion, System.Text.Json.JsonElement pipeline) -> void
+Elsa.Etl.Core.EtlArtifact.FormatVersion.get -> int
+Elsa.Etl.Core.EtlArtifact.Pipeline.get -> System.Text.Json.JsonElement
+Elsa.Etl.Core.EtlArtifactJson
+Elsa.Etl.Core.EtlColumn
+Elsa.Etl.Core.EtlColumn.<Clone>$() -> Elsa.Etl.Core.EtlColumn!
+Elsa.Etl.Core.EtlColumn.Deconstruct(out string! Name, out Elsa.Etl.Core.EtlColumnType Type, out bool Required) -> void
+Elsa.Etl.Core.EtlColumn.Equals(Elsa.Etl.Core.EtlColumn? other) -> bool
+Elsa.Etl.Core.EtlColumn.EtlColumn(string! Name, Elsa.Etl.Core.EtlColumnType Type, bool Required) -> void
+Elsa.Etl.Core.EtlColumn.Name.get -> string!
+Elsa.Etl.Core.EtlColumn.Name.init -> void
+Elsa.Etl.Core.EtlColumn.Required.get -> bool
+Elsa.Etl.Core.EtlColumn.Required.init -> void
+Elsa.Etl.Core.EtlColumn.Type.get -> Elsa.Etl.Core.EtlColumnType
+Elsa.Etl.Core.EtlColumn.Type.init -> void
+Elsa.Etl.Core.EtlColumnType
+Elsa.Etl.Core.EtlColumnType.Boolean = 3 -> Elsa.Etl.Core.EtlColumnType
+Elsa.Etl.Core.EtlColumnType.Decimal = 2 -> Elsa.Etl.Core.EtlColumnType
+Elsa.Etl.Core.EtlColumnType.Int64 = 1 -> Elsa.Etl.Core.EtlColumnType
+Elsa.Etl.Core.EtlColumnType.String = 0 -> Elsa.Etl.Core.EtlColumnType
+Elsa.Etl.Core.EtlComparison
+Elsa.Etl.Core.EtlComparison.Equal = 0 -> Elsa.Etl.Core.EtlComparison
+Elsa.Etl.Core.EtlComparison.NotEqual = 1 -> Elsa.Etl.Core.EtlComparison
+Elsa.Etl.Core.EtlFieldOrigin
+Elsa.Etl.Core.EtlFieldOrigin.Lookup = 1 -> Elsa.Etl.Core.EtlFieldOrigin
+Elsa.Etl.Core.EtlFieldOrigin.Source = 0 -> Elsa.Etl.Core.EtlFieldOrigin
+Elsa.Etl.Core.EtlFileBindings
+Elsa.Etl.Core.EtlFileBindings.<Clone>$() -> Elsa.Etl.Core.EtlFileBindings!
+Elsa.Etl.Core.EtlFileBindings.Deconstruct(out string! Source, out string! Lookup, out string! Output, out string! Errors) -> void
+Elsa.Etl.Core.EtlFileBindings.Equals(Elsa.Etl.Core.EtlFileBindings? other) -> bool
+Elsa.Etl.Core.EtlFileBindings.Errors.get -> string!
+Elsa.Etl.Core.EtlFileBindings.Errors.init -> void
+Elsa.Etl.Core.EtlFileBindings.EtlFileBindings(string! Source, string! Lookup, string! Output, string! Errors) -> void
+Elsa.Etl.Core.EtlFileBindings.Lookup.get -> string!
+Elsa.Etl.Core.EtlFileBindings.Lookup.init -> void
+Elsa.Etl.Core.EtlFileBindings.Output.get -> string!
+Elsa.Etl.Core.EtlFileBindings.Output.init -> void
+Elsa.Etl.Core.EtlFileBindings.Source.get -> string!
+Elsa.Etl.Core.EtlFileBindings.Source.init -> void
+Elsa.Etl.Core.EtlFilter
+Elsa.Etl.Core.EtlFilter.<Clone>$() -> Elsa.Etl.Core.EtlFilter!
+Elsa.Etl.Core.EtlFilter.Comparison.get -> Elsa.Etl.Core.EtlComparison
+Elsa.Etl.Core.EtlFilter.Equals(Elsa.Etl.Core.EtlFilter? other) -> bool
+Elsa.Etl.Core.EtlFilter.EtlFilter(string! field, Elsa.Etl.Core.EtlComparison comparison, System.Text.Json.JsonElement value) -> void
+Elsa.Etl.Core.EtlFilter.Field.get -> string!
+Elsa.Etl.Core.EtlFilter.Value.get -> System.Text.Json.JsonElement
+Elsa.Etl.Core.EtlLimits
+Elsa.Etl.Core.EtlLimits.<Clone>$() -> Elsa.Etl.Core.EtlLimits!
+Elsa.Etl.Core.EtlLimits.Equals(Elsa.Etl.Core.EtlLimits? other) -> bool
+Elsa.Etl.Core.EtlLimits.EtlLimits() -> void
+Elsa.Etl.Core.EtlLimits.MaxArtifactBytes.get -> int
+Elsa.Etl.Core.EtlLimits.MaxArtifactBytes.init -> void
+Elsa.Etl.Core.EtlLimits.MaxBatchBytes.get -> long
+Elsa.Etl.Core.EtlLimits.MaxBatchBytes.init -> void
+Elsa.Etl.Core.EtlLimits.MaxBatchRecords.get -> int
+Elsa.Etl.Core.EtlLimits.MaxBatchRecords.init -> void
+Elsa.Etl.Core.EtlLimits.MaxFields.get -> int
+Elsa.Etl.Core.EtlLimits.MaxFields.init -> void
+Elsa.Etl.Core.EtlLimits.MaxLookupBytes.get -> long
+Elsa.Etl.Core.EtlLimits.MaxLookupBytes.init -> void
+Elsa.Etl.Core.EtlLimits.MaxLookupRecords.get -> long
+Elsa.Etl.Core.EtlLimits.MaxLookupRecords.init -> void
+Elsa.Etl.Core.EtlLimits.MaxOutputBatchBytes.get -> long
+Elsa.Etl.Core.EtlLimits.MaxOutputBatchBytes.init -> void
+Elsa.Etl.Core.EtlLimits.MaxOutstandingBytes.get -> long
+Elsa.Etl.Core.EtlLimits.MaxOutstandingBytes.init -> void
+Elsa.Etl.Core.EtlLimits.MaxOutstandingRecords.get -> long
+Elsa.Etl.Core.EtlLimits.MaxOutstandingRecords.init -> void
+Elsa.Etl.Core.EtlLimits.MaxRecordBytes.get -> int
+Elsa.Etl.Core.EtlLimits.MaxRecordBytes.init -> void
+Elsa.Etl.Core.EtlLimits.MaxSnapshotBytes.get -> long
+Elsa.Etl.Core.EtlLimits.MaxSnapshotBytes.init -> void
+Elsa.Etl.Core.EtlLimits.PartitionCount.get -> int
+Elsa.Etl.Core.EtlLimits.PartitionCount.init -> void
+Elsa.Etl.Core.EtlOutputField
+Elsa.Etl.Core.EtlOutputField.<Clone>$() -> Elsa.Etl.Core.EtlOutputField!
+Elsa.Etl.Core.EtlOutputField.Deconstruct(out string! Name, out Elsa.Etl.Core.EtlFieldOrigin Origin, out string! Field) -> void
+Elsa.Etl.Core.EtlOutputField.Equals(Elsa.Etl.Core.EtlOutputField? other) -> bool
+Elsa.Etl.Core.EtlOutputField.EtlOutputField(string! Name, Elsa.Etl.Core.EtlFieldOrigin Origin, string! Field) -> void
+Elsa.Etl.Core.EtlOutputField.Field.get -> string!
+Elsa.Etl.Core.EtlOutputField.Field.init -> void
+Elsa.Etl.Core.EtlOutputField.Name.get -> string!
+Elsa.Etl.Core.EtlOutputField.Name.init -> void
+Elsa.Etl.Core.EtlOutputField.Origin.get -> Elsa.Etl.Core.EtlFieldOrigin
+Elsa.Etl.Core.EtlOutputField.Origin.init -> void
+Elsa.Etl.Core.EtlPipeline
+Elsa.Etl.Core.EtlPipeline.<Clone>$() -> Elsa.Etl.Core.EtlPipeline!
+Elsa.Etl.Core.EtlPipeline.Bindings.get -> Elsa.Etl.Core.EtlFileBindings!
+Elsa.Etl.Core.EtlPipeline.Bindings.init -> void
+Elsa.Etl.Core.EtlPipeline.Deconstruct(out Elsa.Etl.Core.EtlFileBindings! Bindings, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>! SourceSchema, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>! LookupSchema, out string! SourceLookupField, out string! LookupKeyField, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlOutputField!>! Mapping, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlFilter!>! Filters, out Elsa.Etl.Core.EtlLimits! Limits) -> void
+Elsa.Etl.Core.EtlPipeline.Equals(Elsa.Etl.Core.EtlPipeline? other) -> bool
+Elsa.Etl.Core.EtlPipeline.EtlPipeline(Elsa.Etl.Core.EtlFileBindings! Bindings, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>! SourceSchema, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>! LookupSchema, string! SourceLookupField, string! LookupKeyField, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlOutputField!>! Mapping, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlFilter!>! Filters, Elsa.Etl.Core.EtlLimits! Limits) -> void
+Elsa.Etl.Core.EtlPipeline.Filters.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlFilter!>!
+Elsa.Etl.Core.EtlPipeline.Filters.init -> void
+Elsa.Etl.Core.EtlPipeline.Limits.get -> Elsa.Etl.Core.EtlLimits!
+Elsa.Etl.Core.EtlPipeline.Limits.init -> void
+Elsa.Etl.Core.EtlPipeline.LookupKeyField.get -> string!
+Elsa.Etl.Core.EtlPipeline.LookupKeyField.init -> void
+Elsa.Etl.Core.EtlPipeline.LookupSchema.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>!
+Elsa.Etl.Core.EtlPipeline.LookupSchema.init -> void
+Elsa.Etl.Core.EtlPipeline.Mapping.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlOutputField!>!
+Elsa.Etl.Core.EtlPipeline.Mapping.init -> void
+Elsa.Etl.Core.EtlPipeline.SourceLookupField.get -> string!
+Elsa.Etl.Core.EtlPipeline.SourceLookupField.init -> void
+Elsa.Etl.Core.EtlPipeline.SourceSchema.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.EtlColumn!>!
+Elsa.Etl.Core.EtlPipeline.SourceSchema.init -> void
+const Elsa.Etl.Core.EtlArtifact.CurrentFormatVersion = 1 -> int
+const Elsa.Etl.Core.EtlArtifact.MaximumByteLength = 262144 -> int
+override Elsa.Etl.Core.EtlColumn.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlColumn.GetHashCode() -> int
+override Elsa.Etl.Core.EtlColumn.ToString() -> string!
+override Elsa.Etl.Core.EtlFileBindings.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlFileBindings.GetHashCode() -> int
+override Elsa.Etl.Core.EtlFileBindings.ToString() -> string!
+override Elsa.Etl.Core.EtlFilter.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlFilter.GetHashCode() -> int
+override Elsa.Etl.Core.EtlFilter.ToString() -> string!
+override Elsa.Etl.Core.EtlLimits.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlLimits.GetHashCode() -> int
+override Elsa.Etl.Core.EtlLimits.ToString() -> string!
+override Elsa.Etl.Core.EtlOutputField.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlOutputField.GetHashCode() -> int
+override Elsa.Etl.Core.EtlOutputField.ToString() -> string!
+override Elsa.Etl.Core.EtlPipeline.Equals(object? obj) -> bool
+override Elsa.Etl.Core.EtlPipeline.GetHashCode() -> int
+override Elsa.Etl.Core.EtlPipeline.ToString() -> string!
+static Elsa.Etl.Core.EtlArtifactJson.Hash(System.Text.Json.JsonElement document) -> string!
+static Elsa.Etl.Core.EtlArtifactJson.Read(System.Text.Json.JsonElement document) -> Elsa.Etl.Core.EtlPipeline!
+static Elsa.Etl.Core.EtlArtifactJson.Write(Elsa.Etl.Core.EtlPipeline! pipeline) -> System.Text.Json.JsonElement
+static Elsa.Etl.Core.EtlColumn.operator !=(Elsa.Etl.Core.EtlColumn? left, Elsa.Etl.Core.EtlColumn? right) -> bool
+static Elsa.Etl.Core.EtlColumn.operator ==(Elsa.Etl.Core.EtlColumn? left, Elsa.Etl.Core.EtlColumn? right) -> bool
+static Elsa.Etl.Core.EtlFileBindings.operator !=(Elsa.Etl.Core.EtlFileBindings? left, Elsa.Etl.Core.EtlFileBindings? right) -> bool
+static Elsa.Etl.Core.EtlFileBindings.operator ==(Elsa.Etl.Core.EtlFileBindings? left, Elsa.Etl.Core.EtlFileBindings? right) -> bool
+static Elsa.Etl.Core.EtlFilter.operator !=(Elsa.Etl.Core.EtlFilter? left, Elsa.Etl.Core.EtlFilter? right) -> bool
+static Elsa.Etl.Core.EtlFilter.operator ==(Elsa.Etl.Core.EtlFilter? left, Elsa.Etl.Core.EtlFilter? right) -> bool
+static Elsa.Etl.Core.EtlLimits.operator !=(Elsa.Etl.Core.EtlLimits? left, Elsa.Etl.Core.EtlLimits? right) -> bool
+static Elsa.Etl.Core.EtlLimits.operator ==(Elsa.Etl.Core.EtlLimits? left, Elsa.Etl.Core.EtlLimits? right) -> bool
+static Elsa.Etl.Core.EtlOutputField.operator !=(Elsa.Etl.Core.EtlOutputField? left, Elsa.Etl.Core.EtlOutputField? right) -> bool
+static Elsa.Etl.Core.EtlOutputField.operator ==(Elsa.Etl.Core.EtlOutputField? left, Elsa.Etl.Core.EtlOutputField? right) -> bool
+static Elsa.Etl.Core.EtlPipeline.operator !=(Elsa.Etl.Core.EtlPipeline? left, Elsa.Etl.Core.EtlPipeline? right) -> bool
+static Elsa.Etl.Core.EtlPipeline.operator ==(Elsa.Etl.Core.EtlPipeline? left, Elsa.Etl.Core.EtlPipeline? right) -> bool

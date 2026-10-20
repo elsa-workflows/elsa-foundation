@@ -1,0 +1,101 @@
+#nullable enable
+Elsa.Etl.Design.EtlCompilationResult
+Elsa.Etl.Design.EtlCompilationResult.<Clone>$() -> Elsa.Etl.Design.EtlCompilationResult!
+Elsa.Etl.Design.EtlCompilationResult.Artifact.get -> Elsa.Etl.Core.EtlArtifact?
+Elsa.Etl.Design.EtlCompilationResult.Artifact.init -> void
+Elsa.Etl.Design.EtlCompilationResult.Deconstruct(out Elsa.Etl.Core.EtlArtifact? Artifact, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Design.EtlDiagnostic!>! Diagnostics) -> void
+Elsa.Etl.Design.EtlCompilationResult.Diagnostics.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Design.EtlDiagnostic!>!
+Elsa.Etl.Design.EtlCompilationResult.Diagnostics.init -> void
+Elsa.Etl.Design.EtlCompilationResult.Equals(Elsa.Etl.Design.EtlCompilationResult? other) -> bool
+Elsa.Etl.Design.EtlCompilationResult.EtlCompilationResult(Elsa.Etl.Core.EtlArtifact? Artifact, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Design.EtlDiagnostic!>! Diagnostics) -> void
+Elsa.Etl.Design.EtlDesignFeature
+Elsa.Etl.Design.EtlDesignFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Etl.Design.EtlDesignFeature.EtlDesignFeature() -> void
+Elsa.Etl.Design.EtlDiagnostic
+Elsa.Etl.Design.EtlDiagnostic.<Clone>$() -> Elsa.Etl.Design.EtlDiagnostic!
+Elsa.Etl.Design.EtlDiagnostic.Code.get -> string!
+Elsa.Etl.Design.EtlDiagnostic.Code.init -> void
+Elsa.Etl.Design.EtlDiagnostic.Deconstruct(out string! Code, out string! Path, out string! Message) -> void
+Elsa.Etl.Design.EtlDiagnostic.Equals(Elsa.Etl.Design.EtlDiagnostic? other) -> bool
+Elsa.Etl.Design.EtlDiagnostic.EtlDiagnostic(string! Code, string! Path, string! Message) -> void
+Elsa.Etl.Design.EtlDiagnostic.Message.get -> string!
+Elsa.Etl.Design.EtlDiagnostic.Message.init -> void
+Elsa.Etl.Design.EtlDiagnostic.Path.get -> string!
+Elsa.Etl.Design.EtlDiagnostic.Path.init -> void
+Elsa.Etl.Design.IEtlArtifactCompiler
+Elsa.Etl.Design.IEtlArtifactCompiler.Compile(string! definitionId, int definitionVersion, Elsa.Etl.Core.EtlPipeline! pipeline) -> Elsa.Etl.Design.EtlCompilationResult!
+Elsa.Etl.Design.Stores.EtlDefinitionDraft
+Elsa.Etl.Design.Stores.EtlDefinitionDraft.<Clone>$() -> Elsa.Etl.Design.Stores.EtlDefinitionDraft!
+Elsa.Etl.Design.Stores.EtlDefinitionDraft.DefinitionId.get -> string!
+Elsa.Etl.Design.Stores.EtlDefinitionDraft.DefinitionId.init -> void
+Elsa.Etl.Design.Stores.EtlDefinitionDraft.Deconstruct(out string! DefinitionId, out long Revision, out int LastPublishedVersion, out Elsa.Etl.Core.EtlPipeline! Pipeline, out System.DateTimeOffset UpdatedAt) -> void
+Elsa.Etl.Design.Stores.EtlDefinitionDraft.Equals(Elsa.Etl.Design.Stores.EtlDefinitionDraft? other) -> bool
+Elsa.Etl.Design.Stores.EtlDefinitionDraft.EtlDefinitionDraft(string! DefinitionId, long Revision, int LastPublishedVersion, Elsa.Etl.Core.EtlPipeline! Pipeline, System.DateTimeOffset UpdatedAt) -> void
+Elsa.Etl.Design.Stores.EtlDefinitionDraft.LastPublishedVersion.get -> int
+Elsa.Etl.Design.Stores.EtlDefinitionDraft.LastPublishedVersion.init -> void
+Elsa.Etl.Design.Stores.EtlDefinitionDraft.Pipeline.get -> Elsa.Etl.Core.EtlPipeline!
+Elsa.Etl.Design.Stores.EtlDefinitionDraft.Pipeline.init -> void
+Elsa.Etl.Design.Stores.EtlDefinitionDraft.Revision.get -> long
+Elsa.Etl.Design.Stores.EtlDefinitionDraft.Revision.init -> void
+Elsa.Etl.Design.Stores.EtlDefinitionDraft.UpdatedAt.get -> System.DateTimeOffset
+Elsa.Etl.Design.Stores.EtlDefinitionDraft.UpdatedAt.init -> void
+Elsa.Etl.Design.Stores.EtlDefinitionWriteResult
+Elsa.Etl.Design.Stores.EtlDefinitionWriteResult.<Clone>$() -> Elsa.Etl.Design.Stores.EtlDefinitionWriteResult!
+Elsa.Etl.Design.Stores.EtlDefinitionWriteResult.Draft.init -> void
+Elsa.Etl.Design.Stores.EtlDefinitionWriteResult.Deconstruct(out Elsa.Etl.Design.Stores.EtlDefinitionWriteStatus Status, out Elsa.Etl.Design.Stores.EtlDefinitionDraft? Draft) -> void
+Elsa.Etl.Design.Stores.EtlDefinitionWriteResult.Draft.get -> Elsa.Etl.Design.Stores.EtlDefinitionDraft?
+Elsa.Etl.Design.Stores.EtlDefinitionWriteResult.Equals(Elsa.Etl.Design.Stores.EtlDefinitionWriteResult? other) -> bool
+Elsa.Etl.Design.Stores.EtlDefinitionWriteResult.EtlDefinitionWriteResult(Elsa.Etl.Design.Stores.EtlDefinitionWriteStatus Status, Elsa.Etl.Design.Stores.EtlDefinitionDraft? Draft) -> void
+Elsa.Etl.Design.Stores.EtlDefinitionWriteResult.Status.get -> Elsa.Etl.Design.Stores.EtlDefinitionWriteStatus
+Elsa.Etl.Design.Stores.EtlDefinitionWriteResult.Status.init -> void
+Elsa.Etl.Design.Stores.EtlDefinitionWriteStatus
+Elsa.Etl.Design.Stores.EtlDefinitionWriteStatus.Conflict = 2 -> Elsa.Etl.Design.Stores.EtlDefinitionWriteStatus
+Elsa.Etl.Design.Stores.EtlDefinitionWriteStatus.Created = 0 -> Elsa.Etl.Design.Stores.EtlDefinitionWriteStatus
+Elsa.Etl.Design.Stores.EtlDefinitionWriteStatus.NotFound = 3 -> Elsa.Etl.Design.Stores.EtlDefinitionWriteStatus
+Elsa.Etl.Design.Stores.EtlDefinitionWriteStatus.Updated = 1 -> Elsa.Etl.Design.Stores.EtlDefinitionWriteStatus
+Elsa.Etl.Design.Stores.EtlPublicationResult
+Elsa.Etl.Design.Stores.EtlPublicationResult.<Clone>$() -> Elsa.Etl.Design.Stores.EtlPublicationResult!
+Elsa.Etl.Design.Stores.EtlPublicationResult.Artifact.get -> Elsa.Etl.Core.EtlArtifact?
+Elsa.Etl.Design.Stores.EtlPublicationResult.Artifact.init -> void
+Elsa.Etl.Design.Stores.EtlPublicationResult.Deconstruct(out Elsa.Etl.Design.Stores.EtlPublicationStatus Status, out Elsa.Etl.Core.EtlArtifact? Artifact) -> void
+Elsa.Etl.Design.Stores.EtlPublicationResult.Equals(Elsa.Etl.Design.Stores.EtlPublicationResult? other) -> bool
+Elsa.Etl.Design.Stores.EtlPublicationResult.EtlPublicationResult(Elsa.Etl.Design.Stores.EtlPublicationStatus Status, Elsa.Etl.Core.EtlArtifact? Artifact) -> void
+Elsa.Etl.Design.Stores.EtlPublicationResult.Status.get -> Elsa.Etl.Design.Stores.EtlPublicationStatus
+Elsa.Etl.Design.Stores.EtlPublicationResult.Status.init -> void
+Elsa.Etl.Design.Stores.EtlPublicationStatus
+Elsa.Etl.Design.Stores.EtlPublicationStatus.Conflict = 2 -> Elsa.Etl.Design.Stores.EtlPublicationStatus
+Elsa.Etl.Design.Stores.EtlPublicationStatus.InvalidArtifact = 4 -> Elsa.Etl.Design.Stores.EtlPublicationStatus
+Elsa.Etl.Design.Stores.EtlPublicationStatus.NotFound = 3 -> Elsa.Etl.Design.Stores.EtlPublicationStatus
+Elsa.Etl.Design.Stores.EtlPublicationStatus.Published = 0 -> Elsa.Etl.Design.Stores.EtlPublicationStatus
+Elsa.Etl.Design.Stores.EtlPublicationStatus.Replay = 1 -> Elsa.Etl.Design.Stores.EtlPublicationStatus
+Elsa.Etl.Design.Stores.IEtlDefinitionStore
+Elsa.Etl.Design.Stores.IEtlDefinitionStore.CreateDraftAsync(Elsa.Etl.Core.EtlScope! scope, string! definitionId, Elsa.Etl.Core.EtlPipeline! pipeline, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Design.Stores.EtlDefinitionWriteResult!>
+Elsa.Etl.Design.Stores.IEtlDefinitionStore.FindDraftAsync(Elsa.Etl.Core.EtlScope! scope, string! definitionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Design.Stores.EtlDefinitionDraft?>
+Elsa.Etl.Design.Stores.IEtlDefinitionStore.FindPublishedAsync(Elsa.Etl.Core.EtlScope! scope, string! definitionId, int definitionVersion, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.EtlArtifact?>
+Elsa.Etl.Design.Stores.IEtlDefinitionStore.PublishAsync(Elsa.Etl.Core.EtlScope! scope, string! definitionId, long expectedRevision, Elsa.Etl.Core.EtlArtifact! artifact, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Design.Stores.EtlPublicationResult!>
+Elsa.Etl.Design.Stores.IEtlDefinitionStore.UpdateDraftAsync(Elsa.Etl.Core.EtlScope! scope, string! definitionId, long expectedRevision, Elsa.Etl.Core.EtlPipeline! pipeline, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Design.Stores.EtlDefinitionWriteResult!>
+override Elsa.Etl.Design.EtlCompilationResult.Equals(object? obj) -> bool
+override Elsa.Etl.Design.EtlCompilationResult.GetHashCode() -> int
+override Elsa.Etl.Design.EtlCompilationResult.ToString() -> string!
+override Elsa.Etl.Design.EtlDiagnostic.Equals(object? obj) -> bool
+override Elsa.Etl.Design.EtlDiagnostic.GetHashCode() -> int
+override Elsa.Etl.Design.EtlDiagnostic.ToString() -> string!
+override Elsa.Etl.Design.Stores.EtlDefinitionDraft.Equals(object? obj) -> bool
+override Elsa.Etl.Design.Stores.EtlDefinitionDraft.GetHashCode() -> int
+override Elsa.Etl.Design.Stores.EtlDefinitionDraft.ToString() -> string!
+override Elsa.Etl.Design.Stores.EtlDefinitionWriteResult.Equals(object? obj) -> bool
+override Elsa.Etl.Design.Stores.EtlDefinitionWriteResult.GetHashCode() -> int
+override Elsa.Etl.Design.Stores.EtlDefinitionWriteResult.ToString() -> string!
+override Elsa.Etl.Design.Stores.EtlPublicationResult.Equals(object? obj) -> bool
+override Elsa.Etl.Design.Stores.EtlPublicationResult.GetHashCode() -> int
+override Elsa.Etl.Design.Stores.EtlPublicationResult.ToString() -> string!
+static Elsa.Etl.Design.EtlCompilationResult.operator !=(Elsa.Etl.Design.EtlCompilationResult? left, Elsa.Etl.Design.EtlCompilationResult? right) -> bool
+static Elsa.Etl.Design.EtlCompilationResult.operator ==(Elsa.Etl.Design.EtlCompilationResult? left, Elsa.Etl.Design.EtlCompilationResult? right) -> bool
+static Elsa.Etl.Design.EtlDiagnostic.operator !=(Elsa.Etl.Design.EtlDiagnostic? left, Elsa.Etl.Design.EtlDiagnostic? right) -> bool
+static Elsa.Etl.Design.EtlDiagnostic.operator ==(Elsa.Etl.Design.EtlDiagnostic? left, Elsa.Etl.Design.EtlDiagnostic? right) -> bool
+static Elsa.Etl.Design.Stores.EtlDefinitionDraft.operator !=(Elsa.Etl.Design.Stores.EtlDefinitionDraft? left, Elsa.Etl.Design.Stores.EtlDefinitionDraft? right) -> bool
+static Elsa.Etl.Design.Stores.EtlDefinitionDraft.operator ==(Elsa.Etl.Design.Stores.EtlDefinitionDraft? left, Elsa.Etl.Design.Stores.EtlDefinitionDraft? right) -> bool
+static Elsa.Etl.Design.Stores.EtlDefinitionWriteResult.operator !=(Elsa.Etl.Design.Stores.EtlDefinitionWriteResult? left, Elsa.Etl.Design.Stores.EtlDefinitionWriteResult? right) -> bool
+static Elsa.Etl.Design.Stores.EtlDefinitionWriteResult.operator ==(Elsa.Etl.Design.Stores.EtlDefinitionWriteResult? left, Elsa.Etl.Design.Stores.EtlDefinitionWriteResult? right) -> bool
+static Elsa.Etl.Design.Stores.EtlPublicationResult.operator !=(Elsa.Etl.Design.Stores.EtlPublicationResult? left, Elsa.Etl.Design.Stores.EtlPublicationResult? right) -> bool
+static Elsa.Etl.Design.Stores.EtlPublicationResult.operator ==(Elsa.Etl.Design.Stores.EtlPublicationResult? left, Elsa.Etl.Design.Stores.EtlPublicationResult? right) -> bool

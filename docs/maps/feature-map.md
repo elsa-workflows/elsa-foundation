@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 113
+- Discovered feature classes: 115
 
 ## Features
 
@@ -48,6 +48,8 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | EfOpenTelemetryFeature | direct IShellFeature | Elsa.Diagnostics.OpenTelemetry.Persistence.EntityFrameworkCore | IShellFeature | [EfOpenTelemetryFeature.cs](../../Essentials/src/Diagnostics/OpenTelemetry/Persistence/EntityFrameworkCore/EfOpenTelemetryFeature.cs) |
 | StructuredLogsFeature | direct IWebShellFeature | Elsa.Diagnostics.StructuredLogs | IWebShellFeature | [StructuredLogsFeature.cs](../../Essentials/src/Diagnostics/StructuredLogs/Elsa.Diagnostics.StructuredLogs/StructuredLogsFeature.cs) |
 | StructuredLogsEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore | IShellFeature | [StructuredLogsEntityFrameworkCoreFeature.cs](../../Essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/StructuredLogsEntityFrameworkCoreFeature.cs) |
+| EtlDesignFeature | direct IShellFeature | Elsa.Etl.Design | IShellFeature | [EtlDesignFeature.cs](../../Extensions/Etl/src/Design/EtlDesignFeature.cs) |
+| EtlDesignEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Etl.Persistence.EntityFrameworkCore | IShellFeature | [EtlDesignEntityFrameworkCoreFeature.cs](../../Extensions/Etl/src/Persistence/EntityFrameworkCore/EtlDesignEntityFrameworkCoreFeature.cs) |
 | EventsFeature | direct IShellFeature | Elsa.Events | IShellFeature | [EventsFeature.cs](../../Essentials/src/Events/Elsa.Events/EventsFeature.cs) |
 | ExpressionsFeature | direct IShellFeature | Elsa.Expressions | IShellFeature | [ExpressionsFeature.cs](../../Essentials/src/Expressions/Elsa.Expressions/ExpressionsFeature.cs) |
 | ExpressionsApiFeature | direct IWebShellFeature | Elsa.Expressions.Api | IWebShellFeature | [ExpressionsApiFeature.cs](../../Essentials/src/Expressions/Api/ExpressionsApiFeature.cs) |

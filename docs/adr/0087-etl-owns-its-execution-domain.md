@@ -1,15 +1,15 @@
 ---
-status: proposed
+status: accepted
 date: 2026-10-20
 ---
 
 # ETL owns its execution domain
 
-Status: Proposed; domain-list amendment awaits ratification. Implementation unit: [#3109](https://github.com/elsa-workflows/elsa-foundation/issues/3109), [spec 255](../../specs/255-finite-file-etl/spec.md), under [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892).
+Status: Accepted under the owner's delegated self-review/PR approval authority, reaffirmed 20 October 2026. The program lead adopts this decision after the bounded review loop; no multi-architect vote is asserted. Implementation unit: [#3109](https://github.com/elsa-workflows/elsa-foundation/issues/3109), [spec 255](../../specs/255-finite-file-etl/spec.md), under [Program #2892](https://github.com/elsa-workflows/elsa-foundation/issues/2892).
 
-## Decision proposed
+## Decision
 
-Add `Elsa.Etl` to the pinned Elsa domain tree, with the purpose **“Executes data transformations over independently recoverable partitions.”** Ship it as an optional capability under `Extensions/Etl`, with its Studio companion under that same capability. A host can install ETL without choosing an optional actor provider.
+Admit `Elsa.Etl` to the pinned Elsa domain tree, with the purpose **“Executes data transformations over independently recoverable partitions.”** Ship it as an optional capability under `Extensions/Etl`, with its Studio companion under that same capability. A host can install ETL without choosing an optional actor provider.
 
 ETL owns its authored definition, immutable runnable artifact, run, partition cursor, bounded batch, output acceptance and terminal result. Its native workflow adapter uses the existing checkpoint outbox and bookmark-resume contracts. Native Sequence and Flowchart retain composition semantics; ETL does not introduce records or partition rules into those composites. No workflow or actor is created per record or batch.
 
@@ -19,7 +19,7 @@ The first implementation is finite CSV-to-JSONL with a pinned local lookup. It d
 
 `Elsa.Pipelines.Core` composes middleware. Its pinned purpose and current implementation do not describe datasets, cursors or connector effects. Nesting ETL under `Elsa.Pipelines.Dataflow` would give one root two unrelated meanings. Treating ETL as a native composite would instead entangle record processing with workflow activity semantics.
 
-The proposed domain separates those responsibilities while sharing durable infrastructure through existing contracts. The runtime consumes an immutable ETL artifact and runtime configuration, never a mutable draft or Studio layout. Feature-specific contracts remain small; provider algorithms and orchestration policy remain internal.
+The domain separates those responsibilities while sharing durable infrastructure through existing contracts. The runtime consumes an immutable ETL artifact and runtime configuration, never a mutable draft or Studio layout. Feature-specific contracts remain small; provider algorithms and orchestration policy remain internal.
 
 ## Package boundaries
 
@@ -39,4 +39,4 @@ ETL state does not enter the workflow checkpoint's typed state-change participan
 
 Physical file effects and a relational cursor cannot share one atomic transaction. Deterministic chunk identities and content checks make matching replay converge; a stale worker cannot make output authoritative or advance state. A physical write already in progress may finish. Lease expiry never implies that a live task released its buffers.
 
-Ratification adds the domain entry and purpose, with the normal Elsa constitution version/report update. It changes no existing domain's purpose, workflow semantics, provider default or frozen wire contract. The proposal is not recorded as accepted merely because the broader ETL program is authorized.
+The owner-delegated adoption adds the domain entry and purpose, with the Elsa constitution 6.1.0 version/report update. It changes no existing domain's purpose, workflow semantics, provider default or frozen wire contract. The adoption relies on the explicit self-review/approval delegation and this concrete reviewed decision, not an assertion that the broader program already delivered ETL.

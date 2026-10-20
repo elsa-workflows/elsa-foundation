@@ -1,6 +1,6 @@
 # Finite ETL validation guide
 
-**State:** acceptance target, not a claim of implemented commands or passing ETL tests. Follow [tasks.md](tasks.md) as implementation lands. Domain admission is pending in [ADR 0087](../../docs/adr/0087-etl-owns-its-execution-domain.md).
+**State:** acceptance target, not a claim of implemented commands or passing ETL tests. Follow [tasks.md](tasks.md) as implementation lands. Domain admission is recorded in [ADR 0087](../../docs/adr/0087-etl-owns-its-execution-domain.md).
 
 ## Existing runtime seam
 

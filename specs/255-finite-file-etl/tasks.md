@@ -1,12 +1,12 @@
 # Tasks: Finite CSV-to-JSONL ETL
 
-**State:** Draft execution checklist for [#3109](https://github.com/elsa-workflows/elsa-foundation/issues/3109). Only independent existing-runtime coverage is implemented. Do not start the new domain until T001 and T003 pass. This is the one active program leaf; do not turn its checkboxes into competing issue claims.
+**State:** Approved execution checklist for [#3109](https://github.com/elsa-workflows/elsa-foundation/issues/3109). Domain admission/design review and existing-runtime coverage are complete; component/design-persistence implementation is in progress. The [foundation checkpoint](evidence/finite-file-foundations.md) records executed evidence and the remaining product gate. This is the one active program leaf; do not turn its checkboxes into competing issue claims.
 
 ## Phase 1 — Admission and source verification
 
-- [ ] T001 Record the owner's ADR 0087 decision; if adopted, update the Elsa domain pin/purpose/version report in `.specify/memory/constitution.md` and `docs/reference/elsa-domain-tree.md`, retaining the existing framework rules.
+- [x] T001 Adopt reviewed ADR 0087 under the owner's reaffirmed self-review/approval delegation; update the Elsa domain pin/purpose/version report in `.specify/memory/constitution.md` and `docs/reference/elsa-domain-tree.md`, retaining existing framework rules.
 - [x] T002 Prove the existing wait boundary in `Essentials/tests/Workflows/Runtime/Tests/RuntimeCreateBookmarkSchedulerWorkHandlerTests.cs`: typed state/bookmark co-commit, legacy behavior and cancelled/stale delayed work. Root-reviewed focused run: 19 passed, 0 failed/skipped on 2026-10-20; no ETL production proof.
-- [ ] T003 Reconcile independent review of `specs/255-finite-file-etl/{spec,plan,research,data-model}.md`, `contracts/journey.md` and `quickstart.md`; pass both constitution gate indexes before implementation.
+- [x] T003 Reconcile independent review of `specs/255-finite-file-etl/{spec,plan,research,data-model}.md`, `contracts/journey.md` and `quickstart.md`; pass both constitution gate indexes before implementation.
 
 ## Phase 2 — Foundations
 
@@ -20,7 +20,7 @@
 **Goal:** Save, validate and publish a supported definition whose artifact is independently runnable.
 **Independent test:** Publish a fixture, modify its draft, and load the old immutable artifact from runtime-only composition.
 
-- [ ] T008 [US1] Add behavior tests in `Extensions/Etl/tests/Tests` for valid topology, duplicate/missing headers/keys, invalid types/filters/mapping, finite limits, draft concurrency and deterministic artifact hashing.
+- [x] T008 [US1] Add behavior tests in `Extensions/Etl/tests/Tests` for valid topology, duplicate/missing headers/keys, invalid types/filters/mapping, finite limits, draft concurrency and deterministic artifact hashing.
 - [ ] T009 [US1] Implement definition commands/queries and validation in `Extensions/Etl/src/Design`; retain schema/operation order, separate draft and published state, and issue safe stable diagnostics.
 - [ ] T010 [US1] Implement immutable artifact publication/retention through `Extensions/Etl/src/Design` and its EF store; prove replay/conflicting version refusal and unavailable dependency diagnostics.
 - [ ] T011 [US1] Add authorized binding/definition/draft/validate/publish endpoints in `Extensions/Etl/src/Api`, capability/permission contributions and scope/concurrency behavior tests.
@@ -30,8 +30,8 @@
 **Goal:** One native invocation executes one finite run; rows are transformed/routed correctly and the surrounding composite continues normally.
 **Independent test:** Valid/filtered/rejected fixture through Sequence and Flowchart, with typed JSONL and one accepted continuation.
 
-- [ ] T012 [US2] Write bounded parser/transform tests in `Extensions/Etl/tests/Tests` before implementation: quoting/multiline/BOM/CRLF/strict UTF-8, record/field/lookup/output byte bounds, typed mapping/filtering and deterministic row diagnostics.
-- [ ] T013 [US2] Implement streaming CSV preparation, verified snapshots, logical-record index/ranges, exact-key lookup and transforms in `Extensions/Etl/src/Runtime`; avoid whole-file materialization.
+- [x] T012 [US2] Write bounded parser/transform tests in `Extensions/Etl/tests/Tests` before implementation: quoting/multiline/BOM/CRLF/strict UTF-8, record/field/lookup/output byte bounds, typed mapping/filtering and deterministic row diagnostics.
+- [x] T013 [US2] Implement streaming CSV preparation, verified snapshots, logical-record index/ranges, exact-key lookup and transforms in `Extensions/Etl/src/Runtime`; avoid whole-file materialization.
 - [ ] T014 [US2] Implement short idempotent run admission and separately recoverable preparation in `Extensions/Etl/src/Runtime` and its EF store; persist chosen input/output revisions before acknowledging admission.
 - [ ] T015 [US2] Implement independently leased partitions and durable record/byte batch reservations in `Extensions/Etl/src/Runtime` and the EF store. Both quotas precede dispatch; only one owed batch per partition; retries retain identity/reservation.
 - [ ] T016 [US2] Implement immutable bounded JSONL chunks, conflict checks, fenced acceptance/cursor/quota transaction and deterministic accepted manifest/materialization in `Extensions/Etl/src/Runtime` and its EF store.
