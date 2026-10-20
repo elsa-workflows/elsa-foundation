@@ -4,7 +4,14 @@
 
 **Created**: 2026-10-20
 
-**Status**: Draft
+**Status**: Implemented. The runtime seams and the core of #2747 (`RetryFaultedActivity/1`) landed through [#3113](https://github.com/elsa-workflows/elsa-foundation/pull/3113). Scope state v2, uncertain steps, bounded handler retries, the intervention wait, the Studio states and the docs landed under [#3045](https://github.com/elsa-workflows/elsa-foundation/issues/3045). Evidence:
+
+- compensation tests 58/58, including J1–J6 and every FR-216 injection point in Durable, Balanced and Ephemeral;
+- the Workbench owned-process journeys (M1, and J1 + J5 with a kill after the retry) 2/2;
+- the SC-204 negative controls, run by hand and reverted: dropping the handler operation key fails 6 tests, dropping the uncertain branch fails 5, dropping the intervention request fails 5;
+- Studio Vitest, typecheck and lint.
+
+The Studio retry button for #2747 is M4.
 
 **Program**: [Native compensation #3035](https://github.com/elsa-workflows/elsa-foundation/issues/3035) → [Epic #3038](https://github.com/elsa-workflows/elsa-foundation/issues/3038) → [Feature #3045](https://github.com/elsa-workflows/elsa-foundation/issues/3045) (M2). Builds on [spec 250](../250-native-compensation/spec.md), whose FR-001 to FR-020 and owner decisions OD1–OD4 still hold. Prerequisite delivered here: the core of [#2747](https://github.com/elsa-workflows/elsa-foundation/issues/2747) (operator retry of a faulted activity).
 
