@@ -13,8 +13,9 @@ Elsa Studio. Recovery must remain correct and observable across retries, cancell
 uncertain external outcomes represented explicitly. Studio authoring and occurrence inspection are part of
 the first durable delivery slice, not a later addition.
 
-Releases and deployment are outside this program. Runtime and persistence PRs get a human merge
-([ADR 0080 D7](../adr/0080-elsa-4-simplification-decisions.md#d7--recurring-review-and-fix-routines)).
+Releases and deployment are outside this program. Its PRs merge under
+[ADR 0080 D7](../adr/0080-elsa-4-simplification-decisions.md#d7--recurring-review-and-fix-routines) as amended on
+15 October: the Code Review app merges once a review round leaves nothing actionable and CI is green.
 
 ## Relationship to other programs
 
