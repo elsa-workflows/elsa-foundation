@@ -91,6 +91,11 @@ function mapActivityTree(node: ActivityNode, transform: (node: ActivityNode) => 
     } else if (Array.isArray(value) && value.length > 0 && value.every(isActivityNode)) {
       nextPayload[key] = value.map(child => mapActivityTree(child, transform));
       changed = true;
+    } else if (Array.isArray(value) && value.some(isCollectionItemWithActivity)) {
+      // Collection slots keep their activities inside items, such as Switch cases (`cases[].activity`) and
+      // compensation steps (`steps[].activity` and `steps[].compensation`).
+      nextPayload[key] = value.map(item => isCollectionItemWithActivity(item) ? mapCollectionItem(item, transform) : item);
+      changed = true;
     }
   }
 
@@ -103,6 +108,18 @@ function mapActivityTree(node: ActivityNode, transform: (node: ActivityNode) => 
 
   const mapped = changed ? { ...transformed, structure: { ...structure, payload: nextPayload } } : transformed;
   return normalizeFlowchartStartNode(mapped);
+}
+
+function isCollectionItemWithActivity(value: unknown): value is Record<string, unknown> {
+  return isRecord(value) && !Array.isArray(value) && !isActivityNode(value) && Object.values(value).some(isActivityNode);
+}
+
+function mapCollectionItem(item: Record<string, unknown>, transform: (node: ActivityNode) => ActivityNode): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...item };
+  for (const [key, value] of Object.entries(item)) {
+    if (isActivityNode(value)) next[key] = mapActivityTree(value, transform);
+  }
+  return next;
 }
 
 function mapArgumentRecords(

@@ -832,6 +832,16 @@
           "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
+      "elsa.activities.compensation": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Activities.Runtime.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Design.Validations.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )"
+        }
+      },
       "elsa.activities.controlflow": {
         "type": "Project",
         "dependencies": {

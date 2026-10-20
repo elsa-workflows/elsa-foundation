@@ -38,3 +38,9 @@ The root checkpoint review ran four review/fix passes and stopped with no action
 Initial architecture runs identified wiring/freshness gaps while the worktree was changing; those failed runs are not passes. In particular the stale dependency dataset was regenerated before the final 579/579 run. Final exact-commit CI and the later product journey remain separate gates.
 
 No durable ETL run/partition acceptance, native invocation/continuation, actual two-worker recovery, API/Studio or browser qualification exists yet. Partial snapshot/staging retention, platform/filesystem durability and live worker memory accounting remain explicit operational boundaries. Parent #2908 and Program #2892 remain open; Orleans remains deferred and Proto.Actor is not selected.
+
+## Integration with main61abce1
+
+Merged main `61abce1dbb0c010817c44ca28b22ed031bc52803` normally into the existing implementation branch after GitHub reported a conflict and did not start new-head CI. Explicit conflicts were the active-spec selector and generated maps. Kept spec255 selected for this branch and regenerated maps from both sets of source; all native compensation #3089 and Connection creation #3105 behavior is retained. No ETL production source changed during integration.
+
+Integrated local validation: **108 ETL tests, 19 bookmark-boundary tests and 579 architecture tests passed**, zero failures/skips. Maps freshness, reviewed generated findings, solution-filter validation and diff checks passed. The now-landed CompensationScope is added to the pending native child-completion proof; this does not promise automatic reversal of ETL effects. Current-head GitHub CI and the remaining product acceptance are still owed. Historical main-red issue #2293 remains with its existing owner and cause investigation.

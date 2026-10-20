@@ -73,7 +73,7 @@ Compose optional features through existing host manifests. Register the `Elsa.Et
 1. Adopt the reviewed domain decision under owner delegation; preserve the independently tested existing bookmark/cancellation seam.
 2. Establish versioned artifact/state contracts and bounded parser/transform tests. Add only store contracts needed by real consumers.
 3. Implement durable admission, partition claims, bounded batches, chunk acceptance, terminal outbox and cancellation tombstones. Prove recovery before UI.
-4. Integrate native publication pins and suspend/resume; prove Sequence/Flowchart and business-error/fault/cancellation with real persistence.
+4. Integrate native publication pins and suspend/resume; prove Sequence/Flowchart, normal child completion inside the landed CompensationScope, and business-error/fault/cancellation with real persistence. ETL output has no automatic reversal; compensation remains explicitly authored.
 5. Implement authorized API/Studio and rebuilt-server/browser acceptance.
 6. Review integrated changes and safeguard-removal/restoration evidence, architecture/maps/migrations, exact-head CI and resulting main. Parent #2908/program remain open.
 

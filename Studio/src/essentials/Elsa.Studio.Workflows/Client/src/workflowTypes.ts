@@ -1220,7 +1220,18 @@ export interface ActivityExecutionStateSummary {
   incidentIds?: string[] | null;
   faultCount?: number;
   aggregateFaultCount?: number;
+  /** Outcomes of a completed execution, when the runtime reports them. */
+  outcomeNames?: string[] | null;
+  /** How the execution was scheduled. `schedulingCause` is "compensation" for a compensation handler. */
+  provenance?: ActivityExecutionSchedulingProvenance | null;
   metadata: Record<string, string>;
+}
+
+export interface ActivityExecutionSchedulingProvenance {
+  parentActivityExecutionId?: string | null;
+  schedulingActivityExecutionId?: string | null;
+  schedulingCause?: string | null;
+  metadata?: Record<string, string> | null;
 }
 
 export interface IncidentStateSummary {

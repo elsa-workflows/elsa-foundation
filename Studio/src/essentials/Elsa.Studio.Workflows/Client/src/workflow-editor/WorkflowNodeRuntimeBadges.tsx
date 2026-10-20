@@ -16,6 +16,7 @@ export function WorkflowNodeRuntimeBadges({
   return (
     <div className={["wf-node-runtime-strip", className].filter(Boolean).join(" ")}>
       {runtime.status ? <WorkflowStatusBadge status={runtime.status} subStatus={runtime.subStatus} /> : null}
+      {runtime.compensated ? <span className="wf-status-badge" data-status="compensated"><span aria-hidden="true">⟲</span> Compensated</span> : null}
       <RuntimeIncidentAction runtime={runtime} onOpenIncident={data.onIncidentClick} activityLabel={data.label} />
       {runtime.faultCount > 0 ? <span className="wf-node-runtime-count" data-health={runtime.hasBlockingIncident ? "blocking" : "neutral"}>{runtime.faultCount} faults</span> : null}
     </div>

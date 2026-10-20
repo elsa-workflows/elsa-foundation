@@ -96,6 +96,7 @@
     <Project Path="Essentials/src/Git/Elsa.Git.csproj" />
   </Folder>
   <Folder Name="/Essentials/src/Activities/">
+    <Project Path="Essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj" />
     <Project Path="Essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj" />
     <Project Path="Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
     <Project Path="Essentials/src/Activities/Http/Elsa.Activities.Http.csproj" />
@@ -358,6 +359,9 @@
   </Folder>
   <Folder Name="/Essentials/tests/Activities/Behavioral/">
     <Project Path="Essentials/tests/Activities/Behavioral/Tests/Elsa.Activities.Behavioral.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Essentials/tests/Activities/Compensation/">
+    <Project Path="Essentials/tests/Activities/Compensation/Tests/Elsa.Activities.Compensation.Tests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Activities/ControlFlow/">
     <Project Path="Essentials/tests/Activities/ControlFlow/Tests/Elsa.Activities.ControlFlow.Tests.csproj" />
@@ -630,6 +634,7 @@
   </Folder>
   <Folder Name="/Essentials/tests/Workbench/Fixtures/">
     <Project Path="Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj" />
+    <Project Path="Essentials/tests/Workbench/Fixtures/Reservations/Reservations.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Workflows/" />
   <Folder Name="/Essentials/tests/Workflows/Design/">

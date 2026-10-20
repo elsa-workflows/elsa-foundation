@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0",
+  "package": {
+    "id": "Elsa.Workbench.Tests.Reservations",
+    "version": "1.0.0"
+  },
+  "displayName": "Reservation participant test witness",
+  "description": "Test-only package assembled into one owned Workbench feed.",
+  "features": [
+    {
+      "id": "Elsa.Workbench.Tests.Reservations.ReservationWitness",
+      "typeName": "Elsa.Workbench.Tests.Reservations.ReservationWitnessFeature",
+      "displayName": "Reservation participant witness",
+      "dependencies": [
+        { "featureId": "ActivitiesCompensation", "optional": false }
+      ],
+      "extensions": { "cshellsFeatureName": "ReservationWitness" }
+    }
+  ]
+}

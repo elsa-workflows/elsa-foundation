@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 115
+- Discovered feature classes: 116
 
 ## Features
 
@@ -14,6 +14,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 |---|---|---|---|---|
 | ActivitiesBpmnFeature | direct IShellFeature | Elsa.Activities.Bpmn | IShellFeature | [ActivitiesBpmnFeature.cs](../../Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/ActivitiesBpmnFeature.cs) |
 | ActivitiesBpmnInterchangeFeature | direct IWebShellFeature | Elsa.Activities.Bpmn.Interchange | IWebShellFeature | [ActivitiesBpmnInterchangeFeature.cs](../../Essentials/src/Activities/Bpmn/Interchange/ActivitiesBpmnInterchangeFeature.cs) |
+| ActivitiesCompensationFeature | direct IShellFeature | Elsa.Activities.Compensation | IShellFeature | [ActivitiesCompensationFeature.cs](../../Essentials/src/Activities/Compensation/ActivitiesCompensationFeature.cs) |
 | ActivitiesControlFlowFeature | direct IShellFeature | Elsa.Activities.ControlFlow | IShellFeature | [ActivitiesControlFlowFeature.cs](../../Essentials/src/Activities/ControlFlow/ActivitiesControlFlowFeature.cs) |
 | ActivitiesDesignApiFeature | direct IWebShellFeature | Elsa.Activities.Design.Api | IWebShellFeature | [ActivitiesDesignApiFeature.cs](../../Essentials/src/Activities/Design/Api/ActivitiesDesignApiFeature.cs) |
 | ActivitiesDesignEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Activities.Design.Persistence.EntityFrameworkCore | IShellFeature | [ActivitiesDesignEntityFrameworkCoreFeature.cs](../../Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/ActivitiesDesignEntityFrameworkCoreFeature.cs) |

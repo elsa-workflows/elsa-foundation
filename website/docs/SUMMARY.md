@@ -7,6 +7,7 @@
   * [Try Elsa locally](essentials/quickstart.md)
   * [Your first workflow](essentials/first-workflow.md)
   * [Persistence modes](essentials/persistence-modes.md)
+  * [Undo completed steps with a compensation scope](essentials/compensation.md)
 
 ## Extensions
 

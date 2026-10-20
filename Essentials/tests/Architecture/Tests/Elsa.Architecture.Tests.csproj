@@ -109,6 +109,7 @@
        loadable here. These are the ones no reference above already reaches; the test fails, naming the project, for a
        packable library that is missing from this closure. -->
   <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Activities\Compensation\Elsa.Activities.Compensation.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Design\Reconciliation\Elsa.Activities.Design.Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Design\Reconciliation\Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />

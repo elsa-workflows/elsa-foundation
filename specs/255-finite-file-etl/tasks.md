@@ -38,7 +38,7 @@
 - [ ] T017 [US2] Implement `RunEtl` and immutable typed invocation/result state in `Extensions/Etl/src/Workflows/Runtime`; derive admission from real `BookmarkCreated` commits using the existing enricher/outbox seam, with no kernel switch or mutable staging buffer.
 - [ ] T018 [US2] Implement publication pinning/picker contribution in `Extensions/Etl/src/Workflows/Design`; retain the exact ETL artifact/hash and expose the activity only through the existing catalog.
 - [ ] T019 [US2] Implement durable terminal compare-and-set/outbox and idempotent bookmark result delivery in the ETL runtime/native adapter; acknowledge consumption or demonstrated parent termination, not merely queueing.
-- [ ] T020 [US2] Prove native Sequence sibling continuation and Flowchart completion plus business-error/fault/cancellation behavior in `Extensions/Etl/tests/Tests`, using real durable state and normal composite semantics.
+- [ ] T020 [US2] Prove native Sequence sibling continuation, Flowchart completion and normal child completion inside the now-landed CompensationScope, plus business-error/fault/cancellation behavior in `Extensions/Etl/tests/Tests`, using real durable state and normal composite semantics. Do not imply automatic reversal of ETL physical effects; compensation remains explicitly authored.
 
 ## Phase 5 — US3: Recover and fence work
 

@@ -2,6 +2,7 @@
   "solution": {
     "path": "Elsa.Server.slnx",
     "projects": [
+      "Essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj",
       "Essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj",
       "Essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj",
       "Essentials/src/Activities/Design/Core/Elsa.Activities.Design.Core.csproj",
