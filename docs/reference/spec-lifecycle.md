@@ -9,7 +9,7 @@ merged months ago — 42 carry no status line at all, and the remainder use roug
 status strings. Nothing was ever wrong with any single spec; there was simply no rule saying when a
 spec stops being live, so none of them ever did.
 
-See also: [Spec status map](../maps/spec-status-map.md) (generated), and
+See also: [Spec status map](https://github.com/elsa-workflows/elsa-foundation/blob/generated-maps/docs/maps/spec-status-map.md) (generated, published on the `generated-maps` branch; see the [maps index](../maps/README.md)), and
 [the simplification review](../reports/simplification-review-2026-07.md) §D2 for the finding that
 prompted this.
 
@@ -52,8 +52,7 @@ replacement sets the old spec to `Superseded` and names the successor.
 
 Set the terminal status before that PR merges, in its own diff: the status becomes true the moment
 the PR merges. Do not leave `In progress` until after the merge, and never open a separate PR only
-to change a status line. Such a PR also rewrites the generated spec-status map, so it conflicts with
-nearly every other merge while it waits.
+to change a status line.
 
 This is the whole policy. Everything else here is vocabulary in service of it.
 
@@ -78,7 +77,8 @@ residue and are not kept; `spec.md`, `plan.md`, `tasks.md`, `research.md`, `data
 
 - [`specs/README.md`](../../specs/README.md) is the hand-maintained entry point: what the tree is,
   how to read a spec, and where the generated index lives.
-- [`docs/maps/spec-status-map.md`](../maps/spec-status-map.md) is the generated index. It reads the
+- [`docs/maps/spec-status-map.md`](https://github.com/elsa-workflows/elsa-foundation/blob/generated-maps/docs/maps/spec-status-map.md) is the generated index, published on the
+  `generated-maps` branch or generated locally with `-- all`. It reads the
   `**Status**:` line, so the vocabulary above is what makes it useful — a map over 105 identical
   `Draft` values cannot tell anyone anything.
 
