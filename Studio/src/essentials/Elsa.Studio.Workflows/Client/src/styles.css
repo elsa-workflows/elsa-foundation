@@ -2792,14 +2792,14 @@
 .wf-status-badge[data-status="completed"] {
   border-color: color-mix(in srgb, var(--wf-success) 35%, var(--wf-border));
   background: var(--wf-success-soft);
-  color: var(--wf-success);
+  color: var(--studio-success-fg);
 }
 
 .wf-status-badge[data-status="faulted"],
 .wf-status-badge[data-status="cancelled"] {
   border-color: color-mix(in srgb, var(--wf-danger) 35%, var(--wf-border));
   background: var(--wf-danger-soft);
-  color: var(--wf-danger);
+  color: var(--studio-danger-fg);
 }
 
 .wf-status-badge[data-status="suspended"] {
