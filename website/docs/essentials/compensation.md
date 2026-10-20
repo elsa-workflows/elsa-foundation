@@ -79,6 +79,7 @@ A scope inside another scope's step hands its work to the outer scope when it fi
 - **Parallel branches.** Each branch's scope hands over when it finishes. A hand-over that arrives while the outer scope is already undoing is undone in that same recovery.
 - **No enclosing scope.** A scope with nothing around it keeps its entries when it finishes; nothing is sent.
 - **Keep the work.** Turn on the inner scope's `confirmOnComplete` input to confirm its entries instead of handing them over (see below).
+- **Variables.** A compensation that can be handed over can use the step's result and workflow variables. Publishing refuses one that uses a variable of a Sequence or Flowchart between its scope and the outer scope, because that container has finished by the time the outer scope runs it.
 
 A retry, after a crash or by an operator, never adds an entry twice.
 
@@ -127,6 +128,6 @@ A scope that ran more than once, in a loop or because its parent ran again, has 
 These behaviours are planned and not yet available:
 
 - a delay between automatic retries of a failed compensation, and a Studio button to retry it;
-- publishing does not warn when a compensation that can be handed over reads a value local to the inner scope's container; it fails when it runs and waits for an operator;
+- a compensation that can be handed over and reads a container's variable from a script expression is not checked at publication; it fails when it runs and waits for an operator;
 - a failure inside a Sequence inside a Flowchart step does not reach the scope;
 - a warning when a step or compensation is marked safe to repeat, so its effect may not be committed before it runs.
