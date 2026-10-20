@@ -55,3 +55,8 @@ Essentials/tests/Diagnostics/StructuredLogs/Tests/
 ## Complexity Tracking
 
 None. The design uses the existing browser API and current client lifecycle.
+
+
+## Local qualification and delivery order
+
+The final independently reviewed PR #3133 candidate may be stacked locally to run combined product-host checks while parent CI is pending. Delivery order remains parent-first: integrate its verified main result before opening this issue’s PR, compare source changes, and repeat affected proof. Parent revisions invalidate the relevant earlier qualification. Exact-head review/CI and resulting-main verification still gate delivery. This sequencing refinement changes no product behavior, scope or acceptance criterion.
