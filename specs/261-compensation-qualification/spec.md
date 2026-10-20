@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-20
 
-**Status**: Draft — M5 design packet under [#3048](https://github.com/elsa-workflows/elsa-foundation/issues/3048). Open decisions OD17–OD20 wait for the owner; the rest of the packet assumes the recommended option of each, so a different answer changes the marked sections only.
+**Status**: Draft — M5 design packet under [#3048](https://github.com/elsa-workflows/elsa-foundation/issues/3048). The owner decided OD17–OD20 on 20 October 2026, each as the recommended option A.
 
 **Program**: [Native compensation #3035](https://github.com/elsa-workflows/elsa-foundation/issues/3035) → [Epic #3040](https://github.com/elsa-workflows/elsa-foundation/issues/3040) → [Feature #3048](https://github.com/elsa-workflows/elsa-foundation/issues/3048) (M5). Builds on [spec 250](../250-native-compensation/spec.md) (M1), [spec 251](../251-compensation-uncertainty/spec.md) (M2), [spec 258](../258-compensation-nesting/spec.md) (M3) and [spec 260](../260-compensation-operator-actions/spec.md) (M4). Their requirements and owner decisions still hold, except where this spec says otherwise. The M4 Studio slice is open as [#3140](https://github.com/elsa-workflows/elsa-foundation/pull/3140); this packet reads it from `origin/agent/claude/3047-compensation-operator-studio` and assumes it merges before PR 2 starts.
 
@@ -12,7 +12,9 @@
 
 Releases and deployment are outside this program (owner, [program charter](../../docs/program-goals/native-compensation.md)). Nothing in this spec claims a package release, a published image or a deployment.
 
-## Open decisions (owner)
+## Owner decisions (20 October 2026)
+
+The owner chose option A for each of OD17–OD20 below.
 
 Each question lists its options and the recommended one. The packet is written for the recommendation; [plan.md](plan.md) names the tasks each other option would change.
 
