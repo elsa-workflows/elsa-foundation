@@ -29,7 +29,9 @@ Representative examples:
 
 The repo-root `EXTENSION_POINTS.md` links every source catalog grouped by domain family. The root index is pure links; authoritative extension-point detail remains in each local catalog.
 
-Generated maps are now the review surface for catalog/index drift:
+Generated maps are now the review surface for catalog/index drift. Generate them locally with
+`dotnet run --project tools/maps/Elsa.Maps.Generator -- all` or read them on the `generated-maps` branch
+(see the [maps index](../maps/README.md)):
 
 - `docs/maps/extension-point-map.md`
 - `docs/reports/maps-v2-findings.md`
@@ -167,7 +169,7 @@ For the **Overridable contracts** section, each entry records: a **layer badge**
 
 **Form.** Application-defined. Recommended: a single `EXTENSION_POINTS.md` file at the **composition-root feature project** of the domain (e.g. `src/<App>.<Domain>/EXTENSION_POINTS.md`), co-located with the feature's `README.md`. The `.Core` project is contracts-only (§2.1) and cannot describe defaults or wiring; the composition root can. Exception: domains with no separate feature project place the catalog in their `.Core`. Alternatives — generated reference, sidecar JSON, doc-site page — are equally valid; the obligation is the content + discoverability, not the medium.
 
-Generated maps are the current review surface for extension-point catalog/index drift.
+Generated maps are the current review surface for extension-point catalog/index drift; they are generated locally or read on the `generated-maps` branch ([maps index](../maps/README.md)).
 
 ## Minimum-viable-project exemption classes
 

@@ -3,6 +3,7 @@ import type { StudioActivityPropertyEditorContribution, StudioAiContributionApi,
 import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
 import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
 import type { ExpressionToolingCacheIdentity } from "../expression-tooling/expressionToolingClient";
+import { useWorkflowDefinitionBrowseSession } from "./workflowDefinitionBrowseSession";
 
 const WorkflowEditor = lazy(() => import("./WorkflowEditor").then(module => ({ default: module.WorkflowEditor })));
 const WorkflowDefinitions = lazy(() => import("./WorkflowDefinitions").then(module => ({ default: module.WorkflowDefinitions })));
@@ -35,6 +36,7 @@ export function WorkflowManagementPage({
   autosaveEnabledByDefault?: boolean;
 }) {
   const [definitionId, setDefinitionId] = useState(readDefinitionIdFromUrl);
+  const browseSession = useWorkflowDefinitionBrowseSession(context);
 
   useEffect(() => {
     const syncFromLocation = () => setDefinitionId(readDefinitionIdFromUrl());
@@ -57,7 +59,7 @@ export function WorkflowManagementPage({
     : (
       <WorkflowsPageFrame title="Workflow definitions" definitions>
         <WorkflowLazyBoundary label="workflow definitions">
-          <WorkflowDefinitions context={context} ai={ai} onOpen={openDefinition} />
+          <WorkflowDefinitions context={context} ai={ai} onOpen={openDefinition} session={browseSession} />
         </WorkflowLazyBoundary>
       </WorkflowsPageFrame>
     );

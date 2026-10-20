@@ -26,6 +26,7 @@ import { builtInPropertyEditors } from "../../src/apps/Elsa.Studio.Web/Client/sr
 import { Download, ListTree, Package, PackageOpen, Play, Sparkles, Upload } from "lucide-react";
 import { PanelTabList } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/PanelTabList";
 import { WorkflowDefinitions } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowDefinitions";
+import { useWorkflowDefinitionBrowseSession } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/workflowDefinitionBrowseSession";
 import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
 import { useRunDetailLayout } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useRunDetailLayout";
 import {
@@ -118,6 +119,11 @@ const expressionToolingUnavailable = searchParams.get("tooling") === "unavailabl
 const expressionFieldCount = Math.max(1, Math.min(50, Number(searchParams.get("fields") ?? 1)));
 const referenceJavaScriptExpression = `formatTotal(total)${" + total".repeat(248)}`;
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+function DirectWorkflowDefinitions({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
+  const session = useWorkflowDefinitionBrowseSession(context);
+  return <WorkflowDefinitions context={context} ai={ai} onOpen={() => undefined} session={session} />;
+}
 const endpointContext = createEndpointContext(window.location.origin);
 
 const DeferredWorkflowPanel = lazy(() => new Promise<{ default: React.ComponentType }>(resolve => {
@@ -975,7 +981,7 @@ function MoveDefinitionsFixture() {
 
   return <main className="wf-editor browser-fixture" data-moved={moved}>
     <h1>Workflow definitions</h1>
-    <WorkflowDefinitions context={context} ai={ai} onOpen={() => undefined} />
+    <DirectWorkflowDefinitions context={context} ai={ai} />
   </main>;
 }
 
@@ -1123,7 +1129,7 @@ function FolderRestructureFixture() {
 
   return <main className="wf-editor browser-fixture">
     <h1>Workflow folders</h1>
-    <WorkflowDefinitions context={context} ai={ai} onOpen={() => undefined} />
+    <DirectWorkflowDefinitions context={context} ai={ai} />
   </main>;
 }
 
@@ -1751,6 +1757,11 @@ async function renderRequestedFixture() {
   if (searchParams.get("mode") === "definition-versions") {
     const { DefinitionVersionsFixture } = await import("./definitionVersionsFixture");
     root.render(<DefinitionVersionsFixture />);
+    return;
+  }
+  if (searchParams.get("mode") === "workflow-definition-browse") {
+    const { WorkflowDefinitionBrowseFixture } = await import("./workflowDefinitionBrowseFixture");
+    root.render(<WorkflowDefinitionBrowseFixture />);
     return;
   }
   if (navBeforeFixture) {
