@@ -59,8 +59,15 @@ an ordinary activity input that publication pins; it is not part of the structur
 
 `nextStepIndex` is the index of the next step to schedule. It advances when the scope schedules a step, in the same
 staged state as that schedule request, so the running step is always `nextStepIndex - 1`: execution schedules step 0
-and stages `1`; the completion of step `i` appends its entry, schedules step `i + 1` and stages `i + 2`, all in one
-commit. A fault is the running step's only if it comes from step `nextStepIndex - 1`.
+and stages `1`; the completion of step `i` appends its entry and, unless `i` is the last step, schedules step `i + 1`
+and stages `i + 2`, all in one commit. When `i` is the last step, the same commit enters `Completed` and the scope
+completes with `Done` without scheduling another step (`contracts/semantics.md`). A fault is the running step's only
+if it comes from step `nextStepIndex - 1`.
+
+`nextOrdinal` is the completion ordinal the next entry receives. It starts at `1` and always equals one more than the
+highest ordinal in `entries`: appending an entry takes `nextOrdinal` as the entry's ordinal and increments it in the
+same commit. M1 runs one step at a time, so only one completion appends at a time; a later milestone that runs steps
+concurrently must define its own allocation rule.
 
 The runtime clears structural private state when the scope completes. The journal therefore lives only while the
 scope is active. Completed-scope inspection (M1) is derived from run data (FR-019); late compensation of a
