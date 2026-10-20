@@ -154,6 +154,7 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [detail, setDetail] = useState("Connecting to structured logs.");
+  const [recentFailure, setRecentFailure] = useState<ReturnType<typeof classifyStructuredLogError> | null>(null);
   const [paused, setPaused] = useState(false);
   const [bufferedRows, setBufferedRows] = useState<StructuredLogEntry[]>([]);
   const [queuedCount, setQueuedCount] = useState(0);
@@ -247,6 +248,7 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
     setQueuedCount(0);
     setUpstreamDroppedCount(0);
     setLocalDiscardedCount(0);
+    setRecentFailure(null);
     setStatus("connecting");
     setDetail("Loading recent structured logs.");
 
@@ -259,8 +261,7 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
       } catch (error) {
         if (!cancelled) {
           const classified = classifyStructuredLogError(error);
-          setStatus(classified.status);
-          setDetail(classified.message);
+          setRecentFailure(classified);
         }
       }
     }
@@ -371,8 +372,8 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
     rows,
     selectedEntryId,
     setSelectedEntryId,
-    status,
-    detail,
+    status: recentFailure?.status ?? status,
+    detail: recentFailure?.message ?? detail,
     paused,
     togglePaused,
     queuedCount,
