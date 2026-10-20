@@ -47,7 +47,6 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     [Fact]
     public async Task Create_Resolve_AndRejectWrongTypeOrOwner()
     {
-
         await _secrets.CreateAsync(Tenant, new CreateSecretRequest
         {
             Name = "api-token",
@@ -109,7 +108,6 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     [Fact]
     public async Task Create_ExistingSecretMustBeActiveTextAndBelongToTheCurrentTenant()
     {
-
         await _secrets.CreateAsync("tenant-b", new CreateSecretRequest { Name = "other-tenant-token", Value = "secret" });
         await _secrets.CreateAsync(Tenant, new CreateSecretRequest
         {
@@ -132,15 +130,9 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
 
         foreach (var secretName in new[] { "missing-token", "other-tenant-token", "rsa-token", "revoked-token", "expired-token" })
         {
-            await Assert.ThrowsAsync<ArgumentException>(() => _manager.CreateAsync(Tenant, new CreateConnectionRequest
+            await Assert.ThrowsAsync<ArgumentException>(() => CreateConnectionAsync($"reject-{secretName}", new Dictionary<string, ConnectionSecretFieldInput>
             {
-                Name = $"reject-{secretName}",
-                AuthScheme = HttpAuthSchemes.Bearer,
-                Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
-                SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
-                {
-                    [HttpConnectionSecretFields.Token] = new() { ExistingSecretName = secretName }
-                }
+                [HttpConnectionSecretFields.Token] = new() { ExistingSecretName = secretName }
             }).AsTask());
 
             Assert.Null(await _manager.FindAsync(Tenant, $"reject-{secretName}"));
@@ -164,27 +156,15 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
 
         for (var index = 0; index < invalidSources.Length; index++)
         {
-            await Assert.ThrowsAsync<ArgumentException>(() => _manager.CreateAsync(Tenant, new CreateConnectionRequest
+            await Assert.ThrowsAsync<ArgumentException>(() => CreateConnectionAsync($"invalid-source-{index}", new Dictionary<string, ConnectionSecretFieldInput>
             {
-                Name = $"invalid-source-{index}",
-                AuthScheme = HttpAuthSchemes.Bearer,
-                Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
-                SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
-                {
-                    [HttpConnectionSecretFields.Token] = invalidSources[index]
-                }
+                [HttpConnectionSecretFields.Token] = invalidSources[index]
             }).AsTask());
         }
 
-        var empty = await _manager.CreateAsync(Tenant, new CreateConnectionRequest
+        var empty = await CreateConnectionAsync("empty-source-noop", new Dictionary<string, ConnectionSecretFieldInput>
         {
-            Name = "empty-source-noop",
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
-            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
-            {
-                [HttpConnectionSecretFields.Token] = new()
-            }
+            [HttpConnectionSecretFields.Token] = new()
         });
         Assert.Empty(empty.SecretFieldNames);
     }
@@ -192,16 +172,9 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     [Fact]
     public async Task Update_RejectsUnavailableExistingSecretAndKeepsThePreviousCredential()
     {
-
-        await _manager.CreateAsync(Tenant, new CreateConnectionRequest
+        await CreateConnectionAsync("update-existing-secret", new Dictionary<string, ConnectionSecretFieldInput>
         {
-            Name = "update-existing-secret",
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
-            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
-            {
-                [HttpConnectionSecretFields.Token] = new() { Value = "previous-token" }
-            }
+            [HttpConnectionSecretFields.Token] = new() { Value = "previous-token" }
         });
 
         await Assert.ThrowsAsync<ArgumentException>(() => _manager.UpdateAsync(Tenant, "update-existing-secret", new UpdateConnectionRequest
@@ -223,7 +196,6 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     [Fact]
     public async Task CreateAndUpdate_RejectNullCredentialFieldInputs()
     {
-
         await Assert.ThrowsAsync<ArgumentException>(() => _manager.CreateAsync(Tenant, new CreateConnectionRequest
         {
             Name = "null-secret-fields",
@@ -232,23 +204,11 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
             SecretFields = null!
         }).AsTask());
 
-        await Assert.ThrowsAsync<ArgumentException>(() => _manager.CreateAsync(Tenant, new CreateConnectionRequest
-        {
-            Name = "null-secret-field-value",
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
-            SecretFields = new Dictionary<string, ConnectionSecretFieldInput> { ["token"] = null! }
-        }).AsTask());
+        await Assert.ThrowsAsync<ArgumentException>(() => CreateConnectionAsync("null-secret-field-value", new Dictionary<string, ConnectionSecretFieldInput> { ["token"] = null! }).AsTask());
 
-        await _manager.CreateAsync(Tenant, new CreateConnectionRequest
+        await CreateConnectionAsync("null-update-field-value", new Dictionary<string, ConnectionSecretFieldInput>
         {
-            Name = "null-update-field-value",
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
-            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
-            {
-                [HttpConnectionSecretFields.Token] = new() { Value = "previous-token" }
-            }
+            [HttpConnectionSecretFields.Token] = new() { Value = "previous-token" }
         });
 
         await Assert.ThrowsAsync<ArgumentException>(() => _manager.UpdateAsync(Tenant, "null-update-field-value", new UpdateConnectionRequest
@@ -263,15 +223,9 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
         const string secretName = "connection:prefix-owned:token";
 
         await _secrets.CreateAsync(Tenant, new CreateSecretRequest { Name = secretName, Value = "external-value" });
-        await _manager.CreateAsync(Tenant, new CreateConnectionRequest
+        await CreateConnectionAsync("prefix-owned", new Dictionary<string, ConnectionSecretFieldInput>
         {
-            Name = "prefix-owned",
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
-            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
-            {
-                [HttpConnectionSecretFields.Token] = new() { ExistingSecretName = secretName }
-            }
+            [HttpConnectionSecretFields.Token] = new() { ExistingSecretName = secretName }
         });
 
         Assert.True(await _manager.DeleteAsync(Tenant, "prefix-owned"));
@@ -283,15 +237,9 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     {
         const string ownedSecretName = "connection:retained-owned:token";
 
-        await _manager.CreateAsync(Tenant, new CreateConnectionRequest
+        await CreateConnectionAsync("retained-owned", new Dictionary<string, ConnectionSecretFieldInput>
         {
-            Name = "retained-owned",
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
-            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
-            {
-                [HttpConnectionSecretFields.Token] = new() { Value = "owned-value" }
-            }
+            [HttpConnectionSecretFields.Token] = new() { Value = "owned-value" }
         });
         await _secrets.CreateAsync(Tenant, new CreateSecretRequest { Name = "replacement-token", Value = "replacement-value" });
         await _manager.UpdateAsync(Tenant, "retained-owned", new UpdateConnectionRequest
@@ -318,16 +266,9 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     [Fact]
     public async Task Update_RotatesSecretWhenTheStoredFieldProvesItIsOwned()
     {
-
-        await _manager.CreateAsync(Tenant, new CreateConnectionRequest
+        await CreateConnectionAsync("owned-rotation", new Dictionary<string, ConnectionSecretFieldInput>
         {
-            Name = "owned-rotation",
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
-            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
-            {
-                [HttpConnectionSecretFields.Token] = new() { Value = "old-value" }
-            }
+            [HttpConnectionSecretFields.Token] = new() { Value = "old-value" }
         });
         await _manager.UpdateAsync(Tenant, "owned-rotation", new UpdateConnectionRequest
         {
@@ -346,25 +287,13 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     {
         const string ownedSecretName = "connection:reference-owner:token";
 
-        await _manager.CreateAsync(Tenant, new CreateConnectionRequest
+        await CreateConnectionAsync("reference-owner", new Dictionary<string, ConnectionSecretFieldInput>
         {
-            Name = "reference-owner",
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
-            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
-            {
-                [HttpConnectionSecretFields.Token] = new() { Value = "shared-owned-value" }
-            }
+            [HttpConnectionSecretFields.Token] = new() { Value = "shared-owned-value" }
         });
-        await _manager.CreateAsync(Tenant, new CreateConnectionRequest
+        await CreateConnectionAsync("reference-consumer", new Dictionary<string, ConnectionSecretFieldInput>
         {
-            Name = "reference-consumer",
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
-            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
-            {
-                [HttpConnectionSecretFields.Token] = new() { ExistingSecretName = ownedSecretName }
-            }
+            [HttpConnectionSecretFields.Token] = new() { ExistingSecretName = ownedSecretName }
         });
 
         await _secrets.CreateAsync(Tenant, new CreateSecretRequest { Name = "owner-replacement-token", Value = "replacement-value" });
@@ -386,21 +315,14 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     [Fact]
     public async Task InlineSecretWrites_DoNotRotateExternalSecretsAtGeneratedNames()
     {
-
         await _secrets.CreateAsync(Tenant, new CreateSecretRequest
         {
             Name = "connection:collision-create:token",
             Value = "external-create-value"
         });
-        await Assert.ThrowsAsync<ArgumentException>(() => _manager.CreateAsync(Tenant, new CreateConnectionRequest
+        await Assert.ThrowsAsync<ArgumentException>(() => CreateConnectionAsync("collision-create", new Dictionary<string, ConnectionSecretFieldInput>
         {
-            Name = "collision-create",
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
-            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
-            {
-                [HttpConnectionSecretFields.Token] = new() { Value = "attempted-overwrite" }
-            }
+            [HttpConnectionSecretFields.Token] = new() { Value = "attempted-overwrite" }
         }).AsTask());
 
         await _secrets.CreateAsync(Tenant, new CreateSecretRequest
@@ -408,12 +330,7 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
             Name = "connection:collision-update:token",
             Value = "external-update-value"
         });
-        await _manager.CreateAsync(Tenant, new CreateConnectionRequest
-        {
-            Name = "collision-update",
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" }
-        });
+        await CreateConnectionAsync("collision-update");
         await Assert.ThrowsAsync<ArgumentException>(() => _manager.UpdateAsync(Tenant, "collision-update", new UpdateConnectionRequest
         {
             SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
@@ -430,16 +347,10 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
             Name = "connection:collision-preflight-create:extra",
             Value = "external-preflight-value"
         });
-        await Assert.ThrowsAsync<ArgumentException>(() => _manager.CreateAsync(Tenant, new CreateConnectionRequest
+        await Assert.ThrowsAsync<ArgumentException>(() => CreateConnectionAsync("collision-preflight-create", new Dictionary<string, ConnectionSecretFieldInput>
         {
-            Name = "collision-preflight-create",
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
-            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
-            {
-                ["token"] = new() { Value = "must-not-be-written" },
-                ["extra"] = new() { Value = "attempted-overwrite" }
-            }
+            ["token"] = new() { Value = "must-not-be-written" },
+            ["extra"] = new() { Value = "attempted-overwrite" }
         }).AsTask());
         Assert.Null(await _secrets.FindAsync(Tenant, "connection:collision-preflight-create:token"));
 
@@ -448,12 +359,7 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
             Name = "connection:collision-preflight-update:extra",
             Value = "external-preflight-value"
         });
-        await _manager.CreateAsync(Tenant, new CreateConnectionRequest
-        {
-            Name = "collision-preflight-update",
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" }
-        });
+        await CreateConnectionAsync("collision-preflight-update");
         await Assert.ThrowsAsync<ArgumentException>(() => _manager.UpdateAsync(Tenant, "collision-preflight-update", new UpdateConnectionRequest
         {
             SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
@@ -468,7 +374,6 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     [Fact]
     public async Task MissingAndRevoked_AreUnavailable()
     {
-
         var missing = await Assert.ThrowsAsync<ConnectionUnavailableException>(() => _resolver.ResolveAsync(new ConnectionResolveRequest
         {
             TenantId = Tenant,
@@ -476,12 +381,7 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
         }).AsTask());
         Assert.False(missing.IsRetryable);
 
-        await _manager.CreateAsync(Tenant, new CreateConnectionRequest
-        {
-            Name = "soon-gone",
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" }
-        });
+        await CreateConnectionAsync("soon-gone");
         await _manager.RevokeAsync(Tenant, "soon-gone");
         var revoked = await Assert.ThrowsAsync<ConnectionUnavailableException>(() => _resolver.ResolveAsync(new ConnectionResolveRequest
         {
@@ -498,16 +398,9 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     [Fact]
     public async Task DuplicateCreate_DoesNotOverwriteTheExistingCredential()
     {
-
-        await _manager.CreateAsync(Tenant, new CreateConnectionRequest
+        await CreateConnectionAsync("dup", new Dictionary<string, ConnectionSecretFieldInput>
         {
-            Name = "dup",
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
-            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
-            {
-                [HttpConnectionSecretFields.Token] = new() { Value = "value-a" }
-            }
+            [HttpConnectionSecretFields.Token] = new() { Value = "value-a" }
         });
 
         await Assert.ThrowsAsync<ConnectionConflictException>(() => _manager.CreateAsync(Tenant, new CreateConnectionRequest
@@ -529,16 +422,9 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     [Fact]
     public async Task Update_KeepsPreviousSecretFieldsWhenTheInputCarriesNoNewValue()
     {
-
-        await _manager.CreateAsync(Tenant, new CreateConnectionRequest
+        await CreateConnectionAsync("keep-fields", new Dictionary<string, ConnectionSecretFieldInput>
         {
-            Name = "keep-fields",
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
-            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
-            {
-                [HttpConnectionSecretFields.Token] = new() { Value = "value-keep" }
-            }
+            [HttpConnectionSecretFields.Token] = new() { Value = "value-keep" }
         });
 
         await _manager.UpdateAsync(Tenant, "keep-fields", new UpdateConnectionRequest
@@ -559,7 +445,6 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     [Fact]
     public async Task HttpCreate_RequiresBaseUrlOrAllowedHosts()
     {
-
         await Assert.ThrowsAsync<ArgumentException>(() => _manager.CreateAsync(Tenant, new CreateConnectionRequest
         {
             Name = "no-hosts",
@@ -574,7 +459,6 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     [Fact]
     public async Task Resolve_UsesBaseUrlHostWhenAllowedHostsIsOmitted()
     {
-
         await _manager.CreateAsync(Tenant, new CreateConnectionRequest
         {
             Name = "from-base",
@@ -594,7 +478,6 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     [Fact]
     public async Task NamedCredential_ResolvesFromConfiguration()
     {
-
         await _manager.CreateAsync(Tenant, new CreateConnectionRequest
         {
             Name = "payments",
@@ -713,16 +596,10 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
         var outage = new InvalidOperationException("Simulated secret create failure.");
         _secretHooks.OnCreate = _ => ++creates >= 2 ? outage : null;
 
-        var failure = await Assert.ThrowsAsync<ConnectionStoreException>(() => _manager.CreateAsync(Tenant, new CreateConnectionRequest
+        var failure = await Assert.ThrowsAsync<ConnectionStoreException>(() => CreateConnectionAsync("partial", new Dictionary<string, ConnectionSecretFieldInput>
         {
-            Name = "partial",
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
-            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
-            {
-                ["token"] = new() { Value = "first" },
-                ["extra"] = new() { Value = "second" }
-            }
+            ["token"] = new() { Value = "first" },
+            ["extra"] = new() { Value = "second" }
         }).AsTask());
 
         Assert.Same(outage, failure.InnerException);
@@ -734,16 +611,9 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     [Fact]
     public async Task Rebind_DeletesThePreviousOwnedSecret()
     {
-
-        await _manager.CreateAsync(Tenant, new CreateConnectionRequest
+        await CreateConnectionAsync("rebind", new Dictionary<string, ConnectionSecretFieldInput>
         {
-            Name = "rebind",
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
-            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
-            {
-                [HttpConnectionSecretFields.Token] = new() { Value = "owned-value" }
-            }
+            [HttpConnectionSecretFields.Token] = new() { Value = "owned-value" }
         });
         await _secrets.CreateAsync(Tenant, new CreateSecretRequest
         {
@@ -772,15 +642,9 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
         const string connectionName = "owned-rebind";
         const string secretName = "connection:owned-rebind:token";
 
-        await _manager.CreateAsync(Tenant, new CreateConnectionRequest
+        await CreateConnectionAsync(connectionName, new Dictionary<string, ConnectionSecretFieldInput>
         {
-            Name = connectionName,
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
-            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
-            {
-                [HttpConnectionSecretFields.Token] = new() { Value = "owned-value" }
-            }
+            [HttpConnectionSecretFields.Token] = new() { Value = "owned-value" }
         });
 
         await _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
@@ -806,15 +670,9 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
         const string connectionName = "raw-credential";
         const string inputValue = "  raw value with surrounding spaces  ";
 
-        await _manager.CreateAsync(Tenant, new CreateConnectionRequest
+        await CreateConnectionAsync(connectionName, new Dictionary<string, ConnectionSecretFieldInput>
         {
-            Name = connectionName,
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
-            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
-            {
-                [HttpConnectionSecretFields.Token] = new() { Value = inputValue }
-            }
+            [HttpConnectionSecretFields.Token] = new() { Value = inputValue }
         });
 
         await using var resolved = await _resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = connectionName });
