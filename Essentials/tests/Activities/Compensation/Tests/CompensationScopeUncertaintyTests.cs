@@ -175,10 +175,10 @@ public sealed class CompensationScopeUncertaintyTests
         var attempt = Assert.Single(done.HandlerAttempts);
         Assert.Equal((CompensationAttemptResult.Completed, "ae-4"), (attempt.Result, attempt.ActivityExecutionId));
 
-        // It is written back as version 2, never as version 1.
+        // It is written back as current version, never as version 1.
         var staged = CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Defer, state);
         Assert.Equal(CompensationScopeStatePersister.StateSchemaVersion, staged.StateUpdate!.StateVersion);
-        Assert.Equal(2, CompensationScopeStatePersister.StateSchemaVersion);
+        Assert.Equal(3, CompensationScopeStatePersister.StateSchemaVersion);
     }
 
     [Fact]

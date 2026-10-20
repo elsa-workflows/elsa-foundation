@@ -26,12 +26,16 @@ public static class CompensationGraph
     public static ExecutableNode Scope(string nodeId, bool faultAfterCompensation, params Step[] steps) =>
         Scope(nodeId, faultAfterCompensation, handlerMaxAttempts: 3, steps);
 
-    public static ExecutableNode Scope(string nodeId, bool faultAfterCompensation, int handlerMaxAttempts, params Step[] steps)
+    public static ExecutableNode Scope(string nodeId, bool faultAfterCompensation, int handlerMaxAttempts, params Step[] steps) =>
+        Scope(nodeId, faultAfterCompensation, handlerMaxAttempts, confirmOnComplete: false, steps);
+
+    public static ExecutableNode Scope(string nodeId, bool faultAfterCompensation, int handlerMaxAttempts, bool confirmOnComplete, params Step[] steps)
     {
         var contract = ClrActivityContractTestBuilder.BuildContract(typeof(CompensationScope));
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
         Bind("faultAfterCompensation", faultAfterCompensation);
         Bind("handlerMaxAttempts", handlerMaxAttempts);
+        Bind("confirmOnComplete", confirmOnComplete);
 
         void Bind<T>(string key, T value)
         {
