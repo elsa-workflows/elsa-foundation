@@ -735,3 +735,19 @@ Elsa.Etl.Core.Runtime.IEtlRunAdmissionService.AdmitAsync(Elsa.Etl.Core.Runtime.E
 Elsa.Etl.Core.Runtime.IEtlResultDelivery
 Elsa.Etl.Core.Runtime.IEtlResultDelivery.DeliverAsync(Elsa.Etl.Core.Runtime.EtlDeliveryLease! delivery, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlDeliveryDisposition?>
 static Elsa.Etl.Core.EtlArtifactJson.CreateArtifactId(int formatVersion, string! definitionId, int definitionVersion, string! contentHash) -> string!
+Elsa.Etl.Core.Runtime.EtlBindingSummary
+Elsa.Etl.Core.Runtime.EtlBindingSummary.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlBindingSummary!
+Elsa.Etl.Core.Runtime.EtlBindingSummary.Alias.get -> string!
+Elsa.Etl.Core.Runtime.EtlBindingSummary.Alias.init -> void
+Elsa.Etl.Core.Runtime.EtlBindingSummary.Deconstruct(out string! Alias, out string! Role) -> void
+Elsa.Etl.Core.Runtime.EtlBindingSummary.Equals(Elsa.Etl.Core.Runtime.EtlBindingSummary? other) -> bool
+Elsa.Etl.Core.Runtime.EtlBindingSummary.EtlBindingSummary(string! Alias, string! Role) -> void
+Elsa.Etl.Core.Runtime.EtlBindingSummary.Role.get -> string!
+Elsa.Etl.Core.Runtime.EtlBindingSummary.Role.init -> void
+Elsa.Etl.Core.Runtime.IEtlBindingCatalog
+Elsa.Etl.Core.Runtime.IEtlBindingCatalog.ListBindings(Elsa.Etl.Core.EtlScope! scope, string? afterAlias, string? afterRole, int take) -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlBindingSummary!>!
+override Elsa.Etl.Core.Runtime.EtlBindingSummary.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlBindingSummary.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlBindingSummary.ToString() -> string!
+static Elsa.Etl.Core.Runtime.EtlBindingSummary.operator !=(Elsa.Etl.Core.Runtime.EtlBindingSummary? left, Elsa.Etl.Core.Runtime.EtlBindingSummary? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlBindingSummary.operator ==(Elsa.Etl.Core.Runtime.EtlBindingSummary? left, Elsa.Etl.Core.Runtime.EtlBindingSummary? right) -> bool

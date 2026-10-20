@@ -6,7 +6,7 @@ using Elsa.Etl.Core.Runtime;
 namespace Elsa.Etl.Runtime.Bindings;
 
 /// <summary>Resolves exact host revisions without using authored paths or retargeting retained runs.</summary>
-internal sealed class HostFileBindings
+internal sealed class HostFileBindings : IEtlBindingCatalog
 {
     private readonly IReadOnlyList<(HostFileBinding Binding, PinnedFileBinding Pin)> _bindings;
 
@@ -49,6 +49,22 @@ internal sealed class HostFileBindings
         .Where(x => x.Binding.IsCurrent && x.Binding.Scope == scope)
         .Select(x => new FileBindingInfo(x.Binding.Alias, x.Binding.Role))
         .OrderBy(x => x.Alias, StringComparer.Ordinal).ThenBy(x => x.Role).ToArray();
+
+    public IReadOnlyList<EtlBindingSummary> ListBindings(EtlScope scope, string? afterAlias, string? afterRole, int take)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        ArgumentOutOfRangeException.ThrowIfLessThan(take, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(take, 1000);
+        if ((afterAlias is null) != (afterRole is null))
+            throw new ArgumentException("A binding page boundary requires both alias and role.");
+
+        return _bindings.Where(item => item.Binding.IsCurrent && item.Binding.Scope == scope)
+            .Select(item => new EtlBindingSummary(item.Binding.Alias, item.Binding.Role.ToString()))
+            .Where(item => afterAlias is null || StringComparer.Ordinal.Compare(item.Alias, afterAlias) > 0 ||
+                StringComparer.Ordinal.Equals(item.Alias, afterAlias) && StringComparer.Ordinal.Compare(item.Role, afterRole) > 0)
+            .OrderBy(item => item.Alias, StringComparer.Ordinal).ThenBy(item => item.Role, StringComparer.Ordinal)
+            .Take(take).ToArray();
+    }
 
     public PinnedFileBinding Resolve(EtlScope scope, string alias, EtlFileRole role)
     {

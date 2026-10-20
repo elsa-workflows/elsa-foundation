@@ -54,11 +54,12 @@ The workflow and ETL stores have separate transactions, bridged by idempotent in
 Extensions/Etl/
   src/
     Core/                         Elsa.Etl.Core
-    Design/                       Elsa.Etl.Design
+    Design/Elsa.Etl.Design/        Elsa.Etl.Design
     Runtime/                      Elsa.Etl.Runtime
     Persistence/EntityFrameworkCore/
                                   Elsa.Etl.Persistence.EntityFrameworkCore
-    Api/                          Elsa.Etl.Api
+    Design/Api/                   Elsa.Etl.Design.Api
+    Runtime/Api/                  runtime-only API (separate composition; later task)
     Workflows/Design/             Elsa.Etl.Workflows.Design
     Workflows/Runtime/            Elsa.Etl.Workflows.Runtime
   tests/Tests/                    Elsa.Etl.Tests with shared fixtures

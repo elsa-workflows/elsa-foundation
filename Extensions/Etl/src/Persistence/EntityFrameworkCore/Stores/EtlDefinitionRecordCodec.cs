@@ -79,6 +79,87 @@ internal static class EtlDefinitionRecordCodec
         return new EtlDefinitionDraft(definitionId, row.Revision, row.LastPublishedVersion, pipeline, updatedAt);
     }
 
+    public static EtlDefinitionSummary ReadDraftSummary(
+        string scopeKey,
+        string? tenantId,
+        string persistencePartition,
+        string definitionKey,
+        string encodedDefinitionId,
+        long revision,
+        int lastPublishedVersion,
+        string schemaVersion,
+        long updatedAtUtcTicks,
+        EtlScope scope)
+    {
+        EnsureSchemaVersion(schemaVersion);
+        EnsureScopeIdentity(scopeKey, tenantId, persistencePartition, scope);
+        var definitionId = DecodeIdentity(encodedDefinitionId, "definition id");
+        if (!StringComparer.Ordinal.Equals(definitionKey, Definition(definitionId).Key))
+            throw new InvalidDataException("The ETL draft row does not match its definition identity.");
+        if (revision <= 0 || lastPublishedVersion < 0)
+            throw new InvalidDataException("The ETL draft row has an invalid revision or publication version.");
+
+        DateTimeOffset updatedAt;
+        try
+        {
+            updatedAt = new DateTimeOffset(updatedAtUtcTicks, TimeSpan.Zero);
+        }
+        catch (ArgumentOutOfRangeException exception)
+        {
+            throw new InvalidDataException("The ETL draft row has an invalid update timestamp.", exception);
+        }
+
+        return new(definitionId, revision, lastPublishedVersion, updatedAt);
+    }
+
+    public static EtlPublishedVersionSummary ReadPublishedVersionSummary(
+        string scopeKey,
+        string? tenantId,
+        string persistencePartition,
+        string definitionKey,
+        string encodedDefinitionId,
+        int definitionVersion,
+        string schemaVersion,
+        string artifactEnvelopeHash,
+        string contentHash,
+        long publishedAtUtcTicks,
+        EtlScope scope,
+        string expectedDefinitionId)
+    {
+        EnsureSchemaVersion(schemaVersion);
+        EnsureScopeIdentity(scopeKey, tenantId, persistencePartition, scope);
+        var definitionId = DecodeIdentity(encodedDefinitionId, "definition id");
+        EnsureIdentity(expectedDefinitionId, "definition id");
+        if (!StringComparer.Ordinal.Equals(definitionId, expectedDefinitionId) ||
+            !StringComparer.Ordinal.Equals(definitionKey, Definition(expectedDefinitionId).Key))
+            throw new InvalidDataException("The published ETL artifact row does not match its definition identity.");
+        if (!IsLowercaseSha256(artifactEnvelopeHash) || !IsLowercaseSha256(contentHash))
+            throw new InvalidDataException("The published ETL artifact row has an invalid content or envelope hash.");
+
+        try
+        {
+            var selection = new EtlPublishedSelection(definitionId, definitionVersion, contentHash);
+            if (EtlPublishedSelection.Parse(selection.ToToken()) != selection)
+                throw new InvalidDataException("The published ETL artifact row does not form a canonical selection.");
+        }
+        catch (ArgumentException exception)
+        {
+            throw new InvalidDataException("The published ETL artifact row does not form a valid selection.", exception);
+        }
+
+        DateTimeOffset publishedAt;
+        try
+        {
+            publishedAt = new DateTimeOffset(publishedAtUtcTicks, TimeSpan.Zero);
+        }
+        catch (ArgumentOutOfRangeException exception)
+        {
+            throw new InvalidDataException("The published ETL artifact row has an invalid publication timestamp.", exception);
+        }
+
+        return new(definitionId, definitionVersion, contentHash, publishedAt);
+    }
+
     public static ValidatedArtifact ValidateArtifact(string definitionId, EtlArtifact artifact)
     {
         ArgumentNullException.ThrowIfNull(artifact);
@@ -142,6 +223,45 @@ internal static class EtlDefinitionRecordCodec
     }
 
     public static string HashText(string value) => Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
+
+    private static void EnsureScopeIdentity(string scopeKey, string? tenantId, string persistencePartition, EtlScope scope)
+    {
+        var expected = Scope(scope);
+        EnsureIdentityResidual(tenantId, scope.TenantId, "tenant id");
+        EnsureIdentityResidual(persistencePartition, scope.PersistencePartition, "persistence partition");
+        if (!StringComparer.Ordinal.Equals(scopeKey, expected.Key) ||
+            !StringComparer.Ordinal.Equals(tenantId, expected.TenantId) ||
+            !StringComparer.Ordinal.Equals(persistencePartition, expected.PersistencePartition))
+            throw new InvalidDataException("The ETL row does not match its encoded scope identity.");
+    }
+
+    private static string DecodeIdentity(string encodedIdentity, string label)
+    {
+        string identity;
+        try
+        {
+            identity = EfRelationalIdentity.Decode(encodedIdentity);
+            EnsureIdentity(identity, label);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException)
+        {
+            throw new InvalidDataException($"The ETL row has an invalid encoded {label}.", exception);
+        }
+
+        if (!StringComparer.Ordinal.Equals(EfRelationalIdentity.Encode(identity), encodedIdentity))
+            throw new InvalidDataException($"The ETL row has a noncanonical encoded {label}.");
+        return identity;
+    }
+
+    private static bool IsLowercaseSha256(string? value)
+    {
+        if (value is null || value.Length != EtlDesignEfModule.HashLength)
+            return false;
+        foreach (var character in value)
+            if (character is not (>= '0' and <= '9') and not (>= 'a' and <= 'f'))
+                return false;
+        return true;
+    }
 
     public static void EnsureIdentity(string value, string label)
     {

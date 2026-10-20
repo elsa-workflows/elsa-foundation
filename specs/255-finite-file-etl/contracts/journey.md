@@ -47,11 +47,19 @@ Use existing endpoint/capability/permission conventions. All lookups are scope-f
 | `PUT /etl/definitions/{id}/draft` | Desired state plus concurrency revision | Definition/write |
 | `POST /etl/definitions/{id}/validate` | Structured diagnostics | Definition/write |
 | `POST /etl/definitions/{id}/publish` | Immutable version/artifact | Definition/publish |
+| `GET /etl/definitions/{id}/versions` | Paginated immutable version metadata and selection tokens | Definition/read |
+| `GET /etl/definitions/{id}/versions/{version}` | Inspect one exact published pipeline | Definition/read |
 | `GET /etl/runs` | Paginated summaries | Run/read |
 | `GET /etl/runs/{id}` | Pin, outcome, counts, diagnostics | Run/read |
 | `GET /etl/runs/{id}/partitions` | Paginated cursor/owed-batch/claim inspection | Run/read |
 | `POST /etl/runs/{id}/cancel` | Idempotent durable cancellation | Run/cancel |
 
 Implement identifiers with repository permission conventions. Authoring routes require the design feature; runtime inspection/cancellation requires no design database. No arbitrary worker/result posting API belongs to this slice.
+
+The authoring feature declares `etl/definitions:read`, `etl/definitions:manage`, `etl/definitions:publish` and `etl/bindings:read`. Permission evaluation precedes dispatch. Tenant identity comes from the validated normalized principal and the persistence partition comes from ordinary host-selected persistence access. Neither is accepted from the authored body. Missing providers return unavailable, distinct from an empty catalog. Binding metadata contains only alias and role.
+
+Create accepts an explicit definition ID and typed pipeline. Updates require the current draft revision. Validation requires that revision and returns bounded diagnostics plus the proposed positive publication version and full lowercase content hash when valid. Publication requires the explicit `(expectedRevision, definitionVersion, contentHash)` tuple; it never accepts a client-built artifact. Retrying an already published matching version returns `replay`, even after later draft edits or publications. A mismatched hash, stale unpublished revision, or conflicting next version returns conflict. A successful new publication returns `published`.
+
+Definition, binding and version catalogs accept `limit` from 1 through 200 (default 50) and return `items` and an optional `nextCursor`. Cursors are signed, bounded and bound to their exact scope, resource, catalog and page size. Definition pages order by the stable ordinal definition key, binding pages by ordinal alias/role, and version pages by ascending version under the first page's frozen upper version. New publications do not enter an existing version traversal. Host replicas require the same configured cursor signing key for continuation across replicas; the default process-local key invalidates old cursors on restart. The complete authoring request body is capped at the artifact allowance plus 4096 bytes of envelope overhead before JSON binding, including streaming requests. Pipeline compilation retains its separate artifact-size and topology limits.
 
 Studio provides a structured stage editor, binding/schema validation, publication, run list/detail and partition progress. Loading, empty, unavailable feature, forbidden, error and recovery states remain distinct. Diagnostics expose stable codes and safe record ordinals/field names, never raw row values or host paths. Logical reservations and expired claims are not presented as physical-memory reclamation or worker termination.

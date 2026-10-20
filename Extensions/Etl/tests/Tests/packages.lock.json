@@ -19,6 +19,12 @@
           "Microsoft.Extensions.DependencyModel": "10.0.1"
         }
       },
+      "Microsoft.AspNetCore.TestHost": {
+        "type": "Direct",
+        "requested": "[10.0.10, )",
+        "resolved": "10.0.10",
+        "contentHash": "Kks+OpQlP/eWQhnTjkiv0H9kc9Uqa7ieAzNV62yJpZ8Ips/WwpfpwrwZUKzV83CBJaBl5OI7J2XxVVTC8vah/Q=="
+      },
       "Microsoft.EntityFrameworkCore.Sqlite": {
         "type": "Direct",
         "requested": "[10.0.10, )",
@@ -377,6 +383,21 @@
         "dependencies": {
           "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Etl.Core": "[4.0.0-dev, )"
+        }
+      },
+      "elsa.etl.design.api": {
+        "type": "Project",
+        "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
+          "CShells.AspNetCore.Abstractions": "[0.0.31, )",
+          "Elsa.Api.AspNetCore": "[4.0.0-dev, )",
+          "Elsa.Api.Capabilities": "[4.0.0-dev, )",
+          "Elsa.Etl.Core": "[4.0.0-dev, )",
+          "Elsa.Etl.Design": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity": "[4.0.0-dev, )",
+          "Elsa.Foundation.Identity.Core": "[4.0.0-dev, )",
+          "Elsa.Workflows.Runtime.Core": "[4.0.0-dev, )",
+          "NativeEndpoints": "[1.0.0-preview.6, )"
         }
       },
       "elsa.etl.persistence.entityframeworkcore": {

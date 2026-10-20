@@ -13053,8 +13053,13 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Etl.Design.Api",
+          "path": "Extensions/Etl/src/Design/Api/Elsa.Etl.Design.Api.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Etl.Design",
-          "path": "Extensions/Etl/src/Design/Elsa.Etl.Design.csproj"
+          "path": "Extensions/Etl/src/Design/Elsa.Etl.Design/Elsa.Etl.Design.csproj"
         },
         {
           "type": "internal",
@@ -22675,7 +22680,76 @@
       "edges": []
     },
     {
-      "path": "Extensions/Etl/src/Design/Elsa.Etl.Design.csproj",
+      "path": "Extensions/Etl/src/Design/Api/Elsa.Etl.Design.Api.csproj",
+      "name": "Elsa.Etl.Design.Api",
+      "kind": "source",
+      "domain": "Elsa.Etl",
+      "sub_domain": "Design.Api",
+      "role": "feature/implementation",
+      "declared_target_framework": null,
+      "packable": true,
+      "package_id": "Elsa.Etl.Design.Api",
+      "line": "B",
+      "edges": [
+        {
+          "type": "internal",
+          "id": "Elsa.Api.AspNetCore",
+          "path": "Essentials/src/Api/AspNetCore/Elsa.Api.AspNetCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Api.Capabilities",
+          "path": "Essentials/src/Api/Capabilities/Elsa.Api.Capabilities.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity.Core",
+          "path": "Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Foundation.Identity",
+          "path": "Essentials/src/Foundation/Identity/Elsa.Foundation.Identity/Elsa.Foundation.Identity.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Core",
+          "path": "Essentials/src/Workflows/Runtime/Core/Elsa.Workflows.Runtime.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Etl.Core",
+          "path": "Extensions/Etl/src/Core/Elsa.Etl.Core.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Etl.Design",
+          "path": "Extensions/Etl/src/Design/Elsa.Etl.Design/Elsa.Etl.Design.csproj"
+        },
+        {
+          "type": "external",
+          "id": "CShells.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "CShells.AspNetCore.Abstractions",
+          "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Elsa.Specifications.PackageManifest.Generator",
+          "version": "0.0.1-preview.8"
+        },
+        {
+          "type": "external",
+          "id": "NativeEndpoints",
+          "version": "1.0.0-preview.6"
+        }
+      ]
+    },
+    {
+      "path": "Extensions/Etl/src/Design/Elsa.Etl.Design/Elsa.Etl.Design.csproj",
       "name": "Elsa.Etl.Design",
       "kind": "source",
       "domain": "Elsa.Etl",
@@ -22753,7 +22827,7 @@
         {
           "type": "internal",
           "id": "Elsa.Etl.Design",
-          "path": "Extensions/Etl/src/Design/Elsa.Etl.Design.csproj"
+          "path": "Extensions/Etl/src/Design/Elsa.Etl.Design/Elsa.Etl.Design.csproj"
         },
         {
           "type": "external",
@@ -22956,7 +23030,7 @@
         {
           "type": "internal",
           "id": "Elsa.Etl.Design",
-          "path": "Extensions/Etl/src/Design/Elsa.Etl.Design.csproj"
+          "path": "Extensions/Etl/src/Design/Elsa.Etl.Design/Elsa.Etl.Design.csproj"
         },
         {
           "type": "internal",
@@ -23218,8 +23292,13 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Etl.Design.Api",
+          "path": "Extensions/Etl/src/Design/Api/Elsa.Etl.Design.Api.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Etl.Design",
-          "path": "Extensions/Etl/src/Design/Elsa.Etl.Design.csproj"
+          "path": "Extensions/Etl/src/Design/Elsa.Etl.Design/Elsa.Etl.Design.csproj"
         },
         {
           "type": "internal",
@@ -23250,6 +23329,11 @@
           "type": "external",
           "id": "CShells",
           "version": "0.0.31"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.AspNetCore.TestHost",
+          "version": "10.0.10"
         },
         {
           "type": "external",

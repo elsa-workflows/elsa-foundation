@@ -23,7 +23,9 @@
 - [x] T008 [US1] Add behavior tests in `Extensions/Etl/tests/Tests` for valid topology, duplicate/missing headers/keys, invalid types/filters/mapping, finite limits, draft concurrency and deterministic artifact hashing.
 - [x] T009 [US1] Implement definition commands/queries and validation in `Extensions/Etl/src/Design`; retain schema/operation order, separate draft and published state, and issue safe stable diagnostics.
 - [x] T010 [US1] Implement immutable artifact publication/retention through `Extensions/Etl/src/Design` and its EF store; prove replay/conflicting version refusal and unavailable dependency diagnostics.
-- [ ] T011 [US1] Add authorized binding/definition/draft/validate/publish endpoints in `Extensions/Etl/src/Api`, capability/permission contributions and scope/concurrency behavior tests.
+- [x] T011 [US1] Add authorized binding/definition/draft/validate/publish endpoints in `Extensions/Etl/src/Design/Api`, capability/permission contributions and scope/concurrency behavior tests.
+
+**Authoring API checkpoint:** [T011 evidence](evidence/authoring-api.md) records nine scoped operations over real SQLite/HTTP, immutable tuple retries including a deterministic publication race, bounded signed catalogs, permission/scope/provider refusal and known-length/chunked request limits. All338 ETL/581 architecture tests passed after exact safeguard restoration. Runtime API/Studio and integrated ETL host/browser acceptance remain open.
 
 ## Phase 4 — US2: Execute and return a native outcome
 
@@ -70,7 +72,7 @@
 **Goal:** Authors publish the supported journey and operators understand run/partition recovery without database access.
 **Independent test:** Browser author/publish/invoke/inspect a fixture and distinguish rejected data, fault, cancellation and outstanding work.
 
-- [ ] T028 [US4] Add scope-filtered paginated run/partition inspection and idempotent cancel endpoints to `Extensions/Etl/src/Api`; test permission failures, cross-tenant non-disclosure, missing features and runtime-only composition.
+- [ ] T028 [US4] Add scope-filtered paginated run/partition inspection and idempotent cancel endpoints to `Extensions/Etl/src/Runtime/Api`; test permission failures, cross-tenant non-disclosure, missing features and runtime-only composition.
 - [ ] T029 [P] [US4] Implement the structured stage/binding/schema editor and publish/version views in `Extensions/Etl/studio/Elsa.Studio.Etl`, with focused frontend tests for validation and state preservation.
 - [ ] T030 [P] [US4] Implement run list/detail/partition progress/recovery views in `Extensions/Etl/studio/Elsa.Studio.Etl`, including loading/empty/forbidden/error/missing-feature states and partial outputs.
 - [ ] T031 [US4] Add and execute rebuilt Workbench HTTP acceptance in `e2e-tests/etl/`, using fresh fixture storage, both native composites and the declared feature composition.

@@ -48,6 +48,7 @@ public sealed class SchemaWriteRefusalMappingGuardTests
     [
         typeof(ActivitiesBpmnInterchangeFeature),
         typeof(ActivitiesDesignApiFeature),
+        typeof(Elsa.Etl.Design.Api.EtlDesignApiFeature),
         typeof(ModularityApiFeature),
         typeof(WorkflowsDesignApiFeature),
         typeof(WorkflowsPublishingApiFeature),

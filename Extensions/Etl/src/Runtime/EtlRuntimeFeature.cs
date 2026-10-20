@@ -61,6 +61,7 @@ public sealed class EtlRuntimeFeature : IShellFeature
         services.TryAddSingleton<IFileChunkPublisherFactory, FileChunkPublisherFactory>();
         services.TryAddSingleton<EtlAttemptBudget>(_ => new EtlAttemptBudget(options.MaxConcurrentAttempts, options.Capacity));
         services.AddScoped(_ => new HostFileBindings(options.FileBindings));
+        services.TryAddScoped<IEtlBindingCatalog>(provider => provider.GetRequiredService<HostFileBindings>());
         services.AddScoped<EtlExecutableReader>();
         services.AddScoped<EtlBatchProcessor>();
         services.AddScoped(provider => new EtlFilePreparer(

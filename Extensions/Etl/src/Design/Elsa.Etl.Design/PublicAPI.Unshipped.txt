@@ -99,3 +99,42 @@ static Elsa.Etl.Design.Stores.EtlDefinitionWriteResult.operator !=(Elsa.Etl.Desi
 static Elsa.Etl.Design.Stores.EtlDefinitionWriteResult.operator ==(Elsa.Etl.Design.Stores.EtlDefinitionWriteResult? left, Elsa.Etl.Design.Stores.EtlDefinitionWriteResult? right) -> bool
 static Elsa.Etl.Design.Stores.EtlPublicationResult.operator !=(Elsa.Etl.Design.Stores.EtlPublicationResult? left, Elsa.Etl.Design.Stores.EtlPublicationResult? right) -> bool
 static Elsa.Etl.Design.Stores.EtlPublicationResult.operator ==(Elsa.Etl.Design.Stores.EtlPublicationResult? left, Elsa.Etl.Design.Stores.EtlPublicationResult? right) -> bool
+Elsa.Etl.Design.Stores.EtlDefinitionSummary
+Elsa.Etl.Design.Stores.EtlDefinitionSummary.<Clone>$() -> Elsa.Etl.Design.Stores.EtlDefinitionSummary!
+Elsa.Etl.Design.Stores.EtlDefinitionSummary.DefinitionId.get -> string!
+Elsa.Etl.Design.Stores.EtlDefinitionSummary.DefinitionId.init -> void
+Elsa.Etl.Design.Stores.EtlDefinitionSummary.Deconstruct(out string! DefinitionId, out long Revision, out int LastPublishedVersion, out System.DateTimeOffset UpdatedAt) -> void
+Elsa.Etl.Design.Stores.EtlDefinitionSummary.Equals(Elsa.Etl.Design.Stores.EtlDefinitionSummary? other) -> bool
+Elsa.Etl.Design.Stores.EtlDefinitionSummary.EtlDefinitionSummary(string! DefinitionId, long Revision, int LastPublishedVersion, System.DateTimeOffset UpdatedAt) -> void
+Elsa.Etl.Design.Stores.EtlDefinitionSummary.LastPublishedVersion.get -> int
+Elsa.Etl.Design.Stores.EtlDefinitionSummary.LastPublishedVersion.init -> void
+Elsa.Etl.Design.Stores.EtlDefinitionSummary.Revision.get -> long
+Elsa.Etl.Design.Stores.EtlDefinitionSummary.Revision.init -> void
+Elsa.Etl.Design.Stores.EtlDefinitionSummary.UpdatedAt.get -> System.DateTimeOffset
+Elsa.Etl.Design.Stores.EtlDefinitionSummary.UpdatedAt.init -> void
+Elsa.Etl.Design.Stores.IEtlDefinitionCatalog
+Elsa.Etl.Design.Stores.IEtlDefinitionCatalog.ListDefinitionsAsync(Elsa.Etl.Core.EtlScope! scope, string? afterDefinitionId, int take, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Etl.Design.Stores.EtlDefinitionSummary!>!>
+Elsa.Etl.Design.Stores.IEtlDefinitionCatalog.ListVersionsAsync(Elsa.Etl.Core.EtlScope! scope, string! definitionId, int afterVersion, int throughVersion, int take, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Etl.Design.Stores.EtlPublishedVersionSummary!>!>
+Elsa.Etl.Design.Stores.EtlPublishedVersionSummary
+Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.<Clone>$() -> Elsa.Etl.Design.Stores.EtlPublishedVersionSummary!
+Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.ContentHash.get -> string!
+Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.ContentHash.init -> void
+Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.Deconstruct(out string! DefinitionId, out int DefinitionVersion, out string! ContentHash, out System.DateTimeOffset PublishedAt) -> void
+Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.DefinitionId.get -> string!
+Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.DefinitionId.init -> void
+Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.DefinitionVersion.get -> int
+Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.DefinitionVersion.init -> void
+Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.Equals(Elsa.Etl.Design.Stores.EtlPublishedVersionSummary? other) -> bool
+Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.EtlPublishedVersionSummary(string! DefinitionId, int DefinitionVersion, string! ContentHash, System.DateTimeOffset PublishedAt) -> void
+Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.PublishedAt.get -> System.DateTimeOffset
+Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.PublishedAt.init -> void
+override Elsa.Etl.Design.Stores.EtlDefinitionSummary.Equals(object? obj) -> bool
+override Elsa.Etl.Design.Stores.EtlDefinitionSummary.GetHashCode() -> int
+override Elsa.Etl.Design.Stores.EtlDefinitionSummary.ToString() -> string!
+override Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.Equals(object? obj) -> bool
+override Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.GetHashCode() -> int
+override Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.ToString() -> string!
+static Elsa.Etl.Design.Stores.EtlDefinitionSummary.operator !=(Elsa.Etl.Design.Stores.EtlDefinitionSummary? left, Elsa.Etl.Design.Stores.EtlDefinitionSummary? right) -> bool
+static Elsa.Etl.Design.Stores.EtlDefinitionSummary.operator ==(Elsa.Etl.Design.Stores.EtlDefinitionSummary? left, Elsa.Etl.Design.Stores.EtlDefinitionSummary? right) -> bool
+static Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.operator !=(Elsa.Etl.Design.Stores.EtlPublishedVersionSummary? left, Elsa.Etl.Design.Stores.EtlPublishedVersionSummary? right) -> bool
+static Elsa.Etl.Design.Stores.EtlPublishedVersionSummary.operator ==(Elsa.Etl.Design.Stores.EtlPublishedVersionSummary? left, Elsa.Etl.Design.Stores.EtlPublishedVersionSummary? right) -> bool
