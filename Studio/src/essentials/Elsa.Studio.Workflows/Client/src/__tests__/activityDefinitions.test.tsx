@@ -156,35 +156,59 @@ describe("Activity Definitions experience", () => {
     await rendered.unmount();
   });
 
-  it("opens the only authorized active draft directly and keeps technical identities collapsed", async () => {
+  it.each([
+    { scenario: "a confirmed current head and one historical draft", hasHead: true },
+    { scenario: "no current head", hasHead: false }
+  ])("opens the only authorized active draft directly with $scenario", async ({ hasHead }) => {
     const active = { ...draft(), actions: [{ action: "edit-draft", allowed: true }] };
-    const rendered = renderOverview({ drafts: page([active, draft({ draftId: "published-draft", status: "Published" })]) });
+    const drafts = hasHead ? page([active, draft({ draftId: "published-draft", status: "Published" })]) : page([active]);
+    const rendered = renderOverview({
+      drafts,
+      versions: hasHead ? page([version()]) : page([]),
+      definitionView: hasHead ? undefined : definitionWithoutCurrentHead()
+    });
     await waitForText(rendered.container, "1 open draft");
     const details = rendered.container.querySelector<HTMLDetailsElement>(".ad-technical-disclosure")!;
     expect(details.open).toBe(false);
     expect(details.textContent).toContain("Contoso.InvoiceEvaluator");
-    click(buttonByText(rendered.container, "Edit activity"));
+    const primaryAction = rendered.container.querySelector<HTMLButtonElement>(".ad-primary-action")!;
+    const actionName = primaryAction.textContent?.trim();
+    click(primaryAction);
     expect(new URLSearchParams(window.location.search).get("section")).toBe("editor");
     expect(new URLSearchParams(window.location.search).get("draft")).toBe("draft-1");
     await waitForText(rendered.container, "Saved revision 3");
     click(buttonByText(rendered.container, "Activity Definition"));
     await waitForText(rendered.container, "Build your activity");
     expect(new URLSearchParams(window.location.search).has("draft")).toBe(false);
+    expect(actionName).toBe("Continue editing draft");
     await rendered.unmount();
   });
 
   it.each([
     { label: "parallel active drafts", drafts: page([draft(), draft({ draftId: "draft-2" })]) },
     { label: "an incomplete draft page", drafts: page([{ ...draft(), actions: [{ action: "edit-draft", allowed: true }] }], { hasMore: true, continuation: "next" }) },
-    { label: "a draft without edit permission", drafts: page([draft()]) }
-  ])("requires explicit selection for $label", async ({ drafts }) => {
-    const rendered = renderOverview({ drafts });
+    { label: "a draft without edit permission", drafts: page([draft()]) },
+    { label: "an unreadable current head", drafts: page([]), versions: page([]), actions: [{ action: "create-draft", allowed: true }] },
+    {
+      label: "an omitted current head",
+      drafts: page([]),
+      versions: page([]),
+      actions: [{ action: "create-draft", allowed: true }],
+      definitionView: definitionWithOmittedHead([{ action: "create-draft", allowed: true }])
+    }
+  ])("requires explicit selection for $label", async ({ drafts, versions, actions, definitionView }) => {
+    const postJson = vi.fn();
+    const rendered = renderOverview({ drafts, versions, actions, definitionView, postJson });
     await waitForText(rendered.container, "Build your activity");
-    await waitFor(() => expect(buttonByText(rendered.container, "Open drafts").disabled).toBe(false));
-    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent?.includes("Edit activity"))).toBe(false);
-    click(buttonByText(rendered.container, "Open drafts"));
+    const primaryAction = rendered.container.querySelector<HTMLButtonElement>(".ad-primary-action")!;
+    await waitFor(() => expect(primaryAction.disabled).toBe(false));
+    expect(primaryAction.textContent?.trim()).toBe("Open drafts");
+    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent?.includes("Continue editing draft"))).toBe(false);
+    click(primaryAction);
     expect(new URLSearchParams(window.location.search).get("section")).toBe("drafts");
     expect(new URLSearchParams(window.location.search).has("draft")).toBe(false);
+    expect(rendered.container.querySelector("[role='dialog']")).toBeNull();
+    expect(postJson).not.toHaveBeenCalled();
     await rendered.unmount();
   });
 
@@ -201,7 +225,7 @@ describe("Activity Definitions experience", () => {
     await waitForText(rendered.container, "Earlier active draft");
     click(buttonByText(rendered.container, "Next"));
     await waitForText(rendered.container, "Final active draft");
-    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent === "Edit activity")).toBe(false);
+    expect([...rendered.container.querySelectorAll("button")].some(button => button.textContent === "Continue editing draft")).toBe(false);
     click(buttonByText(rendered.container, "Open drafts"));
     expect(new URLSearchParams(window.location.search).has("draft")).toBe(false);
     await rendered.unmount();
@@ -215,10 +239,35 @@ describe("Activity Definitions experience", () => {
       actions: [{ action: "create-draft", allowed: true }], postJson
     });
     await waitForText(rendered.container, "No open drafts");
-    click(buttonByText(rendered.container, "Edit activity"));
+    const primaryAction = rendered.container.querySelector<HTMLButtonElement>(".ad-primary-action")!;
+    const actionName = primaryAction.textContent?.trim();
+    click(primaryAction);
     await waitFor(() => expect(new URLSearchParams(window.location.search).get("section")).toBe("editor"));
     expect(postJson).toHaveBeenCalledTimes(1);
     expect(postJson).toHaveBeenCalledWith("/design/activities/definitions/definition-1/drafts", { sourceVersionId: "version-1", presentationLabel: null });
+    expect(actionName).toBe("Create draft from current version");
+    await rendered.unmount();
+  });
+
+  it("offers blank creation when the definition has no current head and creation is authorized", async () => {
+    const rendered = renderOverview({
+      drafts: page([draft({ status: "Published" })]),
+      versions: page([]),
+      definitionView: definitionWithoutCurrentHead([{ action: "create-draft", allowed: true }]),
+      withAuthoringCapabilities: true,
+      activityEditors: [graphContribution()]
+    });
+    await waitForText(rendered.container, "No open drafts");
+    const primaryAction = rendered.container.querySelector<HTMLButtonElement>(".ad-primary-action")!;
+    const actionName = primaryAction.textContent?.trim();
+    click(primaryAction);
+
+    await waitForText(rendered.container, "Create blank draft");
+    const modes = [...rendered.container.querySelectorAll<HTMLInputElement>("input[name='draft-mode']")];
+    expect(modes).toHaveLength(2);
+    expect(modes[0].checked).toBe(true);
+    expect(modes[1].checked).toBe(false);
+    expect(actionName).toBe("Create draft");
     await rendered.unmount();
   });
 
@@ -732,7 +781,7 @@ describe("Activity Definitions experience", () => {
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
     await waitForText(rendered.container, "Second evaluator");
-    await waitFor(() => expect(buttonByText(rendered.container, "Edit activity").disabled).toBe(false));
+    await waitFor(() => expect(buttonByText(rendered.container, "Continue editing draft").disabled).toBe(false));
 
     click(buttonByText(rendered.container, "Drafts"));
     await waitForText(rendered.container, "Second evaluator draft");
@@ -968,20 +1017,40 @@ function renderPage(
   };
 }
 
-function renderOverview({ drafts, versions = page([version()]), actions = [], postJson }: {
+function renderOverview({ drafts, versions = page([version()]), actions = [], postJson, definitionView, withAuthoringCapabilities = false, activityEditors }: {
   drafts: ReturnType<typeof page<ActivityDefinitionDraftManagementView>>;
   versions?: ReturnType<typeof page<ActivityDefinitionVersionManagementView>>;
   actions?: ActivityDefinitionManagementView["actions"];
   postJson?: (url: string, body: unknown) => Promise<unknown>;
+  definitionView?: ActivityDefinitionManagementView;
+  withAuthoringCapabilities?: boolean;
+  activityEditors?: StudioActivityDefinitionImplementationEditorContribution[];
 }) {
   return renderPage(async (url: string) => {
-    if (url === "/capabilities") return capabilities();
-    if (url === "/design/activities/definitions/definition-1") return definition({}, actions);
+    if (url === "/capabilities") return capabilities(withAuthoringCapabilities);
+    if (url === "/design/activities/definitions/definition-1") return definitionView ?? definition({}, actions);
     if (url.includes("/definitions/definition-1/drafts?")) return drafts;
     if (url.includes("/definitions/definition-1/versions?")) return versions;
+    if (withAuthoringCapabilities && url === "/design/activities/authoring-capabilities") return authoringCapabilities();
     if (url === "/design/activities/drafts/draft-1") return draftDetail();
     throw new Error(`Unexpected GET ${url}`);
-  }, undefined, "/workflows/activity-definitions?definition=definition-1", postJson);
+  }, undefined, "/workflows/activity-definitions?definition=definition-1", postJson, activityEditors);
+}
+
+function definitionWithoutCurrentHead(actions: ActivityDefinitionManagementView["actions"] = []): ActivityDefinitionManagementView {
+  const view = definition({ headVersionId: null, recommendedVersionId: null }, actions);
+  return { ...view, lifecycle: { ...view.lifecycle, draftCount: 1, versionCount: 0, head: null, recommendation: null } };
+}
+
+function definitionWithOmittedHead(actions: ActivityDefinitionManagementView["actions"]): ActivityDefinitionManagementView {
+  const view = definitionWithoutCurrentHead(actions);
+  const definitionView = { ...view.definition };
+  delete definitionView.headVersionId;
+  return {
+    ...view,
+    definition: definitionView,
+    lifecycle: { ...view.lifecycle, draftCount: 0 }
+  };
 }
 
 function capabilities(includeAuthoring = false, includeFork = false) {

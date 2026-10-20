@@ -21,10 +21,13 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     const flushExactSavedRevision = vi.fn(async () => ({ revision: 3, signature: "signature-3" }));
     const harness = renderReview({ postJson: async url => url.endsWith("/publication-preflight") ? preflight() : Promise.reject(new Error(`Unexpected POST ${url}`)), flushExactSavedRevision });
     const trigger = buttonByText(harness.container, "Review & publish");
+    const entryName = trigger.getAttribute("aria-label") ?? trigger.textContent?.trim();
     trigger.focus();
     click(trigger);
 
     await waitFor(() => expect(buttonByText(harness.container, "Publish 1.0.0")).toBeTruthy());
+    const continuationTrigger = buttonByText(harness.container, "Continue publication review");
+    const continuationName = continuationTrigger.getAttribute("aria-label") ?? continuationTrigger.textContent?.trim();
     expect(flushExactSavedRevision).toHaveBeenCalledTimes(1);
     expect(preflight).toHaveBeenCalledTimes(1);
     expect(harness.container.textContent).toContain("Additive");
@@ -37,10 +40,12 @@ describe("ActivityDefinitionPublicationReview toolbar mode", () => {
     expect(document.activeElement).toBe(trigger);
     expect(document.body.style.overflow).toBe("");
 
-    click(trigger);
+    click(continuationTrigger);
     await waitFor(() => expect(harness.container.querySelector('[role="dialog"]')).not.toBeNull());
     expect(flushExactSavedRevision).toHaveBeenCalledTimes(1);
     expect(preflight).toHaveBeenCalledTimes(1);
+    expect(entryName).toBe("Review & publish");
+    expect(continuationName).toBe("Continue publication review");
     await harness.unmount();
   });
 

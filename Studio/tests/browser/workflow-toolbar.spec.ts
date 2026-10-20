@@ -53,7 +53,7 @@ for (const width of [320, 768, 1024, 1440]) {
       expect(await definitions.boundingBox()).toEqual(initialDefinitions);
       expect(await breadcrumbChevron.boundingBox()).toEqual(initialChevron);
     }
-    await expect(toolbar.getByRole("button", { name: "Review and Publish" })).toBeVisible();
+    await expect(toolbar.getByRole("button", { name: "Review & publish" })).toBeVisible();
     if (width === 768) {
       await toolbar.getByRole("button", { name: "Publish options", exact: true }).click();
       await page.getByRole("menuitemradio", { name: "Publish", exact: true }).click();
@@ -101,7 +101,7 @@ test("makes secondary actions keyboard accessible and preserves autosave state",
   await expect(menu.getByRole("menuitem", { name: "Export BPMN" })).toBeFocused();
   await menu.getByRole("menuitem", { name: "Export BPMN" }).press("Shift+Tab");
   await expect(menu).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Run", exact: true })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Test Run", exact: true })).toBeFocused();
   await trigger.click();
   await page.getByLabel("Save status").click();
   await expect(menu).toHaveCount(0);
@@ -122,7 +122,7 @@ test("keeps the overflow menu inside a narrow viewport and primary commands dire
   await page.setViewportSize({ width: 320, height: 600 });
   await page.goto("/?mode=workflow-toolbar&theme=dark");
   const toolbar = page.locator(".wf-editor-toolbar");
-  for (const name of ["Save", "Review and Publish", "Run"]) {
+  for (const name of ["Save", "Review & publish", "Test Run"]) {
     await toolbar.getByRole("button", { name, exact: true }).click();
     await expect(page.getByText(`Selected action: ${name}`, { exact: true })).toBeVisible();
   }
@@ -144,7 +144,7 @@ test("supports keyboard publish-mode selection and repeats the remembered mode a
   await trigger.focus();
   await trigger.press("ArrowDown");
   const menu = page.getByRole("menu", { name: "Publish action" });
-  const review = menu.getByRole("menuitemradio", { name: "Review and Publish", exact: true });
+  const review = menu.getByRole("menuitemradio", { name: "Review & publish", exact: true });
   const publish = menu.getByRole("menuitemradio", { name: "Publish", exact: true });
   await expect(review).toBeFocused();
   await expect(review).toHaveAttribute("aria-checked", "true");
@@ -172,3 +172,50 @@ test("supports keyboard publish-mode selection and repeats the remembered mode a
   await expect(menu).toHaveCount(0);
   await expect(trigger).toBeFocused();
 });
+
+for (const theme of ["light", "dark"]) {
+  for (const width of [320, 768, 1024, 1440]) {
+    test(`keeps primary authoring actions stationary through Test Run status changes at ${width}px in ${theme}`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/?mode=workflow-toolbar&theme=${theme}`);
+      const toolbar = page.locator(".wf-editor-toolbar");
+      const primary = toolbar.getByRole("button", { name: "Review & publish", exact: true });
+      const actions = [toolbar.locator(".wf-save-button"), primary, toolbar.locator(".wf-run-button")];
+      const initial = await Promise.all(actions.map(action => action.boundingBox()));
+      expect(initial.every(Boolean)).toBe(true);
+      const observations = [];
+      for (const state of ["accepted", "rejected", "incidents", "runtime-issue", "stale", ""]) {
+        await page.getByLabel("Test Run status", { exact: true }).selectOption(state);
+        const status = toolbar.locator(".wf-test-run-trigger");
+        if (state) {
+          await expect(status).toBeVisible();
+          await expect(status).toHaveText(state === "rejected" ? /Test Run rejected/ : state === "incidents" ? /Test Run accepted with incidents/ : state === "runtime-issue" ? /Test Run accepted with a runtime issue/ : state === "stale" ? /Earlier draft · Test Run dispatched/ : /Test Run dispatched/);
+          await toolbar.locator(".wf-run-button").focus();
+          await page.keyboard.press("Tab");
+          await expect(toolbar.getByRole("button", { name: "More workflow actions" })).toBeFocused();
+          await page.keyboard.press("Tab");
+          await expect(status).toBeFocused();
+          await status.press("Enter");
+          await expect(page.getByText("Selected action: Runtime details", { exact: true })).toBeVisible();
+        } else await expect(status).toHaveCount(0);
+        for (const saveStatus of statusValues) {
+          await page.getByLabel("Save status", { exact: true }).selectOption(saveStatus);
+          await expect(toolbar.locator(".wf-editor-save-status")).toHaveText(saveStatus);
+          const boxes = await Promise.all(actions.map(action => action.boundingBox()));
+          observations.push({ state, saveStatus, boxes });
+          if (state === "stale" && saveStatus === "") await page.screenshot({ path: testInfo.outputPath("workflow-authoring-toolbar.png"), fullPage: true });
+          for (let index = 0; index < actions.length; index++) {
+            await expect(actions[index]).toBeVisible();
+            expect(boxes[index]!.x).toBeGreaterThanOrEqual(0);
+            expect(boxes[index]!.x + boxes[index]!.width).toBeLessThanOrEqual(width);
+          }
+        }
+      }
+      await testInfo.attach("authoring-status-geometry", { body: JSON.stringify({ initial, observations }), contentType: "application/json" });
+      for (const { boxes } of observations) for (let index = 0; index < boxes.length; index++) {
+        expect(Math.abs(boxes[index]!.x - initial[index]!.x)).toBeLessThanOrEqual(1);
+        expect(Math.abs(boxes[index]!.y - initial[index]!.y)).toBeLessThanOrEqual(1);
+      }
+    });
+  }
+}

@@ -21,6 +21,7 @@ import { ActivityDefinitionDraftCodeView } from "../../src/essentials/Elsa.Studi
 import { ActivityDefinitionDiagnosticsPanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDiagnosticsPanel";
 import { ActivityDefinitionTestRunDialog } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionTestRunDialog";
 import { WorkflowLazyBoundary } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/WorkflowLazyBoundary";
+import { TestRunStatus } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorPanels";
 import { WorkflowEditorToolbar } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditorToolbar";
 import { builtInPropertyEditors } from "../../src/apps/Elsa.Studio.Web/Client/src/app/propertyEditors";
 import { Download, ListTree, Package, PackageOpen, Play, Sparkles, Upload } from "lucide-react";
@@ -42,7 +43,8 @@ import type {
   ActivityCatalogItem,
   ActivityExecutionStateSummary,
   ActivityNode,
-  WorkflowDraft
+  WorkflowDraft,
+  WorkflowTestRunView
 } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 import { listActivities, listRecommendedActivityDefinitions, useFullActivityDefinitionVersion } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/activityDesign";
 import { runExecutable } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/runtime";
@@ -133,6 +135,7 @@ const DeferredWorkflowPanel = lazy(() => new Promise<{ default: React.ComponentT
 function WorkflowToolbarFixture() {
   const [status, setStatus] = useState("");
   const [autosave, setAutosave] = useState(true);
+  const [runStatus, setRunStatus] = useState("");
   const [selectedAction, setSelectedAction] = useState("");
   const selectAction = (label: string) => () => setSelectedAction(label);
   return (
@@ -152,9 +155,10 @@ function WorkflowToolbarFixture() {
         onAutoLayout={selectAction("Auto-layout")}
         onBack={selectAction("Definitions")}
         onSave={selectAction("Save")}
-        onPublish={mode => selectAction(mode === "publish" ? "Publish" : "Review and Publish")()}
-        onRun={selectAction("Run")}
+        onPublish={mode => selectAction(mode === "publish" ? "Publish" : "Review & publish")()}
+        onRun={selectAction("Test Run")}
         canRun
+        runStatus={runStatus ? <TestRunStatus testRun={toolbarTestRun(runStatus)} stale={runStatus === "stale"} onOpenDetails={selectAction("Runtime details")} /> : null}
         runTitle="Run a transient test of the current design"
         moreActions={[
           { label: "Weaver", actions: [
@@ -173,10 +177,22 @@ function WorkflowToolbarFixture() {
         <label>Save status<select aria-label="Save status" value={status} onChange={event => setStatus(event.target.value)}>
           {["", "Autosaving...", "Autosaved", "Saving before review...", "Published to an unusually long publication channel"].map(value => <option key={value} value={value}>{value || "Empty"}</option>)}
         </select></label>
+        <label>Test Run status<select aria-label="Test Run status" value={runStatus} onChange={event => setRunStatus(event.target.value)}>
+          {["", "accepted", "rejected", "incidents", "runtime-issue", "stale"].map(value => <option key={value} value={value}>{value || "None"}</option>)}
+        </select></label>
         <p>Selected action: {selectedAction || "None"}</p>
       </section>
     </main>
   );
+}
+
+function toolbarTestRun(state: string): WorkflowTestRunView {
+  return {
+    testRunId: "toolbar-test-run", definitionId: "toolbar-definition", definitionVersionId: "draft:1",
+    status: state === "rejected" ? "Rejected" : "DispatchAccepted",
+    commandDispatchStatus: state === "runtime-issue" ? "AcceptedButFaulted" : "Accepted",
+    incidentCount: state === "incidents" ? 2 : 0
+  };
 }
 
 function ActivityDefinitionRoutesFixture() {
