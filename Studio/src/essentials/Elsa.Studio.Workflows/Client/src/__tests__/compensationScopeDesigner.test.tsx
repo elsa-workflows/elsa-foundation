@@ -111,7 +111,7 @@ describe("CompensationScopeDesigner", () => {
           { step: "Reserve inventory", forward: { state: "Completed", activityExecutionId: "ae-1" }, recovery: { state: "Compensated", activityExecutionId: "ae-5", order: 1 } },
           { step: "Confirm order", forward: { state: "Faulted", activityExecutionId: "ae-3" }, recovery: { state: "NotApplicable" } }
         ],
-        cause: { step: "Confirm order", activityExecutionId: "ae-3", failureType: "order.rejected", message: "Order rejected" }
+        cause: { kind: "fault", step: "Confirm order", activityExecutionId: "ae-3", failureType: "order.rejected", message: "Order rejected" }
       } satisfies CompensationScopeRuntime
     });
 
@@ -129,6 +129,33 @@ describe("CompensationScopeDesigner", () => {
     click(button("Recovery: Compensated (1st). Show this occurrence"));
     click([...container.querySelectorAll<HTMLButtonElement>("button")].find(candidate => candidate.textContent === "Show failed step")!);
     expect(onSelectExecution.mock.calls).toEqual([["ae-5"], ["ae-3"]]);
+  });
+
+  it("shows uncertain steps and handlers that need an operator, with their attempts and incident", () => {
+    const onOpenIncident = vi.fn();
+    mount({
+      readOnly: true,
+      onSelectExecution: vi.fn(),
+      onOpenIncident,
+      runtime: {
+        scopeActivityExecutionId: "ae-scope",
+        phase: "AwaitingIntervention",
+        rows: [
+          { step: "Reserve inventory", forward: { state: "Uncertain", activityExecutionId: "ae-1" }, recovery: { state: "NeedsAction", activityExecutionId: "ae-6", order: 1, attempts: { count: 3, max: 3 }, incidentId: "inc-6" } },
+          { step: "Confirm order", forward: { state: "NotRun" }, recovery: { state: "NotApplicable" } }
+        ],
+        cause: { kind: "uncertain", step: "Reserve inventory", activityExecutionId: "ae-1", failureType: "inventory.timeout" }
+      } satisfies CompensationScopeRuntime
+    });
+
+    expect(container.querySelector(".wf-compensation-phase")?.textContent).toContain("Needs action");
+    expect(container.querySelector(".wf-compensation-cause")?.textContent).toContain("Recovery started because Reserve inventory could not confirm its outcome: inventory.timeout.");
+    expect([...container.querySelectorAll(".wf-compensation-state")].slice(0, 2).map(chip => chip.getAttribute("aria-label"))).toEqual([
+      "Forward: Uncertain. Show this occurrence",
+      "Recovery: Needs action (1st) · Attempt 3 of 3. Show this occurrence"
+    ]);
+    click(button("Show the incident Reserve inventory is waiting on"));
+    expect(onOpenIncident).toHaveBeenCalledWith("inc-6");
   });
 
   it("moves focus between the same cell of neighbouring rows with the arrow keys", () => {

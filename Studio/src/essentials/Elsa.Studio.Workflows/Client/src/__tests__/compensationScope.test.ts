@@ -12,7 +12,7 @@ import {
   updateCompensationStep
 } from "../compensationScope";
 import { buildExecutableActivityGraph } from "../executableGraph";
-import { deriveCompensationRuntime, isCompensationHandlerExecution, ordinalLabel } from "../compensationRuntime";
+import { deriveCompensationRuntime, forwardStateLabel, isCompensationHandlerExecution, ordinalLabel, recoveryStateLabel, scopePhaseLabel } from "../compensationRuntime";
 import { buildCanvas, findActivityNode, findNodeScopePath, getActivityDesignerSupport, getChildSlots, replaceSlotActivities, updateActivity } from "../workflowAdapter";
 import type { ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary } from "../workflowTypes";
 
@@ -160,6 +160,7 @@ describe("compensation runtime", () => {
       ["Confirm order", "Faulted", "NotApplicable", undefined]
     ]);
     expect(runtime.cause).toEqual({
+      kind: "fault",
       step: "Confirm order",
       activityExecutionId: "ae-3",
       incidentId: "inc-1",
@@ -287,6 +288,92 @@ describe("compensation runtime", () => {
     expect(runtime.cause?.failureType).toBe("order.rejected");
   });
 
+  it("shows an uncertain step as uncertain and undoes it like a completed one", () => {
+    const runtime = deriveCompensationRuntime(journeyScope(), [
+      execution("ae-scope", "scope", "Completed", "10", { outcomeNames: ["Compensated"] }),
+      execution("ae-1", "reserve", "Completed", "11", { parent: "ae-scope" }),
+      execution("ae-2", "deliver", "Faulted", "12", { parent: "ae-scope" }),
+      execution("ae-4", "cancel", "Completed", "14", { parent: "ae-scope", handler: true, scheduledBy: "ae-2" }),
+      execution("ae-5", "release", "Completed", "15", { parent: "ae-scope", handler: true, scheduledBy: "ae-1" })
+    ], [outcome(incident("inc-2", "ae-2", "delivery.timeout", "No response"), { "compensation.forwardOutcome": "unknown" })]);
+
+    expect(runtime.rows.map(row => [row.forward.state, row.recovery.state, row.recovery.order])).toEqual([
+      ["Completed", "Compensated", 2],
+      ["Uncertain", "Compensated", 1],
+      ["NotRun", "NotApplicable", undefined]
+    ]);
+    expect(runtime.cause).toMatchObject({ kind: "uncertain", step: "Reserve delivery", incidentId: "inc-2" });
+    expect(forwardStateLabel("Uncertain")).toBe("Uncertain");
+  });
+
+  it("counts handler attempts and shows a pending retry between them", () => {
+    const runtime = deriveCompensationRuntime(journeyScope(), [
+      ...recoveringRun(),
+      execution("ae-4", "cancel", "Faulted", "14", { parent: "ae-scope", handler: true, scheduledBy: "ae-2" })
+    ], [confirmIncident(), outcome(incident("inc-4", "ae-4", "delivery.unavailable", "Unavailable"), { "compensation.attempt": "1", "compensation.maxAttempts": "3" })]);
+
+    expect(runtime.phase).toBe("Compensating");
+    expect(runtime.rows[1].recovery).toMatchObject({ state: "Pending", attempts: { count: 1, max: 3 } });
+  });
+
+  it("waits for intervention when a handler exhausts its attempts, keeping the original cause", () => {
+    const runtime = deriveCompensationRuntime(journeyScope(), [
+      ...recoveringRun(),
+      execution("ae-4", "cancel", "Faulted", "14", { parent: "ae-scope", handler: true, scheduledBy: "ae-2" }),
+      execution("ae-5", "cancel", "Faulted", "15", { parent: "ae-scope", handler: true, scheduledBy: "ae-2" }),
+      execution("ae-6", "cancel", "Faulted", "16", { parent: "ae-scope", handler: true, scheduledBy: "ae-2" })
+    ], [
+      confirmIncident(),
+      outcome(incident("inc-4", "ae-4", "delivery.unavailable", "Unavailable"), { "compensation.maxAttempts": "3" }),
+      outcome(incident("inc-5", "ae-5", "delivery.unavailable", "Unavailable"), { "compensation.maxAttempts": "3" }),
+      intervention(incident("inc-6", "ae-6", "delivery.unavailable", "Unavailable"), { "compensation.maxAttempts": "3" })
+    ]);
+
+    expect(runtime.phase).toBe("AwaitingIntervention");
+    expect(scopePhaseLabel(runtime.phase)).toBe("Needs action");
+    expect(runtime.rows[1].recovery).toMatchObject({ state: "NeedsAction", attempts: { count: 3, max: 3 }, incidentId: "inc-6", order: 1 });
+    expect(recoveryStateLabel("NeedsAction")).toBe("Needs action");
+    // Inventory is still to be undone once delivery is resolved.
+    expect(runtime.rows[0].recovery.state).toBe("Pending");
+    expect(runtime.cause).toMatchObject({ kind: "fault", step: "Confirm order" });
+  });
+
+  it("counts an operator retry as another attempt of the same entry", () => {
+    const superseded = { ...execution("ae-6", "cancel", "Superseded", "16", { parent: "ae-scope", handler: true, scheduledBy: "ae-2" }) };
+    const runtime = deriveCompensationRuntime(journeyScope(), [
+      ...recoveringRun(),
+      execution("ae-4", "cancel", "Faulted", "14", { parent: "ae-scope", handler: true, scheduledBy: "ae-2" }),
+      superseded,
+      execution("ae-7", "cancel", "Completed", "17", { parent: "ae-scope", handler: true, scheduledBy: "ae-2" }),
+      execution("ae-8", "release", "Running", "18", { parent: "ae-scope", handler: true, scheduledBy: "ae-1" })
+    ], [
+      confirmIncident(),
+      outcome(incident("inc-4", "ae-4", "delivery.unavailable", "Unavailable"), { "compensation.maxAttempts": "2" }),
+      { ...incident("inc-6", "ae-6", "delivery.unavailable", "Unavailable"), resolutionOutcome: { actionKind: "OperatorRetry", systemSource: "OperatorRetryAlteration", metadata: {} } }
+    ]);
+
+    expect(runtime.phase).toBe("Compensating");
+    expect(runtime.rows[1].recovery).toMatchObject({ state: "Compensated", attempts: { count: 3, max: 2 }, order: 1, activityExecutionId: "ae-7" });
+    expect(runtime.rows[0].recovery).toMatchObject({ state: "Running", order: 2 });
+  });
+
+  it("waits for intervention on an uncertain step that has nothing to undo it", () => {
+    const scope = scopeNode([
+      { name: "Reserve inventory", activity: leaf("reserve"), compensation: leaf("release") },
+      { name: "Notify carrier", activity: leaf("notify"), compensation: null }
+    ]);
+    const runtime = deriveCompensationRuntime(scope, [
+      execution("ae-scope", "scope", "Running", "10"),
+      execution("ae-1", "reserve", "Completed", "11", { parent: "ae-scope" }),
+      execution("ae-2", "notify", "Faulted", "12", { parent: "ae-scope" })
+    ], [intervention(incident("inc-2", "ae-2", "carrier.timeout", "No response"), { "compensation.forwardOutcome": "unknown" })]);
+
+    expect(runtime.phase).toBe("AwaitingIntervention");
+    expect(runtime.rows[1].forward.state).toBe("Uncertain");
+    expect(runtime.rows[1].recovery).toMatchObject({ state: "NeedsAction", incidentId: "inc-2" });
+    expect(runtime.cause).toMatchObject({ kind: "uncertain", step: "Notify carrier" });
+  });
+
   it("recognises handler executions by their scheduling cause", () => {
     expect(isCompensationHandlerExecution({ provenance: { schedulingCause: "compensation" } })).toBe(true);
     expect(isCompensationHandlerExecution({ provenance: { schedulingCause: "ActivityCompletion" } })).toBe(false);
@@ -351,6 +438,29 @@ function execution(
     },
     metadata: {}
   };
+}
+
+function recoveringRun(): ActivityExecutionStateSummary[] {
+  return [
+    execution("ae-scope", "scope", "Running", "10"),
+    execution("ae-1", "reserve", "Completed", "11", { parent: "ae-scope" }),
+    execution("ae-2", "deliver", "Completed", "12", { parent: "ae-scope" }),
+    execution("ae-3", "confirm", "Faulted", "13", { parent: "ae-scope" })
+  ];
+}
+
+function confirmIncident(): IncidentStateSummary {
+  return incident("inc-3", "ae-3", "order.rejected", "Order rejected");
+}
+
+// An incident the scope absorbed, carrying the scope's outcome metadata.
+function outcome(source: IncidentStateSummary, metadata: Record<string, string>): IncidentStateSummary {
+  return { ...source, resolutionOutcome: { actionKind: "AbsorbFault", systemSource: "StructuralFaultAbsorption", metadata } };
+}
+
+// An incident the scope left blocking for an operator (spec 251 FR-209).
+function intervention(source: IncidentStateSummary, metadata: Record<string, string>): IncidentStateSummary {
+  return { ...source, status: "Blocking", isBlocking: true, resolvedAt: null, resolutionOutcome: { actionKind: "WaitForIntervention", systemSource: "StructuralIntervention", metadata } };
 }
 
 function incident(incidentId: string, activityExecutionId: string, failureType: string, message: string): IncidentStateSummary {

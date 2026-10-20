@@ -52,8 +52,20 @@ test("the run view shows forward and recovery state as text and opens an occurre
   await expect(page.getByTestId("fixture-execution")).toHaveText("ae-4");
 });
 
+test("the run view shows an uncertain step and a handler that needs an operator, and opens its incident", async ({ page }) => {
+  await page.goto("/?mode=compensation-scope&view=waiting&theme=light");
+
+  await expect(page.locator(".wf-compensation-phase")).toContainText("Needs action");
+  await expect(page.locator(".wf-compensation-cause")).toContainText("Recovery started because Reserve delivery could not confirm its outcome");
+  await expect(page.getByRole("button", { name: "Forward: Uncertain. Show this occurrence", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Recovery: Needs action (1st) · Attempt 3 of 3. Show this occurrence", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Show the incident Reserve delivery is waiting on", exact: true }).press("Enter");
+  await expect(page.getByTestId("fixture-incident")).toHaveText("inc-6");
+});
+
 for (const theme of ["light", "dark"]) {
-  for (const view of ["author", "run"]) {
+  for (const view of ["author", "run", "waiting"]) {
     for (const width of [390, 1200]) {
       test(`the ${view} view fits ${width}px in ${theme} with no serious accessibility violations`, async ({ page }) => {
         await page.setViewportSize({ width, height: 800 });

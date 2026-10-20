@@ -1569,6 +1569,7 @@ function WorkflowInstanceCanvas({
             runtime={canvas.compensation.runtime}
             onSelect={nodeId => nodeId && onSelectActivity(nodeId)}
             onSelectExecution={onSelectEvidence}
+            onOpenIncident={incidentId => onOpenIncident(incidentId)}
             onOpenSlot={canvas.compensation.openSlot}
           />
         ) : definitionVersion && canvas.mode === "sequence" ? (
