@@ -18,6 +18,7 @@ using Elsa.Etl.Persistence.EntityFrameworkCore;
 using Elsa.Etl.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Etl.Runtime;
+using Elsa.Etl.Runtime.Execution;
 using Elsa.Etl.Runtime.Hosting;
 using Elsa.Etl.Workflows.Design;
 using Elsa.Etl.Workflows.Runtime;
@@ -185,9 +186,100 @@ public sealed class EtlNativeCompositeJourneyTests
             }
         });
 
-    private static async Task WithJourneyAsync(CompositeKind kind, NativeOutcome outcome, Func<NativeEtlJourney, Task> test)
+    [Theory]
+    [InlineData(CompositeKind.Sequence)]
+    [InlineData(CompositeKind.Flowchart)]
+    [InlineData(CompositeKind.CompensationScope)]
+    public Task Native_workflow_cancellation_settles_ETL_and_retires_its_wait(CompositeKind compositeKind) =>
+        WithJourneyAsync(compositeKind, NativeOutcome.Succeeded, async journey =>
+        {
+            var invocation = await journey.StartSuspendedAsync();
+            await journey.Harness.CancelAsync(journey.WorkflowExecutionId);
+            await journey.WaitForNativeCancellationAsync(invocation);
+
+            await AssertNativeCancellationAsync(journey, invocation);
+        });
+
+    [Theory]
+    [InlineData(CompositeKind.Sequence)]
+    [InlineData(CompositeKind.Flowchart)]
+    [InlineData(CompositeKind.CompensationScope)]
+    public Task Native_cancellation_before_admission_cannot_be_resurrected_by_a_delayed_start(CompositeKind compositeKind)
     {
-        await using var journey = await NativeEtlJourney.CreateAsync(kind, outcome);
+        var gate = new AdmissionGate();
+        return WithJourneyAsync(compositeKind, NativeOutcome.Succeeded, async journey =>
+        {
+            var reference = await journey.PublishWorkflowAsync();
+            var started = await journey.Harness.StartPublishedAsync(reference, journey.WorkflowExecutionId);
+            Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, started.CommandDispatch.Status);
+            var pendingStart = journey.DriveAsync();
+            Exception? failure = null;
+            try
+            {
+                var invocation = await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(30));
+                Assert.Null(await journey.ReadRunAsync(invocation.Scope, invocation.RunId));
+                EtlNativeBoundary.EnsureBookmark(invocation.ResultAddress,
+                    Assert.IsType<BookmarkState>(await journey.ReadBookmarkAsync(invocation.ResultAddress.BookmarkId)));
+
+                await journey.Harness.CancelAsync(journey.WorkflowExecutionId);
+                await journey.DeliverCancellationIntentsAsync();
+                var tombstone = Assert.IsType<EtlRunView>(await journey.ReadRunAsync(invocation.Scope, invocation.RunId));
+                Assert.Equal(EtlRunStatus.Cancelled, tombstone.Status);
+                Assert.Equal(EtlTerminalOutcome.Cancelled, tombstone.TerminalResult!.Outcome);
+
+                gate.Release.TrySetResult();
+                await pendingStart.WaitAsync(TimeSpan.FromSeconds(30));
+                await journey.WaitForNativeCancellationAsync(invocation);
+                var settled = Assert.IsType<EtlRunView>(await journey.ReadRunAsync(invocation.Scope, invocation.RunId));
+                Assert.Equal(EtlRuntimeJson.Write(tombstone), EtlRuntimeJson.Write(settled));
+                Assert.Null(settled.Bindings);
+                Assert.Null(settled.Prepared);
+                await AssertNativeCancellationAsync(journey, invocation);
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+                throw;
+            }
+            finally
+            {
+                gate.Release.TrySetResult();
+                try { await pendingStart.WaitAsync(TimeSpan.FromSeconds(30)); }
+                catch when (failure is not null) { /* Preserve the primary failure; the fixture retains durable state. */ }
+            }
+        }, gate);
+    }
+
+    private static async Task AssertNativeCancellationAsync(NativeEtlJourney journey, EtlInvocation invocation)
+    {
+        var native = await journey.ReadNativeStateAsync();
+        var child = Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == "run-etl");
+        Assert.Equal(ActivityExecutionStatus.Cancelled, child.Status);
+        Assert.Equal(ActivityExecutionStatus.Cancelled,
+            Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == journey.CompositeNodeId).Status);
+        Assert.DoesNotContain(native.Activities, state => state.Execution.ExecutableNodeId == "after-etl");
+        Assert.Empty(child.TriggerDeliveries ?? []);
+        Assert.Null(await journey.ReadBookmarkAsync(invocation.ResultAddress.BookmarkId));
+        var run = Assert.IsType<EtlRunView>(await journey.ReadRunAsync(invocation.Scope, invocation.RunId));
+        Assert.Equal(EtlRunStatus.Cancelled, run.Status);
+        Assert.Equal(EtlTerminalOutcome.Cancelled, run.TerminalResult!.Outcome);
+        Assert.Equal(EtlRuntimeIdentity.InvocationFingerprint(invocation), EtlRuntimeIdentity.InvocationFingerprint(run.Invocation));
+        Assert.Empty(await journey.ReadManifestAsync(invocation.Scope, invocation.RunId));
+        Assert.Null((await journey.ReadOutboxAsync(invocation.Scope, invocation.RunId)).AcknowledgedAtUtcTicks);
+
+        await journey.StartWorkerAsync();
+        await journey.WaitForNativeResultAsync(invocation, ActivityExecutionStatus.Cancelled,
+            WorkflowExecutionStatus.Cancelled);
+        var delivery = await journey.ReadOutboxAsync(invocation.Scope, invocation.RunId);
+        Assert.Equal((int)EtlDeliveryDisposition.ProvenParentTerminal, delivery.Disposition);
+        Assert.NotNull(delivery.AcknowledgedAtUtcTicks);
+        Assert.Empty(Assert.Single((await journey.ReadNativeStateAsync()).Activities,
+            state => state.Execution.ExecutableNodeId == "run-etl").TriggerDeliveries ?? []);
+    }
+
+    private static async Task WithJourneyAsync(CompositeKind kind, NativeOutcome outcome, Func<NativeEtlJourney, Task> test, AdmissionGate? gate = null)
+    {
+        await using var journey = await NativeEtlJourney.CreateAsync(kind, outcome, gate);
         try
         {
             await test(journey);
@@ -227,6 +319,23 @@ public sealed class EtlNativeCompositeJourneyTests
             (int)EtlDeliveryDisposition.ProvenParentTerminal
         });
         Assert.NotNull(delivery.AcknowledgedAtUtcTicks);
+    }
+
+    private sealed class AdmissionGate
+    {
+        public TaskCompletionSource<EtlInvocation> Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
+
+    // Only orders two real durable operations. Admission still executes the production implementation and store.
+    private sealed class GatedAdmission(IEtlRunAdmissionService inner, AdmissionGate gate) : IEtlRunAdmissionService
+    {
+        public async ValueTask<EtlAdmissionResult> AdmitAsync(EtlInvocation invocation, CancellationToken cancellationToken = default)
+        {
+            gate.Entered.TrySetResult(invocation);
+            await gate.Release.Task.WaitAsync(cancellationToken);
+            return await inner.AdmitAsync(invocation, cancellationToken);
+        }
     }
 
     public enum NativeOutcome { Succeeded, BusinessError, Faulted, Cancelled }
@@ -285,7 +394,7 @@ public sealed class EtlNativeCompositeJourneyTests
         public EtlScope Scope { get; }
         public string OutputRoot { get; }
 
-        public static async Task<NativeEtlJourney> CreateAsync(CompositeKind compositeKind, NativeOutcome outcome = NativeOutcome.Succeeded)
+        public static async Task<NativeEtlJourney> CreateAsync(CompositeKind compositeKind, NativeOutcome outcome = NativeOutcome.Succeeded, AdmissionGate? gate = null)
         {
             var directory = Path.Combine(Path.GetTempPath(), "Elsa.Etl.NativeCompositeJourney", Guid.NewGuid().ToString("N"));
             IHost? lifetimeHost = null;
@@ -346,6 +455,9 @@ public sealed class EtlNativeCompositeJourneyTests
                     .ConfigureServices(services =>
                     {
                         services.AddLogging();
+                        if (gate is not null)
+                            services.AddScoped<IEtlRunAdmissionService>(provider => new GatedAdmission(
+                                provider.GetRequiredService<EtlExecution>(), gate));
                         services.AddSingleton(lifetimeHost.Services.GetRequiredService<IHostApplicationLifetime>());
                         services.AddRuntimeEntityFrameworkCore(new RuntimeEntityFrameworkCoreOptions
                         {
@@ -474,6 +586,24 @@ public sealed class EtlNativeCompositeJourneyTests
             await using var operation = await OpenPartitionScopeAsync();
             var cancelled = await operation.ServiceProvider.GetRequiredService<IEtlRuntimeStore>().CancelAsync(invocation);
             Assert.Equal(EtlStoreStatus.Applied, cancelled.Status);
+        }
+
+        public Task WaitForNativeCancellationAsync(EtlInvocation invocation) =>
+            WaitForAsync(async () =>
+            {
+                var native = await ReadNativeStateAsync();
+                return native.Workflow.Status == WorkflowExecutionStatus.Cancelled &&
+                    native.Activities.Any(state => state.Execution.ExecutableNodeId == "run-etl" && state.Status == ActivityExecutionStatus.Cancelled) &&
+                    (await ReadRunAsync(invocation.Scope, invocation.RunId))?.Status == EtlRunStatus.Cancelled;
+            });
+
+        public async Task DeliverCancellationIntentsAsync()
+        {
+            await using var operation = await OpenPartitionScopeAsync();
+            var delivered = await operation.ServiceProvider.GetRequiredService<IRuntimePostCommitOutboxProcessor>()
+                .ProcessAsync(new RuntimePostCommitOutboxProcessRequest(8, WorkflowExecutionId, EtlNativeBoundary.CancelKind));
+            Assert.Equal(1, delivered.DeliveredCount);
+            Assert.Equal(0, delivered.FailedCount);
         }
 
         public async Task StartWorkerAsync()

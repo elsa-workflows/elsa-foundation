@@ -3,10 +3,12 @@ using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 using Elsa.Workflows.Runtime.Core.Models;
 using Elsa.Workflows.Runtime.Services.ActivityExecutions;
+using Elsa.Workflows.Runtime.Services.Bookmarks;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Elsa.Workflows.Runtime.Services.Coalescing;
 using Elsa.Workflows.Runtime.Services.Dispatch;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Scheduler;
 using Elsa.Workflows.Runtime.Services.WorkHandlers;
 using Microsoft.Extensions.Time.Testing;
 using Xunit;
@@ -77,6 +79,34 @@ public sealed class RuntimeCancellationContractTests
         Assert.Equal(ActivityExecutionStatus.Cancelled, (await harness.FindActivity("actexec-running"))!.Status);
         Assert.Equal(ActivityExecutionStatus.Cancelled, (await harness.FindActivity("actexec-scheduled"))!.Status);
         Assert.Equal(ActivityExecutionStatus.Cancelled, (await harness.FindActivity("actexec-waiting"))!.Status);
+    }
+
+    [Fact]
+    public async Task Cancel_CleansLiveActivityBookmarks_AndPreservesTerminalSiblingBookmarks()
+    {
+        var harness = new Harness(_now);
+        await harness.SeedWorkflow(WorkflowExecutionStatus.Running);
+        await harness.SeedActivity(ActivityExecutionStatus.Waiting, "actexec-live", "scope-live");
+        await harness.SeedActivity(ActivityExecutionStatus.Completed, "actexec-terminal", "scope-terminal");
+        await harness.SeedBookmark("bookmark-live", "actexec-live");
+        await harness.SeedBookmark("bookmark-terminal", "actexec-terminal");
+
+        await harness.Handler().HandleAsync(harness.CancelWorkItem());
+
+        var commit = Assert.Single(harness.CommitStore.ListCommits()).Commit;
+        Assert.Equal(WorkflowExecutionStatus.Cancelled, commit.StateChanges.WorkflowExecution!.State.Status);
+        Assert.Equal(["actexec-live"], commit.StateChanges.ActivityExecutions.Select(change => change.StateId));
+        Assert.Equal(ActivityExecutionStatus.Cancelled, (await harness.FindActivity("actexec-live"))!.Status);
+        Assert.Equal(ActivityExecutionStatus.Completed, (await harness.FindActivity("actexec-terminal"))!.Status);
+        Assert.Equal("actexec-live", Assert.Single(commit.StateChanges.ActivityExecutions).StateId);
+        Assert.Null(await harness.FindBookmark("bookmark-live"));
+        Assert.NotNull(await harness.FindBookmark("bookmark-terminal"));
+
+        var cleanup = Assert.Single(commit.StateChanges.ActivityScopeCleanups);
+        Assert.Equal(WorkflowExecutionId, cleanup.WorkflowExecutionId);
+        Assert.Equal(WorkflowExecutionId, cleanup.ExecutionScopeId);
+        Assert.Equal(["actexec-live", "scope-live", WorkflowExecutionId], cleanup.ActivityExecutionIds.Order(StringComparer.Ordinal));
+        Assert.Equal(["bookmark-live"], cleanup.BookmarkIds);
     }
 
     // ── compose with the W1 fault path: cancel must never rewrite an already-terminal activity ──────
@@ -371,12 +401,16 @@ public sealed class RuntimeCancellationContractTests
         private readonly TimeProvider _timeProvider;
         private readonly InMemoryWorkflowExecutionStateStore _workflowStore = new();
         private readonly InMemoryActivityExecutionStateStore _activityStore = new();
+        private readonly InMemoryBookmarkStateStore _bookmarkStore = new();
+        private readonly InMemoryDurableTimerStore _durableTimerStore = new();
+        private readonly InMemoryWorkflowSchedulerWorkQueue _schedulerWorkQueue = new();
         private readonly InMemoryActivityExecutionInspectionStore _inspectionStore = new();
         private readonly InMemoryExecutionLivenessStateStore _livenessStore = new();
         private readonly InMemoryWorkflowDispatchStore _dispatchStore;
         private readonly IRuntimeCheckpointPersistencePolicy _persistencePolicy;
         private readonly IReadOnlyCollection<IRuntimeCheckpointCommitEnricher> _enrichers;
         private readonly IReadOnlyCollection<RuntimePostCommitIntentHandlerContribution> _intentHandlerContributions;
+        private readonly IActivityScopeCleanupStore _activityScopeCleanupStore;
         // The committer requires the fence accessor by construction (C1); with no lease pushed it behaves exactly like
         // the former null accessor: AttachExpectedFence finds no ambient lease and leaves the commit unfenced.
         private IRuntimeExecutionOwnershipContextAccessor _ownershipAccessor = new AsyncLocalRuntimeExecutionOwnershipContextAccessor();
@@ -392,17 +426,21 @@ public sealed class RuntimeCancellationContractTests
             _persistencePolicy = persistencePolicy ?? new ImmediateRuntimeCheckpointPersistencePolicy();
             _enrichers = enrichers ?? [];
             _intentHandlerContributions = intentHandlerContributions ?? [];
+            _activityScopeCleanupStore = new ActivityScopeCleanupStore(_bookmarkStore, _durableTimerStore, _schedulerWorkQueue);
             var checkpointState = new InMemoryRuntimeCheckpointStoreState();
             _dispatchStore = new InMemoryWorkflowDispatchStore(checkpointState);
             CommitStore = new InMemoryRuntimeCheckpointCommitStore(
                 _workflowStore,
                 _activityStore,
+                bookmarkStateStore: _bookmarkStore,
                 operationalStateStore: _livenessStore,
                 activityExecutionInspectionWriter: _inspectionStore,
                 rootWriteLeaseManager: PassThroughWorkflowExecutableRootWriteLeaseManager.Instance,
                 state: checkpointState,
                 workflowDispatchStore: _dispatchStore,
-                timeProvider: _timeProvider);
+                timeProvider: _timeProvider,
+                activityScopeCleanupStore: _activityScopeCleanupStore,
+                schedulerWorkQueue: _schedulerWorkQueue);
         }
 
         public InMemoryRuntimeCheckpointCommitStore CommitStore { get; }
@@ -431,7 +469,8 @@ public sealed class RuntimeCancellationContractTests
                     _enrichers,
                     _intentHandlerContributions),
                 new RuntimeActivityExecutionInspectionAccumulator(_inspectionStore),
-                _timeProvider);
+                _timeProvider,
+                _activityScopeCleanupStore);
 
         public async Task SeedWorkflow(WorkflowExecutionStatus status) =>
             await _workflowStore.SaveAsync(new WorkflowExecutionState(
@@ -448,7 +487,7 @@ public sealed class RuntimeCancellationContractTests
                 TenantId: null,
                 SystemMetadata: new Dictionary<string, string>()));
 
-        public async Task SeedActivity(ActivityExecutionStatus status, string activityExecutionId) =>
+        public async Task SeedActivity(ActivityExecutionStatus status, string activityExecutionId, string? executionScopeId = null) =>
             await _activityStore.SaveAsync(new ActivityExecutionState(
                 Execution: new ActivityExecution(
                     ActivityExecutionId: activityExecutionId,
@@ -474,19 +513,37 @@ public sealed class RuntimeCancellationContractTests
                     branchId: null,
                     iterationId: null,
                     executionPathId: null,
-                    executionScopeId: null,
+                    executionScopeId: executionScopeId,
                     schedulingCause: "test"),
                 CallStackDepth: null,
                 BookmarkIds: [],
                 IncidentIds: [],
                 FaultCount: 0,
                 AggregateFaultCount: 0,
-                Metadata: new Dictionary<string, string>()));
+                Metadata: new Dictionary<string, string>(),
+                ExecutionScopeId: executionScopeId));
+
+        public async Task SeedBookmark(string bookmarkId, string activityExecutionId) =>
+            await _bookmarkStore.SaveAsync(new BookmarkState(
+                bookmarkId,
+                WorkflowExecutionId,
+                activityExecutionId,
+                "node-a",
+                "resume-target",
+                "test.stimulus",
+                $"hash-{bookmarkId}",
+                null,
+                new Dictionary<string, string>(),
+                DateTimeOffset.UnixEpoch,
+                null));
 
         public ValueTask<WorkflowExecutionState?> FindWorkflow() => _workflowStore.FindAsync(WorkflowExecutionId);
 
         public ValueTask<ActivityExecutionState?> FindActivity(string activityExecutionId) =>
             _activityStore.FindAsync(WorkflowExecutionId, activityExecutionId);
+
+        public ValueTask<BookmarkState?> FindBookmark(string bookmarkId) =>
+            _bookmarkStore.FindAsync(WorkflowExecutionId, bookmarkId);
 
         public ValueTask<WorkflowDispatchRecord?> FindDispatch(string dispatchId) =>
             _dispatchStore.FindAsync(dispatchId);
