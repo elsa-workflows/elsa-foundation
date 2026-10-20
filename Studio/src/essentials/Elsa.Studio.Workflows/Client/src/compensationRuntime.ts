@@ -9,7 +9,7 @@ export const compensationSchedulingCause = "compensation";
 export const compensatedOutcome = "Compensated";
 
 export type CompensationForwardState = "NotLoaded" | "NotRun" | "Running" | "Completed" | "Faulted" | "Cancelled";
-export type CompensationRecoveryState = "NotLoaded" | "NotApplicable" | "NotNeeded" | "Registered" | "Pending" | "Running" | "Compensated" | "Failed";
+export type CompensationRecoveryState = "NotLoaded" | "NotApplicable" | "NotNeeded" | "Registered" | "Kept" | "Pending" | "Running" | "Compensated" | "Failed";
 export type CompensationScopeRunPhase = "NotLoaded" | "NotStarted" | "Running" | "Compensating" | "Completed" | "Compensated" | "Faulted" | "Cancelled";
 
 export interface CompensationRowRuntime {
@@ -91,7 +91,7 @@ export function deriveCompensationRuntime(
       recovery: {
         state: forwardState === "Completed" && step.compensation && !handler && handlerMayBeUnloaded
           ? "NotLoaded"
-          : recoveryStateOf(forwardState, !!step.compensation, handler, recovering),
+          : recoveryStateOf(forwardState, !!step.compensation, handler, recovering, phase === "Completed" || phase === "Cancelled"),
         activityExecutionId: handler?.activityExecutionId,
         order: handler ? handlerOrder.get(handler.activityExecutionId) : undefined
       }
@@ -123,6 +123,7 @@ export function recoveryStateLabel(state: CompensationRecoveryState): string {
     case "NotApplicable": return "Not applicable";
     case "NotNeeded": return "Not needed";
     case "Registered": return "Can be undone";
+    case "Kept": return "Kept";
     case "Pending": return "Waiting to undo";
     case "Running": return "Undoing";
     case "Compensated": return "Compensated";
@@ -171,7 +172,9 @@ function recoveryStateOf(
   forward: CompensationForwardState,
   hasHandler: boolean,
   handler: ActivityExecutionStateSummary | undefined,
-  recovering: boolean
+  recovering: boolean,
+  // The scope finished without recovery. M1 cannot undo it afterwards; late compensation is M3.
+  finished: boolean
 ): CompensationRecoveryState {
   if (forward === "NotLoaded") return "NotLoaded";
   if (forward !== "Completed") return "NotApplicable";
@@ -179,7 +182,8 @@ function recoveryStateOf(
   if (handler?.status === "Completed") return "Compensated";
   if (handler?.status === "Faulted") return "Failed";
   if (handler) return "Running";
-  return recovering ? "Pending" : "Registered";
+  if (recovering) return "Pending";
+  return finished ? "Kept" : "Registered";
 }
 
 function causeOf(step: string, forward: ActivityExecutionStateSummary, incidents: IncidentStateSummary[]): CompensationRecoveryCause {
