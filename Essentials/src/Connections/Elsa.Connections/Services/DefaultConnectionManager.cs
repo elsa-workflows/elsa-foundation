@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Elsa.Connections.Core.Contracts;
 using Elsa.Connections.Core.Exceptions;
 using Elsa.Connections.Core.Models;
@@ -134,9 +135,26 @@ internal sealed class DefaultConnectionManager(
         await repository.SaveAsync(document, cancellationToken);
 
         // The save has committed, so finish its secret writes even when the request is cancelled now.
-        await WriteOwnedSecretValuesAsync(tenantId, document.Definition.Name, ownedSecretValues);
-        if (previousSecretFields is not null && nextSecretFields is not null)
-            await DeleteReplacedOwnedSecretsAsync(tenantId, document.Definition.Name, previousSecretFields, nextSecretFields, CancellationToken.None);
+        // Cleanup of the secrets the save replaced must run even when a rotation fails, or they stay Active and unreferenced.
+        var rotationFailed = true;
+        try
+        {
+            await WriteOwnedSecretValuesAsync(tenantId, document.Definition.Name, ownedSecretValues);
+            rotationFailed = false;
+        }
+        finally
+        {
+            try
+            {
+                if (previousSecretFields is not null && nextSecretFields is not null)
+                    await DeleteReplacedOwnedSecretsAsync(tenantId, document.Definition.Name, previousSecretFields, nextSecretFields, CancellationToken.None);
+            }
+            catch when (rotationFailed)
+            {
+                // The rotation failure is the one the caller needs to see; it must not be replaced by a cleanup failure.
+            }
+        }
+
         return ToMetadata(document);
     }
 
@@ -366,16 +384,19 @@ internal sealed class DefaultConnectionManager(
 
     private async ValueTask WriteOwnedSecretValuesAsync(string tenantId, string connectionName, IEnumerable<OwnedSecretValue> values)
     {
+        // Every field is attempted: one that lost a race must not stop the others from taking their new values.
+        var conflictedFields = new List<string>();
+        Exception? fault = null;
         foreach (var value in values)
         {
-            if (value.Current is null)
-            {
-                await CreateOwnedSecretAsync(tenantId, connectionName, value.FieldName, value.SecretName, value.Value, CancellationToken.None);
-                continue;
-            }
-
             try
             {
+                if (value.Current is null)
+                {
+                    await CreateOwnedSecretAsync(tenantId, connectionName, value.FieldName, value.SecretName, value.Value, CancellationToken.None);
+                    continue;
+                }
+
                 // Expecting the version read before the save keeps a later writer's value instead of overwriting it.
                 await secretManager.RotateAsync(tenantId, value.SecretName, new RotateSecretRequest
                 {
@@ -385,10 +406,24 @@ internal sealed class DefaultConnectionManager(
             }
             catch (SecretVersionConflictException)
             {
-                throw new ConnectionConflictException(
-                    connectionName,
-                    $"Connection '{connectionName}' credential '{value.FieldName}' was changed by another request, so this update did not write its new value. Its other changes were saved.");
+                conflictedFields.Add(value.FieldName);
             }
+            catch (Exception exception)
+            {
+                fault ??= exception;
+            }
+        }
+
+        // A genuine fault outranks a conflict: reporting a retryable 409 would hide it.
+        if (fault is not null)
+            ExceptionDispatchInfo.Capture(fault).Throw();
+
+        if (conflictedFields.Count > 0)
+        {
+            var fields = string.Join(", ", conflictedFields.Select(field => $"'{field}'"));
+            throw new ConnectionConflictException(
+                connectionName,
+                $"Connection '{connectionName}' credential(s) {fields} changed by another request, so this update did not write the new value(s). Its other changes were saved.");
         }
     }
 

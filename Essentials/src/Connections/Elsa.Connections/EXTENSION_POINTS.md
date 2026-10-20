@@ -18,8 +18,15 @@ Use `services.AddConnections()` to register defaults, then replace these service
 - `IConnectionManager` for lifecycle. The default manager writes a new value for an owned secret the
   stored connection already resolves only after the update's `SaveAsync` wins, expecting the secret
   version it read first. A request that loses the save therefore leaves what the stored connection
-  resolves unchanged, and one that finds the secret rotated after its save gets
-  `ConnectionConflictException` rather than overwriting the newer value.
+  resolves unchanged, and one that finds an active secret rotated after its save gets
+  `ConnectionConflictException` rather than overwriting the newer value. The check compares the
+  secret's current version (Secrets exposes no other revision token), so a secret with no
+  active version (revoked or expired) is rotated unconditionally. Every changed field is attempted;
+  the exception names the fields whose values were not written, and the update's other changes stay
+  saved. A request that loses the save does not roll back a new `connection:<name>:<field>` secret it
+  created beforehand for a field moving to inline storage: Secrets deletes softly and keeps the name,
+  so removing it would block that field for good. The secret stays Active and unreferenced, and a
+  retried inline write for that field is rejected as a managed-name conflict.
 - `IConnectionResolver` for point-of-use resolution.
 - `IConnectionGrantWriter` for compare-and-swap grant writes (expected secret version).
 - `IConnectionPublishTenantAccessor` — owned by `ConnectionsDesign` (principal tenant, then persistence scope).
