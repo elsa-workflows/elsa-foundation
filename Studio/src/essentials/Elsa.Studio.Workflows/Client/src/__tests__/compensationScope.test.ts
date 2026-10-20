@@ -181,6 +181,20 @@ describe("compensation runtime", () => {
     expect(runtime.rows.map(row => row.recovery.state)).toEqual(["Pending", "Failed", "NotApplicable"]);
   });
 
+  it("shows a step whose handler never ran as kept once a recovering scope has faulted", () => {
+    const runtime = deriveCompensationRuntime(journeyScope(), [
+      execution("ae-scope", "scope", "Faulted", "10"),
+      execution("ae-1", "reserve", "Completed", "11", { parent: "ae-scope" }),
+      execution("ae-2", "deliver", "Completed", "12", { parent: "ae-scope" }),
+      execution("ae-3", "confirm", "Faulted", "13", { parent: "ae-scope" }),
+      execution("ae-4", "cancel", "Completed", "14", { parent: "ae-scope", handler: true, scheduledBy: "ae-2" })
+    ], []);
+
+    expect(runtime.phase).toBe("Faulted");
+    expect(runtime.rows.map(row => row.recovery.state)).toEqual(["Kept", "Compensated", "NotApplicable"]);
+    expect(runtime.cause?.step).toBe("Confirm order");
+  });
+
   it("shows a running scope's completed steps as undoable", () => {
     const runtime = deriveCompensationRuntime(journeyScope(), [
       execution("ae-scope", "scope", "Running", "10"),

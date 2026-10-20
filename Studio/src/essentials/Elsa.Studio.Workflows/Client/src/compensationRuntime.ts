@@ -75,6 +75,8 @@ export function deriveCompensationRuntime(
   // Only a scope that completed normally or was cancelled settles that no handler ran; otherwise a handler missing from
   // a partial page may simply not be loaded.
   const handlerMayBeUnloaded = !complete && phase !== "Completed" && phase !== "Cancelled";
+  // An ended scope schedules nothing more, so a handler that has not run never will: the step is kept, not pending.
+  const ended = phase === "Completed" || phase === "Cancelled" || phase === "Compensated" || phase === "Faulted";
 
   const rows = steps.map((step): CompensationRowRuntime => {
     const forward = step.activity
@@ -91,7 +93,7 @@ export function deriveCompensationRuntime(
       recovery: {
         state: forwardState === "Completed" && step.compensation && !handler && handlerMayBeUnloaded
           ? "NotLoaded"
-          : recoveryStateOf(forwardState, !!step.compensation, handler, recovering, phase === "Completed" || phase === "Cancelled"),
+          : recoveryStateOf(forwardState, !!step.compensation, handler, phase === "Compensating", ended),
         activityExecutionId: handler?.activityExecutionId,
         order: handler ? handlerOrder.get(handler.activityExecutionId) : undefined
       }
@@ -172,9 +174,9 @@ function recoveryStateOf(
   forward: CompensationForwardState,
   hasHandler: boolean,
   handler: ActivityExecutionStateSummary | undefined,
-  recovering: boolean,
-  // The scope finished without recovery. M1 cannot undo it afterwards; late compensation is M3.
-  finished: boolean
+  compensating: boolean,
+  // The scope ended without running this handler. M1 cannot undo it afterwards; late compensation is M3.
+  ended: boolean
 ): CompensationRecoveryState {
   if (forward === "NotLoaded") return "NotLoaded";
   if (forward !== "Completed") return "NotApplicable";
@@ -182,8 +184,8 @@ function recoveryStateOf(
   if (handler?.status === "Completed") return "Compensated";
   if (handler?.status === "Faulted") return "Failed";
   if (handler) return "Running";
-  if (recovering) return "Pending";
-  return finished ? "Kept" : "Registered";
+  if (compensating) return "Pending";
+  return ended ? "Kept" : "Registered";
 }
 
 function causeOf(step: string, forward: ActivityExecutionStateSummary, incidents: IncidentStateSummary[]): CompensationRecoveryCause {

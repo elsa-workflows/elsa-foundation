@@ -74,8 +74,8 @@ Recovery started because "Confirm order" failed: ActivityReturnedFault — Order
 
 - Each state is an icon plus text: `✓ Completed`, `✕ Faulted`, `● Running`, `◌ Not run`, `⟲ Compensated`,
   `◌ Can be undone` (Registered: the step completed and has a handler, and the scope is still running, so a later
-  fault would undo it), `Kept` (the scope completed or was cancelled without recovery; undoing a completed scope is
-  M3's late compensation), `… Pending`,
+  fault would undo it), `Kept` (the scope ended without undoing the step: it completed, was cancelled, or ended
+  after recovery; undoing a completed scope is M3's late compensation), `… Pending`,
   `● Undoing`, `✕ Undo failed`, `— Not applicable`, `Not needed` (the step has no handler), and `Not loaded` when the
   run's activity list is a bounded page that may hold the occurrence on a later page. In M1 `Undo failed` means the
   handler faulted and its incident blocks the run. M2 adds `⚠ Uncertain` and `✋ Needs action`.
