@@ -1,6 +1,6 @@
 # Specification Quality Checklist: Connection Creation Disclosure
 
-**Purpose**: Validate specification completeness and quality before proceeding to planning
+**Purpose**: Validate specification completeness and quality; this checklist does not track delivery gates
 **Created**: 2026-10-20
 **Feature**: [spec.md](../spec.md)
 
@@ -32,5 +32,5 @@
 ## Notes
 
 - The three acceptance scenarios correspond one-to-one with issue #3065 acceptance criteria.
-- The measurable outcomes are mapped to independently verifiable acceptance criteria; implementation has not started and no implementation task has passed.
-- Root approved the spec on 2026-10-20. This checklist validates specification quality only; it does not mean implementation tasks passed.
+- The measurable outcomes are mapped to independently verifiable acceptance criteria. Implementation and local verification are recorded in tasks.md; this checklist does not mark review, hosted CI, merge, or resulting-main gates complete.
+- Root approved the spec on 2026-10-20. This checklist validates specification quality only.

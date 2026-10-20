@@ -2,13 +2,13 @@
 
 **Branch**: `agent/codex/3065-connection-creation` | **Date**: 2026-10-20 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from specs/254-connection-creation-disclosure/spec.md; selected issue #3065; source-grounded implementation handoff at /Users/sipke/Documents/Codex/2026-10-19/studio-ux-audit/execution/3065-implementation-handoff.md.
+**Input**: Feature specification from specs/254-connection-creation-disclosure/spec.md; selected issue #3065 and its acceptance criteria; PR #3105 and the local verification evidence recorded in tasks.md.
 
-**Delivery State**: Root approved 2026-10-20 after source, requirements, and constitution review. Implementation in progress; no execution gate has passed yet.
+**Delivery State**: Root approved 2026-10-20. The implementation and round-one fixes pass the local results recorded in tasks.md, including 46/46 Connections tests (30/30 focused) and 35/35 related browser cases (including 9/9 Connections management cases). Round-one findings have local fixes; revised-head independent review, hosted exact-head CI, merge, and resulting-main verification are pending.
 
 ## Summary
 
-Make the built-in HTTP API-key connection path present the required credential before optional settings, explain and enforce the existing Base URL-or-Allowed-hosts rule when its descriptor supports both fields, and progressively disclose only relevant optional controls while retaining authored values and safe defaults. Keep unknown types and contributed schemes descriptor-driven. Preserve the existing metadata-only Secret boundary. Retain an automatic reveal through error correction until the operator manually collapses it, without persisting that automatic reveal.
+Make the built-in HTTP API-key connection path present the required credential before Base URL, while keeping Base URL directly available. Offer Base URL-or-Allowed-hosts guidance only when both descriptor fields are optional; descriptor-required address fields remain direct and mandatory without contradictory either/or guidance. Progressively disclose relevant optional controls while retaining authored values and safe defaults. Keep unknown types and contributed schemes descriptor-driven. Preserve the existing metadata-only Secret boundary. Retain an automatic reveal through error correction until the operator manually collapses it, without persisting that automatic reveal.
 
 The client will use the existing exported AdvancedSection from @elsa-workflows/studio-ui. Add that internal workspace dependency to the Connections client and update Studio/pnpm-lock.yaml. No backend, endpoint, DTO, descriptor, public SDK, Secret policy, or persistence change is planned.
 
@@ -47,17 +47,17 @@ The client will use the existing exported AdvancedSection from @elsa-workflows/s
 ### After Phase 1 design
 
 - **Root approved 2026-10-20**: use private transient AdvancedSection reveal state through recovery; automatic reveals must not persist as user preference. No new public prop or persisted error-reveal preference is proposed.
-- No constitution violation or exception has been identified. Recheck the review checklist after implementation, particularly metadata compatibility, focus/child preservation, dependency cohesion, and the unchanged Secret boundary.
+- No constitution violation or exception has been identified. The delivery review covers metadata compatibility, focus/child preservation, dependency cohesion, and the unchanged Secret boundary; independent review tasks T018-T020 remain pending.
 
 ## Phase 0: Research
 
 Completed as planning research in [research.md](research.md). Key decisions are:
 
 - Specialize only exact built-in HTTP plus API-key metadata; keep other types and schemes generic.
-- Apply the address one-of guidance/gate only when the recognized HTTP descriptor contains both address fields. Base URL remains direct; Allowed hosts is optional More options. If metadata cannot satisfy the rule, leave generic validation and server-error behavior intact.
+- Apply address one-of validation when the recognized HTTP descriptor contains both Base URL and Allowed hosts; show either/or guidance only when both are optional. Keep Base URL direct and Allowed hosts in More options in that case, with the exact prompt “Enter the Base URL above or configure Allowed hosts in More options.” If an address field is descriptor-required, retain its direct control and mandatory validation without either/or guidance. If either address field is missing or unfamiliar, leave generic validation and server-error behavior intact.
 - Header and Query are verified runtime contract values, not descriptor-advertised enum values. Missing or whitespace-only placement acts as Header; supported matching is case-insensitive without trimming; emit canonical lowercase values and reject unsupported nonblank values.
 - Retain both authored header and query names through placement changes. Required metadata overrides optional relevance grouping. Placeholder/default values are not authored, while explicit user entries equal to runtime defaults remain configured.
-- Keep automatic AdvancedSection error reveal and manual preference distinct. Root approved this private local refinement; a failing shared regression is required before implementation.
+- Keep automatic AdvancedSection error reveal and manual preference distinct. Root approved this private local refinement; T002 records the red regression before implementation and its subsequent green verification.
 - Keep ConnectionCredentialField and the Secret API contract unchanged.
 
 ## Phase 1: Design
@@ -88,18 +88,18 @@ No contracts/ directory is needed: the work changes no public API, endpoint, DTO
 
 ### Test strategy
 
-Add failing regression coverage before implementation for the API-key create path and shared disclosure recovery. The browser case is root-owned and must also be authored before implementation. Prove error→focused correction→recovery→manual collapse, preserving mounted child identity, controlled value, and useful focus without changing the stored user disclosure preference. Then implement and show the same regressions passing. Keep all existing Secret and generic-scheme tests passing.
+The API-key create-path and shared disclosure regressions were authored and recorded failing before implementation (T001-T003). The subsequent green results include recovery through manual collapse, preservation of mounted child identity, controlled value, and useful focus without changing the stored user disclosure preference. Keep all existing Secret and generic-scheme tests passing.
 
 ### Quickstart
 
-See [quickstart.md](quickstart.md). Commands are planned only; no tests, builds, browser run, architecture check, or map check was run in this specification preparation.
+See [quickstart.md](quickstart.md) for reproducible local gates and tasks.md for the recorded results and evidence limits. Canonical type/lint passed on the revised source. Root checks generated maps and the final diff after documentation updates.
 
 ## Verification and Delivery Plan
 
-All implementation tasks remain unchecked until executed and evidenced. Root runs machine-intensive cross-package/architecture/map checks serially.
+Tasks T001-T017 are marked complete for the implementation, local verification, and PR setup. Review tasks T018-T022 remain pending. The current local review-fix source passed the expanded Connections tests and corrected browser flow; canonical type/lint passed on the revised source; root checks generated maps after documentation updates. Root runs machine-intensive cross-package/architecture/map checks serially.
 
 1. Focused Connections dialog regression, then full Connections client suite and build.
-2. Focused and full Studio Web disclosure tests/build, StudioUi public typecheck build, and full Studio Workflows client suite/build because it consumes the shared component.
+2. Focused and full Studio Web disclosure tests/build, StudioUi public typecheck build, and full Studio Workflows client suite/build because it consumes the shared component. The recorded local snapshot is in tasks.md; rerun affected checks after any subsequent code changes.
 3. Canonical Studio typecheck and lint, including CSS and module-layout checks.
 4. Direct Playwright Connections browser run with metadata-only stubs; verify keyboard operation, expanded-state accessibility, narrow and desktop layout, address gating, relevant fields, and preserved values.
 5. Restore the architecture CI project graph and run the full architecture test project, reconciling executed test count with the reported result. No whole-solution local build.
@@ -115,8 +115,8 @@ No constitution exception or new architectural layer is proposed. The internal w
 
 ## Integration refinement (root, 2026-10-20)
 
-Full Web suite passed 564 tests. Full Workflows suite exposed one valid cross-activity identity regression: its existing stale-host-error test expected a new node’s optional section to start closed, while the new private reveal latch retained the prior node’s state. Root authorized a narrow consumer identity key on AdvancedSection, scoped to draft/activity identity, and adapting the existing test to inspect the current section after the legitimate identity remount. Same-activity corrections retain focus/value/child identity. No public disclosure prop or changed error policy is added. Re-run the focused stale-activity case and full Workflows suite after the correction; the first full run is recorded as 2058 passed / 1 failed, not a green result.
+Full Web suite passed 564 tests. The first full Workflows run exposed one valid cross-activity identity regression (2058 passed / 1 failed); root authorized a narrow consumer identity key on AdvancedSection, scoped to draft/activity identity, and the test now inspects the current section after the legitimate identity remount. Same-activity corrections retain focus/value/child identity. No public disclosure prop or changed error policy was added. The corrected full Workflows suite passed 2059/2059; the first run remains recorded as an initial failure, not a green result.
 
-Root visual inspection found the generic Connections browser mode omitted the actual host stylesheet, leaving required spacing tokens undefined; its light palette was also generic fixture fallback. The Connections-only lazy fixture now loads the real host CSS, and only that mode uses the existing theme-palette setup for both modes. The browser proof explicitly checks >=16px dialog insets and is rerun after this fixture correction. This changes test composition, not production styles or host requirements.
+Root visual inspection found the generic Connections browser mode omitted the actual host stylesheet, leaving required spacing tokens undefined; its light palette was also generic fixture fallback. The Connections-only lazy fixture now loads the real host CSS, and only that mode uses the existing theme-palette setup for both modes. The browser proof explicitly checks >=16px dialog insets; the corrected management spec passed 9/9. This changes test composition, not production styles or host requirements.
 
-Root browser proof with actual host styles reproduced a concrete 320px credential-source defect: focusing the native New value radio changed its width from 13px to 37.375px under generic text-input padding, wrapping the radio onto another line between pointerdown and pointerup and losing the click. Captured pointer/focus/geometry events in external 3065-radio-debug-width.log. Scoped native-radio sizing/padding reset plus the existing label hit height keeps the source choice stable; the actual pointer-driven creation test must pass without force clicks, retry clicks, or keyboard substitution. More-options trigger alignment also preserves the shared left-aligned disclosure composition inside the modal.
+Root browser proof with actual host styles reproduced a concrete 320px credential-source defect: focusing the native New value radio changed its width from 13px to 37.375px under generic text-input padding, wrapping the radio onto another line between pointerdown and pointerup and losing the click. Captured pointer/focus/geometry events in the local diagnostic log. Scoped native-radio sizing/padding reset plus the existing label hit height keeps the source choice stable; the corrected pointer-driven management spec passed without force clicks, retry clicks, or keyboard substitution. More-options trigger alignment also preserves the shared left-aligned disclosure composition inside the modal.

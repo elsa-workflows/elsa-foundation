@@ -93,6 +93,10 @@ export function ConnectionCreateDialog({
   const hasHttpAddress = !httpAddressFields
     || isSettingPresent(httpAddressFields.baseUrl, visibleSettings[httpAddressFields.baseUrl.name])
     || isSettingPresent(httpAddressFields.allowedHosts, visibleSettings[httpAddressFields.allowedHosts.name]);
+  const showAddressGuidance = !!httpAddressFields
+    && !httpAddressFields.baseUrl.required
+    && !httpAddressFields.allowedHosts.required
+    && !hasHttpAddress;
   const validRequiredSettings = typeSettings.filter(field => field.required).every(field => isSettingPresent(field, visibleSettings[field.name]));
   const validRequiredSchemeSettings = nonSensitiveSchemeFields.filter(field => field.required).every(field => isSettingPresent(field, visibleSettings[field.name]));
   const validCredentials = sensitiveFields.every(field => {
@@ -226,7 +230,7 @@ export function ConnectionCreateDialog({
           checked={isCheckbox ? checked : undefined}
           value={isCheckbox ? undefined : visibleSettings[field.name] ?? ""}
           placeholder={isAllowedHosts ? "api.example, *.googleapis.com" : undefined}
-          aria-describedby={isBaseUrl && httpAddressFields && !hasHttpAddress ? addressGuidanceId : undefined}
+          aria-describedby={isBaseUrl && showAddressGuidance ? addressGuidanceId : undefined}
           disabled={!contextIsCurrent || submitting}
           onChange={event => {
             setSettings(current => {
@@ -297,6 +301,49 @@ export function ConnectionCreateDialog({
       </div>
     );
   }
+
+  const authenticationSection = (
+    <section className="connections-create-section" aria-labelledby={authenticationTitleId}>
+      <h3 id={authenticationTitleId}>Authentication</h3>
+      {directSchemeFields.map(renderSchemeSetting)}
+
+      {sensitiveFields.map(field => (
+        <ConnectionCredentialField
+          key={`${typeName}:${authScheme}:${field.name}`}
+          context={context}
+          field={field}
+          value={visibleCredentials[field.name] ?? defaultCredentialInput()}
+          disabled={!contextIsCurrent || submitting}
+          onChange={input => setCredentialInput(field.name, input)}
+        />
+      ))}
+      {directSchemeFields.length === 0 && sensitiveFields.length === 0
+        ? <p className="connections-create-section-empty">No additional authentication fields required.</p>
+        : null}
+    </section>
+  );
+
+  const serviceSettingsSection = (
+    <>
+      {directTypeFields.length > 0 ? (
+        <section className="connections-create-section" aria-labelledby={serviceSettingsTitleId}>
+          <h3 id={serviceSettingsTitleId}>Service settings</h3>
+          {directTypeFields.map(renderTypeSetting)}
+        </section>
+      ) : typeSettings.length === 0 ? (
+        <section className="connections-create-section" aria-labelledby={serviceSettingsTitleId}>
+          <h3 id={serviceSettingsTitleId}>Service settings</h3>
+          <p className="connections-create-section-empty">No additional service settings required.</p>
+        </section>
+      ) : null}
+
+      {showAddressGuidance ? (
+        <p className="connections-create-guidance" id={addressGuidanceId} role="note">
+          Enter the Base URL above or configure Allowed hosts in More options.
+        </p>
+      ) : null}
+    </>
+  );
 
   return (
     <div
@@ -379,42 +426,7 @@ export function ConnectionCreateDialog({
               </div>
             </div>
 
-            {directTypeFields.length > 0 ? (
-              <section className="connections-create-section" aria-labelledby={serviceSettingsTitleId}>
-                <h3 id={serviceSettingsTitleId}>Service settings</h3>
-                {directTypeFields.map(renderTypeSetting)}
-              </section>
-            ) : typeSettings.length === 0 ? (
-              <section className="connections-create-section" aria-labelledby={serviceSettingsTitleId}>
-                <h3 id={serviceSettingsTitleId}>Service settings</h3>
-                <p className="connections-create-section-empty">No additional service settings required.</p>
-              </section>
-            ) : null}
-
-            {httpAddressFields && !hasHttpAddress ? (
-              <p className="connections-create-guidance" id={addressGuidanceId} role="note">
-                Enter either a Base URL or Allowed hosts in More options.
-              </p>
-            ) : null}
-
-            <section className="connections-create-section" aria-labelledby={authenticationTitleId}>
-              <h3 id={authenticationTitleId}>Authentication</h3>
-              {directSchemeFields.map(renderSchemeSetting)}
-
-              {sensitiveFields.map(field => (
-                <ConnectionCredentialField
-                  key={`${typeName}:${authScheme}:${field.name}`}
-                  context={context}
-                  field={field}
-                  value={visibleCredentials[field.name] ?? defaultCredentialInput()}
-                  disabled={!contextIsCurrent || submitting}
-                  onChange={input => setCredentialInput(field.name, input)}
-                />
-              ))}
-              {directSchemeFields.length === 0 && sensitiveFields.length === 0
-                ? <p className="connections-create-section-empty">No additional authentication fields required.</p>
-                : null}
-            </section>
+            {apiKeyFields ? <>{authenticationSection}{serviceSettingsSection}</> : <>{serviceSettingsSection}{authenticationSection}</>}
 
             {(advancedTypeFields.length > 0 || apiKeyFields && advancedSettingNames.size > 0) ? (
               <AdvancedSection

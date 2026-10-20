@@ -2,7 +2,7 @@
 
 **Input**: Design documents from specs/254-connection-creation-disclosure/
 
-**Status**: Root approved 2026-10-20; implementation in progress. Tasks remain unchecked until evidenced. Regression tests and browser proof must be added and shown failing before the corresponding implementation, as explicitly required for this work unit. This is a task-specific order, not a claim that the application constitution declares a general TDD cadence.
+**Status**: Root approved 2026-10-20; implementation and PR setup are complete. T001-T017 are checked against recorded evidence. T018-T022 remain pending. Regression tests and browser proof were added and shown failing before the corresponding implementation, as explicitly required for this work unit. This is a task-specific order, not a claim that the application constitution declares a general TDD cadence.
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, quickstart.md. No contracts/ directory applies because no public contract changes.
 
@@ -14,13 +14,13 @@
 
 ### Regression tests - add before implementation
 
-- [x] T001 [P] [US1] Add a separate built-in HTTP/API-key descriptor fixture and failing coverage for credential order, Base URL-or-Allowed-hosts behavior, placement/name preservation, authored versus untouched defaults, checkbox on→off omission, required and unfamiliar contributed fields, and unchanged Secret-source submission in Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/__tests__/connectionCreateDialog.test.tsx; run the focused Vitest command and record the expected red result before implementation.
+- [x] T001 [P] [US1] Add a separate built-in HTTP/API-key descriptor fixture and failing coverage for credential-before-Base-URL order, the optional-address one-of rule and its copy, descriptor-required address controls, placement/name preservation, authored versus untouched defaults, checkbox on→off omission, Basic/custom ordering, unfamiliar contributed fields, and unchanged Secret-source submission in Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/__tests__/connectionCreateDialog.test.tsx; record the initial focused red result before implementation.
 - [x] T002 [P] [US1] Add a failing AdvancedSection regression for real error reveal→focused correction→recovery→manual collapse, asserting child/value/focus identity and unchanged persisted disclosure preference in Studio/src/apps/Elsa.Studio.Web/Client/src/app/ui/disclosure/__tests__/disclosure.test.tsx; record the expected red result before implementation.
 - [x] T003 [P] [US1] Add a root-owned failing create-flow browser case using metadata-only route stubs in Studio/tests/browser/connections-management.spec.ts and Studio/tests/browser/connectionsFixture.tsx; cover 320px and desktop, light/dark, keyboard Enter/Space and ARIA relationships, credential-first ordering, initial collapsed disclosure, address guidance, placement switching and retained values, and record the expected red result before implementation.
 
 ### Implementation
 
-- [x] T004 [US1] Implement exact built-in HTTP/API-key credential-first presentation, descriptor-aware address one-of validation/guidance, runtime placement handling, optional relevant-name visibility with both authored values retained/submitted, authored-default serialization, generic fallback, and descriptor-required field precedence in Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/ConnectionCreateDialog.tsx; preserve ConnectionCredentialField behavior.
+- [x] T004 [US1] Implement exact built-in HTTP/API-key credential-before-Base-URL presentation, keeping Base URL direct; offer address one-of validation when both recognized fields are present and guidance only when both address fields are optional, keep descriptor-required addresses direct and mandatory without either/or copy, preserve Basic Username→Password and custom ordering, and implement runtime placement, authored-name submission, safe-default serialization, and generic fallback in Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/ConnectionCreateDialog.tsx; preserve ConnectionCredentialField behavior.
 - [x] T005 [US1] After root approves the disclosure design, implement the smallest private AdvancedSection state refinement that retains automatic reveal through error recovery until manual collapse, keeps children/value/focus stable, preserves existing forced-error behavior, and never persists automatic reveal as a user preference in Studio/src/apps/Elsa.Studio.Web/Client/src/app/ui/disclosure/AdvancedSection.tsx; satisfy T002. Preserve the existing Workflows stale-activity behavior by scoping its AdvancedSection identity in ActivityPropertiesPanel.tsx and adapting activityPropertyGroups.test.tsx to inspect the current section after a draft/activity identity change.
 - [x] T006 [US1] Add only the targeted responsive and accessible create-form layout changes in Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/styles.css; satisfy the root-owned narrow and desktop browser case without altering unrelated screens.
 - [x] T007 [US1] Add the internal @elsa-workflows/studio-ui workspace dependency to Extensions/Connections/studio/Elsa.Studio.Connections/Client/package.json and update Studio/pnpm-lock.yaml with the Studio workspace lockfile-only install; review the lock diff for unrelated dependency changes.
@@ -48,7 +48,7 @@
 
 **Goal**: Deliver the reviewed change through the authorized App-owned issue and pull-request protocol and verify the resulting main state.
 
-- [ ] T017 Create the local commit as elsa-workflows-codex[bot], open a ready pull request with Fixes #3065, map all three acceptance criteria to evidence, post the issue PR transition, and attach the pull request to the Codex task.
+- [x] T017 Create the local commit as elsa-workflows-codex[bot], open a ready pull request with Fixes #3065, map all three acceptance criteria to evidence, post the issue PR transition, and attach the pull request to the Codex task.
 - [ ] T018 Complete an independent acceptance and accessibility review of the three issue criteria, browser keyboard/focus behavior, narrow layouts, and generic fallback; resolve findings on the pull request.
 - [ ] T019 Complete an independent Secret/privacy review of metadata-only lookup, reference-versus-new-value submission, permission/eligibility behavior, and the absence of stored values from display; resolve findings on the pull request.
 - [ ] T020 Complete an independent code/test/architecture review of boundaries, package dependency, serialization, failure recovery, test coverage, generated maps, and the full diff; resolve findings on the pull request.
@@ -57,11 +57,11 @@
 
 ## Dependencies and execution order
 
-- Root approved the spec and private AdvancedSection recovery design on 2026-10-20. T001-T003 still gate production implementation.
+- Root approved the spec and private AdvancedSection recovery design on 2026-10-20. T001-T003 captured the red checkpoints before implementation and are complete.
 - T001-T003 establish red regression evidence before T004-T007. T002 must be green after T005; T003 is root-owned and must be green after T004-T007.
 - T005 depends on root approval and T002. T007 depends on importing the existing shared package and must be reviewed for lockfile scope.
-- T008-T016 depend on the implementation and regressions being complete. Root serializes cross-package, architecture, and map checks on the shared machine.
-- T017 depends on all local gates and the ownership recheck. T018-T020 are separate review axes. T021 depends on all three axes, complete exact-head checks, and posted evidence. T022 follows merge.
+- T008-T016 are checked against the local verification results recorded below. Root serializes cross-package, architecture, and map checks on the shared machine.
+- T017 is complete: commit, ready PR, issue transition, and attachment are recorded. T018-T020 are separate round-two review axes. T021 depends on all three axes, revised-head exact checks, and posted evidence. T022 follows merge.
 
 ## Parallel opportunities
 
@@ -71,17 +71,39 @@
 
 ## Notes
 
-- All items remain unchecked; no implementation, test, build, architecture, map, GitHub delivery, review, or merge result is claimed here.
-- The existing Studio main map job is already red at base f7c417d for the two stale generated files named in T015. This pre-feature finding must remain separate from any finding caused by this work.
+- T001-T017 are checked against the recorded work. T018-T022 remain unchecked because round-one review is not clean and exact-head hosted CI, merge, and resulting-main proof are incomplete.
+- Base f7c417d initially had stale manifest/findings output. Root refreshed and reviewed the narrow map output; the local map check passed in the verification snapshot. Root will regenerate/check again after this documentation cleanup.
 - The browser proof reuses the existing Connections page fixture. Unit coverage is direct dialog coverage in the existing Connections client test harness; it is not a pre-existing dedicated picker test.
 - Use the direct Vitest and Playwright exec commands in quickstart.md; do not forward a file argument through the package test script.
 
 ## Execution evidence
 
-2026-10-20 root confirmed pre-implementation regression evidence: Connections focused 4 intended failures / 19 passed (23 total); shared disclosure 3 intended recovery failures / 27 passed (30 total); browser API-key flow 4 intended missing-disclosure failures across 320/1440 px and light/dark. External logs `3065-dialog-red.log`, `3065-disclosure-red.log`, `3065-browser-red.log`. No green execution result follows from these red checkpoints.
+### Initial red checkpoints before implementation
 
-Root integration review found a valid Workflows regression (2058 pass / 1 fail): a new activity inherited a previous error reveal. A narrow identity-key correction and current-node regression check are authorized under T005; full Workflows rerun remains required. Final corrected Connections RED expanded to 27 cases with 7 intended failures, including the pure placement seam and required-name relevance (initial 23-case snapshot above preceded those added boundaries).
+Root recorded intentional failing regressions before changing production behavior:
 
-Root local gates: Connections44/44; sharedWeb564/564; Workflows2059/2059 after two fixture identity corrections; architecture578/578, zero skips; 35/35 related browser cases with actualhoststyles, no retries/force clicks; canonicaltypes/lint/builds passed (48 preexisting ESLint warnings, zero errors). Geometry debug reproduced and qualified native-radio sizing fix. Shared error latch and activityidentity safeguard covered before/after. Final screenshots inspected at320Dark and1440Light; scoped axe reports zero violations in the new complete flow. Hosted/fullbrowser and main gates still pending.
+- The initial focused Connections dialog run had 4 intended failures and 19 passes, 23 tests total.
+- The initial shared disclosure run had 3 intended recovery failures and 27 passes, 30 tests total.
+- The initial browser API-key flow had 4 intended missing-disclosure failures across 320px and 1440px in light and dark themes.
+- After the API-key unit boundary cases were expanded, the red snapshot was 7 intended failures across 27 cases.
 
-Root maps/diff review: the base’s spec248 had already been added to the status map but omitted from manifest/report counts. The narrow dependency-map/maps refresh changes only manifest count249→251 (existing248 plusnew254), report count249→251, and the Spec254 status row. No project/dependency/feature graph changed. Findings reviewed; manifest will be staged explicitly. Full diff/DRY/credential-boundary review complete. Direct Connections tsc --noEmit also passes; simplified the placement test to a static typed import and reran all44 Connections tests. Current App claim6285876529 remains unique, no assignee/readiness/competingPR.
+These were expected red checkpoints, not unresolved failures in the subsequent green runs. Root retained the logs 3065-dialog-red.log, 3065-disclosure-red.log, and 3065-browser-red.log.
+
+### Local green verification
+
+Root recorded the following local verification results on the implementation and review-fix source:
+
+- The Connections client passed 46/46 tests, including 30/30 in the focused dialog test file. Direct Connections TypeScript checking and its build passed.
+- Studio Web passed 564/564 tests. Studio Workflows passed 2059/2059 after two fixture-identity corrections.
+- The architecture suite passed 578/578 with zero skipped tests.
+- The revised source passed all 35 related browser cases in one execution, including 9 Connections management cases with credential-before-Base-URL order, 8 existing Secret creation cases, 2 dialog-token cases, 4 picker cases, and 12 HTTP disclosure cases. Required-address behavior has focused unit coverage.
+- Canonical type and lint checks, affected builds, and the local maps check passed in the recorded snapshot. Lint reported zero errors and 48 existing warnings.
+- Root inspected the 320px dark and 1440px light screenshots; scoped axe reported zero violations in the new flow. The prior base map finding was reviewed and narrowly refreshed; the map check passed in that local snapshot.
+
+These are local results, not hosted CI. Canonical type/lint passed on the revised source. Root checks generated maps and the final diff after documentation updates.
+
+### Delivery and remaining gates
+
+PR #3105 is open and ready. The commit, public issue transition, and Codex pull-request attachment are complete (T017). Round-one fixes have the local evidence above; each pushed head requires fresh independent review and hosted checks.
+
+Round-one independent review is not clean, so T018-T020 remain pending for the revised PR. Exact-head hosted CI is not complete; there is no merge or resulting-main proof, so T021-T022 remain pending. No gate was waived.

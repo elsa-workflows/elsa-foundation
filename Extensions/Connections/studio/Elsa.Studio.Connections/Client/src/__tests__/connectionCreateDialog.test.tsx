@@ -24,8 +24,9 @@ describe("connection credential creation", () => {
     const moreOptions = button(container, "More options");
     const advanced = container.querySelector(".studio-advanced-section")!;
     expect(credential.compareDocumentPosition(advanced) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(credential.compareDocumentPosition(control(container, "Base URL")) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
     expect(moreOptions.getAttribute("aria-expanded")).toBe("false");
-    expect(container.textContent).toContain("Enter either a Base URL or Allowed hosts in More options.");
+    expect(container.textContent).toContain("Enter the Base URL above or configure Allowed hosts in More options.");
     expect(container.textContent).not.toContain(rawSecretValue);
 
     changeText(container, "Name", "api.connection");
@@ -54,7 +55,7 @@ describe("connection credential creation", () => {
     await waitFor(() => control<HTMLSelectElement>(container, "Existing Secret for Access token").options.length > 1);
     chooseSecret(container, "Access token", "payments.api");
     expect(button(container, "Create").disabled).toBe(true);
-    expect(container.textContent).toContain("Enter either a Base URL or Allowed hosts in More options.");
+    expect(container.textContent).toContain("Enter the Base URL above or configure Allowed hosts in More options.");
 
     clickButton(container, "More options");
     changeText(container, "Allowed hosts", "api.example");
@@ -70,6 +71,29 @@ describe("connection credential creation", () => {
     });
   });
 
+  it.each(["baseUrl", "allowedHosts"] as const)("keeps descriptor-required %s direct without suggesting an invalid address alternative", async requiredField => {
+    const descriptors = {
+      ...apiKeyDescriptors,
+      types: apiKeyDescriptors.types.map(type => ({
+        ...type,
+        settings: type.settings.map(field => field.name === requiredField ? { ...field, required: true } : field)
+      }))
+    };
+    const { container } = renderApiKeyDialog(descriptors);
+    await waitFor(() => container.textContent?.includes("Payments API") === true);
+    changeText(container, "Name", "required-address.connection");
+    chooseSecret(container, "API key", "payments.api");
+    expect(container.querySelector(".connections-create-guidance")).toBeNull();
+    const requiredLabel = requiredField === "baseUrl" ? "Base URL (required)" : "Allowed hosts (required)";
+    const otherLabel = requiredField === "baseUrl" ? "Allowed hosts" : "Base URL";
+    expect(control(container, requiredLabel).closest(".studio-advanced-section")).toBeNull();
+    if (control(container, otherLabel).closest(".studio-advanced-section")) clickButton(container, "More options");
+    changeText(container, otherLabel, requiredField === "baseUrl" ? "api.example" : "https://api.example");
+    expect(button(container, "Create").disabled).toBe(true);
+    changeText(container, requiredLabel, requiredField === "baseUrl" ? "https://api.example" : "api.example");
+    expect(button(container, "Create").disabled).toBe(false);
+  });
+
   it("keeps the generic HTTP fallback usable when the descriptor lacks one address field", async () => {
     const postJson = vi.fn(async (url: string) => url === "/secrets/picker" ? pickerResponse() : createdConnection());
     const { container } = renderDialog({ context: endpointContext(postJson) });
@@ -80,7 +104,7 @@ describe("connection credential creation", () => {
     chooseSecret(container, "Signing key", "signing.key");
 
     expect(button(container, "Create").disabled).toBe(false);
-    expect(container.textContent).not.toContain("either Base URL or Allowed hosts");
+    expect(container.querySelector(".connections-create-guidance")).toBeNull();
     expect(control<HTMLInputElement>(container, "Allowed hosts").value).toBe("");
   });
 

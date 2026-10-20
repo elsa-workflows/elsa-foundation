@@ -108,6 +108,8 @@ for (const width of [320, 1440]) for (const theme of ["light", "dark"]) {
     await expect(dialog.locator(`[id="${bodyId}"]`)).toBeHidden();
     const credential = dialog.getByRole("group", { name: "API key (required)", exact: true });
     await expect(credential).toBeVisible();
+    const baseUrlId = await dialog.getByLabel("Base URL", { exact: true }).getAttribute("id");
+    expect(await credential.evaluate((element, id) => Boolean(element.compareDocumentPosition(document.getElementById(id!)!) & Node.DOCUMENT_POSITION_FOLLOWING), baseUrlId)).toBe(true);
     expect(await credential.evaluate(element => Boolean(element.compareDocumentPosition(document.querySelector(".studio-advanced-section")!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
     await expect(dialog.getByText(/Base URL.*Allowed hosts.*More options|Allowed hosts.*More options.*Base URL/i)).toBeVisible();
     await dialog.getByLabel("Name", { exact: true }).fill("customer-api");
@@ -192,7 +194,7 @@ for (const width of [320, 1440]) for (const theme of ["light", "dark"]) {
     await expect(dialog).toHaveCount(0);
     expect(creates[2]).toEqual({ name: "new-api", typeName: "http", authScheme: "api-key", settings: { allowedHosts: "api.example" }, secretFields: { apiKey: { value: "fixture-operator-value" } } });
     expect(secretQueries.length).toBeGreaterThanOrEqual(2);
-    expect(secretQueries.every(body => JSON.stringify(body) === JSON.stringify({ search: "", typeNames: ["text"], storeNames: [], activeOnly: true }))).toBe(true);
+    for (const body of secretQueries) expect(body).toEqual({ search: "", typeNames: ["text"], storeNames: [], activeOnly: true });
     expect(requests.every(request => ["GET /connections", "GET /connections/descriptors", "POST /secrets/picker", "POST /connections"].includes(request))).toBe(true);
     await testInfo.attach("metadata-only-request-proof.json", { body: JSON.stringify({ requests, secretQueries }), contentType: "application/json" });
   });
