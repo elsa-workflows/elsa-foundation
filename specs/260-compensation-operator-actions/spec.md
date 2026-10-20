@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-20
 
-**Status**: Draft — design packet for M4 under [#3047](https://github.com/elsa-workflows/elsa-foundation/issues/3047), awaiting review. No production code yet.
+**Status**: In progress — M4 under [#3047](https://github.com/elsa-workflows/elsa-foundation/issues/3047). PR 1 (Phases A and B: the runtime seams, the scope's decisions, the journal, the permission signal and the backend docs) is implemented; PR 2 (Studio) is pending.
 
 **Program**: [Native compensation #3035](https://github.com/elsa-workflows/elsa-foundation/issues/3035) → [Epic #3040](https://github.com/elsa-workflows/elsa-foundation/issues/3040) → [Feature #3047](https://github.com/elsa-workflows/elsa-foundation/issues/3047) (M4). Builds on [spec 250](../250-native-compensation/spec.md) (M1), [spec 251](../251-compensation-uncertainty/spec.md) (M2) and [spec 258](../258-compensation-nesting/spec.md) (M3). Their requirements and owner decisions still hold, except where this spec says otherwise.
 
