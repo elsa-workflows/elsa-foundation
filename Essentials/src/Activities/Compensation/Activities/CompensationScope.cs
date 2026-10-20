@@ -86,6 +86,12 @@ public sealed class CompensationScope : StructuralActivity,
     /// </summary>
     public const string CompensateRequestedFaultCode = "compensation.scope.compensate-requested";
 
+    /// <summary>
+    /// The fault code of a scope whose Compensate stopped a started step that has no handler (spec 258 FR-313, research
+    /// R9). It carries <see cref="OutcomeUnknownCategory"/>, so an enclosing scope treats the scope as an uncertain step.
+    /// </summary>
+    public const string UncertainUnhandledFaultCode = "compensation.scope.uncertain-unhandled";
+
     /// <summary>The fault category prefix that names the outer scope a cascading Compensate aims at.</summary>
     public const string TargetCategoryPrefix = "compensation.target:";
 
@@ -397,11 +403,12 @@ public sealed class CompensationScope : StructuralActivity,
             Entries = [.. state.Entries, entry]
         };
 
-        // A fault cannot ride the same commit as a subtree cancellation. With nothing to undo, a cascading scope faults
-        // at once and leaves the step to the next scope out, whose absorption of this fault cancels it (research R11).
-        if (NextEligible(navigator, compensating) is null && target is not null)
+        // A fault cannot ride the same commit as a subtree cancellation. With nothing to undo, a scope that must fault
+        // does so at once and leaves the step to the next scope out, whose absorption of the fault cancels it, or to an
+        // operator (research R11).
+        if (NextEligible(navigator, compensating) is null && FinishFault(navigator, compensating) is { } fault)
             return CompensationScopeStatePersister.Stage(
-                RuntimeStructuralContinuation.Faulted(CompensateRequestedFault(target)),
+                RuntimeStructuralContinuation.Faulted(fault),
                 compensating with { Phase = CompensationScopePhase.Compensated });
 
         runtimeContext.RequestChildSubtreeCancellation(
@@ -690,19 +697,35 @@ public sealed class CompensationScope : StructuralActivity,
         if (NextEligible(navigator, state) is not { } next)
         {
             var finished = state with { Phase = CompensationScopePhase.Compensated };
-            var continuation = state.Cause switch
-            {
-                // A Compensate aimed further out: pass the request on to the next scope (FR-314).
-                { Target: { } target } => RuntimeStructuralContinuation.Faulted(CompensateRequestedFault(target)),
-                // Recovery the author asked for is the outcome, not a fault to re-raise (research R11).
-                { Kind: CompensationRecoveryCause.ExplicitKind or CompensationRecoveryCause.RequestedKind } => RuntimeStructuralContinuation.Complete(CompensatedOutcome),
-                _ when FaultAfterCompensation => RuntimeStructuralContinuation.Faulted(CompensatedFault(state.Cause?.Step)),
-                _ => RuntimeStructuralContinuation.Complete(CompensatedOutcome)
-            };
+            var continuation = FinishFault(navigator, state) is { } fault
+                ? RuntimeStructuralContinuation.Faulted(fault)
+                : RuntimeStructuralContinuation.Complete(CompensatedOutcome);
             return CompensationScopeStatePersister.Stage(continuation, finished);
         }
 
         return ScheduleHandler(runtimeContext, navigator, state, next);
+    }
+
+    // How a finished recovery ends: null completes Compensated.
+    private ActivityFault? FinishFault(CompensationScopeNavigator navigator, CompensationScopeState state)
+    {
+        // A step a Compensate stopped may have had an effect nothing can undo: an operator decides (research R9). This
+        // wins over a cascade, because an enclosing scope must not treat the step as undone.
+        if (state.Cause is { Kind: CompensationRecoveryCause.ExplicitKind } explicitCause
+            && state.Entries.Any(entry => entry.Status == CompensationEntryStatus.Uncertain
+                                          && StringComparer.Ordinal.Equals(entry.ForwardActivityExecutionId, explicitCause.ActivityExecutionId)
+                                          && HandlerNodeOf(navigator, entry) is null))
+            return UncertainUnhandledFault(explicitCause.Step);
+
+        return state.Cause switch
+        {
+            // A Compensate aimed further out: pass the request on to the next scope (FR-314).
+            { Target: { } target } => CompensateRequestedFault(target),
+            // Recovery the author asked for is the outcome, not a fault to re-raise (research R11).
+            { Kind: CompensationRecoveryCause.ExplicitKind or CompensationRecoveryCause.RequestedKind } => null,
+            _ when FaultAfterCompensation => CompensatedFault(state.Cause?.Step),
+            _ => null
+        };
     }
 
     // Schedules the next attempt of an entry's handler and marks the entry compensating, in one commit (FR-008).
@@ -930,6 +953,9 @@ public sealed class CompensationScope : StructuralActivity,
 
     private static ActivityFault CompensatedFault(string? stepName) =>
         new(CompensatedFaultCode, $"Step '{stepName}' failed; the completed steps were compensated.");
+
+    private static ActivityFault UncertainUnhandledFault(string stepName) =>
+        new(UncertainUnhandledFaultCode, $"A Compensate activity stopped step '{stepName}', which has no handler; its effect is unknown.", category: OutcomeUnknownCategory);
 
     private static ActivityFault CompensateRequestedFault(string target) =>
         new(CompensateRequestedFaultCode, $"A Compensate activity asked scope '{target}' to recover; this scope compensated itself first.", category: TargetCategoryPrefix + target);

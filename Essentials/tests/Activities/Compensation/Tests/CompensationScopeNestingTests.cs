@@ -27,6 +27,11 @@ public sealed class CompensationScopeNestingTests
     // One step without a handler: a Compensate in it leaves nothing to undo.
     private static readonly ExecutableNode CheckOnly = Scope(new Step("Check", Participant("check")));
 
+    // A step with a handler, then one without.
+    private static readonly ExecutableNode HandledThenCheck = Scope(
+        new Step("Reserve inventory", Participant("reserve-inventory"), Participant("release-inventory")),
+        new Step("Check", Participant("check")));
+
     [Fact]
     public void A_version_2_state_is_upgraded_with_no_confirmations_and_no_hand_overs()
     {
@@ -250,16 +255,54 @@ public sealed class CompensationScopeNestingTests
     }
 
     [Fact]
-    public async Task Compensate_with_nothing_to_undo_completes_Compensated_even_when_faultAfterCompensation_is_set()
+    public async Task An_explicit_recovery_completes_Compensated_even_when_faultAfterCompensation_is_set()
     {
-        var started = await StartAsync(faultAfterCompensation: true, graph: CheckOnly);
+        var started = await StartAsync(faultAfterCompensation: true);
 
-        var compensated = await NotifiedAsync(started.State, CompensationScope.Notifications.Compensate,
-            new CompensationCompensateRequest("actexec-compensate", null, null), via: "check", viaExecution: "actexec-check", faultAfterCompensation: true, graph: CheckOnly);
+        var compensating = await NotifiedAsync(started.State, CompensationScope.Notifications.Compensate,
+            new CompensationCompensateRequest("actexec-compensate", null, null), via: "reserve-inventory", viaExecution: "actexec-reserve-inventory", faultAfterCompensation: true);
+        Assert.Single(compensating.Context.GetChildSubtreeCancellationRequests());
+        var release = Assert.Single(compensating.Requests);
+        Assert.Equal("release-inventory", release.ExecutableNodeId);
 
-        Assert.Single(compensated.Context.GetChildSubtreeCancellationRequests());
-        Assert.True(compensated.Continuation.IsComplete);
-        Assert.Equal(CompensationScope.CompensatedOutcome, compensated.Continuation.OutcomeName);
+        var finished = await CompletedAsync(compensating.State, release, "actexec-release-inventory");
+        Assert.True(finished.Continuation.IsComplete);
+        Assert.Equal(CompensationScope.CompensatedOutcome, finished.Continuation.OutcomeName);
+    }
+
+    [Fact]
+    public async Task Compensate_stopping_a_step_without_a_handler_recovers_the_rest_then_faults_uncertain_unhandled()
+    {
+        var started = await StartAsync(graph: HandledThenCheck);
+        var afterInventory = await CompletedAsync(started.State, started.Requests.Single(), "actexec-reserve-inventory", graph: HandledThenCheck);
+
+        var compensating = await NotifiedAsync(afterInventory.State, CompensationScope.Notifications.Compensate,
+            new CompensationCompensateRequest("actexec-compensate", null, null), via: "check", viaExecution: "actexec-check", graph: HandledThenCheck);
+        Assert.Equal("actexec-check", Assert.Single(compensating.Context.GetChildSubtreeCancellationRequests()).ChildActivityExecutionId);
+        var release = Assert.Single(compensating.Requests);
+
+        var finished = await CompletedAsync(compensating.State, release, "actexec-release-inventory", graph: HandledThenCheck);
+
+        // Its effect may exist and nothing can undo it, whatever faultAfterCompensation says: an operator decides (R9).
+        Assert.True(finished.Continuation.Kind == RuntimeStructuralContinuationKind.Fault);
+        Assert.Equal(CompensationScope.UncertainUnhandledFaultCode, finished.Continuation.Fault!.Code);
+        Assert.Equal(CompensationScope.OutcomeUnknownCategory, finished.Continuation.Fault.Category);
+        var check = StateOf(finished).Entries.Single(entry => entry.Step == "Check");
+        Assert.Equal(CompensationEntryStatus.Uncertain, check.Status);
+    }
+
+    [Fact]
+    public async Task Compensate_stopping_a_step_without_a_handler_with_nothing_to_undo_faults_at_once_without_cancelling()
+    {
+        var started = await StartAsync(graph: CheckOnly);
+
+        var faulted = await NotifiedAsync(started.State, CompensationScope.Notifications.Compensate,
+            new CompensationCompensateRequest("actexec-compensate", null, null), via: "check", viaExecution: "actexec-check", graph: CheckOnly);
+
+        // A fault cannot ride the same commit as a cancellation: the step is left to an enclosing scope or an operator.
+        Assert.Empty(faulted.Context.GetChildSubtreeCancellationRequests());
+        Assert.True(faulted.Continuation.Kind == RuntimeStructuralContinuationKind.Fault);
+        Assert.Equal(CompensationScope.UncertainUnhandledFaultCode, faulted.Continuation.Fault!.Code);
     }
 
     [Fact]
@@ -278,18 +321,16 @@ public sealed class CompensationScopeNestingTests
     }
 
     [Fact]
-    public async Task Compensate_aimed_further_out_with_nothing_to_undo_passes_the_request_on_without_cancelling()
+    public async Task An_unhandled_stopped_step_wins_over_a_cascade_so_no_enclosing_scope_treats_it_as_undone()
     {
         var started = await StartAsync(graph: CheckOnly);
 
-        var passedOn = await NotifiedAsync(started.State, CompensationScope.Notifications.Compensate,
+        var faulted = await NotifiedAsync(started.State, CompensationScope.Notifications.Compensate,
             new CompensationCompensateRequest("actexec-compensate", null, "authored-outer"), via: "check", viaExecution: "actexec-check", graph: CheckOnly);
 
-        // A fault cannot ride the same commit as a cancellation: the next scope's absorption of this fault cancels the step.
-        Assert.Empty(passedOn.Context.GetChildSubtreeCancellationRequests());
-        Assert.True(passedOn.Continuation.Kind == RuntimeStructuralContinuationKind.Fault);
-        Assert.Equal(CompensationScope.CompensateRequestedFaultCode, passedOn.Continuation.Fault!.Code);
-        Assert.Equal(CompensationScope.TargetCategoryPrefix + "authored-outer", passedOn.Continuation.Fault.Category);
+        Assert.Empty(faulted.Context.GetChildSubtreeCancellationRequests());
+        Assert.Equal(CompensationScope.UncertainUnhandledFaultCode, faulted.Continuation.Fault!.Code);
+        Assert.Equal(CompensationScope.OutcomeUnknownCategory, faulted.Continuation.Fault.Category);
     }
 
     [Fact]
@@ -396,9 +437,9 @@ public sealed class CompensationScopeNestingTests
         return (faulted, faulted.Requests.Single());
     }
 
-    private static async Task<Evaluation> CompletedAsync(RuntimeStructuralStateUpdate? state, RuntimeChildActivityScheduleRequest child, string childExecutionId, bool confirmOnComplete = false)
+    private static async Task<Evaluation> CompletedAsync(RuntimeStructuralStateUpdate? state, RuntimeChildActivityScheduleRequest child, string childExecutionId, bool confirmOnComplete = false, ExecutableNode? graph = null)
     {
-        var context = NewContext(state, child.Metadata);
+        var context = NewContext(state, child.Metadata, graph);
         var continuation = await new CompensationScope { ConfirmOnComplete = confirmOnComplete }.OnChildCompletedAsync(
             new ActivityChildCompletedContext(context, childExecutionId, child.ExecutableNodeId, [ActivityOutcomes.Done]));
         return new(continuation, context, context.GetChildActivityScheduleRequests().ToArray(), state);
