@@ -25,8 +25,8 @@ namespace Elsa.Activities.Compensation.Activities;
 public sealed class Confirm : StructuralActivity, IRuntimeStructuralActivity
 {
     /// <summary>The node id of an enclosing compensation scope to confirm too; blank confirms the nearest one only.</summary>
-    [ActivityInput(Key = "scope", DefaultValue = "")]
-    public string Scope { get; set; } = "";
+    [ActivityInput(Key = "scope")]
+    public string? Scope { get; set; }
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {
@@ -37,7 +37,7 @@ public sealed class Confirm : StructuralActivity, IRuntimeStructuralActivity
         // delivery is a repeat of the same confirmation and changes nothing.
         runtimeContext.RequestAncestorNotification(CompensationScope.NearestScope(), CompensationScope.Notifications.Confirm, payload);
         if (!string.IsNullOrWhiteSpace(Scope))
-            runtimeContext.RequestAncestorNotification(CompensationScope.NamedScope(Scope), CompensationScope.Notifications.Confirm, payload);
+            runtimeContext.RequestAncestorNotification(CompensationScope.NamedScope(Scope.Trim()), CompensationScope.Notifications.Confirm, payload);
 
         return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
     }

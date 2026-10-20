@@ -13,7 +13,9 @@ namespace Elsa.Workbench.Tests;
 /// rejected and the process is killed after a handler's external effect and before its completion commits; the
 /// restarted process re-runs that handler with the same invocation id. Spec 251 (M2): a step's response is lost, its
 /// handler exhausts its attempts and the scope waits until an operator retries it, and the process is killed after the
-/// retry commits. In both, the participant applies each effect once and the scope finishes Compensated.
+/// retry commits. Spec 258 (M3): an inner scope hands its reservations to the outer scope, a Confirm keeps the payment,
+/// and the process is killed after the first handed-over handler's effect. In all, the participant applies each effect
+/// once and the scope finishes Compensated.
 /// </summary>
 /// <remarks>
 /// The participant keeps its state in files under the content root, which outlive the killed process. The recovery
@@ -28,6 +30,7 @@ public sealed class WorkbenchCompensationRecoveryTests
     private const string PackageId = "Elsa.Workbench.Tests.Reservations";
     private const string ParticipantType = PackageId + ".ReservationParticipant";
     private const string ScopeType = "Elsa.Activities.Compensation.Activities.CompensationScope";
+    private const string ConfirmType = "Elsa.Activities.Compensation.Activities.Confirm";
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(120);
 
     [Fact]
@@ -143,6 +146,51 @@ public sealed class WorkbenchCompensationRecoveryTests
         Assert.Equal("OperatorRetryAlteration", retried["resolutionOutcome"]!["systemSource"]!.GetValue<string>());
     }
 
+    [Fact]
+    public async Task A_nested_scope_s_handed_over_entries_are_undone_once_and_a_confirmed_step_is_kept_across_a_kill()
+    {
+        await using var original = await WorkbenchProcess.StartAsync(WitnessShell(), PrepareContentRoot);
+        await LoginAsync(original);
+        var journal = Path.Combine(original.ContentRoot, "reservations");
+        var reservations = new Reservations(await ActivityVersionAsync(original, ParticipantType), journal);
+        var inner = await ActivityVersionAsync(original, ScopeType);
+        var confirm = await ActivityVersionAsync(original, ConfirmType);
+
+        // Spec 258 N1 + C1: the payment is confirmed, so nothing can undo it; the inner scope completes and hands its two
+        // reservations to the outer scope, which undoes them when the order is rejected.
+        var published = await PublishScopeAsync(original, "Compensation nesting witness", [Input("faultAfterCompensation", false)],
+            Step("Pay", reservations.Participant("payment", "payment"), reservations.Participant("payment-refund", "payment-refund")),
+            Step("Confirm payment", Node("confirm-payment", confirm), null),
+            Step("Reserve", Node("inner", inner, [Input("faultAfterCompensation", false)], ScopeStructure(
+                Step("Reserve inventory", reservations.Participant("inventory", "inventory", captures: "inventoryReservation"),
+                    reservations.Participant("inventory-release", "inventory-release", undoes: VariableArgument("Undoes", "inventoryReservation"))),
+                Step("Reserve delivery", reservations.Participant("delivery", "delivery"),
+                    reservations.Participant("delivery-cancel", "delivery-cancel", hold: true)))), null),
+            Step("Confirm order", reservations.Participant("confirm", "confirm", reject: true), null));
+
+        // The outer scope's first handler is the inner scope's delivery cancellation: it applies its effect and holds.
+        var execute = original.Client.PostAsJsonAsync($"/runtime/workflows/executables/{published.ArtifactId}/execute",
+            new { sourceReferenceId = published.SourceReferenceId });
+        await WaitForAsync(original, () => EffectLog(journal).Contains("delivery-cancel"),
+            "the handed-over delivery cancellation to apply its effect", () => Describe(original, journal, execute));
+        var executionId = await ExecutionIdAsync(original, published.ArtifactId);
+
+        await using var restarted = await original.CrashAndRestartAsync(directory =>
+            File.WriteAllText(Path.Combine(directory, "reservations", "delivery-cancel.release"), "release"));
+        await Assert.ThrowsAnyAsync<Exception>(() => execute);
+        await LoginAsync(restarted);
+        var completed = await WaitForStateAsync(restarted, executionId, instance => instance["instance"]?["status"]?.GetValue<string>() == "Completed");
+
+        // One undo per unconfirmed effect, newest first, and none for the confirmed payment.
+        Assert.Equal(["payment", "inventory", "delivery", "delivery-cancel", "inventory-release"], EffectLog(journal));
+        Assert.Equal(2, Calls(journal, "delivery-cancel").Length);
+        Assert.Single(Calls(journal, "inventory-release"));
+        Assert.Empty(Calls(journal, "payment-refund"));
+        Assert.Contains("Done", Activity(completed, "inner")["outcomeNames"]!.AsArray().Select(outcome => outcome!.GetValue<string>()));
+        Assert.Contains("Compensated", Activity(completed, "scope")["outcomeNames"]!.AsArray().Select(outcome => outcome!.GetValue<string>()));
+        Assert.Equal("compensation", Activity(completed, "delivery-cancel")["provenance"]!["schedulingCause"]!.GetValue<string>());
+    }
+
     private static JsonNode? WaitingIncident(JsonNode instance) => instance["incidents"]?.AsArray().LastOrDefault(item =>
         item?["executableNodeId"]?.GetValue<string>() == "delivery-cancel" && item["isBlocking"]?.GetValue<bool>() == true &&
         item["resolutionOutcome"]?["actionKind"]?.GetValue<string>() == "WaitForIntervention");
@@ -194,11 +242,7 @@ public sealed class WorkbenchCompensationRecoveryTests
     private static async Task<PublishedWorkflow> PublishScopeAsync(WorkbenchProcess host, string name, JsonNode[] scopeInputs, params JsonObject[] steps)
     {
         var scope = await ActivityVersionAsync(host, ScopeType);
-        var root = Node("scope", scope, scopeInputs, new JsonObject
-        {
-            ["kind"] = "elsa.compensation-scope.structure", ["schemaVersion"] = "1.0.0",
-            ["payload"] = new JsonObject { ["steps"] = new JsonArray(steps) }
-        });
+        var root = Node("scope", scope, scopeInputs, ScopeStructure(steps));
         var definition = await PostAsync(host, "/design/workflows/definitions/submit", new
         {
             name, description = "Reservations undone after a rejected order",
@@ -207,6 +251,12 @@ public sealed class WorkbenchCompensationRecoveryTests
         var published = await PostAsync(host, $"/publishing/workflows/{definition["version"]!["id"]!.GetValue<string>()}/publish", new { });
         return new(published["artifactId"]!.GetValue<string>(), published["sourceReferenceId"]!.GetValue<string>());
     }
+
+    private static JsonObject ScopeStructure(params JsonObject[] steps) => new()
+    {
+        ["kind"] = "elsa.compensation-scope.structure", ["schemaVersion"] = "1.0.0",
+        ["payload"] = new JsonObject { ["steps"] = new JsonArray(steps) }
+    };
 
     private static JsonObject Step(string name, JsonObject activity, JsonObject? compensation) => new()
     {

@@ -25,12 +25,12 @@ namespace Elsa.Activities.Compensation.Activities;
 public sealed class Compensate : StructuralActivity, IRuntimeStructuralActivity
 {
     /// <summary>The node id of the enclosing compensation scope that should recover; blank means the nearest one.</summary>
-    [ActivityInput(Key = "scope", DefaultValue = "")]
-    public string Scope { get; set; } = "";
+    [ActivityInput(Key = "scope")]
+    public string? Scope { get; set; }
 
     /// <summary>Why recovery was asked for, kept with the request.</summary>
-    [ActivityInput(Key = "reason", DefaultValue = "")]
-    public string Reason { get; set; } = "";
+    [ActivityInput(Key = "reason")]
+    public string? Reason { get; set; }
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)
     {

@@ -106,11 +106,15 @@ public static class CompensationGraph
 
     /// <summary>A Confirm activity; <paramref name="scope"/> names an enclosing scope by authored id.</summary>
     public static ExecutableNode ConfirmNode(string nodeId, string? scope = null) =>
-        ClrNode<Confirm>(nodeId, ("scope", scope ?? string.Empty));
+        ClrNode<Confirm>(nodeId, Bound(("scope", scope)));
 
     /// <summary>A Compensate activity; <paramref name="scope"/> names an enclosing scope by authored id.</summary>
     public static ExecutableNode CompensateNode(string nodeId, string? scope = null, string? reason = null) =>
-        ClrNode<Compensate>(nodeId, ("scope", scope ?? string.Empty), ("reason", reason ?? string.Empty));
+        ClrNode<Compensate>(nodeId, Bound(("scope", scope), ("reason", reason)));
+
+    // Inputs left out stay unbound, as Studio leaves them.
+    private static (string Key, string Value)[] Bound(params (string Key, string? Value)[] inputs) =>
+        inputs.Where(input => input.Value is not null).Select(input => (input.Key, input.Value!)).ToArray();
 
     /// <summary>The authored activity id of a node these builders made.</summary>
     public static string AuthoredId(string nodeId) => $"authored-{nodeId}";
@@ -255,7 +259,8 @@ public static class CompensationGraph
             activityTypeVersion: "1.0.0",
             descriptorType: contract.DescriptorKind,
             descriptorPayload: contract.DescriptorPayload,
-            inputBindings: bindings,
+            // Unbound inputs get their default, or absent when nullable, as publishing completes them.
+            inputBindings: ClrActivityContractTestBuilder.CompleteInputBindings(contract, bindings),
             metadata: new Dictionary<string, string>(),
             activityContract: contract);
     }
