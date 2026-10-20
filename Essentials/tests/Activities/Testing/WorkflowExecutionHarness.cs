@@ -618,7 +618,22 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         var outcomes = ResolveOutcomes(node, activityType);
         var contract = NewActivityContract(activityType, descriptor, inputs, outcomes);
 
-        return CopyNode(node, childSlots, descriptor.Payload, bindings, contract);
+        return CopyNode(node, childSlots, descriptor.Payload, bindings, contract, WithStructuralFaultHandling(node.Metadata, activityType));
+    }
+
+    // Mirrors ExecutableNodeCompiler: the node carries how it handles faults below it (spec 258 R-3).
+    private static IReadOnlyDictionary<string, string> WithStructuralFaultHandling(IReadOnlyDictionary<string, string> metadata, Type activityType)
+    {
+        var faultHandling = typeof(IRuntimeActivityDescendantFaultHandler).IsAssignableFrom(activityType)
+            ? RuntimeMetadataKeys.StructuralFaultHandlingDescendant
+            : typeof(IRuntimeActivityChildFaultHandler).IsAssignableFrom(activityType) ||
+              typeof(IRuntimeActivityChildOutcomeHandler).IsAssignableFrom(activityType)
+                ? RuntimeMetadataKeys.StructuralFaultHandlingChild
+                : null;
+        if (faultHandling is null || metadata.ContainsKey(RuntimeMetadataKeys.StructuralFaultHandling))
+            return metadata;
+
+        return new Dictionary<string, string>(metadata, StringComparer.Ordinal) { [RuntimeMetadataKeys.StructuralFaultHandling] = faultHandling };
     }
 
     private static bool IsNullable(PropertyInfo property)
@@ -635,7 +650,8 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         IReadOnlyCollection<ExecutableChildSlot> childSlots,
         JsonElement descriptorPayload,
         IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
-        ActivityContract? contract)
+        ActivityContract? contract,
+        IReadOnlyDictionary<string, string>? metadata = null)
     {
         var consumerKey = StringComparer.Ordinal.Equals(
             contract?.DescriptorKind,
@@ -650,7 +666,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             new RuntimeActivityDescriptor(consumerKey, node.DescriptorSchemaVersion, descriptorPayload),
             inputBindings,
             node.OutputCaptures,
-            node.Metadata,
+            metadata ?? node.Metadata,
             node.ExecutionPlacement,
             childSlots,
             node.Structure,

@@ -54,6 +54,25 @@ public static class RuntimeMetadataKeys
     public const string CancellationReason = "runtime.cancellationReason";
     public const string ChildExecutableNodeId = "runtime.childExecutableNodeId";
     public const string ChildFaulted = "runtime.childFaulted";
+    /// <summary>
+    /// Executable-node capability compiled from the node's activity type: <see cref="StructuralFaultHandlingChild"/>
+    /// when it handles its children's faults, <see cref="StructuralFaultHandlingDescendant"/> when it also opted into
+    /// descendant faults (spec 258 R-3). Absent for every other node.
+    /// </summary>
+    public const string StructuralFaultHandling = "runtime.structuralFaultHandling";
+    public const string StructuralFaultHandlingChild = "child";
+    public const string StructuralFaultHandlingDescendant = "descendant";
+    /// <summary>Marks a child-fault evaluation work item that delivers a descendant's fault (spec 258 R-3).</summary>
+    public const string DescendantFault = "runtime.descendantFault";
+    /// <summary>The receiver's direct child the delivered descendant fault passed through.</summary>
+    public const string DescendantFaultViaChildActivityExecutionId = "runtime.descendantFault.viaChildActivityExecutionId";
+    /// <summary>The executable node id of <see cref="DescendantFaultViaChildActivityExecutionId"/>.</summary>
+    public const string DescendantFaultViaChildExecutableNodeId = "runtime.descendantFault.viaChildExecutableNodeId";
+    /// <summary>
+    /// Descendant-fault work item that durably processed the faulted activity's fault, stored on the faulted activity
+    /// beside <see cref="ParentCompletionProcessedWorkItemId"/>, which its direct parent already set.
+    /// </summary>
+    public const string DescendantFaultProcessedWorkItemId = "runtime.descendantFaultProcessedWorkItemId";
     public const string CausalActivityExecutionId = "runtime.causalActivityExecutionId";
     public const string CausalExecutableNodeId = "runtime.causalExecutableNodeId";
     public const string CausalIncidentId = "runtime.causalIncidentId";

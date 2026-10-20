@@ -126,14 +126,31 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         if (parentState.Status != ActivityExecutionStatus.Running)
             return;
 
+        // A descendant-fault delivery (spec 258 R-3) reaches an ancestor after the faulted child's direct parent
+        // already marked the fault processed, so it keeps its own marker on the faulted child.
+        var isDescendantFaultEvaluation = !isParentOutcomeEvaluation && DescendantFaultEvaluation.IsDescendantFault(workItem);
         if (isParentOutcomeEvaluation)
         {
             if (completedChildState.Metadata.TryGetValue(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId, out var processedWorkItemId) &&
                 StringComparer.Ordinal.Equals(processedWorkItemId, workItem.WorkItemId))
                 return;
         }
+        else if (isDescendantFaultEvaluation)
+        {
+            if (DescendantFaultEvaluation.WasProcessed(completedChildState, workItem.WorkItemId))
+                return;
+        }
         else if (ActivityAttemptActivationClaimer.WasParentCompletionProcessed(completedChildState))
             return;
+
+        var viaChildState = isDescendantFaultEvaluation
+            ? await activityExecutionStateStore.FindAsync(
+                  workItem.WorkflowExecutionId,
+                  DescendantFaultEvaluation.ReadViaChildActivityExecutionId(workItem)
+                  ?? throw new InvalidOperationException($"Descendant-fault work item '{workItem.WorkItemId}' names no via child."),
+                  cancellationToken)
+              ?? throw new InvalidOperationException($"Descendant-fault work item '{workItem.WorkItemId}' references a missing via child.")
+            : null;
 
         // A completion evaluation for a child this parent already cancelled is late by
         // definition — ack it without invoking the structural callback.
@@ -205,7 +222,19 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
             var parentActivity = constructedParent.Activity;
             var childFaulted = IsChildFaulted(workItem);
 
-            if (childFaulted)
+            if (childFaulted && isDescendantFaultEvaluation)
+            {
+                // Only the capability compiled into the node routes a delivery here; an activity that no longer
+                // implements it leaves the fault blocking, as its direct parent did.
+                if (parentActivity is not IRuntimeActivityDescendantFaultHandler)
+                {
+                    callbackBypassParentState = ActivityAttemptActivationClaimer.EndOpenAttempt(
+                        parentState,
+                        Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend,
+                        TimeProvider.GetUtcNow());
+                }
+            }
+            else if (childFaulted)
             {
                 // A combined outcome is delivered only to the explicit combined capability. Legacy notification
                 // consumers are handled below as a visible incompatibility; parents without notification support
@@ -221,6 +250,20 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                         parentState,
                         Elsa.Workflows.Runtime.Core.Models.ActivityTransitionKind.Suspend,
                         TimeProvider.GetUtcNow());
+
+                    // Spec 258 R-3: unless an ancestor that opted into descendant faults is in reach past composites
+                    // like this one, in which case the fault is delivered there in the same checkpoint.
+                    if (!isParentOutcomeEvaluation && ReadIncidentId(workItem) is { } incidentId &&
+                        await DescendantFaultEvaluation.TryBuildAsync(
+                            activityExecutionStateStore,
+                            TimeProvider,
+                            workItem,
+                            executable,
+                            parentState,
+                            completedChildState,
+                            incidentId,
+                            cancellationToken) is { } descendantFaultWorkItem)
+                        callbackBypassContinuationWorkItems = [descendantFaultWorkItem];
                 }
             }
             else if (parentActivity is not IRuntimeActivityChildCompletionHandler)
@@ -259,7 +302,21 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                     liveChildActivities: liveChildActivities,
                     scopedVariableEnvelopes: scopedVariableEnvelopes);
 
-                if (childFaulted)
+                if (childFaulted && isDescendantFaultEvaluation)
+                {
+                    var descendantFault = completedChildState.Fault;
+                    continuation = await ((IRuntimeActivityDescendantFaultHandler)parentActivity).OnDescendantFaultedAsync(new ActivityDescendantFaultedContext(
+                        context,
+                        completedChildActivityExecutionId,
+                        completedChildState.Execution.ExecutableNodeId,
+                        viaChildState!.Execution.ActivityExecutionId,
+                        viaChildState.Execution.ExecutableNodeId,
+                        ReadIncidentId(workItem),
+                        completedChildState.IterationId,
+                        descendantFault?.Code,
+                        descendantFault?.Metadata.GetValueOrDefault(ActivityFault.CategoryMetadataKey)));
+                }
+                else if (childFaulted)
                 {
                     if (isParentOutcomeEvaluation && parentActivity is IRuntimeActivityChildOutcomeHandler outcomeHandler)
                     {
@@ -330,7 +387,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                     context.GetChildFaultAbsorptionRequests(),
                     continuation,
                     childFaulted,
-                    completedChildState,
+                    // A descendant's absorbed fault reclaims the subtree of the child it came through.
+                    viaChildState ?? completedChildState,
                     cancellationToken);
                 if (absorptionPlan is not null)
                     subtreeCancellationPlans = [.. subtreeCancellationPlans, absorptionPlan];
@@ -471,7 +529,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 TimeProvider,
                 NewCommitSource(workItem, payload, "ChildActivityScheduling"),
                 callbackBypassParentState,
-                [ActivityAttemptActivationClaimer.MarkParentCompletionProcessed(completedChildState, workItem.WorkItemId)],
+                [MarkFaultProcessed(completedChildState, workItem, isDescendantFaultEvaluation)],
                 [],
                 callbackBypassContinuationWorkItems,
                 [],
@@ -563,7 +621,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 TimeProvider,
                 NewCommitSource(workItem, payload, "ChildActivityScheduling"),
                 currentParentState,
-                [ActivityAttemptActivationClaimer.MarkParentCompletionProcessed(completedChildState, workItem.WorkItemId)],
+                [MarkFaultProcessed(completedChildState, workItem, isDescendantFaultEvaluation)],
                 childScheduleRequests,
                 parentNotificationWorkItems,
                 subtreeCancellationPlans,
@@ -1016,6 +1074,11 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
             throw new InvalidOperationException($"Parent outcome work item '{workItem.WorkItemId}' notifications do not identify its faulted child state.");
     }
 
+    private static ActivityExecutionState MarkFaultProcessed(ActivityExecutionState completedChildState, RuntimeSchedulerWorkItem workItem, bool isDescendantFaultEvaluation) =>
+        isDescendantFaultEvaluation
+            ? DescendantFaultEvaluation.MarkProcessed(completedChildState, workItem.WorkItemId)
+            : ActivityAttemptActivationClaimer.MarkParentCompletionProcessed(completedChildState, workItem.WorkItemId);
+
     private static string? ReadIncidentId(RuntimeSchedulerWorkItem workItem) =>
         workItem.CommandMetadata.TryGetValue(RuntimeMetadataKeys.IncidentId, out var value) && !string.IsNullOrWhiteSpace(value)
             ? value
@@ -1032,7 +1095,10 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
     [
         RuntimeMetadataKeys.ChildFaulted,
         RuntimeMetadataKeys.IncidentId,
-        RuntimeMetadataKeys.CompletedChildActivityExecutionId
+        RuntimeMetadataKeys.CompletedChildActivityExecutionId,
+        RuntimeMetadataKeys.DescendantFault,
+        RuntimeMetadataKeys.DescendantFaultViaChildActivityExecutionId,
+        RuntimeMetadataKeys.DescendantFaultViaChildExecutableNodeId
     ];
 
     private static Dictionary<string, string> WithoutFaultEvaluationMetadata(IReadOnlyDictionary<string, string> source)
