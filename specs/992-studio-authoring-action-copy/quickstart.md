@@ -1,0 +1,58 @@
+# Quickstart: Validate Studio Authoring Action Copy
+
+This is the planned implementation validation guide. Only the untouched unit baseline recorded below has run; new copy and geometry regressions and implementation qualification remain pending.
+
+## Prerequisites
+
+- Use the Studio workspace’s declared pnpm 11.9.0 toolchain and installed dependencies.
+- Playwright’s Chromium browser must be installed for browser tests.
+- Run commands from the Studio directory at the repository root.
+
+## Test-driven sequence
+
+First add the user-visible regression assertions and run the targeted tests before production edits. Expected RED results concern the specified labels, accessible copy or measured status geometry. Record them. An unexpected eligibility, identity, request or callback failure requires investigation and root scope review; do not alter existing selection or operation behavior to make a copy assertion pass.
+
+Run targeted Workflows component tests:
+
+    pnpm --filter @elsa-workflows/studio-workflows exec vitest run src/__tests__/workflowTestDrive.test.tsx src/__tests__/lazyTestDriveAnnouncement.test.tsx src/__tests__/workflowEditorToolbar.test.tsx src/__tests__/publishActionButton.test.tsx src/__tests__/activityDefinitions.test.tsx src/__tests__/activityDefinitionAuthoring.test.tsx src/__tests__/activityDefinitionPublicationReview.test.tsx
+
+Run the full affected Workflows client unit suite:
+
+    pnpm --filter @elsa-workflows/studio-workflows test
+
+Run Workflows client typecheck and bundle build:
+
+    pnpm --filter @elsa-workflows/studio-workflows typecheck
+    pnpm --filter @elsa-workflows/studio-workflows build
+
+Run the targeted Chromium browser specs:
+
+    CI=1 pnpm exec playwright test tests/browser/workflow-toolbar.spec.ts tests/browser/activity-definitions.spec.ts --workers=1
+
+Run canonical workspace typecheck and lint from Studio:
+
+    pnpm typecheck
+    pnpm lint
+
+Run the repository gates from the repository root:
+
+    bash tools/architecture/restore-ci-project-graph.sh --locked-mode
+    dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj -c Release --no-restore
+    dotnet run --project tools/maps/Elsa.Maps.Generator -- check
+
+The map check compares the committed dependency map. Do not stage or force-add ignored documentation maps or manifests. Keep heavy checks serial and respect the shared-machine build slots.
+
+## Expected verification
+
+- Workflow setup fallback is “Start Test Run”; module-supplied submit label, input labels and associations, loading announcements, connected-environment/real-side-effects warning, and existing request/callback payloads remain correct.
+- Workflow status geometry uses the actual TestRunStatus component and detail callback, not a lookalike button; capitalization is consistent with “Test Run,” and complete outcome, stale-draft, and runtime-issue information remains accessible. Save, publication, and Test Run status changes are observed semantically at each fixed width of 320, 768, 1024, and 1440 pixels, in light and dark themes. Every primary action remains visible, and each compared action position differs by no more than 1 CSS pixel for the same definition and viewport.
+- Activity action states confirm complete list coverage, exact editable draft precedence, exact clone source version, explicit no-head create behavior, and chooser fallback for unconfirmed, ambiguous, or denied states.
+- The Activity authoring route verifies actual publication statuses and keeps its primary actions visible and within 1 CSS pixel while those statuses change. Workflow and Activity publication entry copy changes preserve their existing subsequent review, publish, and continuation behavior.
+- Keyboard access, full accessible Test Run status, direct result-details access, and absence of primary-action overflow are checked through rendered roles and geometry.
+
+The untouched Workflows baseline passed 2124 tests across 167 files with no skips (`3072-unit-baseline.log`, source3255701, docs-only branch78189151b). Retain this existing coverage and account separately for added cases; 2124 is not a fixed target for the completed suite. Browser geometry and copy baselines remain pending and must be measured before production edits.
+
+## Lifecycle and delivery
+
+Before final implementation review, set the spec to Implemented and remove its completed specification-quality checklist in the same PR. Preserve delivery verification separately from that lifecycle marker. Root requires three independent non-author review axes, qualifying hosted checks on the exact reviewed head, and resulting-main checks after merge. A fixture pass does not establish final composed Workbench acceptance (#3075), backend-service availability or deployment.
+
