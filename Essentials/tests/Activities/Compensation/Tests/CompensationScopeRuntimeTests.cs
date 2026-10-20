@@ -6,7 +6,9 @@ using Elsa.Serialization.SystemText;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Recovery;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -160,6 +162,30 @@ public sealed class CompensationScopeRuntimeTests
     }
 
     [Fact]
+    public async Task An_operator_retry_of_the_waiting_handler_finishes_the_recovery_once()
+    {
+        // Spec 251 J5: the handler fails on all three attempts, the operator retries it, and the fourth call succeeds.
+        var participant = new Participant().Rejecting("confirm-order").FailingTimes("cancel-delivery", 3);
+        await using var harness = NewHarness(participant);
+        // An alteration targets a run started from a published source in a tenant partition.
+        var reference = await harness.PublishAsync(Executable(ReservationJourney()), "source-operator-retry");
+        await harness.StartPublishedAsync(reference, harness.ExecutionId, tenantId: WorkflowExecutionHarness.Partition.Value);
+        var executionId = harness.ExecutionId;
+        var incident = Assert.Single(await harness.Services.GetRequiredService<IIncidentStateStore>().ListBlockingAsync(executionId));
+
+        var job = await OperatorRetry.RetryAsync(harness, executionId, incident.ActivityExecutionId!, "retry-1", WorkflowExecutionHarness.Partition);
+
+        Assert.True(job.Status == WorkflowAlterationJobStatus.Succeeded,
+            $"{job.Status} {job.SafeFailure} {string.Join("; ", job.Outcomes.Select(outcome => $"{outcome.Code}: {outcome.Message}"))}");
+        var run = await harness.ReadRunAsync(executionId);
+        Assert.Equal(WorkflowExecutionStatus.Completed, run.WorkflowState?.Status);
+        run.AssertOutcomes(ScopeNodeId, CompensationScope.CompensatedOutcome);
+        Assert.Equal(["reserve-inventory", "reserve-delivery", "cancel-delivery", "release-inventory"], participant.EffectOrder);
+        Assert.Single(participant.Calls.Where(call => call.NodeId == "cancel-delivery").Select(call => call.OperationKey).Distinct());
+        Assert.Empty(participant.Present);
+    }
+
+    [Fact]
     public async Task A_handler_that_recovers_within_its_attempts_undoes_once_with_one_operation_key()
     {
         var participant = new Participant().Rejecting("confirm-order").FailingTimes("cancel-delivery", 2);
@@ -254,6 +280,7 @@ public sealed class CompensationScopeRuntimeTests
                 services.AddSingleton(participant);
                 HostKillSwitch.Install(services, new HostKillSwitch());
                 services.Replace(ServiceDescriptor.Singleton<IRuntimeExecutionIdGenerator>(_ => new ShortRuntimeExecutionIdGenerator(TimeProvider.System)));
+                services.TryAddScoped<IRuntimeResumptionService, RuntimeResumptionService>();
             })
             .Build();
 }

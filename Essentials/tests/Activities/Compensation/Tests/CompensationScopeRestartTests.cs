@@ -196,6 +196,49 @@ public sealed class CompensationScopeRestartTests : IDisposable
     }
 
     /// <summary>
+    /// Spec 251 injection point 4: the host stops after an operator retry committed and the retried handler applied its
+    /// effect, before its completion commits. The restarted host runs the handler again with the same operation key and
+    /// recovery finishes once.
+    /// </summary>
+    [Theory]
+    [InlineData(PersistenceMode.Durable)]
+    [InlineData(PersistenceMode.Balanced)]
+    [InlineData(PersistenceMode.Ephemeral)]
+    public async Task A_crash_after_an_operator_retry_finishes_the_recovery_once(PersistenceMode mode)
+    {
+        // Three failed attempts leave the scope waiting; the retried fourth call applies the effect and the host stops.
+        var participant = new Participant().Rejecting("confirm-order").FailingTimes("cancel-delivery", 3).KillingHostAfterEffectOf("cancel-delivery");
+
+        await using (var first = await StartHostAsync(participant, mode))
+        {
+            var reference = await first.PublishAsync(Executable(ReservationJourney()), "source-compensation-restart");
+            await StartUntilTheHostStopsAsync(first, reference);
+            var waiting = Assert.Single(await first.Services.GetRequiredService<IIncidentStateStore>().ListBlockingAsync(WorkflowExecutionId));
+            try
+            {
+                await OperatorRetry.RetryAsync(first, WorkflowExecutionId, waiting.ActivityExecutionId!, "retry-restart", DefaultPartition);
+            }
+            catch (Exception exception) when (exception is OperationCanceledException or InvalidOperationException)
+            {
+                // The host stopped while the retried handler ran.
+            }
+        }
+
+        Assert.Contains("cancel-delivery", participant.EffectOrder);
+        await using var second = await StartHostAsync(participant, mode);
+        await RecoverAsync(second);
+
+        var run = await second.ReadRunAsync(WorkflowExecutionId);
+        Assert.Equal(WorkflowExecutionStatus.Completed, run.WorkflowState?.Status);
+        run.AssertOutcomes(ScopeNodeId, CompensationScope.CompensatedOutcome);
+        Assert.Equal(ExpectedEffects, participant.EffectOrder);
+        var cancelCalls = participant.Calls.Where(call => call.NodeId == "cancel-delivery").ToArray();
+        Assert.Equal(5, cancelCalls.Length);
+        Assert.Single(cancelCalls.Select(call => call.OperationKey).Distinct());
+        Assert.Empty(participant.Present);
+    }
+
+    /// <summary>
     /// A republish while recovery is in flight does not change the run's handlers: recovery finishes with the handler
     /// of the executable the run started on, not the one published since.
     /// </summary>

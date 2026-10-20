@@ -9,10 +9,11 @@ using Xunit;
 namespace Elsa.Workbench.Tests;
 
 /// <summary>
-/// The spec 250 M1 journey on a real Workbench process: a compensation scope is published and run through REST, a
-/// later step is rejected, and the process is killed after a compensation handler's external effect and before its
-/// completion commits. The restarted process re-runs that handler with the same invocation id, so the participant
-/// applies each effect once, and the scope finishes Compensated with its handlers newest first.
+/// Compensation journeys on a real Workbench process, published and run through REST. Spec 250 (M1): a later step is
+/// rejected and the process is killed after a handler's external effect and before its completion commits; the
+/// restarted process re-runs that handler with the same invocation id. Spec 251 (M2): a step's response is lost, its
+/// handler exhausts its attempts and the scope waits until an operator retries it, and the process is killed after the
+/// retry commits. In both, the participant applies each effect once and the scope finishes Compensated.
 /// </summary>
 /// <remarks>
 /// The participant keeps its state in files under the content root, which outlive the killed process. The recovery
@@ -42,7 +43,7 @@ public sealed class WorkbenchCompensationRecoveryTests
         var execute = original.Client.PostAsJsonAsync($"/runtime/workflows/executables/{published.ArtifactId}/execute",
             new { sourceReferenceId = published.SourceReferenceId });
         await WaitForAsync(original, () => EffectLog(journal).Contains("delivery-cancel"),
-            "the delivery cancellation effect to land before its completion commits", () => Describe(journal));
+            "the delivery cancellation effect to land before its completion commits", () => Describe(original, journal, execute));
         var executionId = await ExecutionIdAsync(original, published.ArtifactId);
         var killedCall = Assert.Single(Calls(journal, "delivery-cancel"));
         Assert.DoesNotContain("inventory-release", EffectLog(journal));
@@ -76,6 +77,97 @@ public sealed class WorkbenchCompensationRecoveryTests
                                                                        activity["status"]?.GetValue<string>() == "Completed");
     }
 
+    [Fact]
+    public async Task An_operator_retry_resumes_a_recovery_that_waits_for_intervention_and_survives_a_kill()
+    {
+        await using var original = await WorkbenchProcess.StartAsync(WitnessShell(), PrepareContentRoot);
+        await LoginAsync(original);
+        var journal = Path.Combine(original.ContentRoot, "reservations");
+        var reservations = new Reservations(await ActivityVersionAsync(original, ParticipantType), journal);
+
+        // J1: the delivery effect lands and its response is lost, so the step is uncertain and recovery starts. J5: the
+        // delivery cancellation fails on both attempts, so the scope waits for an operator; the third call succeeds.
+        var published = await PublishScopeAsync(original, "Compensation intervention witness",
+            [Input("faultAfterCompensation", false), Input("handlerMaxAttempts", 2)],
+            Step("Reserve inventory", reservations.Participant("inventory", "inventory", captures: "inventoryReservation"),
+                reservations.Participant("inventory-release", "inventory-release", undoes: VariableArgument("Undoes", "inventoryReservation"))),
+            Step("Reserve delivery", reservations.Participant("delivery", "delivery", loseResponse: true),
+                reservations.Participant("delivery-cancel", "delivery-cancel", hold: true, failTimes: 2)),
+            Step("Confirm order", reservations.Participant("confirm", "confirm"), null));
+
+        var execute = original.Client.PostAsJsonAsync($"/runtime/workflows/executables/{published.ArtifactId}/execute",
+            new { sourceReferenceId = published.SourceReferenceId });
+        await WaitForAsync(original, () => Calls(journal, "delivery-cancel").Length == 2,
+            "both delivery cancellation attempts to fail", () => Describe(original, journal, execute));
+        var executionId = await ExecutionIdAsync(original, published.ArtifactId);
+        var waiting = await WaitForStateAsync(original, executionId, instance => WaitingIncident(instance) is not null);
+
+        // The run yielded, so the execute request returned. It stays Running while the handler's incident blocks and waits; no compensation effect exists yet.
+        using (var executed = await execute)
+            Assert.True(executed.IsSuccessStatusCode, await executed.Content.ReadAsStringAsync());
+        Assert.Equal("Running", waiting["instance"]!["status"]!.GetValue<string>());
+        var incident = WaitingIncident(waiting)!;
+        Assert.Equal("StructuralIntervention", incident["resolutionOutcome"]!["systemSource"]!.GetValue<string>());
+        Assert.Equal(["inventory", "delivery"], EffectLog(journal));
+        Assert.Empty(Calls(journal, "confirm"));
+        var faulted = incident["activityExecutionId"]!.GetValue<string>();
+
+        // The operator retries the faulted handler. The successor applies the cancellation and holds, and the process is
+        // killed after the retry committed and before the successor completes (injection point 4).
+        await SubmitRetryAsync(original, executionId, faulted, "retry-" + executionId);
+        await WaitForAsync(original, () => EffectLog(journal).Contains("delivery-cancel"),
+            "the retried delivery cancellation to apply its effect", () => Describe(journal));
+        var retriedCall = Calls(journal, "delivery-cancel")[2];
+
+        await using var restarted = await original.CrashAndRestartAsync(directory =>
+            File.WriteAllText(Path.Combine(directory, "reservations", "delivery-cancel.release"), "release"));
+        await LoginAsync(restarted);
+        var completed = await WaitForStateAsync(restarted, executionId, instance => instance["instance"]?["status"]?.GetValue<string>() == "Completed");
+
+        // Every handler call used one operation key, which targeted the uncertain delivery's key, and each effect landed
+        // once: the cancellation, then the inventory release.
+        Assert.Equal(["inventory", "delivery", "delivery-cancel", "inventory-release"], EffectLog(journal));
+        var cancelCalls = Calls(journal, "delivery-cancel");
+        Assert.Equal(4, cancelCalls.Length);
+        Assert.NotEqual(retriedCall.ProcessId, cancelCalls[3].ProcessId);
+        Assert.Single(cancelCalls.Select(call => call.OperationKey).Distinct());
+        Assert.False(File.Exists(EffectMarkerPath(journal, Assert.Single(Calls(journal, "delivery")).OperationKey)));
+        Assert.Single(Calls(journal, "inventory-release"));
+        Assert.Empty(Calls(journal, "confirm"));
+
+        var scope = Activity(completed, "scope");
+        Assert.Contains("Compensated", scope["outcomeNames"]!.AsArray().Select(outcome => outcome!.GetValue<string>()));
+        var retried = Assert.Single(completed["incidents"]!.AsArray(), item => item?["incidentId"]?.GetValue<string>() == incident["incidentId"]!.GetValue<string>());
+        Assert.Equal("Resolved", retried!["status"]!.GetValue<string>());
+        Assert.Equal("OperatorRetry", retried["resolutionOutcome"]!["actionKind"]!.GetValue<string>());
+        Assert.Equal("OperatorRetryAlteration", retried["resolutionOutcome"]!["systemSource"]!.GetValue<string>());
+    }
+
+    private static JsonNode? WaitingIncident(JsonNode instance) => instance["incidents"]?.AsArray().LastOrDefault(item =>
+        item?["executableNodeId"]?.GetValue<string>() == "delivery-cancel" && item["isBlocking"]?.GetValue<bool>() == true &&
+        item["resolutionOutcome"]?["actionKind"]?.GetValue<string>() == "WaitForIntervention");
+
+    private static async Task SubmitRetryAsync(WorkbenchProcess host, string executionId, string activityExecutionId, string idempotencyKey)
+    {
+        var body = new
+        {
+            target = new { executionIds = new[] { executionId } },
+            alterations = new[]
+            {
+                new { kind = "RetryFaultedActivity", schemaVersion = 1, payload = new { sourceActivityExecutionId = activityExecutionId, reason = "Delivery service restored" } }
+            }
+        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/runtime/workflows/alteration-plans") { Content = JsonContent.Create(body) };
+        request.Headers.Add("Idempotency-Key", idempotencyKey);
+        using var response = await host.Client.SendAsync(request);
+        var text = await response.Content.ReadAsStringAsync();
+        Assert.True(response.IsSuccessStatusCode, $"Retry submission: {(int)response.StatusCode} {text}\n{host.Output}");
+    }
+
+    // Mirrors ReservationParticipant's marker naming so the test can see whether an effect is still present.
+    private static string EffectMarkerPath(string journal, string operationKey) => Path.Combine(journal,
+        $"{Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(operationKey)))[..24]}.effect");
+
     private static WorkbenchShell WitnessShell() => WorkbenchShell.Development with
     {
         Settings = new Dictionary<string, string>
@@ -88,41 +180,52 @@ public sealed class WorkbenchCompensationRecoveryTests
     private static async Task<PublishedWorkflow> PublishAsync(WorkbenchProcess host, string journal)
     {
         var participant = await ActivityVersionAsync(host, ParticipantType);
-        var scope = await ActivityVersionAsync(host, ScopeType);
+        var reservations = new Reservations(participant, journal);
         // A handler gets the reservation id its forward step made in one of two ways: the step captures it into a
         // workflow variable that the handler reads, or the handler references the step's result directly.
-        JsonObject Participant(string nodeId, string key, bool reject = false, bool hold = false, string? captures = null, JsonObject? undoes = null)
-        {
-            JsonNode[] inputs = [Input("DirectoryPath", journal), Input("Key", key), Input("Reject", reject), Input("HoldAfterEffect", hold)];
-            var node = Node(nodeId, participant, undoes is null ? inputs : [.. inputs, undoes]);
-            if (captures is not null) node["outputs"] = new JsonArray(VariableArgument("Reservation", captures));
-            return node;
-        }
-        JsonObject Step(string name, JsonObject activity, JsonObject? compensation) => new()
-        {
-            ["name"] = name, ["activity"] = activity, ["compensation"] = compensation
-        };
+        return await PublishScopeAsync(host, "Compensation recovery witness", [Input("faultAfterCompensation", false)],
+            Step("Reserve inventory", reservations.Participant("inventory", "inventory", captures: "inventoryReservation"),
+                reservations.Participant("inventory-release", "inventory-release", undoes: VariableArgument("Undoes", "inventoryReservation"))),
+            Step("Reserve delivery", reservations.Participant("delivery", "delivery"),
+                reservations.Participant("delivery-cancel", "delivery-cancel", hold: true, undoes: ActivityResultArgument("Undoes", "delivery", "Reservation"))),
+            Step("Confirm order", reservations.Participant("confirm", "confirm", reject: true), null));
+    }
 
-        var root = Node("scope", scope, [Input("faultAfterCompensation", false)], new JsonObject
+    private static async Task<PublishedWorkflow> PublishScopeAsync(WorkbenchProcess host, string name, JsonNode[] scopeInputs, params JsonObject[] steps)
+    {
+        var scope = await ActivityVersionAsync(host, ScopeType);
+        var root = Node("scope", scope, scopeInputs, new JsonObject
         {
             ["kind"] = "elsa.compensation-scope.structure", ["schemaVersion"] = "1.0.0",
-            ["payload"] = new JsonObject
-            {
-                ["steps"] = new JsonArray(
-                    Step("Reserve inventory", Participant("inventory", "inventory", captures: "inventoryReservation"),
-                        Participant("inventory-release", "inventory-release", undoes: VariableArgument("Undoes", "inventoryReservation"))),
-                    Step("Reserve delivery", Participant("delivery", "delivery"),
-                        Participant("delivery-cancel", "delivery-cancel", hold: true, undoes: ActivityResultArgument("Undoes", "delivery", "Reservation"))),
-                    Step("Confirm order", Participant("confirm", "confirm", reject: true), null))
-            }
+            ["payload"] = new JsonObject { ["steps"] = new JsonArray(steps) }
         });
         var definition = await PostAsync(host, "/design/workflows/definitions/submit", new
         {
-            name = "Compensation recovery witness", description = "Reservations undone after a rejected order",
+            name, description = "Reservations undone after a rejected order",
             state = new { variables = new[] { Variable("inventoryReservation") }, inputs = Array.Empty<object>(), outputs = Array.Empty<object>(), rootActivity = root }
         });
         var published = await PostAsync(host, $"/publishing/workflows/{definition["version"]!["id"]!.GetValue<string>()}/publish", new { });
         return new(published["artifactId"]!.GetValue<string>(), published["sourceReferenceId"]!.GetValue<string>());
+    }
+
+    private static JsonObject Step(string name, JsonObject activity, JsonObject? compensation) => new()
+    {
+        ["name"] = name, ["activity"] = activity, ["compensation"] = compensation
+    };
+
+    private sealed record Reservations(string ParticipantVersion, string Journal)
+    {
+        public JsonObject Participant(string nodeId, string key, bool reject = false, bool hold = false, string? captures = null,
+            JsonObject? undoes = null, bool loseResponse = false, int failTimes = 0)
+        {
+            List<JsonNode> inputs = [Input("DirectoryPath", Journal), Input("Key", key), Input("Reject", reject), Input("HoldAfterEffect", hold)];
+            if (undoes is not null) inputs.Add(undoes);
+            if (loseResponse) inputs.Add(Input("LoseResponse", true));
+            if (failTimes > 0) inputs.Add(Input("FailTimes", failTimes));
+            var node = Node(nodeId, ParticipantVersion, [.. inputs]);
+            if (captures is not null) node["outputs"] = new JsonArray(VariableArgument("Reservation", captures));
+            return node;
+        }
     }
 
     private static async Task<string> ExecutionIdAsync(WorkbenchProcess host, string artifactId)
@@ -179,7 +282,7 @@ public sealed class WorkbenchCompensationRecoveryTests
         var path = Path.Combine(journal, key + ".calls");
         return File.Exists(path)
             ? File.ReadAllLines(path).Select(line => line.Split('|')).Where(parts => parts.Length >= 3)
-                .Select(parts => new ParticipantCall(parts[0], parts[1])).ToArray()
+                .Select(parts => new ParticipantCall(parts[0], parts[1], parts.Length > 3 ? parts[3] : "")).ToArray()
             : [];
     }
 
@@ -187,6 +290,17 @@ public sealed class WorkbenchCompensationRecoveryTests
     {
         var path = Path.Combine(journal, key + ".undoes");
         return File.Exists(path) ? File.ReadAllLines(path).Where(line => line.Length > 0).ToArray() : [];
+    }
+
+    private static string Describe(WorkbenchProcess host, string journal, Task<HttpResponseMessage> execute)
+    {
+        if (!execute.IsCompletedSuccessfully)
+            return $"{Describe(journal)}{Environment.NewLine}Execute: {execute.Status}";
+
+        var response = execute.Result.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+        var executionId = JsonNode.Parse(response)?["workflowExecutionId"]?.GetValue<string>();
+        var instance = executionId is null ? null : host.Client.GetStringAsync($"/runtime/workflows/instances/{executionId}").GetAwaiter().GetResult();
+        return $"{Describe(journal)}{Environment.NewLine}Execute: {(int)execute.Result.StatusCode} {response}{Environment.NewLine}Instance: {instance}";
     }
 
     private static string Describe(string journal) => Directory.Exists(journal)
@@ -274,7 +388,7 @@ public sealed class WorkbenchCompensationRecoveryTests
         stream.Write(Encoding.UTF8.GetBytes(value));
     }
 
-    private sealed record ParticipantCall(string ProcessId, string InvocationId);
+    private sealed record ParticipantCall(string ProcessId, string InvocationId, string OperationKey);
 
     private sealed record PublishedWorkflow(string ArtifactId, string SourceReferenceId);
 }

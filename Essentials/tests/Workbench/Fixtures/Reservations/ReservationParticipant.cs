@@ -62,8 +62,8 @@ public sealed partial class ReservationParticipant : Activity<ReservationResult>
     [ActivityInput] public bool Reject { get; set; }
     [ActivityInput] public bool HoldAfterEffect { get; set; }
     [ActivityInput] public string? Undoes { get; set; }
-    [ActivityInput] public bool LoseResponse { get; set; }
-    [ActivityInput] public int FailTimes { get; set; }
+    [ActivityInput] public bool? LoseResponse { get; set; }
+    [ActivityInput] public int? FailTimes { get; set; }
 
     public const string UnavailableCode = "reservation.unavailable";
     public const string TimeoutCode = "reservation.timeout";
@@ -83,7 +83,7 @@ public sealed partial class ReservationParticipant : Activity<ReservationResult>
         if (Reject)
             return ActivityTransition.Fault<ReservationResult>(new ActivityFault(RejectionCode, "The order was rejected."));
 
-        if (previousCalls < FailTimes)
+        if (previousCalls < (FailTimes ?? 0))
             return ActivityTransition.Fault<ReservationResult>(new ActivityFault(UnavailableCode, "The reservation service is unavailable."));
 
         if (context.TargetOperationKey is { } target)
@@ -118,7 +118,7 @@ public sealed partial class ReservationParticipant : Activity<ReservationResult>
         while (HoldAfterEffect && !File.Exists(Path.Combine(DirectoryPath, Key + ".release")))
             await Task.Delay(25, context.CancellationToken);
 
-        if (LoseResponse && previousCalls == 0)
+        if (LoseResponse == true && previousCalls == 0)
             return ActivityTransition.Fault<ReservationResult>(new ActivityFault(TimeoutCode, "No response from the reservation service.", category: "outcome-unknown"));
 
         return ActivityTransition.Complete(new ReservationResult($"{Key}:{context.InvocationId}"));
