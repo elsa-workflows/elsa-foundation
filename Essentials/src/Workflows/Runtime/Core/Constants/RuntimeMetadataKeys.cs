@@ -322,6 +322,20 @@ public static class RuntimeMetadataKeys
     public const string InterventionRequestedBy = "runtime.interventionRequestedBy";
     /// <summary>Author-supplied reason a structural parent kept a child fault's incident blocking for intervention.</summary>
     public const string InterventionReason = "runtime.interventionReason";
+    /// <summary>
+    /// The decision codes a structural parent offered when it requested intervention (spec 260 R-5), as a JSON array in
+    /// offer order, on the <c>WaitForIntervention</c> outcome metadata. Opaque to the runtime.
+    /// </summary>
+    public const string InterventionDecisions = "runtime.interventionDecisions";
+    /// <summary>The decision code an operator chose, on the <c>OperatorDecision</c> outcome metadata.</summary>
+    public const string InterventionDecision = "runtime.interventionDecision";
+    /// <summary>
+    /// Decision-delivery work item that durably processed an operator decision, stored on the requesting structural
+    /// parent, so a repeated delivery of the same item is acknowledged without a second callback.
+    /// </summary>
+    public const string InterventionDecisionProcessedWorkItemId = "runtime.interventionDecisionProcessedWorkItemId";
+    /// <summary>Provenance of a decision-delivery evaluation: the work item that delivered the operator's decision.</summary>
+    public const string InterventionDecisionSchedulerWorkItemId = "runtime.interventionDecisionSchedulerWorkItemId";
     /// <summary>Action kind of the wait-for-intervention outcome an operator retry replaced on an incident.</summary>
     public const string PriorResolutionActionKind = "runtime.priorResolutionActionKind";
     /// <summary>System source of the wait-for-intervention outcome an operator retry replaced on an incident.</summary>

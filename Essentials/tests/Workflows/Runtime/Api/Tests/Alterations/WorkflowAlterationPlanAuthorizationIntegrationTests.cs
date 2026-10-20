@@ -106,6 +106,36 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
             Assert.Equal(HttpStatusCode.Accepted, manage.StatusCode);
     }
 
+    [Fact]
+    public async Task Decide_intervention_submission_requires_runtime_manage_permission_and_creates_no_plan_without_it()
+    {
+        await using var host = await AlterationApiHost.StartAsync();
+        var body = new
+        {
+            target = new { executionIds = new[] { "execution-a" } },
+            alterations = new[]
+            {
+                new { kind = "DecideIntervention", schemaVersion = 1, payload = new { incidentId = "incident-a", decision = "compensation.abandon", reason = "Order written off" } }
+            }
+        };
+
+        using (var anonymous = await SendRetryAsync(host, body, "decide-anonymous"))
+            Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+
+        host.Authorize(PermissionNames.WorkflowRuntimeRead, "tenant-a");
+        using (var readOnly = await SendRetryAsync(host, body, "decide-read-only"))
+            Assert.Equal(HttpStatusCode.Forbidden, readOnly.StatusCode);
+
+        host.Authorize(PermissionNames.WorkflowRuntimeManage, "tenant-a");
+        using (var manage = await SendRetryAsync(host, body, "decide-read-only"))
+        {
+            // The forbidden attempt created nothing under its key: the first managed submission is accepted, not replayed.
+            Assert.Equal(HttpStatusCode.Accepted, manage.StatusCode);
+            using var document = JsonDocument.Parse(await manage.Content.ReadAsStringAsync());
+            Assert.Equal("Accepted", document.RootElement.GetProperty("submissionDisposition").GetString());
+        }
+    }
+
     private static Task<HttpResponseMessage> SendRetryAsync(AlterationApiHost host, object body, string idempotencyKey)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, "/runtime/workflows/alteration-plans") { Content = JsonContent.Create(body) };

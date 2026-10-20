@@ -61,15 +61,44 @@ return ActivityTransition.Fault<ReservationResult>(new ActivityFault("delivery.t
 
 The scope records the step as **Uncertain** and starts recovery with that step included. Its compensation gets the step's operation key as `TargetOperationKey` and undoes the effect if it is there (rule 3 above covers the case where it is not there yet).
 
-## Resume a waiting recovery
+## Act on a waiting recovery
 
-A scope that is waiting shows **Needs action**, and the compensation's row shows its attempts ("Attempt 3 of 3") and a link to the blocking incident. Once the cause is fixed, an operator with runtime-manage permission retries that compensation by submitting a `RetryFaultedActivity/1` alteration for the failed run of it:
+A scope that is waiting shows **Needs action**: a compensation failed on every attempt, or a step's outcome is uncertain and it has no compensation. The compensation's row shows its attempts ("Attempt 3 of 3") and a link to the blocking incident. An operator acts on that incident in one of three ways, each submitted as an alteration plan to `POST runtime/workflows/alteration-plans` with an `Idempotency-Key` header, naming the run in `"target": { "executionIds": ["<run>"] }`. Sending the same request twice with the same key returns the existing plan (`Replayed`) and applies nothing twice.
+
+**Retry** runs the failed compensation again, once the cause is fixed:
 
 ```json
 { "kind": "RetryFaultedActivity", "schemaVersion": 1, "payload": { "sourceActivityExecutionId": "<the failed compensation run>", "reason": "Delivery service restored" } }
 ```
 
-The retry resolves the incident and runs the compensation again with the same inputs and operation key. If it succeeds, recovery carries on with the remaining steps; if it fails, the scope waits again. Sending the same request twice (same `Idempotency-Key`) has no further effect. A Studio button for this follows in a later release.
+The retry resolves the incident and runs the compensation again with the same inputs and operation key. If it succeeds, recovery carries on with the remaining steps; if it fails, the scope waits again.
+
+**Resolve** declares what happened to the effect without running anything, with a required reason (1 to 500 characters; it is visible to everyone who can view the run, so put no secret in it):
+
+```json
+{ "kind": "DecideIntervention", "schemaVersion": 1, "payload": { "incidentId": "<the waiting incident>", "decision": "compensation.resolve.effect-absent", "reason": "Refunded manually, ticket FIN-221" } }
+```
+
+| Decision | Meaning | On a failed compensation | On an uncertain step without a compensation |
+|---|---|---|---|
+| `compensation.resolve.effect-absent` | The effect does not exist: it never happened, or it was undone outside Elsa. | The step is settled; recovery continues with the next step. | The step failed with no effect; the steps before it are undone. |
+| `compensation.resolve.effect-accepted` | The effect exists and the business keeps it. | The step is settled and kept; recovery continues. | The step's effect counts as done; the scope runs the next step. |
+
+Either way the step reads **Resolved manually** and is never undone, confirmed or handed over afterwards. A later step that reads the result of a resolved step faults as for any missing value.
+
+**Abandon** stops the recovery, with a required reason:
+
+```json
+{ "kind": "DecideIntervention", "schemaVersion": 1, "payload": { "incidentId": "<the waiting incident>", "decision": "compensation.abandon", "reason": "Order written off by finance" } }
+```
+
+No further compensation runs, every step keeps its state, and the scope faults with `compensation.scope.abandoned` (category `outcome-unknown`), so the run never completes as if recovery had finished. Inside another scope, the outer scope treats the abandoned scope as an uncertain step: it runs that step's compensation, or waits for an operator itself.
+
+**Permissions and which runs.** Submitting needs the `workflows/runtime:manage` permission; without it the request returns 403 and creates no plan. An operator can act on any run of their tenant by id, whatever started it (an HTTP endpoint, a timer, a Studio test run or the REST API); another tenant's run is not found. The run details (`GET runtime/workflows/instances/{id}`) say whether the caller may act on that run in `permissions.canManage`.
+
+**Refusals.** A plan's job fails with a code and changes nothing when the action no longer applies: `InterventionNotPending` (someone already retried, resolved or abandoned it), `NoBlockingIncident` (a retry after that), `DecisionNotOffered`, `RequesterNotRunning` or `SourceParentNotRunning` (the scope was cancelled), `WorkflowTerminal` (the run ended) or `InvalidDecideInterventionPayload` (a missing or invalid reason).
+
+**History and journal.** Every action is recorded on the incident it resolved: the action (`OperatorRetry` or `OperatorDecision`), the decision, who submitted it, the reason and the time. While the scope is live, `GET runtime/workflows/instances/{run}/activity-executions/{scope}/state-view` returns its journal (view `compensation.journal`): each step with its status, attempts and incidents, what it waits on and which decisions it offers, its resolution, and the steps still to undo. A completed scope keeps no journal; the run's activities and incidents still show what happened.
 
 ## Nest scopes and run them in loops
 
@@ -127,7 +156,8 @@ A scope that ran more than once, in a loop or because its parent ran again, has 
 
 These behaviours are planned and not yet available:
 
-- a delay between automatic retries of a failed compensation, and a Studio button to retry it;
+- a delay between automatic retries of a failed compensation;
+- Studio buttons to retry, resolve and abandon (use the alteration API above until then);
 - a compensation that can be handed over and reads a container's variable from a script expression is not checked at publication; it fails when it runs and waits for an operator;
 - a failure inside a Sequence inside a Flowchart step does not reach the scope;
 - a warning when a step or compensation is marked safe to repeat, so its effect may not be committed before it runs.

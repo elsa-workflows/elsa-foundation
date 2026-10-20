@@ -12,7 +12,13 @@ internal enum CompensationScopePhase
     /// <summary>A step or handler waits on an operator: its incident stays blocking with Wait for intervention.</summary>
     AwaitingIntervention,
     Completed,
-    Compensated
+    Compensated,
+
+    /// <summary>
+    /// An operator abandoned the recovery (spec 260): no further handler runs, every entry keeps its status, and the
+    /// scope faults with <c>compensation.scope.abandoned</c>. The journal stays as evidence.
+    /// </summary>
+    Abandoned
 }
 
 /// <summary>The recovery status of one journal entry. Persisted by name.</summary>
@@ -38,7 +44,24 @@ internal enum CompensationEntryStatus
     Failed,
 
     /// <summary>A Confirm (or <c>confirmOnComplete</c>) ended the entry's eligibility; it is kept as evidence (spec 258).</summary>
-    Confirmed
+    Confirmed,
+
+    /// <summary>
+    /// An operator settled the entry without running it (spec 260), with the <see cref="CompensationEntryResolution"/>
+    /// outcome. Never eligible, confirmed or handed over; the resolution never changes.
+    /// </summary>
+    ResolvedManually
+}
+
+/// <summary>What an operator declared about a manually resolved entry's effect. Persisted by name.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<CompensationResolutionOutcome>))]
+internal enum CompensationResolutionOutcome
+{
+    /// <summary>The effect does not exist: it never happened, or it was undone outside Elsa.</summary>
+    EffectAbsent,
+
+    /// <summary>The effect exists and the business keeps it.</summary>
+    EffectAccepted
 }
 
 /// <summary>What the forward occurrence reported. Kept when the entry's status changes. Persisted by name.</summary>
@@ -73,7 +96,8 @@ internal sealed record CompensationScopeState
         IReadOnlyList<CompensationEntry>? entries = null,
         IReadOnlyList<CompensationConfirmation>? confirmations = null,
         IReadOnlyList<string>? receivedHandOvers = null,
-        IReadOnlyList<CompensationHandOverProgress>? handOversInProgress = null)
+        IReadOnlyList<CompensationHandOverProgress>? handOversInProgress = null,
+        CompensationAbandonment? abandonment = null)
     {
         Phase = phase;
         NextStepIndex = nextStepIndex;
@@ -83,6 +107,7 @@ internal sealed record CompensationScopeState
         Confirmations = confirmations ?? [];
         ReceivedHandOvers = receivedHandOvers ?? [];
         HandOversInProgress = handOversInProgress ?? [];
+        Abandonment = abandonment;
     }
 
     public static CompensationScopeState Initial { get; } = new(CompensationScopePhase.Running, 0, 1);
@@ -107,6 +132,43 @@ internal sealed record CompensationScopeState
 
     /// <summary>Inner scope occurrences with some, not all, of their hand-over batches journaled.</summary>
     public IReadOnlyList<CompensationHandOverProgress> HandOversInProgress { get; init; }
+
+    /// <summary>Which operator decision abandoned the recovery, set once with <see cref="CompensationScopePhase.Abandoned"/>.</summary>
+    public CompensationAbandonment? Abandonment { get; init; }
+}
+
+/// <summary>
+/// The abandonment of a scope's recovery: the incident the operator decided on, the entry that waited on it, and the
+/// phase the scope waited from (<see cref="CompensationScopePhase.Running"/> for a waiting step,
+/// <see cref="CompensationScopePhase.Compensating"/> for a waiting handler).
+/// </summary>
+internal sealed record CompensationAbandonment
+{
+    [JsonConstructor]
+    public CompensationAbandonment(string incidentId, string entryId, CompensationScopePhase fromPhase)
+    {
+        IncidentId = incidentId;
+        EntryId = entryId;
+        FromPhase = fromPhase;
+    }
+
+    public string IncidentId { get; init; }
+    public string EntryId { get; init; }
+    public CompensationScopePhase FromPhase { get; init; }
+}
+
+/// <summary>An operator's resolution of an entry: what the operator declared, and on which incident.</summary>
+internal sealed record CompensationEntryResolution
+{
+    [JsonConstructor]
+    public CompensationEntryResolution(CompensationResolutionOutcome outcome, string incidentId)
+    {
+        Outcome = outcome;
+        IncidentId = incidentId;
+    }
+
+    public CompensationResolutionOutcome Outcome { get; init; }
+    public string IncidentId { get; init; }
 }
 
 /// <summary>The hand-over batches journaled so far for one inner scope occurrence.</summary>
@@ -139,7 +201,8 @@ internal sealed record CompensationEntry
         IReadOnlyList<CompensationHandlerAttempt>? handlerAttempts = null,
         string? interventionIncidentId = null,
         string? handlerExecutableNodeId = null,
-        CompensationEntryOrigin? origin = null)
+        CompensationEntryOrigin? origin = null,
+        CompensationEntryResolution? resolution = null)
     {
         Id = id;
         Step = step;
@@ -153,6 +216,7 @@ internal sealed record CompensationEntry
         InterventionIncidentId = interventionIncidentId;
         HandlerExecutableNodeId = handlerExecutableNodeId;
         Origin = origin;
+        Resolution = resolution;
     }
 
     public string Id { get; init; }
@@ -181,6 +245,9 @@ internal sealed record CompensationEntry
 
     /// <summary>Where a handed-over entry came from. The first origin is kept through every later hand-over.</summary>
     public CompensationEntryOrigin? Origin { get; init; }
+
+    /// <summary>An operator's resolution, set with <see cref="CompensationEntryStatus.ResolvedManually"/> and never changed.</summary>
+    public CompensationEntryResolution? Resolution { get; init; }
 }
 
 /// <summary>The inner scope occurrence and entry a handed-over entry came from.</summary>

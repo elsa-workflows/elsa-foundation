@@ -57,6 +57,22 @@ public interface IRuntimeActivityChildNotificationHandler
 }
 
 /// <summary>
+/// Engine-only opt-in for receiving an operator's decision on an intervention this activity requested with offered
+/// decisions (spec 260 R-5, <c>DecideIntervention/1</c>). The runtime delivers the decision in its own structural
+/// evaluation, after the alteration checkpoint resolved the incident. The callback may schedule children, stage a child
+/// subtree cancellation (with a <c>Defer</c> or <c>Complete</c> continuation), stage private state, notify an ancestor
+/// when it completes, and return <c>Defer</c>, <c>Complete</c> or <c>Fault</c>; it may not absorb a fault or request
+/// intervention, because no fault is being evaluated. A requester that is no longer running is not called. A requester
+/// must accept any decision it offered while its wait stands, and may ignore one for a wait it no longer has (a repeat).
+/// </summary>
+public interface IRuntimeActivityInterventionDecisionHandler
+{
+    ValueTask<RuntimeStructuralContinuation> OnInterventionDecidedAsync(
+        IRuntimeActivityExecutionContext context,
+        ActivityInterventionDecidedContext decision);
+}
+
+/// <summary>
 /// Opt-in marker for a structural activity whose child-completion/child-fault callback needs the parent's
 /// direct, non-terminal child executions. Only a parent implementing this pays the extra
 /// parent-scoped read; the runtime then populates

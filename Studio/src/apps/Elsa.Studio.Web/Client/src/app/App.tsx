@@ -428,7 +428,7 @@ function AppContent({ authManager }: { authManager: AuthProviderManager | null }
             />
           </Suspense>
         ) : null}
-        {path === "/diagnostics" ? <Diagnostics api={api!} /> : null}
+        {path === "/diagnostics" ? <Diagnostics api={api!} navigation={filterAccessibleNavigation(navigation, access)} onNavigate={navigateTo} /> : null}
         {path === "/diagnostics/modules" ? <ModuleDiagnostics api={api!} /> : null}
         {DevDisclosurePage && path === "/dev/disclosure" ? (
           <Suspense fallback={null}>
@@ -1045,31 +1045,112 @@ function BottomPanel({ panels }: { panels: StudioPanelContribution[] }) {
   );
 }
 
-export function Diagnostics({ api }: { api: ElsaStudioModuleApi }) {
+export function Diagnostics({
+  api,
+  navigation,
+  onNavigate
+}: {
+  api: ElsaStudioModuleApi;
+  navigation: StudioNavigationContribution[];
+  onNavigate: (path: string) => void;
+}) {
   const widgets = api.diagnosticsWidgets.list().sort(compareOrderedContributions);
+  const destinations = getDiagnosticDestinations(navigation);
 
   return (
     <section className="diagnostics-view">
-      <div className="section-header">
-        <div>
-          <h2>Diagnostics</h2>
-          <p>Runtime and operational widgets contributed through the Studio SDK.</p>
-        </div>
-      </div>
+      <section className="diagnostics-index" aria-labelledby="diagnostics-index-heading">
+        <header className="diagnostics-section-heading">
+          <h2 id="diagnostics-index-heading">Diagnostic tasks</h2>
+          <p>Choose a tool for the task you need to complete.</p>
+        </header>
+        {destinations.length === 0 ? (
+          <p className="diagnostics-index-empty" role="status">No diagnostic tool links are available to you in this app.</p>
+        ) : (
+          <ul className="diagnostics-task-list">
+            {destinations.map(destination => (
+              <li key={destination.id}>
+                <a
+                  className="diagnostics-task-link"
+                  href={destination.path}
+                  onClick={event => {
+                    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                    event.preventDefault();
+                    onNavigate(destination.path);
+                  }}
+                >
+                  <span className="diagnostics-task-content">
+                    <span className="diagnostics-task-title">{destination.label}</span>
+                    <span className="diagnostics-task-description">{describeDiagnosticDestination(destination)}</span>
+                  </span>
+                  <ChevronRight size={16} aria-hidden="true" />
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
-      <div className="widget-grid">
-        {widgets.length === 0 ? (
-          <div className="empty-state">
-            <FileText size={22} />
-            <span>No diagnostics widgets are registered.</span>
-          </div>
-        ) : null}
-        {widgets.map(widget => (
-          <DiagnosticsWidgetHost widget={widget} key={widget.id} />
-        ))}
-      </div>
+      <section className="diagnostics-widgets" aria-labelledby="diagnostics-widgets-heading">
+        <header className="diagnostics-section-heading">
+          <h2 id="diagnostics-widgets-heading">Diagnostics widgets</h2>
+          <p>Runtime and operational widgets contributed through the Studio SDK.</p>
+        </header>
+        <div className="widget-grid">
+          {widgets.length === 0 ? (
+            <div className="empty-state">
+              <FileText size={22} />
+              <span>No diagnostics widgets are registered.</span>
+            </div>
+          ) : null}
+          {widgets.map(widget => (
+            <DiagnosticsWidgetHost widget={widget} key={widget.id} />
+          ))}
+        </div>
+      </section>
     </section>
   );
+}
+
+function getDiagnosticDestinations(navigation: StudioNavigationContribution[]) {
+  const navigationById = new Map(navigation.map(item => [item.id, item]));
+  const diagnosticsRegistered = navigationById.has("diagnostics");
+
+  function isDiagnosticsDescendant(item: StudioNavigationContribution) {
+    if (!diagnosticsRegistered) return false;
+
+    const visited = new Set([item.id]);
+    let parentId = item.parentId;
+    while (parentId) {
+      if (parentId === "diagnostics") return true;
+      if (visited.has(parentId)) return false;
+      visited.add(parentId);
+      parentId = navigationById.get(parentId)?.parentId;
+    }
+    return false;
+  }
+
+  return navigation.filter(item => {
+    if (item.id === "diagnostics" || item.path === "/diagnostics") return false;
+    const isRuntimeEvidenceSettings = item.id === "workflows-runtime-diagnostics" && item.path === "/workflows/runtime-diagnostics";
+    return isRuntimeEvidenceSettings || isDiagnosticsDescendant(item);
+  });
+}
+
+function describeDiagnosticDestination(item: StudioNavigationContribution) {
+  if (item.id === "open-telemetry" && item.path === "/diagnostics/open-telemetry") {
+    return "Inspect distributed traces. Metrics and OpenTelemetry Logs are not available in this experience.";
+  }
+  if (item.id === "structured-logs" && item.path === "/diagnostics/structured-logs") {
+    return "Inspect application logs and follow the live structured log stream.";
+  }
+  if (item.id === "console" && item.path === "/diagnostics/console") {
+    return "Inspect live console output.";
+  }
+  if (item.id === "workflows-runtime-diagnostics" && item.path === "/workflows/runtime-diagnostics") {
+    return "Review runtime evidence capture policy settings.";
+  }
+  return "Open this destination.";
 }
 
 function DiagnosticsWidgetHost({ widget }: { widget: StudioDiagnosticsWidgetContribution }) {

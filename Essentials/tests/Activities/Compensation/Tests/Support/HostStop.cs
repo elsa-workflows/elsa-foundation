@@ -23,6 +23,10 @@ public static class HostStop
         services => Install<WorkflowParentActivityCompletionSchedulerWorkHandler>(services, workItem =>
             workItem.CommandMetadata.ContainsKey(RuntimeMetadataKeys.DescendantFault));
 
+    /// <summary>Before the first operator decision reaches its requester (spec 260, injection point 2).</summary>
+    public static Action<IServiceCollection> BeforeDecisionDelivery() =>
+        services => Install<WorkflowInterventionDecisionSchedulerWorkHandler>(services, _ => true);
+
     /// <summary>The hand-over notification code, for <see cref="BeforeNotification"/>.</summary>
     public static string Register => CompensationScope.Notifications.Register;
 

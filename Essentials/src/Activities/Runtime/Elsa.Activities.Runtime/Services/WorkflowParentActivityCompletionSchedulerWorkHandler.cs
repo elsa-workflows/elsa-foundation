@@ -401,6 +401,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                     serviceProvider,
                     workItem,
                     payload,
+                    parentActivity,
                     context.GetChildFaultInterventionRequests(),
                     context.GetChildFaultAbsorptionRequests().Count > 0,
                     continuation,
@@ -862,6 +863,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         IServiceProvider serviceProvider,
         RuntimeSchedulerWorkItem workItem,
         RuntimeCompleteActivityCommandPayload payload,
+        IActivity parentActivity,
         IReadOnlyCollection<RuntimeChildFaultInterventionRequest> requests,
         bool absorptionRequested,
         RuntimeStructuralContinuation continuation,
@@ -881,6 +883,10 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
             throw new InvalidOperationException("A child-fault intervention requires a Defer continuation: the parent keeps waiting for the retried child.");
 
         var request = requests.Single();
+        // Offering decisions promises to apply them (spec 260 R-5): only a requester with the decision callback may.
+        if (request.Decisions.Count > 0 && parentActivity is not IRuntimeActivityInterventionDecisionHandler)
+            throw new InvalidOperationException(
+                $"Parent activity '{payload.ExecutableNodeId}' offers intervention decisions but does not implement IRuntimeActivityInterventionDecisionHandler.");
         var evaluationIncidentId = ReadIncidentId(workItem);
         if (evaluationIncidentId is null || !StringComparer.Ordinal.Equals(request.IncidentId, evaluationIncidentId))
             throw new InvalidOperationException($"Child-fault intervention names incident '{request.IncidentId}', but this evaluation carries incident '{evaluationIncidentId ?? "<none>"}'.");
@@ -896,6 +902,18 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         metadata[RuntimeMetadataKeys.InterventionReason] = request.Reason;
         metadata[RuntimeMetadataKeys.SchedulerWorkItemId] = workItem.WorkItemId;
 
+        // The offer and the requester ride the outcome metadata, which any reader of the run's structure sees, so an
+        // operator and the DecideIntervention preflight read them without the sensitive-values grant (spec 260 R4).
+        var outcomeMetadata = request.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        // Only the runtime writes the offer: a requester's own metadata cannot smuggle in decisions it did not validate.
+        outcomeMetadata.Remove(RuntimeMetadataKeys.InterventionDecisions);
+        outcomeMetadata.Remove(RuntimeMetadataKeys.InterventionRequestedBy);
+        if (request.Decisions.Count > 0)
+        {
+            outcomeMetadata[RuntimeMetadataKeys.InterventionDecisions] = JsonSerializer.Serialize(request.Decisions);
+            outcomeMetadata[RuntimeMetadataKeys.InterventionRequestedBy] = payload.ActivityExecutionId;
+        }
+
         return new IncidentState(
             incident.IncidentId,
             incident.WorkflowExecutionId,
@@ -908,7 +926,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 TimeProvider.GetUtcNow(),
                 strategy: null,
                 systemSource: IncidentResolutionSystemSources.StructuralIntervention,
-                metadata: request.Metadata),
+                metadata: outcomeMetadata),
             incident.FailureType,
             incident.Message,
             incident.CreatedAt,

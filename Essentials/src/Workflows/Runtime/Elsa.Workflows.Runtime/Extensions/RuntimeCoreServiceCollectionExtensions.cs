@@ -95,6 +95,7 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<MigrateWorkflowAlterationHandler>();
         services.TryAddScoped<RescheduleActivityAlterationHandler>();
         services.TryAddScoped<RetryFaultedActivityAlterationHandler>();
+        services.TryAddScoped<DecideInterventionAlterationHandler>();
         services.TryAddScoped<ActivityExecutionSupersessionPlanner>();
         AddRuntimeOwnedAlterationContribution(services, new("CancelWorkflow", 1, "Cancel workflow"), typeof(CancelWorkflowAlterationHandler));
         AddRuntimeOwnedAlterationContribution(services, new("ModifyVariable", 1, "Modify variable"), typeof(ModifyVariableAlterationHandler));
@@ -105,6 +106,10 @@ public static class RuntimeCoreServiceCollectionExtensions
             services,
             new(RetryFaultedActivityAlterationHandler.Kind, RetryFaultedActivityAlterationHandler.SchemaVersion, "Retry faulted activity"),
             typeof(RetryFaultedActivityAlterationHandler));
+        AddRuntimeOwnedAlterationContribution(
+            services,
+            new(DecideInterventionAlterationHandler.Kind, DecideInterventionAlterationHandler.SchemaVersion, "Decide intervention"),
+            typeof(DecideInterventionAlterationHandler));
         services.TryAddScoped<IWorkflowAlterationCheckpointWriter, RuntimeWorkflowAlterationCheckpointWriter>();
         services.TryAddScoped<WorkflowAlterationJobExecutor>();
         services.TryAddScoped<IWorkflowAlterationActorCommandExecutor, WorkflowAlterationActorCommandExecutor>();

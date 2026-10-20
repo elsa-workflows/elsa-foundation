@@ -17,8 +17,13 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   The `scope` input carries the UI hint `compensation-confirm-target` or `compensation-compensate-target`, which
   Studio's target picker claims (spec 258 R23).
 - The fault codes `compensation.scope.compensated`, `compensation.scope.compensate-requested` (category
-  `compensation.target:{scopeNodeId}` while a cascade passes outward) and `compensation.scope.uncertain-unhandled`
-  (category `outcome-unknown`).
+  `compensation.target:{scopeNodeId}` while a cascade passes outward), `compensation.scope.uncertain-unhandled`
+  (category `outcome-unknown`) and `compensation.scope.abandoned` (category `outcome-unknown`, spec 260: an operator
+  abandoned the recovery).
+- Operator decisions (spec 260, runtime seam R-5): a waiting scope offers `compensation.resolve.effect-absent`,
+  `compensation.resolve.effect-accepted` and `compensation.abandon` on its intervention incident and implements
+  `IRuntimeActivityInterventionDecisionHandler` to apply them. Entry status `ResolvedManually` and phase `Abandoned`
+  are part of private state version 4.
 - Descendant faults (spec 258 R-3): the scope implements `IRuntimeActivityDescendantFaultHandler`, so a fault under a
   Sequence or loop step reaches it as a fault of that step. Direct/combined child faults route from the callback's
   committed child provenance, and descendant faults from its committed via-child provenance; delivery-command keys
@@ -45,3 +50,8 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   `{nodeId}/outputs/{key}` or `{nodeId}/variable`). It reads container declarations through
   `IActivityStructureService.ProjectScopedVariables` and checks structured `Variable` references only; script
   expressions are not analyzed (spec 258 R18).
+- `CompensationJournalProjector` implements `IActivityStateViewProjector` (`Elsa.Workflows.Runtime.Core`, spec 260
+  R-6). Registered by `ActivitiesCompensationFeature` for private state `Elsa.CompensationScope.State`, it projects the
+  journal view `compensation.journal` version 1 (phase, cause, entries with attempts, waits and offered decisions,
+  resolutions, origins and confirmations, the entries still to undo, hand-over progress and the abandonment). It carries
+  no captured value; the cause message needs the sensitive-values grant.

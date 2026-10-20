@@ -23,6 +23,15 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 - **Register:** `ActivitiesRuntimeFeature` registers it as an `IWorkflowSchedulerWorkHandler`.
 - **Usage:** handles `WorkflowExecutionCommandKind.NotifyParentActivity` (spec 126, seam C) by reactivating the target parent — the notifying child's committed parent — from its pinned snapshot and invoking `IRuntimeActivityChildNotificationHandler.OnChildNotifiedAsync`, applying the returned continuation and any staged seam-A subtree cancellations / child schedules / further parent notifications in one atomic checkpoint commit. A parent that does not implement the interface, or is no longer `Running`, silently acks the notification (late delivery is legal — a notifying child that has since completed or faulted still delivers). The notifying child keeps running throughout. Its `HandlerName` is a frozen wire value (persisted in scheduler poison/drain records). It does not interpret workflow-level edges or load Design-owned authored workflow models.
 
+### `WorkflowInterventionDecisionSchedulerWorkHandler` *(Activities Runtime — `Elsa.Activities.Runtime`, spec 260 R-5)*
+- **Kind:** Built-in scheduler work handler; not replaced by hosts.
+- **Usage:** handles `WorkflowExecutionCommandKind.DeliverInterventionDecision`, the work item a `DecideIntervention/1` alteration checkpoint enqueues. It finds the requester's direct child on the path from the faulted activity, reactivates the requester from its pinned snapshot and invokes `IRuntimeActivityInterventionDecisionHandler.OnInterventionDecidedAsync`, then commits the continuation, child schedules, subtree cancellations and notifications in one checkpoint with `runtime.interventionDecisionProcessedWorkItemId` on the requester. A requester that is no longer `Running`, or that already processed the item, acks it without a callback. It shares `StructuralCallbackEvaluation` with `WorkflowNotifyParentActivitySchedulerWorkHandler`. Its `HandlerName` is a frozen wire value.
+
+### `IRuntimeActivityInterventionDecisionHandler` *(Core — `Elsa.Workflows.Runtime.Core`, spec 260 R-5)*
+- **Kind:** Engine-only opt-in structural callback.
+- **Signature:** `OnInterventionDecidedAsync(IRuntimeActivityExecutionContext context, ActivityInterventionDecidedContext decision)` returns `ValueTask<RuntimeStructuralContinuation>`.
+- **Usage:** a structural activity that offers decisions with `RequestChildFaultIntervention(incidentId, reason, metadata, decisions)` must implement it; it receives the operator's decision in its own evaluation and applies it by its own transition. It must accept any decision it offered while its wait stands and may ignore one for a wait it no longer has. The runtime never interprets the code. Known implementation: `CompensationScope` (`compensation.resolve.effect-absent`, `compensation.resolve.effect-accepted`, `compensation.abandon`).
+
 ### `ResumeTargetAttribute` *(Core — `Elsa.Activities.Runtime.Core`)*
 - **Kind:** Declaration surface (activity author contract).
 - **Signature:** `[ResumeTarget("stable-resume-target-id")]` on an activity handler method.
