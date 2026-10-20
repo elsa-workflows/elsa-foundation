@@ -6,10 +6,10 @@ Records CShells feature identity, public feature properties, and dependency evid
 
 ## Summary
 
-- Feature classes: 114
+- Feature classes: 115
 - Concrete features missing explicit ShellFeature ID: 1
 - Duplicate explicit feature IDs: 0
-- Feature-bearing source projects: 93
+- Feature-bearing source projects: 94
 - IConfiguration feature-registration shape observed from: `Essentials/apps/Elsa.Workbench/appsettings.json`
 
 ## IConfiguration Shape Evidence
@@ -141,6 +141,7 @@ No duplicate explicit feature IDs were discovered.
 | WorkflowsRuntimeScheduling | WorkflowsRuntimeSchedulingFeature | False | Elsa.Workflows.Runtime.Scheduling | ClaimVisibilitySeconds: double<br>MaxBackoffIntervalMinutes: double<br>MaxTimersPerTick: int<br>NotFoundGraceSeconds: double<br>SweepIntervalSeconds: double | code default | [WorkflowsRuntimeSchedulingFeature.cs](../../Essentials/src/Workflows/Runtime/Scheduling/WorkflowsRuntimeSchedulingFeature.cs) |
 | Elsa3ImportJsonActivities | Elsa3ImportActivitiesFeature | False | Elsa3.Activities.Design.Import | ImportOptions: ReusableActivityImportOptions<br>WorkflowCollectionSourceTypes: IEnumerable<string> | type-name selection signal<br>validation/requiredness guard in code | [Elsa3ImportActivitiesFeature.cs](../../Extensions/Elsa3/src/Activities/Design/Import/Elsa3.Activities.Design.Import/Elsa3ImportActivitiesFeature.cs) |
 | Elsa3ImportActivitiesEntityFrameworkCore | Elsa3ImportActivitiesEntityFrameworkCoreFeature | False | Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore | ConnectionName: string?<br>ConnectionString: string?<br>Pooling: bool<br>Provider: string<br>Schema: string? | code default<br>sensitive or deployment-specific value signal | [Elsa3ImportActivitiesEntityFrameworkCoreFeature.cs](../../Extensions/Elsa3/src/Activities/Design/Import/Persistence/EntityFrameworkCore/Elsa3ImportActivitiesEntityFrameworkCoreFeature.cs) |
+| Elsa3ImportActivitiesPublishing | Elsa3ImportActivitiesPublishingFeature | False | Elsa3.Activities.Design.Import.Publishing | - | - | [Elsa3ImportActivitiesPublishingFeature.cs](../../Extensions/Elsa3/src/Activities/Design/Import/Publishing/Elsa3ImportActivitiesPublishingFeature.cs) |
 | Elsa3Mapping | Elsa3MappingFeature | False | Elsa3.Mapping | - | - | [Elsa3MappingFeature.cs](../../Extensions/Elsa3/src/Mapping/Elsa3MappingFeature.cs) |
 
 ## Feature Dependency Evidence
@@ -260,6 +261,7 @@ Rows below are dependency evidence, not final policy. Feature-project references
 | WorkflowsRuntimeScheduling | Elsa.Workflows.Runtime.Scheduling | Elsa.Workflows.Runtime (WorkflowsActivationChannels, WorkflowsRuntimeAttention, WorkflowsRuntimeTracing) | Elsa.Tasks.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.31<br>Cronos 0.13.0<br>Elsa.Specifications.PackageManifest.Generator 0.0.1-preview.8<br>Microsoft.Extensions.DependencyInjection.Abstractions 10.0.10<br>Microsoft.Extensions.Logging.Abstractions 10.0.10<br>Microsoft.Extensions.Options 10.0.10 |
 | Elsa3ImportJsonActivities | Elsa3.Activities.Design.Import | Elsa.Foundation.Identity (FoundationIdentityAbstractions) | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Api.AspNetCore<br>Elsa.Events.Core<br>Elsa.Foundation.Identity.Core<br>Elsa.Serialization.Core<br>Elsa.Tasks.Schedules<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa.Workflows.Design.Validations.Core<br>Elsa.Workflows.Runtime.Core<br>Elsa3.Models | CShells.Abstractions 0.0.31<br>CShells.AspNetCore.Abstractions 0.0.31<br>Elsa.Specifications.PackageManifest.Generator 0.0.1-preview.8<br>NativeEndpoints 1.0.0-preview.6 |
 | Elsa3ImportActivitiesEntityFrameworkCore | Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore | Elsa.Activities.Design.Persistence.EntityFrameworkCore (ActivitiesDesignEntityFrameworkCore)<br>Elsa.Workflows.Design.Persistence.EntityFrameworkCore (WorkflowsDesignEntityFrameworkCore)<br>Elsa3.Activities.Design.Import (Elsa3ImportJsonActivities) | Elsa.Persistence.EntityFramework<br>Elsa.Serialization.Core<br>Elsa.Workflows.Runtime.Core | CShells.Abstractions 0.0.31<br>Elsa.Specifications.PackageManifest.Generator 0.0.1-preview.8<br>Microsoft.EntityFrameworkCore 10.0.10<br>Microsoft.EntityFrameworkCore.Relational 10.0.10<br>Microsoft.Extensions.Configuration.Abstractions 10.0.10<br>Microsoft.Extensions.DependencyInjection 10.0.10 |
+| Elsa3ImportActivitiesPublishing | Elsa3.Activities.Design.Import.Publishing | Elsa.Workflows.Publishing.Api (WorkflowsPublishingApi)<br>Elsa3.Activities.Design.Import (Elsa3ImportJsonActivities) | - | CShells.Abstractions 0.0.31<br>Elsa.Specifications.PackageManifest.Generator 0.0.1-preview.8 |
 | Elsa3Mapping | Elsa3.Mapping | Elsa3.Activities.Design.Import (Elsa3ImportJsonActivities) | Elsa.Activities.Design.Persistence.Core<br>Elsa.Serialization.Core<br>Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Persistence.Core<br>Elsa3.Models | Acornima 1.6.1<br>CShells.Abstractions 0.0.31<br>Elsa.Specifications.PackageManifest.Generator 0.0.1-preview.8<br>Fluid.Core 2.31.0 |
 
 ## Gaps For Generator Work

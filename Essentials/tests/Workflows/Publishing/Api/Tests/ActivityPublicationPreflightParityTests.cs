@@ -71,7 +71,7 @@ public sealed class ActivityPublicationPreflightParityTests
     /// What an entry point concluded, reduced to what a caller can act on. A preflight that returns a view it does not
     /// call publishable is the same refusal publish raises as <see cref="ActivityErrorCodes.PublicationInvalid"/>.
     /// </summary>
-    private sealed record Outcome(string? ErrorCode, string DiagnosticCodes)
+    internal sealed record Outcome(string? ErrorCode, string DiagnosticCodes)
     {
         public static readonly Outcome Accepted = new(null, "");
 
@@ -79,7 +79,8 @@ public sealed class ActivityPublicationPreflightParityTests
             new(errorCode, string.Join(",", diagnostics.Select(diagnostic => diagnostic.Code)));
     }
 
-    private sealed class Scenario
+    /// <summary>One draft and its publisher over in-memory stores; also used by the requested-version-id tests.</summary>
+    internal sealed class Scenario
     {
         private const string DraftId = "draft-1";
         private const long Revision = 4;
@@ -196,6 +197,14 @@ public sealed class ActivityPublicationPreflightParityTests
             {
                 return Outcome.Refused(rejection.ErrorCode, rejection.Diagnostics);
             }
+        }
+
+        /// <summary>Preflights, then publishes with the issued token, naming the version id the commit must use.</summary>
+        public async Task<ActivityPublicationReceipt> PublishReviewedAsync(string? requestedVersionId, string idempotencyKey)
+        {
+            var reviewToken = (await _publisher.PreflightAsync(new(DraftId, Revision, _headVersionId) { Version = _version })).ReviewToken;
+            return await _publisher.PublishReviewedAsync(
+                new(DraftId, Revision, _headVersionId, _version, reviewToken, idempotencyKey, requestedVersionId));
         }
 
         private static ActivityProviderManifest Provider() => new("test.provider", "1", JsonSerializer.SerializeToElement(new { }));
