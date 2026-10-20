@@ -52,8 +52,8 @@ No setup: existing projects only.
 
 - [X] T014 Run the touched test projects listed in specs/254-http-structured-response-body/quickstart.md
 - [X] T015 Throwaway JTest check (not committed): `javascript-array-methods` and `javascript-object-methods` convert end to end and the only remaining `content` refusal is the computed content type; record the result in the PR evidence
-- [ ] T016 Set this spec's `**Status**:` to `Implemented` with the PR link, before the PR merges (spec-lifecycle transition rule; never a separate status PR) in specs/254-http-structured-response-body/spec.md
-- [ ] T017 Regenerate the maps with `Elsa.Maps.Generator -- all` after ticking this file; stage only the files whose content really changed (CRLF caveat)
+- [X] T016 Set this spec's `**Status**:` to `Implemented` with the PR link, before the PR merges (spec-lifecycle transition rule; never a separate status PR) in specs/254-http-structured-response-body/spec.md
+- [X] T017 Regenerate the maps with `Elsa.Maps.Generator -- all` after ticking this file; stage only the files whose content really changed (CRLF caveat)
 
 ## Dependencies
 
