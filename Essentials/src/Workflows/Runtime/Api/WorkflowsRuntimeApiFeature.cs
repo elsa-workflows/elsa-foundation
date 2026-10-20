@@ -4,6 +4,7 @@ using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
+using Elsa.Tasks.Core;
 using Elsa.Workflows.Runtime.Api.Authorization;
 using Elsa.Workflows.Runtime.Api.Capabilities;
 using Elsa.Workflows.Runtime.Api.Coalescing;
@@ -108,6 +109,12 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         services.TryAddScoped<IWorkflowDispatchInspectionService>(sp => sp.GetRequiredService<WorkflowDispatchInspectionService>());
         services.TryAddScoped<RuntimeDiagnosticsSettingsService>();
         services.TryAddScoped<IRuntimeDiagnosticsSettingsService>(sp => sp.GetRequiredService<RuntimeDiagnosticsSettingsService>());
+        services.TryAddScoped<ActivityExecutionStateViewService>();
+        services.TryAddScoped<IActivityExecutionStateViewService>(sp => sp.GetRequiredService<ActivityExecutionStateViewService>());
+        services.TryAddSingleton<ActivityStateViewProjectorRegistry>();
+        services.TryAddEnumerable(ServiceDescriptor.Scoped<IStartupTask, ValidateActivityStateViewProjectorsStartupTask>());
+        services.TryAddScoped<HttpContextWorkflowRuntimeOperatorAccess>();
+        services.TryAddScoped<IWorkflowRuntimeOperatorAccess>(sp => sp.GetRequiredService<HttpContextWorkflowRuntimeOperatorAccess>());
         services.TryAddScoped<WorkflowAlterationPlanApiService>();
         services.TryAddScoped<IWorkflowAlterationPlanApiService>(sp => sp.GetRequiredService<WorkflowAlterationPlanApiService>());
 
@@ -130,6 +137,7 @@ public class WorkflowsRuntimeApiFeature : IWebShellFeature, IPostConfigureShellS
         services.AddApiCapabilitySource<RuntimeOperationalCapabilitySource>();
         services.AddApiCapabilitySource<RuntimeAlterationCapabilitySource>();
         services.AddApiCapabilitySource<RuntimeRunDeletionCapabilitySource>();
+        services.AddApiCapabilitySource<RuntimeActivityStateViewCapabilitySource>();
         services.AddPermissionContributor<WorkflowRuntimePermissionContributor>();
     }
 
