@@ -6,9 +6,9 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 
 ## Summary
 
-- Catalog files discovered: 72
-- Source catalogs discovered: 71
-- Source catalogs indexed from root: 71
+- Catalog files discovered: 73
+- Source catalogs discovered: 72
+- Source catalogs indexed from root: 72
 - Discovered source catalogs not linked from root index: 0
 - Root-indexed catalogs missing on disk: 0
 
@@ -19,6 +19,7 @@ Records Markdown catalog facts from `EXTENSION_POINTS.md` files. It does not val
 | [EXTENSION_POINTS.md](../../EXTENSION_POINTS.md) | - | repo root | Two axes: override vs. extend<br>Intra-domain vs. cross-domain contributions<br>How to read the kinds<br>The doc layering<br>Per-domain catalogs | Infrastructure<br>Expressions<br>HTTP<br>API<br>Agent and Identity<br>Secrets<br>Connections<br>Persistence<br>Activities<br>Workflows<br>Legacy<br>Diagnostics | - | 0 | root |
 | [Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md](../../Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/EXTENSION_POINTS.md) | Elsa.Activities.Bpmn | Elsa.Activities | Scoped execution seam<br>Implementable contributor interfaces<br>Activity-owned structure contracts<br>Consumed runtime contracts<br>Publish-time start-trigger surface (spec 117)<br>Cross-domain contributions<br>Structure-dependent `Cancelled` outcome (spec 125) | `IBpmnElementBehavior` | Contributor (element behavior provider) | 0 | yes |
 | [Essentials/src/Activities/Bpmn/Interchange/EXTENSION_POINTS.md](../../Essentials/src/Activities/Bpmn/Interchange/EXTENSION_POINTS.md) | Elsa.Activities.Bpmn.Interchange | Elsa.Activities | Replaceable service contracts<br>Owned interchange contracts<br>Owned HTTP endpoints<br>Consumed contracts | `IBpmnDocumentImporter`<br>`IBpmnDocumentExporter` | Replacement contract<br>Replacement contract | 0 | yes |
+| [Essentials/src/Activities/Compensation/EXTENSION_POINTS.md](../../Essentials/src/Activities/Compensation/EXTENSION_POINTS.md) | Elsa.Activities.Compensation | Elsa.Activities | Cross-domain contributions | - | - | 0 | yes |
 | [Essentials/src/Activities/ControlFlow/Do/EXTENSION_POINTS.md](../../Essentials/src/Activities/ControlFlow/Do/EXTENSION_POINTS.md) | Elsa.Activities.ControlFlow | Elsa.Activities | Cross-domain contributions | - | - | 0 | yes |
 | [Essentials/src/Activities/ControlFlow/For/EXTENSION_POINTS.md](../../Essentials/src/Activities/ControlFlow/For/EXTENSION_POINTS.md) | Elsa.Activities.ControlFlow | Elsa.Activities | Cross-domain contributions<br>Runtime extensions consumed | - | - | 0 | yes |
 | [Essentials/src/Activities/ControlFlow/ForEach/EXTENSION_POINTS.md](../../Essentials/src/Activities/ControlFlow/ForEach/EXTENSION_POINTS.md) | Elsa.Activities.ControlFlow | Elsa.Activities | Cross-domain contributions<br>Runtime seam dependencies | - | - | 0 | yes |

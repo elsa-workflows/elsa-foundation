@@ -418,6 +418,8 @@ no versions. Nothing publishes yet.
   (`Elsa3ReusableGuidanceTests`, `ReusableBodyWaitTests`); readiness guide updated.
 - [X] T053 Prove Event and mid-flow HTTP Endpoint waits in a reusable body (`ReusableBodyWaitTests`); file the
   Publish Event resume fault found on the way (#3107) and name it in the readiness guide.
+- [X] T054 Set the spec's `**Status**:` line to `Implemented` in this PR, before it merges, and regenerate the
+  spec-status map (docs/reference/spec-lifecycle.md transition rule).
 
 ---
 
