@@ -709,3 +709,8 @@ static Elsa.Etl.Core.Runtime.EtlTerminalResult.operator !=(Elsa.Etl.Core.Runtime
 static Elsa.Etl.Core.Runtime.EtlTerminalResult.operator ==(Elsa.Etl.Core.Runtime.EtlTerminalResult? left, Elsa.Etl.Core.Runtime.EtlTerminalResult? right) -> bool
 static Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult.operator !=(Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult? left, Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult? right) -> bool
 static Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult.operator ==(Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult? left, Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult? right) -> bool
+Elsa.Etl.Core.Runtime.EtlRuntimeIdentity
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.BatchId(Elsa.Etl.Core.Runtime.EtlRunAdmission! admission, Elsa.Etl.Core.Runtime.EtlPreparedRun! prepared, int partitionOrdinal, long startOrdinal, long endOrdinalExclusive, long inputBytes, string! inputHash) -> string!
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.InvocationFingerprint(Elsa.Etl.Core.Runtime.EtlInvocation! invocation) -> string!
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.OutputIdentity(Elsa.Etl.Core.Runtime.EtlRunAdmission! admission, string! batchId, Elsa.Etl.Core.Runtime.EtlOutputRoute route) -> string!
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.OutputKey(Elsa.Etl.Core.Runtime.EtlRunAdmission! admission, string! batchId, Elsa.Etl.Core.Runtime.EtlOutputRoute route) -> string!
