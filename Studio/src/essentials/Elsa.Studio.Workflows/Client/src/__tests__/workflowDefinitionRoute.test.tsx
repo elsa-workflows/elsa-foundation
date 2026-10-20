@@ -48,9 +48,9 @@ describe("workflow definition route browse session", () => {
     await waitForCondition(() => expect(container.querySelector(".wf-folder-actions")?.getAttribute("aria-label")).toBe("Actions for Previous context folder"));
 
     updateEndpoint("https://server.example/");
-    await waitForCondition(() => expect(detailRequests).toBe(2));
     expect(container.querySelector(".wf-folder-actions")).toBeNull();
     expect(container.textContent).not.toContain("Previous context folder");
+    await waitForCondition(() => expect(detailRequests).toBe(2));
 
     resolveDetail?.(response({ folder: currentFolder, ancestors: [] }));
     await waitForCondition(() => expect(container.querySelector(".wf-folder-actions")?.getAttribute("aria-label")).toBe("Actions for Current context folder"));

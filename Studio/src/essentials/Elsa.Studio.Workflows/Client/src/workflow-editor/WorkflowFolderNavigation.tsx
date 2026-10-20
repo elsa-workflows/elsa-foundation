@@ -39,6 +39,8 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   const folderPickerButtonRef = useRef<HTMLButtonElement>(null);
   const renameButtonRef = useRef<HTMLButtonElement>(null);
   const moveButtonRef = useRef<HTMLButtonElement>(null);
+  const selectedId = selectedFolderId(selection);
+  const breadcrumbIdentity = `${context.baseUrl}\u0000${selectedId ?? ""}`;
   const breadcrumbIdentityRef = useRef<string | null>(null);
   const breadcrumbContextRef = useRef(context);
   const {
@@ -77,9 +79,8 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
 
   useEffect(() => {
     const id = selectedFolderId(selection);
-    const identity = `${context.baseUrl}\u0000${id ?? ""}`;
-    const identityChanged = breadcrumbIdentityRef.current !== identity || breadcrumbContextRef.current !== context;
-    breadcrumbIdentityRef.current = identity;
+    const identityChanged = breadcrumbIdentityRef.current !== breadcrumbIdentity || breadcrumbContextRef.current !== context;
+    breadcrumbIdentityRef.current = breadcrumbIdentity;
     breadcrumbContextRef.current = context;
     if (identityChanged || !available) {
       setCrumbs([]);
@@ -105,7 +106,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
         }
       });
     return () => { cancelled = true; };
-  }, [available, context, localRefreshKey, selection]);
+  }, [available, breadcrumbIdentity, context, localRefreshKey, selection]);
 
   const toggle = async (folder: WorkflowFolder) => {
     if (expanded.has(folder.id)) {
@@ -144,8 +145,10 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
     }
   };
 
-  const selectedId = selectedFolderId(selection);
-  const selectedFolder = selectedId ? findFolder(roots, children, selectedId) ?? crumbs.at(-1) : undefined;
+  const breadcrumbContextCurrent = breadcrumbContextRef.current === context && breadcrumbIdentityRef.current === breadcrumbIdentity;
+  const selectedFolder = selectedId && breadcrumbContextCurrent
+    ? findFolder(roots, children, selectedId) ?? crumbs.at(-1)
+    : undefined;
 
   const refreshAfterStructureChange = async (
     affectedParentIds: ReadonlyArray<string | null>,
