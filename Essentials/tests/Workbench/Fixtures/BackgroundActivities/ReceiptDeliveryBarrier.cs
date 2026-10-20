@@ -11,10 +11,12 @@ namespace Elsa.Workbench.Tests.BackgroundActivities;
 /// Captures the real worker claims used by the process-recovery witnesses, replays a cancelled claim when explicitly
 /// armed, and can hold a real receipt after commit but before notification to simulate process loss.
 /// </summary>
-internal sealed class ReceiptDeliveryBarrier(IBackgroundActivityWorkStore inner) : IBackgroundActivityWorkStore
+internal sealed class ReceiptDeliveryBarrier(IBackgroundActivityWorkStore inner, string journal, string role, bool ownsInner)
+    : IBackgroundActivityWorkStore, IDisposable, IAsyncDisposable
 {
-    private static string Journal => Path.Combine(Environment.CurrentDirectory, "background-witness");
-    private static bool HoldDelivery => File.Exists(Path.Combine(Journal, "hold-receipts"));
+    private int _disposed;
+    private string Journal => journal;
+    private bool HoldDelivery => File.Exists(Path.Combine(Journal, "hold-receipts"));
 
     public ValueTask<BackgroundActivityWorkItem?> FindAsync(string workflowExecutionId, string workId, CancellationToken cancellationToken = default) =>
         inner.FindAsync(workflowExecutionId, workId, cancellationToken);
@@ -22,6 +24,10 @@ internal sealed class ReceiptDeliveryBarrier(IBackgroundActivityWorkStore inner)
     public async ValueTask<BackgroundActivityWorkClaim?> ClaimNextAsync(string ownerId, DateTimeOffset now,
         TimeSpan visibilityTimeout, CancellationToken cancellationToken = default)
     {
+        // Suppress this test host's poll without creating a lease or passing a stale timestamp after a long wait.
+        if (File.Exists(Path.Combine(Journal, $"hold-workers-{role}")))
+            return null;
+
         if (File.Exists(Path.Combine(Journal, "attempt-late-receipt-after-restart")))
             await ReplayCancelledClaimsAsync(cancellationToken);
 
@@ -36,8 +42,15 @@ internal sealed class ReceiptDeliveryBarrier(IBackgroundActivityWorkStore inner)
         {
             Directory.CreateDirectory(Journal);
             var claimPath = Path.Combine(Journal, item.Request.ExecutableNodeId + ".claim.json");
-            if (!File.Exists(claimPath))
-                await WriteJsonAtomicallyAsync(claimPath, claim, cancellationToken);
+            try
+            {
+                if (!File.Exists(claimPath))
+                    await BackgroundWitnessJournal.WriteJsonAtomicallyAsync(claimPath, claim, cancellationToken);
+            }
+            catch (IOException) when (File.Exists(claimPath))
+            {
+                // Another real worker retained the first claim; never overwrite it or change this claim's outcome.
+            }
         }
 
         return claim;
@@ -110,7 +123,7 @@ internal sealed class ReceiptDeliveryBarrier(IBackgroundActivityWorkStore inner)
             catch (BackgroundActivityWorkConflictException exception)
             {
                 var current = await inner.FindAsync(claim.WorkflowExecutionId, claim.WorkId, cancellationToken);
-                await WriteJsonAtomicallyAsync(resultPath, new
+                await BackgroundWitnessJournal.WriteJsonAtomicallyAsync(resultPath, new
                 {
                     ProcessId = Environment.ProcessId,
                     claim.WorkflowExecutionId,
@@ -126,22 +139,7 @@ internal sealed class ReceiptDeliveryBarrier(IBackgroundActivityWorkStore inner)
         }
     }
 
-    private static async Task WriteJsonAtomicallyAsync<T>(string path, T value, CancellationToken cancellationToken)
-    {
-        var temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-        try
-        {
-            await File.WriteAllTextAsync(temporaryPath, JsonSerializer.Serialize(value), cancellationToken);
-            File.Move(temporaryPath, path);
-        }
-        finally
-        {
-            if (File.Exists(temporaryPath))
-                File.Delete(temporaryPath);
-        }
-    }
-
-    private static async Task TryWriteWorkStageAsync(BackgroundActivityWorkClaim claim, string operation, string stage,
+    private async Task TryWriteWorkStageAsync(BackgroundActivityWorkClaim claim, string operation, string stage,
         long? resultRevision = null, string? resultStatus = null, Exception? exception = null)
     {
         try
@@ -154,6 +152,7 @@ internal sealed class ReceiptDeliveryBarrier(IBackgroundActivityWorkStore inner)
             await BackgroundWitnessJournal.TryWriteJsonAtomicallyAsync(path, new
             {
                 Stage = stage,
+                Role = role,
                 ProcessId = Environment.ProcessId,
                 RecordedAt = DateTimeOffset.UtcNow,
                 claim.WorkflowExecutionId,
@@ -174,4 +173,17 @@ internal sealed class ReceiptDeliveryBarrier(IBackgroundActivityWorkStore inner)
             // Diagnostic filesystem failures must not replace the store outcome.
         }
     }
+
+    public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
+
+    public async ValueTask DisposeAsync()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0 || !ownsInner)
+            return;
+        if (inner is IAsyncDisposable asyncDisposable)
+            await asyncDisposable.DisposeAsync();
+        else if (inner is IDisposable disposable)
+            disposable.Dispose();
+    }
+
 }
