@@ -26,15 +26,17 @@ describe("PublishActionButton", () => {
     const selectedModes: WorkflowPublishMode[] = [];
     const first = mount(mode => selectedModes.push(mode));
     const firstPrimary = primaryButton(first.host);
+    const primaryReviewName = firstPrimary.getAttribute("aria-label") ?? firstPrimary.textContent?.trim();
 
-    expect(firstPrimary.textContent).toContain("Review and Publish");
     flushSync(() => firstPrimary.click());
     expect(selectedModes).toEqual(["review"]);
 
     const trigger = publishOptionsButton(first.host);
     flushSync(() => trigger.click());
     await nextFrame();
-    const publishOption = menuItem("Publish");
+    const reviewOption = menuItem("review");
+    const reviewMenuName = reviewOption.getAttribute("aria-label") ?? reviewOption.textContent?.trim();
+    const publishOption = menuItem("publish");
     flushSync(() => publishOption.click());
 
     expect(selectedModes).toEqual(["review", "publish"]);
@@ -47,24 +49,28 @@ describe("PublishActionButton", () => {
     expect(rememberedPrimary.textContent).toContain("Publish");
     flushSync(() => rememberedPrimary.click());
     expect(selectedModes).toEqual(["review", "publish", "publish"]);
+    expect.soft(primaryReviewName).toBe("Review & publish");
+    expect.soft(reviewMenuName).toBe("Review & publish");
   });
 
   it("falls back to review for an invalid value and keeps working when storage is unavailable", () => {
     window.localStorage.setItem(rememberedModeKey, "preview");
     const invalid = mount();
-    expect(primaryButton(invalid.host).textContent).toContain("Review and Publish");
+    const invalidFallbackName = primaryButton(invalid.host).getAttribute("aria-label") ?? primaryButton(invalid.host).textContent?.trim();
     invalid.unmount();
 
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("storage is blocked"); });
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("storage is blocked"); });
     const selectedModes: WorkflowPublishMode[] = [];
     const unavailable = mount(mode => selectedModes.push(mode));
-    expect(primaryButton(unavailable.host).textContent).toContain("Review and Publish");
+    const unavailableFallbackName = primaryButton(unavailable.host).getAttribute("aria-label") ?? primaryButton(unavailable.host).textContent?.trim();
 
     flushSync(() => publishOptionsButton(unavailable.host).click());
-    flushSync(() => menuItem("Publish").click());
+    flushSync(() => menuItem("publish").click());
     expect(selectedModes).toEqual(["publish"]);
     expect(primaryButton(unavailable.host).textContent).toContain("Publish");
+    expect.soft(invalidFallbackName).toBe("Review & publish");
+    expect.soft(unavailableFallbackName).toBe("Review & publish");
   });
 
   it("disables both controls while busy but leaves publication available during a save", () => {
@@ -78,8 +84,8 @@ describe("PublishActionButton", () => {
     expect(publishOptionsButton(saving.host).disabled).toBe(false);
     expect(primaryButton(saving.host).title).toContain("current save");
     flushSync(() => publishOptionsButton(saving.host).click());
-    expect(menuItem("Review and Publish").disabled).toBe(false);
-    expect(menuItem("Publish").disabled).toBe(false);
+    expect(menuItem("review").disabled).toBe(false);
+    expect(menuItem("publish").disabled).toBe(false);
   });
 
   it("supports menu arrows, Home, End, Enter, Escape, Tab, and focus return", async () => {
@@ -90,8 +96,8 @@ describe("PublishActionButton", () => {
     press("ArrowDown");
     await nextFrame();
 
-    const reviewOption = menuItem("Review and Publish");
-    const publishOption = menuItem("Publish");
+    const reviewOption = menuItem("review");
+    const publishOption = menuItem("publish");
     expect(document.activeElement).toBe(reviewOption);
     expect(reviewOption.getAttribute("aria-checked")).toBe("true");
     expect(reviewOption.querySelector("svg")?.getAttribute("style")).toContain("visibility: visible");
@@ -113,7 +119,7 @@ describe("PublishActionButton", () => {
 
     pressOn(trigger, "ArrowUp");
     await nextFrame();
-    expect(document.activeElement).toBe(menuItem("Publish"));
+    expect(document.activeElement).toBe(menuItem("publish"));
     press("Escape");
     expect(document.body.querySelector("[role='menu']")).toBeNull();
     expect(document.activeElement).toBe(trigger);
@@ -172,7 +178,7 @@ describe("PublishActionButton", () => {
     trigger.focus();
     pressOn(trigger, "ArrowDown");
     await nextFrame();
-    expect(document.activeElement).toBe(menuItem("Review and Publish"));
+    expect(document.activeElement).toBe(menuItem("review"));
 
     mounted.rerender({ busy: true });
     expect(document.body.querySelector("[role='menu']")).toBeNull();
@@ -216,9 +222,8 @@ function publishOptionsButton(host: HTMLElement) {
   return host.querySelector<HTMLButtonElement>("[aria-label='Publish options']")!;
 }
 
-function menuItem(label: string) {
-  return [...document.body.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']")]
-    .find(item => item.textContent?.trim() === label)!;
+function menuItem(mode: "review" | "publish") {
+  return [...document.body.querySelectorAll<HTMLButtonElement>("[role='menuitemradio']")][mode === "review" ? 0 : 1]!;
 }
 
 async function nextFrame() {

@@ -64,3 +64,12 @@ All source pointers below refer to revision 3255701dcd9ed231d718aea0945dc3a6332c
 
 Root reports a pre-change Workflows client Vitest baseline at source revision 3255701dcd9ed231d718aea0945dc3a6332c3866: 2124 passed across 167 files, zero skips, 56.74 seconds. The external execution log is [/Users/sipke/Documents/Codex/2026-10-19/studio-ux-audit/execution/3072-unit-baseline.log](/Users/sipke/Documents/Codex/2026-10-19/studio-ux-audit/execution/3072-unit-baseline.log). This is a unit-suite baseline only. New copy regressions, actual conditional-status geometry, themes, and the expanded browser matrix remain unmeasured and must be verified by root before delivery.
 
+
+
+## Reviewed pre-implementation regressions — 2026-10-20
+
+Root reviewed all seven targeted component test diffs and the final pre-production run: 134 tests, 121 passing and 13 expected copy-only failures. Draft identity/request/permission and precedence checks execute before their label assertions; the retained head plus historical-draft case and the no-head/no-create case both select the exact editable draft. Supplied submit text, native field-label associations, connected-environment warning, exact payload, full Test Run status/details callbacks, remembered publication mode, continuation and the immediate Save now flush remain covered. An initially incorrect test assumption about label[for] was corrected to inspect the existing native wrapping-label association; production markup was unchanged.
+
+Actual-component browser baseline: four existing save-status cases pass and all sixteen new geometry cases fail, across four widths and both themes. The expanded workflow matrix then reproduces the failure for all thirty combinations of save status and real TestRunStatus per width/theme. Workflow primary movement reaches 301.14 CSS pixels horizontally and 80 vertically; Activity publication states reach 308.98 horizontally and 46.39 vertically. The narrow Activity graph toolbar also overflows because Back remains beside the header. These measurements authorize only the planned bounded presentation repair; no eligibility or lifecycle correction is required. Logs, JSON geometry and traces are retained with the external issue execution record.
+
+Root approves the T007 gate: proceed with the specified copy changes, then the smallest measured responsive toolbar repair. Final green, visual/keyboard review, repository gates, independent reviews, hosted checks and resulting-main verification remain pending.

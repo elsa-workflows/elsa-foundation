@@ -172,3 +172,46 @@ test("supports keyboard publish-mode selection and repeats the remembered mode a
   await expect(menu).toHaveCount(0);
   await expect(trigger).toBeFocused();
 });
+
+for (const theme of ["light", "dark"]) {
+  for (const width of [320, 768, 1024, 1440]) {
+    test(`keeps primary authoring actions stationary through Test Run status changes at ${width}px in ${theme}`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(`/?mode=workflow-toolbar&theme=${theme}`);
+      const toolbar = page.locator(".wf-editor-toolbar");
+      // Select the primary publish action structurally while its approved wording is under test elsewhere.
+      const primary = toolbar.getByRole("button").filter({ hasText: /^(Review and Publish|Review & publish)$/ });
+      const actions = [toolbar.locator(".wf-save-button"), primary, toolbar.locator(".wf-run-button")];
+      const initial = await Promise.all(actions.map(action => action.boundingBox()));
+      expect(initial.every(Boolean)).toBe(true);
+      const observations = [];
+      for (const state of ["accepted", "rejected", "incidents", "runtime-issue", "stale", ""]) {
+        await page.getByLabel("Test Run status", { exact: true }).selectOption(state);
+        const status = toolbar.locator(".wf-test-run-trigger");
+        if (state) {
+          await expect(status).toBeVisible();
+          await expect(status).toHaveText(state === "rejected" ? /Test run rejected/i : state === "incidents" ? /Test run accepted with incidents/i : state === "runtime-issue" ? /Test run accepted with a runtime issue/i : state === "stale" ? /Earlier draft · Test run dispatched/i : /Test run dispatched/i);
+          await status.focus();
+          await status.press("Enter");
+          await expect(page.getByText("Selected action: Runtime details", { exact: true })).toBeVisible();
+        } else await expect(status).toHaveCount(0);
+        for (const saveStatus of statusValues) {
+          await page.getByLabel("Save status", { exact: true }).selectOption(saveStatus);
+          await expect(toolbar.locator(".wf-editor-save-status")).toHaveText(saveStatus);
+          const boxes = await Promise.all(actions.map(action => action.boundingBox()));
+          observations.push({ state, saveStatus, boxes });
+          for (let index = 0; index < actions.length; index++) {
+            await expect(actions[index]).toBeVisible();
+            expect(boxes[index]!.x).toBeGreaterThanOrEqual(0);
+            expect(boxes[index]!.x + boxes[index]!.width).toBeLessThanOrEqual(width);
+          }
+        }
+      }
+      await testInfo.attach("authoring-status-geometry", { body: JSON.stringify({ initial, observations }), contentType: "application/json" });
+      for (const { boxes } of observations) for (let index = 0; index < boxes.length; index++) {
+        expect(Math.abs(boxes[index]!.x - initial[index]!.x)).toBeLessThanOrEqual(1);
+        expect(Math.abs(boxes[index]!.y - initial[index]!.y)).toBeLessThanOrEqual(1);
+      }
+    });
+  }
+}

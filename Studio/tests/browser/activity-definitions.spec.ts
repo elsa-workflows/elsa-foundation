@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page, type Route } from "@playwright/test";
 
 test("Activity Definitions supports keyboard collection-to-workbench navigation and exact draft URLs", async ({ page }) => {
   await mockActivityDefinitions(page);
@@ -684,6 +684,56 @@ test("Activity Graph diagnostics focus accessible root context while the exact c
   await expect(page.getByText(/Focused the provider-owned Activity Graph location/)).toBeVisible();
   state.releaseCatalog();
 });
+
+for (const theme of ["light", "dark"]) {
+  for (const width of [320, 768, 1024, 1440]) {
+    test(`keeps activity authoring actions stationary through publication status changes at ${width}px in ${theme}`, async ({ page }, testInfo) => {
+      const state = await mockActivityDefinitionAuthoring(page);
+      await page.setViewportSize({ width, height: 900 });
+      await createBrowserActivity(page, theme);
+      await page.locator("details.ad-authoring-advanced > summary").click();
+      const toolbar = page.locator(".ad-authoring-toolbar-actions");
+      const actions = [toolbar.locator(".ad-publication-toolbar-trigger"), toolbar.getByRole("button", { name: "Test Run", exact: true }), toolbar.getByRole("button", { name: "Save now", exact: true })];
+      const initial = await Promise.all(actions.map(action => action.boundingBox()));
+      expect(initial.every(Boolean)).toBe(true);
+      const observations = [];
+      const preflightPath = /\/design\/activities\/drafts\/[^/]+\/publication-preflight$/;
+      let releaseFailure!: () => void;
+      const failurePending = new Promise<void>(resolve => { releaseFailure = resolve; });
+      const failPreflight = async (route: Route) => {
+        await failurePending;
+        await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ title: "Preflight unavailable" }) });
+      };
+      await page.route(preflightPath, failPreflight);
+      await actions[0].click();
+      const dialog = page.getByRole("dialog", { name: "Review & publish" });
+      await expect(dialog).toBeVisible();
+      observations.push({ state: "preparing", boxes: await Promise.all(actions.map(action => action.boundingBox())) });
+      releaseFailure();
+      await expect(dialog.getByRole("alert")).toContainText("Publication preflight could not be confirmed");
+      await dialog.getByRole("button", { name: "Close publication review" }).click();
+      await expect(toolbar.getByRole("status")).toBeVisible();
+      observations.push({ state: "failed", boxes: await Promise.all(actions.map(action => action.boundingBox())) });
+      await page.unroute(preflightPath, failPreflight);
+      await actions[0].click();
+      await expect(dialog.getByRole("button", { name: "Publish 1.0.0", exact: true })).toBeVisible();
+      await dialog.getByRole("button", { name: "Close publication review" }).click();
+      await expect(actions[0]).toHaveText("Continue publication review");
+      await expect(toolbar.getByRole("status")).toBeVisible();
+      observations.push({ state: "review", boxes: await Promise.all(actions.map(action => action.boundingBox())) });
+      await testInfo.attach("activity-publication-geometry", { body: JSON.stringify({ initial, observations }), contentType: "application/json" });
+      expect(state.publicationWrites).toBe(0);
+      for (const action of actions) await expect(action).toBeVisible();
+      for (const { boxes } of observations) for (let index = 0; index < boxes.length; index++) {
+        expect(boxes[index]).not.toBeNull();
+        expect(boxes[index]!.x).toBeGreaterThanOrEqual(0);
+        expect(boxes[index]!.x + boxes[index]!.width).toBeLessThanOrEqual(width);
+        expect(Math.abs(boxes[index]!.x - initial[index]!.x)).toBeLessThanOrEqual(1);
+        expect(Math.abs(boxes[index]!.y - initial[index]!.y)).toBeLessThanOrEqual(1);
+      }
+    });
+  }
+}
 
 test("Activity Definition publication keeps first and later recommendation semantics while preserving exact versions", async ({ page }) => {
   const state = await mockActivityDefinitionAuthoring(page);
@@ -2645,8 +2695,8 @@ function browserPublicationReceipt(idempotencyKey: string, version: string, revi
   };
 }
 
-async function createBrowserActivity(page: Page) {
-  await page.goto("/?mode=activity-definitions");
+async function createBrowserActivity(page: Page, theme = "light") {
+  await page.goto(`/?mode=activity-definitions&theme=${theme}`);
   await page.locator(".ad-page-header").getByRole("button", { name: "Create activity" }).click();
   await page.getByRole("textbox", { name: "Display name" }).fill("Published browser activity");
   await selectSequenceComposition(page);

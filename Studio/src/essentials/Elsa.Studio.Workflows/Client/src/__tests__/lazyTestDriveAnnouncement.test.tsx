@@ -48,8 +48,7 @@ describe("lazy Test Drive UI", () => {
       />
     );
 
-    expect(container.querySelector(".wf-test-drive-panel [role='status']")?.textContent)
-      .toBe("Loading Test Drive setup…");
+    const loadingAnnouncement = container.querySelector<HTMLElement>(".wf-test-drive-panel [role='status']")?.textContent;
     expect(container.textContent).not.toContain("Test Run setup ready");
 
     panelChunk.resolveModule({
@@ -57,6 +56,7 @@ describe("lazy Test Drive UI", () => {
     });
     await vi.waitFor(() => expect(container.textContent).toContain("Test Run setup ready"));
     expect(container.textContent).not.toContain("Loading Test Drive setup…");
+    expect(loadingAnnouncement).toBe("Loading Test Run setup…");
   });
 
   it("announces while Test Drive controls load on the Runtime panel", async () => {
