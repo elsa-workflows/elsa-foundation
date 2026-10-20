@@ -25,6 +25,15 @@ public interface IConnectionRepository
 
     ValueTask<bool> TryAddAsync(ConnectionDocument document, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Saves a document with compare-and-swap on <see cref="ConnectionState.Version"/>. The save succeeds
+    /// only when the stored version equals the document's, and then stores the document with the version
+    /// incremented by one. Otherwise, including when the stored document was deleted, it throws
+    /// <see cref="Exceptions.ConnectionConflictException"/> and writes nothing. The manager relies on this
+    /// so that a concurrent update, revoke or test never overwrites another one. Whether the new version is
+    /// also written back onto <paramref name="document"/> is up to the implementation, so read the document
+    /// again before saving it a second time.
+    /// </summary>
     ValueTask SaveAsync(ConnectionDocument document, CancellationToken cancellationToken = default);
 
     ValueTask<bool> DeleteAsync(string tenantId, string name, CancellationToken cancellationToken = default);
