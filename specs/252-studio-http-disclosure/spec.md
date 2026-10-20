@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-20
 
-**Status**: Approved — root reviewed against #3064 on 2026-10-20; implementation is authorized within epic #3057.
+**Status**: Implemented — #3064; the implementation PR carries this transition and the final delivery receipt under the spec lifecycle.
 
 **Input**: GitHub issue #3064, “Studio UX: Guide HTTP activity configuration with safe progressive disclosure”
 
