@@ -21,6 +21,7 @@ using Elsa.Locking.FileSystem;
 using Elsa.Tasks;
 using Elsa.Tasks.Core;
 using Elsa.Etl.Runtime.Hosting;
+using Elsa.Etl.Tests.Support;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -270,6 +271,8 @@ public sealed partial class EtlRuntimeJourneyTests
     {
         private readonly string _directory = Path.Combine(Path.GetTempPath(), "Elsa.Etl.RuntimeJourney", Guid.NewGuid().ToString("N"));
         private readonly List<IHost> _hosts = [];
+        private readonly List<EtlWorkerProcess> _workers = [];
+        private readonly HashSet<string> _workerRoles = new(StringComparer.Ordinal);
         private readonly string _source;
         private readonly string _lookup;
         public EtlScope Scope { get; } = new(null, "runtime-journey");
@@ -338,6 +341,26 @@ public sealed partial class EtlRuntimeJourneyTests
 
         public Task AdmitAsync(IHost host, EtlInvocation invocation, EtlStoreStatus expected = EtlStoreStatus.Applied) =>
             AdmitAsync(host.Services, invocation, expected);
+
+        public async Task<EtlWorkerProcess> StartWorkerAsync(string role, CancellationToken cancellationToken)
+        {
+            EtlWorkerProtocol.ValidateRole(role);
+            if (!_workerRoles.Add(role))
+                throw new InvalidOperationException("Each fixture worker requires a distinct role and journal.");
+            Directory.CreateDirectory(Path.Combine(_directory, "journal"));
+            var configurationPath = EtlWorkerProtocol.ConfigurationPath(_directory);
+            if (!File.Exists(configurationPath))
+            {
+                var configuration = new EtlWorkerConfiguration(_directory, Scope,
+                    [Binding("source", "Source", _source, "v1"), Binding("lookup", "Lookup", _lookup, "v1"),
+                        Binding("output", "MainOutput", OutputRoot, "v1"), Binding("errors", "ErrorOutput", ErrorRoot, "v1")]);
+                await EtlWorkerProtocol.WriteConfigurationAsync(_directory, configuration, cancellationToken);
+            }
+            var worker = new EtlWorkerProcess(_directory, configurationPath, role);
+            _workers.Add(worker); // Retain ownership even when startup/readiness fails.
+            await worker.StartAsync(cancellationToken);
+            return worker;
+        }
 
         public async Task AdmitAsync(IServiceProvider services, EtlInvocation invocation, EtlStoreStatus expected = EtlStoreStatus.Applied)
         {
@@ -412,8 +435,15 @@ public sealed partial class EtlRuntimeJourneyTests
 
         public async ValueTask DisposeAsync()
         {
+            var failures = new List<Exception>();
+            foreach (var worker in _workers.AsEnumerable().Reverse())
+                try { await worker.DisposeAsync(); }
+                catch (Exception exception) { failures.Add(exception); }
             foreach (var host in _hosts.ToArray())
-                await StopHostAsync(host);
+                try { await StopHostAsync(host); }
+                catch (Exception exception) { failures.Add(exception); }
+            if (failures.Count > 0)
+                throw new AggregateException($"Fixture cleanup failed; shared ETL state and worker logs remain at {_directory}.", failures);
             Directory.Delete(_directory, recursive: true);
         }
     }

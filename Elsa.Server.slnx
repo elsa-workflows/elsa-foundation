@@ -26,6 +26,7 @@
   </Folder>
   <Folder Name="/Extensions/Etl/tests/">
     <Project Path="Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj" />
+    <Project Path="Extensions/Etl/tests/WorkerHost/Elsa.Etl.WorkerHost.csproj" />
   </Folder>
   <Folder Name="/Extensions/Elsa3/" />
   <Folder Name="/Extensions/Elsa3/tests/" />

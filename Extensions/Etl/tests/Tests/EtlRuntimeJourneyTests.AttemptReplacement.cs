@@ -1,7 +1,7 @@
 using Elsa.Etl.Core;
 using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
-using Elsa.Etl.Runtime;
+using Elsa.Etl.Tests.Support;
 using Elsa.Etl.Runtime.Execution;
 using Elsa.Etl.Runtime.Hosting;
 using Elsa.Persistence.EntityFramework;
@@ -220,28 +220,28 @@ public sealed partial class EtlRuntimeJourneyTests
     }
 
     /// <summary>Pauses real I/O calls before entering the inner EF transaction, never the database lock.</summary>
-    private sealed class PausedAttemptStore(IEtlRuntimeStore inner, AttemptReplacementBarrier barrier) : IEtlRuntimeStore
+    private sealed class PausedAttemptStore(IEtlRuntimeStore inner, AttemptReplacementBarrier barrier) : ForwardingEtlRuntimeStore(inner)
     {
-        public async ValueTask<EtlStoreStatus> RenewPreparationAsync(EtlPreparationLease lease, CancellationToken cancellationToken = default)
+        public override async ValueTask<EtlStoreStatus> RenewPreparationAsync(EtlPreparationLease lease, CancellationToken cancellationToken = default)
         {
             if (lease.Owner == "prepare-held")
             {
                 using var registration = cancellationToken.Register(() => barrier.PreparationStopping.TrySetResult());
                 await barrier.ReleasePreparationRenewal.Task;
             }
-            return await inner.RenewPreparationAsync(lease, cancellationToken);
+            return await Inner.RenewPreparationAsync(lease, cancellationToken);
         }
 
-        public async ValueTask<EtlStoreStatus> RenewPartitionAsync(EtlPartitionLease lease, CancellationToken cancellationToken = default)
+        public override async ValueTask<EtlStoreStatus> RenewPartitionAsync(EtlPartitionLease lease, CancellationToken cancellationToken = default)
         {
             // Heartbeat starts synchronously before the execution body. Hold only its first old call;
             // the execution body's explicit pre-effect renewal still reaches the real store.
             if (lease.Owner == "old" && Interlocked.Increment(ref barrier.OldRenewals) == 1)
                 await barrier.ReleaseOldRenewal.Task;
-            return await inner.RenewPartitionAsync(lease, cancellationToken);
+            return await Inner.RenewPartitionAsync(lease, cancellationToken);
         }
 
-        public async ValueTask<EtlAcceptanceResult> AcceptBatchAsync(EtlPartitionLease lease, EtlBatchAcceptance acceptance, CancellationToken cancellationToken = default)
+        public override async ValueTask<EtlAcceptanceResult> AcceptBatchAsync(EtlPartitionLease lease, EtlBatchAcceptance acceptance, CancellationToken cancellationToken = default)
         {
             if (lease.Owner == "old")
             {
@@ -251,39 +251,25 @@ public sealed partial class EtlRuntimeJourneyTests
                 // Model a physical operation that cannot stop immediately on cancellation. Still use
                 // the real store fence check afterward, independently of caller cancellation.
                 await barrier.ReleaseOldAcceptance.Task;
-                var result = await inner.AcceptBatchAsync(lease, acceptance, CancellationToken.None);
+                var result = await Inner.AcceptBatchAsync(lease, acceptance, CancellationToken.None);
                 barrier.OldAcceptanceStatus = result.Status;
                 return result;
             }
             barrier.SuccessorAcceptance = acceptance;
             barrier.SuccessorAcceptanceEntered.TrySetResult();
             await barrier.ReleaseSuccessorAcceptance.Task.WaitAsync(cancellationToken);
-            return await inner.AcceptBatchAsync(lease, acceptance, cancellationToken);
+            return await Inner.AcceptBatchAsync(lease, acceptance, cancellationToken);
         }
 
-        public async ValueTask<EtlStoreStatus> ReleasePartitionAsync(EtlPartitionLease lease, CancellationToken cancellationToken = default)
+        public override async ValueTask<EtlStoreStatus> ReleasePartitionAsync(EtlPartitionLease lease, CancellationToken cancellationToken = default)
         {
             if (lease.Owner == "old")
             {
                 barrier.OldCleanupEntered.TrySetResult();
                 await barrier.ReleaseOldCleanup.Task.WaitAsync(cancellationToken);
             }
-            return await inner.ReleasePartitionAsync(lease, cancellationToken);
+            return await Inner.ReleasePartitionAsync(lease, cancellationToken);
         }
 
-        public ValueTask<EtlAdmissionResult> AdmitAsync(EtlRunAdmission admission, CancellationToken cancellationToken = default) => inner.AdmitAsync(admission, cancellationToken);
-        public ValueTask<EtlTerminalSettlementResult> RejectAdmissionAsync(EtlInvocation invocation, EtlRunDiagnostic diagnostic, CancellationToken cancellationToken = default) => inner.RejectAdmissionAsync(invocation, diagnostic, cancellationToken);
-        public ValueTask<EtlRunView?> FindRunAsync(EtlScope scope, string runId, CancellationToken cancellationToken = default) => inner.FindRunAsync(scope, runId, cancellationToken);
-        public ValueTask<EtlPreparationLease?> ClaimPreparationAsync(EtlScope scope, string workerId, CancellationToken cancellationToken = default) => inner.ClaimPreparationAsync(scope, workerId, cancellationToken);
-        public ValueTask<EtlStoreStatus> CommitPreparationAsync(EtlPreparationLease lease, EtlPreparedRun prepared, CancellationToken cancellationToken = default) => inner.CommitPreparationAsync(lease, prepared, cancellationToken);
-        public ValueTask<EtlPartitionLease?> ClaimPartitionAsync(EtlScope scope, string? runId, string workerId, CancellationToken cancellationToken = default) => inner.ClaimPartitionAsync(scope, runId, workerId, cancellationToken);
-        public ValueTask<EtlReservationResult> ReserveBatchAsync(EtlPartitionLease lease, EtlBatchDescriptor batch, CancellationToken cancellationToken = default) => inner.ReserveBatchAsync(lease, batch, cancellationToken);
-        public ValueTask<EtlTerminalSettlementResult> SettleTerminalAsync(EtlTerminalProposal proposal, CancellationToken cancellationToken = default) => inner.SettleTerminalAsync(proposal, cancellationToken);
-        public ValueTask<EtlTerminalSettlementResult> CancelAsync(EtlInvocation invocation, CancellationToken cancellationToken = default) => inner.CancelAsync(invocation, cancellationToken);
-        public ValueTask<EtlDeliveryLease?> ClaimDeliveryAsync(EtlScope scope, string workerId, CancellationToken cancellationToken = default) => inner.ClaimDeliveryAsync(scope, workerId, cancellationToken);
-        public ValueTask<EtlStoreStatus> AcknowledgeDeliveryAsync(EtlDeliveryLease lease, EtlDeliveryDisposition disposition, CancellationToken cancellationToken = default) => inner.AcknowledgeDeliveryAsync(lease, disposition, cancellationToken);
-        public ValueTask<IReadOnlyList<EtlRunView>> ListRunsAsync(EtlScope scope, string? afterRunId, int take, CancellationToken cancellationToken = default) => inner.ListRunsAsync(scope, afterRunId, take, cancellationToken);
-        public ValueTask<IReadOnlyList<EtlPartitionView>> ListPartitionsAsync(EtlScope scope, string runId, int afterPartitionOrdinal, int take, CancellationToken cancellationToken = default) => inner.ListPartitionsAsync(scope, runId, afterPartitionOrdinal, take, cancellationToken);
-        public ValueTask<IReadOnlyList<EtlManifestEntry>> ListManifestAsync(EtlScope scope, string runId, EtlManifestPosition? after, int take, CancellationToken cancellationToken = default) => inner.ListManifestAsync(scope, runId, after, take, cancellationToken);
     }
 }

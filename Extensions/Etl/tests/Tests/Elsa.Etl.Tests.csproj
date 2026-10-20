@@ -12,6 +12,8 @@
     <PackageReference Include="CShells" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Build-order only: process tests run this host's own output, never load it into the test host. -->
+    <ProjectReference Include="../WorkerHost/Elsa.Etl.WorkerHost.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../src/Core/Elsa.Etl.Core.csproj" />
     <ProjectReference Include="../../src/Runtime/Elsa.Etl.Runtime.csproj" />
     <ProjectReference Include="../../src/Design/Elsa.Etl.Design.csproj" />
@@ -39,6 +41,9 @@
     <ProjectReference Include="../../../../Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj" />
     <Using Include="Xunit" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../Shared/*.cs" Link="Support/%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
