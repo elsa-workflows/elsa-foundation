@@ -29,22 +29,22 @@
 ### Baselines for User Story 1 (P1): required source first
 
 - [x] T002 [P] Add a synthetic preselected Configuration Store scenario to `Studio/tests/browser/secretScopesFixture.tsx` and an actual-host-styles test to `Studio/tests/browser/secret-scopes.spec.ts` that measures the complete Value or Configuration key control inside the visible dialog body at 1280×800 before scrolling.
-- [ ] T003 [P] Add focused source-selection and current requiredness/submission regression cases to `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/__tests__/secretDialogs.test.tsx`; preserve current Type defaults, Value versus Configuration key selection, and Configuration key trim behavior.
+- [x] T003 [P] Add focused source-selection and current requiredness/submission regression cases to `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/__tests__/secretDialogs.test.tsx`; preserve current Type defaults, Value versus Configuration key selection, and Configuration key trim behavior.
 
 ### Baselines for User Story 2 (P2): optional choices and context
 
-- [ ] T004 Add focused regression cases to `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/__tests__/secretDialogs.test.tsx` and `Studio/tests/browser/secret-scopes.spec.ts` for initial More options collapse, grouping, generic count exclusions, directly visible Store context and canonical Scope hint, and empty-Store recovery with Type still direct.
+- [x] T004 Add focused regression cases to `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/__tests__/secretDialogs.test.tsx` and `Studio/tests/browser/secret-scopes.spec.ts` for initial More options collapse, grouping, generic count exclusions, directly visible Store context and canonical Scope hint, and empty-Store recovery with Type still direct.
 
 ### Baselines for User Story 3 (P3): preservation and recovery
 
-- [ ] T005 Add regression coverage in `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/__tests__/secretDialogs.test.tsx`, `Studio/tests/browser/secretScopesFixture.tsx`, and `Studio/tests/browser/secret-scopes.spec.ts` for exact create payload/defaults/omissions/expiry, Type and Store switching, authored-value retention, Value remasking, advisory Scope failure with focused custom Scope, no stored-value fetch, and no raw source in fixture metadata.
-- [ ] T006 Update the tall-error case in `Studio/tests/browser/secret-scopes.spec.ts` to open More options and scroll to a real below-fold optional field or long help instead of Expires; preserve its dialog-body scrolling, fixed-action visibility, save-error, focus, and entered-value assertions.
+- [x] T005 Add regression coverage in `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/__tests__/secretDialogs.test.tsx`, `Studio/tests/browser/secretScopesFixture.tsx`, and `Studio/tests/browser/secret-scopes.spec.ts` for exact create payload/defaults/omissions/expiry, Type and Store switching, authored-value retention, Value remasking, advisory Scope failure with focused custom Scope, no stored-value fetch, and no raw source in fixture metadata.
+- [x] T006 Update the tall-error case in `Studio/tests/browser/secret-scopes.spec.ts` to open More options and scroll to a real below-fold optional field or long help instead of Expires; preserve its dialog-body scrolling, fixed-action visibility, save-error, focus, and entered-value assertions.
 
 ### Run baselines and pass the pre-implementation gate
 
 - [x] T007 Root runs the browser visibility test from `Studio/` using `pnpm exec playwright test tests/browser/secret-scopes.spec.ts --grep "required source is visible at 1280x800" --workers=1`; record actual body/control geometry for both source paths and the expected pre-change result alongside the validation criteria in `specs/991-studio-secret-creation-focus/quickstart.md`.
-- [ ] T008 Run the full Secrets Client Vitest suite and the `secret-scopes.spec.ts` browser suite serially from the documented working directories; distinguish expected new-layout/disclosure failures from existing behavior baselines and record results for the commands in `specs/991-studio-secret-creation-focus/quickstart.md` without claiming expected RED results as passing.
-- [ ] T009 Root reviews the baseline evidence from `Studio/tests/browser/secret-scopes.spec.ts` and `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/__tests__/secretDialogs.test.tsx` against `spec.md` and `quickstart.md`; production UI editing remains blocked until root approves the captured baselines.
+- [x] T008 Run the full Secrets Client Vitest suite and the `secret-scopes.spec.ts` browser suite serially from the documented working directories; distinguish expected new-layout/disclosure failures from existing behavior baselines and record results for the commands in `specs/991-studio-secret-creation-focus/quickstart.md` without claiming expected RED results as passing.
+- [x] T009 Root reviews the baseline evidence from `Studio/tests/browser/secret-scopes.spec.ts` and `Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/__tests__/secretDialogs.test.tsx` against `spec.md` and `quickstart.md`; production UI editing remains blocked until root approves the captured baselines.
 
 ### Direct dependency gate before UI implementation
 
