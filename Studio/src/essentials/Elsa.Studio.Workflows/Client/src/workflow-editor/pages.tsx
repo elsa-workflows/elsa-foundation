@@ -1,9 +1,10 @@
-import React, { lazy, useCallback, useEffect, useState } from "react";
+import React, { lazy, useCallback, useEffect, useRef, useState } from "react";
 import type { StudioActivityPropertyEditorContribution, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionToolingClient, StudioWorkflowDesignerPanelContribution, StudioWorkflowRunInputEditorContribution, StudioTestStimulusEditorContribution } from "@elsa-workflows/studio-sdk";
 import { WorkflowLazyBoundary } from "../WorkflowLazyBoundary";
 import { updateWorkflowDefinitionIdInUrl } from "./workflowDefinitionUrl";
 import type { ExpressionToolingCacheIdentity } from "../expression-tooling/expressionToolingClient";
 import { useWorkflowDefinitionBrowseSession } from "./workflowDefinitionBrowseSession";
+import { readRunSelection } from "./runSelectionUrl";
 
 const WorkflowEditor = lazy(() => import("./WorkflowEditor").then(module => ({ default: module.WorkflowEditor })));
 const WorkflowDefinitions = lazy(() => import("./WorkflowDefinitions").then(module => ({ default: module.WorkflowDefinitions })));
@@ -155,7 +156,13 @@ export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [
 }) {
   const workflowExecutionId = readWorkflowExecutionIdFromUrl();
   const searchParams = new URLSearchParams(window.location.search);
-  const initialActivityExecutionId = searchParams.get("activityExecutionId")?.trim() || null;
+  // The run view rewrites the selection in the URL as the operator moves around (spec 260 FR-423); read it once per run
+  // so a later render never reloads the run for a selection the view itself wrote.
+  const initialSelection = useRef<{ workflowExecutionId: string; activityExecutionId: string | null } | null>(null);
+  if (initialSelection.current?.workflowExecutionId !== workflowExecutionId) {
+    initialSelection.current = { workflowExecutionId, activityExecutionId: readRunSelection(window.location.search) };
+  }
+  const initialActivityExecutionId = initialSelection.current.activityExecutionId;
   const requestedInspectorTab = searchParams.get("tab");
   const initialInspectorTab = requestedInspectorTab === "issues"
     ? "issues"

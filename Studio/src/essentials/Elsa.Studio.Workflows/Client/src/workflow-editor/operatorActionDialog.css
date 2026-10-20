@@ -1,0 +1,206 @@
+/* Spec 260: the confirmation dialog for operator actions on a waiting recovery. */
+.wf-operator-dialog {
+  width: min(600px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
+.wf-operator-dialog form {
+  gap: 14px;
+}
+
+.wf-operator-facts {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.wf-operator-facts > div {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: 4px 12px;
+}
+
+.wf-operator-facts dt {
+  color: var(--studio-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.wf-operator-facts dd {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.wf-operator-facts ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.wf-operator-outcomes {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius, .5rem);
+}
+
+.wf-operator-outcomes legend {
+  padding: 0 4px;
+  color: var(--studio-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.wf-operator-outcome {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 2px 8px;
+}
+
+.wf-operator-outcome label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.wf-operator-outcome small {
+  grid-column: 2;
+  color: var(--studio-text-muted);
+  font-size: 12px;
+}
+
+.wf-operator-reason {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.wf-operator-reason label {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.wf-operator-reason textarea {
+  width: 100%;
+  min-height: 56px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm, .375rem);
+  color: var(--studio-text);
+  background: var(--studio-surface);
+  font: inherit;
+  font-size: 14px;
+}
+
+.wf-operator-reason textarea[aria-invalid="true"] {
+  border-color: var(--studio-danger);
+}
+
+.wf-operator-reason small {
+  color: var(--studio-text-muted);
+  font-size: 12px;
+}
+
+.wf-operator-dialog .wf-operator-error {
+  color: var(--studio-danger-fg);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.wf-operator-submit-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--studio-danger) 45%, var(--studio-border));
+  border-radius: var(--studio-radius-sm, .375rem);
+  color: var(--studio-danger-fg);
+  background: var(--studio-surface);
+  font-size: 13px;
+}
+
+.wf-operator-dialog .wf-dialog-actions {
+  flex-wrap: wrap;
+}
+
+.wf-operator-dialog .wf-dialog-actions button[type="submit"][data-tone="danger"] {
+  border-color: color-mix(in srgb, var(--studio-danger) 55%, var(--studio-border));
+  color: var(--studio-danger-fg);
+  background: color-mix(in srgb, var(--studio-danger) 10%, var(--studio-surface));
+}
+
+.wf-operator-dialog :focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
+}
+
+@media (width <= 30rem) {
+  .wf-operator-facts > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The run view's status line for operator actions: present and empty until there is something to announce. */
+.wf-operator-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 8px 18px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius, .5rem);
+  color: var(--studio-text);
+  background: var(--studio-surface);
+  font-size: 13px;
+}
+
+.wf-operator-status:empty {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.wf-operator-status[data-tone="error"] {
+  border-color: color-mix(in srgb, var(--studio-danger) 50%, var(--studio-border));
+  color: var(--studio-danger-fg);
+}
+
+.wf-operator-status svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.wf-incident-operator-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wf-incident-operator-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--studio-accent) 45%, var(--studio-border));
+  border-radius: var(--studio-radius-sm, .375rem);
+  color: var(--studio-text);
+  background: var(--studio-surface);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.wf-incident-operator-actions button[data-tone="danger"] {
+  border-color: color-mix(in srgb, var(--studio-danger) 55%, var(--studio-border));
+  color: var(--studio-danger-fg);
+}
