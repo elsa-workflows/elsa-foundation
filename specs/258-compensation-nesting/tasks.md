@@ -12,19 +12,19 @@
 
 ## Phase B — Scope v3, Confirm, Compensate (PR 2)
 
-- [ ] T306 State v3 types (`Confirmed`, `handlerExecutableNodeId`, `origin`, cause kinds `explicit` / `requested`, `confirmations`, `receivedHandOvers`) and `CompensationScopeStateUpcaster` v2→v3. Unit tests for every upcast row and no downgrade.
-- [ ] T307 Routing keys in request metadata and provenance metadata for every scheduled child; outcome matching falls back to provenance (FR-304). Test: operator retry of a handed-over handler routes back to the outer scope.
-- [ ] T308 Hand-over on `Done` (R-1 optional, boundary stop, R-2, batches of 16) and `confirmOnComplete`. Scope implements `IRuntimeActivityChildNotificationHandler` and `IRuntimeActivityChildOutcomeHandler` (research R8).
-- [ ] T309 Receiving hand-overs in every phase, de-duplication, fresh ordinals, transitive origin; scheduling handed-over handlers (FR-307). First test: the runtime accepts a handler node owned by an inner scope's slot as the outer scope's child (research R5); stop and re-plan if it does not.
-- [ ] T310 Late handler bindings: prove an `ActivityResult` reference to the inner forward step resolves when the handler runs under the outer scope (research R6); validator refuses container-local reads in a scope that can hand over.
-- [ ] T311 `Confirm` activity and the scope's confirm transition; refusal during recovery.
-- [ ] T312 `Compensate` activity, explicit cause, stopping the running step (uncertain journaling, R9), cascade through intermediate scopes, refusal inside a handler.
-- [ ] T313 Descendant-fault handling in the scope (`OnDescendantFaultedAsync`, R-3).
-- [ ] T314 Validators: Confirm/Compensate targets must be enclosing scopes on the same side of every reusable boundary.
-- [ ] T315 Integration and restart tests for every [quickstart](quickstart.md) journey in Durable, Balanced and Ephemeral, with the four injection points.
-- [ ] T316 Workbench owned-process journey N1 + C1 over REST with a process kill.
-- [ ] T317 Run the six SC-305 negative controls once by hand and record them in the PR.
-- [ ] T318 Docs: `website/docs/essentials/compensation.md` (nesting, loops, confirmation, Compensate, cancellation, the composition matrix and its known limit), glossary rows.
+- [x] T306 State v3 types (`Confirmed`, `handlerExecutableNodeId`, `origin`, cause kinds `explicit` / `requested`, `confirmations`, `receivedHandOvers`) and `CompensationScopeStateUpcaster` v2→v3. Unit tests for every upcast row and no downgrade.
+- [x] T307 Routing keys in request metadata and provenance metadata for every scheduled child; outcome matching falls back to provenance (FR-304). Test: operator retry of a handed-over handler routes back to the outer scope.
+- [x] T308 Hand-over on `Done` (R-1 optional, boundary stop, R-2, batches of 16) and `confirmOnComplete`. Scope implements `IRuntimeActivityChildNotificationHandler` and `IRuntimeActivityChildOutcomeHandler` (research R8).
+- [x] T309 Receiving hand-overs in every phase, de-duplication, fresh ordinals, transitive origin; scheduling handed-over handlers (FR-307). First test: the runtime accepts a handler node owned by an inner scope's slot as the outer scope's child (research R5); stop and re-plan if it does not.
+- [x] T310 Late handler bindings: prove an `ActivityResult` reference to the inner forward step resolves when the handler runs under the outer scope (research R6); validator refuses container-local reads in a scope that can hand over. (Validator deferred to T321: research R18.)
+- [x] T311 `Confirm` activity and the scope's confirm transition; refusal during recovery.
+- [x] T312 `Compensate` activity, explicit cause, stopping the running step (uncertain journaling, R9), cascade through intermediate scopes, refusal inside a handler.
+- [x] T313 Descendant-fault handling in the scope (`OnDescendantFaultedAsync`, R-3).
+- [x] T314 Validators: Confirm/Compensate targets must be enclosing scopes on the same side of every reusable boundary.
+- [x] T315 Integration and restart tests for every [quickstart](quickstart.md) journey in Durable, Balanced and Ephemeral, with the four injection points.
+- [x] T316 Workbench owned-process journey N1 + C1 over REST with a process kill.
+- [x] T317 Run the six SC-305 negative controls once by hand and record them in the PR.
+- [x] T318 Docs: `website/docs/essentials/compensation.md` (nesting, loops, confirmation, Compensate, cancellation, the composition matrix and its known limit), glossary rows.
 
 ## Phase C — Studio (PR 3)
 

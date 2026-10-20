@@ -74,3 +74,57 @@ Citations are to `main` plus the M2 branch (`agent/claude/3045-compensation-unce
 ## R10 — Hand-over size
 
 - **Decision:** at most 16 entries per message, several messages in one checkpoint when needed. Each payload carries the entry's identity, keys and handler node, never forward values, which stay in the run's value store and are resolved when the handler runs.
+
+## Decisions taken while building Phase B
+
+Each follows the rule "never undo something unconfirmed silently; never block forever without an incident" where the plan and the runtime disagreed.
+
+### R11 — No recovery of recovery
+
+- **Problem:** FR-312 asks a Confirm during recovery and a Compensate inside a handler to fault with `compensation.confirm-during-recovery` and `compensation.compensate-in-handler`. A Confirm or Compensate completes before its scope evaluates the notification, so nothing is left to fault, and a notification evaluation cannot fault the scope and stop a step in one commit.
+- **Decision:** the scope ignores a Confirm or Compensate that arrives while it is not running its steps, or that did not come through its running step (a handler). Publication refuses both inside a compensation handler (T314), so the runtime case is a race or an expression target. The two FR-312 codes are not used.
+
+### R12 — Explicit and requested recovery completes `Compensated`
+
+- **Decision:** a recovery a Compensate asked for, directly or through a cascade, finishes `Compensated` whatever `faultAfterCompensation` says. The author asked for the recovery; it is the outcome, not a failure to re-raise. R9 still faults when a stopped step has no handler.
+
+### R13 — A fault cannot ride a cancellation
+
+- **Evidence:** a structural evaluation that stages a subtree cancellation may only `Defer` or `Complete` (`StructuralParentEvaluationSupport.cs:157`).
+- **Decision:** when a Compensate leaves nothing to undo and the scope must fault (R9, or a cascade), the scope faults at once and does not stop the step. An enclosing scope's absorption of that fault cancels the subtree; with none, the run faults with a blocking incident. The Compensate's parent may evaluate once in between.
+
+### R14 — How a cascade names its target
+
+- **Decision:** the target's node id rides in the fault category, `compensation.target:{scopeNodeId}`. The target clears it and recovers as after a step fault. A stopped step without a handler wins over a cascade: the scope faults `compensation.scope.uncertain-unhandled` with category `outcome-unknown`, so an enclosing scope treats it as an uncertain step (undone by its handler, or an intervention wait), never as undone.
+
+### R15 — A Compensate that is the step
+
+- **Decision:** when the Compensate is itself the step's forward activity, it has no effect and is already completing: nothing is journaled and nothing is stopped. Otherwise the step would be journaled uncertain and R9 would fault every such scope.
+
+### R16 — A named Confirm
+
+- **Decision:** a named Confirm confirms the nearest scope and the named one. Scopes in between are not confirmed: their entries are handed over unconfirmed and the named scope, which holds the confirmations, receives them after the confirmation. Known limit: an entry handed to the named scope after its Confirm is undoable.
+
+### R17 — Unmatched targets at run time
+
+- **Decision:** a Confirm or Compensate whose target matches no enclosing scope faults with the runtime's `runtime.ancestor-notification.target-not-found`, not `compensation.target-not-found`: the runtime refuses before the activity completes, and one code serves every ancestor notification. Publication catches literal targets in a workflow Draft (T314). An expression target, and one in a reusable activity's body (an activity Draft, which workflow Draft validators never see), are checked only at run time.
+
+### R18 — Container-local reads in a handed-over handler (T310)
+
+- **Decision:** deferred. R6 holds for workflow variables and `ActivityResult` references (Phase A). A handler that reads a container-local value the inner scope no longer has fails at run time, takes its retries and then waits for an operator; nothing is skipped silently. A validator follows with the Studio editors (T321).
+
+### R19 — Reporting metadata (runtime seam R-4)
+
+- **Problem:** the outer scope never recognised its inner scope's completion: a structural child reported with the metadata of its own last child, which carries the inner scope's `compensation.*` keys.
+- **Decision:** the runtime overlays the reporting activity's scheduling provenance on its completion and child-fault work items ([runtime-seams R-4](contracts/runtime-seams.md)). The scope keeps routing by metadata; no compensation-specific runtime change.
+
+### R20 — Cancellation and an in-flight handler
+
+- **Decision:** cancellation starts no handler (R7). A handler already running when the cancellation arrives may finish; no further handler is scheduled.
+
+### R21 — Known limits
+
+- A descendant fault retried while the scope waits for intervention is not routed back to the waiting entry.
+- Notifications that arrive combined with a step's fault (`IRuntimeActivityChildOutcomeHandler`) are ignored; the scope's own notifications always arrive as separate ancestor notifications.
+- A child's command metadata inherits its parent's, so origin keys from an earlier handed-over handler can appear on a later own handler's command metadata. Routing uses the entry id and attempt, which are always set, so this is informational only.
+- B2 (a hand-over that arrives during recovery) and the operator retry in L2 are covered by callback tests and the T307 operator-retry journey, not by their own integration journeys.

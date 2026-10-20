@@ -32,7 +32,7 @@ Extends [spec 251 data-model.md](../251-compensation-uncertainty/data-model.md).
 | `compensation.originScopeActivityExecutionId`, `compensation.originEntryId` | the scope, on a handed-over handler's scheduling metadata **and provenance** (FR-304) | the scope, Studio |
 | `compensation.cause` = `explicit` | the scope, on absorbed or cancelled step metadata after Compensate | Studio |
 
-Fault codes: `compensation.target-not-found`, `compensation.confirm-during-recovery`, `compensation.compensate-in-handler`, `compensation.scope.compensate-requested`, `compensation.scope.uncertain-unhandled`.
+Fault codes: `compensation.scope.compensate-requested` (category `compensation.target:{scopeNodeId}`), `compensation.scope.uncertain-unhandled` (category `outcome-unknown`), and the runtime's `runtime.ancestor-notification.target-not-found` for an unmatched target. `compensation.target-not-found`, `compensation.confirm-during-recovery` and `compensation.compensate-in-handler` are not used (research R11, R17).
 
 ## Private state — type `Elsa.CompensationScope.State`, version `3`
 

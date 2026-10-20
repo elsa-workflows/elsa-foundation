@@ -43,3 +43,12 @@ public interface IRuntimeActivityDescendantFaultHandler
 - The receiver may request absorption (cancels the via-child's subtree, not just the faulted leaf) or intervention, under spec 251's rules for those seams.
 - The intermediate composites stay suspended until the absorption cancels them.
 - **Known limit:** a non-handling composite under a fault-handling one (a Sequence inside a Flowchart step) still suspends, because a Flowchart expects faults from its direct children only. Such a step blocks as today until that composite opts in too. The composition tests pin this.
+
+## R-4 — A structural child reports with the metadata its parent gave it
+
+Found while building Phase B, not planned in PR 1. A structural activity that completes or faults from a child (or notification) evaluation reported upward with the command metadata of the child that triggered the evaluation. A nested compensation scope stamps the same `compensation.*` keys on its children as the scope around it, so the outer scope read the inner scope's keys, did not recognise its own child, and the run stalled.
+
+- `SchedulerWorkItems.NewCompletionWorkItem` and `ChildFaultParentEvaluation.TryBuildAsync` overlay the reporting activity's `Provenance.Metadata` on the command metadata, as the R-3 delivery already does with the via child's.
+- Keys the reporting activity's own children added and its parent never set pass through unchanged, so composites that read pass-through keys see what they saw before.
+- Pinned by `StructuralChildReportMetadataExecutionTests` (completion and fault); the Activities.Runtime and Workflows.Runtime suites pass unchanged.
+

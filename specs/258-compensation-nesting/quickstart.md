@@ -43,3 +43,14 @@ N1 + C1 over REST: publish an order workflow with a nested reservation scope and
 4. Compensate on cancellation: X1 must fail.
 5. Disable descendant-fault delivery: S1 must fail.
 6. Put routing keys in command metadata only: the operator-retry test of a handed-over handler must fail.
+
+### Results (T317, run by hand on the full Elsa.Activities.Compensation.Tests suite of 166 tests, each reverted)
+
+| Control | Mutation | Result |
+|---|---|---|
+| 1 | `ContinueForward` sends no hand-over | 32 fail: N1, N2, L1, L2, B1, X1, P1, P2, the operator-retry journey, and the two hand-over callback tests |
+| 2 | `OnHandOver` drops the `receivedHandOvers` check (also with the per-origin check dropped) | 1 fails: the repeat-delivery callback test. The runtime's own work-item idempotency keeps P1 green |
+| 3 | `NextEligible` treats `Confirmed` as eligible | 7 fail: C1, C2 and the confirmed-entries callback test |
+| 4 | Compensate on cancellation | Not runnable: the runtime cancels a scope's subtree without calling the scope (research R7), so there is no code to remove. X1 pins that no handler runs |
+| 5 | `OnDescendantFaultedAsync` returns `Defer` | 16 fail: S1 (all four composites, three modes), P4 and the descendant-fault callback test |
+| 6 | Handler routing keys in command metadata only, not provenance | 22 fail, among them the operator retry of a handed-over handler in every mode |
