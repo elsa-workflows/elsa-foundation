@@ -293,7 +293,8 @@ public sealed partial class EtlRuntimeJourneyTests
         }
 
         public async Task<IHost> StartHostAsync(EfMigratePolicy policy, bool includeBindings = true, bool useShell = false,
-            string bindingRevision = "v1", IEtlResultDelivery? resultDelivery = null, int deliveryLeaseSeconds = 30, int maximumPageSize = 100)
+            string bindingRevision = "v1", IEtlResultDelivery? resultDelivery = null, int deliveryLeaseSeconds = 30, int maximumPageSize = 100,
+            Action<IServiceCollection>? configureServices = null)
         {
             var builder = Host.CreateApplicationBuilder();
             var runtime = new EtlRuntimeFeature
@@ -327,6 +328,7 @@ public sealed partial class EtlRuntimeJourneyTests
             }
             if (resultDelivery is not null)
                 builder.Services.AddSingleton<IEtlResultDelivery>(resultDelivery);
+            configureServices?.Invoke(builder.Services);
             builder.Services.Configure<EfMigrateOptions>(options => options.Policy = policy);
             var host = builder.Build();
             _hosts.Add(host);

@@ -56,15 +56,16 @@ internal sealed class EtlExecution(
 
     public async ValueTask PrepareAsync(EtlPreparationLease lease, CancellationToken cancellationToken = default)
     {
-        await using var heartbeat = Heartbeat((runtime, token) => runtime.RenewPreparationAsync(lease, token), cancellationToken);
+        var heartbeat = Heartbeat((runtime, token) => runtime.RenewPreparationAsync(lease, token), cancellationToken);
         var token = heartbeat.Token;
+        IAsyncDisposable? permit = null;
         try
         {
             var run = await store.FindRunAsync(lease.Scope, lease.RunId, token);
             if (run is not { Status: EtlRunStatus.Preparing, Bindings: not null })
                 return;
             var pipeline = executableReader.Read(run.Invocation.Artifact);
-            await using var permit = await budget.AcquireAsync(Charge(pipeline.Limits), token);
+            permit = await budget.AcquireAsync(Charge(pipeline.Limits), token);
             var preparer = new EtlFilePreparer(bindings, options.SnapshotRoot);
             var snapshots = await preparer.CreateSnapshotsAsync(lease.Scope, lease.RunId, pipeline,
                 EtlRuntimeMetadata.PinnedBinding(lease.Scope, run.Bindings.Source, EtlFileRole.Source),
@@ -93,20 +94,26 @@ internal sealed class EtlExecution(
         {
             // Shutdown, cancellation or claim loss leaves durable responsibility intact.
         }
+        finally
+        {
+            await using var retainedPermit = permit;
+            await heartbeat.DisposeAsync();
+        }
     }
 
     public async ValueTask ExecutePartitionAsync(EtlPartitionLease initialLease, CancellationToken cancellationToken = default)
     {
         var lease = initialLease;
-        await using var heartbeat = Heartbeat((runtime, token) => runtime.RenewPartitionAsync(Volatile.Read(ref lease), token), cancellationToken);
+        var heartbeat = Heartbeat((runtime, token) => runtime.RenewPartitionAsync(Volatile.Read(ref lease), token), cancellationToken);
         var token = heartbeat.Token;
+        IAsyncDisposable? permit = null;
         try
         {
             var run = await store.FindRunAsync(lease.Scope, lease.RunId, token);
             if (run is not { Status: EtlRunStatus.Running, Bindings: not null, Prepared: not null })
                 return;
             var pipeline = executableReader.Read(run.Invocation.Artifact);
-            await using var permit = await budget.AcquireAsync(Charge(pipeline.Limits), token);
+            permit = await budget.AcquireAsync(Charge(pipeline.Limits), token);
             var admission = new EtlRunAdmission(run.Invocation, run.Bindings);
             var snapshots = new EtlInputSnapshots(lease.Scope, lease.RunId,
                 EtlRuntimeMetadata.PinnedBinding(lease.Scope, run.Bindings.Source, EtlFileRole.Source),
@@ -193,9 +200,10 @@ internal sealed class EtlExecution(
         }
         finally
         {
-            // File writes/readers and their local permits have unwound. Relinquish only this claim;
-            // a replacement keeps the same durable reservation and acquires its own local allowance.
-            await heartbeat.StopAsync();
+            // Keep this live attempt's allowances through reader/writer and asynchronous claim cleanup.
+            // A replacement retains the durable reservation but must acquire its own local permit.
+            await using var retainedPermit = permit;
+            await heartbeat.DisposeAsync();
             using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(5), clock);
             try { await store.ReleasePartitionAsync(lease, cleanup.Token); }
             catch (Exception exception) when (exception is not OperationCanceledException || cleanup.IsCancellationRequested)

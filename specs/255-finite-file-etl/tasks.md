@@ -49,8 +49,10 @@
 **Goal:** Worker loss, retries and cancellation preserve accepted state and owed work.
 **Independent test:** Two real worker processes over a shared fixture filesystem/database, deterministic interruption barriers and durable-state assertions.
 
-- [ ] T021 [US3] Implement live worker record/byte permits and cancellation/unwind cleanup in `Extensions/Etl/src/Runtime`; test that a replaced lease does not release a paused task's capacity and a successor acquires its own permit.
+- [x] T021 [US3] Implement live worker record/byte permits and cancellation/unwind cleanup in `Extensions/Etl/src/Runtime`; test that a replaced lease does not release a paused task's capacity and a successor acquires its own permit.
 - [x] T022 [US3] Implement private-state-derived cancellation intents and pre-admission tombstones in `Extensions/Etl/src/Workflows/Runtime`/ETL store; test whole-parent and subtree cancellation, reversed delivery and no resurrection.
+**Live-attempt checkpoint:** [T021 evidence](evidence/live-attempt-replacement.md) joins actual file execution, SQLite lease replacement and shared record/byte permits. Cancellation/replacement and async cleanup retain allowances; stale acceptance is refused and the successor holds its own allowance while replaying the same owed effect. Two final strengthened cases fail under the original disposal order; exact restoration passes the affected ETL suite. Separate-process interruption/recovery remains owed.
+
 - [ ] T023 [US3] Add shared two-process fixture support in `Extensions/Etl/tests/Tests`, following existing cluster process lifecycle/teardown. Stop one owned fixture worker and recover on restart/survivor.
 - [ ] T024 [US3] Cover interruptions at read/admission/mid-staged-write/published-effect/cursor/result boundaries in `Extensions/Etl/tests/Tests`; verify no partial final chunk, stable replay, conflicting chunks, stale claims/cursors, duplicate/late results and retained reservations.
 - [ ] T025 [US3] Cover cancellation/completion races, frozen bookmark/resume/stimulus/type address validation, mismatched or unexpectedly retired registrations versus legitimate consumption/parent termination, changed/corrupt snapshots/output revisions and unknown saved formats in `Extensions/Etl/tests/Tests`.
