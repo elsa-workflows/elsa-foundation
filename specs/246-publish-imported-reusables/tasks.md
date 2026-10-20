@@ -408,8 +408,11 @@ no versions. Nothing publishes yet.
   `git diff --stat docs/`. Stage every changed map by explicit path, `docs/maps/manifest.json` included. On Windows,
   `-- check` always says stale (CRLF), so rely on the diff.
 - [X] T049 Run [quickstart.md](quickstart.md) steps 1–5 and record the results for the PR evidence comment.
-- [ ] T050 Re-check #2796 and open PRs for competing work before committing (AGENTS.md claims). Ask the maintainer
+- [X] T050 Re-check #2796 and open PRs for competing work before committing (AGENTS.md claims). Ask the maintainer
   before pushing or opening the draft PR against `main`.
+- [X] T051 After spec 248 merged: refuse only real start triggers (D-6 amendment, 2026-10-20). Add
+  `IReusableActivityTriggerClassifier` (Import) and its Elsa3Mapping implementation, prove it with
+  `ReusableActivityStartTriggerTests` and `ReusableFlaggedStartTests`, and update the readiness guide.
 
 ---
 

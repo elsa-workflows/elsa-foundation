@@ -6,7 +6,7 @@ Appended at the end of the class, a file #2717 (spec 247) may also touch. The co
 
 | Code | Severity | Raised by | Message (shape) | Guidance |
 |---|---|---|---|---|
-| `ELS3-REUSABLE-UNSUPPORTED-START-TRIGGER` | error, blocks apply | analyzer, per reusable source with a `CanStartWorkflow` node that owns no nested behaviour | "Reusable workflow '{definitionId}' v{version} starts from trigger '{nodeId}' ({type}). Elsa 4 cannot start a reusable activity from a trigger." | "Move the trigger into its own Elsa 3 workflow that calls the reusable workflow, then re-export the collection." |
+| `ELS3-REUSABLE-UNSUPPORTED-START-TRIGGER` | error, blocks apply | analyzer, per reusable source with a `CanStartWorkflow` trigger (a flagged node the activity map does not know as a non-trigger) that owns no nested behaviour | "Reusable workflow '{definitionId}' v{version} starts from trigger '{nodeId}' ({type}). Elsa 4 cannot start a reusable activity from a trigger." | "Move the trigger into its own Elsa 3 workflow that calls the reusable workflow, then re-export the collection." For a type the map does not know, it adds: "If '{type}' is not a trigger, clear 'Can start workflow' on it instead, and check that the flowchart still starts where it should: Elsa 3 then starts at the first activity nothing leads into." |
 | `ELS3-REUSABLE-PUBLISHING-UNAVAILABLE` | error, blocks apply | importer, before commit, when the selection holds a reusable version and no `IReusableActivityImportPublisher` is registered | "This host cannot publish imported reusable activities." | "Enable the `Elsa3ImportActivitiesPublishing` feature (it needs `WorkflowsPublishingApi`)." |
 
 Metadata:

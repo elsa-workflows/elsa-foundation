@@ -37,7 +37,7 @@ field.
 
 | Change | Rule |
 |---|---|
-| New code `ELS3-REUSABLE-UNSUPPORTED-START-TRIGGER` | A reusable source with any `CanStartWorkflow` node. Blocking. `DirectStarts` is still inventoried. |
+| New code `ELS3-REUSABLE-UNSUPPORTED-START-TRIGGER` | A reusable source with a `CanStartWorkflow` trigger: any flagged node the activity map does not know as a non-trigger. Blocking. `DirectStarts` is still inventoried, triggers only. |
 
 ## New
 

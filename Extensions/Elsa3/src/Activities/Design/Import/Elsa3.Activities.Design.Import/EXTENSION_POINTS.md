@@ -15,6 +15,13 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
 - **Invariant:** exact planned reference rewrites only; recursive composition is never replaced by separate-workflow execution. A replacement must also build each reusable activity version's `GraphManifest` from the `Body` it returns beside it, because the importer judges the credential-literal rule on `Body` (see Mapped bodies). It returns the reusable versions in publish order: every version after the versions it uses, the versions of one definition ascending.
 - **Mapped bodies:** each `ImportedReusableActivity` carries its mapped workflow state as `Body`, so the importer can admit it before the commit. The importer judges `Body`, not the version's `GraphManifest` (the graph manifest format belongs to the graph activity module, which the import does not reference), so an implementation must build the manifest from that `Body` and put no activity input into it that the body does not hold; a manifest built otherwise is published unjudged. The default implementation builds the payload's `rootActivity` from the body's root in the same call (`ReusableActivityCollectionCredentialLiteralTests` pins it).
 
+### `IReusableActivityTriggerClassifier`
+
+- **Kind:** optional classification port.
+- **Purpose:** tells the analyzer whether an Elsa 3 activity type is a trigger, so a reusable workflow is refused (`ELS3-REUSABLE-UNSUPPORTED-START-TRIGGER`) only for a real start trigger; 'Can start workflow' on a non-trigger only picks the flowchart's start node (spec 246 D-6, spec 248).
+- **Default implementation:** `Elsa3ReusableActivityTriggerClassifier` from `Elsa3.Mapping`, over the activity map.
+- **Invariant:** `null` for a type it does not know; the analyzer treats that, and every flagged activity when no classifier is registered, as a trigger.
+
 ### `IReusableActivityImportCommand`
 
 - **Kind:** atomic persistence command.
@@ -74,6 +81,7 @@ applied only as a reviewed dependency-closed mutation; Runtime never consumes th
 - **Kind:** replaceable pure analysis strategy.
 - **Default implementation:** `ReusableActivityCollectionAnalyzer`.
 - **Output:** deterministic identities, exact rewrites, direct-start wrapper facts, missing/unsupported diagnostics, and complete cycle paths.
+- **Uses:** `IReusableActivityTriggerClassifier` when registered.
 
 ## Authorized HTTP contract
 

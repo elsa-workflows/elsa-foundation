@@ -5,7 +5,7 @@ import applies and every imported reusable activity publishes and runs. It cover
 activity** (reusable workflows) and the workflows that call them. General conversion rules for every Elsa 3 activity are
 in the [Elsa 3 mapping README](../../Extensions/Elsa3/src/Mapping/README.md#behaviour-worth-knowing).
 
-This page describes the import as of specs 246 and 247 (2026-10-19). JavaScript and Liquid rules for every workflow
+This page describes the import as of specs 246, 247 and 248 (2026-10-20). JavaScript and Liquid rules for every workflow
 are in the README's [Migrating Elsa 3 JavaScript](../../Extensions/Elsa3/src/Mapping/README.md#migrating-elsa-3-javascript);
 this page adds what differs inside a reusable workflow. Each check names the diagnostic code the import reports if it is
 not met. Every code comes with a message and guidance
@@ -31,8 +31,14 @@ are done.
 
 ## Checklist per reusable workflow
 
-1. **No trigger.** The workflow does not start from a trigger (an activity with *Can start workflow*), nested or not.
-   Move the trigger, with the activities it owns, into its own workflow that calls the reusable workflow.
+1. **No trigger.** The workflow does not start from a trigger (such as HTTP Endpoint, Timer, Cron or Event) with
+   *Can start workflow* ticked, nested or not. Move the trigger, with the activities it owns, into its own workflow
+   that calls the reusable workflow.
+   - Allowed: *Can start workflow* ticked on an activity that is not a trigger (a WriteLine, an If, a Flowchart, …). It only
+     marks where the flowchart starts, and the import keeps that.
+   - A custom activity type the import does not know counts as a trigger. If it is not one, clear *Can start workflow*
+     on it and check that the flowchart still starts where it should: Elsa 3 then starts at the first activity nothing
+     leads into.
 2. **No setting values.** The body uses no SetVariable, SetOutput, Correlate or SetName activity. No JavaScript or
    Liquid assigns a value either (`setVariable`, `setOutput`, `setInput`, `setResult`, a generated `set{Name}(...)`,
    `setCorrelationId`, `setWorkflowInstanceName`, `variables.x = ...`, Liquid `assign`): that is refused in every

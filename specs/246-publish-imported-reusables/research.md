@@ -218,6 +218,13 @@ reached nodes only) through `Elsa3OutcomeKey.Assemble`. They differ for:
   from a trigger; split the trigger into its own workflow that calls the activity."
 - The existing `UNSUPPORTED-TRIGGER` stays for a trigger that owns nested behaviour, so codes stay stable.
 - `DirectStarts` is still inventoried. Studio shows it (`Elsa3ReusableImportPage.tsx:703`), and Studio is not touched.
+- *Amended 2026-10-20 (spec 248).* Only triggers count. Elsa 3 also allows the flag on a non-trigger, where it only
+  picks the flowchart's start node; spec 248 converts that. The analyzer cannot see the activity map (the import does
+  not reference Mapping), so it takes an optional `IReusableActivityTriggerClassifier` port, which Elsa3Mapping
+  implements with the same rule conversion uses (`Elsa3ActivityNormalizer.IsNonTrigger`). Analysis still reports real
+  triggers, so the preview stays an early readiness check. A type the map does not know (a custom activity) counts as
+  a trigger, and its guidance adds how to clear the flag. Moving the check into conversion was rejected: the refusal
+  would then only show at apply. `DirectStarts` lists triggers only.
 
 **Tests that change.**
 - `ReusableActivityCollectionImportTests.Analysis_reports_deterministic_rewrites_direct_starts_missing_unsupported_and_complete_cycles`
