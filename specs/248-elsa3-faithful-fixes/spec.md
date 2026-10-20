@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-19
 
-**Status**: In progress
+**Status**: Implemented — merged as [#3054](https://github.com/elsa-workflows/elsa-foundation/pull/3054) (`f7c417d0f`), 2026-10-20
 
 **Issue**: [#3051](https://github.com/elsa-workflows/elsa-foundation/issues/3051) (epic [#3052](https://github.com/elsa-workflows/elsa-foundation/issues/3052))
 
