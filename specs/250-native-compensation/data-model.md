@@ -57,9 +57,10 @@ an ordinary activity input that publication pins; it is not part of the structur
 }
 ```
 
-`nextStepIndex` is the index of the next step to schedule; the running step is `nextStepIndex - 1`. It advances in
-the same staged state as the entry the completed step appends, so the append and the cursor move commit together.
-The fault's code and message stay on the absorbed incident; the cause references it by `incidentId`.
+`nextStepIndex` is the index of the next step to schedule. It advances when the scope schedules a step, in the same
+staged state as that schedule request, so the running step is always `nextStepIndex - 1`: execution schedules step 0
+and stages `1`; the completion of step `i` appends its entry, schedules step `i + 1` and stages `i + 2`, all in one
+commit. A fault is the running step's only if it comes from step `nextStepIndex - 1`.
 
 The runtime clears structural private state when the scope completes. The journal therefore lives only while the
 scope is active. Completed-scope inspection (M1) is derived from run data (FR-019); late compensation of a

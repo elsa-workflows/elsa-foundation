@@ -5,8 +5,8 @@
 - [ ] T001 Create `Elsa.Activities.Compensation` project, add it to `Elsa.Server.slnx` and the solution filters.
 - [ ] T002 Authored and executable structure models, plus `CompensationScopeStructureHandler` (project, replace,
   compile, remap) with round-trip tests.
-- [ ] T003 Draft validator: blank or duplicate step names, missing forward activity (error); `ReplaySafe` step or
-  handler (warning). Tests for each message and path.
+- [ ] T003 Draft validator: blank or duplicate step names, missing forward activity (error). Tests for each message and
+  path. The `ReplaySafe` warning (FR-014) is deferred to M5: design time has no side-effect profile to read.
 - [ ] T004 `CompensationScopeState` v1 and its persister (`InstanceInline`).
 - [ ] T005 `CompensationScope` activity: execute, child completed, child faulted per
   [contracts/semantics.md](contracts/semantics.md). Unit tests for each transition and FR-009.
