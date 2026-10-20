@@ -100,7 +100,7 @@ to Elsa 3's result.
 
 **Independent test**: the strict-mode tests in `Elsa3StrictModeTests` pass; sources valid in both modes convert unchanged.
 
-- [ ] T013 [US2] In `Elsa3StrictModeTests.cs`, add a strict-parse refusal theory, in Expression and Script mode. Assert `VF-IMP-007` and that the message carries the parser's reason. Cases:
+- [x] T013 [US2] In `Elsa3StrictModeTests.cs`, add a strict-parse refusal theory, in Expression and Script mode. Assert `VF-IMP-007` and that the message carries the parser's reason. Cases:
   - `with ({ a: 1 }) { a }`;
   - `010 + 1`;
   - `'\\010'`;
@@ -111,7 +111,7 @@ to Elsa 3's result.
   - `var arguments = 1; arguments`, where strict mode forbids `arguments` as a binding name.
 
   Add one fact that a sloppy parse failure (`return (`) still reports the existing "could not be parsed" refusal and not the strict-mode one.
-- [ ] T014 [US2] In `Elsa3StrictModeTests.cs`, add `this`/`arguments` tests. Assert `VF-IMP-007` for the refusals:
+- [x] T014 [US2] In `Elsa3StrictModeTests.cs`, add `this`/`arguments` tests. Assert `VF-IMP-007` for the refusals:
   - **Refused:**
     - `this.x`;
     - `(() => this)()`;
@@ -124,13 +124,13 @@ to Elsa 3's result.
     - `(function () { return this })`, a function value with `this` inside;
     - `(function () { return arguments.length })(1, 2)`;
     - `(function (a) { a = 2; return a })(1)`.
-- [ ] T015 [US2] Run T013–T014 on the current code and confirm the gaps.
-- [ ] T016 [US2] Implement D-3 in `RewriteJavaScript` in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs`. Route every `Success` through one private `StrictCheck(ExpressionDefinition definition, Elsa3JavaScriptMode mode)`:
+- [x] T015 [US2] Run T013–T014 on the current code and confirm the gaps.
+- [x] T016 [US2] Implement D-3 in `RewriteJavaScript` in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs`. Route every `Success` through one private `StrictCheck(ExpressionDefinition definition, Elsa3JavaScriptMode mode)`:
   - **Expression mode:** `new Parser().ParseExpression(source, strict: true)`.
   - **Script mode:** `new Parser(new ParserOptions { AllowReturnOutsideFunction = true }).ParseScript("(() => { " + source + " })()", strict: true)`.
   - **On `ParseErrorException`:** return `Failure(StrictModeIssue(exception.Description))`.
   - Keep `CompletionValueLost` on success.
-- [ ] T017 [US2] Implement D-5 in `JavaScriptAnalyzer` in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs`:
+- [x] T017 [US2] Implement D-5 in `JavaScriptAnalyzer` in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs`:
   - In `Visit`, keep a stack of enclosing non-arrow function contexts. Push for an `IFunction` that is not an `ArrowFunctionExpression`, and for a `ClassBody`.
   - Each context records its parameter names, whether its body (including nested arrows) reads `arguments`, and its pending writes to parameters or `arguments[…]`.
   - Refuse `ThisExpression`, and an `Identifier` `arguments` that is not `IsDeclared`, when the stack is empty.

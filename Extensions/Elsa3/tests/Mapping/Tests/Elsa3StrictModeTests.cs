@@ -48,6 +48,64 @@ public sealed class Elsa3StrictModeTests
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
     }
 
+    [Theory]
+    [InlineData("with ({ a: 1 }) { a }\n1")]
+    [InlineData("010 + 1")]
+    [InlineData("'\\010'")]
+    [InlineData("(function (a, a) { return a })(1, 2)")]
+    [InlineData("var x = 1; delete x; x")]
+    [InlineData("var static = 1; static")]
+    [InlineData("var yield = 1; yield")]
+    [InlineData("var arguments = 1; arguments")]
+    public async Task Syntax_that_only_parses_in_sloppy_mode_is_refused(string source)
+    {
+        foreach (var result in await ConvertBothAsync(source))
+        {
+            Assert.False(result.Succeeded);
+            Assert.Contains(result.Diagnostics, diagnostic =>
+                diagnostic.Code == Elsa3ImportDiagnosticCodes.UnsupportedShape && diagnostic.Message.Contains("strict mode, where it does not parse", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
+    public async Task Javascript_that_does_not_parse_at_all_keeps_the_parse_refusal()
+    {
+        var result = await ConvertTextAsync("return (");
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Message.Contains("could not be parsed", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Message.Contains("strict mode", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("this.x", "'this'")]
+    [InlineData("(() => this)()", "'this'")]
+    [InlineData("arguments.length", "'arguments' outside a function")]
+    [InlineData("(function (a) { arguments[0] = 2; return a })(1)", "'arguments[…]'")]
+    [InlineData("(function (a) { a = 2; return arguments[0] })(1)", "'a'")]
+    [InlineData("(function (a) { const f = () => arguments[0]; a = 2; return f() })(1)", "'a'")]
+    public async Task This_and_arguments_that_strict_mode_changes_are_refused(string source, string named)
+    {
+        foreach (var result in await ConvertBothAsync(source))
+        {
+            Assert.False(result.Succeeded);
+            Assert.Contains(result.Diagnostics, diagnostic =>
+                diagnostic.Code == Elsa3ImportDiagnosticCodes.UnsupportedShape && diagnostic.Message.Contains(named, StringComparison.Ordinal));
+        }
+    }
+
+    [Theory]
+    [InlineData("({ v: 1, f() { return this.v } }).f()")]
+    [InlineData("(function () { return this })")]
+    [InlineData("(function () { return arguments.length })(1, 2)")]
+    [InlineData("(function (a) { a = 2; return a })(1)")]
+    public async Task This_in_a_function_and_read_only_arguments_convert(string source)
+    {
+        var result = await ConvertTextAsync(source);
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
     private static async Task<Elsa3MigrationResult<Conversion.Elsa3ConvertedDefinition>[]> ConvertBothAsync(string source) =>
     [
         await ConvertTextAsync(source),
