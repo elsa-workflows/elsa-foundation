@@ -199,7 +199,7 @@ public sealed class Elsa3ConversionDiagnosticsTests
                 node = Activity("node", "Elsa.Event", ("eventName", Literal("e")), ("result", Captured("payload")));
                 break;
             case "required-input-unbound":
-                node = Activity("node", "Elsa.WriteLine");
+                node = Activity("node", "Elsa.PublishEvent");
                 break;
             case "duplicate-input-binding":
                 node = Activity("node", "Elsa.WriteLine", ("text", Literal("a")), ("Text", Literal("b")));

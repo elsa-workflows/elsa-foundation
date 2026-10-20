@@ -81,10 +81,13 @@ export function ConnectionPickerEditor({
           </option>
         ))}
       </select>
-      <p id={statusId}>
+      <p id={statusId} role="status">
         {visibleState.status === "loading" ? "Loading connections…" : null}
         {visibleState.status === "error" ? (
-          <button type="button" onClick={() => setLoadAttempt(attempt => attempt + 1)}>Retry</button>
+          <>
+            Connections could not be loaded.{" "}
+            <button type="button" onClick={() => setLoadAttempt(attempt => attempt + 1)}>Retry</button>
+          </>
         ) : null}
         {unavailable ? "This connection is unavailable." : null}
         {needsAuthorization ? "Needs authorization. Publishing still succeeds; a run will fault until authorized." : null}
