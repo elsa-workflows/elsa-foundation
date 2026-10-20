@@ -1226,7 +1226,7 @@ function incident(overrides: Partial<IncidentStateSummary> = {}): IncidentStateS
     executableNodeId: "write-line-1",
     severity: "Error",
     status: "Open",
-    resolutionAction: "None",
+    resolutionOutcome: null,
     failureType: "ActivityFaulted",
     message: "Required service is not registered.",
     createdAt: "2026-06-18T01:00:02Z",

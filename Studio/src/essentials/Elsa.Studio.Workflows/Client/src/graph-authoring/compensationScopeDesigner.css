@@ -68,6 +68,14 @@ button.wf-compensation-state {
   border-color: color-mix(in srgb, var(--studio-danger) 60%, var(--studio-border));
 }
 
+/* Spec 251: an effect that may exist, and recovery blocked on an operator. Both also carry text and an icon. */
+.wf-compensation-state[data-state="Uncertain"],
+.wf-compensation-state[data-state="NeedsAction"],
+.wf-compensation-phase[data-phase="AwaitingIntervention"] {
+  border-color: color-mix(in srgb, var(--studio-warning) 75%, var(--studio-border));
+  border-style: dashed;
+}
+
 .wf-compensation-cause {
   display: flex;
   flex-wrap: wrap;

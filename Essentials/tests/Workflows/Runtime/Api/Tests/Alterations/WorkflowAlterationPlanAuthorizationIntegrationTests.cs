@@ -82,6 +82,38 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
     }
 
     [Fact]
+    public async Task Retry_faulted_activity_submission_requires_runtime_manage_permission()
+    {
+        await using var host = await AlterationApiHost.StartAsync();
+        var body = new
+        {
+            target = new { executionIds = new[] { "execution-a" } },
+            alterations = new[]
+            {
+                new { kind = "RetryFaultedActivity", schemaVersion = 1, payload = new { sourceActivityExecutionId = "activity-a", reason = "Delivery service restored" } }
+            }
+        };
+
+        using (var anonymous = await SendRetryAsync(host, body, "retry-anonymous"))
+            Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+
+        host.Authorize(PermissionNames.WorkflowRuntimeRead, "tenant-a");
+        using (var readOnly = await SendRetryAsync(host, body, "retry-read-only"))
+            Assert.Equal(HttpStatusCode.Forbidden, readOnly.StatusCode);
+
+        host.Authorize(PermissionNames.WorkflowRuntimeManage, "tenant-a");
+        using (var manage = await SendRetryAsync(host, body, "retry-manage"))
+            Assert.Equal(HttpStatusCode.Accepted, manage.StatusCode);
+    }
+
+    private static Task<HttpResponseMessage> SendRetryAsync(AlterationApiHost host, object body, string idempotencyKey)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/runtime/workflows/alteration-plans") { Content = JsonContent.Create(body) };
+        request.Headers.Add("Idempotency-Key", idempotencyKey);
+        return host.Client.SendAsync(request);
+    }
+
+    [Fact]
     public async Task Query_target_read_uses_the_documented_redacted_shape()
     {
         await using var host = await AlterationApiHost.StartAsync();

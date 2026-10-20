@@ -9,7 +9,7 @@ states and transitions marked **M1**. Later milestones add states without changi
 |---|---|---|
 | `Running` | Forward steps are being scheduled in order. | M1 |
 | `Compensating` | Recovery started; handlers are being scheduled newest first. | M1 |
-| `AwaitingIntervention` | A handler failed after its retries; an operator must act (OD2). The scope holds a durable wait. | M2 |
+| `AwaitingIntervention` | A handler failed after its retries; an operator must act (OD2). The handler's incident stays blocking with outcome `WaitForIntervention`; an operator resumes it with `RetryFaultedActivity/1` ([spec 251](../../251-compensation-uncertainty/contracts/semantics.md)). | M2 |
 | `Completed` | All steps completed. Outcome `Done`. The runtime clears the journal on completion, so late compensation (OD3) needs a durable journal that M3 must add. | M1 (outcome), M3 (late compensation) |
 | `Compensated` | Recovery finished; every registered entry is `Compensated` or explicitly resolved. Outcome `Compensated`. | M1 |
 | `Confirmed` | Entries are no longer eligible for compensation. | M3 |
@@ -63,7 +63,7 @@ OnChildFaulted(child, incident)
                                                faultAfterCompensation is true, do not absorb and fault
   phase Compensating and child is the running handler
                          -> M1: do not absorb; Defer. The blocking incident stays and the run's incident
-                            strategy decides. Entry stays Compensating.            [M2: entry Failed, retry/intervene]
+                            strategy decides. Entry stays Compensating.            [M2: spec 251 retries, then waits]
   otherwise              -> do not absorb; Defer
 ```
 
@@ -134,11 +134,14 @@ never as blank.
 - **M2 uncertainty.** An activity reports an uncertain outcome through a reserved fault category
   `outcome-unknown`. The scope records an `Uncertain` entry for that occurrence, which is eligible for recovery,
   instead of treating it as "never completed". Its handler must be safe whether or not the effect exists
-  (compensate-if-present). A late success arriving for an uncertain occurrence is recorded on the entry and does
+  (compensate-if-present). A late forward request for an uncertain occurrence is refused by the participant, which
+  remembers the compensated operation key ([spec 251](../../251-compensation-uncertainty/spec.md) FR-220); it does
   not reopen the forward path.
-- **M2 handler failure.** Bounded automatic retries (count and backoff via durable timers) per scope. When they
-  are exhausted, the entry becomes `Failed` and the scope enters `AwaitingIntervention` through a durable bookmark
-  that a recovery action resumes. The original cause and every handler attempt stay separate.
+- **M2 handler failure.** Bounded immediate retries per scope (`handlerMaxAttempts`; backoff is M5). When they are
+  exhausted, the entry becomes `Failed` and the scope enters `AwaitingIntervention`: the handler's incident stays
+  blocking with outcome `WaitForIntervention`, and an operator resumes it with the `RetryFaultedActivity/1`
+  alteration (#2747). A structural activity cannot hold a bookmark, so the wait is the incident, not a bookmark.
+  The original cause and every handler attempt stay separate ([spec 251](../../251-compensation-uncertainty/spec.md)).
 - **M3 late compensation (OD3).** A completed scope's journal stays compensable. Prerequisite: the runtime clears
   structural private state on completion today, so M3 first needs a durable journal that outlives the scope (a
   runtime opt-in or a compensation projection); execution metadata and incidents cannot reconstruct entry statuses,

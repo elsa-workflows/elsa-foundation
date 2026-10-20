@@ -12,7 +12,8 @@ namespace Elsa.Activities.Compensation.Internal;
 internal static class CompensationScopeStatePersister
 {
     public const string StateTypeAlias = "Elsa.CompensationScope.State";
-    public const int StateSchemaVersion = 1;
+    public const int StateSchemaVersion = 2;
+    private const int Version1 = 1;
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -21,14 +22,15 @@ internal static class CompensationScopeStatePersister
         if (activityExecutionState.PrivateState is not { } privateState)
             return null;
 
-        if (privateState.StateVersion != StateSchemaVersion ||
+        if (privateState.StateVersion is not (StateSchemaVersion or Version1) ||
             !StringComparer.Ordinal.Equals(privateState.Value.Type.Alias, StateTypeAlias) ||
             privateState.Value.InlineValue is not { } payload)
         {
             throw new CompensationScopeExecutionException("Compensation scope private state does not match the required type and schema version.");
         }
 
-        return Deserialize(payload);
+        // A scope that started before M2 carries version 1; it is upgraded here and written as version 2 on its next commit.
+        return Deserialize(privateState.StateVersion == Version1 ? CompensationScopeStateUpcaster.FromVersion1(payload) : payload);
     }
 
     public static CompensationScopeState Deserialize(JsonElement payload)

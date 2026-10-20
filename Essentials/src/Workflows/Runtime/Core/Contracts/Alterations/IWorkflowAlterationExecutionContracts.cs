@@ -68,6 +68,7 @@ public sealed class WorkflowAlterationRuntimeCheckpointStateBuilder(WorkflowExec
     private readonly Dictionary<string, RuntimePostCommitIntent> _postCommitIntents = new(StringComparer.Ordinal);
     private readonly Dictionary<string, RuntimeStateChange<ActivityExecutionState>> _activityExecutions = new(StringComparer.Ordinal);
     private readonly Dictionary<string, RuntimeStateChange<ActivityExecutionInspectionProjection>> _activityExecutionInspections = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, RuntimeStateChange<IncidentState>> _incidents = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ActivityScopeCleanupRequest> _activityScopeCleanups = new(StringComparer.Ordinal);
     private readonly Dictionary<string, WorkflowDispatchCancellationRequest> _workflowDispatchCancellations = new(StringComparer.Ordinal);
 
@@ -87,6 +88,12 @@ public sealed class WorkflowAlterationRuntimeCheckpointStateBuilder(WorkflowExec
     /// <summary>Activity inspection projections to persist in the same alteration checkpoint.</summary>
     public IReadOnlyCollection<RuntimeStateChange<ActivityExecutionInspectionProjection>> ActivityExecutionInspections => _activityExecutionInspections.Values;
 
+    /// <summary>
+    /// Incident changes to persist in the same alteration checkpoint, such as an operator retry resolving the blocking
+    /// incident of the activity it reschedules.
+    /// </summary>
+    public IReadOnlyCollection<RuntimeStateChange<IncidentState>> Incidents => _incidents.Values;
+
     /// <summary>Continuation intents that become durable in the same checkpoint as the alteration terminal evidence.</summary>
     public IReadOnlyCollection<RuntimePostCommitIntent> PostCommitIntents => _postCommitIntents.Values;
 
@@ -101,6 +108,14 @@ public sealed class WorkflowAlterationRuntimeCheckpointStateBuilder(WorkflowExec
 
     public void AddActivityExecutionInspection(RuntimeStateChange<ActivityExecutionInspectionProjection> change) =>
         Add(_activityExecutionInspections, change, "activity execution inspection");
+
+    public void AddIncident(RuntimeStateChange<IncidentState> change)
+    {
+        ArgumentNullException.ThrowIfNull(change);
+        if (change.State is null || !StringComparer.Ordinal.Equals(change.State.WorkflowExecutionId, WorkflowExecution.WorkflowExecutionId))
+            throw new ArgumentException("An alteration incident change must belong to the altered workflow execution.", nameof(change));
+        Add(_incidents, change, "incident");
+    }
 
     public void AddPostCommitIntent(RuntimePostCommitIntent intent)
     {

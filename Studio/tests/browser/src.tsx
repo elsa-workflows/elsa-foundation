@@ -1739,7 +1739,8 @@ async function renderRequestedFixture() {
   }
   if (searchParams.get("mode") === "compensation-scope") {
     const { CompensationScopeFixture } = await import("./compensationScopeFixture");
-    root.render(<CompensationScopeFixture view={searchParams.get("view") === "run" ? "run" : "author"} />);
+    const view = searchParams.get("view");
+    root.render(<CompensationScopeFixture view={view === "run" || view === "waiting" ? view : "author"} />);
     return;
   }
   if (searchParams.get("mode") === "incident-diagnostics") {
