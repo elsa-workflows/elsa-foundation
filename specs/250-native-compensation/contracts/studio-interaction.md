@@ -73,7 +73,10 @@ Recovery started because "Confirm order" failed: order.rejected — Order reject
 ```
 
 - Each state is an icon plus text: `✓ Completed`, `✕ Faulted`, `● Running`, `◌ Not run`, `⟲ Compensated`,
-  `… Pending`, `● Undoing`, `— Not applicable`, `Not needed`. M2 adds `⚠ Uncertain`, `⚠ Failed`, `✋ Needs action`.
+  `◌ Can be undone` (Registered: the step completed and has a handler, and no recovery started), `… Pending`,
+  `● Undoing`, `✕ Undo failed`, `— Not applicable`, `Not needed` (the step has no handler), and `Not loaded` when the
+  run's activity list is a bounded page that may hold the occurrence on a later page. In M1 `Undo failed` means the
+  handler faulted and its incident blocks the run. M2 adds `⚠ Uncertain` and `✋ Needs action`.
 - Clicking a Forward or Recovery cell selects that occurrence, using the existing `selectedEvidenceId`.
 - **Handler occurrence inspector**: header `Compensation · Cancel delivery`; first row `Compensates: Reserve
   delivery (occurrence ae-5)` as a link, then the normal input/output evidence.
