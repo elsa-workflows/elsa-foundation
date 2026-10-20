@@ -14,8 +14,9 @@ namespace Elsa.Connections.Design.Validators;
 /// <remarks>
 /// The findings depend on the draft and the tenant's connections, never on the caller. The validations panel, the
 /// dashboard and the promotion gate all run this as whoever asks, and every viewer sees the same result. The right to
-/// bind a connection is <c>workflows/design:manage</c>, which the Workflow Design routes that write or promote drafts
-/// require.
+/// bind a connection is <c>workflows/design:manage</c>, which the Workflow Design routes that write drafts or versions, or promote drafts,
+/// require. The gate runs at promotion only: <c>versions/ingest</c> and <c>definitions/submit</c> write versions
+/// without draft validators (pre-existing).
 /// </remarks>
 public sealed class ConnectionDraftValidator(
     IActivityStructureService activityStructureService,
@@ -52,7 +53,7 @@ public sealed class ConnectionDraftValidator(
                     errors.Add(new ValidationError(
                         Path: $"{node.NodeId}/inputs/{input.ReferenceKey}",
                         Type: MissingType,
-                        Message: "A tenant is required to publish a workflow that uses a connection."));
+                        Message: "A tenant is required to promote a workflow draft that uses a connection."));
                     continue;
                 }
 
@@ -91,7 +92,7 @@ public sealed class ConnectionDraftValidator(
                     errors.Add(new ValidationError(
                         Path: $"{node.NodeId}/inputs/{input.ReferenceKey}",
                         Type: NeedsAuthorizationType,
-                        Message: $"Connection '{reference.Name}' needs authorization. Publishing still succeeds; a run faults until it is authorized.")
+                        Message: $"Connection '{reference.Name}' needs authorization. Promotion still succeeds; a run faults until it is authorized.")
                     {
                         Severity = ValidationSeverities.Warning
                     });
