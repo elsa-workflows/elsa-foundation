@@ -13,7 +13,7 @@ public sealed class EtlDefinitionStoreTests
     [Fact]
     public async Task Fresh_schema_persists_draft_and_published_artifact_after_reopen()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await EtlDesignTestDatabase.CreateAsync();
         var scope = new EtlScope("tenant-a", "partition-a");
         var pipeline = EtlTestPipelines.Create();
         var artifact = Compile("orders", 1, pipeline);
@@ -46,7 +46,7 @@ public sealed class EtlDefinitionStoreTests
     [Fact]
     public async Task Draft_updates_and_publication_use_optimistic_revision_checks()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await EtlDesignTestDatabase.CreateAsync();
         await using var context = database.CreateContext();
         var store = Store(context);
         var scope = new EtlScope("tenant-a", "partition-a");
@@ -70,7 +70,7 @@ public sealed class EtlDefinitionStoreTests
     [Fact]
     public async Task Draft_and_publication_reads_are_isolated_by_tenant_and_partition()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await EtlDesignTestDatabase.CreateAsync();
         await using var context = database.CreateContext();
         var store = Store(context);
         var owner = new EtlScope("tenant-a", "partition-a");
@@ -100,7 +100,7 @@ public sealed class EtlDefinitionStoreTests
     [Fact]
     public async Task Published_artifacts_remain_immutable_and_exact_retries_converge()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await EtlDesignTestDatabase.CreateAsync();
         await using var context = database.CreateContext();
         var store = Store(context);
         var scope = new EtlScope("tenant-a", "partition-a");
@@ -133,7 +133,7 @@ public sealed class EtlDefinitionStoreTests
     [Fact]
     public async Task Publish_recompiles_and_rejects_invalid_or_forged_artifacts()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await EtlDesignTestDatabase.CreateAsync();
         await using var context = database.CreateContext();
         var store = Store(context);
         var scope = new EtlScope("tenant-a", "partition-a");
@@ -178,7 +178,7 @@ public sealed class EtlDefinitionStoreTests
     [Fact]
     public async Task Revision_and_publication_version_ceiling_conflict_without_overflow()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await EtlDesignTestDatabase.CreateAsync();
         await using var context = database.CreateContext();
         var store = Store(context);
         var scope = new EtlScope("tenant-a", "partition-a");
@@ -203,7 +203,7 @@ public sealed class EtlDefinitionStoreTests
     [Fact]
     public async Task Unrelated_publication_storage_failure_remains_visible_and_rolls_back_the_version()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await EtlDesignTestDatabase.CreateAsync();
         await using var context = database.CreateContext();
         var store = Store(context);
         var scope = new EtlScope("tenant-a", "partition-a");
@@ -226,7 +226,7 @@ public sealed class EtlDefinitionStoreTests
     [Fact]
     public async Task Oversized_forged_artifact_is_refused_without_publishing_or_advancing_the_draft()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await EtlDesignTestDatabase.CreateAsync();
         await using var context = database.CreateContext();
         var store = Store(context);
         var scope = new EtlScope("tenant-a", "partition-a");
@@ -244,37 +244,4 @@ public sealed class EtlDefinitionStoreTests
 
     private static EtlArtifact Compile(string definitionId, int version, EtlPipeline pipeline) =>
         Assert.IsType<EtlArtifact>(new EtlArtifactCompiler().Compile(definitionId, version, pipeline).Artifact);
-
-
-
-    private sealed class TestDatabase(string directory) : IAsyncDisposable
-    {
-        private readonly string _connectionString = $"Data Source={Path.Combine(directory, "etl.db")};Pooling=False";
-
-        public static async Task<TestDatabase> CreateAsync()
-        {
-            var directory = Path.Combine(Path.GetTempPath(), "Elsa.Etl.Tests", Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(directory);
-            var database = new TestDatabase(directory);
-            await using var context = database.CreateContext();
-            await EfDatabaseMigrator.ApplyAsync(context, EtlDesignSqliteDbContext.ExpectedProviderName);
-            return database;
-        }
-
-        public EtlDesignSqliteDbContext CreateContext()
-        {
-            var options = new DbContextOptionsBuilder<EtlDesignSqliteDbContext>()
-                .UseSqlite(_connectionString, sqlite => sqlite
-                    .MigrationsAssembly(typeof(EtlDesignSqliteDbContext).Assembly.GetName().Name)
-                    .MigrationsHistoryTable(EtlDesignEfModule.HistoryTableName))
-                .Options;
-            return new EtlDesignSqliteDbContext(options);
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            Directory.Delete(directory, recursive: true);
-            return ValueTask.CompletedTask;
-        }
-    }
 }

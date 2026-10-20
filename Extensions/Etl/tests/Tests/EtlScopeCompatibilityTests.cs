@@ -14,7 +14,7 @@ public sealed class EtlScopeCompatibilityTests
     [Fact]
     public async Task Null_tenant_draft_and_publication_roundtrip_without_colliding_with_named_tenants()
     {
-        await using var database = await TestDatabase.CreateAsync();
+        await using var database = await EtlDesignTestDatabase.CreateAsync();
         var nullTenant = new EtlScope(null, "partition-a");
         var literalNull = new EtlScope("null", "partition-a");
         var literalDefault = new EtlScope("default", "partition-a");
@@ -95,35 +95,4 @@ public sealed class EtlScopeCompatibilityTests
 
     private static EtlArtifact Compile(string definitionId, int version, EtlPipeline pipeline) =>
         Assert.IsType<EtlArtifact>(new EtlArtifactCompiler().Compile(definitionId, version, pipeline).Artifact);
-
-    private sealed class TestDatabase(string directory) : IAsyncDisposable
-    {
-        private readonly string _connectionString = $"Data Source={Path.Combine(directory, "etl.db")};Pooling=False";
-
-        public static async Task<TestDatabase> CreateAsync()
-        {
-            var directory = Path.Combine(Path.GetTempPath(), "Elsa.Etl.Tests", Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(directory);
-            var database = new TestDatabase(directory);
-            await using var context = database.CreateContext();
-            await EfDatabaseMigrator.ApplyAsync(context, EtlDesignSqliteDbContext.ExpectedProviderName);
-            return database;
-        }
-
-        public EtlDesignSqliteDbContext CreateContext()
-        {
-            var options = new DbContextOptionsBuilder<EtlDesignSqliteDbContext>()
-                .UseSqlite(_connectionString, sqlite => sqlite
-                    .MigrationsAssembly(typeof(EtlDesignSqliteDbContext).Assembly.GetName().Name)
-                    .MigrationsHistoryTable(EtlDesignEfModule.HistoryTableName))
-                .Options;
-            return new EtlDesignSqliteDbContext(options);
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            Directory.Delete(directory, recursive: true);
-            return ValueTask.CompletedTask;
-        }
-    }
 }
