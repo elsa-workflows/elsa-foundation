@@ -30,8 +30,8 @@
 
 **Independent test criteria**: The rendered constructor regression passes with the current browser-managed session option and unchanged URL/filter semantics; the final normal-host product proof returns 200 `text/event-stream`, reaches Live, and keeps Recent/Sources at 200.
 
-- [ ] T003 Change only the existing EventSource construction in `Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/module.tsx` to pass `{ withCredentials: true }`; keep the URL, endpoint, permissions, CORS configuration, auth model, and effect lifecycle unchanged.
-- [ ] T004 Run the Structured Logs client Vitest suite from `Studio/` with `pnpm --filter @elsa-workflows/studio-diagnostics-structured-logs test`; confirm the test from T002 is green and the existing URL/filter tests remain green in `Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/__tests__/module.test.ts`.
+- [x] T003 Change only the existing EventSource construction in `Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/module.tsx` to pass `{ withCredentials: true }`; keep the URL, endpoint, permissions, CORS configuration, auth model, and effect lifecycle unchanged.
+- [x] T004 Run the Structured Logs client Vitest suite from `Studio/` with `pnpm --filter @elsa-workflows/studio-diagnostics-structured-logs test`; confirm the test from T002 is green and the existing URL/filter tests remain green in `Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/__tests__/module.test.ts`.
 
 **Checkpoint**: The focused client regression is green; no backend or public contract change is introduced.
 
@@ -43,8 +43,8 @@
 
 **Independent test criteria**: Rendered-page behavior tests prove filter replacement closes the prior source, the replacement carries current filters and credential mode, pause/buffer and entry filtering remain correct, and unmount closes the active source. Existing backend authorization and stream tests pass; the real-host retry proof is completed in final qualification.
 
-- [ ] T005 Extend the existing EventSource stub and rendered tests in `Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/__tests__/module.test.ts` to verify filter changes close the previous source and create one replacement with the selected level/source/category query and credential option, and that unmount closes the active source.
-- [ ] T006 Add deterministic page-event regressions in `Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/__tests__/module.test.ts` for entry filtering and pause/resume buffer behavior; verify `onerror` preserves the disconnected UI state without client-created duplicate EventSource instances or changed cleanup behavior.
+- [x] T005 Extend the existing EventSource stub and rendered tests in `Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/__tests__/module.test.ts` to verify filter changes close the previous source and create one replacement with the selected level/source/category query and credential option, and that unmount closes the active source.
+- [x] T006 Add deterministic page-event regressions in `Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/__tests__/module.test.ts` for entry filtering and pause/resume buffer behavior; verify `onerror` preserves the disconnected UI state without client-created duplicate EventSource instances or changed cleanup behavior.
 - [ ] T007 Run the existing authorization matrix in `Essentials/tests/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj` (`StructuredLogsApiAuthorizationTests`); retain anonymous/insufficient denial and zero-SSE/no-subscription outcomes.
 - [ ] T008 Run the existing stream replay/filter/cleanup coverage in `Essentials/tests/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj` (`StreamEndpointTests`); preserve backend behavior without changing its source.
 
@@ -82,3 +82,8 @@
 ## Root RED checkpoint
 
 At the test-only checkpoint, all twelve cases execute: the original ten pass and the two new same/separate-origin rendered regressions fail only because the actual EventSource init options are undefined rather than credentialed. The exact existing Information filter URL and single instance assertions pass. Root reviewed the full test diff, shared failure-safe DOM/global teardown, and complete `3132-credential-red.log`. `src/module.tsx` remains unchanged. Root accepts this as valid behavior RED before T003; it is not browser cookie or server authorization proof.
+
+
+## Root focused GREEN checkpoint
+
+Root reviewed the one-call-site product diff and all new page/panel tests. The credential option makes both RED cases pass: 12/12. Two further rendered preservation cases bring the module suite to 14/14 and verify exact level/source/category query replacement, closing previous/active sources, entry rendering, pause buffering/resume, and disconnected/open callback behavior on the same source. Shared root/global cleanup remains failure-safe. Logs: `3132-credential-green.log` and `3132-preservation-green.log` in the external execution folder. Simulated callbacks do not prove browser cookie attachment or native reconnect; T010/T011 remain required. Backend safeguards, integrated base, full gates and delivery remain open.
