@@ -22,9 +22,10 @@ Use `services.AddConnections()` to register defaults, then replace these service
   `ConnectionConflictException` (HTTP 409) rather than overwriting the newer value. The expected
   version is read before the save, so a rotation between that read and the save also yields 409,
   although the save then wins; so does a secret soft-deleted, or created under the same name, by a
-  concurrent writer. A retry of the soft-deleted case succeeds only once Secrets releases the names
-  of deleted secrets (a separate Secrets change); until then the field must be re-pointed with
-  `ExistingSecretName`. The check compares the secret's current version, so a secret with no active
+  concurrent writer. For the soft-deleted case the 409 message says so and that a plain retry will not
+  work: retrying with an inline value fails with `ConnectionCredentialWriteException` (HTTP 500) until
+  Secrets releases the names of deleted secrets (a separate Secrets change), so until then the field must
+  be re-pointed with `ExistingSecretName`. The check compares the secret's current version, so a secret with no active
   version (revoked or expired) is rotated without an expected version; if Secrets then reports a
   concurrent writer as a plain `InvalidOperationException` and the secret's version, status or
   update time differs from what the manager read, that too is a 409. Every changed field is
@@ -43,6 +44,19 @@ Use `services.AddConnections()` to register defaults, then replace these service
   Secrets deletes softly and keeps the name, so removing it would block that field for good. The
   secret stays Active and unreferenced, and a retried inline write for that field is rejected as a
   managed-name conflict.
+  Known limits of this write path:
+  - A custom `ISecretAuditSink` that throws after Secrets committed a write makes that write look
+    failed: it is reported as not written (HTTP 500), or as a false 409 when the failure reads as a
+    concurrent change.
+  - A secret version that expires between the manager's read and the rotation gives a 409 that heals
+    on retry, because the retry reads the new state.
+  - A secret with no active version (revoked or expired) is rotated without an expected version, and
+    Secrets has no guard there, so concurrent updaters are last-writer-wins.
+  - A cleanup failure after a conflicted rotation is logged and not returned: the 409 is the one the
+    caller sees, and the replaced secret stays Active and unreferenced.
+  - A store failure before the save throws `ConnectionStoreException` (HTTP 500, no store detail in
+    the body) with nothing confirmed saved, so the request is safe to retry. `Revoke`, `Delete`,
+    `Find` and `List` do not wrap store failures.
 - `IConnectionResolver` for point-of-use resolution.
 - `IConnectionGrantWriter` for compare-and-swap grant writes (expected secret version).
 - `IConnectionPublishTenantAccessor` — owned by `ConnectionsDesign` (principal tenant, then persistence scope).

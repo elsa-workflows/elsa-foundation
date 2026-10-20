@@ -69,19 +69,41 @@ public sealed class ConnectionsApiTests
     [Fact]
     public async Task Update_MapsACredentialWriteFailureTo500WithoutLeakingTheStoreFailure()
     {
+        var body = await UpdateFailingWithAsync(name => new ConnectionCredentialWriteException(
+            name,
+            ["token"],
+            $"Connection '{name}' credential(s) 'token' were not written. Its other changes were saved.",
+            new IOException("Connection refused by db-host-1")));
+
+        Assert.Contains("token", body);
+        Assert.DoesNotContain("db-host-1", body);
+    }
+
+    [Fact]
+    public async Task Update_MapsAStoreFailureBeforeTheSaveTo500WithoutLeakingTheStoreFailure()
+    {
+        var body = await UpdateFailingWithAsync(name => new ConnectionStoreException(
+            name,
+            $"Connection '{name}' was not updated: the connection or secret store failed before the change was confirmed saved. It is safe to retry.",
+            new IOException("Connection refused by db-host-1")));
+
+        Assert.Contains("not updated", body);
+        Assert.DoesNotContain("db-host-1", body);
+    }
+
+    private async Task<string> UpdateFailingWithAsync(Func<string, Exception> failure)
+    {
         await using var host = await StartHostAsync(configure: services =>
         {
             services.RemoveAll<IConnectionManager>();
-            services.AddScoped<IConnectionManager>(_ => new FailingConnectionManager());
+            services.AddScoped<IConnectionManager>(_ => new FailingConnectionManager(failure));
         });
         using var client = host.GetTestClient();
 
         using var response = await client.SendAsync(Authed(HttpMethod.Put, "/connections/any", new { displayName = "Renamed" }));
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        var body = await response.Content.ReadAsStringAsync();
-        Assert.Contains("token", body);
-        Assert.DoesNotContain("db-host-1", body);
+        return await response.Content.ReadAsStringAsync();
     }
 
     [Fact]
@@ -244,15 +266,11 @@ public sealed class ConnectionsApiTests
         return app;
     }
 
-    /// <summary>Fails every update the way the default manager does when a step after its save hits a store outage.</summary>
-    private sealed class FailingConnectionManager : IConnectionManager
+    /// <summary>Fails every update with the exception the default manager throws for a store outage.</summary>
+    private sealed class FailingConnectionManager(Func<string, Exception> failure) : IConnectionManager
     {
         public ValueTask<ConnectionMetadata?> UpdateAsync(string tenantId, string name, UpdateConnectionRequest request, CancellationToken cancellationToken = default) =>
-            throw new ConnectionCredentialWriteException(
-                name,
-                ["token"],
-                $"Connection '{name}' credential(s) 'token' were not written. Its other changes were saved.",
-                new IOException("Connection refused by db-host-1"));
+            throw failure(name);
 
         public ValueTask<ConnectionMetadata> CreateAsync(string tenantId, CreateConnectionRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 

@@ -260,6 +260,14 @@ public static class ConnectionsApi
                     contentType: "application/json",
                     statusCode: StatusCodes.Status500InternalServerError).ExecuteAsync(context);
                 return true;
+            case ConnectionStoreException storeFailure:
+                // 500: a store fault, nothing confirmed saved, so a retry is safe. The message names the connection only; the inner failure stays in the logs.
+                await Results.Json(
+                    new { error = storeFailure.Message },
+                    JsonOptions,
+                    contentType: "application/json",
+                    statusCode: StatusCodes.Status500InternalServerError).ExecuteAsync(context);
+                return true;
             case ConnectionUnavailableException unavailable when string.Equals(unavailable.Code, ConnectionFaultCodes.Forbidden, StringComparison.Ordinal):
                 await Results.Json(
                     new { error = unavailable.Message },

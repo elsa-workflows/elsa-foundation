@@ -24,6 +24,18 @@ internal sealed class DefaultConnectionManager(
         ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
         ArgumentNullException.ThrowIfNull(request);
         ConnectionName.Validate(request.Name);
+        try
+        {
+            return await CreateCoreAsync(tenantId, request, cancellationToken);
+        }
+        catch (Exception exception) when (IsStoreFault(exception))
+        {
+            throw StoreFailure(ConnectionName.Normalize(request.Name), "created", exception);
+        }
+    }
+
+    private async ValueTask<ConnectionMetadata> CreateCoreAsync(string tenantId, CreateConnectionRequest request, CancellationToken cancellationToken)
+    {
         ValidateOwner(request.Owner);
 
         var name = ConnectionName.Normalize(request.Name);
@@ -95,6 +107,28 @@ internal sealed class DefaultConnectionManager(
     public async ValueTask<ConnectionMetadata?> UpdateAsync(string tenantId, string name, UpdateConnectionRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
+        try
+        {
+            return await UpdateCoreAsync(tenantId, name, request, cancellationToken);
+        }
+        catch (Exception exception) when (IsStoreFault(exception))
+        {
+            // Nothing after the save escapes raw (the post-save steps throw only the exceptions excluded here), so this is a pre-save failure.
+            throw StoreFailure(ConnectionName.Normalize(name), "updated", exception);
+        }
+    }
+
+    private static bool IsStoreFault(Exception exception) =>
+        exception is not (ArgumentException or ConnectionConflictException or ConnectionUnavailableException
+            or ConnectionCredentialWriteException or OperationCanceledException);
+
+    private static ConnectionStoreException StoreFailure(string connectionName, string verb, Exception exception) =>
+        new(connectionName,
+            $"Connection '{connectionName}' was not {verb}: the connection or secret store failed before the change was confirmed saved. It is safe to retry.",
+            exception);
+
+    private async ValueTask<ConnectionMetadata?> UpdateCoreAsync(string tenantId, string name, UpdateConnectionRequest request, CancellationToken cancellationToken)
+    {
         var document = await repository.FindAsync(tenantId, ConnectionName.Normalize(name), cancellationToken);
         if (document is null)
             return null;
@@ -388,6 +422,7 @@ internal sealed class DefaultConnectionManager(
     {
         // Every field is attempted: one that lost a race must not stop the others from taking their new values.
         var conflictedFields = new List<string>();
+        var deletedFields = new List<string>();
         var faultedFields = new List<string>();
         var faults = new List<Exception>();
         foreach (var value in values)
@@ -413,10 +448,16 @@ internal sealed class DefaultConnectionManager(
             }
             catch (Exception exception)
             {
-                if (exception is InvalidOperationException && await ConcurrentWriterCausedAsync(tenantId, value))
+                if (exception is InvalidOperationException)
                 {
-                    conflictedFields.Add(value.FieldName);
-                    continue;
+                    var change = await ConcurrentChangeAsync(tenantId, value);
+                    if (change != ConcurrentChange.None)
+                    {
+                        conflictedFields.Add(value.FieldName);
+                        if (change == ConcurrentChange.Deleted)
+                            deletedFields.Add(value.FieldName);
+                        continue;
+                    }
                 }
 
                 logger.LogWarning(exception,
@@ -443,7 +484,10 @@ internal sealed class DefaultConnectionManager(
         {
             throw new ConnectionConflictException(
                 connectionName,
-                $"Connection '{connectionName}' credential(s) {QuoteAll(conflictedFields)} changed by another request, so this update did not write the new value(s). Its other changes were saved.");
+                $"Connection '{connectionName}' credential(s) {QuoteAll(conflictedFields)} changed by another request, so this update did not write the new value(s). Its other changes were saved."
+                + (deletedFields.Count == 0
+                    ? ""
+                    : $" Credential(s) {QuoteAll(deletedFields)} were deleted, and a deleted secret's name is not released yet: retrying an inline value fails, so point them at an existing secret instead."));
         }
     }
 
@@ -453,21 +497,25 @@ internal sealed class DefaultConnectionManager(
     /// Secrets reports a vanished secret (rotate) and a taken name (create) as a plain <see cref="InvalidOperationException"/>.
     /// Reading the secret again tells a concurrent writer apart from a genuine fault.
     /// </summary>
-    private async ValueTask<bool> ConcurrentWriterCausedAsync(string tenantId, OwnedSecretValue value)
+    private async ValueTask<ConcurrentChange> ConcurrentChangeAsync(string tenantId, OwnedSecretValue value)
     {
         try
         {
             var current = await secretManager.FindAsync(tenantId, value.SecretName, CancellationToken.None);
-            return value.Current is null
-                ? current is not null
-                : current is null || ChangedSince(value.Current, current);
+            if (value.Current is null)
+                return current is not null ? ConcurrentChange.Changed : ConcurrentChange.None;
+            if (current is null)
+                return ConcurrentChange.Deleted;
+            return ChangedSince(value.Current, current) ? ConcurrentChange.Changed : ConcurrentChange.None;
         }
         catch (Exception exception)
         {
             logger.LogWarning(exception, "Could not re-read secret '{SecretName}' to classify a failed write; reporting the original failure.", value.SecretName);
-            return false;
+            return ConcurrentChange.None;
         }
     }
+
+    private enum ConcurrentChange { None, Changed, Deleted }
 
     /// <summary>
     /// Without an expected version (the secret had no active version when read), Secrets detects a concurrent writer
