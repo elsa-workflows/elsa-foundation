@@ -9,6 +9,10 @@ using Elsa.Maps.Generator;
 //   solution-filter-roots <filter-path> | solution-filter <filter-path>
 //   ef-suites-select | ef-suites-self-test
 //   project-facts-self-test | feature-facts-self-test | repo-layout-self-test
+//   publish <out-dir> --source-commit <sha> --repo-url <url> | publish-self-test
+//
+// Only dependency-map.json is committed and checked. The documentation maps are generated locally with "all" and
+// published by CI with "publish" (spec 257).
 
 // "dependency-map" first: it is the dataset every project-graph map is a projection of (spec 149). Then "maps":
 // the v2 findings report reads summary lines out of the v1 maps, so they must exist first.
@@ -74,15 +78,34 @@ try
         return 0;
     }
 
+    if (layers.SequenceEqual(["publish-self-test"], StringComparer.Ordinal))
+    {
+        MapSetPublisherContractTests.Run();
+        return 0;
+    }
+
+    if (layers.Length > 0 && string.Equals(layers[0], "publish", StringComparison.Ordinal))
+    {
+        if (layers.Length != 6 || layers[2] != "--source-commit" || layers[4] != "--repo-url")
+        {
+            Console.Error.WriteLine("Usage: publish <out-dir> --source-commit <sha> --repo-url <url>");
+            return 2;
+        }
+
+        Console.WriteLine($"Published maps for {layers[3]} into {layers[1]}:");
+        foreach (var path in MapSetPublisher.Publish(repo, layers[1], layers[3], layers[5]))
+            Console.WriteLine($" - {path}");
+        return 0;
+    }
+
     if (layers.SequenceEqual(["ef-suites-select"], StringComparer.Ordinal))
     {
         Console.WriteLine(EfSuiteSelector.Select(repo).ToJson());
         return 0;
     }
 
-    // Freshness check: regenerates into a scratch directory and compares the bytes with what is
-    // committed. Writes nothing into the repository, so it is safe to run in CI while generation
-    // itself stays manually initiated.
+    // Freshness check of the committed dependency-map dataset: regenerates it into a scratch directory and
+    // compares the bytes with what is committed. Writes nothing into the repository.
     if (layers.Contains("check", StringComparer.Ordinal))
     {
         if (layers.Length > 1)
@@ -95,7 +118,7 @@ try
     // writing part of the maps and then throwing.
     var requested = layers.Contains("all", StringComparer.Ordinal) ? knownLayers : layers;
     if (requested.FirstOrDefault(layer => !knownLayers.Contains(layer, StringComparer.Ordinal)) is { } unknown)
-        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test, solution-filter-roots <filter-path>, solution-filter <filter-path>, ef-suites-select, ef-suites-self-test, project-facts-self-test, feature-facts-self-test, repo-layout-self-test.");
+        throw new ArgumentException($"Unknown generator command '{unknown}'. Known map layers: {string.Join(", ", knownLayers)}, all, check, solution-filters, solution-filters-check, solution-filters-self-test, solution-filter-roots <filter-path>, solution-filter <filter-path>, ef-suites-select, ef-suites-self-test, project-facts-self-test, feature-facts-self-test, repo-layout-self-test, publish <out-dir> --source-commit <sha> --repo-url <url>, publish-self-test.");
 
     var projects = ProjectGraph.Read(repo);
     var written = new List<string>();
