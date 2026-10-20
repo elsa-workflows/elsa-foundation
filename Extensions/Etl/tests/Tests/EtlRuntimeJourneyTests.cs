@@ -27,7 +27,7 @@ using Microsoft.Extensions.Hosting;
 
 namespace Elsa.Etl.Tests;
 
-public sealed class EtlRuntimeJourneyTests
+public sealed partial class EtlRuntimeJourneyTests
 {
     [Fact]
     public async Task Worker_acknowledges_terminal_delivery_only_after_adapter_returns_proof()
@@ -275,7 +275,7 @@ public sealed class EtlRuntimeJourneyTests
         public EtlScope Scope { get; } = new(null, "runtime-journey");
         public string SnapshotRoot => Path.Combine(_directory, "snapshots");
         public string OutputRoot => Path.Combine(_directory, "output");
-        private string ErrorRoot => Path.Combine(_directory, "errors");
+        public string ErrorRoot => Path.Combine(_directory, "errors");
 
         public RuntimeFiles(string source)
         {
@@ -293,7 +293,7 @@ public sealed class EtlRuntimeJourneyTests
         }
 
         public async Task<IHost> StartHostAsync(EfMigratePolicy policy, bool includeBindings = true, bool useShell = false,
-            string bindingRevision = "v1", IEtlResultDelivery? resultDelivery = null, int deliveryLeaseSeconds = 30)
+            string bindingRevision = "v1", IEtlResultDelivery? resultDelivery = null, int deliveryLeaseSeconds = 30, int maximumPageSize = 100)
         {
             var builder = Host.CreateApplicationBuilder();
             var runtime = new EtlRuntimeFeature
@@ -305,7 +305,8 @@ public sealed class EtlRuntimeJourneyTests
             var persistence = new EtlRuntimeEntityFrameworkCoreFeature
             {
                 ConnectionString = $"Data Source={Path.Combine(_directory, "runtime.db")};Pooling=False",
-                DeliveryLeaseSeconds = deliveryLeaseSeconds
+                DeliveryLeaseSeconds = deliveryLeaseSeconds,
+                MaximumPageSize = maximumPageSize
             };
             if (useShell)
                 builder.Services.AddCShells(shells => shells

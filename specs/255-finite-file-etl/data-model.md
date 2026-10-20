@@ -23,6 +23,8 @@ This model supports only the finite topology in [spec.md](spec.md). The ETL feat
 
 The CSV dialect, supported types, lookup behavior, transformations, output encoding, and base finite-limit semantics are the explicit defaults in [spec assumptions](spec.md#assumptions). The artifact hash covers the canonical definition and all behavior-affecting versions, including the logical batch and output serialization rules.
 
+The [terminal materializer](contracts/journey.md#terminal-jsonl-materialization) derives optional route objects from the frozen accepted manifest and retained output revisions. Its descriptor is internal and not persisted; it adds no schema or terminal-result format.
+
 ## Workflow invocation state
 
 The native ETL activity stores one small, versioned `EtlInvocationState` in typed private state:

@@ -12,6 +12,16 @@ A host supplies role-specific named file bindings with tenant scope. Input revis
 
 Output is run-owned. Admission pins destination revisions as well as input revisions; retargeting an alias cannot redirect an existing run's replay. Chunk identity includes run/partition/fixed batch range, independent of attempt/lease. Write to attempt-private staging, flush/close/verify, then atomically publish a complete chunk without overwriting. Interrupted staging never occupies the final key; unsupported publication semantics refuse the binding. Accepted/rejected records have separate chunks. The authoritative manifest lists only accepted identities/hashes in partition/range order. Deterministic JSONL materialization uses that manifest, never concurrent append. Partial/cancelled output remains visibly partial.
 
+## Terminal JSONL materialization
+
+The runtime-owned materializer accepts trusted scope and run identity, not a caller path. It requires a retained terminal result so that the accepted manifest cannot grow during pagination. It resolves main/error destinations from that run's exact pinned binding revisions; removing a revision refuses output instead of selecting today's alias. A terminal run without admitted bindings has no output references.
+
+Read bounded manifest pages in partition/range/route order. Stream only accepted chunks, verifying their exact key, length and digest as they are copied. Never enumerate the destination directory or include acceptance timestamps in canonical content. Use fixed copy buffers and checked length/count accounting; this is not a new total-output ceiling or a heap/RSS promise. Refuse a missing, altered or inconsistent accepted chunk with a stable diagnostic.
+
+Publish each nonempty route through the existing attempt-private staging and atomic create-only mechanism, using a versioned identity containing the scoped run, terminal result and route. Matching replay returns the same immutable reference; conflicting content is refused. Empty routes have no file reference. Return outcome, counts and safe route object references; cancelled/faulted runs are explicitly partial. Do not modify the run, manifest, terminal result or native delivery responsibility. Each route is independently atomic; interruption can leave a complete unreferenced candidate, and replay must recover it. No atomic multi-file publication is implied.
+
+This initial operation and descriptor remain internal to the runtime until a concrete API/Studio consumer establishes the public response contract. No new persisted record or schema migration is required.
+
 ## Native invocation
 
 `RunEtl` selects a published definition; workflow publication pins an exact artifact/hash/schema. Immutable private state records stable run identity, pin, supported state version and trusted parent/scope address. Validate the actual bookmark registration instead of guessing its ID from user input.
