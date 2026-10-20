@@ -24,8 +24,11 @@ namespace Elsa.Activities.Compensation.Activities;
 [Activity(Icon = "Undo")]
 public sealed class Compensate : StructuralActivity, IRuntimeStructuralActivity
 {
+    /// <summary>Asks Studio for the target picker that lists the enclosing compensation scopes (spec 258 FR-320).</summary>
+    public const string TargetUIHint = "compensation-compensate-target";
+
     /// <summary>The node id of the enclosing compensation scope that should recover; blank means the nearest one.</summary>
-    [ActivityInput(Key = "scope")]
+    [ActivityInput(Key = "scope", UIHint = TargetUIHint)]
     public string? Scope { get; set; }
 
     /// <summary>Why recovery was asked for, kept with the request.</summary>
