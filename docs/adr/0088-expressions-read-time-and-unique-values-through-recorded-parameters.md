@@ -159,6 +159,10 @@ version 7 instead of version 4; and a GUID arrives as a string, not a CLR `Guid`
 - A runtime build that predates the new kinds or `binding-pure-v2` cannot read an executable that uses them. Before GA
   this is accepted, not mitigated, as for #2717.
 - A `UniqueId` value reveals its creation time to the millisecond.
+- Plain-source JavaScript is stamped `binding-pure-v2` at publish, so republishing an unchanged definition produces a new
+  executable fingerprint once. Stored executables keep the profile they were stamped with.
+- Today the only way to declare these parameters is a full portable expression definition. A Studio control for them is
+  separate work.
 
 ## Tests the spec must name
 

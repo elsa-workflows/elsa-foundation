@@ -171,8 +171,11 @@ v2 succeeds; publish a new JavaScript and a new Liquid expression and check thei
   `Clock` and `UniqueId` values; nothing from the lost segment was observable, so this is correct (ADR 0088 D2).
 - **Inspection timestamps**: the inspection record of a `While` pass has its own timestamp; `Clock` must equal the
   materialization time, never that inspection timestamp.
-- **An evaluation site with no commit that fixes its values**: such a site cannot bind `Clock` or `UniqueId`, and
-  publishing an expression that uses them there is rejected with a message naming the site.
+- **Graph inputs and outputs**: `GraphActivity` evaluates its input and output mappings with literal parameters only,
+  so `Clock` and `UniqueId` cannot reach it; it stays on `binding-pure-v1`.
+- **A context without an instant**: a defensive failure with a stable message (FR-012), never a live clock read.
+- **Plain-source JavaScript**: it declares no parameters, so it cannot use `Clock` or `UniqueId`, but under
+  `binding-pure-v2` it can use the clockless `Date` on values it reads.
 - **Liquid**: a Liquid expression may declare `Clock` and `UniqueId` parameters and receives the same string values;
   its time filters stay unavailable.
 - **An older runtime**: a runtime that predates the new kinds or the new profile cannot read an executable that uses
@@ -201,16 +204,19 @@ v2 succeeds; publish a new JavaScript and a new Liquid expression and check thei
 
 **Recording (ADR 0088 D2)**
 
-- **FR-007**: `Clock` and `UniqueId` values MUST be stored in the input snapshot they were materialized into; no
-  separate store records them.
+- **FR-007**: `Clock` and `UniqueId` values MUST be pinned through the inputs evaluated from them: the input snapshot
+  (or, for an intrinsic, its committed result) records the evaluated value, and no separate store records the
+  parameter values.
 - **FR-008**: A retry of an invocation MUST read the committed input snapshot and therefore see the same values.
 - **FR-009**: A committed input snapshot MUST NOT be rebuilt; reading it back MUST return the recorded values.
 - **FR-010**: Each `While` pass MUST materialize its own values, and the `Clock` value of a pass MUST equal the
   materialization time used for that pass.
 - **FR-011**: A child-completion message delivered again after the pass it triggered has committed MUST NOT evaluate
   the condition again.
-- **FR-012**: Every runtime site that evaluates a portable expression MUST either fix its `Clock` and `UniqueId` values
-  with a commit, or reject those kinds when the workflow is published, with a message naming the site.
+- **FR-012**: Every runtime site that resolves declared expression parameters MUST supply the evaluation instant and
+  MUST fix the evaluated result with a commit: activity input materialization (including each `While` and `Do` pass)
+  and engine intrinsics (`Set`, `Control` and the other intrinsic inputs). Resolving a `Clock` parameter without an
+  instant MUST fail with a stable message naming the node and input, never fall back to reading the clock.
 
 **`binding-pure-v2` (ADR 0088 D4)**
 
@@ -230,12 +236,16 @@ v2 succeeds; publish a new JavaScript and a new Liquid expression and check thei
 - **FR-018**: `Temporal`, `Intl` and `Math.random` MUST stay unavailable under `binding-pure-v2`.
 - **FR-019**: Authoring validation MUST report the FR-017 messages, at the authored line and column, for each removed
   form it can identify without evaluating the source.
-- **FR-020**: The editor's declared globals MUST follow the expression's profile: `Date` appears for
-  `binding-pure-v2` with only the allowed members, and not for `binding-pure-v1`.
+- **FR-020**: The editor's declared globals MUST describe the `binding-pure-v2` surface, because every JavaScript
+  expression authored from now on publishes as `binding-pure-v2` (FR-021): `Date` is declared with only the allowed
+  members, and the removed members are not declared.
 
 **Versioning (ADR 0088 D4)**
 
-- **FR-021**: Newly published JavaScript expressions MUST be stamped `binding-pure-v2`.
+- **FR-021**: A JavaScript expression authored as plain source MUST be stamped `binding-pure-v2` when it is published. An
+  expression authored as a full portable definition keeps the profile it declares, so `binding-pure-v1` remains
+  selectable. Reading an existing executable MUST keep the profile it was stamped with. As a consequence, republishing
+  an unchanged plain-source JavaScript definition once produces a new executable fingerprint.
 - **FR-022**: Liquid expressions MUST stay stamped `binding-pure-v1`, and a Liquid expression stamped
   `binding-pure-v2` MUST be rejected.
 - **FR-023**: The runtime MUST select the JavaScript sandbox surface from the stamped profile: an expression stamped
@@ -270,7 +280,8 @@ v2 succeeds; publish a new JavaScript and a new Liquid expression and check thei
   and every allowed `Date` member is covered by at least one test.
 - **SC-004**: The same `binding-pure-v2` date expressions give identical results on hosts with at least three
   different local time zones and cultures.
-- **SC-005**: No existing executable fingerprint and no existing `binding-pure-v1` test result changes.
+- **SC-005**: No stored executable's fingerprint or behavior changes, and every existing `binding-pure-v1` evaluation
+  test still passes unchanged.
 - **SC-006**: Each `Date` and ID pattern in the JTest corpus except the `wait(ms)` loops and `newShortGuid()` can be
   written as a `binding-pure-v2` expression with `Clock` and `UniqueId` parameters (verified on a sample of each
   pattern).
