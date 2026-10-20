@@ -111,8 +111,9 @@ passing (FR-013).
 
 **Decision (19 October 2026):** M1 supports all three modes. Issue #3043 proposed Durable plus Balanced with a
 mandatory pre-effect boundary, and refusing Ephemeral for compensated external work. The pre-effect flush already
-applies to `External` activities in every mode, and the P1–P4 restart matrix passes in Durable, Balanced and
-Ephemeral, so refusing Ephemeral would remove a working mode without a failing case. A step or handler marked
+applies to `External` activities in every mode, and the P1–P4 restart matrix (`CompensationScopeRestartTests`,
+#3083) passes in Durable, Balanced and Ephemeral, so refusing Ephemeral would remove a working mode without a
+failing case. FR-013's gate still holds: a mode whose restart tests stop passing loses its support claim. A step or handler marked
 `ReplaySafe` loses that boundary in every mode; FR-014's warning (deferred to M5) covers it.
 
 ## Recovery cause

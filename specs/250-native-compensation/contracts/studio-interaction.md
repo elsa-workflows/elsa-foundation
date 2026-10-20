@@ -38,7 +38,8 @@ Order fulfilment  ›  Compensation scope "Reserve and confirm"
   - `Step 2 needs a name.` (every row message uses the path `{scope}/steps/{index}`)
   - `Step "Reserve inventory" is defined twice.`
   - `Step "Reserve delivery" has no activity.`
-  - Warning: `"Release inventory" is marked replay-safe; its effect may not be recorded before it runs.`
+  - Deferred to M5 (FR-014): the warning `"Release inventory" is marked replay-safe; its effect may not be
+    recorded before it runs.`
 
 ## Authoring — nested example (M3 semantics, notation fixed now)
 
