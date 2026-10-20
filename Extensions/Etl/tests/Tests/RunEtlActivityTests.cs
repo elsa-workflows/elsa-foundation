@@ -6,6 +6,7 @@ using Elsa.Etl.Workflows.Runtime.Activities;
 using Elsa.Etl.Workflows.Runtime.Models;
 using Elsa.Etl.Workflows.Runtime.Services;
 using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Etl.Tests;
@@ -26,11 +27,36 @@ public sealed class RunEtlActivityTests
         var request = EtlNativeBoundary.ReadState(suspension.State);
         Assert.Equal(fixture.Invocation.Scope, request.Scope);
         Assert.Equal(fixture.Invocation.RunId, request.RunId);
+        Assert.Equal(fixture.Invocation.ResultAddress.ResumeTargetId, request.ResumeTargetId);
         Assert.Equal(fixture.Invocation.Artifact.ArtifactId, request.Artifact.ArtifactId);
         var registration = Assert.Single(suspension.Registrations);
         Assert.Equal(EtlNativeBoundary.ResumeTargetKey, registration.ResumeTargetKey);
         Assert.Equal(fixture.Invocation.RunId, registration.StimulusHash);
         Assert.Equal(EtlNativeBoundary.CompletionType, registration.PayloadType);
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("foreign-node")]
+    [InlineData("wrong-handler")]
+    public async Task Activation_refuses_an_absent_or_incorrectly_owned_resume_target(string change)
+    {
+        await using var fixture = await EtlNativeTestFixture.CreateAsync();
+        await fixture.SetExecutableAsync(resumeTargets: target => change == "missing"
+            ? new Dictionary<string, WorkflowExecutableResumeTarget>()
+            : new Dictionary<string, WorkflowExecutableResumeTarget>
+            {
+                [change == "foreign-node" ? EtlNativeBoundary.ResumeTargetKey : target.ResumeTargetId] = target with
+                {
+                    ResumeTargetId = change == "foreign-node" ? EtlNativeBoundary.ResumeTargetKey : target.ResumeTargetId,
+                    ExecutableNodeId = change == "foreign-node" ? "other-node" : target.ExecutableNodeId,
+                    HandlerKey = change == "wrong-handler" ? "OtherHandler" : target.HandlerKey
+                }
+            });
+        await using var scope = await fixture.OpenNativeScopeAsync();
+        var activity = NewActivity(fixture, scope.ServiceProvider.GetRequiredService<IPersistenceAccessContextAccessor>());
+
+        await Assert.ThrowsAsync<InvalidDataException>(async () => await ((IActivity)activity).ExecuteAsync(Context(fixture)));
     }
 
     [Theory]

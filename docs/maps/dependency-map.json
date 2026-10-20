@@ -23073,8 +23073,33 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Activities.Design.Api",
+          "path": "Essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Design.Persistence.EntityFrameworkCore",
+          "path": "Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Design.Reconciliation.Clr",
+          "path": "Essentials/src/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Flowchart",
           "path": "Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Graph.Design",
+          "path": "Essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Activities.Graph.Runtime",
+          "path": "Essentials/src/Activities/Graph/Runtime/Elsa.Activities.Graph.Runtime.csproj"
         },
         {
           "type": "internal",
@@ -23083,13 +23108,43 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Events",
+          "path": "Essentials/src/Events/Elsa.Events/Elsa.Events.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Expressions",
+          "path": "Essentials/src/Expressions/Elsa.Expressions/Elsa.Expressions.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Locking.FileSystem",
           "path": "Essentials/src/Locking/FileSystem/Elsa.Locking.FileSystem.csproj"
         },
         {
           "type": "internal",
+          "id": "Elsa.Primitives.Hosting",
+          "path": "Essentials/src/Primitives/Hosting/Elsa.Primitives.Hosting.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Tasks",
           "path": "Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing.Api",
+          "path": "Essentials/src/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing",
+          "path": "Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Elsa.Workflows.Publishing.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore",
+          "path": "Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj"
         },
         {
           "type": "internal",

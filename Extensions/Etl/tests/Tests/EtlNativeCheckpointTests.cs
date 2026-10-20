@@ -14,13 +14,16 @@ namespace Elsa.Etl.Tests;
 public sealed class EtlNativeCheckpointTests
 {
     private static readonly DateTimeOffset Now = DateTimeOffset.Parse("2026-10-20T18:00:00Z");
+    private const string PlacedResumeTarget = "resume-opaque-placement-4d21";
     private static readonly IReadOnlyDictionary<string, string> Metadata = new Dictionary<string, string>();
     private readonly InMemoryActivityExecutionStateStore _activities = new();
 
-    [Fact]
-    public async Task Suspension_alone_does_not_admit_until_the_real_bookmark_is_committed()
+    [Theory]
+    [InlineData(null)]
+    [InlineData(PlacedResumeTarget)]
+    public async Task Suspension_alone_does_not_admit_until_the_real_bookmark_is_committed(string? resumeTarget)
     {
-        var activity = Activity();
+        var activity = Activity(resumeTarget: resumeTarget);
         var enricher = new EtlCheckpointEnricher(_activities);
         var suspended = await enricher.EnrichAsync(Commit(activity, RuntimeCheckpointNames.ActivitySuspended));
         Assert.Empty(suspended.PostCommitIntents);
@@ -31,7 +34,7 @@ public sealed class EtlNativeCheckpointTests
         Assert.Equal(EtlNativeBoundary.StartKind, intent.Kind);
         Assert.Equal("actual-durable-registration-not-an-attempt-formula", invocation.ResultAddress.BookmarkId);
         Assert.Equal(invocation.ResultAddress.BookmarkId, invocation.ResultAddress.RegistrationId);
-        Assert.Equal("node-1:etl-completed", invocation.ResultAddress.ResumeTargetId);
+        Assert.Equal(resumeTarget ?? "node-1:etl-completed", invocation.ResultAddress.ResumeTargetId);
         Assert.Equal(typeof(RunEtlCompletion).FullName, invocation.ResultAddress.PayloadTypeAlias);
         Assert.Equal(EtlNativeResultAddress.CompletionProviderId, invocation.ResultAddress.ProviderId);
         Assert.Equal("once", invocation.ResultAddress.DeduplicationPolicy);
@@ -109,25 +112,30 @@ public sealed class EtlNativeCheckpointTests
             await new EtlCheckpointEnricher(_activities).EnrichAsync(Commit(invalid, "SubtreeCancelled")));
     }
 
-    [Fact]
-    public void Native_private_state_preserves_the_explicit_null_tenant_and_opaque_partition()
+    [Theory]
+    [InlineData(null)]
+    [InlineData(PlacedResumeTarget)]
+    public void Native_private_state_preserves_the_explicit_null_tenant_opaque_partition_and_frozen_target(string? resumeTarget)
     {
-        var activity = Activity(new(null, "partition-\uD800"));
+        var activity = Activity(new(null, "partition-\uD800"), resumeTarget);
         var json = JsonSerializer.Serialize(activity.PrivateState);
         var restored = activity with { PrivateState = JsonSerializer.Deserialize<ActivityPrivateState>(json) };
         var invocation = EtlNativeBoundary.Invocation(restored);
 
+        Assert.Equal(resumeTarget ?? "node-1:etl-completed", invocation.ResultAddress.ResumeTargetId);
         Assert.Null(invocation.Scope.TenantId);
         Assert.Equal("partition-\uD800", invocation.Scope.PersistencePartition);
         Assert.Equal(EtlRuntimeIdentity.InvocationFingerprint(EtlNativeBoundary.Invocation(activity)), EtlRuntimeIdentity.InvocationFingerprint(invocation));
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Cancellation_after_typed_claim_uses_the_consumed_receipt_even_after_payload_retirement(bool retired)
+    [InlineData(false, null)]
+    [InlineData(true, null)]
+    [InlineData(false, PlacedResumeTarget)]
+    [InlineData(true, PlacedResumeTarget)]
+    public async Task Cancellation_after_typed_claim_uses_the_consumed_receipt_even_after_payload_retirement(bool retired, string? resumeTarget)
     {
-        var original = Activity();
+        var original = Activity(resumeTarget: resumeTarget);
         var invocation = EtlNativeBoundary.Invocation(original);
         var type = EtlNativeBoundary.CompletionType;
         var terminal = new EtlTerminalResult("result-1", EtlTerminalOutcome.Cancelled, 0, 0, 0, null, Now);
@@ -152,6 +160,36 @@ public sealed class EtlNativeCheckpointTests
     }
 
     [Fact]
+    public void A_legacy_direct_request_without_the_target_field_retains_its_composed_address()
+    {
+        var request = EtlNativeBoundary.ReadState(Activity());
+        var json = System.Text.Json.Nodes.JsonNode.Parse(EtlRuntimeJson.Write(request))!.AsObject();
+        Assert.True(json.Remove("resumeTargetId"));
+        var restored = EtlNativeBoundary.ReadState(new RunEtlState(1, JsonSerializer.SerializeToElement(json)));
+
+        Assert.Null(restored.ResumeTargetId);
+        Assert.Equal("node-1:etl-completed", EtlNativeBoundary.Invocation(restored, "registration-1").ResultAddress.ResumeTargetId);
+    }
+
+    [Theory]
+    [InlineData("node-1:etl-completed")]
+    [InlineData("other-opaque-target")]
+    public async Task A_placed_wait_rejects_a_registration_that_does_not_match_its_frozen_target(string target)
+    {
+        var original = Activity(resumeTarget: PlacedResumeTarget);
+        var registration = Assert.Single(original.TriggerRegistrations!);
+        var changed = original with
+        {
+            TriggerRegistrations = [new(registration.RegistrationId, registration.InvocationId, target,
+                registration.PayloadType, registration.StimulusType, registration.StimulusHash, registration.DeduplicationPolicy)]
+        };
+
+        await Assert.ThrowsAsync<InvalidDataException>(async () =>
+            await new EtlCheckpointEnricher(_activities).EnrichAsync(
+                Commit(changed, RuntimeCheckpointNames.BookmarkCreated, Bookmark(original))));
+    }
+
+    [Fact]
     public async Task A_missing_registration_without_a_consumed_receipt_cannot_be_reconstructed()
     {
         var retired = Activity() with { Status = ActivityExecutionStatus.Cancelled, TriggerRegistrations = [] };
@@ -160,21 +198,21 @@ public sealed class EtlNativeCheckpointTests
             await new EtlCheckpointEnricher(_activities).EnrichAsync(Commit(retired, "ActivityCancelled")));
     }
 
-    internal static ActivityExecutionState Activity(EtlScope? scope = null)
+    internal static ActivityExecutionState Activity(EtlScope? scope = null, string? resumeTarget = null)
     {
         scope ??= new("tenant-a", "partition-a");
         var pipeline = EtlArtifactJson.Write(EtlTestPipelines.Create());
         var hash = EtlArtifactJson.Hash(pipeline);
         var artifact = new EtlArtifact(1, EtlArtifactJson.CreateArtifactId(1, "orders", 1, hash), hash, "orders", 1, pipeline);
         var runId = EtlNativeBoundary.RunId(scope, "workflow-1", "activity-1");
-        var request = new RunEtlRequest(scope, runId, artifact, "workflow-1", "activity-1", "executable-1", new('a', 64), "node-1");
+        var request = new RunEtlRequest(scope, runId, artifact, "workflow-1", "activity-1", "executable-1", new('a', 64), "node-1", resumeTarget);
         var state = new RunEtlState(1, EtlRuntimeJson.WriteElement(request));
         return new(new("activity-1", "workflow-1", "node-1", "authored-1", RunEtl.ActivityType, "1"),
             ActivityExecutionStatus.Suspended, "TriggerWaiting", 1, Now, Now, null, null, "parent-sequence", null, null,
             ActivitySchedulingProvenance.Empty, 1, [], [], 0, 0, Metadata,
             PrivateState: new("activity-1", 1, ValueEnvelope.Inline(new(typeof(RunEtlState).FullName!, schemaVersion: 1),
                 JsonSerializer.SerializeToElement(state), ValueProtectionPolicy.InstanceInline), "attempt-1", Now),
-            TriggerRegistrations: [new("actual-durable-registration-not-an-attempt-formula", "activity-1", "node-1:etl-completed",
+            TriggerRegistrations: [new("actual-durable-registration-not-an-attempt-formula", "activity-1", resumeTarget ?? "node-1:etl-completed",
                 new(typeof(RunEtlCompletion).FullName!, schemaVersion: 1), EtlNativeBoundary.StimulusType, runId, ActivityTriggerDeduplicationPolicy.Once)]);
     }
 

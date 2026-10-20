@@ -10,6 +10,15 @@ using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Activities.Sequence;
 using Elsa.Activities.Sequence.Models;
 using Elsa.Activities.Testing;
+using Elsa.Events;
+using Elsa.Expressions;
+using Elsa.Activities.Design.Api;
+using Elsa.Activities.Design.Persistence.EntityFrameworkCore;
+using Elsa.Activities.Design.Reconciliation.Clr;
+using Elsa.Activities.Graph.Design;
+using Elsa.Activities.Graph.Runtime;
+using Elsa.Workflows.Publishing.Api;
+using Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore;
 using Elsa.Etl.Core;
 using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Design;
@@ -27,8 +36,10 @@ using Elsa.Etl.Workflows.Runtime.Models;
 using Elsa.Etl.Workflows.Runtime.Services;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Primitives.Models;
+using Elsa.Primitives.Hosting;
 using Elsa.Tasks.Core;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Publishing;
 using Elsa.Workflows.Publishing.Core.Contracts;
 using Elsa.Workflows.Publishing.Core.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
@@ -190,26 +201,53 @@ public sealed class EtlNativeCompositeJourneyTests
     [InlineData(CompositeKind.Sequence)]
     [InlineData(CompositeKind.Flowchart)]
     [InlineData(CompositeKind.CompensationScope)]
-    public Task Native_workflow_cancellation_settles_ETL_and_retires_its_wait(CompositeKind compositeKind) =>
+    public Task Placed_composite_returns_ETL_completion_to_its_outer_sequence(CompositeKind compositeKind) =>
         WithJourneyAsync(compositeKind, NativeOutcome.Succeeded, async journey =>
         {
-            var invocation = await journey.StartSuspendedAsync();
-            await journey.Harness.CancelAsync(journey.WorkflowExecutionId);
-            await journey.WaitForNativeCancellationAsync(invocation);
-
-            await AssertNativeCancellationAsync(journey, invocation);
+            var invocation = await journey.StartSuspendedAsync(activityBoundary: true);
+            await journey.StartWorkerAsync();
+            await journey.WaitForNativeResultAsync(invocation, ActivityExecutionStatus.Completed, WorkflowExecutionStatus.Completed);
+            var native = await journey.ReadNativeStateAsync();
+            var child = Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == journey.RunEtlNodeId);
+            await AssertConsumedDeliveryAsync(journey, invocation, child);
+            foreach (var nodeId in new[] { journey.ActivityBoundaryNodeId!, journey.CompositeNodeId, journey.AfterEtlNodeId, "after-composite", "outer-sequence" })
+                Assert.Equal(ActivityExecutionStatus.Completed,
+                    Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == nodeId).Status);
+            var run = Assert.IsType<EtlRunView>(await journey.ReadRunAsync(invocation.Scope, invocation.RunId));
+            Assert.Equal(EtlRunStatus.Succeeded, run.Status);
+            AssertCompletionResult(child, run);
         });
 
     [Theory]
-    [InlineData(CompositeKind.Sequence)]
-    [InlineData(CompositeKind.Flowchart)]
-    [InlineData(CompositeKind.CompensationScope)]
-    public Task Native_cancellation_before_admission_cannot_be_resurrected_by_a_delayed_start(CompositeKind compositeKind)
+    [InlineData(CompositeKind.Sequence, false)]
+    [InlineData(CompositeKind.Sequence, true)]
+    [InlineData(CompositeKind.Flowchart, false)]
+    [InlineData(CompositeKind.Flowchart, true)]
+    [InlineData(CompositeKind.CompensationScope, false)]
+    [InlineData(CompositeKind.CompensationScope, true)]
+    public Task Native_cancellation_settles_ETL_and_retires_its_wait(CompositeKind compositeKind, bool subtree) =>
+        WithJourneyAsync(compositeKind, NativeOutcome.Succeeded, async journey =>
+        {
+            var invocation = await journey.StartSuspendedAsync(subtree);
+            await journey.CancelNativeAsync(subtree);
+            await journey.WaitForNativeCancellationAsync(invocation, subtree);
+
+            await AssertNativeCancellationAsync(journey, invocation, subtree);
+        });
+
+    [Theory]
+    [InlineData(CompositeKind.Sequence, false)]
+    [InlineData(CompositeKind.Sequence, true)]
+    [InlineData(CompositeKind.Flowchart, false)]
+    [InlineData(CompositeKind.Flowchart, true)]
+    [InlineData(CompositeKind.CompensationScope, false)]
+    [InlineData(CompositeKind.CompensationScope, true)]
+    public Task Native_cancellation_before_admission_cannot_be_resurrected_by_a_delayed_start(CompositeKind compositeKind, bool subtree)
     {
         var gate = new AdmissionGate();
         return WithJourneyAsync(compositeKind, NativeOutcome.Succeeded, async journey =>
         {
-            var reference = await journey.PublishWorkflowAsync();
+            var reference = await journey.PublishWorkflowAsync(subtree);
             var started = await journey.Harness.StartPublishedAsync(reference, journey.WorkflowExecutionId);
             Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, started.CommandDispatch.Status);
             var pendingStart = journey.DriveAsync();
@@ -221,7 +259,7 @@ public sealed class EtlNativeCompositeJourneyTests
                 EtlNativeBoundary.EnsureBookmark(invocation.ResultAddress,
                     Assert.IsType<BookmarkState>(await journey.ReadBookmarkAsync(invocation.ResultAddress.BookmarkId)));
 
-                await journey.Harness.CancelAsync(journey.WorkflowExecutionId);
+                await journey.CancelNativeAsync(subtree);
                 await journey.DeliverCancellationIntentsAsync();
                 var tombstone = Assert.IsType<EtlRunView>(await journey.ReadRunAsync(invocation.Scope, invocation.RunId));
                 Assert.Equal(EtlRunStatus.Cancelled, tombstone.Status);
@@ -229,12 +267,12 @@ public sealed class EtlNativeCompositeJourneyTests
 
                 gate.Release.TrySetResult();
                 await pendingStart.WaitAsync(TimeSpan.FromSeconds(30));
-                await journey.WaitForNativeCancellationAsync(invocation);
+                await journey.WaitForNativeCancellationAsync(invocation, subtree);
                 var settled = Assert.IsType<EtlRunView>(await journey.ReadRunAsync(invocation.Scope, invocation.RunId));
                 Assert.Equal(EtlRuntimeJson.Write(tombstone), EtlRuntimeJson.Write(settled));
                 Assert.Null(settled.Bindings);
                 Assert.Null(settled.Prepared);
-                await AssertNativeCancellationAsync(journey, invocation);
+                await AssertNativeCancellationAsync(journey, invocation, subtree);
             }
             catch (Exception exception)
             {
@@ -250,15 +288,11 @@ public sealed class EtlNativeCompositeJourneyTests
         }, gate);
     }
 
-    private static async Task AssertNativeCancellationAsync(NativeEtlJourney journey, EtlInvocation invocation)
+    private static async Task AssertNativeCancellationAsync(NativeEtlJourney journey, EtlInvocation invocation, bool subtree)
     {
         var native = await journey.ReadNativeStateAsync();
-        var child = Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == "run-etl");
-        Assert.Equal(ActivityExecutionStatus.Cancelled, child.Status);
-        Assert.Equal(ActivityExecutionStatus.Cancelled,
-            Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == journey.CompositeNodeId).Status);
-        Assert.DoesNotContain(native.Activities, state => state.Execution.ExecutableNodeId == "after-etl");
-        Assert.Empty(child.TriggerDeliveries ?? []);
+        AssertCancelledTree(native);
+
         Assert.Null(await journey.ReadBookmarkAsync(invocation.ResultAddress.BookmarkId));
         var run = Assert.IsType<EtlRunView>(await journey.ReadRunAsync(invocation.Scope, invocation.RunId));
         Assert.Equal(EtlRunStatus.Cancelled, run.Status);
@@ -269,12 +303,33 @@ public sealed class EtlNativeCompositeJourneyTests
 
         await journey.StartWorkerAsync();
         await journey.WaitForNativeResultAsync(invocation, ActivityExecutionStatus.Cancelled,
-            WorkflowExecutionStatus.Cancelled);
+            subtree ? WorkflowExecutionStatus.Running : WorkflowExecutionStatus.Cancelled);
         var delivery = await journey.ReadOutboxAsync(invocation.Scope, invocation.RunId);
         Assert.Equal((int)EtlDeliveryDisposition.ProvenParentTerminal, delivery.Disposition);
         Assert.NotNull(delivery.AcknowledgedAtUtcTicks);
-        Assert.Empty(Assert.Single((await journey.ReadNativeStateAsync()).Activities,
-            state => state.Execution.ExecutableNodeId == "run-etl").TriggerDeliveries ?? []);
+        AssertCancelledTree(await journey.ReadNativeStateAsync());
+        Assert.Null(await journey.ReadBookmarkAsync(invocation.ResultAddress.BookmarkId));
+        Assert.Empty(await journey.ReadManifestAsync(invocation.Scope, invocation.RunId));
+
+        void AssertCancelledTree((WorkflowExecutionState Workflow, IReadOnlyCollection<ActivityExecutionState> Activities) native)
+        {
+            var child = Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == journey.RunEtlNodeId);
+            Assert.Equal(ActivityExecutionStatus.Cancelled, child.Status);
+            Assert.Equal(ActivityExecutionStatus.Cancelled,
+                Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == journey.CompositeNodeId).Status);
+            Assert.DoesNotContain(native.Activities, state => state.Execution.ExecutableNodeId == journey.AfterEtlNodeId);
+            if (subtree)
+            {
+                Assert.Equal(ActivityExecutionStatus.Cancelled,
+                    Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == journey.ActivityBoundaryNodeId).Status);
+                Assert.Equal(WorkflowExecutionStatus.Running, native.Workflow.Status);
+                // Sequence defers while its child runs; cancelling that child scope does not complete the outer parent.
+                Assert.Equal(ActivityExecutionStatus.Running,
+                    Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == "outer-sequence").Status);
+                Assert.DoesNotContain(native.Activities, state => state.Execution.ExecutableNodeId == "after-composite");
+            }
+            Assert.Empty(child.TriggerDeliveries ?? []);
+        }
     }
 
     private static async Task WithJourneyAsync(CompositeKind kind, NativeOutcome outcome, Func<NativeEtlJourney, Task> test, AdmissionGate? gate = null)
@@ -306,6 +361,19 @@ public sealed class EtlNativeCompositeJourneyTests
         var receipt = Assert.Single(child.TriggerDeliveries ?? []);
         Assert.Equal(ActivityTriggerDeliveryStatus.Consumed, receipt.Status);
         Assert.Equal(invocation.ResultAddress.RegistrationId, receipt.RegistrationId);
+        if (child.Status == ActivityExecutionStatus.Completed)
+        {
+            // Successful typed completion retires state/payload; fault/cancel paths preserve their recovery state.
+            Assert.Null(child.PrivateState);
+            Assert.Equal(ValuePresence.Absent, receipt.Payload.Presence);
+        }
+        else
+        {
+            Assert.Equal(EtlRuntimeIdentity.InvocationFingerprint(invocation),
+                EtlRuntimeIdentity.InvocationFingerprint(EtlNativeBoundary.Invocation(child)));
+        }
+        var run = Assert.IsType<EtlRunView>(await journey.ReadRunAsync(invocation.Scope, invocation.RunId));
+        Assert.Equal(EtlRuntimeIdentity.InvocationFingerprint(invocation), EtlRuntimeIdentity.InvocationFingerprint(run.Invocation));
         Assert.Equal(invocation.ResultAddress.ProviderId, receipt.ProviderId);
         Assert.Equal(EtlNativeBoundary.CompletionType, receipt.PayloadType);
         Assert.Null(await journey.ReadBookmarkAsync(invocation.ResultAddress.BookmarkId));
@@ -390,7 +458,10 @@ public sealed class EtlNativeCompositeJourneyTests
         public CompositeKind CompositeKind { get; }
         private NativeOutcome Outcome { get; }
         public string WorkflowExecutionId { get; }
-        public string CompositeNodeId { get; }
+        public string CompositeNodeId { get; private set; }
+        public string? ActivityBoundaryNodeId { get; private set; }
+        public string RunEtlNodeId { get; private set; } = "run-etl";
+        public string AfterEtlNodeId { get; private set; } = "after-etl";
         public EtlScope Scope { get; }
         public string OutputRoot { get; }
 
@@ -436,6 +507,23 @@ public sealed class EtlNativeCompositeJourneyTests
                     .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
                     .WithFeature(services => new ActivitiesFlowchartFeature().ConfigureServices(services))
                     .WithFeature(services => new ActivitiesCompensationFeature().ConfigureServices(services))
+                    .WithFeature(services => new PrimitivesFeature().ConfigureServices(services))
+                    .WithFeature(services => new ExpressionsFeature().ConfigureServices(services))
+                    .WithFeature(services => new EventsFeature().ConfigureServices(services))
+                    .WithFeature(services => new WorkflowsPublishingFeature().ConfigureServices(services))
+                    .WithFeature(services => new ActivitiesDesignApiFeature().ConfigureServices(services))
+                    .WithFeature(services => new WorkflowsPublishingApiFeature().ConfigureServices(services))
+                    .WithFeature(services => new GraphActivitiesDesignFeature().ConfigureServices(services))
+                    .WithFeature(services => new GraphActivitiesRuntimeFeature().ConfigureServices(services))
+                    .WithFeature(services => new ClrActivityReconciliationFeature().ConfigureServices(services))
+                    .WithFeature(services => new ActivitiesDesignEntityFrameworkCoreFeature
+                    {
+                        ConnectionString = $"Data Source={workflowDatabase};Pooling=False"
+                    }.ConfigureServices(services))
+                    .WithFeature(services => new PublishingEntityFrameworkCoreFeature
+                    {
+                        ConnectionString = $"Data Source={workflowDatabase};Pooling=False"
+                    }.ConfigureServices(services))
                     .WithFeature(services => new EtlDesignFeature().ConfigureServices(services))
                     .WithFeature(services => new EtlDesignEntityFrameworkCoreFeature
                     {
@@ -497,7 +585,7 @@ public sealed class EtlNativeCompositeJourneyTests
             }
         }
 
-        public async Task<WorkflowExecutableSourceReference> PublishWorkflowAsync()
+        public async Task<WorkflowExecutableSourceReference> PublishWorkflowAsync(bool activityBoundary = false)
         {
             EtlArtifact artifact;
             await using (var operation = await OpenPartitionScopeAsync())
@@ -528,20 +616,35 @@ public sealed class EtlNativeCompositeJourneyTests
                     "WorkflowDefinitionVersion",
                     "parent-workflow-version",
                     "1.0.0");
-                var context = new ExecutableCompilationContext(request, source, rootWithoutPin);
-                var compilationSource = Assert.Single(operation.ServiceProvider.GetServices<IExecutableCompilationSource>()
-                    .OfType<Elsa.Etl.Workflows.Design.Services.EtlPublishedArtifactPinSource>());
-                var contribution = await compilationSource.GetContributionAsync(context);
-                var pin = Assert.Single(contribution.NodeMetadata);
-                Assert.Equal("run-etl", pin.ExecutableNodeId);
-                Assert.Equal(EtlNativeBoundary.PinKey, pin.Key);
-
-                var pinnedRoot = Composite(RunEtlNode(token, new Dictionary<string, string> { [pin.Key] = pin.Value }),
-                    WorkflowExecutionHarness.NewProbeNode("after-etl"));
+                var pinnedRoot = rootWithoutPin;
                 var targets = new Dictionary<string, WorkflowExecutableResumeTarget>(StringComparer.Ordinal);
-                var targetId = WorkflowExecutableResumeTarget.ComposeScopedId("run-etl", EtlNativeBoundary.ResumeTargetKey);
-                targets.Add(targetId, new WorkflowExecutableResumeTarget(
-                    targetId, "run-etl", "ResumeAsync", new Dictionary<string, string>(), EtlNativeBoundary.ResumeTargetKey));
+                if (activityBoundary)
+                {
+                    var authored = NativeEtlAuthoredComposite.Create(operation.ServiceProvider, pinnedRoot);
+                    var placement = await NativeEtlActivityBoundary.PlaceAsync(operation.ServiceProvider,
+                        authored.Root, authored.SourceCatalog, "parent-workflow-version", "composite-boundary");
+                    ActivityBoundaryNodeId = placement.Root.ExecutableNodeId;
+                    CompositeNodeId = NativeEtlActivityBoundary.FindOccurrenceNodeId(placement, authored.Root.NodeId);
+                    RunEtlNodeId = NativeEtlActivityBoundary.FindOccurrenceNodeId(placement, "run-etl");
+                    var resumeTarget = Assert.Single(placement.ResumeTargets.Values,
+                        target => target.ExecutableNodeId == RunEtlNodeId && target.LocalResumeTargetId == EtlNativeBoundary.ResumeTargetKey);
+                    Assert.Equal("ResumeAsync", resumeTarget.HandlerKey);
+                    Assert.NotEqual(WorkflowExecutableResumeTarget.ComposeScopedId(RunEtlNodeId, EtlNativeBoundary.ResumeTargetKey),
+                        resumeTarget.ResumeTargetId);
+                    AfterEtlNodeId = NativeEtlActivityBoundary.FindOccurrenceNodeId(placement, "after-etl");
+                    pinnedRoot = Sequence(placement.Root, WorkflowExecutionHarness.NewProbeNode("after-composite"), "outer-sequence");
+                    targets = placement.ResumeTargets.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+                }
+                else
+                {
+                    var targetId = WorkflowExecutableResumeTarget.ComposeScopedId("run-etl", EtlNativeBoundary.ResumeTargetKey);
+                    targets.Add(targetId, new WorkflowExecutableResumeTarget(
+                        targetId, "run-etl", "ResumeAsync", new Dictionary<string, string>(), EtlNativeBoundary.ResumeTargetKey));
+                }
+                pinnedRoot = await operation.ServiceProvider.GetRequiredService<IExecutableNodeMetadataEnricher>()
+                    .EnrichAsync(request, source, pinnedRoot);
+                Assert.NotEmpty(pinnedRoot.DescendantsAndSelf().Single(node => node.ActivityType == RunEtl.ActivityType)
+                    .Metadata[EtlNativeBoundary.PinKey]);
                 var executable = new WorkflowExecutable(
                     WorkflowExecutionHarness.Identity,
                     pinnedRoot,
@@ -556,16 +659,16 @@ public sealed class EtlNativeCompositeJourneyTests
             }
         }
 
-        public async Task<EtlInvocation> StartSuspendedAsync()
+        public async Task<EtlInvocation> StartSuspendedAsync(bool activityBoundary = false)
         {
-            var reference = await PublishWorkflowAsync();
+            var reference = await PublishWorkflowAsync(activityBoundary);
             var started = await Harness.StartPublishedAsync(reference, WorkflowExecutionId);
             Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, started.CommandDispatch.Status);
             EtlInvocation? invocation = null;
             await WaitForAsync(async () =>
             {
                 var native = await ReadNativeStateAsync();
-                var child = native.Activities.SingleOrDefault(state => state.Execution.ExecutableNodeId == "run-etl");
+                var child = native.Activities.SingleOrDefault(state => state.Execution.ExecutableNodeId == RunEtlNodeId);
                 if (native.Workflow.Status != WorkflowExecutionStatus.Running || child?.Status != ActivityExecutionStatus.Suspended)
                     return false;
                 invocation = EtlNativeBoundary.Invocation(child);
@@ -575,7 +678,7 @@ public sealed class EtlNativeCompositeJourneyTests
                     return false;
                 EtlNativeBoundary.EnsureBookmark(invocation.ResultAddress, bookmark);
                 Assert.Null(admitted.TerminalResult);
-                Assert.DoesNotContain(native.Activities, state => state.Execution.ExecutableNodeId == "after-etl");
+                Assert.DoesNotContain(native.Activities, state => state.Execution.ExecutableNodeId == AfterEtlNodeId);
                 return true;
             });
             return Assert.IsType<EtlInvocation>(invocation);
@@ -588,12 +691,41 @@ public sealed class EtlNativeCompositeJourneyTests
             Assert.Equal(EtlStoreStatus.Applied, cancelled.Status);
         }
 
-        public Task WaitForNativeCancellationAsync(EtlInvocation invocation) =>
+        public async Task CancelNativeAsync(bool subtree)
+        {
+            if (!subtree)
+            {
+                await Harness.CancelAsync(WorkflowExecutionId);
+                return;
+            }
+            var native = await ReadNativeStateAsync();
+            var boundary = Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == ActivityBoundaryNodeId);
+            Assert.Equal(boundary.InvocationId, boundary.ExecutionScopeId);
+            var composite = Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == CompositeNodeId);
+            Assert.Equal(boundary.InvocationId, composite.ParentActivityExecutionId);
+            Assert.Equal(composite.InvocationId,
+                Assert.Single(native.Activities, state => state.Execution.ExecutableNodeId == RunEtlNodeId).ParentActivityExecutionId);
+            var now = Harness.Services.GetRequiredService<TimeProvider>().GetUtcNow();
+            var commandId = "scope-cancel-" + Guid.NewGuid().ToString("N");
+            var agent = await Harness.Services.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(
+                new WorkflowExecutionActorActivationRequest(WorkflowExecutionId,
+                    WorkflowExecutionActorActivationReason.ControlPlaneCommand, now, requestedBy: "etl-native-test",
+                    requiredCapabilities: WorkflowExecutionActorCapabilities.None, partition: WorkflowExecutionHarness.Partition));
+            var command = new WorkflowExecutionCommand(commandId, WorkflowExecutionId, WorkflowExecutionCommandKind.CancelActivityScope,
+                now, JsonSerializer.SerializeToElement(new CancelActivityScopeCommand(boundary.InvocationId, boundary.ExecutionScopeId!, "ETL composite fixture cancellation")),
+                new Dictionary<string, string>());
+            var dispatched = await agent.EnqueueAsync(new WorkflowExecutionCommandEnvelope(commandId, WorkflowExecutionId, command,
+                $"{WorkflowExecutionId}:cancel-scope:{boundary.InvocationId}", WorkflowExecutionCommandDeliveryMode.AtLeastOnce, now,
+                metadata: new Dictionary<string, string>(), partition: WorkflowExecutionHarness.Partition));
+            Assert.Equal(WorkflowExecutionCommandDispatchStatus.Accepted, dispatched.Status);
+        }
+
+        public Task WaitForNativeCancellationAsync(EtlInvocation invocation, bool subtree) =>
             WaitForAsync(async () =>
             {
                 var native = await ReadNativeStateAsync();
-                return native.Workflow.Status == WorkflowExecutionStatus.Cancelled &&
-                    native.Activities.Any(state => state.Execution.ExecutableNodeId == "run-etl" && state.Status == ActivityExecutionStatus.Cancelled) &&
+                return native.Workflow.Status == (subtree ? WorkflowExecutionStatus.Running : WorkflowExecutionStatus.Cancelled) &&
+                    native.Activities.Any(state => state.Execution.ExecutableNodeId == RunEtlNodeId && state.Status == ActivityExecutionStatus.Cancelled) &&
                     (await ReadRunAsync(invocation.Scope, invocation.RunId))?.Status == EtlRunStatus.Cancelled;
             });
 
@@ -618,7 +750,7 @@ public sealed class EtlNativeCompositeJourneyTests
             {
                 var native = await ReadNativeStateAsync();
                 if (native.Workflow.Status != parentStatus || !native.Activities.Any(state =>
-                        state.Execution.ExecutableNodeId == "run-etl" && state.Status == childStatus))
+                        state.Execution.ExecutableNodeId == RunEtlNodeId && state.Status == childStatus))
                     return false;
                 return (await ReadOutboxAsync(invocation.Scope, invocation.RunId)).AcknowledgedAtUtcTicks is not null;
             });
@@ -642,7 +774,7 @@ public sealed class EtlNativeCompositeJourneyTests
             try
             {
                 var native = await ReadNativeStateAsync();
-                var child = native.Activities.FirstOrDefault(state => state.Execution.ExecutableNodeId == "run-etl");
+                var child = native.Activities.FirstOrDefault(state => state.Execution.ExecutableNodeId == RunEtlNodeId);
                 var runId = child is null ? null : EtlNativeBoundary.RunId(Scope, WorkflowExecutionId, child.InvocationId);
                 var run = runId is null ? null : await ReadRunAsync(Scope, runId);
                 var outbox = run?.TerminalResult is null ? null : await ReadOutboxAsync(Scope, runId!);

@@ -48,14 +48,20 @@ public sealed class RunEtl(IWorkflowExecutionStateStore workflows, IWorkflowExec
             literal.GetString() != Pipeline)
             throw EtlNativeBoundary.Invalid();
         var artifact = EtlNativeBoundary.ReadPin(pin, literal.GetString()!);
+        var resumeTarget = WorkflowExecutableResumeTarget.FindForNode(executable, node.ExecutableNodeId, EtlNativeBoundary.ResumeTargetKey);
+        if (resumeTarget is null || resumeTarget.ExecutableNodeId != node.ExecutableNodeId ||
+            resumeTarget.HandlerKey != nameof(ResumeAsync) ||
+            !executable.ResumeTargets.TryGetValue(resumeTarget.ResumeTargetId, out var declaredTarget) || declaredTarget != resumeTarget)
+            throw EtlNativeBoundary.Invalid();
         var scope = new EtlScope(parent.TenantId, persistenceScope.Value);
         var runId = EtlNativeBoundary.RunId(scope, context.WorkflowExecutionId, context.InvocationId);
         var request = new RunEtlRequest(scope, runId, artifact, context.WorkflowExecutionId, context.InvocationId,
-            parent.PinnedExecutable.ArtifactId, parent.PinnedExecutable.ArtifactHash, context.ExecutableNodeId);
+            parent.PinnedExecutable.ArtifactId, parent.PinnedExecutable.ArtifactHash, context.ExecutableNodeId, resumeTarget.ResumeTargetId);
         return Suspend(new(EtlNativeBoundary.FormatVersion, EtlRuntimeJson.WriteElement(request)),
             [new ActivityTriggerRegistration<RunEtlCompletion>(EtlNativeBoundary.ResumeTargetKey, EtlNativeBoundary.StimulusType, runId)]);
     }
 
+    [ResumeTarget(EtlNativeBoundary.ResumeTargetKey)]
     protected override async ValueTask<ActivityTransition<RunEtlResult, RunEtlState>> ResumeAsync(
         ActivityResumeContext<RunEtlState, RunEtlCompletion> context)
     {

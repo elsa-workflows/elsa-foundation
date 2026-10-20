@@ -1,6 +1,6 @@
 # Native ETL terminal outcomes
 
-Date: 2026-10-20. Active #3109 / draft PR #3111; builds on integrated checkpoint `bca4c08cc02f75f7d5d67256f832ba501ba950b4`. T020 is complete, bringing the checklist to 17/36. T022 and the complete product acceptance remain open.
+Date: 2026-10-20. Active #3109 / draft PR #3111; builds on integrated checkpoint `bca4c08cc02f75f7d5d67256f832ba501ba950b4`. T020 is complete, bringing the checklist to 17/36. At this checkpoint T022 and the complete product acceptance remained open. The later [placed-subtree checkpoint](native-subtree-cancellation.md) completes T022; product acceptance remains open.
 
 ## Executed cases
 
@@ -14,7 +14,7 @@ The same actual migrated SQLite/native start, scheduler/resumption and ETL backg
 
 Each case requires the matching consumed typed native receipt, original registration/provider/payload type, absent consumed bookmark and acknowledged ETL result outbox. A final `ProvenParentTerminal` disposition alone cannot pass, because the exact consumed receipt is independently asserted. Completed success and business-error results are deserialized from the native activity's committed completion and compared with the real ETL run/terminal counts and diagnostic. Faults/cancellations cannot masquerade as successful completion.
 
-The fixture uses actual files and `IEtlRuntimeStore.CancelAsync`; it does not call RunEtl execution methods directly, fabricate ETL terminal results or replace the native dispatcher. ETL-returned cancellation is distinct from native whole-parent/subtree cancellation flowing into ETL, which remains T022. Input/output binding revisions remain pinned before execution. Physical effects remain at least once; these preparation-fault/cancel cases do not establish reversal of previously published effects.
+The fixture uses actual files and `IEtlRuntimeStore.CancelAsync`; it does not call RunEtl execution methods directly, fabricate ETL terminal results or replace the native dispatcher. ETL-returned cancellation is distinct from native whole-parent/subtree cancellation flowing into ETL, which is separately proved by the later [T022 checkpoint](native-subtree-cancellation.md). Input/output binding revisions remain pinned before execution. Physical effects remain at least once; these preparation-fault/cancel cases do not establish reversal of previously published effects.
 
 ## Fixture correction and diagnostics
 
@@ -40,7 +40,7 @@ git diff --check
 
 The [regression receipt](native-business-outcome-regression.json) records exact source hashes and command. Temporarily changing `BusinessError => Complete(value, "BusinessError")` to `Complete(value)` makes the real Sequence business-error case fail on its native outcome. The fixture retained its diagnostic JSON and all three SQLite databases. Exact source restoration passes the same case; no changed production code remains.
 
-The full workflow-definition compiler/picker/API/Studio path, native-initiated whole-parent/subtree/pre-admission cancellation, two-process recovery, deterministic final materialization and HTTP/browser acceptance remain required. The parent/program is not complete, and standing self-review/normal self-merge authority does not turn incomplete product acceptance into a merge gate pass.
+Native-initiated whole-parent/subtree/pre-admission cancellation is proved by the later [T022 checkpoint](native-subtree-cancellation.md). The full workflow-definition compiler/picker/API/Studio path, two-process recovery, deterministic final materialization and HTTP/browser acceptance remain required. The parent/program is not complete, and standing self-review/normal self-merge authority does not turn incomplete product acceptance into a merge gate pass.
 
 ## Final test-source hash
 

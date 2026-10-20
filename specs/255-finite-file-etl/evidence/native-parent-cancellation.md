@@ -1,6 +1,6 @@
 # Native parent cancellation checkpoint
 
-This is a partial T022 checkpoint in draft PR #3111, not completion of the finite ETL journey or program.
+This records the initial whole-parent T022 checkpoint in draft PR #3111. The later [placed-subtree checkpoint](native-subtree-cancellation.md) completes T022, not the finite ETL journey or program.
 
 ## Actual cancellation and ordering
 
@@ -36,4 +36,4 @@ The REST replay/restart journey uses a rebuilt Workbench, its own temporary cont
 
 ## Remaining boundary
 
-T022 remains unchecked until genuine activity-boundary subtree cancellation and its reversed ordering are proved. No scope metadata is injected to make an ordinary composite appear to own a reusable activity boundary. The production compiler/placer must supply that boundary. The full workflow-definition/compiler/picker/API/Studio path, deterministic final materialization, two-process recovery and remaining HTTP/browser acceptance remain owed. Physical effects remain at least once; cancellation does not prove physical worker termination or reverse prior output. Historical receipt/HTTP timeout causes remain unproven. Orleans remains deferred; no actor provider is selected here.
+At this initial checkpoint, genuine activity-boundary subtree cancellation and its reversed ordering remained unproved. They are now covered by the [placed-subtree checkpoint](native-subtree-cancellation.md), completing T022. No scope metadata is injected to make an ordinary composite appear to own a reusable activity boundary. The production compiler/placer must supply that boundary. The full workflow-definition/compiler/picker/API/Studio path, deterministic final materialization, two-process recovery and remaining HTTP/browser acceptance remain owed. Physical effects remain at least once; cancellation does not prove physical worker termination or reverse prior output. Historical receipt/HTTP timeout causes remain unproven. Orleans remains deferred; no actor provider is selected here.

@@ -63,7 +63,8 @@ internal static class EtlNativeBoundary
             string.IsNullOrWhiteSpace(request.ActivityExecutionId) ||
             request.RunId != RunId(request.Scope, request.WorkflowExecutionId, request.ActivityExecutionId) ||
             string.IsNullOrWhiteSpace(request.ExecutableId) || string.IsNullOrWhiteSpace(request.ExecutableHash) ||
-            string.IsNullOrWhiteSpace(request.NodeId))
+            string.IsNullOrWhiteSpace(request.NodeId) ||
+            (request.ResumeTargetId is not null && string.IsNullOrWhiteSpace(request.ResumeTargetId)))
             throw Invalid();
     }
 
@@ -71,7 +72,7 @@ internal static class EtlNativeBoundary
     {
         var address = invocation.ResultAddress;
         var request = new RunEtlRequest(invocation.Scope, invocation.RunId, invocation.Artifact, address.WorkflowExecutionId,
-            address.ActivityExecutionId, address.ExecutableId, address.ExecutableHash, address.NodeId);
+            address.ActivityExecutionId, address.ExecutableId, address.ExecutableHash, address.NodeId, address.ResumeTargetId);
         ValidateRequest(request);
         if (EtlRuntimeIdentity.InvocationFingerprint(invocation) != EtlRuntimeIdentity.InvocationFingerprint(Invocation(request, address.RegistrationId)))
             throw Invalid();
@@ -98,7 +99,7 @@ internal static class EtlNativeBoundary
             throw Invalid();
         var registration = registrations.Single();
         if (registration.InvocationId != request.ActivityExecutionId ||
-            registration.ResumeTargetKey != WorkflowExecutableResumeTarget.ComposeScopedId(request.NodeId, ResumeTargetKey) ||
+            registration.ResumeTargetKey != ResumeTargetId(request) ||
             registration.StimulusType != StimulusType || registration.StimulusHash != request.RunId ||
             registration.PayloadType != CompletionType ||
             registration.DeduplicationPolicy != ActivityTriggerDeduplicationPolicy.Once)
@@ -135,9 +136,14 @@ internal static class EtlNativeBoundary
         ArgumentException.ThrowIfNullOrWhiteSpace(registrationId);
         return new(request.Scope, request.RunId, request.Artifact, new(FormatVersion,
             request.WorkflowExecutionId, request.ActivityExecutionId, request.ExecutableId, request.ExecutableHash,
-            request.NodeId, registrationId, registrationId, WorkflowExecutableResumeTarget.ComposeScopedId(request.NodeId, ResumeTargetKey),
+            request.NodeId, registrationId, registrationId, ResumeTargetId(request),
             StimulusType, request.RunId, CompletionType.Alias, FormatVersion, "once", EtlNativeResultAddress.CompletionProviderId));
     }
+
+    // Older direct-invocation snapshots predate the explicit target field. Fresh activations always freeze
+    // the pinned executable's real target, which may be a placement-generated opaque identity.
+    private static string ResumeTargetId(RunEtlRequest request) =>
+        request.ResumeTargetId ?? WorkflowExecutableResumeTarget.ComposeScopedId(request.NodeId, ResumeTargetKey);
 
     public static void EnsureBookmark(EtlNativeResultAddress address, BookmarkState bookmark)
     {

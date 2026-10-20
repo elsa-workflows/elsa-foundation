@@ -169,7 +169,8 @@ internal sealed class EtlNativeTestFixture : IAsyncDisposable
             .CreateAsync(new PersistenceScope(Scope.PersistencePartition), cancellationToken);
 
     /// <summary>Adds the pinned published node used by direct RunEtl activity execution tests.</summary>
-    public async Task SetExecutableAsync(string? pin = null, string? literalToken = null)
+    public async Task SetExecutableAsync(string? pin = null, string? literalToken = null,
+        Func<WorkflowExecutableResumeTarget, IReadOnlyDictionary<string, WorkflowExecutableResumeTarget>>? resumeTargets = null)
     {
         pin ??= JsonSerializer.Serialize(Invocation.Artifact, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         literalToken ??= new EtlPublishedSelection(Invocation.Artifact.DefinitionId,
@@ -183,12 +184,12 @@ internal sealed class EtlNativeTestFixture : IAsyncDisposable
             "test.clr-activity", JsonSerializer.SerializeToElement(new { type = RunEtl.ActivityType }),
             new Dictionary<string, RuntimeInputBinding> { [nameof(RunEtl.Pipeline)] = pipelineBinding },
             new Dictionary<string, string> { [EtlNativeBoundary.PinKey] = pin });
-        var target = new WorkflowExecutableResumeTarget(address.ResumeTargetId, address.NodeId, "test.etl-resume",
-            new Dictionary<string, string>());
+        var target = new WorkflowExecutableResumeTarget(address.ResumeTargetId, address.NodeId, "ResumeAsync",
+            new Dictionary<string, string>(), EtlNativeBoundary.ResumeTargetKey);
         var parent = await Workflows.FindAsync(address.WorkflowExecutionId)
             ?? throw new InvalidOperationException("The fixture parent state is missing.");
         var executable = new WorkflowExecutable(parent.PinnedExecutable, node,
-            new Dictionary<string, WorkflowExecutableResumeTarget> { [target.ResumeTargetId] = target },
+            resumeTargets?.Invoke(target) ?? new Dictionary<string, WorkflowExecutableResumeTarget> { [target.ResumeTargetId] = target },
             Now, new Dictionary<string, string>(), new IncidentStrategyReference("ContinueWithIncidents", "1"));
         await Executables.SaveAsync(executable);
     }

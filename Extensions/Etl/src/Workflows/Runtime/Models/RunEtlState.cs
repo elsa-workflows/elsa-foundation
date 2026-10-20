@@ -16,4 +16,5 @@ public sealed record RunEtlResult(string RunId, EtlTerminalOutcome Outcome, long
     long RejectedRecords, long FilteredRecords, string? DiagnosticCode);
 
 internal sealed record RunEtlRequest(EtlScope Scope, string RunId, EtlArtifact Artifact,
-    string WorkflowExecutionId, string ActivityExecutionId, string ExecutableId, string ExecutableHash, string NodeId);
+    string WorkflowExecutionId, string ActivityExecutionId, string ExecutableId, string ExecutableHash, string NodeId,
+    string? ResumeTargetId = null);
