@@ -94,12 +94,17 @@ public static class RuntimeCoreServiceCollectionExtensions
         services.TryAddScoped<IWorkflowMigrationQuiescenceProbe, RuntimeWorkflowMigrationQuiescenceProbe>();
         services.TryAddScoped<MigrateWorkflowAlterationHandler>();
         services.TryAddScoped<RescheduleActivityAlterationHandler>();
+        services.TryAddScoped<RetryFaultedActivityAlterationHandler>();
         services.TryAddScoped<ActivityExecutionSupersessionPlanner>();
         AddRuntimeOwnedAlterationContribution(services, new("CancelWorkflow", 1, "Cancel workflow"), typeof(CancelWorkflowAlterationHandler));
         AddRuntimeOwnedAlterationContribution(services, new("ModifyVariable", 1, "Modify variable"), typeof(ModifyVariableAlterationHandler));
         AddRuntimeOwnedAlterationContribution(services, new("ScheduleActivity", 1, "Schedule activity"), typeof(ScheduleActivityAlterationHandler));
         AddRuntimeOwnedAlterationContribution(services, new("Migrate", 1, "Migrate workflow"), typeof(MigrateWorkflowAlterationHandler));
         AddRuntimeOwnedAlterationContribution(services, new("RescheduleActivity", 1, "Reschedule activity"), typeof(RescheduleActivityAlterationHandler));
+        AddRuntimeOwnedAlterationContribution(
+            services,
+            new(RetryFaultedActivityAlterationHandler.Kind, RetryFaultedActivityAlterationHandler.SchemaVersion, "Retry faulted activity"),
+            typeof(RetryFaultedActivityAlterationHandler));
         services.TryAddScoped<IWorkflowAlterationCheckpointWriter, RuntimeWorkflowAlterationCheckpointWriter>();
         services.TryAddScoped<WorkflowAlterationJobExecutor>();
         services.TryAddScoped<IWorkflowAlterationActorCommandExecutor, WorkflowAlterationActorCommandExecutor>();

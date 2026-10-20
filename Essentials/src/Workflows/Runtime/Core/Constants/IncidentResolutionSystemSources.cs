@@ -4,6 +4,10 @@ namespace Elsa.Workflows.Runtime.Core.Constants;
 public static class IncidentResolutionSystemSources
 {
     public const string StructuralFaultAbsorption = "StructuralFaultAbsorption";
+    /// <summary>A structural parent kept a child fault's incident blocking until an operator intervenes.</summary>
+    public const string StructuralIntervention = "StructuralIntervention";
+    /// <summary>An operator resolved the incident by retrying its faulted activity through an alteration.</summary>
+    public const string OperatorRetryAlteration = "OperatorRetryAlteration";
     public const string SubtreeCancellation = "SubtreeCancellation";
     public const string ActivityActivationFailure = "ActivityActivationFailure";
     public const string PoisonedSchedulerWork = "PoisonedSchedulerWork";

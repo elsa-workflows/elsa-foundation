@@ -23,19 +23,26 @@ public static class CompensationGraph
     public static ExecutableNode Scope(bool faultAfterCompensation, params Step[] steps) =>
         Scope(ScopeNodeId, faultAfterCompensation, steps);
 
-    public static ExecutableNode Scope(string nodeId, bool faultAfterCompensation, params Step[] steps)
+    public static ExecutableNode Scope(string nodeId, bool faultAfterCompensation, params Step[] steps) =>
+        Scope(nodeId, faultAfterCompensation, handlerMaxAttempts: 3, steps);
+
+    public static ExecutableNode Scope(string nodeId, bool faultAfterCompensation, int handlerMaxAttempts, params Step[] steps)
     {
         var contract = ClrActivityContractTestBuilder.BuildContract(typeof(CompensationScope));
-        var input = contract.Inputs["faultAfterCompensation"];
-        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal)
+        var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
+        Bind("faultAfterCompensation", faultAfterCompensation);
+        Bind("handlerMaxAttempts", handlerMaxAttempts);
+
+        void Bind<T>(string key, T value)
         {
-            [input.Key] = new(
+            var input = contract.Inputs[key];
+            bindings[input.Key] = new(
                 input.Key,
                 input.Type,
                 ValueProtectionPolicy.InstanceInline,
                 RuntimeInputBindingSource.Literal,
-                literal: ValueEnvelope.Inline(input.Type, JsonSerializer.SerializeToElement(faultAfterCompensation), ValueProtectionPolicy.InstanceInline))
-        };
+                literal: ValueEnvelope.Inline(input.Type, JsonSerializer.SerializeToElement(value), ValueProtectionPolicy.InstanceInline));
+        }
 
         var childSlots = new List<ExecutableChildSlot>();
         foreach (var step in steps)
