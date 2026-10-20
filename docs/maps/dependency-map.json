@@ -14443,6 +14443,11 @@
           "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj"
         },
         {
+          "type": "internal",
+          "id": "Elsa.Testing",
+          "path": "Essentials/tests/Testing/Elsa.Testing.csproj"
+        },
+        {
           "type": "external",
           "id": "Microsoft.AspNetCore.TestHost",
           "version": "10.0.10"

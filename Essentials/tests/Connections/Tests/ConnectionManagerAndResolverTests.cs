@@ -6,6 +6,7 @@ using Elsa.Primitives.Persistence;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Services;
+using Elsa.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -14,9 +15,34 @@ using Xunit;
 
 namespace Elsa.Connections.Tests;
 
-public sealed class ConnectionManagerAndResolverTests
+public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
 {
     private const string Tenant = "tenant-a";
+
+    // Shared arrange for the tests that script secret-store faults and race the connection save.
+    private readonly SaveInterceptor _interceptor = new();
+    private readonly ScriptedSecretManager _secretHooks = new();
+    private readonly RecordingLogger<DefaultConnectionManager> _logger = new();
+    private readonly ServiceProvider _provider;
+    private readonly AsyncServiceScope _scope;
+    private readonly IConnectionManager _manager;
+    private readonly ISecretManager _secrets;
+    private readonly IConnectionResolver _resolver;
+
+    public ConnectionManagerAndResolverTests()
+    {
+        _provider = CreateInstrumentedProvider(_interceptor, _secretHooks, _logger);
+        _scope = _provider.CreateAsyncScope();
+        _manager = _scope.ServiceProvider.GetRequiredService<IConnectionManager>();
+        _secrets = _scope.ServiceProvider.GetRequiredService<ISecretManager>();
+        _resolver = _scope.ServiceProvider.GetRequiredService<IConnectionResolver>();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _scope.DisposeAsync();
+        await _provider.DisposeAsync();
+    }
 
     [Fact]
     public async Task Create_Resolve_AndRejectWrongTypeOrOwner()
@@ -895,38 +921,11 @@ public sealed class ConnectionManagerAndResolverTests
     [Fact]
     public async Task Update_ConflictDuringCredentialRebindKeepsPersistedOwnedSecretActive()
     {
-        var interceptor = new SaveInterceptor();
-        await using var provider = CreateInterceptedProvider(interceptor);
-        await using var scope = provider.CreateAsyncScope();
-        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
-        var secrets = scope.ServiceProvider.GetRequiredService<ISecretManager>();
-        var resolver = scope.ServiceProvider.GetRequiredService<IConnectionResolver>();
-        const string connectionName = "rebind-conflict";
-        const string ownedSecretName = "connection:rebind-conflict:token";
+        await CreateConnectionAsync("rebind-conflict", TokenValue("previous-value"));
+        await CreateSecretAsync("replacement-token", "replacement-value");
 
-        await manager.CreateAsync(Tenant, new CreateConnectionRequest
-        {
-            Name = connectionName,
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
-            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
-            {
-                [HttpConnectionSecretFields.Token] = new() { Value = "previous-value" }
-            }
-        });
-        await secrets.CreateAsync(Tenant, new CreateSecretRequest
-        {
-            Name = "replacement-token",
-            Value = "replacement-value",
-            TypeName = SecretTypeNames.Text
-        });
-
-        interceptor.BeforeOuterSave = () => manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
-        {
-            DisplayName = "Concurrent update"
-        }).AsTask();
-
-        await Assert.ThrowsAsync<ConnectionConflictException>(() => manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
+        _interceptor.BeforeOuterSave = ConcurrentDisplayNameUpdate("rebind-conflict");
+        await Assert.ThrowsAsync<ConnectionConflictException>(() => _manager.UpdateAsync(Tenant, "rebind-conflict", new UpdateConnectionRequest
         {
             SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
             {
@@ -934,44 +933,32 @@ public sealed class ConnectionManagerAndResolverTests
             }
         }).AsTask());
 
-        var oldSecret = await secrets.FindAsync(Tenant, ownedSecretName);
+        var oldSecret = await _secrets.FindAsync(Tenant, "connection:rebind-conflict:token");
         Assert.NotNull(oldSecret);
         Assert.Equal(SecretStatus.Active, oldSecret.Status);
-        await using var resolved = await resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = connectionName });
-        Assert.Equal("previous-value", (await resolved.GetSensitiveAsync(HttpConnectionSecretFields.Token)).Reveal());
+        Assert.Equal("previous-value", await RevealAsync("rebind-conflict"));
     }
 
     [Fact]
     public async Task Update_LosingTheSaveLeavesTheOwnedSecretValueUnchanged()
     {
-        var interceptor = new SaveInterceptor();
-        await using var provider = CreateInterceptedProvider(interceptor);
-        await using var scope = provider.CreateAsyncScope();
-        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
-        var secrets = scope.ServiceProvider.GetRequiredService<ISecretManager>();
-        var resolver = scope.ServiceProvider.GetRequiredService<IConnectionResolver>();
         const string connectionName = "rotation-conflict";
         const string consumerName = "rotation-conflict-consumer";
-        const string ownedSecretName = "connection:rotation-conflict:token";
-
-        await manager.CreateAsync(Tenant, BearerConnection(connectionName, TokenValue("previous-value")));
-        await manager.CreateAsync(Tenant, BearerConnection(consumerName, new Dictionary<string, ConnectionSecretFieldInput>
+        await CreateConnectionAsync(connectionName, TokenValue("previous-value"));
+        await CreateConnectionAsync(consumerName, new Dictionary<string, ConnectionSecretFieldInput>
         {
-            [HttpConnectionSecretFields.Token] = new() { ExistingSecretName = ownedSecretName }
-        }));
+            [HttpConnectionSecretFields.Token] = new() { ExistingSecretName = "connection:rotation-conflict:token" }
+        });
 
-        interceptor.BeforeOuterSave = () => manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
-        {
-            DisplayName = "Concurrent update"
-        }).AsTask();
-        await Assert.ThrowsAsync<ConnectionConflictException>(() => manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
+        _interceptor.BeforeOuterSave = ConcurrentDisplayNameUpdate(connectionName);
+        await Assert.ThrowsAsync<ConnectionConflictException>(() => _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
         {
             SecretFields = TokenValue("losing-value")
         }).AsTask());
 
-        Assert.Equal("previous-value", await RevealAsync(resolver, connectionName));
-        Assert.Equal("previous-value", await RevealAsync(resolver, consumerName));
-        var secret = await secrets.FindAsync(Tenant, ownedSecretName);
+        Assert.Equal("previous-value", await RevealAsync(connectionName));
+        Assert.Equal("previous-value", await RevealAsync(consumerName));
+        var secret = await _secrets.FindAsync(Tenant, "connection:rotation-conflict:token");
         Assert.Equal(SecretStatus.Active, secret!.Status);
         Assert.Equal(1, secret.CurrentVersion);
     }
@@ -979,26 +966,15 @@ public sealed class ConnectionManagerAndResolverTests
     [Fact]
     public async Task Update_SaveFailureOtherThanAConflictKeepsStoredValuesAndLeavesNewlyCreatedSecrets()
     {
-        var interceptor = new SaveInterceptor();
-        await using var provider = CreateInterceptedProvider(interceptor);
-        await using var scope = provider.CreateAsyncScope();
-        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
-        var secrets = scope.ServiceProvider.GetRequiredService<ISecretManager>();
-        var resolver = scope.ServiceProvider.GetRequiredService<IConnectionResolver>();
         const string connectionName = "save-outage";
-
-        await manager.CreateAsync(Tenant, BearerConnection(connectionName, new Dictionary<string, ConnectionSecretFieldInput>
-        {
-            [HttpConnectionSecretFields.Token] = new() { Value = "previous-value" },
-            ["secondary"] = new() { Value = "secondary-value" }
-        }));
-        await secrets.CreateAsync(Tenant, new CreateSecretRequest { Name = "save-outage-replacement", Value = "replacement-value" });
+        await CreateConnectionAsync(connectionName, InlineFields((HttpConnectionSecretFields.Token, "previous-value"), ("secondary", "secondary-value")));
+        await CreateSecretAsync("save-outage-replacement", "replacement-value");
 
         // The interceptor fails before the inner save, so nothing is stored and no secret is deleted. Fields moving to a
         // new inline secret have already created theirs, and it stays; only rotations of already-referenced secrets
         // wait for the save. (A store that commits and then fails is why a failed save never deletes: the outcome is unknown.)
-        interceptor.BeforeOuterSave = () => Task.FromException(new InvalidOperationException("Simulated store outage."));
-        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
+        _interceptor.BeforeOuterSave = () => Task.FromException(new InvalidOperationException("Simulated store outage."));
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
         {
             SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
             {
@@ -1009,59 +985,36 @@ public sealed class ConnectionManagerAndResolverTests
         }).AsTask());
 
         Assert.Equal("Simulated store outage.", failure.Message);
-        Assert.Equal("previous-value", await RevealAsync(resolver, connectionName));
-        Assert.Equal(1, (await secrets.FindAsync(Tenant, "connection:save-outage:token"))!.CurrentVersion);
-        Assert.NotNull(await secrets.FindAsync(Tenant, "connection:save-outage:secondary"));
-        Assert.NotNull(await secrets.FindAsync(Tenant, "connection:save-outage:extra"));
+        Assert.Equal("previous-value", await RevealAsync(connectionName));
+        Assert.Equal(1, (await _secrets.FindAsync(Tenant, "connection:save-outage:token"))!.CurrentVersion);
+        Assert.NotNull(await _secrets.FindAsync(Tenant, "connection:save-outage:secondary"));
+        Assert.NotNull(await _secrets.FindAsync(Tenant, "connection:save-outage:extra"));
     }
 
     [Fact]
     public async Task Update_DoesNotOverwriteAValueRotatedAfterItsSave()
     {
-        var interceptor = new SaveInterceptor();
-        await using var provider = CreateInterceptedProvider(interceptor);
-        await using var scope = provider.CreateAsyncScope();
-        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
-        var secrets = scope.ServiceProvider.GetRequiredService<ISecretManager>();
-        var resolver = scope.ServiceProvider.GetRequiredService<IConnectionResolver>();
         const string connectionName = "rotated-after-save";
+        await CreateConnectionAsync(connectionName, TokenValue("previous-value"));
 
-        await manager.CreateAsync(Tenant, BearerConnection(connectionName, TokenValue("previous-value")));
-
-        interceptor.AfterOuterSave = () => secrets.RotateAsync(Tenant, "connection:rotated-after-save:token", new RotateSecretRequest
-        {
-            Value = "concurrent-value"
-        }).AsTask();
-        await Assert.ThrowsAsync<ConnectionConflictException>(() => manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
+        _interceptor.AfterOuterSave = RotateConcurrently("connection:rotated-after-save:token");
+        await Assert.ThrowsAsync<ConnectionConflictException>(() => _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
         {
             SecretFields = TokenValue("stale-value")
         }).AsTask());
 
-        Assert.Equal("concurrent-value", await RevealAsync(resolver, connectionName));
+        Assert.Equal("concurrent-value", await RevealAsync(connectionName));
     }
 
     [Fact]
     public async Task Update_CleansUpReplacedOwnedSecretsWhenARotationConflictsAfterItsSave()
     {
-        var interceptor = new SaveInterceptor();
-        await using var provider = CreateInterceptedProvider(interceptor);
-        await using var scope = provider.CreateAsyncScope();
-        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
-        var secrets = scope.ServiceProvider.GetRequiredService<ISecretManager>();
         const string connectionName = "conflict-cleanup";
+        await CreateConnectionAsync(connectionName, InlineFields((HttpConnectionSecretFields.Token, "previous-value"), ("secondary", "secondary-value")));
+        await CreateSecretAsync("conflict-cleanup-replacement", "replacement-value");
 
-        await manager.CreateAsync(Tenant, BearerConnection(connectionName, new Dictionary<string, ConnectionSecretFieldInput>
-        {
-            [HttpConnectionSecretFields.Token] = new() { Value = "previous-value" },
-            ["secondary"] = new() { Value = "secondary-value" }
-        }));
-        await secrets.CreateAsync(Tenant, new CreateSecretRequest { Name = "conflict-cleanup-replacement", Value = "replacement-value" });
-
-        interceptor.AfterOuterSave = () => secrets.RotateAsync(Tenant, "connection:conflict-cleanup:token", new RotateSecretRequest
-        {
-            Value = "concurrent-value"
-        }).AsTask();
-        await Assert.ThrowsAsync<ConnectionConflictException>(() => manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
+        _interceptor.AfterOuterSave = RotateConcurrently("connection:conflict-cleanup:token");
+        await Assert.ThrowsAsync<ConnectionConflictException>(() => _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
         {
             SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
             {
@@ -1071,41 +1024,23 @@ public sealed class ConnectionManagerAndResolverTests
         }).AsTask());
 
         // The save committed, so the secret it stopped referencing must not be left Active and unreferenced.
-        Assert.Null(await secrets.FindAsync(Tenant, "connection:conflict-cleanup:secondary"));
+        Assert.Null(await _secrets.FindAsync(Tenant, "connection:conflict-cleanup:secondary"));
     }
 
     [Fact]
     public async Task Update_RotatesTheOtherFieldsWhenOneRotationConflicts()
     {
-        var interceptor = new SaveInterceptor();
-        await using var provider = CreateInterceptedProvider(interceptor);
-        await using var scope = provider.CreateAsyncScope();
-        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
-        var secrets = scope.ServiceProvider.GetRequiredService<ISecretManager>();
-        var resolver = scope.ServiceProvider.GetRequiredService<IConnectionResolver>();
         const string connectionName = "partial-rotation";
+        await CreateConnectionAsync(connectionName, InlineFields((HttpConnectionSecretFields.Token, "previous-value"), ("secondary", "secondary-previous")));
 
-        await manager.CreateAsync(Tenant, BearerConnection(connectionName, new Dictionary<string, ConnectionSecretFieldInput>
+        _interceptor.AfterOuterSave = RotateConcurrently("connection:partial-rotation:token");
+        var conflict = await Assert.ThrowsAsync<ConnectionConflictException>(() => _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
         {
-            [HttpConnectionSecretFields.Token] = new() { Value = "previous-value" },
-            ["secondary"] = new() { Value = "secondary-previous" }
-        }));
-
-        interceptor.AfterOuterSave = () => secrets.RotateAsync(Tenant, "connection:partial-rotation:token", new RotateSecretRequest
-        {
-            Value = "concurrent-value"
-        }).AsTask();
-        var conflict = await Assert.ThrowsAsync<ConnectionConflictException>(() => manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
-        {
-            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
-            {
-                [HttpConnectionSecretFields.Token] = new() { Value = "stale-value" },
-                ["secondary"] = new() { Value = "secondary-new" }
-            }
+            SecretFields = InlineFields((HttpConnectionSecretFields.Token, "stale-value"), ("secondary", "secondary-new"))
         }).AsTask());
 
-        Assert.Equal("concurrent-value", await RevealAsync(resolver, connectionName));
-        await using var resolved = await resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = connectionName });
+        Assert.Equal("concurrent-value", await RevealAsync(connectionName));
+        await using var resolved = await _resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = connectionName });
         Assert.Equal("secondary-new", (await resolved.GetSensitiveAsync("secondary")).Reveal());
         Assert.Contains($"'{HttpConnectionSecretFields.Token}'", conflict.Message);
         Assert.DoesNotContain("'secondary'", conflict.Message);
@@ -1114,66 +1049,125 @@ public sealed class ConnectionManagerAndResolverTests
     [Fact]
     public async Task Update_NamesTheConflictedFieldsWhenAnotherFieldFaults()
     {
-        var interceptor = new SaveInterceptor();
-        var secretsHooks = new ScriptedSecretManager();
-        await using var provider = CreateScriptedProvider(interceptor, secretsHooks);
-        await using var scope = provider.CreateAsyncScope();
-        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
-        var secrets = scope.ServiceProvider.GetRequiredService<ISecretManager>();
         const string connectionName = "fault-and-conflict";
+        await CreateConnectionAsync(connectionName, InlineFields((HttpConnectionSecretFields.Token, "previous-value"), ("secondary", "secondary-previous")));
 
-        await manager.CreateAsync(Tenant, BearerConnection(connectionName, new Dictionary<string, ConnectionSecretFieldInput>
-        {
-            [HttpConnectionSecretFields.Token] = new() { Value = "previous-value" },
-            ["secondary"] = new() { Value = "secondary-previous" }
-        }));
-
-        interceptor.AfterOuterSave = () => secrets.RotateAsync(Tenant, "connection:fault-and-conflict:token", new RotateSecretRequest
-        {
-            Value = "concurrent-value"
-        }).AsTask();
+        _interceptor.AfterOuterSave = RotateConcurrently("connection:fault-and-conflict:token");
         var simulated = new IOException("Simulated secret store outage.");
-        secretsHooks.OnRotate = name => name.EndsWith(":secondary", StringComparison.Ordinal) ? simulated : null;
-        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
+        _secretHooks.OnRotate = name => name.EndsWith(":secondary", StringComparison.Ordinal) ? simulated : null;
+        var failure = await Assert.ThrowsAsync<ConnectionCredentialWriteException>(() => _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
         {
-            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
-            {
-                [HttpConnectionSecretFields.Token] = new() { Value = "stale-value" },
-                ["secondary"] = new() { Value = "secondary-new" }
-            }
+            SecretFields = InlineFields((HttpConnectionSecretFields.Token, "stale-value"), ("secondary", "secondary-new"))
         }).AsTask());
 
         // The fault outranks the conflict (no 409), yet both unwritten fields are named.
-        Assert.IsNotType<ConnectionConflictException>(failure);
         Assert.Same(simulated, failure.InnerException);
+        Assert.Equal(["secondary", HttpConnectionSecretFields.Token], failure.FieldNames.Order());
         Assert.Contains($"'{HttpConnectionSecretFields.Token}'", failure.Message);
         Assert.Contains("'secondary'", failure.Message);
     }
 
     [Fact]
+    public async Task Update_KeepsEveryFaultWhenSeveralFieldsFail()
+    {
+        const string connectionName = "two-faults";
+        await CreateConnectionAsync(connectionName, InlineFields((HttpConnectionSecretFields.Token, "previous-value"), ("secondary", "secondary-previous")));
+
+        var tokenFault = new IOException("Simulated token outage.");
+        var secondaryFault = new TimeoutException("Simulated secondary outage.");
+        _secretHooks.OnRotate = name => name.EndsWith(":secondary", StringComparison.Ordinal) ? secondaryFault : tokenFault;
+        var failure = await Assert.ThrowsAsync<ConnectionCredentialWriteException>(() => _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
+        {
+            SecretFields = InlineFields((HttpConnectionSecretFields.Token, "new-value"), ("secondary", "secondary-new"))
+        }).AsTask());
+
+        // The later fault is not lost behind the first one: both travel as the inner exception and both are logged.
+        var inner = Assert.IsType<AggregateException>(failure.InnerException);
+        Assert.Equal([tokenFault, secondaryFault], inner.InnerExceptions);
+        Assert.Contains(_logger.Entries, entry => entry.Exception == tokenFault);
+        Assert.Contains(_logger.Entries, entry => entry.Exception == secondaryFault);
+    }
+
+    [Fact]
+    public async Task Update_StaysAFaultWhenARotationThrowsWhileTheSecretIsUnchanged()
+    {
+        const string connectionName = "unchanged-fault";
+        await CreateConnectionAsync(connectionName, TokenValue("previous-value"));
+
+        // The same exception type Secrets uses for a vanished secret, but the secret is still there and unchanged.
+        var simulated = new InvalidOperationException("Simulated rotation failure.");
+        _secretHooks.OnRotate = _ => simulated;
+        var failure = await Assert.ThrowsAsync<ConnectionCredentialWriteException>(() => _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
+        {
+            SecretFields = TokenValue("new-value")
+        }).AsTask());
+
+        Assert.Same(simulated, failure.InnerException);
+        Assert.Equal([HttpConnectionSecretFields.Token], failure.FieldNames);
+    }
+
+    [Fact]
+    public async Task Update_ReportsTheOriginalFailureAndLogsWhenClassifyingItCannotReadTheSecret()
+    {
+        const string connectionName = "classify-outage";
+        await CreateConnectionAsync(connectionName, TokenValue("previous-value"));
+
+        var simulated = new InvalidOperationException("Simulated rotation failure.");
+        var readFault = new IOException("Simulated read outage.");
+        _secretHooks.OnRotate = _ => simulated;
+        // Only the classification re-read, which follows the save, may fail.
+        _interceptor.AfterOuterSave = () =>
+        {
+            _secretHooks.OnFind = _ => readFault;
+            return Task.CompletedTask;
+        };
+        var failure = await Assert.ThrowsAsync<ConnectionCredentialWriteException>(() => _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
+        {
+            SecretFields = TokenValue("new-value")
+        }).AsTask());
+
+        Assert.Same(simulated, failure.InnerException);
+        Assert.Contains(_logger.Entries, entry => entry.Exception == readFault && entry.Message.Contains("connection:classify-outage:token"));
+    }
+
+    [Fact]
+    public async Task Update_ReportsAConflictWhenASecretWithoutAnActiveVersionChangedMidRotation()
+    {
+        const string connectionName = "revoked-changed";
+        await CreateConnectionAsync(connectionName, TokenValue("previous-value"));
+        await _secrets.RevokeAsync(Tenant, "connection:revoked-changed:token");
+
+        // No active version means no expected version, so Secrets reports a concurrent writer only as a plain
+        // InvalidOperationException; the secret's changed metadata is what tells it from a fault.
+        var rotateConcurrently = RotateConcurrently("connection:revoked-changed:token");
+        _interceptor.AfterOuterSave = async () =>
+        {
+            await rotateConcurrently();
+            _secretHooks.OnRotate = _ => new InvalidOperationException("Secret changed concurrently.");
+        };
+        var conflict = await Assert.ThrowsAsync<ConnectionConflictException>(() => _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
+        {
+            SecretFields = TokenValue("stale-value")
+        }).AsTask());
+
+        Assert.Contains($"'{HttpConnectionSecretFields.Token}'", conflict.Message);
+        Assert.Equal("concurrent-value", await RevealAsync(connectionName));
+    }
+
+    [Fact]
     public async Task Update_CleansUpEveryReplacedSecretAndSurfacesTheRotationFailureWhenCleanupThrowsToo()
     {
-        var secretsHooks = new ScriptedSecretManager();
-        var logs = new CapturingLoggerProvider();
-        await using var provider = CreateScriptedProvider(new SaveInterceptor(), secretsHooks, logs);
-        await using var scope = provider.CreateAsyncScope();
-        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
-        var secrets = scope.ServiceProvider.GetRequiredService<ISecretManager>();
         const string connectionName = "cleanup-after-failure";
-
-        await manager.CreateAsync(Tenant, BearerConnection(connectionName, new Dictionary<string, ConnectionSecretFieldInput>
-        {
-            [HttpConnectionSecretFields.Token] = new() { Value = "previous-value" },
-            ["first"] = new() { Value = "first-value" },
-            ["second"] = new() { Value = "second-value" }
-        }));
-        await secrets.CreateAsync(Tenant, new CreateSecretRequest { Name = "cleanup-after-failure-a", Value = "a" });
-        await secrets.CreateAsync(Tenant, new CreateSecretRequest { Name = "cleanup-after-failure-b", Value = "b" });
+        await CreateConnectionAsync(connectionName, InlineFields(
+            (HttpConnectionSecretFields.Token, "previous-value"), ("first", "first-value"), ("second", "second-value")));
+        await CreateSecretAsync("cleanup-after-failure-a", "a");
+        await CreateSecretAsync("cleanup-after-failure-b", "b");
 
         var rotationFault = new IOException("Simulated rotation outage.");
-        secretsHooks.OnRotate = _ => rotationFault;
-        secretsHooks.OnDelete = name => name.EndsWith(":first", StringComparison.Ordinal) ? new TimeoutException("Simulated delete outage.") : null;
-        var failure = await Assert.ThrowsAsync<IOException>(() => manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
+        var deleteFault = new TimeoutException("Simulated delete outage.");
+        _secretHooks.OnRotate = _ => rotationFault;
+        _secretHooks.OnDelete = name => name.EndsWith(":first", StringComparison.Ordinal) ? deleteFault : null;
+        var failure = await Assert.ThrowsAsync<ConnectionCredentialWriteException>(() => _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
         {
             SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
             {
@@ -1183,36 +1177,26 @@ public sealed class ConnectionManagerAndResolverTests
             }
         }).AsTask());
 
-        Assert.Same(rotationFault, failure);
+        // The rotation failure is the one reported, not the cleanup failure.
+        Assert.Same(rotationFault, failure.InnerException);
+        Assert.Equal([HttpConnectionSecretFields.Token], failure.FieldNames);
         // The first field's delete threw, yet the second field's replaced secret was still deleted.
-        Assert.Null(await secrets.FindAsync(Tenant, "connection:cleanup-after-failure:second"));
-        Assert.NotNull(await secrets.FindAsync(Tenant, "connection:cleanup-after-failure:first"));
+        Assert.Null(await _secrets.FindAsync(Tenant, "connection:cleanup-after-failure:second"));
+        Assert.NotNull(await _secrets.FindAsync(Tenant, "connection:cleanup-after-failure:first"));
         // The swallowed cleanup failure leaves a trace.
-        Assert.Contains(logs.Entries, entry => entry.Exception is TimeoutException && entry.Message.Contains("connection:cleanup-after-failure:first"));
+        Assert.Contains(_logger.Entries, entry => entry.Exception == deleteFault && entry.Message.Contains("connection:cleanup-after-failure:first"));
     }
 
     [Fact]
     public async Task Update_SurfacesACleanupFailureAfterASuccessfulRotation()
     {
-        var secretsHooks = new ScriptedSecretManager();
-        var logs = new CapturingLoggerProvider();
-        await using var provider = CreateScriptedProvider(new SaveInterceptor(), secretsHooks, logs);
-        await using var scope = provider.CreateAsyncScope();
-        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
-        var secrets = scope.ServiceProvider.GetRequiredService<ISecretManager>();
-        var resolver = scope.ServiceProvider.GetRequiredService<IConnectionResolver>();
         const string connectionName = "cleanup-after-success";
-
-        await manager.CreateAsync(Tenant, BearerConnection(connectionName, new Dictionary<string, ConnectionSecretFieldInput>
-        {
-            [HttpConnectionSecretFields.Token] = new() { Value = "previous-value" },
-            ["secondary"] = new() { Value = "secondary-value" }
-        }));
-        await secrets.CreateAsync(Tenant, new CreateSecretRequest { Name = "cleanup-after-success-replacement", Value = "replacement" });
+        await CreateConnectionAsync(connectionName, InlineFields((HttpConnectionSecretFields.Token, "previous-value"), ("secondary", "secondary-value")));
+        await CreateSecretAsync("cleanup-after-success-replacement", "replacement");
 
         var deleteFault = new TimeoutException("Simulated delete outage.");
-        secretsHooks.OnDelete = _ => deleteFault;
-        var failure = await Assert.ThrowsAsync<TimeoutException>(() => manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
+        _secretHooks.OnDelete = _ => deleteFault;
+        var failure = await Assert.ThrowsAsync<ConnectionCredentialWriteException>(() => _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
         {
             SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
             {
@@ -1221,25 +1205,20 @@ public sealed class ConnectionManagerAndResolverTests
             }
         }).AsTask());
 
-        Assert.Same(deleteFault, failure);
-        Assert.Equal("rotated-value", await RevealAsync(resolver, connectionName));
-        Assert.Contains(logs.Entries, entry => entry.Exception == deleteFault);
+        Assert.Same(deleteFault, failure.InnerException);
+        Assert.Equal(["secondary"], failure.FieldNames);
+        Assert.Equal("rotated-value", await RevealAsync(connectionName));
+        Assert.Contains(_logger.Entries, entry => entry.Exception == deleteFault);
     }
 
     [Fact]
     public async Task Update_ReportsAConflictWhenARotatedSecretWasDeletedAfterItsSave()
     {
-        var interceptor = new SaveInterceptor();
-        await using var provider = CreateInterceptedProvider(interceptor);
-        await using var scope = provider.CreateAsyncScope();
-        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
-        var secrets = scope.ServiceProvider.GetRequiredService<ISecretManager>();
         const string connectionName = "deleted-after-save";
+        await CreateConnectionAsync(connectionName, TokenValue("previous-value"));
 
-        await manager.CreateAsync(Tenant, BearerConnection(connectionName, TokenValue("previous-value")));
-
-        interceptor.AfterOuterSave = () => secrets.DeleteAsync(Tenant, "connection:deleted-after-save:token").AsTask();
-        var conflict = await Assert.ThrowsAsync<ConnectionConflictException>(() => manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
+        _interceptor.AfterOuterSave = () => _secrets.DeleteAsync(Tenant, "connection:deleted-after-save:token").AsTask();
+        var conflict = await Assert.ThrowsAsync<ConnectionConflictException>(() => _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
         {
             SecretFields = TokenValue("stale-value")
         }).AsTask());
@@ -1250,50 +1229,33 @@ public sealed class ConnectionManagerAndResolverTests
     [Fact]
     public async Task Update_ReportsAConflictWhenADeferredCreateFindsTheNameTaken()
     {
-        var secretsHooks = new ScriptedSecretManager();
-        await using var provider = CreateScriptedProvider(new SaveInterceptor(), secretsHooks);
-        await using var scope = provider.CreateAsyncScope();
-        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
-        var resolver = scope.ServiceProvider.GetRequiredService<IConnectionResolver>();
         const string connectionName = "create-taken";
-
-        await manager.CreateAsync(Tenant, BearerConnection(connectionName, TokenValue("previous-value")));
+        await CreateConnectionAsync(connectionName, TokenValue("previous-value"));
 
         // The manager reads the owned secret as absent (calls 1 and 2: write-target validation, then the merge), so it
         // defers a create; by the time that create runs, a concurrent writer has taken the name.
         var finds = 0;
-        secretsHooks.HideFind = name => name == "connection:create-taken:token" && ++finds <= 2;
-        var conflict = await Assert.ThrowsAsync<ConnectionConflictException>(() => manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
+        _secretHooks.HideFind = name => name == "connection:create-taken:token" && ++finds <= 2;
+        var conflict = await Assert.ThrowsAsync<ConnectionConflictException>(() => _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
         {
             SecretFields = TokenValue("stale-value")
         }).AsTask());
 
         Assert.Contains($"'{HttpConnectionSecretFields.Token}'", conflict.Message);
-        Assert.Equal("previous-value", await RevealAsync(resolver, connectionName));
+        Assert.Equal("previous-value", await RevealAsync(connectionName));
     }
 
     [Fact]
     public async Task Update_CancelledAfterItsSaveStillWritesTheNewValueAndCleansUp()
     {
-        var interceptor = new SaveInterceptor();
-        await using var provider = CreateInterceptedProvider(interceptor);
-        await using var scope = provider.CreateAsyncScope();
-        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
-        var secrets = scope.ServiceProvider.GetRequiredService<ISecretManager>();
-        var resolver = scope.ServiceProvider.GetRequiredService<IConnectionResolver>();
         using var cancellation = new CancellationTokenSource();
         const string connectionName = "cancelled-after-save";
-
-        await manager.CreateAsync(Tenant, BearerConnection(connectionName, new Dictionary<string, ConnectionSecretFieldInput>
-        {
-            [HttpConnectionSecretFields.Token] = new() { Value = "previous-value" },
-            ["secondary"] = new() { Value = "secondary-value" }
-        }));
-        await secrets.CreateAsync(Tenant, new CreateSecretRequest { Name = "cancelled-after-save-replacement", Value = "replacement-value" });
+        await CreateConnectionAsync(connectionName, InlineFields((HttpConnectionSecretFields.Token, "previous-value"), ("secondary", "secondary-value")));
+        await CreateSecretAsync("cancelled-after-save-replacement", "replacement-value");
 
         // The save has committed by now, so the update must finish rather than report a cancellation.
-        interceptor.AfterOuterSave = () => cancellation.CancelAsync();
-        await manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
+        _interceptor.AfterOuterSave = () => cancellation.CancelAsync();
+        await _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
         {
             SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
             {
@@ -1302,32 +1264,22 @@ public sealed class ConnectionManagerAndResolverTests
             }
         }, cancellation.Token);
 
-        Assert.Equal("committed-value", await RevealAsync(resolver, connectionName));
-        Assert.Null(await secrets.FindAsync(Tenant, "connection:cancelled-after-save:secondary"));
+        Assert.Equal("committed-value", await RevealAsync(connectionName));
+        Assert.Null(await _secrets.FindAsync(Tenant, "connection:cancelled-after-save:secondary"));
     }
 
     [Fact]
     public async Task Update_DoesNotOverwriteAConcurrentRevoke()
     {
-        var interceptor = new SaveInterceptor();
-        await using var provider = CreateInterceptedProvider(interceptor);
-        await using var scope = provider.CreateAsyncScope();
-        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
+        await CreateConnectionAsync("raced");
 
-        await manager.CreateAsync(Tenant, new CreateConnectionRequest
-        {
-            Name = "raced",
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" }
-        });
-
-        interceptor.BeforeOuterSave = () => manager.RevokeAsync(Tenant, "raced").AsTask();
-        await Assert.ThrowsAsync<ConnectionConflictException>(() => manager.UpdateAsync(Tenant, "raced", new UpdateConnectionRequest
+        _interceptor.BeforeOuterSave = () => _manager.RevokeAsync(Tenant, "raced").AsTask();
+        await Assert.ThrowsAsync<ConnectionConflictException>(() => _manager.UpdateAsync(Tenant, "raced", new UpdateConnectionRequest
         {
             DisplayName = "Hijacked"
         }).AsTask());
 
-        var current = await manager.FindAsync(Tenant, "raced");
+        var current = await _manager.FindAsync(Tenant, "raced");
         Assert.Equal(ConnectionStatuses.Revoked, current!.Status);
         Assert.NotEqual("Hijacked", current.DisplayName);
     }
@@ -1335,22 +1287,12 @@ public sealed class ConnectionManagerAndResolverTests
     [Fact]
     public async Task Test_DoesNotOverwriteAConcurrentRevoke()
     {
-        var interceptor = new SaveInterceptor();
-        await using var provider = CreateInterceptedProvider(interceptor);
-        await using var scope = provider.CreateAsyncScope();
-        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
+        await CreateConnectionAsync("raced-test");
 
-        await manager.CreateAsync(Tenant, new CreateConnectionRequest
-        {
-            Name = "raced-test",
-            AuthScheme = HttpAuthSchemes.Bearer,
-            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" }
-        });
+        _interceptor.BeforeOuterSave = () => _manager.RevokeAsync(Tenant, "raced-test").AsTask();
+        await Assert.ThrowsAsync<ConnectionConflictException>(() => _manager.TestAsync(Tenant, "raced-test").AsTask());
 
-        interceptor.BeforeOuterSave = () => manager.RevokeAsync(Tenant, "raced-test").AsTask();
-        await Assert.ThrowsAsync<ConnectionConflictException>(() => manager.TestAsync(Tenant, "raced-test").AsTask());
-
-        var current = await manager.FindAsync(Tenant, "raced-test");
+        var current = await _manager.FindAsync(Tenant, "raced-test");
         Assert.Equal(ConnectionStatuses.Revoked, current!.Status);
         Assert.Null(current.LastTestedAt);
     }
@@ -1368,14 +1310,7 @@ public sealed class ConnectionManagerAndResolverTests
     private static ServiceProvider CreateProvider(IConfiguration? configuration = null) =>
         ConnectionsTestComposition.CreateProvider(configuration);
 
-    private static ServiceProvider CreateInterceptedProvider(SaveInterceptor interceptor) =>
-        ConnectionsTestComposition.CreateProvider(configure: services =>
-        {
-            services.RemoveAll<IConnectionRepository>();
-            services.AddSingleton<IConnectionRepository>(_ => new InterceptingConnectionRepository(new InMemoryConnectionRepository(), interceptor));
-        });
-
-    private static ServiceProvider CreateScriptedProvider(SaveInterceptor interceptor, ScriptedSecretManager secretHooks, CapturingLoggerProvider? logs = null) =>
+    private static ServiceProvider CreateInstrumentedProvider(SaveInterceptor interceptor, ScriptedSecretManager secretHooks, ILogger<DefaultConnectionManager> logger) =>
         ConnectionsTestComposition.CreateProvider(configure: services =>
         {
             services.RemoveAll<IConnectionRepository>();
@@ -1386,8 +1321,7 @@ public sealed class ConnectionManagerAndResolverTests
                 secretHooks.Inner = ActivatorUtilities.CreateInstance<DefaultSecretManager>(sp);
                 return secretHooks;
             });
-            if (logs is not null)
-                services.AddSingleton<ILoggerProvider>(logs);
+            services.AddSingleton(logger);
         });
 
     private static CreateConnectionRequest BearerConnection(string name, IDictionary<string, ConnectionSecretFieldInput> secretFields) => new()
@@ -1398,16 +1332,29 @@ public sealed class ConnectionManagerAndResolverTests
         SecretFields = secretFields
     };
 
-    private static Dictionary<string, ConnectionSecretFieldInput> TokenValue(string value) => new()
-    {
-        [HttpConnectionSecretFields.Token] = new() { Value = value }
-    };
+    private static Dictionary<string, ConnectionSecretFieldInput> TokenValue(string value) =>
+        InlineFields((HttpConnectionSecretFields.Token, value));
 
-    private static async Task<string> RevealAsync(IConnectionResolver resolver, string connectionName)
+    private static Dictionary<string, ConnectionSecretFieldInput> InlineFields(params (string Field, string Value)[] fields) =>
+        fields.ToDictionary(field => field.Field, field => new ConnectionSecretFieldInput { Value = field.Value });
+
+    private ValueTask<ConnectionMetadata> CreateConnectionAsync(string name, IDictionary<string, ConnectionSecretFieldInput>? secretFields = null) =>
+        _manager.CreateAsync(Tenant, BearerConnection(name, secretFields ?? new Dictionary<string, ConnectionSecretFieldInput>()));
+
+    private ValueTask<SecretMetadata> CreateSecretAsync(string name, string value) =>
+        _secrets.CreateAsync(Tenant, new CreateSecretRequest { Name = name, Value = value });
+
+    private async Task<string> RevealAsync(string connectionName)
     {
-        await using var resolved = await resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = connectionName });
+        await using var resolved = await _resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = connectionName });
         return (await resolved.GetSensitiveAsync(HttpConnectionSecretFields.Token)).Reveal();
     }
+
+    private Func<Task> ConcurrentDisplayNameUpdate(string connectionName) =>
+        () => _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest { DisplayName = "Concurrent update" }).AsTask();
+
+    private Func<Task> RotateConcurrently(string secretName) =>
+        () => _secrets.RotateAsync(Tenant, secretName, new RotateSecretRequest { Value = "concurrent-value" }).AsTask();
 
     private sealed class FailOnNthSecretCreate(ISecretManager inner, int failOn) : ISecretManager
     {
@@ -1442,27 +1389,6 @@ public sealed class ConnectionManagerAndResolverTests
             inner.TestAsync(tenantId, name, cancellationToken);
     }
 
-    private sealed class CapturingLoggerProvider : ILoggerProvider, ILogger
-    {
-        public List<(string Message, Exception? Exception)> Entries { get; } = [];
-
-        public ILogger CreateLogger(string categoryName) => this;
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-        {
-            lock (Entries)
-                Entries.Add((formatter(state, exception), exception));
-        }
-
-        public void Dispose()
-        {
-        }
-    }
-
     /// <summary>Wraps a real secret manager and lets a test fail or hide individual calls, to script faults the real one never raises on demand.</summary>
     private sealed class ScriptedSecretManager : ISecretManager
     {
@@ -1470,12 +1396,17 @@ public sealed class ConnectionManagerAndResolverTests
         public Func<string, Exception?>? OnRotate { get; set; }
         public Func<string, Exception?>? OnDelete { get; set; }
         public Func<string, bool>? HideFind { get; set; }
+        public Func<string, Exception?>? OnFind { get; set; }
 
         public ValueTask<SecretMetadata> CreateAsync(string tenantId, CreateSecretRequest request, CancellationToken cancellationToken = default) =>
             Inner.CreateAsync(tenantId, request, cancellationToken);
 
-        public async ValueTask<SecretMetadata?> FindAsync(string tenantId, string name, CancellationToken cancellationToken = default) =>
-            HideFind?.Invoke(name) == true ? null : await Inner.FindAsync(tenantId, name, cancellationToken);
+        public async ValueTask<SecretMetadata?> FindAsync(string tenantId, string name, CancellationToken cancellationToken = default)
+        {
+            if (OnFind?.Invoke(name) is { } fault)
+                throw fault;
+            return HideFind?.Invoke(name) == true ? null : await Inner.FindAsync(tenantId, name, cancellationToken);
+        }
 
         public ValueTask<Page<SecretMetadata>> ListAsync(string tenantId, SecretQuery query, CancellationToken cancellationToken = default) =>
             Inner.ListAsync(tenantId, query, cancellationToken);
@@ -1559,4 +1490,5 @@ public sealed class ConnectionManagerAndResolverTests
         public ValueTask<bool> DeleteAsync(string tenantId, string name, CancellationToken cancellationToken = default) =>
             inner.DeleteAsync(tenantId, name, cancellationToken);
     }
+
 }

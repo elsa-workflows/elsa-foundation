@@ -1,4 +1,3 @@
-using System.Runtime.ExceptionServices;
 using Elsa.Connections.Core.Contracts;
 using Elsa.Connections.Core.Exceptions;
 using Elsa.Connections.Core.Models;
@@ -390,7 +389,7 @@ internal sealed class DefaultConnectionManager(
         // Every field is attempted: one that lost a race must not stop the others from taking their new values.
         var conflictedFields = new List<string>();
         var faultedFields = new List<string>();
-        Exception? fault = null;
+        var faults = new List<Exception>();
         foreach (var value in values)
         {
             try
@@ -420,21 +419,24 @@ internal sealed class DefaultConnectionManager(
                     continue;
                 }
 
+                logger.LogWarning(exception,
+                    "Could not write the new value of secret '{SecretName}' for connection '{ConnectionName}' field '{FieldName}' after its update was saved.",
+                    value.SecretName, connectionName, value.FieldName);
                 faultedFields.Add(value.FieldName);
-                fault ??= exception;
+                faults.Add(exception);
             }
         }
 
-        if (fault is not null)
+        if (faults.Count > 0)
         {
             // A genuine fault outranks a conflict: reporting a retryable 409 would hide it.
-            if (conflictedFields.Count == 0 && faultedFields.Count == 1)
-                ExceptionDispatchInfo.Capture(fault).Throw();
-
-            // The fault travels as the inner exception; the message still names every field that was not written.
-            throw new InvalidOperationException(
-                $"Connection '{connectionName}' credential(s) {QuoteAll(faultedFields.Concat(conflictedFields))} were not written: {fault.Message} Its other changes were saved.",
-                fault);
+            // The message names every field that was not written; the store's failure(s) travel as the inner exception.
+            var unwritten = faultedFields.Concat(conflictedFields).ToArray();
+            throw new ConnectionCredentialWriteException(
+                connectionName,
+                unwritten,
+                $"Connection '{connectionName}' credential(s) {QuoteAll(unwritten)} were not written. Its other changes were saved.",
+                faults.Count == 1 ? faults[0] : new AggregateException(faults));
         }
 
         if (conflictedFields.Count > 0)
@@ -456,7 +458,9 @@ internal sealed class DefaultConnectionManager(
         try
         {
             var current = await secretManager.FindAsync(tenantId, value.SecretName, CancellationToken.None);
-            return value.Current is null ? current is not null : current is null;
+            return value.Current is null
+                ? current is not null
+                : current is null || ChangedSince(value.Current, current);
         }
         catch (Exception exception)
         {
@@ -464,6 +468,14 @@ internal sealed class DefaultConnectionManager(
             return false;
         }
     }
+
+    /// <summary>
+    /// Without an expected version (the secret had no active version when read), Secrets detects a concurrent writer
+    /// only through its internal revision and reports it as a plain <see cref="InvalidOperationException"/>. A
+    /// change in what the metadata exposes tells that apart from a fault on a secret that did not move.
+    /// </summary>
+    private static bool ChangedSince(SecretMetadata read, SecretMetadata current) =>
+        read.CurrentVersion != current.CurrentVersion || read.Status != current.Status || read.UpdatedAt != current.UpdatedAt;
 
     private static bool WasOwnedSecret(
         IDictionary<string, ConnectionSecretField> previous,
@@ -617,7 +629,8 @@ internal sealed class DefaultConnectionManager(
         CancellationToken cancellationToken)
     {
         // Every replaced field is attempted: one secret that cannot be deleted must not leave the others Active and unreferenced.
-        ExceptionDispatchInfo? firstFailure = null;
+        var failedFields = new List<string>();
+        var failures = new List<Exception>();
         foreach (var (fieldName, field) in previous)
         {
             if (next.TryGetValue(fieldName, out var current) &&
@@ -633,11 +646,19 @@ internal sealed class DefaultConnectionManager(
                 logger.LogWarning(exception,
                     "Could not delete secret '{SecretName}' that connection '{ConnectionName}' field '{FieldName}' no longer references; it stays Active and unreferenced.",
                     field.SecretName, connectionName, fieldName);
-                firstFailure ??= ExceptionDispatchInfo.Capture(exception);
+                failedFields.Add(fieldName);
+                failures.Add(exception);
             }
         }
 
-        firstFailure?.Throw();
+        if (failures.Count > 0)
+        {
+            throw new ConnectionCredentialWriteException(
+                connectionName,
+                failedFields,
+                $"Connection '{connectionName}' was updated, but the replaced secret(s) of credential(s) {QuoteAll(failedFields)} could not be deleted and stay Active and unreferenced.",
+                failures.Count == 1 ? failures[0] : new AggregateException(failures));
+        }
     }
 
     private async ValueTask DeleteOwnedSecretsAsync(

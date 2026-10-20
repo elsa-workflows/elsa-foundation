@@ -14,7 +14,7 @@ public abstract class ConnectionRepositoryContractTests(IConnectionRepository re
 {
     private const string Tenant = "tenant-a";
     // A durable repository may share one database across tests, so each test gets its own name.
-    private readonly string Name = $"contract-{Guid.NewGuid():N}";
+    private readonly string _name = $"contract-{Guid.NewGuid():N}";
 
     [Fact]
     public async Task SaveAsync_StoresTheDocumentAndIncrementsItsVersion()
@@ -25,7 +25,7 @@ public abstract class ConnectionRepositoryContractTests(IConnectionRepository re
 
         await repository.SaveAsync(loaded);
 
-        var stored = await repository.FindAsync(Tenant, Name);
+        var stored = await repository.FindAsync(Tenant, _name);
         Assert.Equal(expectedVersion, stored!.State.Version);
         Assert.Equal("Saved", stored.Definition.DisplayName);
     }
@@ -34,15 +34,15 @@ public abstract class ConnectionRepositoryContractTests(IConnectionRepository re
     public async Task SaveAsync_RejectsAStaleDocumentAndWritesNothing()
     {
         var first = await AddAndLoadAsync();
-        var stale = await repository.FindAsync(Tenant, Name);
+        var stale = await repository.FindAsync(Tenant, _name);
         first.Definition.DisplayName = "Winner";
         await repository.SaveAsync(first);
-        var winnerVersion = (await repository.FindAsync(Tenant, Name))!.State.Version;
+        var winnerVersion = (await repository.FindAsync(Tenant, _name))!.State.Version;
         stale!.Definition.DisplayName = "Loser";
 
         await Assert.ThrowsAsync<ConnectionConflictException>(() => repository.SaveAsync(stale).AsTask());
 
-        var stored = await repository.FindAsync(Tenant, Name);
+        var stored = await repository.FindAsync(Tenant, _name);
         Assert.Equal(winnerVersion, stored!.State.Version);
         Assert.Equal("Winner", stored.Definition.DisplayName);
     }
@@ -51,11 +51,11 @@ public abstract class ConnectionRepositoryContractTests(IConnectionRepository re
     public async Task SaveAsync_AfterDeleteThrowsConflictAndDoesNotRecreateTheDocument()
     {
         var loaded = await AddAndLoadAsync();
-        Assert.True(await repository.DeleteAsync(Tenant, Name));
+        Assert.True(await repository.DeleteAsync(Tenant, _name));
 
         await Assert.ThrowsAsync<ConnectionConflictException>(() => repository.SaveAsync(loaded).AsTask());
 
-        Assert.Null(await repository.FindAsync(Tenant, Name));
+        Assert.Null(await repository.FindAsync(Tenant, _name));
     }
 
     private async Task<ConnectionDocument> AddAndLoadAsync()
@@ -65,14 +65,14 @@ public abstract class ConnectionRepositoryContractTests(IConnectionRepository re
             Definition = new ConnectionDefinition
             {
                 TenantId = Tenant,
-                Name = Name,
-                DisplayName = Name,
+                Name = _name,
+                DisplayName = _name,
                 TypeName = ConnectionTypeNames.Http,
                 AuthScheme = HttpAuthSchemes.Bearer
             },
             State = new ConnectionState { CreatedAt = DateTimeOffset.UnixEpoch }
         }));
 
-        return (await repository.FindAsync(Tenant, Name))!;
+        return (await repository.FindAsync(Tenant, _name))!;
     }
 }

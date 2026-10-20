@@ -22,17 +22,27 @@ Use `services.AddConnections()` to register defaults, then replace these service
   `ConnectionConflictException` (HTTP 409) rather than overwriting the newer value. The expected
   version is read before the save, so a rotation between that read and the save also yields 409,
   although the save then wins; so does a secret soft-deleted, or created under the same name, by a
-  concurrent writer. The check compares the secret's current version (Secrets exposes no other
-  revision token), so a secret with no active version (revoked or expired) is rotated
-  unconditionally. Every changed field is attempted; the exception names the fields whose values
-  were not written, and the update's other changes stay saved. When a field also fails for another
-  reason, that failure is not hidden behind a 409: the update throws an `InvalidOperationException`
-  naming every unwritten field, with the failure as its inner exception. Secrets the save stopped
-  referencing are deleted even then; one that cannot be deleted is logged and stays Active. A request that loses the save does not roll
-  back a new `connection:<name>:<field>` secret it
-  created beforehand for a field moving to inline storage: Secrets deletes softly and keeps the name,
-  so removing it would block that field for good. The secret stays Active and unreferenced, and a
-  retried inline write for that field is rejected as a managed-name conflict.
+  concurrent writer. A retry of the soft-deleted case succeeds only once Secrets releases the names
+  of deleted secrets (a separate Secrets change); until then the field must be re-pointed with
+  `ExistingSecretName`. The check compares the secret's current version, so a secret with no active
+  version (revoked or expired) is rotated without an expected version; if Secrets then reports a
+  concurrent writer as a plain `InvalidOperationException` and the secret's version, status or
+  update time differs from what the manager read, that too is a 409. Every changed field is
+  attempted; the exception names the fields whose values were not written, and the update's other
+  changes stay saved. When a field also fails for another reason, that failure is not hidden behind
+  a 409: the update throws `ConnectionCredentialWriteException` (HTTP 500 from the API, with only the
+  connection and field names in the message), carrying the failed field names and the store's
+  failure as its inner exception (an `AggregateException` when several failed, each also logged).
+  Store exceptions after the save do not cross `IConnectionManager` unwrapped. Secrets the save
+  stopped referencing are deleted even then. After a successful rotation, a secret that cannot be
+  deleted still surfaces to the caller as `ConnectionCredentialWriteException` naming the field: the
+  update committed, and the secret stays Active and unreferenced (issue #2855 item 2.2 remains
+  open). Only when the rotation also failed is the cleanup failure logged and swallowed, so the
+  rotation failure is the one reported. A request that loses the save does not roll back a new
+  `connection:<name>:<field>` secret it created beforehand for a field moving to inline storage:
+  Secrets deletes softly and keeps the name, so removing it would block that field for good. The
+  secret stays Active and unreferenced, and a retried inline write for that field is rejected as a
+  managed-name conflict.
 - `IConnectionResolver` for point-of-use resolution.
 - `IConnectionGrantWriter` for compare-and-swap grant writes (expected secret version).
 - `IConnectionPublishTenantAccessor` — owned by `ConnectionsDesign` (principal tenant, then persistence scope).

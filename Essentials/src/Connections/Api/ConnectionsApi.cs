@@ -251,6 +251,15 @@ public static class ConnectionsApi
                     contentType: "application/json",
                     statusCode: StatusCodes.Status409Conflict).ExecuteAsync(context);
                 return true;
+            case ConnectionCredentialWriteException credentialWrite:
+                // 500, not 503: the update committed, so the caller should not blindly retry it, and the cause may be a
+                // fault rather than an outage. The message names only fields; the store's failure stays in the logs.
+                await Results.Json(
+                    new { error = credentialWrite.Message },
+                    JsonOptions,
+                    contentType: "application/json",
+                    statusCode: StatusCodes.Status500InternalServerError).ExecuteAsync(context);
+                return true;
             case ConnectionUnavailableException unavailable when string.Equals(unavailable.Code, ConnectionFaultCodes.Forbidden, StringComparison.Ordinal):
                 await Results.Json(
                     new { error = unavailable.Message },
