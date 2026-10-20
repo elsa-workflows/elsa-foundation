@@ -6,7 +6,9 @@ Fluid context containing only immutable declared parameter roots.
 
 There is no rendering event, ambient workflow context, configuration access, service-backed filter
 registration, or mutable template-manager seam for canonical bindings. Time-dependent filters and
-undeclared roots are rejected by the `binding-pure-v1` capability profile.
+undeclared roots are rejected by the `binding-pure-v1` capability profile. Liquid stays on
+`binding-pure-v1`; a Liquid expression stamped `binding-pure-v2` is rejected. Declared `Clock` and
+`UniqueId` parameters (ADR 0088) arrive as plain string roots.
 
 ## Cross-references
 

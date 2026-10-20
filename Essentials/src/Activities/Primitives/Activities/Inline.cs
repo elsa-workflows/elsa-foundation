@@ -19,8 +19,8 @@ namespace Elsa.Activities.Primitives.Activities;
 /// The result type is <see cref="object"/> so any expression-produced value flows through unchanged.
 /// </remarks>
 // ReplaySafe (#2581): the body only returns the value already materialized for Expression, and an
-// expression binding is evaluated under binding-pure-v1 (no time, randomness, services or I/O), so a re-run returns
-// the same value. Secret bindings are refused above, so no value can change between runs.
+// expression binding is evaluated under a binding-pure profile (no clock, randomness, services or I/O; time and IDs
+// arrive only as pinned Clock and UniqueId parameters, ADR 0088), so a re-run returns the same value. Secret bindings are refused above, so no value can change between runs.
 [RefusesSecretBinding(nameof(Expression), SecretBindingRefusalReason.EchoedToOutput)]
 [Activity(Icon = "Braces")]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]

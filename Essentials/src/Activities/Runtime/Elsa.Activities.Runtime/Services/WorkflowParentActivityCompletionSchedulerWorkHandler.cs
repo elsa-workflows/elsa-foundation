@@ -183,6 +183,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
             // Issue #977: passing the snapshot materializer lets an IRuntimeRematerializeInputsOnChildCompletion
             // parent (While) re-read its inputs from live committed frames for this evaluation, so a body-mutated
             // loop-condition variable is observed. Non-marker parents reuse the pinned snapshot unchanged.
+            // ADR 0088 D2: this instant is the pass's materialization time, which Clock and UniqueId parameters read;
+            // the pass's decision commit fixes it. The inspection timestamp below is a separate reading and is not it.
             var constructedParent = await StructuralParentEvaluationSupport.ConstructActivityAsync(
                 serviceProvider,
                 parentExecutableNode,

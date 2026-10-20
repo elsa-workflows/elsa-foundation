@@ -8,7 +8,12 @@ parameters.
 There are no binding-time script pre/post-processors, events, library injectors, configuration host
 functions, workflow contexts, raw Jint engine factories, mutable JavaScript execution contexts,
 delegate-backed host functions, or service-location seams. Extending the binding language requires
-a separately reviewed capability profile; a global registration cannot join `binding-pure-v1`.
+a separately reviewed capability profile; a global registration cannot join `binding-pure-v1` or
+`binding-pure-v2`. `binding-pure-v2` (ADR 0088 D4) is `binding-pure-v1` plus a `Date` without a
+clock: UTC-only, ISO 8601 parsing only, and the clock- and locale-reading forms throw guidance
+errors. Plain-source JavaScript is published under `binding-pure-v2`; the authoring validator reports
+the same guidance (`JavaScript/ClocklessDate`). The rule table is `ClocklessDateRules`, shared with
+the Jint sandbox as a linked source file.
 
 `IJavaScriptScriptEvaluator` is a separate typed activity-script contract used by `RunJavaScript`.
 It accepts one explicit JSON argument document and returns JSON. It is not registered as an

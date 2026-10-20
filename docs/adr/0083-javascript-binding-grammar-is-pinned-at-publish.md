@@ -39,7 +39,9 @@ statement body returning an object, use `return { total: 42 };`.
 
 Both forms remain strict, use the same read-only `args` and visible-variable snapshot, and have
 identical deterministic sandbox restrictions, cancellation, execution limits and JSON result
-materialization. They retain the `binding-pure-v1` capability profile. Statements introduce local
+materialization. They retain the `binding-pure-v1` capability profile, which
+[ADR 0088](0088-expressions-read-time-and-unique-values-through-recorded-parameters.md) later extends with
+`binding-pure-v2` for JavaScript. Statements introduce local
 computation, not permission to change workflow state or access services. A result of `undefined`
 remains an error with guidance to produce or return a value.
 

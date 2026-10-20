@@ -13,10 +13,12 @@ descriptors are metadata only; they do not carry runtime handler factories.
 - **Boundary:** The request contains portable source/options and immutable declared parameters. It
   exposes no workflow context, variable frame, service provider, delegate, or mutation callback.
   Workflow-instance metadata (correlation ID, instance ID) reaches a handler only as a declared
-  `WorkflowInstance` parameter value, never as ambient state.
+  `WorkflowInstance` parameter value, and the evaluation instant and new unique IDs only as declared
+  `Clock` and `UniqueId` parameter values (ADR 0088), never as ambient state.
 
-Shipped implementations are `PortableJavaScriptExpressionHandler` and
-`PortableLiquidExpressionHandler`, both restricted to `binding-pure-v1`.
+Shipped implementations are `PortableJavaScriptExpressionHandler` (`binding-pure-v1` and
+`binding-pure-v2`, which adds a `Date` without a clock) and `PortableLiquidExpressionHandler`
+(`binding-pure-v1` only).
 
 ### `IExpressionDescriptorProvider` *(Core — `Elsa.Expressions.Core`)*
 
