@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "8df68f10e2625d505e41a16428070a0e7cf48ad4",
+  "last_publish_commit": "dad32a2510c6247c0baa5bdd805e7d0bc6db60c8",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -79,8 +79,8 @@
     },
     {
       "package_id": "Elsa.Activities.Http",
-      "version": "4.0.18-preview",
-      "commit": "e6b652f27ed1d81ff33e15fbff4adc35ff2bbce4"
+      "version": "4.0.19-preview",
+      "commit": "dad32a2510c6247c0baa5bdd805e7d0bc6db60c8"
     },
     {
       "package_id": "Elsa.Activities.Primitives",
