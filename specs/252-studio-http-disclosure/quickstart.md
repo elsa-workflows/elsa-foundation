@@ -26,6 +26,8 @@ dotnet test Essentials/tests/Activities/Design/Api/Tests/Elsa.Activities.Design.
 
 Retain scanner baseline failure for Connection tier and prove requiredness remains false. Keep existing normalization/catalog coverage green.
 
+The root-approved editor-reporting refinement also requires actual built-in duration/number invalid→recovered coverage, unknown contribution fallback, independent collection/dictionary sibling errors and removal, and stale callback cleanup across draft/activity/editor changes. Retain a failing regression before implementing the reporting bridge. A fake host diagnostic alone does not prove the private-editor boundary.
+
 ## Source-composed journey
 
 Rebuild the owned Studio and Workbench from this source using the repository contributor quickstarts, with a fresh disposable DB. Use only owned ports/processes and preserve other sessions. In actual Studio, add Send HTTP Request, verify URL/method/connection/body prominence, configure content/type and optional values, change methods including GET/HEAD, and verify exact preservation. Exercise configured/bound/default/error scenarios, keyboard and narrow inspector layouts. Record provenance and before/after Light/Dark screenshots.

@@ -9,30 +9,30 @@ Input: [plan.md](plan.md), [spec.md](spec.md), research, data model and interact
 
 ## Phase 2: Shared metadata
 
-- [ ] T003 Add optional tier/requiredness SDK declarations and all current extension copies; extend `Studio/src/apps/Elsa.Studio.Web/Client/src/__tests__/sdk-typing-copies.test.ts` to include Connections. Do not introduce another wire API.
+- [x] T003 Add optional tier/requiredness SDK declarations and all current extension copies; extend `Studio/src/apps/Elsa.Studio.Web/Client/src/__tests__/sdk-typing-copies.test.ts` to include Connections. Include the root-approved optional property-editor validation callback/capability refinement from plan step 6. Do not introduce another wire API.
 
 ## Phase 3: US1 — Straightforward request (P1)
 
 Goal: direct URL/method/connection/body and one opening action for secondary HTTP controls. Independent test: new real-panel HTTP activity shows the direct choices and exposes the four secondary inputs through More options.
 
-- [ ] T004 [US1] Add failing hierarchy coverage in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityPropertyGroups.test.tsx` and update the scanner expectation in `Essentials/tests/Activities/Design/Tests/Unit/ClrAssemblyScannerTests.cs`; retain baseline failure evidence before production changes.
-- [ ] T005 [US1] Partition descriptor tiers with existing category/order rules and public AdvancedSection in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel.tsx`; keep rows mounted and primary choices directly visible.
-- [ ] T006 [US1] Promote only Connection tier to Essential in `Essentials/src/Activities/Http/Activities/SendHttpRequest.cs`, retain not-required and all execution behavior, and confirm the focused tests pass.
+- [x] T004 [US1] Add failing hierarchy coverage in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityPropertyGroups.test.tsx` and update the scanner expectation in `Essentials/tests/Activities/Design/Tests/Unit/ClrAssemblyScannerTests.cs`; retain baseline failure evidence before production changes.
+- [x] T005 [US1] Partition descriptor tiers with existing category/order rules and public AdvancedSection in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel.tsx`; keep rows mounted and primary choices directly visible.
+- [x] T006 [US1] Promote only Connection tier to Essential in `Essentials/src/Activities/Http/Activities/SendHttpRequest.cs`, retain not-required and all execution behavior, and confirm the focused tests pass.
 
 ## Phase 4: US2 — Preserve authored settings (P1)
 
 Goal: stored/default/bound/error state stays discoverable and method/disclosure changes preserve exact authored input data. Independent test: existing body, content type, binding, conversion and unknown extras survive the complete interaction matrix.
 
-- [ ] T007 [US2] Add regression cases for authored versus synthesized defaults, opaque keys, seeded wire state and exact lossless interactions in the existing Workflows `src/__tests__/activityPropertyGroups.test.tsx` harness; extend `activityProperties.test.ts` or `activityInputWire.test.ts` only where a changed helper warrants it.
-- [ ] T008 [US2] Implement read-only authored-state counting and current row error/options-failure visibility in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel.tsx` (a small reused helper may live in `activityProperties.ts`); cover memo equality, cleanup, retry and stale activity/revision boundaries. Do not invent private-editor validation or mutate inputs on collapse.
-- [ ] T009 [US2] Add a real-panel HTTP browser fixture/spec under `Studio/tests/browser/` using existing setup where practical; prove keyboard, full-page axe, configured/error recovery and GET/HEAD/POST value preservation with Light/Dark evidence. Report fixture proof separately from composed Studio proof.
+- [x] T007 [US2] Add regression cases for authored versus synthesized defaults, opaque keys, seeded wire state and exact lossless interactions in the existing Workflows `src/__tests__/activityPropertyGroups.test.tsx` harness; extend `activityProperties.test.ts` or `activityInputWire.test.ts` only where a changed helper warrants it.
+- [x] T008 [US2] Implement read-only authored-state counting and current row error/options-failure visibility in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/ActivityPropertiesPanel.tsx` (a small reused helper may live in `activityProperties.ts`); cover memo equality, cleanup, retry and stale activity/revision boundaries. Under the approved plan step 6 refinement, bridge built-in TimeSpan/Numeric local errors through optional SDK reporting, aggregate collection/dictionary editor instances safely, and keep unknown/unobservable contributions directly visible. Prove invalid/recovered, sibling removal and draft/activity/editor switch cases before claiming error coverage. Do not invent validation or mutate inputs on collapse.
+- [x] T009 [US2] Add a real-panel HTTP browser fixture/spec under `Studio/tests/browser/` using existing setup where practical; prove keyboard, full-page axe, configured/error recovery and GET/HEAD/POST value preservation with Light/Dark evidence. Report fixture proof separately from composed Studio proof.
 
 ## Phase 5: US3 — Safe fallback and module guidance (P2)
 
 Goal: absent/unknown metadata and required inputs remain directly visible, with coherent categories/order. Independent test: legacy, unfamiliar, Setting-tier and required-Optional descriptors need no disclosure to reach their inputs.
 
-- [ ] T010 [US3] Cover fallback/requiredness and custom grouping/order in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityPropertyGroups.test.tsx`; preserve valid existing tests and correct any classification gap in the panel.
-- [ ] T011 [US3] Document the implemented metadata, authored/error visibility, requiredness and fallback contract in `Studio/docs/ux/design-spec.md`; preserve unrelated target rules and keep the HTTP example faithful to actual behavior.
+- [x] T010 [US3] Cover fallback/requiredness and custom grouping/order in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityPropertyGroups.test.tsx`; preserve valid existing tests and correct any classification gap in the panel.
+- [x] T011 [US3] Document the implemented metadata, authored/error visibility, requiredness and fallback contract in `Studio/docs/ux/design-spec.md`; preserve unrelated target rules and keep the HTTP example faithful to actual behavior.
 
 ## Phase 6: Root integration, qualification and delivery
 
