@@ -71,12 +71,27 @@ internal sealed class Elsa3DefinitionConverter(
                      .Where(node => !refused.Contains(node.Node.NodeId))
                      .OrderBy(node => node.JsonPath, StringComparer.Ordinal))
         {
+            // A step conversion synthesized after an HTTP Endpoint (plan D-12) is reported on the endpoint the engineer
+            // knows, with the capture that caused it.
+            if (node.SynthesizedFrom is var (endpoint, output))
+            {
+                plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(
+                    plan,
+                    Elsa3MigrationDiagnosticSeverity.Error,
+                    Elsa3ActivityDiagnosticCodes.ReusableIntrinsicUnsupported,
+                    $"Reusable workflow node '{endpoint.NodeId}' ({endpoint.Type}) captures its '{output}' output, which needs a step a graph activity cannot hold yet.",
+                    Elsa3ReusableGuidance.HttpProjection(output),
+                    node.JsonPath,
+                    new Dictionary<string, string> { ["ActivityNodeId"] = endpoint.NodeId, ["ActivityType"] = endpoint.Type }));
+                continue;
+            }
+
             plan.Diagnostics.Add(Elsa3ConversionDiagnostics.ForDefinition(
                 plan,
                 Elsa3MigrationDiagnosticSeverity.Error,
                 Elsa3ActivityDiagnosticCodes.ReusableIntrinsicUnsupported,
                 $"Reusable workflow node '{node.Node.NodeId}' ({node.Node.Type}) becomes an Elsa 4 engine intrinsic, which a graph activity cannot hold yet.",
-                Elsa3ReusableGuidance.Intrinsic,
+                Elsa3ReusableGuidance.Intrinsic(node.Node.Type),
                 node.JsonPath,
                 new Dictionary<string, string> { ["ActivityNodeId"] = node.Node.NodeId, ["ActivityType"] = node.Node.Type }));
         }

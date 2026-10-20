@@ -163,7 +163,7 @@ public sealed class ReusableActivityCollectionAnalyzer(IReusableActivityTriggerC
                         $"Reusable workflow reference at node '{activity.NodeId}' could not be resolved to one exact reusable Elsa 3 workflow version.",
                         source.Id,
                         path,
-                        guidance: "Include the exact reusable target version in the analyzed collection. A workflow that is not usable as an activity cannot be used as one: call it with Dispatch Workflow or Execute Workflow instead.",
+                        guidance: "Include the exact reusable target version in the analyzed collection. A workflow that is not usable as an activity cannot be used as one: call it with Dispatch Workflow or Execute Workflow instead. The import does not carry its outputs over (a captured Execute Workflow result is refused); a caller that uses an output reads it after import from the Elsa 4 Dispatch Workflow's Result, which holds the outputs when it waits for completion.",
                         metadata: ReferenceMetadata(activity, reference),
                         dependencySourceIdentity: reference.VersionId ?? reference.DefinitionId,
                         dependencyPathKind: reference.VersionId is null

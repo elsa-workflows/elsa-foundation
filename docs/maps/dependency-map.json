@@ -21907,6 +21907,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Activities.Scheduling",
+          "path": "Essentials/src/Activities/Scheduling/Elsa.Activities.Scheduling.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Activities.Scripting",
           "path": "Essentials/src/Activities/Scripting/Elsa.Activities.Scripting.csproj"
         },

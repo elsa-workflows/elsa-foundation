@@ -413,6 +413,9 @@ no versions. Nothing publishes yet.
 - [X] T051 After spec 248 merged: refuse only real start triggers (D-6 amendment, 2026-10-20). Add
   `IReusableActivityTriggerClassifier` (Import) and its Elsa3Mapping implementation, prove it with
   `ReusableActivityStartTriggerTests` and `ReusableFlaggedStartTests`, and update the readiness guide.
+- [X] T052 Guidance review against Elsa 3 semantics (R-19): per-type intrinsic advice including Finish, HTTP projection
+  refusals on the endpoint, capture vs read, the regular-workflow route's outputs, `done` callers, and the Delay proof
+  (`Elsa3ReusableGuidanceTests`, `ReusableBodyWaitTests`); readiness guide updated.
 
 ---
 

@@ -96,12 +96,16 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
 
             if (isReusable)
             {
+                // A captured output writes the value; anything else bound to a memory reference reads it.
+                var captures = directions.Contains(Elsa3PropertyDirection.Output);
                 diagnostics.Add(CreateDiagnostic(
                     input,
                     property,
                     Elsa3ActivityDiagnosticCodes.ReusableValueReadUnsupported,
-                    $"Property '{property.PropertyName}' of reusable workflow node '{property.ActivityNodeId}' reads or captures a workflow value, which an Elsa 4 graph activity body cannot reach yet.",
-                    ReusableValueReadGuidance,
+                    captures
+                        ? $"Output '{property.PropertyName}' of reusable workflow node '{property.ActivityNodeId}' is captured into a variable, which nothing in an Elsa 4 graph activity body can read yet."
+                        : $"Property '{property.PropertyName}' of reusable workflow node '{property.ActivityNodeId}' reads a variable or another activity's result, which an Elsa 4 graph activity body cannot reach yet.",
+                    captures ? Elsa3ReusableGuidance.Capture : ReusableValueReadGuidance,
                     $"{property.JsonPath}.memoryReference",
                     property.MemoryReferenceId));
                 continue;

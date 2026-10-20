@@ -27,6 +27,7 @@
     <ProjectReference Include="..\..\..\..\..\..\src\Activities\Design\Import\Publishing\Elsa3.Activities.Design.Import.Publishing.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\src\Mapping\Elsa3.Mapping.csproj" />
     <!-- The host's composition: the features its one shell enables, by assembly. -->
+    <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Activities\Scheduling\Elsa.Activities.Scheduling.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Primitives\Hosting\Elsa.Primitives.Hosting.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Serialization\SystemText\Elsa.Serialization.SystemText.csproj" />
     <ProjectReference Include="..\..\..\..\..\..\..\..\Essentials\src\Mediator\Elsa.Mediator\Elsa.Mediator.csproj" />

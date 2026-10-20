@@ -349,3 +349,30 @@ alone cannot see it because it has no resolved dependencies.
 
 **Decision.** The source key is the root's own: `Done` for a built-in root, `done` (the Elsa 3 import's reference key)
 for a root that is itself an imported reusable. The boundary key stays `done`.
+
+## R-19 Guidance review against Elsa 3 semantics (2026-10-20)
+
+**Context.** A second guidance review probed every refusal a reusable body can get and checked the advice against Elsa 3's
+source (`elsa-core`, `WorkflowDefinitionActivity`, `Correlate`, `SetName`, `Finish`).
+
+**Findings and decisions.**
+- Elsa 3 runs a reusable workflow as a `Composite` inside the calling workflow's execution context. Its variables are its
+  own, but `Correlate` and `SetName` set the caller's correlation id and name, and `Finish` clears the caller's scheduler
+  and bookmarks and finishes the caller. The intrinsic refusal now gives advice per type (`Elsa3ReusableGuidance.Intrinsic`):
+  delete an unread Set Variable or Set Output; move Correlate or Set Name into each caller; replace Finish with a declared
+  Complete outcome each caller connects to a Finish. The regular-workflow route is not offered for Correlate, Set Name or
+  Finish, because there they would act on the called workflow.
+- Finish was refused with advice that named only the other four intrinsics. It is now named.
+- A captured HTTP Endpoint `Headers` or `QueryStringData` was refused on a synthesized node (`{nodeId}.elsa3-http-headers`,
+  `Elsa.SetVariable`) the engineer does not have. `Elsa3NodePlan.SynthesizedFrom` records the endpoint, and the refusal
+  names it and the capture to remove.
+- A captured output was refused as a read, with "work from literal values". The value-flow refusal now tells a capture
+  (remove it) from a read.
+- The regular-workflow route said nothing about outputs. The import refuses a captured Elsa 3 Execute Workflow `Result`
+  (`ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`), but a waited Elsa 4 Dispatch Workflow returns the child's outputs in
+  `Result.outputs` (`WorkflowDispatchCompletionEnricher`). The guidance now says so.
+- An outcome named `done` is told to update its callers too.
+- A Delay in a reusable body suspends and resumes (`ReusableBodyWaitTests`, with the scheduling activities composed). Waits
+  are not refused. Event and mid-flow HTTP waits use the same resume mechanism but are not proven here: the test host
+  composes neither module.
+

@@ -172,15 +172,16 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     /// Starts a host, activates its shell, waits for its startup tasks (catalog reconciliation among them) and checks the
     /// catalog holds the built-in activities an imported body converts to. Without <paramref name="withPublishing"/> the
     /// shell does not compose <c>Elsa3ImportActivitiesPublishing</c>; with <paramref name="withPublishSeam"/> it composes
-    /// the test's publish seam around it (<see cref="Refusals"/>).
+    /// the test's publish seam around it (<see cref="Refusals"/>); with <paramref name="withScheduling"/> it composes the
+    /// scheduling activities (Delay).
     /// </summary>
-    public static async Task<Elsa3ImportHost> StartAsync(bool withPublishing = true, bool withPublishSeam = false)
+    public static async Task<Elsa3ImportHost> StartAsync(bool withPublishing = true, bool withPublishSeam = false, bool withScheduling = false)
     {
         var root = Directory.CreateTempSubdirectory("elsa3-import-");
         var warnings = new WarningLog();
         try
         {
-            var configuration = new ConfigurationBuilder().AddInMemoryCollection(ShellSettings(root.FullName, withPublishing, withPublishSeam)).Build();
+            var configuration = new ConfigurationBuilder().AddInMemoryCollection(ShellSettings(root.FullName, withPublishing, withPublishSeam, withScheduling)).Build();
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
             builder.WebHost.UseTestServer();
             builder.Logging.ClearProviders();
@@ -229,6 +230,8 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
                     typeof(RuntimeEntityFrameworkCoreFeature).Assembly,
                     typeof(WorkflowsRuntimeResumptionFeature).Assembly,
                     typeof(WorkflowsRuntimeRecurringTriggersFeature).Assembly,
+                    typeof(WorkflowsRuntimeSchedulingFeature).Assembly,
+                    typeof(Elsa.Activities.Scheduling.ActivitiesSchedulingFeature).Assembly,
                     typeof(Elsa3MappingFeature).Assembly,
                     typeof(Elsa3ImportActivitiesFeature).Assembly,
                     typeof(Elsa3ImportActivitiesEntityFrameworkCoreFeature).Assembly,
@@ -262,7 +265,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         }
     }
 
-    private static Dictionary<string, string?> ShellSettings(string root, bool withPublishing, bool withPublishSeam)
+    private static Dictionary<string, string?> ShellSettings(string root, bool withPublishing, bool withPublishSeam, bool withScheduling)
     {
         var features = $"CShells:Shells:{ShellName}:Features:";
         var design = Sqlite(Path.Join(root, "design.db"));
@@ -279,7 +282,8 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         };
         foreach (var feature in Features
                      .Concat(withPublishing ? ["Elsa3ImportActivitiesPublishing"] : [])
-                     .Concat(withPublishSeam ? [Elsa3ImportPublishSeamFeature.Name] : []))
+                     .Concat(withPublishSeam ? [Elsa3ImportPublishSeamFeature.Name] : [])
+                     .Concat(withScheduling ? ["ActivitiesScheduling"] : []))
             settings.TryAdd($"{features}{feature}", null);
         return settings;
     }
@@ -487,7 +491,9 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
             if (run.Workflow?.Status is WorkflowExecutionStatus.Completed or WorkflowExecutionStatus.Faulted or WorkflowExecutionStatus.Cancelled ||
                 run.Activities.Any(activity => activity.Fault is not null) ||
                 run.Incidents.Count > 0)
-                return run;
+                // The read lists activities before the workflow, so a run that settled between the two shows a terminal
+                // workflow with activities still running. Read once more now that it has settled.
+                return await ReadRunAsync(workflowExecutionId);
             Assert.True(deadline.Elapsed < SettleTimeout, $"Run '{workflowExecutionId}' did not settle: {run.Describe()}.");
             await Task.Delay(100);
         }
