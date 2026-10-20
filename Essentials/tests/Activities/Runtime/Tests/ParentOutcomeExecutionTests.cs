@@ -78,6 +78,26 @@ public sealed class ParentOutcomeExecutionTests
     }
 
     [Fact]
+    public async Task CombinedOutcomeCallback_UsesCommittedChildSchedulingMetadata_WhenDeliveryMetadataDisagrees()
+    {
+        var recorder = new ParentOutcomeRecorder { RequireCommittedChildRoute = true };
+        await using var harness = NewHarness(recorder, ParentCompletionCommandMetadataPoisoning.Install);
+
+        var run = await harness.RunAsync(NewGraph(typeof(CombinedOutcomeParentActivity)));
+
+        run.AssertWorkflowCompleted();
+        var outcome = Assert.Single(recorder.Outcomes);
+        Assert.Equal(ParentCompletionCommandMetadataPoisoning.CommittedValue,
+            outcome.ChildSchedulingMetadata[ParentCompletionCommandMetadataPoisoning.MetadataKey]);
+        var deliveryWorkItem = ((IRuntimeActivityExecutionContext)outcome.ParentContext).SchedulerWorkItem;
+        Assert.Equal(ParentCompletionCommandMetadataPoisoning.PoisonedValue,
+            deliveryWorkItem.CommandMetadata[ParentCompletionCommandMetadataPoisoning.MetadataKey]);
+        var incident = Assert.Single(await harness.Services.GetRequiredService<IIncidentStateStore>()
+            .ListAsync(WorkflowExecutionHarness.WorkflowExecutionId));
+        Assert.Equal(IncidentStatus.Resolved, incident.Status);
+    }
+
+    [Fact]
     public async Task CombinedOutcomeCallback_CanBubbleItsFaultAndOrderedNotificationsToGrandparent()
     {
         var recorder = new ParentOutcomeRecorder();
@@ -283,6 +303,7 @@ public sealed class ParentOutcomeExecutionTests
     {
         public ChildCallbackBehavior ChildBehavior { get; init; } = ChildCallbackBehavior.ReturnFaultWithSignals;
         public OutcomeBehavior OutcomeBehavior { get; init; } = OutcomeBehavior.CompleteWithAbsorption;
+        public bool RequireCommittedChildRoute { get; init; }
         public List<ActivityChildOutcomeContext> Outcomes { get; } = [];
         public int LegacyNotificationCalls { get; set; }
         public int LegacyFaultCalls { get; set; }
@@ -306,8 +327,18 @@ public sealed class ParentOutcomeExecutionTests
     }
 
     private static WorkflowExecutionHarness NewHarness(ParentOutcomeRecorder recorder, params string[] activityExecutionIds) =>
+        NewHarness(recorder, (Action<IServiceCollection>?)null, activityExecutionIds);
+
+    private static WorkflowExecutionHarness NewHarness(
+        ParentOutcomeRecorder recorder,
+        Action<IServiceCollection>? configure,
+        params string[] activityExecutionIds) =>
         WorkflowExecutionHarness.Create()
-            .ConfigureServices(services => services.AddSingleton(recorder))
+            .ConfigureServices(services =>
+            {
+                services.AddSingleton(recorder);
+                configure?.Invoke(services);
+            })
             .Build(activityExecutionIds.Length == 0
                 ? new[] { "actexec-parent", "actexec-child", "actexec-leaf", "actexec-followup" }
                 : activityExecutionIds);
@@ -363,7 +394,13 @@ public sealed class ParentOutcomeExecutionTests
         public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
         {
             var child = context.ExecutableNode.ChildSlots.Single().Activities.First();
-            context.ScheduleChildActivity(child.ExecutableNodeId, context.ActivityExecutionState.InvocationId);
+            context.ScheduleChildActivity(
+                child.ExecutableNodeId,
+                context.ActivityExecutionState.InvocationId,
+                new Dictionary<string, string>
+                {
+                    [ParentCompletionCommandMetadataPoisoning.MetadataKey] = ParentCompletionCommandMetadataPoisoning.CommittedValue
+                });
             return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
         }
 
@@ -393,6 +430,10 @@ public sealed class ParentOutcomeExecutionTests
         public ValueTask<RuntimeStructuralContinuation> OnChildOutcomeAsync(ActivityChildOutcomeContext context)
         {
             recorder.Outcomes.Add(context);
+            if (recorder.RequireCommittedChildRoute &&
+                context.ChildSchedulingMetadata.GetValueOrDefault(ParentCompletionCommandMetadataPoisoning.MetadataKey) != ParentCompletionCommandMetadataPoisoning.CommittedValue)
+                return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+
             var runtimeContext = (IRuntimeActivityExecutionContext)context.ParentContext;
             if (recorder.OutcomeBehavior != OutcomeBehavior.FaultWithoutAbsorption)
                 runtimeContext.RequestChildFaultAbsorption(context.IncidentId, "consumed combined child outcome");

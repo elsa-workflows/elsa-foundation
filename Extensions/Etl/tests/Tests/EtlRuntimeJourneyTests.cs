@@ -342,6 +342,22 @@ public sealed partial class EtlRuntimeJourneyTests
         public Task AdmitAsync(IHost host, EtlInvocation invocation, EtlStoreStatus expected = EtlStoreStatus.Applied) =>
             AdmitAsync(host.Services, invocation, expected);
 
+        public async Task<(IHost Host, EtlInvocation Invocation)> PrepareWorkerRunAsync(
+            EtlPipeline pipeline, string runId, CancellationToken cancellationToken)
+        {
+            var host = await StartHostAsync(EfMigratePolicy.AutoMigrate);
+            await host.Services.GetRequiredService<EtlRuntimeWorker>().StopAsync(cancellationToken);
+            var invocation = Invocation(pipeline, runId);
+            await using var operation = host.Services.CreateAsyncScope();
+            var store = operation.ServiceProvider.GetRequiredService<IEtlRuntimeStore>();
+            var execution = operation.ServiceProvider.GetRequiredService<EtlExecution>();
+            Assert.Equal(EtlStoreStatus.Applied, (await execution.AdmitAsync(invocation, cancellationToken)).Status);
+            var preparation = Assert.IsType<EtlPreparationLease>(
+                await store.ClaimPreparationAsync(Scope, "fixture-preparation", cancellationToken));
+            await execution.PrepareAsync(preparation, cancellationToken);
+            return (host, invocation);
+        }
+
         public async Task<EtlWorkerProcess> StartWorkerAsync(string role, CancellationToken cancellationToken,
             EtlWorkerWritePause writePause = EtlWorkerWritePause.None,
             EtlWorkerStoreGate storeGate = EtlWorkerStoreGate.BeforeAcceptance)

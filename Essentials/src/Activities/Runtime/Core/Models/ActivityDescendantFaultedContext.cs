@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using Elsa.Activities.Runtime.Core.Contracts;
 
 namespace Elsa.Activities.Runtime.Core.Models;
@@ -19,8 +20,26 @@ public sealed class ActivityDescendantFaultedContext
         string? faultedDescendantIterationId = null,
         string? faultCode = null,
         string? faultCategory = null)
+        : this(parentContext, faultedDescendantActivityExecutionId, faultedDescendantExecutableNodeId,
+            viaChildActivityExecutionId, viaChildExecutableNodeId, incidentId, faultedDescendantIterationId,
+            faultCode, faultCategory, FrozenDictionary<string, string>.Empty)
+    {
+    }
+
+    public ActivityDescendantFaultedContext(
+        IActivityExecutionContext parentContext,
+        string faultedDescendantActivityExecutionId,
+        string faultedDescendantExecutableNodeId,
+        string viaChildActivityExecutionId,
+        string viaChildExecutableNodeId,
+        string? incidentId,
+        string? faultedDescendantIterationId,
+        string? faultCode,
+        string? faultCategory,
+        IReadOnlyDictionary<string, string> viaChildSchedulingMetadata)
     {
         ArgumentNullException.ThrowIfNull(parentContext);
+        ArgumentNullException.ThrowIfNull(viaChildSchedulingMetadata);
         ArgumentException.ThrowIfNullOrWhiteSpace(faultedDescendantActivityExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(faultedDescendantExecutableNodeId);
         ArgumentException.ThrowIfNullOrWhiteSpace(viaChildActivityExecutionId);
@@ -38,6 +57,7 @@ public sealed class ActivityDescendantFaultedContext
         FaultedDescendantIterationId = string.IsNullOrWhiteSpace(faultedDescendantIterationId) ? null : faultedDescendantIterationId;
         FaultCode = string.IsNullOrWhiteSpace(faultCode) ? null : faultCode;
         FaultCategory = string.IsNullOrWhiteSpace(faultCategory) ? null : faultCategory;
+        ViaChildSchedulingMetadata = viaChildSchedulingMetadata.ToFrozenDictionary(StringComparer.Ordinal);
     }
 
     public IActivityExecutionContext ParentContext { get; }
@@ -61,4 +81,7 @@ public sealed class ActivityDescendantFaultedContext
 
     /// <summary>The author-chosen category of the faulted descendant's committed fault, or <c>null</c>.</summary>
     public string? FaultCategory { get; }
+
+    /// <summary>Immutable metadata from the via child's committed scheduling provenance, independent of the delivery command.</summary>
+    public IReadOnlyDictionary<string, string> ViaChildSchedulingMetadata { get; }
 }

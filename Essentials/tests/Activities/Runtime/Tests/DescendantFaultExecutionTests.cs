@@ -69,6 +69,30 @@ public sealed class DescendantFaultExecutionTests
     }
 
     [Fact]
+    public async Task DescendantFaultCallback_UsesCommittedViaChildMetadata_WhenDeliveryMetadataDisagrees()
+    {
+        var log = new DescendantFaultLog();
+        await using var harness = NewHarness(log,
+            new ReceiverDirective(Absorb: true, RequireCommittedViaChildRoute: true),
+            ParentCompletionCommandMetadataPoisoning.Install);
+
+        var run = await harness.RunAsync(
+            WorkflowExecutionHarness.NewExecutable(Receiver(Sequence("node-sequence",
+                WorkflowExecutionHarness.NewFaultingNode("node-b"),
+                WorkflowExecutionHarness.NewProbeNode("node-c")))),
+            allowPendingWorkOnTerminalCompletion: true,
+            allowAcceptedButFaulted: true);
+
+        var delivery = Assert.Single(log.Deliveries);
+        Assert.Equal(ParentCompletionCommandMetadataPoisoning.CommittedValue, delivery.ViaChildSchedulingMetadata);
+        Assert.Equal(ParentCompletionCommandMetadataPoisoning.PoisonedValue, delivery.DeliveryCommandMetadata);
+        run.AssertWorkflowCompleted();
+        run.AssertDidNotRun("node-c");
+        var incident = Assert.Single(await Incidents(harness));
+        Assert.Equal(IncidentStatus.Resolved, incident.Status);
+    }
+
+    [Fact]
     public async Task AFaultInsideAForEachBodyReachesTheReceiverThroughTheForEach()
     {
         var log = new DescendantFaultLog();
@@ -454,14 +478,16 @@ public sealed class DescendantFaultExecutionTests
         }
     }
 
-    public sealed record ReceiverDirective(bool Absorb = false, bool Intervene = false);
+    public sealed record ReceiverDirective(bool Absorb = false, bool Intervene = false, bool RequireCommittedViaChildRoute = false);
 
     public sealed record DescendantFaultDelivery(
         string FaultedNodeId,
         string? IncidentId,
         string? FaultCode,
         string ViaActivityExecutionId,
-        string ViaNodeId);
+        string ViaNodeId,
+        string? ViaChildSchedulingMetadata,
+        string? DeliveryCommandMetadata);
 
     public sealed class DescendantFaultLog
     {
@@ -486,7 +512,11 @@ public sealed class DescendantFaultExecutionTests
         public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
         {
             var child = Assert.Single(Assert.Single(context.ExecutableNode.ChildSlots).Activities);
-            context.ScheduleChildActivity(child.ExecutableNodeId, context.ActivityExecutionState.InvocationId);
+            var metadata = new Dictionary<string, string>
+            {
+                [ParentCompletionCommandMetadataPoisoning.MetadataKey] = ParentCompletionCommandMetadataPoisoning.CommittedValue
+            };
+            context.ScheduleChildActivity(child.ExecutableNodeId, context.ActivityExecutionState.InvocationId, metadata);
             return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
         }
 
@@ -502,13 +532,19 @@ public sealed class DescendantFaultExecutionTests
 
         public ValueTask<RuntimeStructuralContinuation> OnDescendantFaultedAsync(ActivityDescendantFaultedContext context)
         {
+            var runtimeContext = (IRuntimeActivityExecutionContext)context.ParentContext;
             log.Add(new DescendantFaultDelivery(
                 context.FaultedDescendantExecutableNodeId,
                 context.IncidentId,
                 context.FaultCode,
                 context.ViaChildActivityExecutionId,
-                context.ViaChildExecutableNodeId));
-            var runtimeContext = (IRuntimeActivityExecutionContext)context.ParentContext;
+                context.ViaChildExecutableNodeId,
+                context.ViaChildSchedulingMetadata.GetValueOrDefault(ParentCompletionCommandMetadataPoisoning.MetadataKey),
+                runtimeContext.SchedulerWorkItem.CommandMetadata.GetValueOrDefault(ParentCompletionCommandMetadataPoisoning.MetadataKey)));
+            if (directive.RequireCommittedViaChildRoute &&
+                context.ViaChildSchedulingMetadata.GetValueOrDefault(ParentCompletionCommandMetadataPoisoning.MetadataKey) != ParentCompletionCommandMetadataPoisoning.CommittedValue)
+                return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+
             if (directive.Intervene)
             {
                 runtimeContext.RequestChildFaultIntervention(context.IncidentId!, "operator");

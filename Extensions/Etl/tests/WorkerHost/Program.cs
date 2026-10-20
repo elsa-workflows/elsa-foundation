@@ -36,6 +36,10 @@ var runtime = new EtlRuntimeFeature
     SnapshotRoot = Path.Combine(root, "snapshots"),
     FileBindings = configuration.Bindings
 };
+// A held delivery must not be reclaimed by another attempt in the same fixture process.
+// The recovery case deliberately delegates that next claim to the replacement process.
+if (configuration.StoreGate == EtlWorkerStoreGate.AfterDeliveryClaim)
+    runtime.MaxConcurrentAttempts = 1;
 runtime.ConfigureServices(builder.Services);
 if (configuration.WritePause != EtlWorkerWritePause.None)
     builder.Services.Replace(ServiceDescriptor.Singleton<IFileChunkPublisherFactory>(
@@ -55,6 +59,8 @@ var persistence = new EtlRuntimeEntityFrameworkCoreFeature
 persistence.ConfigureServices(builder.Services);
 builder.Services.Configure<EfMigrateOptions>(options => options.Policy = EfMigratePolicy.Validate);
 var acceptanceGate = new AcceptanceGate(root, role, configuration.StoreGate);
+if (configuration.StoreGate == EtlWorkerStoreGate.AfterDeliveryClaim)
+    builder.Services.AddSingleton<IEtlResultDelivery>(new JournalOnlyResultDelivery(acceptanceGate));
 
 var storeDescriptor = builder.Services.LastOrDefault(descriptor => descriptor.ServiceType == typeof(IEtlRuntimeStore))
     ?? throw new InvalidOperationException("The ETL EF persistence feature did not register IEtlRuntimeStore.");
@@ -102,6 +108,11 @@ internal sealed class AcceptanceGate(string root, string role, EtlWorkerStoreGat
             token => EtlWorkerProtocol.WriteCommittedAcceptanceAsync(root, role,
                 new EtlWorkerCommittedAcceptance(lease, acceptance, result, Environment.ProcessId), token), cancellationToken);
     }
+
+    public Task WaitAfterDeliveryClaimAsync(EtlDeliveryLease lease, CancellationToken cancellationToken) =>
+        WaitAsync(EtlWorkerStoreGate.AfterDeliveryClaim,
+            token => EtlWorkerProtocol.WriteDeliveryAsync(root, role,
+                new EtlWorkerDelivery(lease, Environment.ProcessId), token), cancellationToken);
 
     private async Task WaitAsync(EtlWorkerStoreGate selectedStage, Func<CancellationToken, Task> publish,
         CancellationToken cancellationToken)
@@ -155,5 +166,16 @@ internal sealed class AcceptanceGateStore(IEtlRuntimeStore inner, AcceptanceGate
     {
         await gate.WaitBeforeReservationAsync(lease, batch, cancellationToken);
         return await Inner.ReserveBatchAsync(lease, batch, cancellationToken);
+    }
+}
+
+// This adapter observes a real claim but never dispatches native work or supplies an acknowledgement proof.
+internal sealed class JournalOnlyResultDelivery(AcceptanceGate gate) : IEtlResultDelivery
+{
+    public async ValueTask<EtlDeliveryDisposition?> DeliverAsync(EtlDeliveryLease delivery,
+        CancellationToken cancellationToken = default)
+    {
+        await gate.WaitAfterDeliveryClaimAsync(delivery, cancellationToken);
+        return null;
     }
 }

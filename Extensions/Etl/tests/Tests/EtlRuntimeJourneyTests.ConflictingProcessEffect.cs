@@ -1,9 +1,6 @@
 using System.Text;
 using Elsa.Etl.Core;
 using Elsa.Etl.Core.Runtime;
-using Elsa.Etl.Runtime.Execution;
-using Elsa.Etl.Runtime.Hosting;
-using Elsa.Persistence.EntityFramework;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Etl.Tests;
@@ -14,19 +11,13 @@ public sealed partial class EtlRuntimeJourneyTests
     public async Task Actual_replacement_worker_refuses_conflicting_published_effect_without_advancing_cursor()
     {
         await using var files = new RuntimeFiles("id,name\n1,Ada\n");
-        var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate);
-        await host.Services.GetRequiredService<EtlRuntimeWorker>().StopAsync(CancellationToken.None);
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(90));
-        await using var operation = host.Services.CreateAsyncScope();
-        var store = operation.ServiceProvider.GetRequiredService<IEtlRuntimeStore>();
-        var execution = operation.ServiceProvider.GetRequiredService<EtlExecution>();
-        var invocation = files.Invocation(EtlTestPipelines.Create() with
+        var (host, invocation) = await files.PrepareWorkerRunAsync(EtlTestPipelines.Create() with
         {
             Limits = new EtlLimits { PartitionCount = 1 }
-        }, "process-effect-conflict");
-        Assert.Equal(EtlStoreStatus.Applied, (await execution.AdmitAsync(invocation, deadline.Token)).Status);
-        var preparation = Assert.IsType<EtlPreparationLease>(await store.ClaimPreparationAsync(files.Scope, "prepare", deadline.Token));
-        await execution.PrepareAsync(preparation, deadline.Token);
+        }, "process-effect-conflict", deadline.Token);
+        await using var operation = host.Services.CreateAsyncScope();
+        var store = operation.ServiceProvider.GetRequiredService<IEtlRuntimeStore>();
 
         var predecessor = await files.StartWorkerAsync("publisher", deadline.Token);
         var published = await predecessor.WaitForAcceptanceAsync(deadline.Token);

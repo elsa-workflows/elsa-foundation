@@ -30,4 +30,4 @@ After byte-exact restoration, **291 ETL and 579 architecture tests passed**, zer
 
 ## Remaining acceptance
 
-T024 remains unchecked. Read-to-reservation, post-acceptance/pre-observation and result-delivery process interruptions, conflicting output recovery and the complete duplicate/late/stale result matrix must still be reconciled. Persisted native publication/picker, API, Studio, rebuilt-server/browser, remaining schema/provider and resulting-main gates remain owed. PR #3111 stays draft; Program #2892 is not complete. Physical external effects remain at least once; historical receipt/HTTP timeout causes remain unexplained.
+At this checkpoint T024 remained unchecked. The later [interruption matrix](interruption-matrix.md) completes its read/reservation, committed-cursor, result-claim, conflict and duplicate/late/stale reconciliation. Persisted native publication/picker, API, Studio, rebuilt-server/browser, remaining schema/provider and resulting-main gates remain owed. PR #3111 stays draft; Program #2892 is not complete. Physical external effects remain at least once; historical receipt/HTTP timeout causes remain unexplained.

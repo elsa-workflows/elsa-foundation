@@ -1,9 +1,6 @@
 using Elsa.Etl.Core;
 using Elsa.Etl.Core.Runtime;
-using Elsa.Etl.Runtime.Execution;
-using Elsa.Etl.Runtime.Hosting;
 using Elsa.Etl.Tests.Support;
-using Elsa.Persistence.EntityFramework;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Etl.Tests;
@@ -14,17 +11,13 @@ public sealed partial class EtlRuntimeJourneyTests
     public async Task Actual_worker_interrupted_before_reservation_rebuilds_the_same_descriptor_without_owed_quota()
     {
         await using var files = new RuntimeFiles("id,name\n1,Ada\n2,Bram\n");
-        var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate);
-        await host.Services.GetRequiredService<EtlRuntimeWorker>().StopAsync(CancellationToken.None);
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        var (host, invocation) = await files.PrepareWorkerRunAsync(EtlTestPipelines.Create() with
+        {
+            Limits = new EtlLimits { PartitionCount = 1 }
+        }, "before-reservation", deadline.Token);
         await using var operation = host.Services.CreateAsyncScope();
         var store = operation.ServiceProvider.GetRequiredService<IEtlRuntimeStore>();
-        var execution = operation.ServiceProvider.GetRequiredService<EtlExecution>();
-        var pipeline = EtlTestPipelines.Create() with { Limits = new EtlLimits { PartitionCount = 1 } };
-        var invocation = files.Invocation(pipeline, "before-reservation");
-        Assert.Equal(EtlStoreStatus.Applied, (await execution.AdmitAsync(invocation, deadline.Token)).Status);
-        var preparation = Assert.IsType<EtlPreparationLease>(await store.ClaimPreparationAsync(files.Scope, "prepare-before-reservation", deadline.Token));
-        await execution.PrepareAsync(preparation, deadline.Token);
 
         var predecessor = await files.StartWorkerAsync("before-reservation", deadline.Token,
             storeGate: EtlWorkerStoreGate.BeforeReservation);
@@ -82,17 +75,13 @@ public sealed partial class EtlRuntimeJourneyTests
     public async Task Actual_worker_interrupted_after_acceptance_commit_resumes_at_the_next_batch()
     {
         await using var files = new RuntimeFiles("id,name\n1,Ada\n2,Bram\n");
-        var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate);
-        await host.Services.GetRequiredService<EtlRuntimeWorker>().StopAsync(CancellationToken.None);
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        var (host, invocation) = await files.PrepareWorkerRunAsync(EtlTestPipelines.Create() with
+        {
+            Limits = new EtlLimits { PartitionCount = 1, MaxBatchRecords = 1 }
+        }, "after-acceptance-commit", deadline.Token);
         await using var operation = host.Services.CreateAsyncScope();
         var store = operation.ServiceProvider.GetRequiredService<IEtlRuntimeStore>();
-        var execution = operation.ServiceProvider.GetRequiredService<EtlExecution>();
-        var pipeline = EtlTestPipelines.Create() with { Limits = new EtlLimits { PartitionCount = 1, MaxBatchRecords = 1 } };
-        var invocation = files.Invocation(pipeline, "after-acceptance-commit");
-        Assert.Equal(EtlStoreStatus.Applied, (await execution.AdmitAsync(invocation, deadline.Token)).Status);
-        var preparation = Assert.IsType<EtlPreparationLease>(await store.ClaimPreparationAsync(files.Scope, "prepare-after-acceptance", deadline.Token));
-        await execution.PrepareAsync(preparation, deadline.Token);
 
         var predecessor = await files.StartWorkerAsync("after-acceptance", deadline.Token,
             storeGate: EtlWorkerStoreGate.AfterAcceptanceCommit);

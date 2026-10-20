@@ -20,7 +20,9 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   `compensation.target:{scopeNodeId}` while a cascade passes outward) and `compensation.scope.uncertain-unhandled`
   (category `outcome-unknown`).
 - Descendant faults (spec 258 R-3): the scope implements `IRuntimeActivityDescendantFaultHandler`, so a fault under a
-  Sequence or loop step reaches it as a fault of that step.
+  Sequence or loop step reaches it as a fault of that step. Direct/combined child faults route from the callback's
+  committed child provenance, and descendant faults from its committed via-child provenance; delivery-command keys
+  do not substitute for that ownership evidence.
 
 ## Cross-domain contributions
 

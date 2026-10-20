@@ -6,7 +6,7 @@ using Elsa.Etl.Runtime;
 namespace Elsa.Etl.Tests.Support;
 
 internal enum EtlWorkerWritePause { None, SourceSnapshot, OutputChunk }
-internal enum EtlWorkerStoreGate { BeforeAcceptance, BeforeReservation, AfterAcceptanceCommit }
+internal enum EtlWorkerStoreGate { BeforeAcceptance, BeforeReservation, AfterAcceptanceCommit, AfterDeliveryClaim }
 
 internal sealed record EtlWorkerConfiguration(string Root, EtlScope Scope, List<EtlHostFileBindingOptions> Bindings,
     EtlWorkerWritePause WritePause = EtlWorkerWritePause.None,
@@ -15,6 +15,7 @@ internal sealed record EtlWorkerConfiguration(string Root, EtlScope Scope, List<
 internal sealed record EtlWorkerAcceptance(EtlPartitionLease Lease, EtlBatchAcceptance Acceptance, int ProcessId);
 internal sealed record EtlWorkerCommittedAcceptance(EtlPartitionLease Lease, EtlBatchAcceptance Acceptance,
     EtlAcceptanceResult Result, int ProcessId);
+internal sealed record EtlWorkerDelivery(EtlDeliveryLease Lease, int ProcessId);
 internal sealed record EtlWorkerReservation(EtlPartitionLease Lease, EtlBatchDescriptor Batch, int ProcessId);
 
 internal sealed record EtlWorkerWrite(string OutputRoot, string EffectIdentity, string Extension,
@@ -44,6 +45,12 @@ internal static class EtlWorkerProtocol
     {
         ValidateRole(role);
         return Path.Combine(JournalDirectory(root), $"{role}.committed-acceptance.json");
+    }
+
+    public static string DeliveryPath(string root, string role)
+    {
+        ValidateRole(role);
+        return Path.Combine(JournalDirectory(root), $"{role}.delivery.json");
     }
 
     public static string ReservationPath(string root, string role)
@@ -97,6 +104,10 @@ internal static class EtlWorkerProtocol
     public static Task WriteCommittedAcceptanceAsync(string root, string role, EtlWorkerCommittedAcceptance acceptance,
         CancellationToken cancellationToken = default) =>
         WriteJournalAsync(root, CommittedAcceptancePath(root, role), acceptance, cancellationToken);
+
+    public static Task WriteDeliveryAsync(string root, string role, EtlWorkerDelivery delivery,
+        CancellationToken cancellationToken = default) =>
+        WriteJournalAsync(root, DeliveryPath(root, role), delivery, cancellationToken);
 
     public static Task WriteReservationAsync(string root, string role, EtlWorkerReservation reservation,
         CancellationToken cancellationToken = default) =>

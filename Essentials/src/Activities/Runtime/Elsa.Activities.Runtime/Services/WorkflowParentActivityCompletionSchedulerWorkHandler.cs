@@ -314,7 +314,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                         ReadIncidentId(workItem),
                         completedChildState.IterationId,
                         descendantFault?.Code,
-                        descendantFault?.Metadata.GetValueOrDefault(ActivityFault.CategoryMetadataKey)));
+                        descendantFault?.Metadata.GetValueOrDefault(ActivityFault.CategoryMetadataKey),
+                        viaChildState!.Provenance.Metadata));
                 }
                 else if (childFaulted)
                 {
@@ -328,7 +329,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                             completedChildState.IterationId,
                             outcome.Fault,
                             outcome.IncidentId,
-                            outcome.Notifications));
+                            outcome.Notifications,
+                            completedChildState.Provenance.Metadata));
                     }
                     else if (isParentOutcomeEvaluation && parentActivity is IRuntimeActivityChildNotificationHandler)
                     {
