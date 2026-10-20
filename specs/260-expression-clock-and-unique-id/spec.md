@@ -231,8 +231,8 @@ v2 succeeds; publish a new JavaScript and a new Liquid expression and check thei
   other string MUST produce an invalid date.
 - **FR-017**: Under `binding-pure-v2`, these forms MUST fail with a `TypeError` whose message names the form, says why
   it is not allowed and gives the rewrite: `new Date()` with no argument, `Date()` called as a function, `Date.now()`,
-  `toLocaleString()`, `toLocaleDateString()` and `toLocaleTimeString()`. The messages MUST be the ones listed in
-  ADR 0088 D4, and calling `toISOString()` on an invalid date MUST say that only ISO 8601 date-time strings parse.
+  `toLocaleString()`, `toLocaleDateString()` and `toLocaleTimeString()`. The messages MUST be exactly the texts in
+  [the contract](contracts/clock-uniqueid-and-binding-pure-v2.md#messages), which follow ADR 0088 D4's examples, and calling `toISOString()` on an invalid date MUST say that only ISO 8601 date-time strings parse.
 - **FR-018**: `Temporal`, `Intl` and `Math.random` MUST stay unavailable under `binding-pure-v2`.
 - **FR-019**: Authoring validation MUST report the FR-017 messages, at the authored line and column, for each removed
   form it can identify without evaluating the source.
