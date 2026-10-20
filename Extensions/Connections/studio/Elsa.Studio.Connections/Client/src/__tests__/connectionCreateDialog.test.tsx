@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StudioDialogApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
-import { ConnectionCreateDialog } from "../ConnectionCreateDialog";
+import { ConnectionCreateDialog, resolveApiKeyPlacement } from "../ConnectionCreateDialog";
 import { ConnectionsPage } from "../ConnectionsPage";
 import type { ConnectionDescriptorsResponse, ConnectionMetadata } from "../connectionTypes";
 
@@ -16,6 +16,198 @@ afterEach(() => {
 });
 
 describe("connection credential creation", () => {
+  it("puts the required API key before optional settings and keeps the existing Secret path metadata-only", async () => {
+    const { container, calls } = renderApiKeyDialog();
+
+    await waitFor(() => container.textContent?.includes("Payments API") === true);
+    const credential = Array.from(container.querySelectorAll("legend")).find(item => item.textContent === "API key (required)")!;
+    const moreOptions = button(container, "More options");
+    const advanced = container.querySelector(".studio-advanced-section")!;
+    expect(credential.compareDocumentPosition(advanced) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(moreOptions.getAttribute("aria-expanded")).toBe("false");
+    expect(container.textContent).toContain("Enter either a Base URL or Allowed hosts in More options.");
+    expect(container.textContent).not.toContain(rawSecretValue);
+
+    changeText(container, "Name", "api.connection");
+    chooseSecret(container, "API key", "payments.api");
+    changeText(container, "Base URL", "https://api.example");
+    expect(button(container, "Create").disabled).toBe(false);
+    clickButton(container, "Create");
+    await waitFor(() => calls.some(call => call.url === "/connections"));
+
+    expect(calls.find(call => call.url === "/connections")?.body).toEqual({
+      name: "api.connection",
+      typeName: "http",
+      authScheme: "api-key",
+      settings: { baseUrl: "https://api.example" },
+      secretFields: { apiKey: { sourceKind: "secret", existingSecretName: "payments.api" } }
+    });
+    expect(JSON.stringify(calls.find(call => call.url === "/connections")?.body)).not.toContain(rawSecretValue);
+  });
+
+  it("keeps HTTP creation blocked until Base URL or Allowed hosts is supplied for any HTTP scheme", async () => {
+    const { container, calls } = renderApiKeyDialog();
+
+    await waitFor(() => container.textContent?.includes("Payments API") === true);
+    changeText(container, "Name", "api.connection");
+    changeSelect(container, "Auth scheme", "bearer");
+    await waitFor(() => control<HTMLSelectElement>(container, "Existing Secret for Access token").options.length > 1);
+    chooseSecret(container, "Access token", "payments.api");
+    expect(button(container, "Create").disabled).toBe(true);
+    expect(container.textContent).toContain("Enter either a Base URL or Allowed hosts in More options.");
+
+    clickButton(container, "More options");
+    changeText(container, "Allowed hosts", "api.example");
+    expect(button(container, "Create").disabled).toBe(false);
+    clickButton(container, "Create");
+    await waitFor(() => calls.some(call => call.url === "/connections"));
+    expect(calls.find(call => call.url === "/connections")?.body).toEqual({
+      name: "api.connection",
+      typeName: "http",
+      authScheme: "bearer",
+      settings: { allowedHosts: "api.example" },
+      secretFields: { token: { sourceKind: "secret", existingSecretName: "payments.api" } }
+    });
+  });
+
+  it("keeps the generic HTTP fallback usable when the descriptor lacks one address field", async () => {
+    const postJson = vi.fn(async (url: string) => url === "/secrets/picker" ? pickerResponse() : createdConnection());
+    const { container } = renderDialog({ context: endpointContext(postJson) });
+
+    await waitFor(() => container.textContent?.includes("Payments API") === true);
+    changeText(container, "Name", "generic-http.connection");
+    chooseSecret(container, "Access token", "payments.api");
+    chooseSecret(container, "Signing key", "signing.key");
+
+    expect(button(container, "Create").disabled).toBe(false);
+    expect(container.textContent).not.toContain("either Base URL or Allowed hosts");
+    expect(control<HTMLInputElement>(container, "Allowed hosts").value).toBe("");
+  });
+
+  it("preserves both API-key names across placement changes and omits an unchecked insecure-HTTP override", async () => {
+    const { container, calls } = renderApiKeyDialog();
+
+    await waitFor(() => container.textContent?.includes("Payments API") === true);
+    changeText(container, "Name", "api.connection");
+    chooseRadio(container, "New value");
+    changeText(container, "New value for API key", "operator-entered-key");
+    changeText(container, "Base URL", "https://api.example");
+    clickButton(container, "More options");
+
+    expect(control<HTMLSelectElement>(container, "Placement").value).toBe("header");
+    expect(control<HTMLInputElement>(container, "Header name").value).toBe("");
+    expect(control<HTMLInputElement>(container, "Header name").placeholder).toBe("Authorization");
+    expect(Array.from(container.querySelectorAll("label")).some(label => label.textContent?.trim() === "Query name")).toBe(false);
+    changeText(container, "Header name", "X-Client-Key");
+    changeSelect(container, "Placement", "query");
+    expect(Array.from(container.querySelectorAll("label")).some(label => label.textContent?.trim() === "Header name")).toBe(false);
+    expect(control<HTMLInputElement>(container, "Query name").placeholder).toBe("api_key");
+    changeText(container, "Query name", "client_key");
+    changeCheckbox(container, "Allow insecure HTTP", true);
+    changeCheckbox(container, "Allow insecure HTTP", false);
+    changeSelect(container, "Placement", "header");
+    expect(control<HTMLInputElement>(container, "Header name").value).toBe("X-Client-Key");
+    changeSelect(container, "Placement", "query");
+    expect(control<HTMLInputElement>(container, "Query name").value).toBe("client_key");
+
+    clickButton(container, "Create");
+    await waitFor(() => calls.some(call => call.url === "/connections"));
+    expect(calls.find(call => call.url === "/connections")?.body).toEqual({
+      name: "api.connection",
+      typeName: "http",
+      authScheme: "api-key",
+      settings: {
+        baseUrl: "https://api.example",
+        headerName: "X-Client-Key",
+        placement: "query",
+        queryName: "client_key"
+      },
+      secretFields: { apiKey: { value: "operator-entered-key" } }
+    });
+  });
+
+  it("serializes explicitly authored runtime defaults while leaving untouched defaults absent", async () => {
+    const { container, calls } = renderApiKeyDialog();
+
+    await waitFor(() => container.textContent?.includes("Payments API") === true);
+    changeText(container, "Name", "api.connection");
+    chooseSecret(container, "API key", "payments.api");
+    changeText(container, "Base URL", "https://api.example");
+    clickButton(container, "More options");
+    changeSelect(container, "Placement", "header");
+    changeText(container, "Header name", "Authorization");
+    expect(container.textContent).toContain("2 set");
+
+    clickButton(container, "Create");
+    await waitFor(() => calls.some(call => call.url === "/connections"));
+    expect(calls.find(call => call.url === "/connections")?.body).toEqual({
+      name: "api.connection",
+      typeName: "http",
+      authScheme: "api-key",
+      settings: { baseUrl: "https://api.example", placement: "header", headerName: "Authorization" },
+      secretFields: { apiKey: { sourceKind: "secret", existingSecretName: "payments.api" } }
+    });
+  });
+
+  it.each(["headerName", "queryName"] as const)("keeps required API-key %s direct and rendered once", fieldName => {
+    const descriptors = apiKeyDescriptorsWithRequiredName(fieldName);
+    const { container } = renderDialog({ descriptors });
+    const labelText = fieldName === "headerName" ? "Header name (required)" : "Query name (required)";
+    const requiredName = control<HTMLInputElement>(container, labelText);
+
+    expect(requiredName.required).toBe(true);
+    expect(requiredName.closest(".studio-advanced-section")).toBeNull();
+    expect(Array.from(container.querySelectorAll("label")).filter(label => label.textContent?.trim() === labelText)).toHaveLength(1);
+    if (fieldName === "headerName") {
+      expect(Array.from(container.querySelectorAll("label")).some(label => label.textContent?.trim() === "Query name")).toBe(false);
+    } else {
+      expect(control<HTMLInputElement>(container, "Header name").closest(".studio-advanced-section")).not.toBeNull();
+    }
+  });
+
+  it("matches only the case-insensitive, untrimmed Header and Query placement contract", () => {
+    expect(resolveApiKeyPlacement(undefined)).toBe("header");
+    expect(resolveApiKeyPlacement("   ")).toBe("header");
+    expect(resolveApiKeyPlacement("HEADER")).toBe("header");
+    expect(resolveApiKeyPlacement("QuErY")).toBe("query");
+    expect(resolveApiKeyPlacement("query ")).toBeNull();
+    expect(resolveApiKeyPlacement("unsupported")).toBeNull();
+  });
+
+  it("keeps unknown and required contributed authentication fields generic and direct", async () => {
+    const { container: unknownScheme } = renderDialog({ descriptors: genericSchemeDescriptors });
+    const contributedPlacement = control<HTMLInputElement>(unknownScheme, "Placement (required)");
+    expect(contributedPlacement.type).toBe("text");
+    expect(contributedPlacement.required).toBe(true);
+    expect(control<HTMLInputElement>(unknownScheme, "Header name").type).toBe("text");
+    expect(control<HTMLInputElement>(unknownScheme, "Query name").type).toBe("text");
+    expect(unknownScheme.querySelector(".studio-advanced-section")).toBeNull();
+    const { container: requiredContribution } = renderDialog({ descriptors: apiKeyDescriptorsWithAudience });
+    const audience = control<HTMLInputElement>(requiredContribution, "Audience (required)");
+    expect(audience.required).toBe(true);
+    expect(audience.closest(".studio-advanced-section")).toBeNull();
+    expect(Array.from(requiredContribution.querySelectorAll("label")).filter(label => label.textContent?.trim() === "Audience (required)")).toHaveLength(1);
+  });
+
+  it("leaves API-key-looking fields generic when their metadata does not match the built-in contract", async () => {
+    const { container } = renderDialog({ descriptors: malformedApiKeyDescriptors });
+
+    for (const label of ["Placement", "Header name", "Query name"]) {
+      const field = control<HTMLInputElement>(container, label);
+      expect(field.type).toBe("text");
+      expect(field.closest(".studio-advanced-section")).toBeNull();
+    }
+  });
+
+  it("keeps required API-key placement direct and generic", () => {
+    const { container } = renderDialog({ descriptors: apiKeyDescriptorsWithRequiredPlacement });
+    const placement = control<HTMLInputElement>(container, "Placement (required)");
+
+    expect(placement.type).toBe("text");
+    expect(placement.required).toBe(true);
+    expect(placement.closest(".studio-advanced-section")).toBeNull();
+  });
+
   it("defaults to existing Secrets and sends only reference fields", async () => {
     const calls: Array<{ url: string; body: unknown }> = [];
     const postJson = vi.fn(async (url: string, body: unknown) => {
@@ -180,7 +372,10 @@ describe("connection credential creation", () => {
     changeSelect(container, "Auth scheme", "basic");
 
     expect(control<HTMLSelectElement>(container, "Existing Secret for Password").value).toBe("");
-    expect(control<HTMLInputElement>(container, "Username (required)").value).toBe("");
+    const username = control<HTMLInputElement>(container, "Username (required)");
+    const password = Array.from(container.querySelectorAll("legend")).find(item => item.textContent === "Password (required)")!;
+    expect(username.compareDocumentPosition(password) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+    expect(username.value).toBe("");
     changeText(container, "Username (required)", "worker-user");
     changeSelect(container, "Type", "worker");
     changeText(container, "Queue (required)", "jobs");
@@ -510,6 +705,73 @@ const testDescriptors: ConnectionDescriptorsResponse = {
   ]
 };
 
+const apiKeyDescriptors: ConnectionDescriptorsResponse = {
+  types: [{
+    name: "http",
+    displayName: "HTTP",
+    supportedSchemes: ["api-key", "bearer"],
+    settings: [
+      { name: "baseUrl", displayName: "Base URL", editorHint: "url" },
+      { name: "allowedHosts", displayName: "Allowed hosts", editorHint: "text" },
+      { name: "allowInsecureHttp", displayName: "Allow insecure HTTP", editorHint: "checkbox" }
+    ]
+  }],
+  schemes: [
+    { name: "api-key", displayName: "API key", fields: [
+      { name: "headerName", displayName: "Header name", sensitive: false, editorHint: "text" },
+      { name: "placement", displayName: "Placement", sensitive: false, editorHint: "text" },
+      { name: "queryName", displayName: "Query name", sensitive: false, editorHint: "text" },
+      { name: "apiKey", displayName: "API key", sensitive: true, editorHint: "password", required: true }
+    ], hasInteractiveAuthorization: false },
+    { name: "bearer", displayName: "Bearer", fields: [
+      { name: "token", displayName: "Access token", sensitive: true, editorHint: "password", required: true }
+    ], hasInteractiveAuthorization: false }
+  ]
+};
+
+const apiKeyDescriptorsWithAudience: ConnectionDescriptorsResponse = {
+  ...apiKeyDescriptors,
+  schemes: apiKeyDescriptors.schemes.map(scheme => scheme.name === "api-key" ? {
+    ...scheme,
+    fields: [...scheme.fields, { name: "audience", displayName: "Audience", sensitive: false, editorHint: "text", required: true }]
+  } : scheme)
+};
+
+function apiKeyDescriptorsWithRequiredName(fieldName: "headerName" | "queryName"): ConnectionDescriptorsResponse {
+  return {
+    ...apiKeyDescriptors,
+    schemes: apiKeyDescriptors.schemes.map(scheme => scheme.name === "api-key" ? {
+      ...scheme,
+      fields: scheme.fields.map(field => field.name === fieldName ? { ...field, required: true } : field)
+    } : scheme)
+  };
+}
+
+const apiKeyDescriptorsWithRequiredPlacement: ConnectionDescriptorsResponse = {
+  ...apiKeyDescriptors,
+  schemes: apiKeyDescriptors.schemes.map(scheme => scheme.name === "api-key" ? {
+    ...scheme,
+    fields: scheme.fields.map(field => field.name === "placement" ? { ...field, required: true } : field)
+  } : scheme)
+};
+
+const genericSchemeDescriptors: ConnectionDescriptorsResponse = {
+  types: [{ name: "http", displayName: "HTTP", supportedSchemes: ["custom"], settings: [] }],
+  schemes: [{ name: "custom", displayName: "Custom", fields: [
+    { name: "placement", displayName: "Placement", sensitive: false, editorHint: "text", required: true },
+    { name: "headerName", displayName: "Header name", sensitive: false, editorHint: "text" },
+    { name: "queryName", displayName: "Query name", sensitive: false, editorHint: "text" }
+  ], hasInteractiveAuthorization: false }]
+};
+
+const malformedApiKeyDescriptors: ConnectionDescriptorsResponse = {
+  ...apiKeyDescriptors,
+  schemes: apiKeyDescriptors.schemes.map(scheme => scheme.name === "api-key" ? {
+    ...scheme,
+    fields: scheme.fields.map(field => field.name === "placement" ? { ...field, editorHint: "password" } : field)
+  } : scheme)
+};
+
 const endpointBDescriptors: ConnectionDescriptorsResponse = {
   types: [{ name: "endpoint-b", displayName: "Endpoint B type", supportedSchemes: ["endpoint-b-scheme"], settings: [] }],
   schemes: [{ name: "endpoint-b-scheme", displayName: "Endpoint B scheme", fields: [], hasInteractiveAuthorization: false }]
@@ -540,6 +802,7 @@ function installConnectionList(context: StudioEndpointContext, connection: Conne
 
 function renderDialog(options: {
   context?: StudioEndpointContext;
+  descriptors?: ConnectionDescriptorsResponse;
   onCancel?: () => void;
   onCreated?: (connection: ConnectionMetadata) => void;
 } = {}) {
@@ -553,7 +816,7 @@ function renderDialog(options: {
     flushSync(() => root.render(
       <ConnectionCreateDialog
         context={overrides.context ?? initialContext}
-        descriptors={testDescriptors}
+        descriptors={options.descriptors ?? testDescriptors}
         onCancel={onCancel}
         onCreated={onCreated}
       />
@@ -566,6 +829,16 @@ function renderDialog(options: {
   };
   cleanups.push(cleanup);
   return { container: host, rerender: render, cleanup };
+}
+
+function renderApiKeyDialog(descriptors = apiKeyDescriptors) {
+  const calls: Array<{ url: string; body: unknown }> = [];
+  const postJson = vi.fn(async (url: string, body: unknown) => {
+    calls.push({ url, body });
+    return url === "/secrets/picker" ? pickerResponse() : createdConnection();
+  });
+  const { container } = renderDialog({ context: endpointContext(postJson), descriptors });
+  return { container, calls };
 }
 
 function endpointContext(postJson: ReturnType<typeof vi.fn>): StudioEndpointContext {
@@ -626,6 +899,11 @@ function changeText(container: HTMLElement, labelText: string, value: string) {
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
   setter?.call(input, value);
   flushSync(() => input.dispatchEvent(new Event("input", { bubbles: true })));
+}
+
+function changeCheckbox(container: HTMLElement, labelText: string, checked: boolean) {
+  const input = control<HTMLInputElement>(container, labelText);
+  if (input.checked !== checked) flushSync(() => input.click());
 }
 
 function changeSelect(container: HTMLElement, labelText: string, value: string) {
