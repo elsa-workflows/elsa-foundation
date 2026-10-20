@@ -342,20 +342,18 @@ public sealed partial class EtlRuntimeJourneyTests
         public Task AdmitAsync(IHost host, EtlInvocation invocation, EtlStoreStatus expected = EtlStoreStatus.Applied) =>
             AdmitAsync(host.Services, invocation, expected);
 
-        public async Task<EtlWorkerProcess> StartWorkerAsync(string role, CancellationToken cancellationToken)
+        public async Task<EtlWorkerProcess> StartWorkerAsync(string role, CancellationToken cancellationToken,
+            EtlWorkerWritePause writePause = EtlWorkerWritePause.None)
         {
             EtlWorkerProtocol.ValidateRole(role);
             if (!_workerRoles.Add(role))
                 throw new InvalidOperationException("Each fixture worker requires a distinct role and journal.");
             Directory.CreateDirectory(Path.Combine(_directory, "journal"));
-            var configurationPath = EtlWorkerProtocol.ConfigurationPath(_directory);
-            if (!File.Exists(configurationPath))
-            {
-                var configuration = new EtlWorkerConfiguration(_directory, Scope,
-                    [Binding("source", "Source", _source, "v1"), Binding("lookup", "Lookup", _lookup, "v1"),
-                        Binding("output", "MainOutput", OutputRoot, "v1"), Binding("errors", "ErrorOutput", ErrorRoot, "v1")]);
-                await EtlWorkerProtocol.WriteConfigurationAsync(_directory, configuration, cancellationToken);
-            }
+            var configurationPath = EtlWorkerProtocol.ConfigurationPath(_directory, role);
+            var configuration = new EtlWorkerConfiguration(_directory, Scope,
+                [Binding("source", "Source", _source, "v1"), Binding("lookup", "Lookup", _lookup, "v1"),
+                    Binding("output", "MainOutput", OutputRoot, "v1"), Binding("errors", "ErrorOutput", ErrorRoot, "v1")], writePause);
+            await EtlWorkerProtocol.WriteConfigurationAsync(_directory, role, configuration, cancellationToken);
             var worker = new EtlWorkerProcess(_directory, configurationPath, role);
             _workers.Add(worker); // Retain ownership even when startup/readiness fails.
             await worker.StartAsync(cancellationToken);

@@ -42,16 +42,25 @@ internal sealed class EtlWorkerProcess(string root, string configurationPath, st
         await _ready.Task.WaitAsync(TimeSpan.FromSeconds(60), cancellationToken);
     }
 
-    public async Task<EtlWorkerAcceptance> WaitForAcceptanceAsync(CancellationToken cancellationToken)
+    public Task<EtlWorkerAcceptance> WaitForAcceptanceAsync(CancellationToken cancellationToken) =>
+        WaitForJournalAsync<EtlWorkerAcceptance>(AcceptancePath, cancellationToken);
+
+    public Task<EtlWorkerWrite> WaitForWriteAsync(CancellationToken cancellationToken) =>
+        WaitForJournalAsync<EtlWorkerWrite>(EtlWorkerProtocol.WritePath(root, role), cancellationToken, AcceptancePath);
+
+    private async Task<T> WaitForJournalAsync<T>(string path, CancellationToken cancellationToken,
+        string? prematureAcceptancePath = null) where T : class
     {
-        while (!File.Exists(AcceptancePath))
+        while (!File.Exists(path))
         {
             if (HasExited)
-                throw new InvalidOperationException($"ETL worker {role} exited before the acceptance barrier. {Output}");
+                throw new InvalidOperationException($"ETL worker {role} exited before its journal barrier. {Output}");
+            if (prematureAcceptancePath is not null && File.Exists(prematureAcceptancePath))
+                throw new InvalidOperationException("The actual worker reached acceptance before its required staged-write barrier.");
             await Task.Delay(25, cancellationToken);
         }
-        return JsonSerializer.Deserialize<EtlWorkerAcceptance>(await File.ReadAllTextAsync(AcceptancePath, cancellationToken), EtlWorkerProtocol.JsonOptions)
-            ?? throw new InvalidDataException("The fixture worker acceptance journal is empty.");
+        return JsonSerializer.Deserialize<T>(await File.ReadAllTextAsync(path, cancellationToken), EtlWorkerProtocol.JsonOptions)
+            ?? throw new InvalidDataException("The fixture worker journal is empty.");
     }
 
     public Task ReleaseAsync(CancellationToken cancellationToken = default) => File.WriteAllTextAsync(ReleasePath, "release", cancellationToken);

@@ -57,6 +57,8 @@
 **Process checkpoint:** [T023 evidence](evidence/two-process-recovery.md) proves two real fixture-owned workers over shared SQLite/files, predecessor exit after physical publication and survivor same-effect takeover/acceptance. This establishes the process fixture and one recovery boundary; T024 remains incomplete.
 
 - [ ] T024 [US3] Cover interruptions at read/admission/mid-staged-write/published-effect/cursor/result boundaries in `Extensions/Etl/tests/Tests`; verify no partial final chunk, stable replay, conflicting chunks, stale claims/cursors, duplicate/late results and retained reservations.
+**Staging checkpoint:** [T024 partial evidence](evidence/staged-write-recovery.md) proves actual process interruption during source copying and JSONL staging, replacement rebuild before acceptance, retained output reservations and stale delivery-claim refusal. T024 remains unchecked for its remaining process/result/conflict matrix.
+
 - [ ] T025 [US3] Cover cancellation/completion races, frozen bookmark/resume/stimulus/type address validation, mismatched or unexpectedly retired registrations versus legitimate consumption/parent termination, changed/corrupt snapshots/output revisions and unknown saved formats in `Extensions/Etl/tests/Tests`.
 - [x] T026 [US3] Remove a real acceptance/cancellation safeguard temporarily, observe the precise regression fail, restore it and rerun the affected test; record source hashes/commands/results in `specs/255-finite-file-etl/evidence/`.
 - [ ] T027 [US3] Validate ETL schema/module upgrade/reopen on the existing EF migration/provider fixtures and record executed versus skipped provider evidence in `specs/255-finite-file-etl/evidence/`.

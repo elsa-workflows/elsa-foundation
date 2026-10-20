@@ -144,6 +144,84 @@ public sealed class EtlRuntimeStoreTests
     }
 
     [Fact]
+    public async Task Expired_delivery_claim_is_fenced_until_consumer_proof_settles_once()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var clock = new MutableTimeProvider();
+        await using var context = database.CreateContext();
+        var store = database.CreateStore(context, clock);
+        var scope = new EtlScope("tenant-a", "partition-a");
+        var pipeline = EtlTestPipelines.Create() with
+        {
+            Limits = new EtlLimits { PartitionCount = 1, MaxBatchRecords = 2 }
+        };
+        var admission = CreateAdmission("run-delivery-fence", scope, pipeline);
+        await StartAsync(store, admission, 2);
+
+        var partition = Assert.IsType<EtlPartitionLease>(await store.ClaimPartitionAsync(scope, admission.Invocation.RunId, "partition-worker"));
+        var batch = CreateBatch(admission, EtlRuntimeFixtures.Prepared(2), partition.PartitionOrdinal,
+            partition.StartOrdinal, partition.StartOrdinal + 2, "reserved-before-cancel");
+        Assert.Equal(EtlStoreStatus.Applied, (await store.ReserveBatchAsync(partition, batch)).Status);
+        Assert.Equal(EtlStoreStatus.Applied, (await store.CancelAsync(admission.Invocation)).Status);
+
+        var terminalBefore = Assert.IsType<EtlRunView>(await store.FindRunAsync(scope, admission.Invocation.RunId));
+        Assert.Equal(EtlRunStatus.Cancelled, terminalBefore.Status);
+        Assert.Equal(2, terminalBefore.OutstandingRecords);
+        Assert.Equal(batch.InputBytes, terminalBefore.OutstandingBytes);
+        Assert.NotNull(terminalBefore.TerminalResult);
+
+        var ownerA = Assert.IsType<EtlDeliveryLease>(await store.ClaimDeliveryAsync(scope, "delivery-worker-a"));
+        clock.Advance(TimeSpan.FromSeconds(31));
+        var ownerB = Assert.IsType<EtlDeliveryLease>(await store.ClaimDeliveryAsync(scope, "delivery-worker-b"));
+
+        Assert.Equal(ownerA.DeliveryId, ownerB.DeliveryId);
+        Assert.Equal(ownerA.Result, ownerB.Result);
+        Assert.Equal(ownerA.Address, ownerB.Address);
+        Assert.Equal(ownerA.PayloadHash, ownerB.PayloadHash);
+        Assert.True(ownerB.Fence > ownerA.Fence);
+
+        var outboxBeforeLateAck = await context.Outbox.AsNoTracking().SingleAsync(row => row.DeliveryId == ownerA.DeliveryId);
+        Assert.Null(outboxBeforeLateAck.Disposition);
+        Assert.Null(outboxBeforeLateAck.AcknowledgedAtUtcTicks);
+        Assert.Equal(ownerB.Fence, outboxBeforeLateAck.Fence);
+
+        Assert.Equal(EtlStoreStatus.LeaseLost,
+            await store.AcknowledgeDeliveryAsync(ownerA, EtlDeliveryDisposition.Consumed));
+
+        var outboxAfterLateAck = await context.Outbox.AsNoTracking().SingleAsync(row => row.DeliveryId == ownerA.DeliveryId);
+        Assert.Equal(outboxBeforeLateAck.Owner, outboxAfterLateAck.Owner);
+        Assert.Equal(outboxBeforeLateAck.Fence, outboxAfterLateAck.Fence);
+        Assert.Equal(outboxBeforeLateAck.ExpiresAtUtcTicks, outboxAfterLateAck.ExpiresAtUtcTicks);
+        Assert.Null(outboxAfterLateAck.Disposition);
+        Assert.Null(outboxAfterLateAck.AcknowledgedAtUtcTicks);
+
+        var terminalAfterLateAck = Assert.IsType<EtlRunView>(await store.FindRunAsync(scope, admission.Invocation.RunId));
+        Assert.Equal(
+            (terminalBefore.Status, terminalBefore.OutstandingRecords, terminalBefore.OutstandingBytes,
+                terminalBefore.AcceptedRecords, terminalBefore.RejectedRecords, terminalBefore.FilteredRecords, terminalBefore.TerminalResult),
+            (terminalAfterLateAck.Status, terminalAfterLateAck.OutstandingRecords, terminalAfterLateAck.OutstandingBytes,
+                terminalAfterLateAck.AcceptedRecords, terminalAfterLateAck.RejectedRecords, terminalAfterLateAck.FilteredRecords,
+                terminalAfterLateAck.TerminalResult));
+
+        // A test consumer's typed proof is the store boundary input; native delivery is covered separately.
+        var consumedProof = EtlDeliveryDisposition.Consumed;
+        Assert.Equal(EtlStoreStatus.Applied, await store.AcknowledgeDeliveryAsync(ownerB, consumedProof));
+        Assert.Equal(EtlStoreStatus.Replay, await store.AcknowledgeDeliveryAsync(ownerB, consumedProof));
+        // Once that identical proof is recorded, replay does not require the old claim to remain current.
+        Assert.Equal(EtlStoreStatus.Replay, await store.AcknowledgeDeliveryAsync(ownerA, consumedProof));
+        Assert.Equal(EtlStoreStatus.Conflict,
+            await store.AcknowledgeDeliveryAsync(ownerB, EtlDeliveryDisposition.AlreadyConsumed));
+
+        var acknowledged = await context.Outbox.AsNoTracking().SingleAsync(row => row.DeliveryId == ownerA.DeliveryId);
+        Assert.Equal((int)consumedProof, acknowledged.Disposition);
+        Assert.NotNull(acknowledged.AcknowledgedAtUtcTicks);
+        var terminalAfterSettlement = Assert.IsType<EtlRunView>(await store.FindRunAsync(scope, admission.Invocation.RunId));
+        Assert.Equal(terminalBefore.TerminalResult, terminalAfterSettlement.TerminalResult);
+        Assert.Equal(terminalBefore.OutstandingRecords, terminalAfterSettlement.OutstandingRecords);
+        Assert.Equal(terminalBefore.OutstandingBytes, terminalAfterSettlement.OutstandingBytes);
+    }
+
+    [Fact]
     public async Task Last_acceptance_atomically_completes_with_business_error_and_manifest_pages_are_ordered()
     {
         await using var database = await TestDatabase.CreateAsync();

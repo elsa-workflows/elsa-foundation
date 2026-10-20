@@ -1,6 +1,7 @@
 using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Persistence.EntityFrameworkCore;
 using Elsa.Etl.Runtime;
+using Elsa.Etl.Runtime.Output;
 using Elsa.Etl.Tests.Support;
 using Elsa.Persistence.EntityFramework;
 using Microsoft.Data.Sqlite;
@@ -15,6 +16,8 @@ var configurationPath = Path.GetFullPath(args[0]);
 var role = args[1];
 EtlWorkerProtocol.ValidateRole(role);
 var configuration = await EtlWorkerProtocol.ReadConfigurationAsync(configurationPath);
+if (!Enum.IsDefined(configuration.WritePause))
+    throw new InvalidDataException("Unsupported fixture write-pause stage.");
 ArgumentNullException.ThrowIfNull(configuration.Scope);
 ArgumentNullException.ThrowIfNull(configuration.Bindings);
 if (configuration.Bindings.Any(binding => binding.TenantId != configuration.Scope.TenantId ||
@@ -32,6 +35,9 @@ var runtime = new EtlRuntimeFeature
     FileBindings = configuration.Bindings
 };
 runtime.ConfigureServices(builder.Services);
+if (configuration.WritePause != EtlWorkerWritePause.None)
+    builder.Services.Replace(ServiceDescriptor.Singleton<IFileChunkPublisherFactory>(
+        new StagingPausePublisherFactory(new FileChunkPublisherFactory(), configuration.Root, role, configuration.WritePause)));
 
 var persistence = new EtlRuntimeEntityFrameworkCoreFeature
 {

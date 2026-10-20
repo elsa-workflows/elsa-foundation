@@ -5,9 +5,15 @@ using Elsa.Etl.Runtime;
 
 namespace Elsa.Etl.Tests.Support;
 
-internal sealed record EtlWorkerConfiguration(string Root, EtlScope Scope, List<EtlHostFileBindingOptions> Bindings);
+internal enum EtlWorkerWritePause { None, SourceSnapshot, OutputChunk }
+
+internal sealed record EtlWorkerConfiguration(string Root, EtlScope Scope, List<EtlHostFileBindingOptions> Bindings,
+    EtlWorkerWritePause WritePause = EtlWorkerWritePause.None);
 
 internal sealed record EtlWorkerAcceptance(EtlPartitionLease Lease, EtlBatchAcceptance Acceptance, int ProcessId);
+
+internal sealed record EtlWorkerWrite(string OutputRoot, string EffectIdentity, string Extension,
+    int PrefixBytes, int WriteBytes, int ProcessId);
 
 internal static class EtlWorkerProtocol
 {
@@ -15,7 +21,11 @@ internal static class EtlWorkerProtocol
 
     public static JsonSerializerOptions JsonOptions { get; } = new(JsonSerializerDefaults.Web);
 
-    public static string ConfigurationPath(string root) => Path.Combine(root, "worker.json");
+    public static string ConfigurationPath(string root, string role)
+    {
+        ValidateRole(role);
+        return Path.Combine(JournalDirectory(root), $"{role}.configuration.json");
+    }
 
     public static string JournalDirectory(string root) => Path.Combine(root, "journal");
 
@@ -31,6 +41,12 @@ internal static class EtlWorkerProtocol
         return Path.Combine(JournalDirectory(root), $"{role}.release");
     }
 
+    public static string WritePath(string root, string role)
+    {
+        ValidateRole(role);
+        return Path.Combine(JournalDirectory(root), $"{role}.write.json");
+    }
+
     public static void ValidateRole(string role)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(role);
@@ -39,13 +55,13 @@ internal static class EtlWorkerProtocol
             throw new ArgumentException("The ETL worker role must contain only ASCII letters, digits, hyphens, or underscores.", nameof(role));
     }
 
-    public static async Task WriteConfigurationAsync(string root, EtlWorkerConfiguration configuration,
+    public static async Task WriteConfigurationAsync(string root, string role, EtlWorkerConfiguration configuration,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
         ArgumentNullException.ThrowIfNull(configuration);
         Directory.CreateDirectory(root);
-        await WriteAtomicallyAsync(ConfigurationPath(root), configuration, overwrite: true, cancellationToken);
+        await WriteAtomicallyAsync(ConfigurationPath(root, role), configuration, overwrite: false, cancellationToken);
     }
 
     public static async Task<EtlWorkerConfiguration> ReadConfigurationAsync(string path,
@@ -65,6 +81,9 @@ internal static class EtlWorkerProtocol
         Directory.CreateDirectory(JournalDirectory(root));
         await WriteAtomicallyAsync(AcceptancePath(root, role), acceptance, overwrite: false, cancellationToken);
     }
+
+    public static Task WriteStagingAsync(string root, string role, EtlWorkerWrite write, CancellationToken cancellationToken) =>
+        WriteAtomicallyAsync(WritePath(root, role), write, overwrite: false, cancellationToken);
 
     private static async Task WriteAtomicallyAsync<T>(string path, T value, bool overwrite,
         CancellationToken cancellationToken)
