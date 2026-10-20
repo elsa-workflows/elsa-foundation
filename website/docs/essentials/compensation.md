@@ -63,7 +63,26 @@ The scope records the step as **Uncertain** and starts recovery with that step i
 
 ## Act on a waiting recovery
 
-A scope that is waiting shows **Needs action**: a compensation failed on every attempt, or a step's outcome is uncertain and it has no compensation. The compensation's row shows its attempts ("Attempt 3 of 3") and a link to the blocking incident. An operator acts on that incident in one of three ways, each submitted as an alteration plan to `POST runtime/workflows/alteration-plans` with an `Idempotency-Key` header, naming the run in `"target": { "executionIds": ["<run>"] }`. Sending the same request twice with the same key returns the existing plan (`Replayed`) and applies nothing twice.
+A scope that is waiting shows **Needs action**: a compensation failed on every attempt, or a step's outcome is uncertain and it has no compensation. The compensation's row shows its attempts ("Attempt 3 of 3") and a link to the blocking incident. An operator acts on that incident in one of three ways, from Studio or over the API.
+
+### In Studio
+
+Open the run and the scope's **Steps**. When you may manage the run, the waiting row offers **Retry** and **Resolve…** (next to the step's state when an uncertain step without a compensation waits, next to the compensation's state otherwise), and the scope's header offers **Abandon recovery…**. The incident's details (**Issues** › **Open incident details**) offer the same actions: **Retry** for any incident that waits for an operator, and one button per decision the wait offers. A reader who may not manage the run sees the same view without the buttons.
+
+Each action opens one confirmation dialog:
+
+- **Target**: the scope, the step and its compensation, the attempt the retry would be (for example "Attempt 4 (limit 3 reached)"), the incident and the run.
+- **Effect**: what happens, with only the lines that apply to that row. A retry runs the compensation again with the same operation key and says what recovery does next; a resolve says how the scope carries on; an abandon lists the steps that stay not undone and who decides next (the enclosing scope, or the run's incident strategy).
+- **Outcome** (resolve only): **Effect absent or undone** or **Effect present, keep it**.
+- **Reason**: optional for a retry, required for a resolve or an abandon; at most 500 characters, on one line. It is visible to everyone who can view the run, so put no secret in it.
+
+**Confirm** stays disabled until the form is valid, and Escape cancels. After you confirm, the row reads **Retry submitted** (or **Resolve submitted**, **Abandon submitted**), then **Applying…** until the run shows the change, and the status line above the run says the result: "Retry applied.", "Resolve applied." or "Recovery abandoned.". If the action no longer applies, it says why and that nothing was changed; for example "Someone else already acted on this." when another operator acted first. Reloading the page while Studio waits reopens the same run and step and carries on waiting; it never submits the action again.
+
+The scope's **Operator actions** list shows every retry and decision on it, newest first, with who acted, when and why, and a link to the incident; it stays after the scope completes.
+
+### Over the API
+
+Each action is an alteration plan submitted to `POST runtime/workflows/alteration-plans` with an `Idempotency-Key` header, naming the run in `"target": { "executionIds": ["<run>"] }`. Sending the same request twice with the same key returns the existing plan (`Replayed`) and applies nothing twice. Studio sends exactly these requests.
 
 **Retry** runs the failed compensation again, once the cause is fixed:
 
@@ -141,7 +160,9 @@ Cancelling a run never starts recovery. A scope that is cancelled while it runs 
 
 ## Inspect a run
 
-Open the run and the scope's **Steps**. Each row shows the forward state (`Completed`, `Uncertain`, `Faulted`, `Not run`) and the recovery state (`Can be undone` while the scope still runs, `Kept` once it has ended without undoing the step, `Waiting to undo` while recovery runs, `Compensated` with its order, `Undo failed`, `Needs action` with its attempts, `Not applicable`). A banner names the step whose failure started recovery, or the Compensate that asked for it. Select a state to open that occurrence; a compensation's activity details link to the occurrence it undid, and the timeline tags compensation runs.
+Open the run and the scope's **Steps**. Each row shows the forward state (`Completed`, `Uncertain`, `Faulted`, `Not run`) and the recovery state (`Can be undone` while the scope still runs, `Kept` once it has ended without undoing the step, `Waiting to undo` while recovery runs, `Undoing`, `Retrying` when a compensation runs again after a failed attempt, `Compensated` with its order, `Undo failed`, `Needs action` with its attempts, `Resolved: effect absent` or `Resolved: effect kept` after an operator resolved it, `Not undone (recovery abandoned)`, `Not applicable`). A banner names the step whose failure started recovery, or the Compensate that asked for it; the failure's message shows only to a reader who may see captured values. While recovery runs, a line lists the steps still to undo, in order. Select a state to open that occurrence; a compensation's activity details link to the occurrence it undid, and the timeline tags compensation runs. The address keeps the selected occurrence (`?selected=`), so a reload or a shared link opens it again.
+
+While a scope is live, the view comes from its journal and says **From the scope's journal**. A completed scope keeps no journal, so its view is derived from the run's activities and incidents and says so; the states are the same. An abandoned scope shows **Abandoned**.
 
 Nesting, confirmation and cancellation add these states:
 
@@ -157,7 +178,6 @@ A scope that ran more than once, in a loop or because its parent ran again, has 
 These behaviours are planned and not yet available:
 
 - a delay between automatic retries of a failed compensation;
-- Studio buttons to retry, resolve and abandon (use the alteration API above until then);
 - a compensation that can be handed over and reads a container's variable from a script expression is not checked at publication; it fails when it runs and waits for an operator;
 - a failure inside a Sequence inside a Flowchart step does not reach the scope;
 - a warning when a step or compensation is marked safe to repeat, so its effect may not be committed before it runs.
