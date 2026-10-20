@@ -181,7 +181,18 @@ describe("compensation runtime", () => {
     expect(runtime.rows.map(row => row.recovery.state)).toEqual(["Pending", "Failed", "NotApplicable"]);
   });
 
-  it("shows a completed scope as undoable but not undone", () => {
+  it("shows a running scope's completed steps as undoable", () => {
+    const runtime = deriveCompensationRuntime(journeyScope(), [
+      execution("ae-scope", "scope", "Running", "10"),
+      execution("ae-1", "reserve", "Completed", "11", { parent: "ae-scope" }),
+      execution("ae-2", "deliver", "Running", "12", { parent: "ae-scope" })
+    ], []);
+
+    expect(runtime.phase).toBe("Running");
+    expect(runtime.rows.map(row => row.recovery.state)).toEqual(["Registered", "NotApplicable", "NotApplicable"]);
+  });
+
+  it("shows a completed scope's undoable steps as kept, since M1 cannot undo a finished scope", () => {
     const runtime = deriveCompensationRuntime(journeyScope(), [
       execution("ae-scope", "scope", "Completed", "10", { outcomeNames: ["Done"] }),
       execution("ae-1", "reserve", "Completed", "11", { parent: "ae-scope" }),
@@ -190,7 +201,7 @@ describe("compensation runtime", () => {
     ], []);
 
     expect(runtime.phase).toBe("Completed");
-    expect(runtime.rows.map(row => row.recovery.state)).toEqual(["Registered", "Registered", "NotNeeded"]);
+    expect(runtime.rows.map(row => row.recovery.state)).toEqual(["Kept", "Kept", "NotNeeded"]);
     expect(runtime.cause).toBeUndefined();
   });
 
@@ -249,7 +260,7 @@ describe("compensation runtime", () => {
       execution("ae-1", "reserve", "Completed", "11", { parent: "ae-scope" })
     ], [], { complete: false });
     expect(completed.phase).toBe("Completed");
-    expect(completed.rows[0].recovery.state).toBe("Registered");
+    expect(completed.rows[0].recovery.state).toBe("Kept");
   });
 
   it("finds the recovery cause's incident through its runtime metadata when it carries no execution id", () => {
