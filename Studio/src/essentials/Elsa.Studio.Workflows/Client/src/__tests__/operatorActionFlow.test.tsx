@@ -17,7 +17,7 @@ import {
   type OperatorActionModel
 } from "../operatorActions";
 import { AlterationRequestError } from "../api/alterations";
-import { useOperatorActions, type CompensationJournals, type OperatorActionsApi } from "../workflow-editor/useOperatorActions";
+import { useCompensationJournals, useOperatorActions, type CompensationJournals, type OperatorActionsApi } from "../workflow-editor/useOperatorActions";
 import type { IncidentStateSummary, WorkflowInstanceDetails } from "../workflowTypes";
 
 // Spec 260 T423: the submission flow. A key per dialog, the pending plan in session storage, polling with back-off and a
@@ -80,6 +80,17 @@ describe("following a plan", () => {
     expect(result).toEqual({ kind: "succeeded" });
     expect(onStillQueued).toHaveBeenCalledTimes(1);
     expect(clock).toBeGreaterThan(120_000);
+  });
+
+  it("keeps polling through a lost connection, and stops on a refused read", async () => {
+    const api = fakeApi(["Completed"], { status: "Succeeded", outcomes: [] });
+    api.getPlan.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    await expect(followOperatorPlan(api, "plan-1", { sleep: async () => undefined, now: () => 0 })).resolves.toEqual({ kind: "succeeded" });
+    expect(api.getPlan).toHaveBeenCalledTimes(2);
+
+    const refused = fakeApi(["Completed"], null);
+    refused.getPlan.mockRejectedValueOnce(new AlterationRequestError(403, null, "Forbidden"));
+    await expect(followOperatorPlan(refused, "plan-1", { sleep: async () => undefined, now: () => 0 })).rejects.toMatchObject({ status: 403 });
   });
 
   it("stops when aborted", async () => {
@@ -266,6 +277,40 @@ describe("useOperatorActions", () => {
   });
 });
 
+describe("useCompensationJournals", () => {
+  it("reads a live scope's journal once, never a completed scope's, and again after a reset", async () => {
+    const getJson = vi.fn(async (url: string) => url.endsWith("capabilities")
+      ? { capabilities: [{ id: "elsa.api.runtime", contractVersion: "1", links: [{ rel: "activity-execution-state-view", href: "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/state-view", templated: true }] }] }
+      : { workflowExecutionId: "wf-42", activityExecutionId: "ae-scope", executableNodeId: "scope", activityStatus: "Running", available: true, viewKind: "compensation.journal", viewVersion: 1, canInspectValues: false, view: { phase: "Running", entries: [], remaining: [] } });
+    const context = { baseUrl: `test://journals-${Math.random()}`, http: { getJson } } as unknown as StudioEndpointContext;
+    const sink: { journals?: CompensationJournals } = {};
+    function JournalHarness() {
+      sink.journals = useCompensationJournals(context, "wf-42");
+      return null;
+    }
+    flushSync(() => root.render(<JournalHarness />));
+    const stateViewReads = () => getJson.mock.calls.filter(call => String(call[0]).endsWith("/state-view")).length;
+
+    flushSync(() => sink.journals!.request("ae-scope", "Running"));
+    expect(sink.journals!.get("ae-scope")).toBe("loading");
+    await flush();
+    expect(sink.journals!.get("ae-scope")).toMatchObject({ available: true, viewKind: "compensation.journal" });
+    flushSync(() => sink.journals!.request("ae-scope", "Running"));
+    flushSync(() => sink.journals!.request("ae-done", "Completed"));
+    await flush();
+    expect(stateViewReads()).toBe(1);
+    expect(sink.journals!.get("ae-done")).toBeUndefined();
+
+    const generation = sink.journals!.generation;
+    flushSync(() => sink.journals!.reset());
+    expect(sink.journals!.generation).toBe(generation + 1);
+    expect(sink.journals!.get("ae-scope")).toBeUndefined();
+    flushSync(() => sink.journals!.request("ae-scope", "Running"));
+    await flush();
+    expect(stateViewReads()).toBe(2);
+  });
+});
+
 function retryModel(): OperatorActionModel {
   return {
     kind: "retry",
@@ -314,7 +359,7 @@ function details(incidents: IncidentStateSummary[], canManage = true): WorkflowI
   };
 }
 
-const journals: CompensationJournals = { get: () => undefined, request: () => undefined, reload: async () => "unavailable" };
+const journals: CompensationJournals = { get: () => undefined, request: () => undefined, reload: async () => "unavailable", reset: () => undefined, generation: 0 };
 
 function Harness({ context, sink, canManage = true, refreshRun, extra }: {
   context: StudioEndpointContext;

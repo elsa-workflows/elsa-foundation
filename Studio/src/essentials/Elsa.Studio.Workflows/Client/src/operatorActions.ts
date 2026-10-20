@@ -507,7 +507,16 @@ export async function followOperatorPlan(api: OperatorActionApi, planId: string,
   let warned = false;
   for (let attempt = 0; ; attempt++) {
     if (options.signal?.aborted) return { kind: "aborted" };
-    const plan = await api.getPlan(planId);
+    let plan: AlterationPlan;
+    try {
+      plan = await api.getPlan(planId);
+    } catch (error) {
+      // A lost connection does not end the plan: keep checking. A refused read (sign-in, permission, gone) does.
+      const status = (error as { status?: unknown })?.status;
+      if (status === 401 || status === 403 || status === 404) throw error;
+      await options.sleep(operatorPollDelay(attempt));
+      continue;
+    }
     if (terminalAlterationPlanStatuses.has(plan.status)) {
       const page = await api.pageJobs(planId);
       const summary = page.items[0];

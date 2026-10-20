@@ -277,7 +277,7 @@ function CompensationScopeRunFixture({ view }: { view: CompensationScopeFixtureV
   </main>;
 }
 
-const fixtureJournals: CompensationJournals = { get: () => undefined, request: () => undefined, reload: async () => "unavailable" };
+const fixtureJournals: CompensationJournals = { get: () => undefined, request: () => undefined, reload: async () => "unavailable", reset: () => undefined, generation: 0 };
 
 function waitingIncident(incidentId: string, activityExecutionId: string): IncidentStateSummary {
   return {

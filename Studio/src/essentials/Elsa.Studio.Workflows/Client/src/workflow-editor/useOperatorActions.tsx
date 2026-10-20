@@ -55,18 +55,29 @@ export interface CompensationJournals {
   request(scopeActivityExecutionId: string, activityStatus?: string): void;
   /** Reads it again, for a refresh while an action is being applied. */
   reload(scopeActivityExecutionId: string): Promise<CompensationJournalSource>;
+  /** Forgets every journal read, so the shown scope's is read again (the run view's Refresh). */
+  reset(): void;
+  /** Changes on each reset, so a view that asks for its scope's journal asks again. */
+  generation: number;
 }
 
 export function useCompensationJournals(context: StudioEndpointContext, workflowExecutionId: string): CompensationJournals {
   const [journals, setJournals] = useState<ReadonlyMap<string, CompensationJournalSource>>(() => new Map());
+  // Bumped by a reset, so the shown scope asks for its journal again.
+  const [generation, setGeneration] = useState(0);
   const requested = useRef(new Set<string>());
   const runRef = useRef(workflowExecutionId);
 
-  useEffect(() => {
-    runRef.current = workflowExecutionId;
+  const reset = useCallback(() => {
     requested.current = new Set();
     setJournals(new Map());
-  }, [workflowExecutionId]);
+    setGeneration(current => current + 1);
+  }, []);
+
+  useEffect(() => {
+    runRef.current = workflowExecutionId;
+    reset();
+  }, [reset, workflowExecutionId]);
 
   const reload = useCallback(async (scopeActivityExecutionId: string): Promise<CompensationJournalSource> => {
     const run = runRef.current;
@@ -90,7 +101,7 @@ export function useCompensationJournals(context: StudioEndpointContext, workflow
   }, [reload]);
 
   const get = useCallback((id: string | undefined) => (id ? journals.get(id) : undefined), [journals]);
-  return { get, request, reload };
+  return { get, request, reload, reset, generation };
 }
 
 interface DialogState {
@@ -153,8 +164,8 @@ export function useOperatorActions({
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [followed, setFollowed] = useState<FollowedAction | null>(null);
   const [message, setMessage] = useState<{ text: string; tone: "info" | "error" } | null>(null);
-  const followingPlan = useRef<string | null>(null);
-  const abort = useRef<AbortController | null>(null);
+  // The plan being followed and the controller that stops following it; one at a time.
+  const following = useRef<{ planId: string; controller: AbortController } | null>(null);
   const refreshRunRef = useRef(refreshRun);
   refreshRunRef.current = refreshRun;
   const journalsRef = useRef(journals);
@@ -175,7 +186,15 @@ export function useOperatorActions({
     };
   }, [context]);
 
-  useEffect(() => () => abort.current?.abort(), []);
+  // A different run, or leaving the page, stops following; the stored plan is resumed when the run is opened again.
+  useEffect(() => {
+    setFollowed(null);
+    setMessage(null);
+    return () => {
+      following.current?.controller.abort();
+      following.current = null;
+    };
+  }, [workflowExecutionId]);
 
   const api: OperatorActionApi = {
     submit: (request, key) => submitAlterationPlan(context, request, key),
@@ -205,11 +224,10 @@ export function useOperatorActions({
   }, []);
 
   const follow = useCallback(async (pending: PendingOperatorAction) => {
-    if (followingPlan.current === pending.planId) return;
-    followingPlan.current = pending.planId;
-    abort.current?.abort();
+    if (following.current?.planId === pending.planId) return;
+    following.current?.controller.abort();
     const controller = new AbortController();
-    abort.current = controller;
+    following.current = { planId: pending.planId, controller };
     const options = { sleep, now: () => Date.now(), signal: controller.signal };
     setFollowed({ ...pending, label: pending.submittedLabel });
     try {
@@ -245,7 +263,7 @@ export function useOperatorActions({
         await refreshRunRef.current();
       }
     } finally {
-      if (followingPlan.current === pending.planId) followingPlan.current = null;
+      if (following.current?.controller === controller) following.current = null;
     }
   }, [isApplied, workflowExecutionId]);
 

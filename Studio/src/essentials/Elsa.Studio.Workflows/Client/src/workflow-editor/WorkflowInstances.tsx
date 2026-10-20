@@ -823,8 +823,10 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
     writeRunSelection(selectedUrlActivityId);
   }, [selectedUrlActivityId, state]);
 
+  const resetJournals = journals.reset;
   const load = useCallback(async () => {
     const generation = ++loadGeneration.current;
+    resetJournals();
     latestIncidentActivityLookupById.current.clear();
     incidentNavigationRequest.current += 1;
     setIncidentAssociationMessage(null);
@@ -930,7 +932,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
       setError(formatWorkflowRunLoadError(e, workflowExecutionId));
       setState("failed");
     }
-  }, [context, initialActivityExecutionId, workflowExecutionId]);
+  }, [context, initialActivityExecutionId, resetJournals, workflowExecutionId]);
 
   useEffect(() => {
     void load();
@@ -1600,9 +1602,10 @@ function WorkflowInstanceCanvas({
   const shownScopeExecutionId = canvas.mode === "compensation" ? canvas.compensation?.runtime.scopeActivityExecutionId : undefined;
   const shownScopeStatus = shownScopeExecutionId ? associationActivities.find(activity => activity.activityExecutionId === shownScopeExecutionId)?.status : undefined;
   const requestJournal = journals?.request;
+  const journalGeneration = journals?.generation;
   useEffect(() => {
     if (shownScopeExecutionId && requestJournal) requestJournal(shownScopeExecutionId, shownScopeStatus);
-  }, [requestJournal, shownScopeExecutionId, shownScopeStatus]);
+  }, [journalGeneration, requestJournal, shownScopeExecutionId, shownScopeStatus]);
   const focusCanvasNodeId = focusNodeId
     ? canvas.nodes.find(node => nodeRuntimeId(node) === focusNodeId)?.id ?? null
     : null;
