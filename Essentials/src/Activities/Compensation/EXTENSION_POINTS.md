@@ -37,3 +37,9 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   (`Compensation/TargetNotEnclosing`) and one placed in a compensation handler (`Compensation/InsideHandler`), with
   the node id as path. It resolves the node's catalog version through `IActivityDefinitionLookup`
   (`Elsa.Activities.Design.Core`).
+- `CompensationHandlerVariableValidator` implements `IDraftValidator`. For a scope that can hand over, it reports a
+  compensation handler that uses a variable declared by a container between that scope and the outermost scope its
+  entries can reach (`Compensation/HandlerUsesContainerVariable`, path `{nodeId}/inputs/{key}`,
+  `{nodeId}/outputs/{key}` or `{nodeId}/variable`). It reads container declarations through
+  `IActivityStructureService.ProjectScopedVariables` and checks structured `Variable` references only; script
+  expressions are not analyzed (spec 258 R18).

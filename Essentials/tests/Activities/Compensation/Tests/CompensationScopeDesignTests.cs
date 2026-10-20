@@ -44,7 +44,7 @@ public sealed class CompensationScopeDesignTests : IDisposable
         var services = new ServiceCollection();
         new ActivitiesCompensationFeature().ConfigureServices(services);
         var validators = services.Where(descriptor => descriptor.ServiceType == typeof(IDraftValidator)).ToArray();
-        Assert.Equal([typeof(CompensationScopeValidator), typeof(CompensationTargetValidator)], validators.Select(validator => validator.ImplementationType));
+        Assert.Equal([typeof(CompensationScopeValidator), typeof(CompensationTargetValidator), typeof(CompensationHandlerVariableValidator)], validators.Select(validator => validator.ImplementationType));
         Assert.All(validators, validator => Assert.Equal(ServiceLifetime.Scoped, validator.Lifetime));
     }
 
