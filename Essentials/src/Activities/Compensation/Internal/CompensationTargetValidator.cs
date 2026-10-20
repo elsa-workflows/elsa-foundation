@@ -11,12 +11,14 @@ using CompensationScopeActivity = Elsa.Activities.Compensation.Activities.Compen
 namespace Elsa.Activities.Compensation.Internal;
 
 /// <summary>
-/// Draft validator for Confirm and Compensate (spec 258 FR-315): each needs an enclosing compensation scope, a named
-/// target must be one of its enclosing scopes, and neither may sit in a scope's compensation handler, where the scope
-/// ignores it. A workflow Draft never contains a reusable activity's body, so every scope this walk sees is on the
-/// same side of every reusable-activity boundary; inside a reusable body the runtime refuses an unmatched target with
-/// <c>runtime.ancestor-notification.target-not-found</c>. Errors do not block saving the Draft; the promotion gate
-/// refuses to publish it.
+/// Draft validator for Confirm and Compensate (spec 258 FR-312, FR-315): each needs an enclosing compensation scope, a
+/// named target must be one of its enclosing scopes, and neither may sit in a scope's compensation handler, where the
+/// scope ignores it. A Compensate cascades out through every scope up to its target, so none of those may hold it in a
+/// handler either. A workflow Draft never contains a reusable activity's body, so every scope this walk sees is on the
+/// same side of every reusable-activity boundary. Inside a reusable body, and for an expression target, the check
+/// happens at run time: a Confirm with an unmatched target faults with
+/// <c>runtime.ancestor-notification.target-not-found</c>, while a Compensate's cascade ends at the outermost scope.
+/// Errors do not block saving the Draft; the promotion gate refuses to publish it.
 /// </summary>
 internal sealed class CompensationTargetValidator(
     IActivityStructureService activityStructureService,
@@ -64,13 +66,23 @@ internal sealed class CompensationTargetValidator(
             if (LiteralTarget(node) is not { } target)
                 continue;
 
-            var named = scopes.LastOrDefault(scope => StringComparer.Ordinal.Equals(scope.NodeId, target));
-            if (named is null)
+            var namedIndex = LastIndexOf(scopes, target);
+            if (namedIndex < 0)
+            {
                 errors.Add(new ValidationError(node.NodeId, TargetNotEnclosingType,
                     $"{name} '{node.NodeId}' names scope '{target}', which does not enclose it."));
-            else if (named.InHandler && !ReferenceEquals(named, scopes[^1]))
+                continue;
+            }
+
+            // A Confirm reaches the named scope directly. A Compensate cascades out as a fault through every scope from
+            // the nearest to the named one, so a handler of any of them would see it as its own failure. The nearest
+            // scope's handler is reported above.
+            var holder = name == "Compensate"
+                ? scopes.Skip(namedIndex).SkipLast(1).FirstOrDefault(scope => scope.InHandler)
+                : scopes[namedIndex].InHandler && namedIndex != scopes.Count - 1 ? scopes[namedIndex] : null;
+            if (holder is not null)
                 errors.Add(new ValidationError(node.NodeId, InsideHandlerType,
-                    $"{name} '{node.NodeId}' sits in a compensation handler of scope '{target}', which ignores it during recovery."));
+                    $"{name} '{node.NodeId}' sits in a compensation handler of scope '{holder.NodeId}', which ignores it during recovery."));
         }
 
         return errors;
@@ -91,6 +103,14 @@ internal sealed class CompensationTargetValidator(
             _ => null
         };
         return string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+    }
+
+    private static int LastIndexOf(IReadOnlyList<EnclosingScope> scopes, string nodeId)
+    {
+        for (var index = scopes.Count - 1; index >= 0; index--)
+            if (StringComparer.Ordinal.Equals(scopes[index].NodeId, nodeId))
+                return index;
+        return -1;
     }
 
     private sealed record EnclosingScope(string NodeId, bool InHandler);

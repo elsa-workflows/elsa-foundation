@@ -332,8 +332,14 @@ public sealed class CompensationScope : StructuralActivity,
             journaled = journaled with { NextOrdinal = journaled.NextOrdinal + 1, Entries = [.. journaled.Entries, entry] };
         }
 
-        if (handOver.Batch >= handOver.BatchCount - 1)
-            journaled = journaled with { ReceivedHandOvers = [.. journaled.ReceivedHandOvers, handOver.OriginScope] };
+        // Batches are separate deliveries and may arrive in any order, so the origin counts as received only when every
+        // batch has been journaled; until then a repeat is still filtered per entry by its origin.
+        var others = journaled.HandOversInProgress.Where(progress => !StringComparer.Ordinal.Equals(progress.OriginScope, handOver.OriginScope)).ToArray();
+        var batches = (journaled.HandOversInProgress.FirstOrDefault(progress => StringComparer.Ordinal.Equals(progress.OriginScope, handOver.OriginScope))?.Batches ?? [])
+            .Append(handOver.Batch).Distinct().Order().ToArray();
+        journaled = Enumerable.Range(0, handOver.BatchCount).All(batches.Contains)
+            ? journaled with { ReceivedHandOvers = [.. journaled.ReceivedHandOvers, handOver.OriginScope], HandOversInProgress = others }
+            : journaled with { HandOversInProgress = [.. others, new CompensationHandOverProgress(handOver.OriginScope, batches)] };
 
         // In recovery the new entries are eligible: the next handler to run picks the newest (late result, FR-306).
         return CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Defer, journaled);

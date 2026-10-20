@@ -302,10 +302,35 @@ public sealed class CompensationNestingJourneyTests
         Assert.Empty(host.BlockingIncidents);
     }
 
-    /// <summary>S2: a Flowchart step is unchanged; a Sequence inside a Flowchart still blocks (known limit).</summary>
+    /// <summary>
+    /// S3: an inner scope that faults while evaluating a descendant's fault reports that fault to the outer scope as an
+    /// ordinary child fault, and the outer scope recovers.
+    /// </summary>
     [Theory]
     [MemberData(nameof(Modes))]
-    public async Task S2_a_Flowchart_step_recovers_and_a_Sequence_inside_a_Flowchart_still_blocks(PersistenceMode mode)
+    public async Task S3_an_inner_scope_faulting_on_a_descendant_fault_is_recovered_by_the_outer_scope(PersistenceMode mode)
+    {
+        using var host = new CompensationHost(mode);
+        var participant = new Participant().Rejecting("fail");
+        var root = Scope("node-outer", faultAfterCompensation: false,
+            new Step("Reserve P", Participant("reserve-p"), Participant("release-p")),
+            new Step("Order", Scope("node-inner", faultAfterCompensation: true,
+                new Step("Work", SequenceNode("node-work", Participant("fail"))))),
+            new Step("Ship", Participant("ship")));
+
+        var run = await host.RunAsync(participant, root);
+
+        run.AssertWorkflowCompleted();
+        Assert.Equal(CompensationScope.CompensatedFaultCode, run.State("node-inner").Fault?.Code);
+        run.AssertOutcomes("node-outer", CompensationScope.CompensatedOutcome);
+        Assert.Equal(["reserve-p", "release-p"], participant.EffectOrder);
+        run.AssertDidNotRun("ship");
+    }
+
+    /// <summary>S2: a Flowchart step is unchanged; a Sequence inside a Flowchart faults the run, unrecovered (known limit).</summary>
+    [Theory]
+    [MemberData(nameof(Modes))]
+    public async Task S2_a_Flowchart_step_recovers_and_a_Sequence_inside_a_Flowchart_faults_the_run_unrecovered(PersistenceMode mode)
     {
         using (var host = new CompensationHost(mode))
         {

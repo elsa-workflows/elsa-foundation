@@ -80,6 +80,19 @@ public sealed class CompensationTargetValidatorTests
     }
 
     [Fact]
+    public async Task A_Compensate_whose_cascade_passes_through_a_handler_is_reported()
+    {
+        // outer → step → middle → handler → inner → step → Compensate(outer): the cascade faults middle's handler.
+        var root = Scope("outer", ("Order", Scope("middle", ("Reserve", Leaf("reserve"),
+            Scope("inner", ("Give up", Compensate("compensate", scope: "outer"), null)))), null));
+
+        var error = Assert.Single(await ValidateAsync(root));
+
+        Assert.Equal(("compensate", CompensationTargetValidator.InsideHandlerType), (error.Path, error.Type));
+        Assert.Contains("'middle'", error.Message);
+    }
+
+    [Fact]
     public async Task An_expression_target_is_left_to_the_runtime()
     {
         var node = Compensate("compensate") with

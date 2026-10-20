@@ -43,7 +43,7 @@ public sealed class Compensate : StructuralActivity, IRuntimeStructuralActivity
             CompensationMessages.Serialize(new CompensationCompensateRequest(
                 runtimeContext.ActivityExecutionState.Execution.ActivityExecutionId,
                 string.IsNullOrWhiteSpace(Reason) ? null : Reason,
-                string.IsNullOrWhiteSpace(Scope) ? null : Scope)));
+                string.IsNullOrWhiteSpace(Scope) ? null : Scope.Trim())));
         return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
     }
 }
