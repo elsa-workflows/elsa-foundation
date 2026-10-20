@@ -4,7 +4,11 @@
 
 **Created**: 2026-10-20
 
-**Status**: Draft
+**Status**: Implemented — the three phases on `agent/claude/3046-compensation-nesting` under [#3046](https://github.com/elsa-workflows/elsa-foundation/issues/3046): runtime seams R-1 to R-4 (Phase A), scope state v3 with hand-over, Confirm, Compensate, cancellation, descendant faults, target validators and docs (Phase B), and the Studio run view states and target picker (Phase C). Container-local reads in a handed-over handler are not yet checked at publication (research R18). Evidence:
+
+- Phase A: the R-1 to R-4 runtime suites (ancestor selector, ancestor notification, cross-slot scheduling, descendant fault, structural child report metadata) 38/38;
+- Phase B: compensation tests 168/168, including every [quickstart](quickstart.md) journey in Durable, Balanced and Ephemeral with the four restart injection points, and the UI hints of the Confirm and Compensate targets; the Workbench owned-process journey N1 + C1 with a process kill; five of the six SC-305 negative controls run by hand and reverted, the sixth having no code to remove (research R7, [quickstart](quickstart.md));
+- Phase C: Studio Vitest 3048/3048 across the workspace (nesting derivation, designer states, target editor), typecheck, lint with 0 errors, and the mocked browser suite `compensation-scope.spec.ts` 31/31, with axe at 390 and 1200 px in light and dark for the author, run, waiting, nested, confirmed and loop views (SC-306).
 
 **Program**: [Native compensation #3035](https://github.com/elsa-workflows/elsa-foundation/issues/3035) → [Epic #3039](https://github.com/elsa-workflows/elsa-foundation/issues/3039) → [Feature #3046](https://github.com/elsa-workflows/elsa-foundation/issues/3046) (M3). Builds on [spec 250](../250-native-compensation/spec.md) (M1) and [spec 251](../251-compensation-uncertainty/spec.md) (M2). Their requirements and owner decisions still hold, except where this spec says otherwise.
 

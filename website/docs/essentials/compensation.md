@@ -94,7 +94,7 @@ Add **Compensate** inside a step to undo the scope's work on purpose, for exampl
 - Give `scope` the node id of an outer scope to undo more: each scope in between undoes its own work, then the named scope recovers.
 - Inside a compensation, or once recovery started, Compensate has no effect.
 
-Publishing refuses a Confirm or Compensate without an enclosing scope, one whose `scope` names a scope that does not enclose it, and one placed in a compensation. A target given as an expression is checked when it runs: one that matches no enclosing scope faults with `runtime.ancestor-notification.target-not-found`.
+In Studio, the `scope` input of Confirm and Compensate is a list of the scopes that enclose the activity, nearest first; leave it on **Nearest enclosing scope** to target the nearest one. Publishing refuses a Confirm or Compensate without an enclosing scope, one whose `scope` names a scope that does not enclose it, and one placed in a compensation, and the editor shows the same message. A target given as an expression is checked when it runs: one that matches no enclosing scope faults with `runtime.ancestor-notification.target-not-found`.
 
 ## Cancellation
 
@@ -111,13 +111,22 @@ Cancelling a run never starts recovery. A scope that is cancelled while it runs 
 
 ## Inspect a run
 
-Open the run and the scope's **Steps**. Each row shows the forward state (`Completed`, `Uncertain`, `Faulted`, `Not run`) and the recovery state (`Can be undone` while the scope still runs, `Kept` once it has ended without undoing the step, `Waiting to undo` while recovery runs, `Compensated` with its order, `Undo failed`, `Needs action` with its attempts, `Not applicable`). A banner names the step whose failure started recovery. Select a state to open that occurrence; a compensation's activity details link to the occurrence it undid, and the timeline tags compensation runs.
+Open the run and the scope's **Steps**. Each row shows the forward state (`Completed`, `Uncertain`, `Faulted`, `Not run`) and the recovery state (`Can be undone` while the scope still runs, `Kept` once it has ended without undoing the step, `Waiting to undo` while recovery runs, `Compensated` with its order, `Undo failed`, `Needs action` with its attempts, `Not applicable`). A banner names the step whose failure started recovery, or the Compensate that asked for it. Select a state to open that occurrence; a compensation's activity details link to the occurrence it undid, and the timeline tags compensation runs.
+
+Nesting, confirmation and cancellation add these states:
+
+- `Confirmed`, with a link to the Confirm that confirmed the step.
+- `Compensable by {scope}` on a completed inner scope: its steps were handed to that enclosing scope, which undoes them if it recovers.
+- **Handed over by inner scopes**, a list under the outer scope's own steps, with each entry's recovery state and a link to the inner scope occurrence (and loop iteration) it came from.
+- `Cancelled — nothing undone` on a cancelled scope that undid no step.
+
+A scope that ran more than once, in a loop or because its parent ran again, has an **Occurrence** list to choose which run to show.
 
 ## Current limits
 
 These behaviours are planned and not yet available:
 
 - a delay between automatic retries of a failed compensation, and a Studio button to retry it;
-- Studio editors for Confirm and Compensate that offer only valid target scopes;
+- publishing does not warn when a compensation that can be handed over reads a value local to the inner scope's container; it fails when it runs and waits for an operator;
 - a failure inside a Sequence inside a Flowchart step does not reach the scope;
 - a warning when a step or compensation is marked safe to repeat, so its effect may not be committed before it runs.

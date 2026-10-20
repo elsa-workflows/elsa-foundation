@@ -64,15 +64,70 @@ test("the run view shows an uncertain step and a handler that needs an operator,
   await expect(page.getByTestId("fixture-incident")).toHaveText("inc-6");
 });
 
+// Spec 258: nesting, confirmation, Compensate, cancellation and repeated scopes.
+
+test("an outer scope lists work an inner scope handed over and links to where it ran", async ({ page }) => {
+  await page.goto("/?mode=compensation-scope&view=nested&theme=light");
+
+  const received = page.getByRole("region", { name: "Handed over by inner scopes" });
+  await expect(received.getByRole("listitem")).toHaveAccessibleName("Reserve hotel, from Book hotel (iteration it-2)");
+  await expect(received.getByRole("button", { name: "Recovery: Compensated (1st). Show this occurrence", exact: true })).toBeVisible();
+
+  await received.getByRole("button", { name: "Show Book hotel (iteration it-2), where Reserve hotel ran", exact: true }).press("Enter");
+  await expect(page.getByTestId("fixture-execution")).toHaveText("ae-inner");
+});
+
+test("a completed inner scope shows confirmed and compensable-by steps as text and opens what confirmed one", async ({ page }) => {
+  await page.goto("/?mode=compensation-scope&view=confirmed&theme=light");
+
+  await expect(page.locator(".wf-compensation-phase")).toContainText("Completed");
+  const confirmed = page.locator(".wf-compensation-state[data-kind='recovery']", { hasText: "Confirmed" });
+  await expect(confirmed).toBeVisible();
+  await expect(confirmed.locator("svg")).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Show what confirmed Reserve inventory", exact: true }).press("Enter");
+  await expect(page.getByTestId("fixture-execution")).toHaveText("ae-confirm");
+  await page.getByRole("button", { name: "Recovery: Compensable by Travel booking. Show this occurrence", exact: true }).press("Enter");
+  await expect(page.getByTestId("fixture-execution")).toHaveText("ae-outer");
+});
+
+test("a repeated scope picks its occurrence by keyboard, and names a Compensate request and a cancelled occurrence", async ({ page }) => {
+  await page.goto("/?mode=compensation-scope&view=loop&theme=light");
+
+  const picker = page.getByRole("combobox", { name: "Occurrence" });
+  await expect(picker).toHaveAccessibleDescription("This scope ran 2 times. Choose the occurrence to show.");
+  await expect(picker).toHaveValue("ae-scope-2");
+  await expect(page.locator(".wf-compensation-phase")).toContainText("Cancelled — nothing undone");
+
+  await picker.focus();
+  await page.keyboard.press("ArrowUp");
+  await expect(page.getByTestId("fixture-execution")).toHaveText("ae-scope-1");
+  await expect(picker).toHaveValue("ae-scope-1");
+  await expect(picker).toBeFocused();
+  await expect(page.locator(".wf-compensation-phase")).toContainText("Compensated");
+  await expect(page.locator(".wf-compensation-cause")).toContainText("Recovery started because a Compensate activity asked for it while Reserve delivery was running.");
+  await expect(page.getByRole("button", { name: "Forward: Uncertain. Show this occurrence", exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Show request", exact: true }).press("Enter");
+  await expect(page.getByTestId("fixture-execution")).toHaveText("ae-undo");
+});
+
+const listItemsByView: Record<string, number> = { author: 3, run: 3, waiting: 3, nested: 4, confirmed: 3, loop: 3 };
+
 for (const theme of ["light", "dark"]) {
-  for (const view of ["author", "run", "waiting"]) {
+  for (const view of Object.keys(listItemsByView)) {
     for (const width of [390, 1200]) {
       test(`the ${view} view fits ${width}px in ${theme} with no serious accessibility violations`, async ({ page }) => {
         await page.setViewportSize({ width, height: 800 });
         await page.goto(`/?mode=compensation-scope&view=${view}&theme=${theme}`);
-        await expect(page.getByRole("listitem")).toHaveCount(3);
+        await expect(page.getByRole("listitem")).toHaveCount(listItemsByView[view]);
 
         expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+        if (view === "loop") {
+          // The page clips rather than scrolls, so check the picker itself stays inside the viewport.
+          const picker = await page.getByRole("combobox", { name: "Occurrence" }).boundingBox();
+          expect(picker!.x + picker!.width).toBeLessThanOrEqual(width);
+        }
         expect(await seriousViolations(page)).toEqual([]);
       });
     }
