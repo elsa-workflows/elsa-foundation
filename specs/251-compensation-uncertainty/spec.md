@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-20
 
-**Status**: Implemented. The runtime seams and the core of #2747 (`RetryFaultedActivity/1`) landed through [#3113](https://github.com/elsa-workflows/elsa-foundation/pull/3113). Scope state v2, uncertain steps, bounded handler retries, the intervention wait, the Studio states and the docs landed under [#3045](https://github.com/elsa-workflows/elsa-foundation/issues/3045). Evidence:
+**Status**: Implemented — the runtime seams and the core of #2747 (`RetryFaultedActivity/1`) landed through [#3113](https://github.com/elsa-workflows/elsa-foundation/pull/3113). Scope state v2, uncertain steps, bounded handler retries, the intervention wait, the Studio states and the docs landed under [#3045](https://github.com/elsa-workflows/elsa-foundation/issues/3045). Evidence:
 
 - compensation tests 58/58, including J1–J6 and every FR-216 injection point in Durable, Balanced and Ephemeral;
 - the Workbench owned-process journeys (M1, and J1 + J5 with a kill after the retry) 2/2;
@@ -30,7 +30,7 @@ The Studio retry button for #2747 is M4.
 
 ### User Story 1 - A lost response does not leak a reservation (Priority: P1)
 
-*Reserve delivery* sends its request; the delivery service applies the reservation but the response is lost. The activity cannot tell whether the reservation exists, so it reports an **uncertain outcome** instead of a plain failure. The scope records the step as uncertain and starts recovery. *Cancel delivery* runs with the same operation key the forward call used: it cancels the reservation if it exists and, if it does not, makes sure a late-arriving reservation for that key is refused. *Release inventory* then runs as in M1. The scope completes `Compensated` and no reservation remains.
+*Reserve delivery* sends its request; the delivery service applies the reservation but the response is lost. The activity cannot tell whether the reservation exists, so it reports an **uncertain outcome** instead of a plain failure. The scope records the step as uncertain and starts recovery. *Cancel delivery* runs with its own key (`{forward key}/compensate`) and targets the forward call's key: it cancels the reservation if it exists and, if it does not, makes sure a late-arriving reservation for that key is refused. *Release inventory* then runs as in M1. The scope completes `Compensated` and no reservation remains.
 
 **Why this priority**: A lost response is the most common way a saga leaks an effect. Treating it as "never happened" is the bug this milestone exists to prevent (#3045 acceptance 2).
 
@@ -124,7 +124,7 @@ An operator opens the run. The uncertain step reads "⚠ Uncertain" instead of "
 
 **Operator retry (#2747 core)**
 
-- **FR-211**: A runtime alteration **retry faulted activity** targets a faulted activity occurrence that has a blocking incident in a running run. In one checkpoint it resolves that incident with an operator-retry outcome (actor and reason recorded) and schedules the activity again with its original inputs, parent, scheduling identity, scheduling cause and metadata (including assigned operation keys). It is idempotent through the alteration's existing idempotency key, refuses a target whose incident is no longer blocking, requires runtime-manage permission and is fenced like any runtime alteration. Retrying a terminal (faulted) run stays out of scope.
+- **FR-211**: A runtime alteration **retry faulted activity** targets a faulted activity occurrence that has a blocking incident in a running run. In one checkpoint it resolves that incident with an operator-retry outcome (actor and reason recorded) and schedules the activity again with its original inputs, parent, scheduling identity, scheduling cause and metadata (including assigned operation keys). It applies only when every blocking incident on the target already waits for intervention (otherwise `IncidentNotAwaitingIntervention`). It is idempotent through the alteration's existing idempotency key, refuses a target whose incident is no longer blocking, requires runtime-manage permission and is fenced like any runtime alteration. Retrying a terminal (faulted) run stays out of scope.
 - **FR-212**: When an entry is `Failed` and its retried handler completes, the entry becomes `Compensated`, the scope returns to `Compensating` and recovery continues. When the retried handler faults, FR-210 applies again.
 - **FR-213**: When an uncertain step without a handler is retried (FR-206) and completes, the scope turns the entry `NoHandler` (keeping its uncertain forward outcome) and continues forward. When it faults, the scope handles it as a new fault of the running step.
 

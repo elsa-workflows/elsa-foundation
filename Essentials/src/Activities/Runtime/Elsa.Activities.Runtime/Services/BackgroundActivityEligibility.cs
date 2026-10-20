@@ -2,6 +2,7 @@ using System.Reflection;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Contracts;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
 
@@ -9,7 +10,7 @@ namespace Elsa.Activities.Runtime.Services;
 
 internal static class BackgroundActivityEligibility
 {
-    public const string WorkIdMetadataKey = "runtime.backgroundActivityWorkId";
+    public const string WorkIdMetadataKey = RuntimeMetadataKeys.BackgroundActivityWorkId;
     public const string ResultReason = "BackgroundActivityResult";
 
     public static void Validate(ExecutableNode node)

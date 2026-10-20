@@ -250,6 +250,9 @@ public static class RuntimeMetadataKeys
     /// <summary>Inspection metadata naming the secret reference behind a withheld input. A name is not a value.</summary>
     public const string SecretReferenceName = "runtime.secretReferenceName";
 
+    /// <summary>The background coordinator's admitted-work marker on an activity execution.</summary>
+    public const string BackgroundActivityWorkId = "runtime.backgroundActivityWorkId";
+
     public const string ParentActivityExecutionId = "runtime.parentActivityExecutionId";
 
     /// <summary>

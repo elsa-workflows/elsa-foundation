@@ -66,7 +66,7 @@ The scope records the step as **Uncertain** and starts recovery with that step i
 A scope that is waiting shows **Needs action**, and the compensation's row shows its attempts ("Attempt 3 of 3") and a link to the blocking incident. Once the cause is fixed, an operator with runtime-manage permission retries that compensation by submitting a `RetryFaultedActivity/1` alteration for the failed run of it:
 
 ```json
-{ "kind": "RetryFaultedActivity/1", "payload": { "sourceActivityExecutionId": "<the failed compensation run>", "reason": "Delivery service restored" } }
+{ "kind": "RetryFaultedActivity", "schemaVersion": 1, "payload": { "sourceActivityExecutionId": "<the failed compensation run>", "reason": "Delivery service restored" } }
 ```
 
 The retry resolves the incident and runs the compensation again with the same inputs and operation key. If it succeeds, recovery carries on with the remaining steps; if it fails, the scope waits again. Sending the same request twice (same `Idempotency-Key`) has no further effect. A Studio button for this follows in a later release.
