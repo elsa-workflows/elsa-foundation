@@ -6,8 +6,8 @@ namespace Elsa.Connections.Core.Contracts;
 /// </summary>
 /// <remarks>
 /// Binding a connection in a workflow is not a connection right, so it has no method here. The Workflow Design routes
-/// that write drafts or versions, or promote drafts, authorize it through <c>workflows/design:manage</c>; draft validation and runtime
-/// resolution never ask the caller.
+/// that write drafts or versions, or promote drafts, authorize it through <c>workflows/design:manage</c>; draft
+/// validation and runtime resolution never ask the caller.
 /// </remarks>
 public interface IConnectionPermissionGate
 {

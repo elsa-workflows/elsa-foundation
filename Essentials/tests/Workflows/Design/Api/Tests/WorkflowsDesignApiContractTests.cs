@@ -445,7 +445,8 @@ public sealed class WorkflowsDesignApiContractTests
     /// <summary>
     /// Binding a connection in a workflow is authorized by <c>workflows/design:manage</c> alone: the connection
     /// validator asks no one, so every viewer sees the same findings. Every Workflow Design route that writes drafts or
-    /// versions, or promotes a draft, and so could carry a connection binding, must therefore refuse a reader before it dispatches.
+    /// versions, or promotes a draft, and so could carry a connection binding, must therefore refuse a reader before it
+    /// dispatches.
     /// </summary>
     [Theory]
     [InlineData("POST", "/design/workflows/definitions")]
