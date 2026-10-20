@@ -59,6 +59,15 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
   array) into the captured variable, or into `elsa3.http.{node}.headers` / `.query` for a bare memory slot. The
   endpoint must sit in a list of activities (a Sequence or a Flowchart) so that a node can follow it; in a Flowchart the
   node is connected between the endpoint and the endpoint's former successors.
+- **Defaults and required inputs.** A WriteLine without text gets `text = ""`, because Elsa 3 writes an empty line. An
+  R2 default counts as bound even when it is blank. Any other required Elsa 4 input with no Elsa 3 value is
+  `ELS3-ACTIVITY-REQUIRED-INPUT-UNBOUND`.
+- **`canStartWorkflow` on a non-trigger** (a WriteLine, SetVariable, …) only picks a flowchart's start node, as in Elsa 3
+  when no trigger fired. It is dropped after that, without a diagnostic. HttpEndpoint and Event carry the flag; Cron and
+  Timer require it.
+- **Declared types.** Value-flow lowering compares a value with the Elsa 4 member in the shape normalization gave it:
+  `HttpStatusCode` is an integer, `HttpHeaders` a dictionary of string arrays, `ObjectDictionary` a dictionary, and
+  `List<T>` a list of `T`. A declared type that still does not fit is `VF-IMP-008`.
 - **JavaScript** converts when Elsa 4 runs it the same, and is refused otherwise. See
   [Migrating Elsa 3 JavaScript](#migrating-elsa-3-javascript).
 - **Reusable workflows** (collection import, `IsReusable`):
