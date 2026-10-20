@@ -19,7 +19,7 @@ internal abstract class EtlDesignDbContext(DbContextOptions options) : DbContext
         drafts.ToTable(EtlDesignEfModule.DraftTableName);
         drafts.HasKey(row => new { row.ScopeKey, row.DefinitionKey });
         drafts.Property(row => row.ScopeKey).HasMaxLength(EtlDesignEfModule.HashLength).IsRequired();
-        drafts.Property(row => row.TenantId).HasMaxLength(EtlDesignEfModule.EncodedIdentityMaximumLength).IsRequired();
+        drafts.Property(row => row.TenantId).HasMaxLength(EtlDesignEfModule.EncodedIdentityMaximumLength).IsRequired(false);
         drafts.Property(row => row.PersistencePartition).HasMaxLength(EtlDesignEfModule.EncodedIdentityMaximumLength).IsRequired();
         drafts.Property(row => row.DefinitionKey).HasMaxLength(EtlDesignEfModule.HashLength).IsRequired();
         drafts.Property(row => row.DefinitionId).HasMaxLength(EtlDesignEfModule.EncodedIdentityMaximumLength).IsRequired();
@@ -33,7 +33,7 @@ internal abstract class EtlDesignDbContext(DbContextOptions options) : DbContext
         published.ToTable(EtlDesignEfModule.PublishedArtifactTableName);
         published.HasKey(row => new { row.ScopeKey, row.DefinitionKey, row.DefinitionVersion });
         published.Property(row => row.ScopeKey).HasMaxLength(EtlDesignEfModule.HashLength).IsRequired();
-        published.Property(row => row.TenantId).HasMaxLength(EtlDesignEfModule.EncodedIdentityMaximumLength).IsRequired();
+        published.Property(row => row.TenantId).HasMaxLength(EtlDesignEfModule.EncodedIdentityMaximumLength).IsRequired(false);
         published.Property(row => row.PersistencePartition).HasMaxLength(EtlDesignEfModule.EncodedIdentityMaximumLength).IsRequired();
         published.Property(row => row.DefinitionKey).HasMaxLength(EtlDesignEfModule.HashLength).IsRequired();
         published.Property(row => row.DefinitionId).HasMaxLength(EtlDesignEfModule.EncodedIdentityMaximumLength).IsRequired();

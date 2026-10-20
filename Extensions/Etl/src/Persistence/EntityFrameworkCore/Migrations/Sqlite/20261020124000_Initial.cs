@@ -18,7 +18,7 @@ internal sealed class Initial : Migration
             columns: table => new
             {
                 ScopeKey = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                TenantId = table.Column<string>(type: "TEXT", maxLength: 1200, nullable: false),
+                TenantId = table.Column<string>(type: "TEXT", maxLength: 1200, nullable: true),
                 PersistencePartition = table.Column<string>(type: "TEXT", maxLength: 1200, nullable: false),
                 DefinitionKey = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                 DefinitionId = table.Column<string>(type: "TEXT", maxLength: 1200, nullable: false),
@@ -36,7 +36,7 @@ internal sealed class Initial : Migration
             columns: table => new
             {
                 ScopeKey = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                TenantId = table.Column<string>(type: "TEXT", maxLength: 1200, nullable: false),
+                TenantId = table.Column<string>(type: "TEXT", maxLength: 1200, nullable: true),
                 PersistencePartition = table.Column<string>(type: "TEXT", maxLength: 1200, nullable: false),
                 DefinitionKey = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
                 DefinitionId = table.Column<string>(type: "TEXT", maxLength: 1200, nullable: false),

@@ -1,7 +1,7 @@
 #nullable enable
 Elsa.Etl.Core.EtlScope
-Elsa.Etl.Core.EtlScope.EtlScope(string! tenantId, string! persistencePartition) -> void
-Elsa.Etl.Core.EtlScope.TenantId.get -> string!
+Elsa.Etl.Core.EtlScope.EtlScope(string? tenantId, string! persistencePartition) -> void
+Elsa.Etl.Core.EtlScope.TenantId.get -> string?
 Elsa.Etl.Core.EtlScope.PersistencePartition.get -> string!
 Elsa.Etl.Core.EtlScope.<Clone>$() -> Elsa.Etl.Core.EtlScope!
 Elsa.Etl.Core.EtlScope.Equals(Elsa.Etl.Core.EtlScope? other) -> bool

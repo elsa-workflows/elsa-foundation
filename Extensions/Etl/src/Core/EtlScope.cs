@@ -1,18 +1,19 @@
 namespace Elsa.Etl.Core;
 
-/// <summary>The exact tenant and application persistence partition for an ETL operation.</summary>
-/// <remarks>Adapters derive this address from trusted host context; it conveys no global-access fallback.</remarks>
+/// <summary>The exact optional tenant and required application persistence partition for an ETL operation.</summary>
+/// <remarks>Adapters derive this address from trusted host context; a null tenant is an exact un-tenanted address, not a global-access fallback.</remarks>
 public sealed record EtlScope
 {
-    public EtlScope(string tenantId, string persistencePartition)
+    public EtlScope(string? tenantId, string persistencePartition)
     {
-        Validate(tenantId, nameof(tenantId));
+        if (tenantId is not null)
+            Validate(tenantId, nameof(tenantId));
         Validate(persistencePartition, nameof(persistencePartition));
         TenantId = tenantId;
         PersistencePartition = persistencePartition;
     }
 
-    public string TenantId { get; }
+    public string? TenantId { get; }
     public string PersistencePartition { get; }
 
     private static void Validate(string value, string name)

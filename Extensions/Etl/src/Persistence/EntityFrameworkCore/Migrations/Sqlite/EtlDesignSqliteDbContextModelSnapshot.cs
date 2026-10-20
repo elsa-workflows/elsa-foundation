@@ -48,7 +48,7 @@ internal sealed class EtlDesignSqliteDbContextModelSnapshot : ModelSnapshot
             b.Property<string>("ScopeKey").HasMaxLength(64).IsRequired().HasColumnType("TEXT");
             b.Property<string>("DefinitionKey").HasMaxLength(64).IsRequired().HasColumnType("TEXT");
             b.Property<string>("DefinitionId").HasMaxLength(1200).IsRequired().HasColumnType("TEXT");
-            b.Property<string>("TenantId").HasMaxLength(1200).IsRequired().HasColumnType("TEXT");
+            b.Property<string>("TenantId").HasMaxLength(1200).HasColumnType("TEXT");
             b.Property<string>("PersistencePartition").HasMaxLength(1200).IsRequired().HasColumnType("TEXT");
             b.Property<long>("Revision").IsConcurrencyToken().HasColumnType("INTEGER");
             b.Property<int>("LastPublishedVersion").IsConcurrencyToken().HasColumnType("INTEGER");
@@ -67,7 +67,7 @@ internal sealed class EtlDesignSqliteDbContextModelSnapshot : ModelSnapshot
             b.Property<string>("DefinitionKey").HasMaxLength(64).IsRequired().HasColumnType("TEXT");
             b.Property<int>("DefinitionVersion").HasColumnType("INTEGER");
             b.Property<string>("DefinitionId").HasMaxLength(1200).IsRequired().HasColumnType("TEXT");
-            b.Property<string>("TenantId").HasMaxLength(1200).IsRequired().HasColumnType("TEXT");
+            b.Property<string>("TenantId").HasMaxLength(1200).HasColumnType("TEXT");
             b.Property<string>("PersistencePartition").HasMaxLength(1200).IsRequired().HasColumnType("TEXT");
             b.Property<string>("SchemaVersion").HasMaxLength(32).IsRequired().HasColumnType("TEXT");
             b.Property<string>("ArtifactJson").IsRequired().HasColumnType("TEXT");

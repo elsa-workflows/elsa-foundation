@@ -4,7 +4,7 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Entities;
 internal sealed class EtlDefinitionDraftRecord
 {
     public string ScopeKey { get; set; } = null!;
-    public string TenantId { get; set; } = null!;
+    public string? TenantId { get; set; }
     public string PersistencePartition { get; set; } = null!;
     public string DefinitionKey { get; set; } = null!;
     public string DefinitionId { get; set; } = null!;
@@ -20,7 +20,7 @@ internal sealed class EtlDefinitionDraftRecord
 internal sealed class EtlPublishedArtifactRecord
 {
     public string ScopeKey { get; set; } = null!;
-    public string TenantId { get; set; } = null!;
+    public string? TenantId { get; set; }
     public string PersistencePartition { get; set; } = null!;
     public string DefinitionKey { get; set; } = null!;
     public string DefinitionId { get; set; } = null!;
