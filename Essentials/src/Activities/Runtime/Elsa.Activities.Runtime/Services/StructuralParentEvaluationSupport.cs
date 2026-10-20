@@ -435,7 +435,8 @@ internal static class StructuralParentEvaluationSupport
     /// Commits a structural parent that completed after evaluating a child: persists the completed parent with its
     /// inspection projection, durable-value changes and workflow-variable write-back, and enqueues its upward
     /// completion work item followed by <paramref name="parentNotifications"/> after the commit lands, all in one
-    /// checkpoint alongside the staged subtree cancellations.
+    /// checkpoint alongside the staged subtree cancellations. <paramref name="ancestorNotifications"/> are enqueued
+    /// ahead of the completion work item, so the addressed ancestor evaluates them first.
     /// </summary>
     public static async ValueTask CommitCompletedParentActivityAsync(
         RuntimeCheckpointCommitter checkpointCommitter,
@@ -450,7 +451,8 @@ internal static class StructuralParentEvaluationSupport
         IReadOnlyCollection<RuntimeStateChange<DurableValueState>> durableValueChanges,
         RuntimeStateChange<WorkflowExecutionState>? workflowVariableWriteBack,
         CancellationToken cancellationToken,
-        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>>? additionalActivityExecutions = null)
+        IReadOnlyCollection<RuntimeStateChange<ActivityExecutionState>>? additionalActivityExecutions = null,
+        IReadOnlyCollection<RuntimeSchedulerWorkItem>? ancestorNotifications = null)
     {
         var occurredAt = timeProvider.GetUtcNow();
         var (workItem, activityExecutionId, metadata) = (source.WorkItem, source.Payload.ActivityExecutionId, source.Metadata);
@@ -506,7 +508,8 @@ internal static class StructuralParentEvaluationSupport
                         .. cancellationChanges.Inspections
                     ],
                 activityScopeCleanups: cancellationChanges.Cleanups),
-            PostCommitIntents: new[] { completionWorkItem }
+            PostCommitIntents: (ancestorNotifications ?? [])
+                .Append(completionWorkItem)
                 .Concat(parentNotifications)
                 .Select(item => SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent(workItem, activityExecutionId, item, occurredAt))
                 .ToArray(),

@@ -180,6 +180,102 @@ describe("CompensationScopeDesigner", () => {
   });
 });
 
+describe("CompensationScopeDesigner nesting states (spec 258)", () => {
+  it("lists handed-over work with a link to the inner scope it came from", () => {
+    const onSelectExecution = vi.fn();
+    mount({ readOnly: true, onSelectExecution, runtime: {
+      scopeActivityExecutionId: "ae-outer",
+      phase: "Compensating",
+      rows: [
+        { step: "Reserve inventory", forward: { state: "Completed", activityExecutionId: "ae-1" }, recovery: { state: "Compensated", activityExecutionId: "ae-4", order: 1 } },
+        { step: "Confirm order", forward: { state: "Faulted", activityExecutionId: "ae-3" }, recovery: { state: "NotApplicable" } }
+      ],
+      received: [{
+        step: "Reserve hotel",
+        forward: { state: "Completed", activityExecutionId: "ae-hotel" },
+        recovery: { state: "Running", activityExecutionId: "ae-cancel-hotel", order: 2 },
+        origin: { scopeNodeId: "inner", label: "Book hotel", activityExecutionId: "ae-inner", iterationId: "it-2" }
+      }]
+    } });
+
+    expect(document.getElementById(container.querySelector(".wf-compensation-received")!.getAttribute("aria-labelledby")!)?.textContent)
+      .toBe("Handed over by inner scopes");
+    expect(rowLabels().at(-1)).toBe("Reserve hotel, from Book hotel (iteration it-2)");
+    click(button("Show Book hotel (iteration it-2), where Reserve hotel ran"));
+    expect(onSelectExecution).toHaveBeenCalledWith("ae-inner");
+    expect(button("Recovery: Undoing (2nd). Show this occurrence")).not.toBeNull();
+  });
+
+  it("shows Confirmed and compensable-by states as text and icon, and opens what confirmed a step", () => {
+    const onSelectExecution = vi.fn();
+    mount({ readOnly: true, onSelectExecution, runtime: {
+      scopeActivityExecutionId: "ae-inner",
+      phase: "Completed",
+      rows: [
+        { step: "Reserve inventory", forward: { state: "Completed", activityExecutionId: "ae-1" }, recovery: { state: "Confirmed", confirmedBy: "ae-confirm" } },
+        { step: "Confirm order", forward: { state: "Completed", activityExecutionId: "ae-3" },
+          recovery: { state: "HandedOver", handedOverTo: { scopeNodeId: "outer", label: "Travel booking", activityExecutionId: "ae-outer" } } }
+      ]
+    } });
+
+    const chips = [...container.querySelectorAll(".wf-compensation-state[data-kind='recovery']")];
+    expect(chips.map(chip => chip.getAttribute("aria-label"))).toEqual(["Recovery: Confirmed", "Recovery: Compensable by Travel booking. Show this occurrence"]);
+    expect(chips.every(chip => chip.querySelector("svg"))).toBe(true);
+    click(button("Show what confirmed Reserve inventory"));
+    expect(onSelectExecution).toHaveBeenCalledWith("ae-confirm");
+    click(button("Recovery: Compensable by Travel booking. Show this occurrence"));
+    expect(onSelectExecution).toHaveBeenLastCalledWith("ae-outer");
+  });
+
+  it("names a Compensate request as the cause and says a cancelled scope undid nothing", () => {
+    const onSelectExecution = vi.fn();
+    mount({ readOnly: true, onSelectExecution, runtime: {
+      scopeActivityExecutionId: "ae-scope",
+      phase: "Compensated",
+      rows: [
+        { step: "Reserve inventory", forward: { state: "Completed", activityExecutionId: "ae-1" }, recovery: { state: "Compensated", activityExecutionId: "ae-4", order: 1 } },
+        { step: "Confirm order", forward: { state: "Uncertain", activityExecutionId: "ae-3" }, recovery: { state: "Kept" } }
+      ],
+      cause: { kind: "explicit", step: "Confirm order", activityExecutionId: "ae-undo", requestedBy: "ae-undo" }
+    } });
+
+    expect(container.querySelector(".wf-compensation-cause")?.textContent).toContain("Recovery started because a Compensate activity asked for it while Confirm order was running.");
+    click([...container.querySelectorAll<HTMLButtonElement>("button")].find(candidate => candidate.textContent === "Show request")!);
+    expect(onSelectExecution).toHaveBeenCalledWith("ae-undo");
+
+    mount({ readOnly: true, runtime: {
+      scopeActivityExecutionId: "ae-scope",
+      phase: "Cancelled",
+      rows: [{ step: "Reserve inventory", forward: { state: "Completed", activityExecutionId: "ae-1" }, recovery: { state: "Kept" } }]
+    } });
+    expect(container.querySelector(".wf-compensation-phase")?.textContent).toContain("Cancelled — nothing undone");
+  });
+
+  it("picks a scope occurrence from a labelled list when the scope ran more than once", () => {
+    const onSelectExecution = vi.fn();
+    mount({ readOnly: true, onSelectExecution, runtime: {
+      scopeActivityExecutionId: "ae-inner-2",
+      phase: "Running",
+      rows: [{ step: "Reserve inventory", forward: { state: "Running", activityExecutionId: "ae-2" }, recovery: { state: "NotApplicable" } }],
+      occurrences: [
+        { activityExecutionId: "ae-inner-1", label: "Occurrence 1 · iteration it-1", status: "Completed", iterationId: "it-1" },
+        { activityExecutionId: "ae-inner-2", label: "Occurrence 2 · iteration it-2", status: "Running", iterationId: "it-2" }
+      ]
+    } });
+
+    const picker = container.querySelector<HTMLSelectElement>(".wf-compensation-occurrence select")!;
+    expect([...picker.labels!].map(label => label.textContent)).toEqual(["Occurrence"]);
+    expect(picker.value).toBe("ae-inner-2");
+    expect([...picker.options].map(option => option.textContent)).toEqual(["Occurrence 1 · iteration it-1 · Completed", "Occurrence 2 · iteration it-2 · Running"]);
+    expect(document.getElementById(picker.getAttribute("aria-describedby")!)?.textContent).toBe("This scope ran 2 times. Choose the occurrence to show.");
+    flushSync(() => {
+      picker.value = "ae-inner-1";
+      picker.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(onSelectExecution).toHaveBeenCalledWith("ae-inner-1");
+  });
+});
+
 function mount(overrides: Partial<CompensationScopeDesignerProps> = {}) {
   const props: CompensationScopeDesignerProps = {
     owner: scope([

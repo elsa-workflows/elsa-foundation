@@ -8030,3 +8030,19 @@ html[data-theme-material] .availability-search .wf-search {
   padding-bottom: .75rem;
   background: var(--studio-bg);
 }
+
+/* Spec 258: the Confirm and Compensate target picker, with the Draft validator's message under it. */
+.wf-compensation-target {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+}
+
+.wf-compensation-target-problem {
+  display: flex;
+  align-items: flex-start;
+  gap: .3rem;
+  margin: 0;
+  color: var(--studio-danger);
+  font-size: var(--studio-label-size, .8125rem);
+}

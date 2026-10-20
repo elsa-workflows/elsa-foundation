@@ -13,10 +13,10 @@ test("publishes directly without opening the review dialog when the target is cl
   expect(calls.filter(call => call.method === "POST" && call.path === "/publishing/workflows/version-2/publish")).toHaveLength(1);
 });
 
-test("Review and Publish opens the real review before saving or publishing", async ({ page }) => {
+test("Review & publish opens the real review before saving or publishing", async ({ page }) => {
   await page.goto("/?mode=workflow-publish-choice");
 
-  await page.getByRole("button", { name: "Review and Publish", exact: true }).click();
+  await page.getByRole("button", { name: "Review & publish", exact: true }).click();
 
   const review = page.getByRole("dialog", { name: "Publish workflow" });
   await expect(review).toBeVisible();
@@ -92,7 +92,7 @@ test("recovers a failed direct activation by retrying the retained promoted vers
   expect(calls.filter(call => call.method === "POST" && call.path === "/publishing/workflows/version-2/publish")).toHaveLength(2);
 });
 
-async function choosePublishMode(page: Page, label: "Publish" | "Review and Publish") {
+async function choosePublishMode(page: Page, label: "Publish" | "Review & publish") {
   await page.getByRole("button", { name: "Publish options", exact: true }).click();
   await page.getByRole("menu", { name: "Publish action" })
     .getByRole("menuitemradio", { name: label, exact: true })

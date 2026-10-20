@@ -1,6 +1,6 @@
 import { useId, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject } from "react";
 import type { Node } from "@xyflow/react";
-import { AlertTriangle, ArrowDown, ArrowUp, Check, ChevronRight, CircleDashed, CircleDot, Hand, Hourglass, Minus, Plus, Trash2, Undo2, X } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, BadgeCheck, Ban, Check, ChevronRight, CircleDashed, CircleDot, CornerUpLeft, Hand, Hourglass, Minus, Plus, Trash2, Undo2, X } from "lucide-react";
 import { renderActivityIcon } from "../activityIconView";
 import {
   compensationStepProblems,
@@ -13,10 +13,12 @@ import {
 import {
   forwardStateLabel,
   ordinalLabel,
-  recoveryStateLabel,
+  recoveryLabel,
   scopePhaseLabel,
   type CompensationForwardState,
   type CompensationRecoveryState,
+  type CompensationRowRuntime,
+  type CompensationScopeReference,
   type CompensationScopeRuntime
 } from "../compensationRuntime";
 import { resolveNodeActivityVisual } from "../workflow-editor/workflowNodeVisual";
@@ -47,7 +49,7 @@ export interface CompensationScopeDesignerProps {
   onOpenSlot?(ownerNodeId: string, ownerLabel: string, slot: ChildSlot): void;
   /** Run inspection only: what the run says about each step. */
   runtime?: CompensationScopeRuntime;
-  /** Run inspection only: selects an occurrence by activity execution id. */
+  /** Run inspection only: selects an occurrence by activity execution id (a step, a handler, or a scope occurrence). */
   onSelectExecution?(activityExecutionId: string): void;
   /** Run inspection only: opens the blocking incident a row waits on (spec 251 FR-217). */
   onOpenIncident?(incidentId: string): void;
@@ -94,8 +96,28 @@ export function CompensationScopeDesigner({
         <p>Steps run top to bottom. If a step fails, the steps that completed are undone bottom to top.</p>
         {runtime ? (
           <span className="wf-compensation-phase" data-phase={runtime.phase}>
-            <PhaseIcon phase={runtime.phase} /> {scopePhaseLabel(runtime.phase)}
+            <PhaseIcon phase={runtime.phase} /> {phaseLabel(runtime)}
           </span>
+        ) : null}
+        {runtime?.occurrences && onSelectExecution ? (
+          <div className="wf-compensation-occurrence">
+            <label htmlFor={`${headingId}-occurrence`}>Occurrence</label>
+            <select
+              id={`${headingId}-occurrence`}
+              value={runtime.scopeActivityExecutionId ?? ""}
+              aria-describedby={`${headingId}-occurrences`}
+              onChange={event => onSelectExecution(event.target.value)}
+            >
+              {runtime.occurrences.map(occurrence => (
+                <option key={occurrence.activityExecutionId} value={occurrence.activityExecutionId}>
+                  {occurrence.label} · {occurrence.status}
+                </option>
+              ))}
+            </select>
+            <span id={`${headingId}-occurrences`} className="wf-visually-hidden">
+              This scope ran {runtime.occurrences.length} times. Choose the occurrence to show.
+            </span>
+          </div>
         ) : null}
       </header>
 
@@ -108,14 +130,21 @@ export function CompensationScopeDesigner({
       {runtime?.cause ? (
         <p className="wf-compensation-cause" role="note">
           <AlertTriangle size={14} aria-hidden="true" />
-          <span>
-            Recovery started because <strong>{runtime.cause.step}</strong> {runtime.cause.kind === "uncertain" ? "could not confirm its outcome" : "failed"}
-            {runtime.cause.failureType ? <>: <code>{runtime.cause.failureType}</code></> : null}
-            {runtime.cause.message ? <> — {runtime.cause.message}</> : null}.
-          </span>
+          {runtime.cause.kind === "explicit" ? (
+            <span>
+              Recovery started because a Compensate activity asked for it
+              {runtime.cause.step ? <> while <strong>{runtime.cause.step}</strong> was running</> : null}.
+            </span>
+          ) : (
+            <span>
+              Recovery started because <strong>{runtime.cause.step}</strong> {runtime.cause.kind === "uncertain" ? "could not confirm its outcome" : "failed"}
+              {runtime.cause.failureType ? <>: <code>{runtime.cause.failureType}</code></> : null}
+              {runtime.cause.message ? <> — {runtime.cause.message.replace(/[.\s]+$/, "")}</> : null}.
+            </span>
+          )}
           {onSelectExecution ? (
             <button type="button" className="wf-compensation-link" onClick={() => onSelectExecution(runtime.cause!.activityExecutionId)}>
-              Show failed step
+              {runtime.cause.kind === "explicit" ? "Show request" : "Show failed step"}
             </button>
           ) : null}
         </p>
@@ -225,19 +254,7 @@ export function CompensationScopeDesigner({
                       <Plus size={14} aria-hidden="true" /> Add compensation
                     </button>
                   )}
-                  {row ? (
-                    <StateChip
-                      kind="recovery"
-                      state={row.recovery.state}
-                      label={`${recoveryStateLabel(row.recovery.state)}${row.recovery.order ? ` (${ordinalLabel(row.recovery.order)})` : ""}${attemptLabel(row.recovery.attempts)}`}
-                      onSelect={row.recovery.activityExecutionId && onSelectExecution ? () => onSelectExecution(row.recovery.activityExecutionId!) : undefined}
-                    />
-                  ) : null}
-                  {row?.recovery.incidentId && onOpenIncident ? (
-                    <button type="button" className="wf-compensation-link" aria-label={`Show the incident ${name} is waiting on`} onClick={() => onOpenIncident(row.recovery.incidentId!)}>
-                      Show incident
-                    </button>
-                  ) : null}
+                  {row ? <RecoveryState row={row} name={name} onSelectExecution={onSelectExecution} onOpenIncident={onOpenIncident} /> : null}
                 </div>
 
                 {!readOnly ? (
@@ -262,6 +279,48 @@ export function CompensationScopeDesigner({
             );
           })}
           </div>
+          {runtime?.received?.length ? (
+            <section className="wf-compensation-received" aria-labelledby={`${headingId}-received`}>
+              <h4 id={`${headingId}-received`}>Handed over by inner scopes</h4>
+              <p>Work that completed inner scopes left for this scope to undo if it recovers.</p>
+              <div role="list" aria-label="Handed-over steps">
+                {runtime.received.map((row, index) => (
+                  <article
+                    key={`${row.origin?.activityExecutionId ?? ""}:${row.forward.activityExecutionId ?? index}`}
+                    className="wf-compensation-row wf-compensation-received-row"
+                    role="listitem"
+                    aria-label={`${row.step}, from ${originLabel(row.origin)}`}
+                  >
+                    <span className="wf-compensation-ordinal" aria-hidden="true"><CornerUpLeft size={12} /></span>
+                    <div className="wf-compensation-step">
+                      <span className="wf-compensation-name">{row.step}</span>
+                      {row.origin ? (
+                        onSelectExecution && row.origin.activityExecutionId ? (
+                          <button
+                            type="button"
+                            className="wf-compensation-link"
+                            aria-label={`Show ${originLabel(row.origin)}, where ${row.step} ran`}
+                            onClick={() => onSelectExecution(row.origin!.activityExecutionId!)}
+                          >
+                            From {originLabel(row.origin)}
+                          </button>
+                        ) : <span className="wf-compensation-origin">From {originLabel(row.origin)}</span>
+                      ) : null}
+                      <StateChip
+                        kind="forward"
+                        state={row.forward.state}
+                        label={forwardStateLabel(row.forward.state)}
+                        onSelect={row.forward.activityExecutionId && onSelectExecution ? () => onSelectExecution(row.forward.activityExecutionId!) : undefined}
+                      />
+                    </div>
+                    <div className="wf-compensation-handler">
+                      <RecoveryState row={row} name={row.step} onSelectExecution={onSelectExecution} onOpenIncident={onOpenIncident} />
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
           {!readOnly ? (
             <div className="wf-compensation-footer">
               <button type="button" className="wf-compensation-add" onClick={event => request({ kind: "new-step", index: steps.length }, event)}>
@@ -340,6 +399,53 @@ function ActivityCell({
   );
 }
 
+function RecoveryState({
+  row,
+  name,
+  onSelectExecution,
+  onOpenIncident
+}: {
+  row: CompensationRowRuntime;
+  name: string;
+  onSelectExecution?(activityExecutionId: string): void;
+  onOpenIncident?(incidentId: string): void;
+}) {
+  const { recovery } = row;
+  const target = recovery.activityExecutionId ?? recovery.handedOverTo?.activityExecutionId;
+  return (
+    <>
+      <StateChip
+        kind="recovery"
+        state={recovery.state}
+        label={`${recoveryLabel(recovery)}${recovery.order ? ` (${ordinalLabel(recovery.order)})` : ""}${attemptLabel(recovery.attempts)}`}
+        onSelect={target && onSelectExecution ? () => onSelectExecution(target) : undefined}
+      />
+      {recovery.confirmedBy && onSelectExecution ? (
+        <button type="button" className="wf-compensation-link" aria-label={`Show what confirmed ${name}`} onClick={() => onSelectExecution(recovery.confirmedBy!)}>
+          Show confirmation
+        </button>
+      ) : null}
+      {recovery.incidentId && onOpenIncident ? (
+        <button type="button" className="wf-compensation-link" aria-label={`Show the incident ${name} is waiting on`} onClick={() => onOpenIncident(recovery.incidentId!)}>
+          Show incident
+        </button>
+      ) : null}
+    </>
+  );
+}
+
+// A cancelled scope never compensates (spec 258 OD10): say so, unless a handler that was already running finished.
+function phaseLabel(runtime: CompensationScopeRuntime): string {
+  if (runtime.phase !== "Cancelled") return scopePhaseLabel(runtime.phase);
+  const undone = [...runtime.rows, ...(runtime.received ?? [])].some(row => row.recovery.state === "Compensated");
+  return undone ? "Cancelled" : "Cancelled — nothing undone";
+}
+
+function originLabel(origin: CompensationScopeReference | undefined): string {
+  if (!origin) return "an inner scope";
+  return origin.iterationId ? `${origin.label} (iteration ${origin.iterationId})` : origin.label;
+}
+
 function StateChip({
   kind,
   state,
@@ -372,6 +478,9 @@ function StateIcon({ state }: { state: CompensationForwardState | CompensationRe
     case "Pending": return <Hourglass size={12} aria-hidden="true" />;
     case "Uncertain": return <AlertTriangle size={12} aria-hidden="true" />;
     case "NeedsAction": return <Hand size={12} aria-hidden="true" />;
+    case "Confirmed": return <BadgeCheck size={12} aria-hidden="true" />;
+    case "HandedOver": return <CornerUpLeft size={12} aria-hidden="true" />;
+    case "Cancelled": return <Ban size={12} aria-hidden="true" />;
     case "NotRun":
     case "Registered": return <CircleDashed size={12} aria-hidden="true" />;
     default: return <Minus size={12} aria-hidden="true" />;
@@ -385,6 +494,7 @@ function PhaseIcon({ phase }: { phase: CompensationScopeRuntime["phase"] }) {
     case "Completed": return <Check size={14} aria-hidden="true" />;
     case "Faulted": return <X size={14} aria-hidden="true" />;
     case "AwaitingIntervention": return <Hand size={14} aria-hidden="true" />;
+    case "Cancelled": return <Ban size={14} aria-hidden="true" />;
     default: return <CircleDot size={14} aria-hidden="true" />;
   }
 }

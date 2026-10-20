@@ -138,6 +138,16 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
     /// </summary>
     void RequestAncestorNotification(string ancestorConsumerKey, string code, System.Text.Json.JsonElement? payload = null);
 
+    /// <summary>
+    /// Stages a coded notification to the nearest committed ancestor that matches <paramref name="selector"/>: a
+    /// consumer key (as the overload above), or an activity type key, optionally narrowed to one authored node. The
+    /// selector can end the walk at a reusable-activity boundary and can be optional, in which case no match sends
+    /// nothing instead of faulting. Valid in an initial structural execution, or in a child-completion evaluation,
+    /// that ends in a <c>Complete</c> continuation; either way the notification is enqueued ahead of this activity's
+    /// own completion. The receiver learns which of its direct children the notification came through.
+    /// </summary>
+    void RequestAncestorNotification(RuntimeAncestorSelector selector, string code, System.Text.Json.JsonElement? payload = null);
+
     IReadOnlyCollection<RuntimeAncestorNotificationRequest> GetAncestorNotificationRequests();
 }
 

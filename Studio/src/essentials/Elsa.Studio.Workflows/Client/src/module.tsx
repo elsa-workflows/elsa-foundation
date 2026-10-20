@@ -14,6 +14,7 @@ import {
   httpWorkflowTestStimulusEditor,
   schedulingWorkflowTestStimulusEditor
 } from "./workflowTestStimulusEditors";
+import { compensationTargetPropertyEditor } from "./CompensationTargetEditor";
 
 const WorkflowManagementPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowManagementPage })));
 const WorkflowExecutablesPage = lazy(() => import("./workflow-editor/pages").then(module => ({ default: module.WorkflowExecutablesPage })));
@@ -57,6 +58,7 @@ export function register(api: ElsaStudioModuleApi) {
   registerVariableReferenceContribution(api.expressionEditors);
   api.expressionEditors.add(createObjectExpressionEditorContribution(() => api.propertyEditors.list()));
   registerInputReferenceContribution(api.expressionEditors);
+  api.propertyEditors.add(compensationTargetPropertyEditor);
   api.workflowTestStimulusEditors?.add(httpWorkflowTestStimulusEditor);
   api.workflowTestStimulusEditors?.add(eventWorkflowTestStimulusEditor);
   api.workflowTestStimulusEditors?.add(schedulingWorkflowTestStimulusEditor);
