@@ -18,11 +18,17 @@ internal sealed record EtlBatchProcessResult(EtlBatchAcceptance? Acceptance, Etl
 /// This component does not reserve or accept work. Its caller owns the durable cursor transition and must pass the
 /// same deterministic batch descriptor to reservation and acceptance. Physical chunks remain unaccepted until then.
 /// </remarks>
-internal static class EtlBatchProcessor
+internal sealed class EtlBatchProcessor
 {
-    private static readonly FileChunkStore ChunkStore = new();
+    private readonly IFileChunkPublisher _jsonlPublisher;
 
-    public static async ValueTask<EtlBatchProcessResult> ProcessAsync(
+    public EtlBatchProcessor(IFileChunkPublisherFactory publisherFactory)
+    {
+        ArgumentNullException.ThrowIfNull(publisherFactory);
+        _jsonlPublisher = publisherFactory.Create(EtlFileChunkFormat.Jsonl);
+    }
+
+    public async ValueTask<EtlBatchProcessResult> ProcessAsync(
         EtlRunAdmission admission,
         EtlPipeline pipeline,
         EtlPreparedDescriptor prepared,
@@ -234,7 +240,7 @@ internal static class EtlBatchProcessor
         return true;
     }
 
-    private static async ValueTask<EtlChunk> PublishRouteAsync(
+    private async ValueTask<EtlChunk> PublishRouteAsync(
         string outputRoot,
         EtlRunAdmission admission,
         string batchId,
@@ -244,7 +250,7 @@ internal static class EtlBatchProcessor
         CancellationToken cancellationToken)
     {
         var identity = EtlRuntimeIdentity.OutputIdentity(admission, batchId, route);
-        var chunk = await ChunkStore.PublishAsync(outputRoot, identity, maximumBytes,
+        var chunk = await _jsonlPublisher.PublishAsync(outputRoot, identity, maximumBytes,
             async (destination, ct) =>
             {
                 ct.ThrowIfCancellationRequested();

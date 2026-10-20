@@ -8,9 +8,13 @@ using Elsa.Etl.Runtime.Execution;
 namespace Elsa.Etl.Runtime.Output;
 
 /// <summary>Builds terminal JSONL routes only from the frozen accepted manifest, never physical directory contents.</summary>
-internal sealed class EtlAcceptedOutputMaterializer(IEtlRuntimeStore store, HostFileBindings bindings)
+internal sealed class EtlAcceptedOutputMaterializer(
+    IEtlRuntimeStore store,
+    HostFileBindings bindings,
+    IFileChunkPublisherFactory publisherFactory)
 {
     private const int PageSize = 64;
+    private readonly IFileChunkPublisher _jsonlPublisher = publisherFactory.Create(EtlFileChunkFormat.Jsonl);
 
     public async ValueTask<EtlMaterializedRun> MaterializeAsync(EtlScope scope, string runId, CancellationToken cancellationToken = default)
     {
@@ -75,7 +79,7 @@ internal sealed class EtlAcceptedOutputMaterializer(IEtlRuntimeStore store, Host
         // Batch IDs are fixed hashes; this versioned namespace cannot collide with a batch effect.
         // Reuse the lossless, length-framed identity routine rather than serializing opaque identifiers again.
         var identity = EtlRuntimeIdentity.OutputIdentity(admission, $"etl-materialized-route-v1:{terminal.ResultId}", route);
-        var chunk = await new FileChunkStore().PublishAsync(outputRoot, identity, bytes, async (output, token) =>
+        var chunk = await _jsonlPublisher.PublishAsync(outputRoot, identity, bytes, async (output, token) =>
         {
             var buffer = new byte[4096];
             long copied = 0;

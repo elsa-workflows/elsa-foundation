@@ -12,6 +12,7 @@ namespace Elsa.Etl.Tests;
 
 public sealed class EtlBatchProcessorTests
 {
+    private static readonly EtlBatchProcessor Processor = new(new FileChunkPublisherFactory());
     private const string MainJsonl = "{\"name\":\"A\",\"category\":\"keep\"}\n";
     private const string ErrorJsonl = "{\"recordOrdinal\":3,\"code\":\"etl.lookup-key-not-found\",\"field\":\"id\"}\n";
 
@@ -19,7 +20,7 @@ public sealed class EtlBatchProcessorTests
     public async Task Processes_rows_once_and_publishes_deterministic_main_and_error_routes()
     {
         using var scenario = await Scenario.CreateAsync(CreatePipeline());
-        var result = await EtlBatchProcessor.ProcessAsync(
+        var result = await Processor.ProcessAsync(
             scenario.Admission, scenario.Pipeline, scenario.Prepared, scenario.Batch, scenario.Bindings);
 
         Assert.True(result.Succeeded, result.Diagnostic?.ToString());
@@ -53,7 +54,7 @@ public sealed class EtlBatchProcessorTests
         var exactBudget = Encoding.UTF8.GetByteCount(MainJsonl) + Encoding.UTF8.GetByteCount(ErrorJsonl);
         using var scenario = await Scenario.CreateAsync(CreatePipeline(maxOutputBytes: exactBudget));
 
-        var result = await EtlBatchProcessor.ProcessAsync(
+        var result = await Processor.ProcessAsync(
             scenario.Admission, scenario.Pipeline, scenario.Prepared, scenario.Batch, scenario.Bindings);
 
         Assert.True(result.Succeeded, result.Diagnostic?.ToString());
@@ -65,7 +66,7 @@ public sealed class EtlBatchProcessorTests
     {
         using var scenario = await Scenario.CreateAsync(CreatePipeline(), "id,name\n1,A\n2,B\n9,Z,private-value");
 
-        var result = await EtlBatchProcessor.ProcessAsync(
+        var result = await Processor.ProcessAsync(
             scenario.Admission, scenario.Pipeline, scenario.Prepared, scenario.Batch, scenario.Bindings);
 
         Assert.True(result.Succeeded, result.Diagnostic?.ToString());
@@ -82,7 +83,7 @@ public sealed class EtlBatchProcessorTests
         var cap = Math.Max(Encoding.UTF8.GetByteCount(MainJsonl), Encoding.UTF8.GetByteCount(ErrorJsonl));
         using var scenario = await Scenario.CreateAsync(CreatePipeline(maxOutputBytes: cap));
 
-        var result = await EtlBatchProcessor.ProcessAsync(
+        var result = await Processor.ProcessAsync(
             scenario.Admission, scenario.Pipeline, scenario.Prepared, scenario.Batch, scenario.Bindings);
 
         Assert.False(result.Succeeded);
@@ -96,9 +97,9 @@ public sealed class EtlBatchProcessorTests
     public async Task Replays_identical_effects_at_the_same_keys_and_reports_conflicting_content()
     {
         using var scenario = await Scenario.CreateAsync(CreatePipeline());
-        var first = await EtlBatchProcessor.ProcessAsync(
+        var first = await Processor.ProcessAsync(
             scenario.Admission, scenario.Pipeline, scenario.Prepared, scenario.Batch, scenario.Bindings);
-        var replay = await EtlBatchProcessor.ProcessAsync(
+        var replay = await Processor.ProcessAsync(
             scenario.Admission, scenario.Pipeline, scenario.Prepared, scenario.Batch, scenario.Bindings);
 
         Assert.True(first.Succeeded, first.Diagnostic?.ToString());
@@ -109,7 +110,7 @@ public sealed class EtlBatchProcessorTests
 
         var mainKey = EtlRuntimeIdentity.OutputKey(scenario.Admission, first.Acceptance.Batch.BatchId, EtlOutputRoute.Main);
         await File.WriteAllTextAsync(Path.Combine(scenario.MainRoot, mainKey), "conflicting\n");
-        var conflict = await EtlBatchProcessor.ProcessAsync(
+        var conflict = await Processor.ProcessAsync(
             scenario.Admission, scenario.Pipeline, scenario.Prepared, scenario.Batch, scenario.Bindings);
 
         Assert.False(conflict.Succeeded);
@@ -125,7 +126,7 @@ public sealed class EtlBatchProcessorTests
         var newRoot = Path.Combine(scenario.Root, "main-v2");
         var current = scenario.CreateRetargetedOutputRegistry(newRoot);
 
-        var result = await EtlBatchProcessor.ProcessAsync(
+        var result = await Processor.ProcessAsync(
             scenario.Admission, scenario.Pipeline, scenario.Prepared, scenario.Batch, current);
 
         Assert.True(result.Succeeded, result.Diagnostic?.ToString());
@@ -142,7 +143,7 @@ public sealed class EtlBatchProcessorTests
         cancellation.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
-            await EtlBatchProcessor.ProcessAsync(
+            await Processor.ProcessAsync(
                 scenario.Admission, scenario.Pipeline, scenario.Prepared, scenario.Batch, scenario.Bindings, cancellation.Token));
 
         Assert.False(Directory.Exists(scenario.MainRoot));

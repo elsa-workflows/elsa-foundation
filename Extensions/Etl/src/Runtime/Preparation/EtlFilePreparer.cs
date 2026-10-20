@@ -20,18 +20,29 @@ internal sealed class EtlFilePreparer
     private const int SourceIndexFormatVersion = 1;
     private readonly HostFileBindings _bindings;
     private readonly string _snapshotRoot;
-    private readonly FileChunkStore _snapshotStore = new(".csv");
-    private readonly FileChunkStore _indexStore = new(".index");
+    private readonly IFileChunkPublisher _snapshotPublisher;
+    private readonly IFileChunkPublisher _indexPublisher;
 
     public EtlFilePreparer(HostFileBindings bindings, string hostApprovedSnapshotRoot)
+        : this(bindings, hostApprovedSnapshotRoot, new FileChunkPublisherFactory())
+    {
+    }
+
+    public EtlFilePreparer(
+        HostFileBindings bindings,
+        string hostApprovedSnapshotRoot,
+        IFileChunkPublisherFactory publisherFactory)
     {
         ArgumentNullException.ThrowIfNull(bindings);
+        ArgumentNullException.ThrowIfNull(publisherFactory);
         ArgumentException.ThrowIfNullOrWhiteSpace(hostApprovedSnapshotRoot);
         if (!Path.IsPathFullyQualified(hostApprovedSnapshotRoot))
             throw new ArgumentException("The ETL snapshot root must be an absolute host-approved path.", nameof(hostApprovedSnapshotRoot));
 
         _bindings = bindings;
         _snapshotRoot = Path.GetFullPath(hostApprovedSnapshotRoot);
+        _snapshotPublisher = publisherFactory.Create(EtlFileChunkFormat.Csv);
+        _indexPublisher = publisherFactory.Create(EtlFileChunkFormat.Index);
     }
 
     /// <summary>Retains exactly the source and lookup revisions resolved at admission.</summary>
@@ -119,7 +130,7 @@ internal sealed class EtlFilePreparer
             EtlCsvHeaderMap? sourceHeader = null;
             long sourceRecordCount = 0;
             var identity = SourceIndexIdentity(snapshots, pipelineHash);
-            var sourceIndex = await _indexStore.PublishAsync(_snapshotRoot, identity, indexLimit,
+            var sourceIndex = await _indexPublisher.PublishAsync(_snapshotRoot, identity, indexLimit,
                 async (destination, ct) =>
                 {
                     await using var file = OpenRetainedSnapshot(snapshots.SourceChunk, snapshots.SourcePin,
@@ -209,7 +220,7 @@ internal sealed class EtlFilePreparer
             PinHandle = pin.Handle
         });
 
-        return await _snapshotStore.PublishAsync(_snapshotRoot, identity, maxBytes,
+        return await _snapshotPublisher.PublishAsync(_snapshotRoot, identity, maxBytes,
             async (destination, ct) =>
             {
                 await using var input = _bindings.OpenInput(pin);

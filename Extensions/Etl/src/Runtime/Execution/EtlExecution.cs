@@ -15,6 +15,8 @@ internal sealed class EtlExecution(
     HostFileBindings bindings,
     EtlRuntimeOptions options,
     EtlExecutableReader executableReader,
+    EtlFilePreparer preparer,
+    EtlBatchProcessor batchProcessor,
     EtlAttemptBudget budget,
     IServiceScopeFactory scopeFactory,
     TimeProvider clock,
@@ -66,7 +68,6 @@ internal sealed class EtlExecution(
                 return;
             var pipeline = executableReader.Read(run.Invocation.Artifact);
             permit = await budget.AcquireAsync(Charge(pipeline.Limits), token);
-            var preparer = new EtlFilePreparer(bindings, options.SnapshotRoot);
             var snapshots = await preparer.CreateSnapshotsAsync(lease.Scope, lease.RunId, pipeline,
                 EtlRuntimeMetadata.PinnedBinding(lease.Scope, run.Bindings.Source, EtlFileRole.Source),
                 EtlRuntimeMetadata.PinnedBinding(lease.Scope, run.Bindings.Lookup, EtlFileRole.Lookup), token);
@@ -119,7 +120,7 @@ internal sealed class EtlExecution(
                 EtlRuntimeMetadata.PinnedBinding(lease.Scope, run.Bindings.Source, EtlFileRole.Source),
                 EtlRuntimeMetadata.PinnedBinding(lease.Scope, run.Bindings.Lookup, EtlFileRole.Lookup),
                 Chunk(run.Prepared.Source), Chunk(run.Prepared.Lookup));
-            var preparation = await new EtlFilePreparer(bindings, options.SnapshotRoot).PrepareAsync(pipeline, snapshots, token);
+            var preparation = await preparer.PrepareAsync(pipeline, snapshots, token);
             if (!preparation.Succeeded)
             {
                 await SettleAsync(lease, preparation.Diagnostic!, token);
@@ -167,7 +168,7 @@ internal sealed class EtlExecution(
                 }
                 if (await store.RenewPartitionAsync(lease, token) is not (EtlStoreStatus.Applied or EtlStoreStatus.Replay))
                     return;
-                var processed = await EtlBatchProcessor.ProcessAsync(admission, pipeline, prepared, built.Batch, bindings, token);
+                var processed = await batchProcessor.ProcessAsync(admission, pipeline, prepared, built.Batch, bindings, token);
                 if (!processed.Succeeded)
                 {
                     await SettleAsync(lease, processed.Diagnostic!, token);

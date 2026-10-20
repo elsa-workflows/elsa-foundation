@@ -4,6 +4,7 @@ using Elsa.Etl.Runtime.Bindings;
 using Elsa.Etl.Runtime.Execution;
 using Elsa.Etl.Runtime.Hosting;
 using Elsa.Etl.Runtime.Output;
+using Elsa.Etl.Runtime.Preparation;
 using Elsa.Tasks.Core;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
@@ -57,9 +58,15 @@ public sealed class EtlRuntimeFeature : IShellFeature
 
         services.AddSingleton(options);
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
+        services.TryAddSingleton<IFileChunkPublisherFactory, FileChunkPublisherFactory>();
         services.TryAddSingleton<EtlAttemptBudget>(_ => new EtlAttemptBudget(options.MaxConcurrentAttempts, options.Capacity));
         services.AddScoped(_ => new HostFileBindings(options.FileBindings));
         services.AddScoped<EtlExecutableReader>();
+        services.AddScoped<EtlBatchProcessor>();
+        services.AddScoped(provider => new EtlFilePreparer(
+            provider.GetRequiredService<HostFileBindings>(),
+            options.SnapshotRoot,
+            provider.GetRequiredService<IFileChunkPublisherFactory>()));
         services.AddScoped<EtlExecution>();
         services.AddScoped<EtlAcceptedOutputMaterializer>();
         services.AddScoped<IEtlRunAdmissionService>(provider => provider.GetRequiredService<EtlExecution>());

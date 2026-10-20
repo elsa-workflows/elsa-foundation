@@ -7,7 +7,7 @@ namespace Elsa.Etl.Runtime.Output;
 
 /// <summary>Publishes immutable chunks on a host-approved filesystem with atomic create-only publication.</summary>
 /// <remarks>Only the accepted manifest makes a physical chunk authoritative.</remarks>
-internal sealed class FileChunkStore
+internal sealed class FileChunkStore : IFileChunkPublisher
 {
     private readonly string _extension;
 
