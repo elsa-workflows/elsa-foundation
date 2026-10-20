@@ -93,7 +93,8 @@ for (const theme of ["light", "dark"] as const) {
 }
 
 for (const theme of ["light", "dark"] as const) {
-  for (const width of [320, 768, 1024, 1440]) {
+  // The smaller case also covers inspector space consumed by classic scrollbars and font metrics.
+  for (const width of [290, 320, 768, 1024, 1440]) {
     test(`More options preserves keyboard access and authored state at ${width}px in ${theme}`, async ({ page }, testInfo) => {
       const inspector = await openInspector(page, { theme, width });
       const disclosure = inspector.locator(".studio-advanced-section");

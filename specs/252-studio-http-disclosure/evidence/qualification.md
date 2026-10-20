@@ -1,6 +1,6 @@
 # HTTP disclosure qualification
 
-Local verification date: 2026-10-20. Initial implementation: `2149ad842254d0acd24e6fc314b7334fdf3c02c4`; round-1 corrections and final source-built UI/runtime qualification: `cdc894e06478a2b1e711ec716a0818747ff7b833`. Base includes `main` update `33c33214f16ca8c157d2af99ab31faecb90cb9a9`. Final evidence commits change documentation only. Delivery receipts and exact-head hosted checks belong on PR #3100 and #3064.
+Local verification date: 2026-10-20. Initial implementation: `2149ad842254d0acd24e6fc314b7334fdf3c02c4`; round-1 corrections and source-built UI/runtime qualification: `cdc894e06478a2b1e711ec716a0818747ff7b833`. Base includes `main` update `33c33214f16ca8c157d2af99ab31faecb90cb9a9`. Subsequent narrow-layout hardening is qualified separately below; the composed runtime receipt remains tied to its stated source. Delivery receipts and exact-head hosted checks belong on PR #3100 and #3064.
 
 ## Completed local gates
 
@@ -13,7 +13,7 @@ Local verification date: 2026-10-20. Initial implementation: `2149ad842254d0acd2
 | Workspace types | `pnpm typecheck`: passed |
 | Lint/layout | `pnpm lint`: zero errors; 48 existing warnings; CSS/layout checks passed |
 | Frontend build | `pnpm --recursive --workspace-concurrency=1 build`: passed, including Web bundle budgets |
-| Browser fixture | HTTP progressive-disclosure spec: 10 passed; keyboard and full-page axe at 320/768/1024/1440 px in Light/Dark, plus laptop method/configuration/error recovery |
+| Browser fixture | HTTP progressive-disclosure spec: 12 passed on macOS and Linux ARM Chromium 1.61.1; keyboard and full-page axe at 290/320/768/1024/1440 px in Light/Dark, plus laptop method/configuration/error recovery |
 | Design backend | Release whole Design suite: 679 passed, zero skipped |
 | Design API | Release whole Design API suite: 37 passed, zero skipped |
 | Studio/Workbench | Both rebuilt at clean correction commit; Studio zero warnings/errors; Workbench 91 existing warnings, zero errors |
@@ -48,3 +48,11 @@ An additional noncanonical Web `tsc --noEmit -p tsconfig.json` probe reports 88 
 Architecture discovery has two deferred theories: `Canonical_domain_api_depends_on_capability_aggregation_and_registers_one_stable_declaration` expands from one discovery entry to five executions, and `Every_collectible_api_explorer_artifact_is_rejected` expands from one to six. The TRX contains every discovered method, no unexpected methods, 578 passed outcomes and no skipped result. This explains the nine-case difference rather than treating the smaller list as a passing execution count.
 
 The generated-map diff adds Spec 252 and increments the inventory from 247 to 248; no new architectural findings were introduced. Final independent-review/hosted-CI/merge receipts belong on the PR. Post-merge CI remains a separate gate from local qualification and PR CI.
+
+## Narrow-layout correction after hosted CI
+
+Hosted Studio CI at `14f495e4dea36c79ddfcdb61e43d94cee6dfd2d4` failed two of 220 Chromium cases: the 320 px Light/Dark fixture inspector overflowed internally; page-level width assertions passed. The fixture uses production property editors, but its outer and inner padding leave less space than the maximized composed inspector, so that result alone does not establish a composed Workbench overflow at 320 px.
+
+A local geometry probe reproduced the issue at 305 and 290 px: the Connection header and native-select wrapper retained a roughly 264 px intrinsic width; at 290 px the inspector had `clientWidth=256`, `scrollWidth=280`. Explicitly sizing the property-row grid track with `minmax(0, 1fr)` and allowing the header to wrap removed overflow without clipping or removing controls. The new permanent 290 px Light/Dark cases both fail the existing internal-overflow assertion without these rules and pass with them. The full 12-case HTTP spec passes on macOS and official Playwright 1.61.1 Linux ARM Chromium. Linux ARM passed the original 320 px cases even before correction, so it is not represented as an exact reproduction of the hosted Linux failure. Fresh hosted CI must confirm that environment.
+
+Root visually checked the 290 px Dark fixture: metadata and controls wrap while the Connection select remains within the inspector. That unmocked interactive fixture shows Connection retry because no picker backend runs on its fixture origin; successful picker data is separately supplied by the automated tests. The screenshot is fixture evidence, not the earlier composed runtime. Browser viewport and composed Studio Dark mode were restored after inspection. CSS/layout lint passes with the same 48 existing JavaScript warnings and no errors. These two CSS rules and the additional viewport cases are the only production/test changes after the qualified round-1 source.
