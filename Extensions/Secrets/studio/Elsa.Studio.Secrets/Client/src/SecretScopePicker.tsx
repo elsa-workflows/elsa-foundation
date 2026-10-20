@@ -18,7 +18,8 @@ export function SecretScopePicker({
   loading = false,
   error = false,
   onChange,
-  onRetry
+  onRetry,
+  externalMatchingHintId
 }: {
   value: string;
   options?: SecretScopeDescriptor[];
@@ -26,6 +27,7 @@ export function SecretScopePicker({
   error?: boolean;
   onChange(value: string): void;
   onRetry?(): void;
+  externalMatchingHintId?: string;
 }) {
   const id = useId();
   const [customMode, setCustomMode] = useState(false);
@@ -50,6 +52,7 @@ export function SecretScopePicker({
   const selectedDescription = selectedScope?.description?.trim();
   const selectedSource = selectedScope?.source?.trim();
   const hintId = `scope-hint-${id}`;
+  const describedBy = externalMatchingHintId ? `${externalMatchingHintId} ${hintId}` : hintId;
 
   return (
     <div className="secrets-scope-picker">
@@ -77,7 +80,7 @@ export function SecretScopePicker({
       <select
         id={`scope-select-${id}`}
         value={selectValue}
-        aria-describedby={hintId}
+        aria-describedby={describedBy}
         onChange={event => {
           if (event.target.value === customOptionValue) {
             setCustomMode(true);
@@ -109,7 +112,7 @@ export function SecretScopePicker({
         </label>
       ) : null}
       <div id={hintId}>
-        <ScopeMatchingHint />
+        {externalMatchingHintId ? null : <ScopeMatchingHint />}
         {selectedDescription ? <p className="secrets-field-hint">{selectedDescription}</p> : null}
         {selectedSource ? <p className="secrets-field-hint">Source: {selectedSource}</p> : null}
         {loading ? <p className="secrets-field-hint" role="status">Loading scope suggestions…</p> : null}

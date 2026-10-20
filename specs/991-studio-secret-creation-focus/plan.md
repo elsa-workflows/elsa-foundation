@@ -45,12 +45,10 @@ specs/991-studio-secret-creation-focus/
 ├── research.md
 ├── data-model.md
 ├── quickstart.md
-├── checklists/
-│   └── requirements.md  # specification-quality checklist; remove at terminal status
-└── tasks.md             # Phase 2 output; not created by this plan
+└── tasks.md             # implementation and verification tasks
 ```
 
-There is no `contracts/` directory because this design introduces no external or public contract. The requirements checklist is authoring residue, not delivery evidence.
+There is no `contracts/` directory because this design introduces no external or public contract. The completed specification-quality checklist was removed in this implementation diff.
 
 ### Source Code (repository root)
 
@@ -58,8 +56,8 @@ There is no `contracts/` directory because this design introduces no external or
 Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/
 ├── package.json                                      # direct studio-ui dependency
 ├── src/SecretDialogs.tsx                              # create form and existing request construction
-├── src/SecretScopePicker.tsx                          # bounded hint association, if needed
-├── src/studio-sdk.d.ts                               # remove obsolete ambient SDK copy
+├── src/SecretScopePicker.tsx                          # bounded hint association
+├── src/styles.css                                    # reuse existing form spacing inside options
 └── src/__tests__/
     ├── secretDialogs.test.tsx                       # creation behavior regressions
     ├── secretsApi.test.ts                           # generic fixture typing for direct tsc
@@ -96,4 +94,4 @@ Studio/
 
 ## Validation and Lifecycle
 
-The commands, expected evidence, and individually recorded implementation baselines are in [quickstart.md](quickstart.md). On the implementation PR's final diff, set the spec status to `Implemented` and remove `checklists/requirements.md` and its tree entry before merge. The docs-map policy now publishes the spec-status map through CI on the `generated-maps` branch after a push to `main`; documentation maps and findings are not committed or staged. The local maps `-- check` command checks only the committed dependency map. Run exact-head hosted required checks and independent review after final lifecycle edits, then verify main's post-merge CI/maps gates.
+The commands, expected evidence, and individually recorded implementation baselines are in [quickstart.md](quickstart.md). On the implementation PR's final diff, set the spec status to `Implemented` and remove the specification-quality checklist and its tree entry before merge (completed in this diff). The docs-map policy now publishes the spec-status map through CI on the `generated-maps` branch after a push to `main`; documentation maps and findings are not committed or staged. The local maps `-- check` command checks only the committed dependency map. Run exact-head hosted required checks and independent review after final lifecycle edits, then verify main's post-merge CI/maps gates.

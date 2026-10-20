@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-20
 
-**Status**: Approved
+**Status**: Implemented
 
 **Input**: [Foundation UX issue #3066](https://github.com/elsa-workflows/elsa-foundation/issues/3066), “Studio UX: Make secret creation focus on name and value before optional metadata,” under [epic #3057](https://github.com/elsa-workflows/elsa-foundation/issues/3057) in [Simplification program #2559](https://github.com/elsa-workflows/elsa-foundation/issues/2559).
 

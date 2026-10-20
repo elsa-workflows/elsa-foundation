@@ -14,6 +14,8 @@ const descriptors: SecretDescriptorsResponse = {
 };
 const scopeDescriptors: SecretDescriptorsResponse = {
   ...descriptors,
+  types: descriptors.types.map(type => ({ ...type, description: "Fixture type description." })),
+  stores: descriptors.stores.map(store => ({ ...store, description: "Fixture store description." })),
   scopes: [{ name: "module.payments", displayName: "Payments", description: "Payment module scope", source: "Module catalog" }]
 };
 const configurableDescriptors: SecretDescriptorsResponse = {
@@ -229,6 +231,8 @@ describe("Create dialog regression contract", () => {
     expect(type.compareDocumentPosition(value) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(expires.parentElement?.textContent).toContain("Expires");
     expect(textNodeOutside(dialog, "Store: Encrypted", body)).not.toBeNull();
+    expect(textNodeOutside(dialog, "Fixture type description.", body)).not.toBeNull();
+    expect(textNodeOutside(dialog, "Fixture store description.", body)).not.toBeNull();
 
     const scopeHint = [...dialog.querySelectorAll<HTMLParagraphElement>("p")].filter(paragraph => paragraph.textContent?.trim() === SECRET_SCOPE_MATCHING_HINT);
     expect(scopeHint).toHaveLength(1);
@@ -629,7 +633,7 @@ function textNodeOutside(container: HTMLElement, text: string, excluded: HTMLEle
   while (walker.nextNode()) {
     const node = walker.currentNode;
     const parent = node.parentElement;
-    if (parent && node.textContent?.includes(text) && !excluded.contains(parent) && !parent.closest("select, option")) return parent;
+    if (parent && parent.textContent?.trim() === text && !excluded.contains(parent) && !parent.closest("select, option")) return parent;
   }
   return null;
 }

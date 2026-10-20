@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const fixtureValue = "fixture-secret-value-must-not-return";
+const fixtureScope = " Org.Team-A/Case ";
 
 async function loadSecretsPage(page: import("@playwright/test").Page, scenario = "default") {
   await page.goto(`/secret-scopes.html?scenario=${scenario}`);
@@ -38,6 +39,15 @@ async function revealOptionalFields(dialog: import("@playwright/test").Locator) 
   await more.click();
   await expect(more).toHaveAttribute("aria-expanded", "true");
   return more;
+}
+
+async function beginCustomScopeRefresh(dialog: import("@playwright/test").Locator) {
+  await dialog.getByRole("combobox", { name: "Scope", exact: true }).selectOption({ label: "Custom…" });
+  const custom = dialog.getByRole("textbox", { name: "Custom scope value", exact: true });
+  await custom.fill(fixtureScope);
+  await dialog.getByRole("button", { name: "Refresh scope suggestions", exact: true }).click();
+  await expect(dialog.getByRole("status")).toContainText("Loading scope suggestions…");
+  return custom;
 }
 
 for (const source of [
@@ -237,8 +247,18 @@ test("catalog refresh shows its loading state without clearing the selected scop
 
 test("More options preserves authored choices and keeps context outside the fold", async ({ page }) => {
   const { dialog } = await openCreateSecret(page);
-  const optionalFields = ["Display name", "Description", "Tags", "Store", "Scope"];
-  for (const label of optionalFields) await expect(dialog.getByLabel(label, { exact: true })).toBeHidden();
+  const optionalFields = [
+    { label: "Display name", role: "textbox" },
+    { label: "Description", role: "textbox" },
+    { label: "Tags", role: "textbox" },
+    { label: "Store", role: "combobox" },
+    { label: "Scope", role: "combobox" }
+  ] as const;
+  for (const { label, role } of optionalFields) {
+    const field = dialog.getByRole(role, { name: label, exact: true, includeHidden: true });
+    await expect(field).toHaveCount(1);
+    await expect(field).toBeHidden();
+  }
   const hint = dialog.getByText("Optional qualifier. A reference that specifies a scope must match it (ignoring case). Scope does not grant access.", { exact: true });
   await expect(hint).toHaveCount(1);
   await expect(hint).toBeVisible();
@@ -252,7 +272,7 @@ test("More options preserves authored choices and keeps context outside the fold
   const regionId = await more.getAttribute("aria-controls");
   expect(regionId).toBeTruthy();
   const region = dialog.locator(`[id="${regionId}"]`);
-  for (const label of optionalFields) await expect(region.getByLabel(label, { exact: true })).toBeVisible();
+  for (const { label, role } of optionalFields) await expect(region.getByRole(role, { name: label, exact: true })).toBeVisible();
   await expect(region.getByLabel("Expires", { exact: true })).toHaveCount(0);
   await expect(region.getByText("Store: Encrypted", { exact: true })).toHaveCount(0);
   await expect(storeContext).toBeVisible();
@@ -283,17 +303,13 @@ test("Scope failure preserves focused custom input and stays disclosed after rec
   const { dialog } = await openCreateSecret(page, "focused-retry");
   const more = await revealOptionalFields(dialog);
   await fillRequiredMetadata(dialog, "focused.scope");
-  await dialog.getByRole("combobox", { name: "Scope", exact: true }).selectOption({ label: "Custom…" });
-  const custom = dialog.getByRole("textbox", { name: "Custom scope value", exact: true });
-  await custom.fill(" Org.Team-A/Case ");
-  await dialog.getByRole("button", { name: "Refresh scope suggestions", exact: true }).click();
-  await expect(dialog.getByRole("status")).toContainText("Loading scope suggestions…");
+  const custom = await beginCustomScopeRefresh(dialog);
   await custom.focus();
   await page.evaluate(() => window.dispatchEvent(new Event("fixture-scope-failure")));
   const error = dialog.getByRole("alert");
   await expect(error).toContainText("Scope suggestions could not be refreshed.");
   await expect(custom).toBeFocused();
-  await expect(custom).toHaveValue(" Org.Team-A/Case ");
+  await expect(custom).toHaveValue(fixtureScope);
   await expect(more).toHaveAttribute("aria-expanded", "true");
   await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeEnabled();
   await error.getByRole("button", { name: "Retry scope suggestions", exact: true }).click();
@@ -305,6 +321,30 @@ test("Scope failure preserves focused custom input and stays disclosed after rec
   const metadata = page.getByTestId("created-secret-metadata");
   await expect(metadata).toContainText('"scope":" Org.Team-A/Case "');
   await expect(metadata).not.toContainText(fixtureValue);
+  await expect(page.getByTestId("unexpected-secret-reads")).toHaveText("0");
+});
+
+test("Scope failure reopens collapsed options and keeps recovery visible until dismissed", async ({ page }) => {
+  const { dialog } = await openCreateSecret(page, "focused-retry");
+  const more = await revealOptionalFields(dialog);
+  await fillRequiredMetadata(dialog, "collapsed.scope");
+  const custom = await beginCustomScopeRefresh(dialog);
+  await more.click();
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+  await page.evaluate(() => window.dispatchEvent(new Event("fixture-scope-failure")));
+  await expect(more).toHaveAttribute("aria-expanded", "true");
+  await expect(custom).toHaveValue(fixtureScope);
+  await expect(dialog.getByRole("button", { name: "Create", exact: true })).toBeEnabled();
+  await more.click();
+  await expect(more).toHaveAttribute("aria-expanded", "true");
+  await dialog.getByRole("button", { name: "Retry scope suggestions", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
+  await expect(more).toHaveAttribute("aria-expanded", "true");
+  await more.click();
+  await expect(more).toHaveAttribute("aria-expanded", "false");
+  await more.click();
+  await expect(custom).toHaveValue(fixtureScope);
+  await expect(dialog.getByLabel("Value", { exact: true })).toHaveValue(fixtureValue);
   await expect(page.getByTestId("unexpected-secret-reads")).toHaveText("0");
 });
 
