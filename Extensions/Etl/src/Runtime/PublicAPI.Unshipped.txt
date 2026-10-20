@@ -36,6 +36,8 @@ Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLiveOutputBytes.get -> long
 Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLiveOutputBytes.set -> void
 Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLiveRecords.get -> long
 Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLiveRecords.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLookupCells.get -> long
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLookupCells.set -> void
 Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLookupRecords.get -> long
 Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLookupRecords.set -> void
 Elsa.Etl.Runtime.EtlRuntimeFeature.MaxPartitions.get -> int

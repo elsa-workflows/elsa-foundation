@@ -309,8 +309,33 @@ internal static class EtlRuntimeRecordCodec
             UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
             PropertyNameCaseInsensitive = false
         };
+        options.Converters.Add(new LosslessStringJsonConverter());
         options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false));
         return options;
+    }
+
+    // Private, unshipped v1 store values preserve every UTF-16 code unit. Fixed property names and
+    // the authored pipeline JsonElement are not transformed. No ordinary-JSON legacy fallback is accepted.
+    private sealed class LosslessStringJsonConverter : JsonConverter<string>
+    {
+        private const string Prefix = "u16:";
+
+        public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType != JsonTokenType.String)
+                throw new JsonException("The persisted ETL string representation is invalid.");
+            var value = reader.GetString();
+            if (value is null || !value.StartsWith(Prefix, StringComparison.Ordinal))
+                throw new JsonException("The persisted ETL string representation is invalid.");
+            try { return EfRelationalIdentity.Decode(value[Prefix.Length..]); }
+            catch (InvalidOperationException exception)
+            {
+                throw new JsonException("The persisted ETL string representation is invalid.", exception);
+            }
+        }
+
+        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options) =>
+            writer.WriteStringValue(Prefix + EfRelationalIdentity.Encode(value));
     }
 
     internal sealed record ScopeIdentity(string Key, string? TenantId, string PersistencePartition);

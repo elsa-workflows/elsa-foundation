@@ -1,3 +1,4 @@
+using System.Data.Common;
 using System.Security.Cryptography;
 using Elsa.Etl.Core;
 using Elsa.Etl.Core.Runtime;
@@ -11,6 +12,7 @@ using Elsa.Etl.Runtime.Preparation;
 using Elsa.Etl.Runtime.Output;
 using Elsa.Persistence.EntityFramework;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Etl.Tests;
@@ -349,8 +351,125 @@ public sealed class EtlRuntimeStoreTests
         Assert.Throws<InvalidDataException>(() => EtlRuntimeRecordCodec.Read<EtlTerminalResult>(new string(' ', 16 * 1024 + 1)));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Composite_run_views_never_mix_run_and_terminal_states(bool listRuns)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var scope = new EtlScope("tenant-a", "partition-a");
+        var admission = CreateAdmission("run-read-snapshot", scope);
+        EtlPreparationLease preparation;
+        await using (var setupContext = database.CreateContext())
+        {
+            var setup = database.CreateStore(setupContext);
+            await setup.AdmitAsync(admission);
+            preparation = Assert.IsType<EtlPreparationLease>(await setup.ClaimPreparationAsync(scope, "prep-worker"));
+        }
+
+        var barrier = new TableReadBarrier(EtlRuntimeEfModule.TerminalTableName);
+        await using var readerContext = database.CreateContext(barrier);
+        var reader = database.CreateStore(readerContext);
+        var readTask = ReadAsync(reader, scope, admission.Invocation.RunId, listRuns);
+        await barrier.Entered.WaitAsync(TimeSpan.FromSeconds(5));
+
+        await using var writerContext = database.CreateContext();
+        var writer = database.CreateStore(writerContext);
+        var writerTask = writer.CommitPreparationAsync(preparation, EtlRuntimeFixtures.Prepared(0)).AsTask();
+        try
+        {
+            Assert.Equal(EtlStoreStatus.Applied, await writerTask.WaitAsync(TimeSpan.FromSeconds(10)));
+        }
+        finally
+        {
+            barrier.Release();
+        }
+        var view = await readTask.WaitAsync(TimeSpan.FromSeconds(5));
+        await writerTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.NotNull(view);
+        Assert.False(view.Status == EtlRunStatus.Preparing && view.TerminalResult is not null,
+            "A composite read returned a preparing run paired with a terminal result committed between its queries.");
+        Assert.False(view.Status == EtlRunStatus.Succeeded && view.TerminalResult is null,
+            "A composite read returned a succeeded run without its terminal result.");
+    }
+
     [Fact]
-    public async Task Reused_context_refuses_an_expired_fence_after_another_context_takes_over()
+    public async Task New_admission_builds_its_composite_view_before_committing_the_admission()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var scope = new EtlScope("tenant-a", "partition-a");
+        var admission = CreateAdmission("run-admission-read-snapshot", scope);
+        var barrier = new TableReadBarrier(EtlRuntimeEfModule.TerminalTableName);
+        var commitObserver = new TransactionCommitObserver();
+        await using var admissionContext = database.CreateContext(barrier, commitObserver);
+        var admissionStore = database.CreateStore(admissionContext);
+
+        var admissionTask = admissionStore.AdmitAsync(admission).AsTask();
+        await barrier.Entered.WaitAsync(TimeSpan.FromSeconds(5));
+        var committedBeforeViewCompleted = commitObserver.CommitStarted;
+        barrier.Release();
+        var result = await admissionTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(EtlStoreStatus.Applied, result.Status);
+        Assert.NotNull(result.Run);
+        Assert.False(committedBeforeViewCompleted, "Admission committed before it read the view it returned.");
+        Assert.Equal(EtlRunStatus.Preparing, result.Run.Status);
+        Assert.Null(result.Run.TerminalResult);
+        Assert.True(commitObserver.CommitStarted);
+    }
+
+    [Fact]
+    public async Task Acceptance_snapshots_bounded_effects_before_database_queries()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var barrier = new TableReadBarrier(EtlRuntimeEfModule.ManifestTableName);
+        await using var context = database.CreateContext(barrier);
+        var store = database.CreateStore(context, new MutableTimeProvider());
+        var pipeline = EtlTestPipelines.Create() with { Limits = new EtlLimits { PartitionCount = 1, MaxBatchRecords = 2 } };
+        var admission = CreateAdmission("run-effect-snapshot", new EtlScope("tenant-a", "partition-a"), pipeline);
+        await StartAsync(store, admission, 2);
+        var lease = Assert.IsType<EtlPartitionLease>(await store.ClaimPartitionAsync(admission.Invocation.Scope, admission.Invocation.RunId, "worker"));
+        var batch = CreateBatch(admission, EtlRuntimeFixtures.Prepared(2), lease.PartitionOrdinal, lease.StartOrdinal, lease.StartOrdinal + 2, "two-effects");
+        Assert.Equal(EtlStoreStatus.Applied, (await store.ReserveBatchAsync(lease, batch)).Status);
+
+        var acceptance = CreateAcceptance(admission, batch, 1, 1, 0);
+        var effects = acceptance.Effects.ToArray();
+        acceptance = acceptance with { Effects = effects };
+        Assert.Equal(EtlStoreStatus.Invalid,
+            (await store.AcceptBatchAsync(lease, acceptance with { Effects = [effects[0], effects[1], effects[0]] })).Status);
+        var expectedErrorKey = effects.Single(effect => effect.Route == EtlOutputRoute.Error).Chunk.Key;
+        var acceptTask = store.AcceptBatchAsync(lease, acceptance).AsTask();
+        try
+        {
+            await barrier.Entered.WaitAsync(TimeSpan.FromSeconds(5));
+            var errorIndex = Array.FindIndex(effects, effect => effect.Route == EtlOutputRoute.Error);
+            effects[errorIndex] = effects[errorIndex] with
+            {
+                Chunk = effects[errorIndex].Chunk with { Key = "forged-after-validation" }
+            };
+        }
+        finally
+        {
+            barrier.Release();
+        }
+
+        Assert.Equal(EtlStoreStatus.Applied, (await acceptTask.WaitAsync(TimeSpan.FromSeconds(5))).Status);
+        var manifest = await store.ListManifestAsync(admission.Invocation.Scope, admission.Invocation.RunId, null, 10);
+        Assert.Equal(expectedErrorKey, Assert.Single(manifest, item => item.Position.Route == EtlOutputRoute.Error).Effect.Chunk.Key);
+    }
+
+    private static async Task<EtlRunView?> ReadAsync(EfEtlRuntimeStore store, EtlScope scope, string runId, bool listRuns)
+    {
+        if (!listRuns)
+            return await store.FindRunAsync(scope, runId);
+        return Assert.Single(await store.ListRunsAsync(scope, null, 10), run => run.Invocation.RunId == runId);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Reused_context_refuses_old_acceptance_after_another_context_takes_over(bool probeOtherOperations)
     {
         await using var database = await TestDatabase.CreateAsync();
         var clock = new MutableTimeProvider();
@@ -373,8 +492,11 @@ public sealed class EtlRuntimeStoreTests
         Assert.Equal("worker-new", Assert.Single(await oldStore.ListPartitionsAsync(admission.Invocation.Scope, admission.Invocation.RunId, -1, 10),
             view => view.PartitionOrdinal == current.PartitionOrdinal).Owner);
 
-        Assert.Equal(EtlStoreStatus.LeaseLost, await oldStore.RenewPartitionAsync(oldLease));
-        Assert.Equal(EtlStoreStatus.LeaseLost, (await oldStore.ReserveBatchAsync(oldLease, batch)).Status);
+        if (probeOtherOperations)
+        {
+            Assert.Equal(EtlStoreStatus.LeaseLost, await oldStore.RenewPartitionAsync(oldLease));
+            Assert.Equal(EtlStoreStatus.LeaseLost, (await oldStore.ReserveBatchAsync(oldLease, batch)).Status);
+        }
         Assert.Equal(EtlStoreStatus.LeaseLost,
             (await oldStore.AcceptBatchAsync(oldLease, CreateAcceptance(admission, batch, 2, 0, 0))).Status);
         Assert.Equal(EtlStoreStatus.Replay, (await newStore.ReserveBatchAsync(current, batch)).Status);
@@ -383,6 +505,126 @@ public sealed class EtlRuntimeStoreTests
         Assert.Empty(await oldStore.ListManifestAsync(admission.Invocation.Scope, admission.Invocation.RunId, null, 10));
         Assert.Equal(1, Assert.Single(await oldStore.ListPartitionsAsync(admission.Invocation.Scope, admission.Invocation.RunId, -1, 10),
             view => view.PartitionOrdinal == current.PartitionOrdinal).NextOrdinal);
+    }
+
+    [Fact]
+    public async Task Renewal_and_release_follow_ownership_while_reservation_still_requires_the_current_cursor()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.CreateContext();
+        var store = database.CreateStore(context, new MutableTimeProvider());
+        var pipeline = EtlTestPipelines.Create() with { Limits = new EtlLimits { PartitionCount = 1, MaxBatchRecords = 2 } };
+        var admission = CreateAdmission("renew-after-accept", new EtlScope(null, "partition"), pipeline);
+        await StartAsync(store, admission, 4);
+        var lease = Assert.IsType<EtlPartitionLease>(await store.ClaimPartitionAsync(admission.Invocation.Scope, admission.Invocation.RunId, "worker"));
+        var first = CreateBatch(admission, EtlRuntimeFixtures.Prepared(4), 0, 1, 3, "first");
+        Assert.Equal(EtlStoreStatus.Applied, (await store.ReserveBatchAsync(lease, first)).Status);
+        Assert.Equal(3, (await store.AcceptBatchAsync(lease, CreateAcceptance(admission, first, 2, 0, 0))).Lease!.NextOrdinal);
+        // A heartbeat can have captured this lease just before acceptance advanced the cursor.
+        Assert.Equal(EtlStoreStatus.Applied, await store.RenewPartitionAsync(lease));
+        var next = CreateBatch(admission, EtlRuntimeFixtures.Prepared(4), 0, 3, 5, "next");
+        Assert.Equal(EtlStoreStatus.LeaseLost, (await store.ReserveBatchAsync(lease, next)).Status);
+        Assert.Equal(EtlStoreStatus.Applied, await store.ReleasePartitionAsync(lease));
+        var successor = Assert.IsType<EtlPartitionLease>(await store.ClaimPartitionAsync(admission.Invocation.Scope, admission.Invocation.RunId, "next-worker"));
+        Assert.Equal(3, successor.NextOrdinal);
+        Assert.True(successor.Fence > lease.Fence);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Settled_replay_refuses_changed_counters_or_duplicate_route_substitution(bool duplicateRoute)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.CreateContext();
+        var store = database.CreateStore(context, new MutableTimeProvider());
+        var pipeline = EtlTestPipelines.Create() with { Limits = new EtlLimits { PartitionCount = 1, MaxBatchRecords = 4 } };
+        var admission = CreateAdmission("replay-acceptance", new EtlScope(null, "partition"), pipeline);
+        await StartAsync(store, admission, 8);
+        var lease = Assert.IsType<EtlPartitionLease>(await store.ClaimPartitionAsync(admission.Invocation.Scope, admission.Invocation.RunId, "worker"));
+        var batch = CreateBatch(admission, EtlRuntimeFixtures.Prepared(8), 0, 1, 5, "first");
+        Assert.Equal(EtlStoreStatus.Applied, (await store.ReserveBatchAsync(lease, batch)).Status);
+        var acceptance = CreateAcceptance(admission, batch, 2, 1, 1);
+        var accepted = await store.AcceptBatchAsync(lease, acceptance);
+        Assert.Equal(EtlStoreStatus.Applied, accepted.Status);
+        var changed = duplicateRoute
+            ? acceptance with { Effects = [acceptance.Effects[0], acceptance.Effects[0]] }
+            : acceptance with { AcceptedRecords = 1, FilteredRecords = 2 };
+        Assert.Equal(EtlStoreStatus.Conflict, (await store.AcceptBatchAsync(accepted.Lease!, changed)).Status);
+        var run = Assert.IsType<EtlRunView>(await store.FindRunAsync(admission.Invocation.Scope, admission.Invocation.RunId));
+        Assert.Equal(2, run.AcceptedRecords);
+        Assert.Equal(1, run.RejectedRecords);
+        Assert.Equal(1, run.FilteredRecords);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Nonempty_work_cannot_claim_zero_input_or_output_bytes(bool zeroInput)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.CreateContext();
+        var store = database.CreateStore(context, new MutableTimeProvider());
+        var admission = CreateAdmission("zero-byte", new EtlScope(null, "partition"));
+        await StartAsync(store, admission, 4);
+        var lease = Assert.IsType<EtlPartitionLease>(await store.ClaimPartitionAsync(admission.Invocation.Scope, admission.Invocation.RunId, "worker"));
+        var batch = CreateBatch(admission, EtlRuntimeFixtures.Prepared(4), 0, 1, 3, "first");
+        if (zeroInput)
+        {
+            batch = batch with { InputBytes = 0, BatchId = EtlRuntimeIdentity.BatchId(admission, EtlRuntimeFixtures.Prepared(4), 0, 1, 3, 0, batch.InputHash) };
+            Assert.Equal(EtlStoreStatus.Invalid, (await store.ReserveBatchAsync(lease, batch)).Status);
+        }
+        else
+        {
+            Assert.Equal(EtlStoreStatus.Applied, (await store.ReserveBatchAsync(lease, batch)).Status);
+            var acceptance = CreateAcceptance(admission, batch, 2, 0, 0);
+            var effect = acceptance.Effects[0];
+            acceptance = acceptance with { Effects = [effect with { Chunk = effect.Chunk with { ByteLength = 0 } }] };
+            Assert.Equal(EtlStoreStatus.Invalid, (await store.AcceptBatchAsync(lease, acceptance)).Status);
+        }
+        Assert.Empty(await store.ListManifestAsync(admission.Invocation.Scope, admission.Invocation.RunId, null, 10));
+    }
+
+    [Fact]
+    public async Task Persisted_invocation_preserves_opaque_scope_code_units_without_JSON_replacement()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var scope = new EtlScope("tenant-\ud800", "partition-\ud801");
+        var admission = CreateAdmission("opaque-scope", scope);
+        await using (var context = database.CreateContext())
+            Assert.Equal(EtlStoreStatus.Applied, (await database.CreateStore(context).AdmitAsync(admission)).Status);
+        await using (var context = database.CreateContext())
+        {
+            var store = database.CreateStore(context);
+            var reopened = Assert.IsType<EtlRunView>(await store.FindRunAsync(scope, admission.Invocation.RunId));
+            Assert.Equal(scope, reopened.Invocation.Scope);
+            Assert.Null(await store.FindRunAsync(new EtlScope("tenant-\ufffd", "partition-\ufffd"), admission.Invocation.RunId));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Persisted_invocation_preserves_opaque_run_and_address_code_units(bool addressIdentity)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var scope = new EtlScope(null, "partition");
+        var admission = CreateAdmission(addressIdentity ? "address-roundtrip" : "run-\ud800", scope);
+        if (addressIdentity)
+            admission = admission with { Invocation = admission.Invocation with
+            {
+                ResultAddress = admission.Invocation.ResultAddress with { BookmarkId = "bookmark-\ud801" }
+            } };
+        await using (var context = database.CreateContext())
+            Assert.Equal(EtlStoreStatus.Applied, (await database.CreateStore(context).AdmitAsync(admission)).Status);
+        await using (var context = database.CreateContext())
+        {
+            var store = database.CreateStore(context);
+            var reopened = Assert.IsType<EtlRunView>(await store.FindRunAsync(scope, admission.Invocation.RunId));
+            Assert.Equal(admission.Invocation.RunId, reopened.Invocation.RunId);
+            Assert.Equal(admission.Invocation.ResultAddress, reopened.Invocation.ResultAddress);
+            Assert.Equal(EtlStoreStatus.Replay, (await store.AdmitAsync(admission)).Status);
+        }
     }
 
     private static EtlRunAdmission CreateAdmission(string runId, EtlScope scope, EtlPipeline? pipeline = null)
@@ -453,10 +695,11 @@ public sealed class EtlRuntimeStoreTests
             return database;
         }
 
-        public EtlRuntimeSqliteDbContext CreateContext() => new(new DbContextOptionsBuilder<EtlRuntimeSqliteDbContext>()
+        public EtlRuntimeSqliteDbContext CreateContext(params IInterceptor[] interceptors) => new(new DbContextOptionsBuilder<EtlRuntimeSqliteDbContext>()
             .UseSqlite(_connectionString, sqlite => sqlite
                 .MigrationsAssembly(typeof(EtlRuntimeSqliteDbContext).Assembly.GetName().Name)
                 .MigrationsHistoryTable(EtlRuntimeEfModule.HistoryTableName))
+            .AddInterceptors(interceptors)
             .Options);
 
         public EfEtlRuntimeStore CreateStore(EtlRuntimeSqliteDbContext context, TimeProvider? clock = null,
@@ -476,5 +719,41 @@ public sealed class EtlRuntimeStoreTests
         private DateTimeOffset _now = DateTimeOffset.Parse("2026-10-20T12:00:00Z");
         public override DateTimeOffset GetUtcNow() => _now;
         public void Advance(TimeSpan duration) => _now += duration;
+    }
+
+    private sealed class TableReadBarrier(string tableName) : DbCommandInterceptor
+    {
+        private readonly TaskCompletionSource _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _intercepted;
+
+        public Task Entered => _entered.Task;
+        public void Release() => _release.TrySetResult();
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains(tableName, StringComparison.OrdinalIgnoreCase) &&
+                Interlocked.Exchange(ref _intercepted, 1) == 0)
+            {
+                _entered.TrySetResult();
+                await _release.Task.WaitAsync(cancellationToken);
+            }
+            return result;
+        }
+    }
+
+    private sealed class TransactionCommitObserver : DbTransactionInterceptor
+    {
+        private readonly TaskCompletionSource _commitStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool CommitStarted => _commitStarted.Task.IsCompleted;
+
+        public override ValueTask<InterceptionResult> TransactionCommittingAsync(DbTransaction transaction, TransactionEventData eventData,
+            InterceptionResult result, CancellationToken cancellationToken = default)
+        {
+            _commitStarted.TrySetResult();
+            return ValueTask.FromResult(result);
+        }
     }
 }

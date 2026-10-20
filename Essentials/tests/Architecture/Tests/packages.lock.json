@@ -1328,7 +1328,9 @@
       "elsa.etl.runtime": {
         "type": "Project",
         "dependencies": {
-          "Elsa.Etl.Core": "[4.0.0-dev, )"
+          "CShells.Abstractions": "[0.0.31, )",
+          "Elsa.Etl.Core": "[4.0.0-dev, )",
+          "Elsa.Tasks.Core": "[4.0.0-dev, )"
         }
       },
       "elsa.events": {

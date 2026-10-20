@@ -8,7 +8,7 @@ Records direct project references only.
 
 - Source projects: 151
 - Test projects: 152
-- Direct project references: 1648
+- Direct project references: 1651
 
 ## Projects
 
@@ -313,8 +313,8 @@ Records direct project references only.
 | [Elsa.Etl.Core](../../Extensions/Etl/src/Core/Elsa.Etl.Core.csproj) | source | Elsa.Etl | - | true | - |
 | [Elsa.Etl.Design](../../Extensions/Etl/src/Design/Elsa.Etl.Design.csproj) | source | Elsa.Etl | - | true | Elsa.Etl.Core |
 | [Elsa.Etl.Persistence.EntityFrameworkCore](../../Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj) | source | Elsa.Etl | - | true | Elsa.Etl.Design<br>Elsa.Persistence.EntityFramework |
-| [Elsa.Etl.Runtime](../../Extensions/Etl/src/Runtime/Elsa.Etl.Runtime.csproj) | source | Elsa.Etl | - | true | Elsa.Etl.Core |
-| [Elsa.Etl.Tests](../../Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj) | test | Elsa.Etl | - | false | Elsa.Etl.Core<br>Elsa.Etl.Design<br>Elsa.Etl.Persistence.EntityFrameworkCore<br>Elsa.Etl.Runtime |
+| [Elsa.Etl.Runtime](../../Extensions/Etl/src/Runtime/Elsa.Etl.Runtime.csproj) | source | Elsa.Etl | - | true | Elsa.Etl.Core<br>Elsa.Tasks.Core |
+| [Elsa.Etl.Tests](../../Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj) | test | Elsa.Etl | - | false | Elsa.Etl.Core<br>Elsa.Etl.Design<br>Elsa.Etl.Persistence.EntityFrameworkCore<br>Elsa.Etl.Runtime<br>Elsa.Locking.FileSystem<br>Elsa.Tasks |
 | [Elsa.ExtensionBuilder.Api](../../Extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj) | source | Elsa.ExtensionBuilder | - | true | Elsa.Api.AspNetCore<br>Elsa.Cluster.Readability<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Git<br>Elsa.Modularity.Core |
 | [Elsa.ExtensionBuilder.Api.Tests](../../Extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj) | test | Elsa.ExtensionBuilder | - | false | Elsa.ExtensionBuilder.Api<br>Elsa.Git<br>Elsa.Modularity.Core |
 

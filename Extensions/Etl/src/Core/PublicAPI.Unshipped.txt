@@ -716,3 +716,4 @@ static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.OutputIdentity(Elsa.Etl.Core.Run
 static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.OutputKey(Elsa.Etl.Core.Runtime.EtlRunAdmission! admission, string! batchId, Elsa.Etl.Core.Runtime.EtlOutputRoute route) -> string!
 static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ScopeKey(Elsa.Etl.Core.EtlScope! scope) -> string!
 Elsa.Etl.Core.Runtime.IEtlRuntimeStore.ReleasePartitionAsync(Elsa.Etl.Core.Runtime.EtlPartitionLease! lease, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlStoreStatus>
+static Elsa.Etl.Core.EtlArtifactJson.CreateArtifactId(int formatVersion, string! definitionId, int definitionVersion, string! contentHash) -> string!

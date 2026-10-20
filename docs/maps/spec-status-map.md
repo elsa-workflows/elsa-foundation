@@ -261,4 +261,4 @@ Notes come only from explicit `**Notes**:` metadata; see [Spec status metadata](
 | [252-studio-http-disclosure](../../specs/252-studio-http-disclosure/spec.md) | Guide HTTP activity configuration with safe progressive disclosure | Implemented — #3064; the implementation PR carries this transition and the final delivery receipt under the spec lifecycle. | - | 14 | 2 | - |
 | [253-connection-picker-failure](../../specs/253-connection-picker-failure/spec.md) | Explain Connection picker load failures | Implemented | - | 9 | 3 | - |
 | [254-connection-creation-disclosure](../../specs/254-connection-creation-disclosure/spec.md) | Connection Creation Disclosure | Implemented | - | 17 | 5 | - |
-| [255-finite-file-etl](../../specs/255-finite-file-etl/spec.md) | First Finite CSV-to-JSONL ETL Journey | Approved — implementation authorized under owner-delegated self-review; #3109 acceptance remains open | - | 6 | 30 | - |
+| [255-finite-file-etl](../../specs/255-finite-file-etl/spec.md) | First Finite CSV-to-JSONL ETL Journey | Approved — implementation authorized under owner-delegated self-review; #3109 acceptance remains open | - | 14 | 22 | - |

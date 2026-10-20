@@ -1,5 +1,3 @@
-using System.Buffers.Binary;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -68,7 +66,7 @@ internal sealed class EtlArtifactCompiler : IEtlArtifactCompiler
 
         var formatVersion = EtlArtifact.CurrentFormatVersion;
         var contentHash = EtlArtifactJson.Hash(document);
-        var artifactId = CreateArtifactId(formatVersion, definitionId, definitionVersion, contentHash);
+        var artifactId = EtlArtifactJson.CreateArtifactId(formatVersion, definitionId, definitionVersion, contentHash);
         var artifact = new EtlArtifact(formatVersion, artifactId, contentHash, definitionId, definitionVersion, document);
         if (JsonSerializer.SerializeToUtf8Bytes(artifact).Length > effectiveArtifactBytes)
         {
@@ -452,26 +450,6 @@ internal sealed class EtlArtifactCompiler : IEtlArtifactCompiler
 
     private static EtlColumn? FindField(IReadOnlyDictionary<string, EtlColumn> fields, string? name) =>
         name is not null && fields.TryGetValue(name, out var field) ? field : null;
-
-    private static string CreateArtifactId(int formatVersion, string definitionId, int definitionVersion, string contentHash)
-    {
-        var definitionBytes = Encoding.UTF8.GetBytes(definitionId);
-        var hashBytes = Encoding.ASCII.GetBytes(contentHash);
-        var identity = new byte[sizeof(int) + sizeof(int) + definitionBytes.Length + sizeof(int) + hashBytes.Length];
-        var offset = 0;
-        BinaryPrimitives.WriteInt32BigEndian(identity.AsSpan(offset, sizeof(int)), formatVersion);
-        offset += sizeof(int);
-        BinaryPrimitives.WriteInt32BigEndian(identity.AsSpan(offset, sizeof(int)), definitionBytes.Length);
-        offset += sizeof(int);
-        definitionBytes.CopyTo(identity.AsSpan(offset));
-        offset += definitionBytes.Length;
-        BinaryPrimitives.WriteInt32BigEndian(identity.AsSpan(offset, sizeof(int)), definitionVersion);
-        offset += sizeof(int);
-        hashBytes.CopyTo(identity.AsSpan(offset));
-
-        var digest = Convert.ToHexString(SHA256.HashData(identity)).ToLowerInvariant();
-        return $"etl-v{formatVersion}-{digest}";
-    }
 
     private static EtlCompilationResult Failure(DiagnosticCollector diagnostics) =>
         new(null, diagnostics.Items.ToArray());

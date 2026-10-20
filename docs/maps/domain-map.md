@@ -9,7 +9,7 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 - Source projects: 151
 - Test projects: 152
 - Domains: 34
-- Direct cross-domain references: 1098
+- Direct cross-domain references: 1101
 
 ## Domains
 
@@ -353,8 +353,8 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Etl.Core](../../Extensions/Etl/src/Core/Elsa.Etl.Core.csproj) | source | Elsa.Etl | Core | contract | - |
 | [Elsa.Etl.Design](../../Extensions/Etl/src/Design/Elsa.Etl.Design.csproj) | source | Elsa.Etl | Design | feature/implementation | Elsa.Etl.Core |
 | [Elsa.Etl.Persistence.EntityFrameworkCore](../../Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj) | source | Elsa.Etl | Persistence.EntityFrameworkCore | feature/implementation | Elsa.Etl.Design<br>Elsa.Persistence.EntityFramework |
-| [Elsa.Etl.Runtime](../../Extensions/Etl/src/Runtime/Elsa.Etl.Runtime.csproj) | source | Elsa.Etl | Runtime | feature/implementation | Elsa.Etl.Core |
-| [Elsa.Etl.Tests](../../Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj) | test | Elsa.Etl | Tests | test | Elsa.Etl.Core<br>Elsa.Etl.Design<br>Elsa.Etl.Persistence.EntityFrameworkCore<br>Elsa.Etl.Runtime |
+| [Elsa.Etl.Runtime](../../Extensions/Etl/src/Runtime/Elsa.Etl.Runtime.csproj) | source | Elsa.Etl | Runtime | feature/implementation | Elsa.Etl.Core<br>Elsa.Tasks.Core |
+| [Elsa.Etl.Tests](../../Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj) | test | Elsa.Etl | Tests | test | Elsa.Etl.Core<br>Elsa.Etl.Design<br>Elsa.Etl.Persistence.EntityFrameworkCore<br>Elsa.Etl.Runtime<br>Elsa.Locking.FileSystem<br>Elsa.Tasks |
 | [Elsa.ExtensionBuilder.Api](../../Extensions/ExtensionBuilder/src/Api/Elsa.ExtensionBuilder.Api.csproj) | source | Elsa.ExtensionBuilder | Api | feature/implementation | Elsa.Api.AspNetCore<br>Elsa.Cluster.Readability<br>Elsa.Foundation.Identity<br>Elsa.Foundation.Identity.Core<br>Elsa.Git<br>Elsa.Modularity.Core |
 | [Elsa.ExtensionBuilder.Api.Tests](../../Extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj) | test | Elsa.ExtensionBuilder | Api.Tests | test | Elsa.ExtensionBuilder.Api<br>Elsa.Git<br>Elsa.Modularity.Core |
 
@@ -786,6 +786,9 @@ Records project grouping and direct reference facts only. Roles are heuristic na
 | [Elsa.Diagnostics.StructuredLogs.Tests](../../Essentials/tests/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj) | Elsa.Diagnostics | [Elsa.Foundation.Identity.Core](../../Essentials/src/Foundation/Identity/Core/Elsa.Foundation.Identity.Core.csproj) | Elsa.Foundation |
 | [Elsa.Diagnostics.StructuredLogs.Tests](../../Essentials/tests/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj) | Elsa.Diagnostics | [Elsa.Testing](../../Essentials/tests/Testing/Elsa.Testing.csproj) | Elsa.Testing |
 | [Elsa.Etl.Persistence.EntityFrameworkCore](../../Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj) | Elsa.Etl | [Elsa.Persistence.EntityFramework](../../Essentials/src/Persistence/EntityFramework/Elsa.Persistence.EntityFramework.csproj) | Elsa.Persistence |
+| [Elsa.Etl.Runtime](../../Extensions/Etl/src/Runtime/Elsa.Etl.Runtime.csproj) | Elsa.Etl | [Elsa.Tasks.Core](../../Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj) | Elsa.Tasks |
+| [Elsa.Etl.Tests](../../Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj) | Elsa.Etl | [Elsa.Locking.FileSystem](../../Essentials/src/Locking/FileSystem/Elsa.Locking.FileSystem.csproj) | Elsa.Locking |
+| [Elsa.Etl.Tests](../../Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj) | Elsa.Etl | [Elsa.Tasks](../../Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj) | Elsa.Tasks |
 | [Elsa.Events](../../Essentials/src/Events/Elsa.Events/Elsa.Events.csproj) | Elsa.Events | [Elsa.Pipelines.Core](../../Essentials/src/Pipelines/Core/Elsa.Pipelines.Core.csproj) | Elsa.Pipelines |
 | [Elsa.Events](../../Essentials/src/Events/Elsa.Events/Elsa.Events.csproj) | Elsa.Events | [Elsa.Primitives](../../Essentials/src/Primitives/Primitives/Elsa.Primitives.csproj) | Elsa.Primitives |
 | [Elsa.Events](../../Essentials/src/Events/Elsa.Events/Elsa.Events.csproj) | Elsa.Events | [Elsa.Tasks.Core](../../Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj) | Elsa.Tasks |

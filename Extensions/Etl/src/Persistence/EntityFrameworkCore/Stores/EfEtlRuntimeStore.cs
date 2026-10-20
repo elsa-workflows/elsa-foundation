@@ -44,11 +44,12 @@ internal sealed class EfEtlRuntimeStore(
         }
 
         var now = NowTicks();
-        db.Runs.Add(EtlRuntimeRecordCodec.RunRecord(invocation, fingerprint, bindingsJson, now));
+        var created = EtlRuntimeRecordCodec.RunRecord(invocation, fingerprint, bindingsJson, now);
+        db.Runs.Add(created);
         await db.SaveChangesAsync(cancellationToken);
+        var view = await ReadViewAsync(created, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        var created = await db.Runs.SingleAsync(x => x.ScopeKey == key.ScopeKey && x.RunKey == key.RunKey, cancellationToken);
-        return new(EtlStoreStatus.Applied, await ReadViewAsync(created, cancellationToken));
+        return new(EtlStoreStatus.Applied, view);
     }
 
     public async ValueTask<EtlTerminalSettlementResult> RejectAdmissionAsync(EtlInvocation invocation, EtlRunDiagnostic diagnostic, CancellationToken cancellationToken = default)
@@ -71,11 +72,7 @@ internal sealed class EfEtlRuntimeStore(
         db.ChangeTracker.Clear();
         ArgumentNullException.ThrowIfNull(scope);
         EtlRuntimeRecordCodec.ValidateIdentity(runId, "run id");
-        var key = RunKey(scope, runId);
-        var row = await db.Runs.SingleOrDefaultAsync(x => x.ScopeKey == key.ScopeKey && x.RunKey == key.RunKey, cancellationToken);
-        if (row is null) return null;
-        ValidateRun(row, scope, runId);
-        return await ReadViewAsync(row, cancellationToken);
+        return await ReadRunViewSnapshotAsync(scope, runId, cancellationToken);
     }
 
     public async ValueTask<EtlPreparationLease?> ClaimPreparationAsync(EtlScope scope, string workerId, CancellationToken cancellationToken = default)
@@ -266,7 +263,7 @@ internal sealed class EfEtlRuntimeStore(
         var partition = await FindPartitionRowAsync(lease.Scope, lease.RunId, lease.PartitionOrdinal, cancellationToken);
         if (run is null || partition is null) return EtlStoreStatus.NotFound;
         if (run.Status != (int)EtlRunStatus.Running) return EtlStoreStatus.Terminal;
-        if (!HasPartitionLease(partition, lease, now)) return EtlStoreStatus.LeaseLost;
+        if (!HasPartitionLease(partition, lease, now, requireCursor: false)) return EtlStoreStatus.LeaseLost;
         var leaseExpiresAt = partition.ExpiresAtUtcTicks!.Value;
         partition.Owner = null;
         partition.ExpiresAtUtcTicks = null;
@@ -289,7 +286,7 @@ internal sealed class EfEtlRuntimeStore(
         var run = await FindRunRowAsync(lease.Scope, lease.RunId, cancellationToken);
         if (run is null) return EtlStoreStatus.NotFound;
         if (run.Status != (int)EtlRunStatus.Running) return EtlStoreStatus.Terminal;
-        if (!HasPartitionLease(row, lease, now)) return EtlStoreStatus.LeaseLost;
+        if (!HasPartitionLease(row, lease, now, requireCursor: false)) return EtlStoreStatus.LeaseLost;
         var leaseExpiresAt = row.ExpiresAtUtcTicks!.Value;
         row.ExpiresAtUtcTicks = Expiry(now, options.PartitionLease);
         row.Revision = checked(row.Revision + 1);
@@ -321,7 +318,7 @@ internal sealed class EfEtlRuntimeStore(
             return new(EtlStoreStatus.Replay, new(batch, existing.Settled));
         }
         if (batch.StartOrdinal != partition.NextOrdinal || batch.EndOrdinalExclusive <= batch.StartOrdinal ||
-            batch.EndOrdinalExclusive > partition.EndOrdinalExclusive || batch.InputBytes < 0 || !EtlRuntimeRecordCodec.IsSha256(batch.InputHash))
+            batch.EndOrdinalExclusive > partition.EndOrdinalExclusive || batch.InputBytes <= 0 || !EtlRuntimeRecordCodec.IsSha256(batch.InputHash))
             return new(EtlStoreStatus.Invalid, null);
 
         var preparedRow = await db.PreparedRuns.SingleOrDefaultAsync(x => x.ScopeKey == key.ScopeKey && x.RunKey == key.RunKey, cancellationToken);
@@ -376,6 +373,12 @@ internal sealed class EfEtlRuntimeStore(
         ArgumentNullException.ThrowIfNull(lease);
         ArgumentNullException.ThrowIfNull(acceptance);
         ArgumentNullException.ThrowIfNull(acceptance.Effects);
+        var effectCount = acceptance.Effects.Count;
+        if (effectCount is < 0 or > 2) return new(EtlStoreStatus.Invalid, null);
+        var effects = new EtlOutputEffect[effectCount];
+        for (var index = 0; index < effectCount; index++)
+            effects[index] = acceptance.Effects[index];
+        acceptance = acceptance with { Effects = effects };
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var now = NowTicks();
         var run = await FindRunRowAsync(lease.Scope, lease.RunId, cancellationToken);
@@ -387,6 +390,7 @@ internal sealed class EfEtlRuntimeStore(
         var leaseOwner = partition.Owner;
         var key = RunKey(lease.Scope, lease.RunId);
         var batch = acceptance.Batch;
+        if (batch is null) return new(EtlStoreStatus.Invalid, null);
         var reservation = await db.Reservations.SingleOrDefaultAsync(x => x.ScopeKey == key.ScopeKey && x.RunKey == key.RunKey &&
             x.PartitionOrdinal == lease.PartitionOrdinal && x.StartOrdinal == batch.StartOrdinal, cancellationToken);
         if (reservation is null || !ReservationMatches(reservation, batch)) return new(EtlStoreStatus.Conflict, null);
@@ -412,7 +416,7 @@ internal sealed class EfEtlRuntimeStore(
         long totalBytes = 0;
         foreach (var effect in acceptance.Effects)
         {
-            if (!Enum.IsDefined(effect.Route) || !expected.Remove(effect.Route, out var expectedCount) || effect.RecordCount != expectedCount)
+            if (effect is null || effect.Chunk is null || !Enum.IsDefined(effect.Route) || !expected.Remove(effect.Route, out var expectedCount) || effect.RecordCount != expectedCount || effect.Chunk.ByteLength <= 0)
                 return new(EtlStoreStatus.Invalid, null);
             try { EtlRuntimeRecordCodec.ValidateObject(effect.Chunk, "output chunk"); }
             catch (ArgumentException) { return new(EtlStoreStatus.Invalid, null); }
@@ -590,19 +594,19 @@ internal sealed class EfEtlRuntimeStore(
         db.ChangeTracker.Clear();
         ValidatePage(scope, take);
         var scopeKey = EtlRuntimeRecordCodec.Scope(scope).Key;
-        var query = db.Runs.Where(x => x.ScopeKey == scopeKey);
+        var query = RunSnapshots(scopeKey);
         if (afterRunId is not null)
         {
             EtlRuntimeRecordCodec.ValidateIdentity(afterRunId, "run id");
             var after = EtlRuntimeRecordCodec.EncodeIdentity(afterRunId, "run id");
-            query = query.Where(x => x.RunKey.CompareTo(after) > 0);
+            query = query.Where(x => x.Run.RunKey.CompareTo(after) > 0);
         }
-        var rows = await query.OrderBy(x => x.RunKey).Take(take + 1).ToListAsync(cancellationToken);
+        var rows = await query.OrderBy(x => x.Run.RunKey).Take(take + 1).ToListAsync(cancellationToken);
         var result = new List<EtlRunView>(Math.Min(take, rows.Count));
-        foreach (var row in rows.Take(take))
+        foreach (var snapshot in rows.Take(take))
         {
-            ValidateRun(row, scope, EtlRuntimeRecordCodec.DecodeIdentity(row.RunId, "run id"));
-            result.Add(await ReadViewAsync(row, cancellationToken));
+            ValidateRun(snapshot.Run, scope, EtlRuntimeRecordCodec.DecodeIdentity(snapshot.Run.RunId, "run id"));
+            result.Add(BuildRunView(snapshot.Run, snapshot.Prepared, snapshot.Terminal));
         }
         return result;
     }
@@ -613,19 +617,26 @@ internal sealed class EfEtlRuntimeStore(
         ValidatePage(scope, take);
         if (afterPartitionOrdinal < -1) throw new ArgumentOutOfRangeException(nameof(afterPartitionOrdinal));
         var key = RunKey(scope, runId);
-        var run = await db.Runs.SingleOrDefaultAsync(x => x.ScopeKey == key.ScopeKey && x.RunKey == key.RunKey, cancellationToken);
-        if (run is null) return Array.Empty<EtlPartitionView>();
-        ValidateRun(run, scope, runId);
-        var rows = await db.Partitions.Where(x => x.ScopeKey == key.ScopeKey && x.RunKey == key.RunKey && x.PartitionOrdinal > afterPartitionOrdinal)
-            .OrderBy(x => x.PartitionOrdinal).Take(take).ToListAsync(cancellationToken);
+        var rows = await (from partition in db.Partitions.AsNoTracking()
+                          join run in db.Runs.AsNoTracking()
+                              on new { partition.ScopeKey, partition.RunKey } equals new { run.ScopeKey, run.RunKey }
+                          join reservation in db.Reservations.AsNoTracking().Where(x => !x.Settled)
+                              on new { partition.ScopeKey, partition.RunKey, partition.PartitionOrdinal }
+                              equals new { reservation.ScopeKey, reservation.RunKey, reservation.PartitionOrdinal } into reservationRows
+                          from reservation in reservationRows.DefaultIfEmpty()
+                          where partition.ScopeKey == key.ScopeKey && partition.RunKey == key.RunKey &&
+                                partition.PartitionOrdinal > afterPartitionOrdinal
+                          orderby partition.PartitionOrdinal
+                          select new { Run = run, Partition = partition, Reservation = reservation })
+            .Take(take).ToListAsync(cancellationToken);
         var result = new List<EtlPartitionView>(rows.Count);
-        foreach (var row in rows)
+        foreach (var snapshot in rows)
         {
+            ValidateRun(snapshot.Run, scope, runId);
+            var row = snapshot.Partition;
             EnsureSchema(row.SchemaVersion);
-            var reservation = await db.Reservations.SingleOrDefaultAsync(x => x.ScopeKey == key.ScopeKey && x.RunKey == key.RunKey &&
-                x.PartitionOrdinal == row.PartitionOrdinal && !x.Settled, cancellationToken);
             EtlBatchReservation? owed = null;
-            if (reservation is not null)
+            if (snapshot.Reservation is { } reservation)
             {
                 EnsureSchema(reservation.SchemaVersion);
                 owed = new(new(reservation.BatchId, reservation.StartOrdinal, reservation.EndOrdinalExclusive,
@@ -794,7 +805,42 @@ internal sealed class EfEtlRuntimeStore(
         return null;
     }
 
+    // Each view comes from one statement snapshot; no reader-held write transaction or N+1 component reads.
+    private IQueryable<RunSnapshot> RunSnapshots(string scopeKey) =>
+        from run in db.Runs.AsNoTracking()
+        join prepared in db.PreparedRuns.AsNoTracking()
+            on new { run.ScopeKey, run.RunKey } equals new { prepared.ScopeKey, prepared.RunKey } into preparedRows
+        from prepared in preparedRows.DefaultIfEmpty()
+        join terminal in db.Terminals.AsNoTracking()
+            on new { run.ScopeKey, run.RunKey } equals new { terminal.ScopeKey, terminal.RunKey } into terminalRows
+        from terminal in terminalRows.DefaultIfEmpty()
+        where run.ScopeKey == scopeKey
+        select new RunSnapshot { Run = run, Prepared = prepared, Terminal = terminal };
+
+    private sealed class RunSnapshot
+    {
+        public required EtlRuntimeRunRecord Run { get; init; }
+        public EtlRuntimePreparedRecord? Prepared { get; init; }
+        public EtlRuntimeTerminalRecord? Terminal { get; init; }
+    }
+
+    private async ValueTask<EtlRunView?> ReadRunViewSnapshotAsync(EtlScope scope, string runId, CancellationToken cancellationToken)
+    {
+        var key = RunKey(scope, runId);
+        var snapshot = await RunSnapshots(key.ScopeKey).SingleOrDefaultAsync(x => x.Run.RunKey == key.RunKey, cancellationToken);
+        if (snapshot is null) return null;
+        ValidateRun(snapshot.Run, scope, runId);
+        return BuildRunView(snapshot.Run, snapshot.Prepared, snapshot.Terminal);
+    }
+
     private async ValueTask<EtlRunView> ReadViewAsync(EtlRuntimeRunRecord row, CancellationToken cancellationToken)
+    {
+        var preparedRow = await db.PreparedRuns.SingleOrDefaultAsync(x => x.ScopeKey == row.ScopeKey && x.RunKey == row.RunKey, cancellationToken);
+        var terminalRow = await db.Terminals.SingleOrDefaultAsync(x => x.ScopeKey == row.ScopeKey && x.RunKey == row.RunKey, cancellationToken);
+        return BuildRunView(row, preparedRow, terminalRow);
+    }
+
+    private EtlRunView BuildRunView(EtlRuntimeRunRecord row, EtlRuntimePreparedRecord? preparedRow, EtlRuntimeTerminalRecord? terminalRow)
     {
         EnsureSchema(row.SchemaVersion);
         var invocation = EtlRuntimeRecordCodec.ReadInvocation(row.InvocationJson);
@@ -803,8 +849,6 @@ internal sealed class EfEtlRuntimeStore(
             throw new InvalidDataException("The ETL runtime invocation fingerprint does not match its stored document.");
         var bindings = EtlRuntimeRecordCodec.ReadBindings(row.BindingsJson);
         if (bindings is not null) EtlRuntimeRecordCodec.ValidateStoredBindings(invocation, bindings);
-        var preparedRow = await db.PreparedRuns.SingleOrDefaultAsync(x => x.ScopeKey == row.ScopeKey && x.RunKey == row.RunKey, cancellationToken);
-        var terminalRow = await db.Terminals.SingleOrDefaultAsync(x => x.ScopeKey == row.ScopeKey && x.RunKey == row.RunKey, cancellationToken);
         EtlPreparedRun? prepared = preparedRow is null ? null : EtlRuntimeRecordCodec.ReadPrepared(preparedRow);
         EtlTerminalResult? terminal = terminalRow is null ? null : ReadTerminal(terminalRow);
         var status = (EtlRunStatus)row.Status;
@@ -888,7 +932,15 @@ internal sealed class EfEtlRuntimeStore(
     {
         var rows = await db.Manifest.Where(x => x.ScopeKey == scopeKey && x.RunKey == runKey && x.PartitionOrdinal == ordinal &&
             x.BatchStartOrdinal == acceptance.Batch.StartOrdinal).ToListAsync(cancellationToken);
-        if (rows.Count != acceptance.Effects.Count) return false;
+        if (rows.Count != acceptance.Effects.Count || acceptance.Effects.Count > 2 ||
+            acceptance.Effects.Any(effect => effect is null || effect.Chunk is null) ||
+            acceptance.Effects.Select(effect => effect.Route).Distinct().Count() != acceptance.Effects.Count)
+            return false;
+        var accepted = rows.Where(row => row.Route == (int)EtlOutputRoute.Main).Sum(row => row.RecordCount);
+        var rejected = rows.Where(row => row.Route == (int)EtlOutputRoute.Error).Sum(row => row.RecordCount);
+        var filtered = acceptance.Batch.EndOrdinalExclusive - acceptance.Batch.StartOrdinal - accepted - rejected;
+        if (acceptance.AcceptedRecords != accepted || acceptance.RejectedRecords != rejected || acceptance.FilteredRecords != filtered)
+            return false;
         return acceptance.Effects.All(effect => rows.Any(row => row.Route == (int)effect.Route && ManifestMatches(row, acceptance.Batch, effect)));
     }
 
@@ -920,10 +972,10 @@ internal sealed class EfEtlRuntimeStore(
         row.Status == (int)EtlRunStatus.Preparing && row.PreparationOwner == EtlRuntimeRecordCodec.EncodeIdentity(lease.Owner, "worker id") &&
         row.PreparationFence == lease.Fence && row.PreparationExpiresAtUtcTicks is { } expiry && expiry > now;
 
-    private bool HasPartitionLease(EtlRuntimePartitionRecord row, EtlPartitionLease lease, long now) =>
+    private bool HasPartitionLease(EtlRuntimePartitionRecord row, EtlPartitionLease lease, long now, bool requireCursor = true) =>
         row.Owner == EtlRuntimeRecordCodec.EncodeIdentity(lease.Owner, "worker id") && row.Fence == lease.Fence &&
         row.ExpiresAtUtcTicks is { } expiry && expiry > now && row.StartOrdinal == lease.StartOrdinal &&
-        row.EndOrdinalExclusive == lease.EndOrdinalExclusive && row.NextOrdinal == lease.NextOrdinal;
+        row.EndOrdinalExclusive == lease.EndOrdinalExclusive && (!requireCursor || row.NextOrdinal == lease.NextOrdinal);
 
     private EtlPartitionLease ToPartitionLease(EtlScope scope, string runId, EtlRuntimePartitionRecord row, string owner) =>
         new(scope, runId, row.PartitionOrdinal, owner, row.Fence, EtlRuntimeRecordCodec.ReadUtc(row.ExpiresAtUtcTicks!.Value),

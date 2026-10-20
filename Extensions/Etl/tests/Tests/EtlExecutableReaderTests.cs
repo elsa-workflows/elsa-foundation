@@ -1,5 +1,3 @@
-using System.Buffers.Binary;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Elsa.Etl.Core;
@@ -23,7 +21,7 @@ public sealed class EtlExecutableReaderTests
 
         Assert.Equal(EtlArtifactJson.Write(EtlTestPipelines.Create()).GetRawText(), EtlArtifactJson.Write(pipeline).GetRawText());
         Assert.Equal(EtlArtifactJson.Hash(artifact.Pipeline), artifact.ContentHash);
-        Assert.Equal(CreateArtifactId(artifact.FormatVersion, artifact.DefinitionId, artifact.DefinitionVersion, artifact.ContentHash), artifact.ArtifactId);
+        Assert.Equal(EtlArtifactJson.CreateArtifactId(artifact.FormatVersion, artifact.DefinitionId, artifact.DefinitionVersion, artifact.ContentHash), artifact.ArtifactId);
     }
 
     [Fact]
@@ -92,6 +90,24 @@ public sealed class EtlExecutableReaderTests
     {
         var limits = new EtlLimits { MaxLookupRecords = 100_001 };
         var artifact = CreateArtifact(EtlTestPipelines.Create() with { Limits = limits });
+        using var runtime = CreateRuntime();
+
+        var exception = Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(artifact));
+
+        Assert.Equal("etl.executable.limits-exceeded", exception.Code);
+    }
+
+    [Fact]
+    public void Reader_caps_lookup_cells_before_materializing_a_wide_sparse_lookup()
+    {
+        var pipeline = EtlTestPipelines.Create();
+        pipeline = pipeline with
+        {
+            LookupSchema = [pipeline.LookupSchema[0], .. Enumerable.Range(1, 255)
+                .Select(index => new EtlColumn($"optional{index}", EtlColumnType.String, false))],
+            Limits = pipeline.Limits with { MaxFields = 256, MaxLookupRecords = 100_000 }
+        };
+        var artifact = Assert.IsType<EtlArtifact>(CreateCompiler().Compile("wide", 1, pipeline).Artifact);
         using var runtime = CreateRuntime();
 
         var exception = Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(artifact));
@@ -200,26 +216,9 @@ public sealed class EtlExecutableReaderTests
     {
         var document = EtlArtifactJson.Write(pipeline);
         var hash = EtlArtifactJson.Hash(document);
-        return new EtlArtifact(EtlArtifact.CurrentFormatVersion, CreateArtifactId(EtlArtifact.CurrentFormatVersion, "orders", 1, hash), hash, "orders", 1, document);
+        return new EtlArtifact(EtlArtifact.CurrentFormatVersion, EtlArtifactJson.CreateArtifactId(EtlArtifact.CurrentFormatVersion, "orders", 1, hash), hash, "orders", 1, document);
     }
 
-    private static string CreateArtifactId(int formatVersion, string definitionId, int definitionVersion, string contentHash)
-    {
-        var definitionBytes = Encoding.UTF8.GetBytes(definitionId);
-        var hashBytes = Encoding.ASCII.GetBytes(contentHash);
-        var identity = new byte[sizeof(int) + sizeof(int) + definitionBytes.Length + sizeof(int) + hashBytes.Length];
-        var offset = 0;
-        BinaryPrimitives.WriteInt32BigEndian(identity.AsSpan(offset, sizeof(int)), formatVersion);
-        offset += sizeof(int);
-        BinaryPrimitives.WriteInt32BigEndian(identity.AsSpan(offset, sizeof(int)), definitionBytes.Length);
-        offset += sizeof(int);
-        definitionBytes.CopyTo(identity.AsSpan(offset));
-        offset += definitionBytes.Length;
-        BinaryPrimitives.WriteInt32BigEndian(identity.AsSpan(offset, sizeof(int)), definitionVersion);
-        offset += sizeof(int);
-        hashBytes.CopyTo(identity.AsSpan(offset));
-        return $"etl-v{formatVersion}-{Convert.ToHexString(SHA256.HashData(identity)).ToLowerInvariant()}";
-    }
 
     private sealed class RuntimeProvider(ServiceProvider provider, IServiceScope scope, EtlExecutableReader reader) : IDisposable
     {

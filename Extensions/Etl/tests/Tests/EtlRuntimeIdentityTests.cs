@@ -9,6 +9,11 @@ namespace Elsa.Etl.Tests;
 public sealed class EtlRuntimeIdentityTests
 {
     [Fact]
+    public void Artifact_identity_keeps_the_existing_v1_published_encoding() =>
+        Assert.Equal("etl-v1-54cc25fd04a13358a90c0874814a3f2a34abf1256463af6287ec823e3128d249",
+            EtlArtifactJson.CreateArtifactId(1, "orders", 1, new string('a', 64)));
+
+    [Fact]
     public void Scope_key_preserves_null_named_and_opaque_tenants()
     {
         var scopes = new[]

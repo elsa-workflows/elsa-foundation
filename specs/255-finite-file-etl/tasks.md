@@ -1,6 +1,6 @@
 # Tasks: Finite CSV-to-JSONL ETL
 
-**State:** Approved execution checklist for [#3109](https://github.com/elsa-workflows/elsa-foundation/issues/3109). Domain admission/design review and existing-runtime coverage are complete; component/design-persistence implementation is in progress. The [foundation checkpoint](evidence/finite-file-foundations.md) records executed evidence and the remaining product gate. This is the one active program leaf; do not turn its checkboxes into competing issue claims.
+**State:** Approved execution checklist for [#3109](https://github.com/elsa-workflows/elsa-foundation/issues/3109). Domain admission/design review and existing-runtime coverage are complete; component/design-persistence and bounded runtime execution are implemented; native/API/Studio/recovery acceptance remains in progress. The [foundation checkpoint](evidence/finite-file-foundations.md) records executed evidence and the remaining product gate. This is the one active program leaf; do not turn its checkboxes into competing issue claims.
 
 ## Phase 1 — Admission and source verification
 
@@ -11,9 +11,9 @@
 ## Phase 2 — Foundations
 
 - [ ] T004 Create the real package/test layout in `Extensions/Etl/{src,tests,studio}`, register its path bucket in `Essentials/tests/Architecture/Tests/ArchitectureGuardTests.cs`, and add solution/host composition entries only for actual features.
-- [ ] T005 Implement version-1 immutable artifact/schema/topology and scoped design/runtime contracts in `Extensions/Etl/src/Core`; add tracked public API and strict unsupported-version/identity validation tests in `Extensions/Etl/tests/Tests`.
-- [ ] T006 Define bounded host file binding options/revision resolution in `Extensions/Etl/src/Runtime` and test safe aliases, role/scope checks, required immutable input digests, pinned output revisions and refusal of authored paths.
-- [ ] T007 Add separate design/runtime EF contexts/stores/schema modules in `Extensions/Etl/src/Persistence/EntityFrameworkCore`, reviewed EF admission, provider/migration inventory and lock files. Validate actual fresh-schema/reopen behavior without design-store execution dependencies.
+- [x] T005 Implement version-1 immutable artifact/schema/topology and scoped design/runtime contracts in `Extensions/Etl/src/Core`; add tracked public API and strict unsupported-version/identity validation tests in `Extensions/Etl/tests/Tests`.
+- [x] T006 Define bounded host file binding options/revision resolution in `Extensions/Etl/src/Runtime` and test safe aliases, role/scope checks, required immutable input digests, pinned output revisions and refusal of authored paths.
+- [x] T007 Add separate design/runtime EF contexts/stores/schema modules in `Extensions/Etl/src/Persistence/EntityFrameworkCore`, reviewed EF admission, provider/migration inventory and lock files. Validate actual fresh-schema/reopen behavior without design-store execution dependencies.
 
 ## Phase 3 — US1: Author and publish
 
@@ -21,8 +21,8 @@
 **Independent test:** Publish a fixture, modify its draft, and load the old immutable artifact from runtime-only composition.
 
 - [x] T008 [US1] Add behavior tests in `Extensions/Etl/tests/Tests` for valid topology, duplicate/missing headers/keys, invalid types/filters/mapping, finite limits, draft concurrency and deterministic artifact hashing.
-- [ ] T009 [US1] Implement definition commands/queries and validation in `Extensions/Etl/src/Design`; retain schema/operation order, separate draft and published state, and issue safe stable diagnostics.
-- [ ] T010 [US1] Implement immutable artifact publication/retention through `Extensions/Etl/src/Design` and its EF store; prove replay/conflicting version refusal and unavailable dependency diagnostics.
+- [x] T009 [US1] Implement definition commands/queries and validation in `Extensions/Etl/src/Design`; retain schema/operation order, separate draft and published state, and issue safe stable diagnostics.
+- [x] T010 [US1] Implement immutable artifact publication/retention through `Extensions/Etl/src/Design` and its EF store; prove replay/conflicting version refusal and unavailable dependency diagnostics.
 - [ ] T011 [US1] Add authorized binding/definition/draft/validate/publish endpoints in `Extensions/Etl/src/Api`, capability/permission contributions and scope/concurrency behavior tests.
 
 ## Phase 4 — US2: Execute and return a native outcome
@@ -32,8 +32,8 @@
 
 - [x] T012 [US2] Write bounded parser/transform tests in `Extensions/Etl/tests/Tests` before implementation: quoting/multiline/BOM/CRLF/strict UTF-8, record/field/lookup/output byte bounds, typed mapping/filtering and deterministic row diagnostics.
 - [x] T013 [US2] Implement streaming CSV preparation, verified snapshots, logical-record index/ranges, exact-key lookup and transforms in `Extensions/Etl/src/Runtime`; avoid whole-file materialization.
-- [ ] T014 [US2] Implement short idempotent run admission and separately recoverable preparation in `Extensions/Etl/src/Runtime` and its EF store; persist chosen input/output revisions before acknowledging admission.
-- [ ] T015 [US2] Implement independently leased partitions and durable record/byte batch reservations in `Extensions/Etl/src/Runtime` and the EF store. Both quotas precede dispatch; only one owed batch per partition; retries retain identity/reservation.
+- [x] T014 [US2] Implement short idempotent run admission and separately recoverable preparation in `Extensions/Etl/src/Runtime` and its EF store; persist chosen input/output revisions before acknowledging admission.
+- [x] T015 [US2] Implement independently leased partitions and durable record/byte batch reservations in `Extensions/Etl/src/Runtime` and the EF store. Both quotas precede dispatch; only one owed batch per partition; retries retain identity/reservation.
 - [ ] T016 [US2] Implement immutable bounded JSONL chunks, conflict checks, fenced acceptance/cursor/quota transaction and deterministic accepted manifest/materialization in `Extensions/Etl/src/Runtime` and its EF store.
 - [ ] T017 [US2] Implement `RunEtl` and immutable typed invocation/result state in `Extensions/Etl/src/Workflows/Runtime`; derive admission from real `BookmarkCreated` commits using the existing enricher/outbox seam, with no kernel switch or mutable staging buffer.
 - [ ] T018 [US2] Implement publication pinning/picker contribution in `Extensions/Etl/src/Workflows/Design`; retain the exact ETL artifact/hash and expose the activity only through the existing catalog.
@@ -50,7 +50,7 @@
 - [ ] T023 [US3] Add shared two-process fixture support in `Extensions/Etl/tests/Tests`, following existing cluster process lifecycle/teardown. Stop one owned fixture worker and recover on restart/survivor.
 - [ ] T024 [US3] Cover interruptions at read/admission/mid-staged-write/published-effect/cursor/result boundaries in `Extensions/Etl/tests/Tests`; verify no partial final chunk, stable replay, conflicting chunks, stale claims/cursors, duplicate/late results and retained reservations.
 - [ ] T025 [US3] Cover cancellation/completion races, frozen bookmark/resume/stimulus/type address validation, mismatched or unexpectedly retired registrations versus legitimate consumption/parent termination, changed/corrupt snapshots/output revisions and unknown saved formats in `Extensions/Etl/tests/Tests`.
-- [ ] T026 [US3] Remove a real acceptance/cancellation safeguard temporarily, observe the precise regression fail, restore it and rerun the affected test; record source hashes/commands/results in `specs/255-finite-file-etl/evidence/`.
+- [x] T026 [US3] Remove a real acceptance/cancellation safeguard temporarily, observe the precise regression fail, restore it and rerun the affected test; record source hashes/commands/results in `specs/255-finite-file-etl/evidence/`.
 - [ ] T027 [US3] Validate ETL schema/module upgrade/reopen on the existing EF migration/provider fixtures and record executed versus skipped provider evidence in `specs/255-finite-file-etl/evidence/`.
 
 ## Phase 6 — US4: Studio authoring and inspection
@@ -68,7 +68,7 @@
 
 - [ ] T033 Document ETL feature contracts/tasks and retention/recovery/rollback limitations in `Extensions/Etl` README/catalogs, root `EXTENSION_POINTS.md` and the canonical glossary; keep parent connector/BPMN obligations explicit in `docs/program-goals/unified-execution.md`.
 - [ ] T034 Run focused build/tests, architecture guards, affected migration/provider checks and solution-filter validation; regenerate/check actual changed maps and lock files. Stage explicit paths including `docs/maps/manifest.json` when changed.
-- [ ] T035 Review the integrated diff independently and through a bounded self-review loop, fix actionable findings and post exact-head validation/limits on the single #3109 PR; keep issue/project review state synchronized.
+- [ ] T035 Review the integrated diff through a bounded self-review loop under the owner’s standing authorization; use bounded worker reviews where useful, fix actionable findings and post exact-head validation/limits on the single #3109 PR; keep issue/project review state synchronized.
 - [ ] T036 Merge only through the normal green gate, verify resulting-main CI/maps/Studio and update #3109/#2908/#2892 acceptance and claim disposition. Mark spec implemented in the implementation PR; never claim parent/program complete from this slice.
 
 ## Dependencies and parallel execution

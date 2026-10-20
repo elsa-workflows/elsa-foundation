@@ -3,7 +3,8 @@ namespace Elsa.Etl.Core.Runtime;
 /// <summary>Owns the short atomic transitions of one scoped finite ETL execution.</summary>
 /// <remarks>
 /// Implementations snapshot caller-owned values, use a trusted clock and configured lease durations, and
-/// recheck the persisted fence, expiry, cursor and terminal state inside every guarded transaction.
+/// recheck the persisted fence, expiry and terminal state inside every guarded transaction; reserving or
+/// accepting work also compares the expected cursor. Renewal and release follow ownership across cursor advancement.
 /// A lease is authority to attempt work, not proof that another task stopped. Physical chunks are not accepted output.
 /// </remarks>
 public interface IEtlRuntimeStore

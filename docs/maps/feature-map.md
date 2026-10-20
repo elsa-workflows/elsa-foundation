@@ -6,7 +6,7 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 
 ## Summary
 
-- Discovered feature classes: 116
+- Discovered feature classes: 118
 
 ## Features
 
@@ -51,6 +51,8 @@ Discovers public CShells feature classes and feature-base-derived classes by sca
 | StructuredLogsEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Diagnostics.StructuredLogs.Persistence.EntityFrameworkCore | IShellFeature | [StructuredLogsEntityFrameworkCoreFeature.cs](../../Essentials/src/Diagnostics/StructuredLogs/Persistence/EntityFrameworkCore/StructuredLogsEntityFrameworkCoreFeature.cs) |
 | EtlDesignFeature | direct IShellFeature | Elsa.Etl.Design | IShellFeature | [EtlDesignFeature.cs](../../Extensions/Etl/src/Design/EtlDesignFeature.cs) |
 | EtlDesignEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Etl.Persistence.EntityFrameworkCore | IShellFeature | [EtlDesignEntityFrameworkCoreFeature.cs](../../Extensions/Etl/src/Persistence/EntityFrameworkCore/EtlDesignEntityFrameworkCoreFeature.cs) |
+| EtlRuntimeEntityFrameworkCoreFeature | direct IShellFeature | Elsa.Etl.Persistence.EntityFrameworkCore | IShellFeature | [EtlRuntimeEntityFrameworkCoreFeature.cs](../../Extensions/Etl/src/Persistence/EntityFrameworkCore/EtlRuntimeEntityFrameworkCoreFeature.cs) |
+| EtlRuntimeFeature | direct IShellFeature | Elsa.Etl.Runtime | IShellFeature | [EtlRuntimeFeature.cs](../../Extensions/Etl/src/Runtime/EtlRuntimeFeature.cs) |
 | EventsFeature | direct IShellFeature | Elsa.Events | IShellFeature | [EventsFeature.cs](../../Essentials/src/Events/Elsa.Events/EventsFeature.cs) |
 | ExpressionsFeature | direct IShellFeature | Elsa.Expressions | IShellFeature | [ExpressionsFeature.cs](../../Essentials/src/Expressions/Elsa.Expressions/ExpressionsFeature.cs) |
 | ExpressionsApiFeature | direct IWebShellFeature | Elsa.Expressions.Api | IWebShellFeature | [ExpressionsApiFeature.cs](../../Essentials/src/Expressions/Api/ExpressionsApiFeature.cs) |

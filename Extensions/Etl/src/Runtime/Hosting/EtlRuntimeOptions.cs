@@ -11,6 +11,7 @@ internal sealed record EtlRuntimeOptions(
     int MaxConcurrentAttempts,
     EtlAttemptCharge Capacity,
     long MaxLookupRecords,
+    long MaxLookupCells,
     int MaxPartitions,
     long MaxSnapshotBytes)
 {
@@ -21,7 +22,7 @@ internal sealed record EtlRuntimeOptions(
         if (string.IsNullOrWhiteSpace(feature.SnapshotRoot) || !Path.IsPathFullyQualified(feature.SnapshotRoot) ||
             feature.MaxConcurrentAttempts <= 0 || feature.MaxLiveRecords <= 0 || feature.MaxLiveInputBytes <= 0 ||
             feature.MaxLiveLookupBytes <= 0 || feature.MaxLiveOutputBytes <= 0 || feature.MaxLookupRecords <= 0 ||
-            feature.MaxPartitions <= 0 ||
+            feature.MaxLookupCells <= 0 || feature.MaxPartitions <= 0 ||
             feature.MaxSnapshotBytes <= 0 || feature.FileBindings is null)
             throw InvalidConfiguration();
 
@@ -39,6 +40,7 @@ internal sealed record EtlRuntimeOptions(
                 new EtlAttemptCharge(feature.MaxLiveRecords, feature.MaxLiveInputBytes,
                     feature.MaxLiveLookupBytes, feature.MaxLiveOutputBytes),
                 feature.MaxLookupRecords,
+                feature.MaxLookupCells,
                 feature.MaxPartitions,
                 feature.MaxSnapshotBytes);
         }

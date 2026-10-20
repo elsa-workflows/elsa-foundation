@@ -2,6 +2,7 @@ using CShells.Features;
 using Elsa.Etl.Runtime.Bindings;
 using Elsa.Etl.Runtime.Execution;
 using Elsa.Etl.Runtime.Hosting;
+using Elsa.Tasks.Core;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -11,7 +12,7 @@ namespace Elsa.Etl.Runtime;
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("ETL")]
 [ManifestFeatureCategory("Runtime")]
-[ShellFeature(name: "EtlRuntime", DisplayName = "ETL Runtime", Description = "Bounded execution support for published finite file ETL pipelines.")]
+[ShellFeature(name: "EtlRuntime", DisplayName = "ETL Runtime", Description = "Bounded execution support for published finite file ETL pipelines.", DependsOn = new object[] { "Tasks" })]
 public sealed class EtlRuntimeFeature : IShellFeature
 {
     [ManifestSetting(DisplayName = "Snapshot root", Description = "Absolute host-approved root for bounded ETL source and lookup snapshots.", Category = "Storage")]
@@ -38,6 +39,9 @@ public sealed class EtlRuntimeFeature : IShellFeature
     [ManifestSetting(DisplayName = "Maximum lookup records", Description = "Maximum lookup rows materialized for one ETL attempt.", Category = "Capacity")]
     public long MaxLookupRecords { get; set; } = 100_000;
 
+    [ManifestSetting(DisplayName = "Maximum lookup cells", Description = "Maximum lookup rows times schema columns materialized per attempt; bounds sparse-row object expansion independently of file bytes.", Category = "Capacity")]
+    public long MaxLookupCells { get; set; } = 1_000_000;
+
     [ManifestSetting(DisplayName = "Maximum partitions", Description = "Maximum partition count permitted by one published ETL pipeline.", Category = "Capacity")]
     public int MaxPartitions { get; set; } = 128;
 
@@ -54,6 +58,12 @@ public sealed class EtlRuntimeFeature : IShellFeature
         services.TryAddSingleton<EtlAttemptBudget>(_ => new EtlAttemptBudget(options.MaxConcurrentAttempts, options.Capacity));
         services.AddScoped(_ => new HostFileBindings(options.FileBindings));
         services.AddScoped<EtlExecutableReader>();
+        services.AddScoped<EtlExecution>();
+        // The generic host owns IHostedService; CShells owns IBackgroundTask through Tasks.
+        // Both paths resolve the same idempotently started worker for this provider generation.
+        services.AddSingleton<EtlRuntimeWorker>();
+        services.AddSingleton<IBackgroundTask>(provider => provider.GetRequiredService<EtlRuntimeWorker>());
+        services.AddHostedService(provider => provider.GetRequiredService<EtlRuntimeWorker>());
     }
 }
 

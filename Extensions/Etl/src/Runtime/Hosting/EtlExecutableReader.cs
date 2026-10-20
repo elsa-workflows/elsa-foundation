@@ -1,5 +1,4 @@
-using System.Buffers.Binary;
-using System.Security.Cryptography;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using Elsa.Etl.Core;
@@ -25,9 +24,9 @@ internal sealed class EtlExecutableReader(EtlRuntimeOptions options)
             if (artifact.Pipeline.ValueKind != JsonValueKind.Object)
                 throw Refused("etl.executable.invalid-pipeline");
 
-            var rawPipeline = artifact.Pipeline.GetRawText();
-            if (Encoding.UTF8.GetByteCount(rawPipeline) > EtlArtifact.MaximumByteLength)
+            if (JsonMarshal.GetRawUtf8Value(artifact.Pipeline).Length > EtlArtifact.MaximumByteLength)
                 throw Refused("etl.executable.too-large");
+            var rawPipeline = artifact.Pipeline.GetRawText();
 
             // This envelope measurement is done before typed deserialization. The raw pipeline has already
             // been bounded, and the scalar identity fields were bounded above.
@@ -48,7 +47,7 @@ internal sealed class EtlExecutableReader(EtlRuntimeOptions options)
 
             var hash = EtlArtifactJson.Hash(canonicalPipeline);
             if (!string.Equals(artifact.ContentHash, hash, StringComparison.Ordinal) ||
-                !string.Equals(artifact.ArtifactId, CreateArtifactId(artifact.FormatVersion, artifact.DefinitionId, artifact.DefinitionVersion, hash), StringComparison.Ordinal))
+                !string.Equals(artifact.ArtifactId, EtlArtifactJson.CreateArtifactId(artifact.FormatVersion, artifact.DefinitionId, artifact.DefinitionVersion, hash), StringComparison.Ordinal))
                 throw Refused("etl.executable.provenance-invalid");
 
             return pipeline;
@@ -91,9 +90,10 @@ internal sealed class EtlExecutableReader(EtlRuntimeOptions options)
             limits.MaxBatchRecords > options.Capacity.Records || limits.MaxBatchBytes > options.Capacity.InputBytes ||
             limits.MaxRecordBytes > options.Capacity.InputBytes ||
             limits.MaxLookupRecords > options.MaxLookupRecords ||
+            pipeline.SourceSchema.Count == 0 || pipeline.LookupSchema.Count == 0 ||
+            limits.MaxLookupRecords > options.MaxLookupCells / pipeline.LookupSchema.Count ||
             limits.MaxLookupBytes > options.Capacity.LookupBytes || limits.MaxOutputBatchBytes > options.Capacity.OutputBytes ||
             limits.MaxSnapshotBytes > options.MaxSnapshotBytes ||
-            pipeline.SourceSchema.Count == 0 || pipeline.LookupSchema.Count == 0 ||
             pipeline.SourceSchema.Count > limits.MaxFields || pipeline.LookupSchema.Count > limits.MaxFields ||
             pipeline.Mapping.Count == 0 || pipeline.Mapping.Count > 2 * MaximumFieldCount || pipeline.Filters.Count > 2 * MaximumFieldCount)
             throw Refused("etl.executable.limits-exceeded");
@@ -143,24 +143,6 @@ internal sealed class EtlExecutableReader(EtlRuntimeOptions options)
         if (value is not { Length: > 0 and <= MaximumDefinitionIdLength } || !char.IsAsciiLetterOrDigit(value[0]))
             return false;
         return value.All(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-');
-    }
-
-    private static string CreateArtifactId(int formatVersion, string definitionId, int definitionVersion, string contentHash)
-    {
-        var definitionBytes = Encoding.UTF8.GetBytes(definitionId);
-        var hashBytes = Encoding.ASCII.GetBytes(contentHash);
-        var identity = new byte[sizeof(int) + sizeof(int) + definitionBytes.Length + sizeof(int) + hashBytes.Length];
-        var offset = 0;
-        BinaryPrimitives.WriteInt32BigEndian(identity.AsSpan(offset, sizeof(int)), formatVersion);
-        offset += sizeof(int);
-        BinaryPrimitives.WriteInt32BigEndian(identity.AsSpan(offset, sizeof(int)), definitionBytes.Length);
-        offset += sizeof(int);
-        definitionBytes.CopyTo(identity.AsSpan(offset));
-        offset += definitionBytes.Length;
-        BinaryPrimitives.WriteInt32BigEndian(identity.AsSpan(offset, sizeof(int)), definitionVersion);
-        offset += sizeof(int);
-        hashBytes.CopyTo(identity.AsSpan(offset));
-        return $"etl-v{formatVersion}-{Convert.ToHexString(SHA256.HashData(identity)).ToLowerInvariant()}";
     }
 
     private static EtlExecutableException Refused(string code) => new(code);
