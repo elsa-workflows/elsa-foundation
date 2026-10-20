@@ -14,10 +14,15 @@ public interface IEtlRuntimeStore
     ValueTask<EtlRunView?> FindRunAsync(EtlScope scope, string runId, CancellationToken cancellationToken = default);
     ValueTask<EtlPreparationLease?> ClaimPreparationAsync(EtlScope scope, string workerId, CancellationToken cancellationToken = default);
     ValueTask<EtlStoreStatus> RenewPreparationAsync(EtlPreparationLease lease, CancellationToken cancellationToken = default);
+    /// <summary>Commits verified input and ranges; empty input atomically settles success and its terminal outbox.</summary>
     ValueTask<EtlStoreStatus> CommitPreparationAsync(EtlPreparationLease lease, EtlPreparedRun prepared, CancellationToken cancellationToken = default);
-    ValueTask<EtlPartitionLease?> ClaimPartitionAsync(EtlScope scope, string runId, string workerId, CancellationToken cancellationToken = default);
+    /// <summary>Claims work in the exact scope; a null run ID selects across runnable runs in that scope.</summary>
+    ValueTask<EtlPartitionLease?> ClaimPartitionAsync(EtlScope scope, string? runId, string workerId, CancellationToken cancellationToken = default);
     ValueTask<EtlStoreStatus> RenewPartitionAsync(EtlPartitionLease lease, CancellationToken cancellationToken = default);
+    /// <summary>Relinquishes only the current claim; owed reservations and quota survive. The old fence becomes invalid.</summary>
+    ValueTask<EtlStoreStatus> ReleasePartitionAsync(EtlPartitionLease lease, CancellationToken cancellationToken = default);
     ValueTask<EtlReservationResult> ReserveBatchAsync(EtlPartitionLease lease, EtlBatchDescriptor batch, CancellationToken cancellationToken = default);
+    /// <summary>Accepts effects/cursor/quota atomically; final work also settles the run and outbox in that transaction.</summary>
     ValueTask<EtlAcceptanceResult> AcceptBatchAsync(EtlPartitionLease lease, EtlBatchAcceptance acceptance, CancellationToken cancellationToken = default);
     ValueTask<EtlTerminalSettlementResult> SettleTerminalAsync(EtlTerminalProposal proposal, CancellationToken cancellationToken = default);
     ValueTask<EtlTerminalSettlementResult> CancelAsync(EtlInvocation invocation, CancellationToken cancellationToken = default);
