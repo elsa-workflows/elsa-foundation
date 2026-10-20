@@ -5,9 +5,9 @@ namespace Elsa.Connections.Core.Contracts;
 /// hosts without Identity still compose; the API replaces it with a principal-backed gate.
 /// </summary>
 /// <remarks>
-/// Binding a connection in a workflow is not a connection right, so it has no method here. The routes that write and
-/// promote workflow state authorize it through <c>workflows/design:manage</c>; draft validation and runtime resolution
-/// never ask the caller.
+/// Binding a connection in a workflow is not a connection right, so it has no method here. The Workflow Design routes
+/// that write or promote drafts authorize it through <c>workflows/design:manage</c>; draft validation and runtime
+/// resolution never ask the caller.
 /// </remarks>
 public interface IConnectionPermissionGate
 {

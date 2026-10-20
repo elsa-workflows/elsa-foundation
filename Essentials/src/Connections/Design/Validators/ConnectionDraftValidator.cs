@@ -9,12 +9,13 @@ using Elsa.Workflows.Design.Validations.Core.Models;
 namespace Elsa.Connections.Design.Validators;
 
 /// <summary>
-/// Publish gate (D7): a missing or wrong-type connection blocks; <c>NeedsAuthorization</c> warns only.
+/// Promotion gate (D7): a missing or wrong-type connection blocks; <c>NeedsAuthorization</c> warns only.
 /// </summary>
 /// <remarks>
 /// The findings depend on the draft and the tenant's connections, never on the caller. The validations panel, the
 /// dashboard and the promotion gate all run this as whoever asks, and every viewer sees the same result. The right to
-/// bind a connection is <c>workflows/design:manage</c>, which the routes that write and promote workflow state require.
+/// bind a connection is <c>workflows/design:manage</c>, which the Workflow Design routes that write or promote drafts
+/// require.
 /// </remarks>
 public sealed class ConnectionDraftValidator(
     IActivityStructureService activityStructureService,
