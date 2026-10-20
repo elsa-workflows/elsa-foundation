@@ -673,6 +673,11 @@ public sealed class Elsa3ExpressionRewriter
                 return;
             }
 
+            // Elsa 3's sloppy mode turned a write to an undeclared name into a global; Elsa 4's strict mode throws
+            // (spec 261 R-4). The parse cannot see it, so the scopes decide.
+            foreach (var written in WrittenNames(node).Where(name => !IsDeclared(name)))
+                Issues.Add(UndeclaredWrite(written));
+
             // A function the script declares itself is a local call, not an Elsa 3 host function.
             if (node is CallExpression call && call.Callee is Identifier callee && !IsDeclared(callee.Name))
             {
@@ -898,6 +903,37 @@ public sealed class Elsa3ExpressionRewriter
             foreach (var child in node.ChildNodes)
                 Visit(child);
         }
+
+        /// <summary>
+        /// The names a node writes as a plain binding: an assignment or destructuring target, an update, or the head of a
+        /// <c>for…in</c>/<c>for…of</c> that declares nothing. Member targets are not names.
+        /// </summary>
+        private static IEnumerable<string> WrittenNames(Node node)
+        {
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            switch (node)
+            {
+                case AssignmentExpression assignment:
+                    CollectBindings(assignment.Left, names);
+                    break;
+                case UpdateExpression { Argument: Identifier updated }:
+                    names.Add(updated.Name);
+                    break;
+                case ForInStatement { Left: not VariableDeclaration } forIn:
+                    CollectBindings(forIn.Left, names);
+                    break;
+                case ForOfStatement { Left: not VariableDeclaration } forOf:
+                    CollectBindings(forOf.Left, names);
+                    break;
+            }
+
+            return names;
+        }
+
+        private static Elsa3ExpressionRewriteIssue UndeclaredWrite(string name) => new(
+            Elsa3ImportDiagnosticCodes.UnsupportedShape,
+            $"JavaScript assigns to '{name}', which it never declares. Elsa 3 created a global; Elsa 4 runs in strict mode, where the assignment fails.",
+            $"Declare it with let in the Elsa 3 workflow (let {name} = …;) before import.");
 
         private void AddResolvedEdit(Node node, Elsa3AmbientReferenceKind kind, string name)
         {

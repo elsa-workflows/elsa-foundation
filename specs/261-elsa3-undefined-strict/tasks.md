@@ -69,7 +69,7 @@ to Elsa 3's result.
 
 **Independent test**: the undeclared-write tests in `Elsa3StrictModeTests` pass, and each declared counterpart converts.
 
-- [ ] T009 [US3] Create `Extensions/Elsa3/tests/Mapping/Tests/Elsa3StrictModeTests.cs`, with a summary that names spec 261. Add a refusal theory, in both Expression mode (`ConvertTextAsync`) and Script mode (a RunJavaScript body, as in `Elsa3JavaScriptConversionTests`). Assert `VF-IMP-007` and that the message names the variable. Cases:
+- [x] T009 [US3] Create `Extensions/Elsa3/tests/Mapping/Tests/Elsa3StrictModeTests.cs`, with a summary that names spec 261. Add a refusal theory, in both Expression mode (`ConvertTextAsync`) and Script mode (a RunJavaScript body, as in `Elsa3JavaScriptConversionTests`). Assert `VF-IMP-007` and that the message names the variable. Cases:
   - `total = 1; total`;
   - `total += 1; 1`;
   - `total++; 1`;
@@ -79,7 +79,7 @@ to Elsa 3's result.
   - `for (k of [1]) {} 1`;
   - `(function () { total = 1; })(); 1`;
   - `undefined = 1; 1`.
-- [ ] T010 [US3] In `Elsa3StrictModeTests.cs`, add a conversion theory for the declared counterparts:
+- [x] T010 [US3] In `Elsa3StrictModeTests.cs`, add a conversion theory for the declared counterparts:
   - `var total; total = 1; total`;
   - `let total = 0; total += 1; total`;
   - `total = 1; var total; total` (hoisting);
@@ -87,8 +87,8 @@ to Elsa 3's result.
   - `try { throw 1 } catch (e) { e = 2 } 1`;
   - `for (var k in { x: 1 }) {} k`;
   - `const o = {}; o.total = 1; o.total`, a property write.
-- [ ] T011 [US3] Run T009–T010 on the US1 code and confirm the refusal cases convert today, which is the gap.
-- [ ] T012 [US3] Implement D-4 in `JavaScriptAnalyzer.VisitNode` in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs`, after the ambient-mutation check:
+- [x] T011 [US3] Run T009–T010 on the US1 code and confirm the refusal cases convert today, which is the gap.
+- [x] T012 [US3] Implement D-4 in `JavaScriptAnalyzer.VisitNode` in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs`, after the ambient-mutation check:
   - For `AssignmentExpression`, collect the identifiers its `Left` binds. Use the `CollectBindings` shape for `ArrayPattern`/`ObjectPattern`/`AssignmentPattern`/`RestElement`; an `Identifier` binds itself, and member targets are skipped.
   - For `UpdateExpression`, take its `Identifier` argument.
   - For a `ForInStatement`/`ForOfStatement` whose `Left` is not a `VariableDeclaration`, collect from `Left`.
