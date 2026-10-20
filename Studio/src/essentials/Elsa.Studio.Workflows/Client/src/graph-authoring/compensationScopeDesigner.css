@@ -76,6 +76,59 @@ button.wf-compensation-state {
   border-style: dashed;
 }
 
+/* Spec 258: confirmed work is kept for good; a completed inner scope's work is still undoable by the enclosing scope. */
+.wf-compensation-state[data-state="Confirmed"] {
+  border-color: color-mix(in srgb, var(--studio-success) 55%, var(--studio-border));
+}
+
+.wf-compensation-state[data-state="HandedOver"] {
+  border-style: dotted;
+}
+
+.wf-compensation-occurrence {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  max-width: 100%;
+  font-size: .8125rem;
+}
+
+.wf-compensation-occurrence select {
+  min-width: 0;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  padding: .2rem .4rem;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm, .375rem);
+  color: var(--studio-text);
+  background: var(--studio-surface);
+  font: inherit;
+}
+
+.wf-compensation-received {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  margin-top: .5rem;
+}
+
+.wf-compensation-received h4,
+.wf-compensation-received p {
+  margin: 0;
+}
+
+.wf-compensation-received p,
+.wf-compensation-origin {
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size, .8125rem);
+}
+
+.wf-compensation-received [role="list"] {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+
 .wf-compensation-cause {
   display: flex;
   flex-wrap: wrap;
