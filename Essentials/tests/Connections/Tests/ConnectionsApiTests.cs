@@ -178,12 +178,13 @@ public sealed class ConnectionsApiTests
     };
 
     /// <summary>
-    /// Listing connection metadata is implied by <c>workflows/design:read</c>, and so by <c>workflows/design:manage</c>.
-    /// Neither the connections admin rights nor an unrelated grant imply it, and no listing carries a secret value.
+    /// Listing connection metadata is implied by <c>workflows/design:read</c> (and so by <c>workflows/design:manage</c>)
+    /// or by <c>connections:manage</c>, whose holder must see what they manage. The other connections rights and an
+    /// unrelated grant do not imply it, and no listing carries a secret value.
     /// </summary>
     [Theory]
     [MemberData(nameof(ListingRoutes))]
-    public async Task Listing_requires_workflow_design_read(string method, string route)
+    public async Task Listing_requires_workflow_design_read_or_connections_manage(string method, string route)
     {
         const string secretValue = "listed-canary-secret-value";
         await using var host = await StartHostAsync();
@@ -195,7 +196,8 @@ public sealed class ConnectionsApiTests
         {
             ("workflows/design:read", HttpStatusCode.OK),
             ("workflows/design:manage", HttpStatusCode.OK),
-            ("connections:manage,connections:bind-secret,connections:test", HttpStatusCode.Forbidden),
+            ("connections:manage", HttpStatusCode.OK),
+            ("connections:bind-secret,connections:test", HttpStatusCode.Forbidden),
             ("workflows/runtime:read", HttpStatusCode.Forbidden)
         })
         {

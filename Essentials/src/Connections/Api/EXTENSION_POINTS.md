@@ -20,6 +20,7 @@ existing secret or a named credential to a field also needs `connections:bind-se
 `connections:test`.
 
 The list, descriptors, picker and single-connection reads require `workflows/design:read`, which Workflow Design owns
-and contributes. The Connections API does not reference the Workflow Design API, so it names that permission itself;
-an architecture test compares the name with the owner's declaration. Binding a connection in a workflow needs no
+and contributes, or `connections:manage`, because whoever manages connections must see them. The Connections API does
+not reference the Workflow Design API, so it names that permission itself; an architecture test compares the name with
+the owner's declaration. Binding a connection in a workflow needs no
 Connections permission: it is authorised by `workflows/design:manage` on the routes that write workflow state.

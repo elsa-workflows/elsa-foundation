@@ -16,7 +16,7 @@ public sealed class ConnectionsPermissionContributor : IPermissionContributor
         Permission(
             ConnectionsPermissions.Manage,
             "Manage connections",
-            "Create, update, revoke and delete connections. Does not grant secret binding."),
+            "List, create, update, revoke and delete connections. Does not grant secret binding."),
         Permission(
             ConnectionsPermissions.BindSecret,
             "Bind connection secrets",
