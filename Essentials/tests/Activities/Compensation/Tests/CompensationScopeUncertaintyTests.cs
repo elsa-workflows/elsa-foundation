@@ -181,6 +181,62 @@ public sealed class CompensationScopeUncertaintyTests
         Assert.Equal(2, CompensationScopeStatePersister.StateSchemaVersion);
     }
 
+    [Fact]
+    public async Task A_handler_that_M1_scheduled_still_completes_its_entry_after_the_state_is_upgraded()
+    {
+        // An M1 scope was compensating Reserve inventory when the host was upgraded: its handler's command carries no
+        // attempt number, and the upgraded entry has one running attempt.
+        var v1 = JsonSerializer.SerializeToElement(new
+        {
+            phase = "Compensating",
+            nextStepIndex = 3,
+            nextOrdinal = 3,
+            cause = new { kind = "fault", step = "Confirm order", activityExecutionId = "ae-3", incidentId = "inc-3" },
+            entries = new object[]
+            {
+                new { id = "e1", step = "Reserve inventory", ordinal = 1, status = "Compensating", forwardActivityExecutionId = "ae-1", handlerActivityExecutionIds = Array.Empty<string>() },
+                new { id = "e2", step = "Reserve delivery", ordinal = 2, status = "Compensated", forwardActivityExecutionId = "ae-2", handlerActivityExecutionIds = new[] { "ae-4" } }
+            }
+        });
+        var privateState = new ActivityPrivateState(ScopeExecutionId, 1,
+            ValueEnvelope.Inline(new ValueTypeDescriptor(CompensationScopeStatePersister.StateTypeAlias, schemaVersion: 1), v1, ValueProtectionPolicy.InstanceInline),
+            "attempt-1", DateTimeOffset.UnixEpoch);
+        var m1HandlerMetadata = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [CompensationScope.MetadataKeys.Role] = CompensationScope.MetadataKeys.HandlerRole,
+            [CompensationScope.MetadataKeys.Scope] = ScopeExecutionId,
+            [CompensationScope.MetadataKeys.Step] = "Reserve inventory",
+            [CompensationScope.MetadataKeys.Entry] = "e1",
+            [CompensationScope.MetadataKeys.Forward] = "ae-1"
+        };
+        var context = NewContext(privateState, m1HandlerMetadata);
+
+        var continuation = await new CompensationScope().OnChildCompletedAsync(
+            new ActivityChildCompletedContext(context, "ae-5", "release-inventory", [ActivityOutcomes.Done]));
+
+        // The completion is not dropped: the entry is compensated and, with nothing left, the scope finishes.
+        Assert.False(continuation.IsDeferred);
+        var state = CompensationScopeStatePersister.Deserialize(continuation.StateUpdate!.Value.InlineValue!.Value);
+        Assert.Equal(CompensationScopePhase.Compensated, state.Phase);
+        var entry = state.Entries.Single(candidate => candidate.Id == "e1");
+        Assert.Equal(CompensationEntryStatus.Compensated, entry.Status);
+        Assert.Equal((CompensationAttemptResult.Completed, "ae-5"), (entry.HandlerAttempts.Single().Result, entry.HandlerAttempts.Single().ActivityExecutionId));
+    }
+
+    [Theory]
+    [InlineData(1, null, true)]
+    [InlineData(2, null, false)]
+    [InlineData(2, "2", true)]
+    [InlineData(2, "1", false)]
+    public void Only_the_running_attempt_owns_a_handler_outcome(int attempts, string? attempt, bool expected)
+    {
+        var history = Enumerable.Range(1, attempts - 1).Select(index => new CompensationHandlerAttempt(CompensationAttemptResult.Faulted, $"ae-{index}"))
+            .Append(new CompensationHandlerAttempt(CompensationAttemptResult.Running)).ToArray();
+        var entry = new CompensationEntry("e1", "Reserve inventory", 1, CompensationEntryStatus.Compensating, "ae-f", "key", handlerAttempts: history);
+
+        Assert.Equal(expected, CompensationScope.IsRunningAttempt(entry, attempt));
+    }
+
     // Starts the journey and completes Reserve inventory, so Reserve delivery is the running step.
     private static async Task<(Evaluation AfterInventory, RuntimeChildActivityScheduleRequest DeliverStep)> RunToDeliveryAsync()
     {
@@ -236,6 +292,9 @@ public sealed class CompensationScopeUncertaintyTests
     }
 
     private static SimpleActivityExecutionContext NewContext(RuntimeStructuralStateUpdate? state, IReadOnlyDictionary<string, string> commandMetadata) =>
+        NewContext(state is null ? null : new ActivityPrivateState(ScopeExecutionId, state.StateVersion, state.Value, "attempt-1", DateTimeOffset.UnixEpoch), commandMetadata);
+
+    private static SimpleActivityExecutionContext NewContext(ActivityPrivateState? privateState, IReadOnlyDictionary<string, string> commandMetadata) =>
         new(
             new CompensationScope(),
             CancellationToken.None,
@@ -255,7 +314,7 @@ public sealed class CompensationScopeUncertaintyTests
                 commandMetadata: commandMetadata,
                 envelopeMetadata: new Dictionary<string, string>()),
             Journey,
-            ScopeState(state is null ? null : new ActivityPrivateState(ScopeExecutionId, state.StateVersion, state.Value, "attempt-1", DateTimeOffset.UnixEpoch)));
+            ScopeState(privateState));
 
     private static ActivityExecutionState ScopeState(ActivityPrivateState? privateState) =>
         new(

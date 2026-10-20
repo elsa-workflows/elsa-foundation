@@ -186,6 +186,27 @@ public sealed class CompensationScopeRuntimeTests
     }
 
     [Fact]
+    public async Task A_retried_uncertain_step_that_faults_with_nothing_to_undo_faults_the_scope_when_asked_to()
+    {
+        // The only step loses its response and has no handler, so the scope waits; the operator's retry is rejected.
+        var participant = new Participant().LosingResponseAfterEffectOf("confirm-order");
+        await using var harness = NewHarness(participant);
+        var reference = await harness.PublishAsync(Executable(Scope(faultAfterCompensation: true, new Step("Confirm order", Participant("confirm-order")))), "source-retried-step");
+        await harness.StartPublishedAsync(reference, harness.ExecutionId, tenantId: WorkflowExecutionHarness.Partition.Value);
+        var incident = Assert.Single(await harness.Services.GetRequiredService<IIncidentStateStore>().ListBlockingAsync(harness.ExecutionId));
+        participant.Rejecting("confirm-order");
+
+        await OperatorRetry.RetryAsync(harness, harness.ExecutionId, incident.ActivityExecutionId!, "retry-step", WorkflowExecutionHarness.Partition);
+
+        // A definite fault with nothing to undo: the scope re-raises it rather than also absorbing it.
+        var run = await harness.ReadRunAsync(harness.ExecutionId);
+        Assert.Equal(WorkflowExecutionStatus.Faulted, run.WorkflowState?.Status);
+        var scope = run.State(ScopeNodeId);
+        Assert.Equal(ActivityExecutionStatus.Faulted, scope.Status);
+        Assert.Equal(CompensationScope.CompensatedFaultCode, scope.Fault?.Code);
+    }
+
+    [Fact]
     public async Task A_handler_that_recovers_within_its_attempts_undoes_once_with_one_operation_key()
     {
         var participant = new Participant().Rejecting("confirm-order").FailingTimes("cancel-delivery", 2);

@@ -9,7 +9,7 @@ const incident: IncidentStateSummary = {
   executableNodeId: "response",
   severity: "Error",
   status: "Blocking",
-  resolutionAction: "None",
+  resolutionOutcome: null,
   failureType: "SchedulerWorkPoisoned",
   message: `Scheduler failed to evaluate the input expression. Fingerprint: sha256:${"abcdef0123456789".repeat(50)}`,
   createdAt: "2026-10-17T21:00:00Z",

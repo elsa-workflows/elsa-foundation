@@ -20,7 +20,7 @@ Final-state assertions read the participant's persisted file. They never read wo
 | J1 | Reserve inventory ✓, reserve delivery loses its response with the effect applied, confirm never runs | no reservations | `Compensated`; delivery entry `Compensated`, forward outcome `Uncertain` |
 | J2 | As J1, but the delivery effect arrives late, after its cancel | no reservations; the late request was refused | as J1 |
 | J3 | Confirm faults; cancel delivery fails twice, then succeeds (`handlerMaxAttempts` 3) | no reservations; one cancel effect | `Compensated`; 3 attempts recorded |
-| J4 | As J3, but the cancel fails every time | delivery still reserved; inventory released | `AwaitingIntervention`; delivery entry `Failed` with 3 attempts; blocking incident with `WaitForIntervention`; run `Running`; cause names *Confirm order* |
+| J4 | As J3, but the cancel fails every time | delivery and inventory still reserved: the release runs only after recovery resumes | `AwaitingIntervention`; delivery entry `Failed` with 3 attempts; blocking incident with `WaitForIntervention`; run `Running`; cause names *Confirm order* |
 | J5 | J4, then `RetryFaultedActivity/1` on the last cancel attempt, submitted twice with the same key and once with a new key | no reservations; one cancel effect from the retry | `Compensated`; 4 attempts recorded |
 | J6 | An uncertain step without a handler | the effect is as the participant left it | `AwaitingIntervention`; entry `Uncertain`; never compensated |
 
@@ -40,7 +40,7 @@ Each runs in Durable, Balanced and Ephemeral:
 | The scope-assigned `runtime.operationKey` on handler retries | J3 records two or three cancel effects |
 | The `outcome-unknown` branch, so the step is treated as a plain fault | J1 leaks the delivery reservation |
 | The intervention request, so the default strategy acts | J4's run faults |
-| Incident resolution in the retry alteration | J5's second submission schedules a second successor, or the retry is rejected |
+| Plan-key de-duplication in the retry alteration | a repeated `Idempotency-Key` returns a new plan instead of the existing one (`SameIdempotencyKeyTwice_SchedulesOneSuccessor` fails) |
 
 ## Run locally
 

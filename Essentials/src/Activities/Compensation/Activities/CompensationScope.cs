@@ -258,6 +258,11 @@ public sealed class CompensationScope : StructuralActivity, IRuntimeStructuralAc
             return WaitForStep(runtimeContext, state, entry, incidentId);
 
         var compensating = state with { Phase = CompensationScopePhase.Compensating };
+        if (NextEligible(navigator, compensating) is null && FaultAfterCompensation)
+            return CompensationScopeStatePersister.Stage(
+                RuntimeStructuralContinuation.Faulted(CompensatedFault(step.Name)),
+                compensating with { Phase = CompensationScopePhase.Compensated });
+
         runtimeContext.RequestChildFaultAbsorption(incidentId, $"Compensation scope started recovery because step '{step.Name}' faulted.");
         return ScheduleNextHandlerOrFinish(runtimeContext, navigator, compensating);
     }
@@ -467,8 +472,7 @@ public sealed class CompensationScope : StructuralActivity, IRuntimeStructuralAc
 
         var isLatest = entry.Status switch
         {
-            CompensationEntryStatus.Compensating => entry.HandlerAttempts.LastOrDefault()?.Result == CompensationAttemptResult.Running
-                                                    && StringComparer.Ordinal.Equals(metadata.GetValueOrDefault(MetadataKeys.Attempt), entry.HandlerAttempts.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            CompensationEntryStatus.Compensating => IsRunningAttempt(entry, metadata.GetValueOrDefault(MetadataKeys.Attempt)),
             CompensationEntryStatus.Failed => state.Phase == CompensationScopePhase.AwaitingIntervention,
             _ => false
         };
@@ -481,6 +485,14 @@ public sealed class CompensationScope : StructuralActivity, IRuntimeStructuralAc
                 $"Compensation scope '{runtimeContext.ExecutableNode.ExecutableNodeId}' received a handler outcome of node '{childExecutableNodeId}' for entry '{entry.Id}', whose handler is '{handlerNodeId}'.");
         return entry;
     }
+
+    // Whether a handler outcome with this attempt number belongs to the entry's running attempt. A handler that M1
+    // scheduled carries no attempt number; the version-1 upcast gives its entry exactly one running attempt.
+    internal static bool IsRunningAttempt(CompensationEntry entry, string? attempt) =>
+        entry.HandlerAttempts.LastOrDefault()?.Result == CompensationAttemptResult.Running
+        && (attempt is null
+            ? entry.HandlerAttempts.Count == 1
+            : StringComparer.Ordinal.Equals(attempt, entry.HandlerAttempts.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)));
 
     // The uncertain entry without a handler that the scope waits on, when the child is an operator retry of its step.
     private static CompensationEntry? WaitingStepEntry(

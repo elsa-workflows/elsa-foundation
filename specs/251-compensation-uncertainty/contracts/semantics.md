@@ -44,7 +44,9 @@ OnChildFaulted(child, incident, faultCategory)
                           -> as the Compensating branch above, counting the operator retry as an attempt
 
   phase AwaitingIntervention and child is the retried uncertain step without a handler:
-                          -> treat as a new fault of the running step (phase Running rules), keeping the entry
+                          -> treat as a new fault of the running step (phase Running rules), keeping the entry.
+                             The retry used the step's operation key, so under the participant contract (FR-220) a
+                             definite fault says no effect exists for that key; nothing is left to undo for it
 
   otherwise               -> do not absorb; Defer   (M1)
 
