@@ -161,6 +161,7 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         IReadOnlyCollection<ActivitySubtreeCancellationPlan> subtreeCancellationPlans = [];
         IReadOnlyCollection<IncidentState> interventionIncidents = [];
         IReadOnlyCollection<RuntimeSchedulerWorkItem> parentNotificationWorkItems = [];
+        IReadOnlyCollection<RuntimeSchedulerWorkItem> ancestorNotificationWorkItems = [];
         ActivityExecutionState? callbackBypassParentState = null;
         IReadOnlyCollection<RuntimeSchedulerWorkItem> callbackBypassContinuationWorkItems = [];
         ActivityActivationLease? activationLease = null;
@@ -346,9 +347,33 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                 if (interventionIncident is not null)
                     interventionIncidents = [interventionIncident];
 
-                // An ancestor notification is an initial-execution-only power.
-                if (context.GetAncestorNotificationRequests().Count > 0)
-                    throw new InvalidOperationException("An ancestor notification is only valid in an initial structural execution.");
+                // Spec 258 R-2: a child-completion evaluation that completes this parent may notify an ancestor, ahead
+                // of the parent's own upward completion. A child-fault evaluation may not, and any continuation other
+                // than Complete is refused while building. No matching ancestor faults this parent with a stable code.
+                var ancestorRequests = context.GetAncestorNotificationRequests();
+                if (ancestorRequests.Count > 0)
+                {
+                    if (childFaulted)
+                        throw new InvalidOperationException("An ancestor notification is not valid in a child-fault evaluation.");
+
+                    try
+                    {
+                        ancestorNotificationWorkItems = await ParentNotificationEvaluation.BuildAncestorAsync(
+                            activityExecutionStateStore,
+                            TimeProvider,
+                            workItem,
+                            executable,
+                            parentState,
+                            ancestorRequests,
+                            continuation,
+                            cancellationToken);
+                    }
+                    catch (AncestorNotificationTargetNotFoundException targetNotFound)
+                    {
+                        continuation = RuntimeStructuralContinuation.Faulted(
+                            new ActivityFault(AncestorNotificationTargetNotFoundException.FaultCode, targetNotFound.Message));
+                    }
+                }
 
                 // Seam C: a structural child evaluating its own children may itself notify ITS parent
                 // (bubbling is the consumer's recursion). Harvest those staged notifications and commit them
@@ -701,7 +726,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
             completionDurableValueChanges,
             completionWorkflowVariableWriteBack,
             cancellationToken,
-            processedOutcomeChanges);
+            processedOutcomeChanges,
+            ancestorNotificationWorkItems);
     }
 
     /// <summary>
