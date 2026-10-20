@@ -6,6 +6,7 @@ using Elsa.Connections.Http;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Exceptions;
 using Elsa.Secrets.Core.Models;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Connections.Services;
 
@@ -16,7 +17,8 @@ internal sealed class DefaultConnectionManager(
     IConnectionResolver resolver,
     ISecretManager secretManager,
     IConnectionPermissionGate permissionGate,
-    TimeProvider timeProvider) : IConnectionManager
+    TimeProvider timeProvider,
+    ILogger<DefaultConnectionManager> logger) : IConnectionManager
 {
     public async ValueTask<ConnectionMetadata> CreateAsync(string tenantId, CreateConnectionRequest request, CancellationToken cancellationToken = default)
     {
@@ -152,6 +154,7 @@ internal sealed class DefaultConnectionManager(
             catch when (rotationFailed)
             {
                 // The rotation failure is the one the caller needs to see; it must not be replaced by a cleanup failure.
+                // DeleteReplacedOwnedSecretsAsync has already logged each secret it could not delete.
             }
         }
 
@@ -386,6 +389,7 @@ internal sealed class DefaultConnectionManager(
     {
         // Every field is attempted: one that lost a race must not stop the others from taking their new values.
         var conflictedFields = new List<string>();
+        var faultedFields = new List<string>();
         Exception? fault = null;
         foreach (var value in values)
         {
@@ -410,20 +414,54 @@ internal sealed class DefaultConnectionManager(
             }
             catch (Exception exception)
             {
+                if (exception is InvalidOperationException && await ConcurrentWriterCausedAsync(tenantId, value))
+                {
+                    conflictedFields.Add(value.FieldName);
+                    continue;
+                }
+
+                faultedFields.Add(value.FieldName);
                 fault ??= exception;
             }
         }
 
-        // A genuine fault outranks a conflict: reporting a retryable 409 would hide it.
         if (fault is not null)
-            ExceptionDispatchInfo.Capture(fault).Throw();
+        {
+            // A genuine fault outranks a conflict: reporting a retryable 409 would hide it.
+            if (conflictedFields.Count == 0 && faultedFields.Count == 1)
+                ExceptionDispatchInfo.Capture(fault).Throw();
+
+            // The fault travels as the inner exception; the message still names every field that was not written.
+            throw new InvalidOperationException(
+                $"Connection '{connectionName}' credential(s) {QuoteAll(faultedFields.Concat(conflictedFields))} were not written: {fault.Message} Its other changes were saved.",
+                fault);
+        }
 
         if (conflictedFields.Count > 0)
         {
-            var fields = string.Join(", ", conflictedFields.Select(field => $"'{field}'"));
             throw new ConnectionConflictException(
                 connectionName,
-                $"Connection '{connectionName}' credential(s) {fields} changed by another request, so this update did not write the new value(s). Its other changes were saved.");
+                $"Connection '{connectionName}' credential(s) {QuoteAll(conflictedFields)} changed by another request, so this update did not write the new value(s). Its other changes were saved.");
+        }
+    }
+
+    private static string QuoteAll(IEnumerable<string> fields) => string.Join(", ", fields.Select(field => $"'{field}'"));
+
+    /// <summary>
+    /// Secrets reports a vanished secret (rotate) and a taken name (create) as a plain <see cref="InvalidOperationException"/>.
+    /// Reading the secret again tells a concurrent writer apart from a genuine fault.
+    /// </summary>
+    private async ValueTask<bool> ConcurrentWriterCausedAsync(string tenantId, OwnedSecretValue value)
+    {
+        try
+        {
+            var current = await secretManager.FindAsync(tenantId, value.SecretName, CancellationToken.None);
+            return value.Current is null ? current is not null : current is null;
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Could not re-read secret '{SecretName}' to classify a failed write; reporting the original failure.", value.SecretName);
+            return false;
         }
     }
 
@@ -578,13 +616,28 @@ internal sealed class DefaultConnectionManager(
         IDictionary<string, ConnectionSecretField> next,
         CancellationToken cancellationToken)
     {
+        // Every replaced field is attempted: one secret that cannot be deleted must not leave the others Active and unreferenced.
+        ExceptionDispatchInfo? firstFailure = null;
         foreach (var (fieldName, field) in previous)
         {
             if (next.TryGetValue(fieldName, out var current) &&
                 SameSecretName(current.SecretName, field.SecretName))
                 continue;
-            await DeleteOwnedSecretAsync(tenantId, connectionName, field, next.Values, cancellationToken);
+
+            try
+            {
+                await DeleteOwnedSecretAsync(tenantId, connectionName, field, next.Values, cancellationToken);
+            }
+            catch (Exception exception)
+            {
+                logger.LogWarning(exception,
+                    "Could not delete secret '{SecretName}' that connection '{ConnectionName}' field '{FieldName}' no longer references; it stays Active and unreferenced.",
+                    field.SecretName, connectionName, fieldName);
+                firstFailure ??= ExceptionDispatchInfo.Capture(exception);
+            }
         }
+
+        firstFailure?.Throw();
     }
 
     private async ValueTask DeleteOwnedSecretsAsync(

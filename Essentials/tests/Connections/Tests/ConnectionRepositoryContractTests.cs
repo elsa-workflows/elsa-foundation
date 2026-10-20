@@ -13,7 +13,8 @@ namespace Elsa.Connections.Tests;
 public abstract class ConnectionRepositoryContractTests(IConnectionRepository repository)
 {
     private const string Tenant = "tenant-a";
-    private const string Name = "contract";
+    // A durable repository may share one database across tests, so each test gets its own name.
+    private readonly string Name = $"contract-{Guid.NewGuid():N}";
 
     [Fact]
     public async Task SaveAsync_StoresTheDocumentAndIncrementsItsVersion()

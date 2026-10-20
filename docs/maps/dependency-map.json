@@ -3138,6 +3138,11 @@
         },
         {
           "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
           "id": "Microsoft.Extensions.Options",
           "version": "10.0.10"
         },
@@ -3286,6 +3291,11 @@
         {
           "type": "external",
           "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
           "version": "10.0.10"
         },
         {
