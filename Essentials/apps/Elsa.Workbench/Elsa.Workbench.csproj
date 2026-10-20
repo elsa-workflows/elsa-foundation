@@ -80,6 +80,7 @@
 		<ProjectReference Include="..\..\src\Activities\Runtime\Elsa.Activities.Runtime\Elsa.Activities.Runtime.csproj" />
 		<ProjectReference Include="..\..\src\Activities\Bpmn\Elsa.Activities.Bpmn\Elsa.Activities.Bpmn.csproj" />
 		<ProjectReference Include="..\..\src\Activities\Bpmn\Interchange\Elsa.Activities.Bpmn.Interchange.csproj" />
+		<ProjectReference Include="..\..\src\Activities\Compensation\Elsa.Activities.Compensation.csproj" />
 		<ProjectReference Include="..\..\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
 		<ProjectReference Include="..\..\src\Activities\DispatchWorkflow\Design\Elsa.Activities.DispatchWorkflow.Design.csproj" />
 		<ProjectReference Include="..\..\src\Activities\DispatchWorkflow\Runtime\Elsa.Activities.DispatchWorkflow.Runtime.csproj" />

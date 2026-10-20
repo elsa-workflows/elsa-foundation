@@ -1,0 +1,370 @@
+import { describe, expect, it } from "vitest";
+import {
+  addCompensationStep,
+  compensationScopeStructureKind,
+  compensationStepProblems,
+  compensationStepsSlotId,
+  compensationValidationTarget,
+  moveCompensationStep,
+  nextCompensationStepName,
+  readCompensationSteps,
+  removeCompensationStep,
+  updateCompensationStep
+} from "../compensationScope";
+import { buildExecutableActivityGraph } from "../executableGraph";
+import { deriveCompensationRuntime, isCompensationHandlerExecution, ordinalLabel } from "../compensationRuntime";
+import { buildCanvas, findActivityNode, findNodeScopePath, getActivityDesignerSupport, getChildSlots, replaceSlotActivities, updateActivity } from "../workflowAdapter";
+import type { ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary } from "../workflowTypes";
+
+describe("compensation scope model", () => {
+  it("exposes a Steps slot first, then a forward and a compensation slot per step", () => {
+    const scope = reservationScope();
+
+    const slots = getChildSlots(scope);
+
+    expect(slots.map(slot => slot.id)).toEqual([
+      compensationStepsSlotId,
+      `${compensationScopeStructureKind}:steps:steps:activity:0`,
+      `${compensationScopeStructureKind}:steps:steps:compensation:0`,
+      `${compensationScopeStructureKind}:steps:steps:activity:1`,
+      `${compensationScopeStructureKind}:steps:steps:compensation:1`
+    ]);
+    expect(slots[0].mode).toBe("compensation");
+    expect(slots[0].activities.map(activity => activity.nodeId)).toEqual(["reserve", "release", "confirm"]);
+    expect(getActivityDesignerSupport(scope)).toBe("sequence");
+  });
+
+  it("shows only the Steps slot as a canvas badge", () => {
+    const scope = reservationScope();
+    const { nodes } = buildCanvas({ owner: scopeNode([]), slot: { ...getChildSlots(scopeNode([]))[0], activities: [scope] } }, [], []);
+
+    expect(nodes[0].data.childSlots.map(slot => slot.label)).toEqual(["Steps"]);
+  });
+
+  it("writes through the Steps slot by node id and never stores it as an array", () => {
+    const scope = reservationScope();
+    const steps = getChildSlots(scope)[0];
+    const renamed = leaf("release", "Release (edited)");
+
+    const next = replaceSlotActivities(scope, steps, [leaf("reserve"), renamed]);
+
+    const payloadSteps = next.structure!.payload.steps as unknown[];
+    expect(Array.isArray(payloadSteps)).toBe(true);
+    expect(readCompensationSteps(next)).toEqual([
+      { name: "Reserve inventory", activity: leaf("reserve"), compensation: renamed },
+      { name: "Confirm order", activity: null, compensation: null }
+    ]);
+  });
+
+  it("updates a handler inside the scope through the generic tree update", () => {
+    const root = reservationScope();
+
+    const next = updateActivity(root, "release", activity => ({ ...activity, inputs: [{ referenceKey: "text", value: { expressionType: "Literal", value: "undo" } }] }));
+
+    expect(findActivityNode(next, "release")?.inputs).toHaveLength(1);
+    expect(readCompensationSteps(next)[0].compensation?.inputs).toHaveLength(1);
+    expect(readCompensationSteps(next)[1].activity?.nodeId).toBe("confirm");
+  });
+
+  it("adds, moves, renames and removes steps", () => {
+    const steps = readCompensationSteps(reservationScope());
+
+    const added = addCompensationStep(steps, 1, leaf("deliver"));
+    expect(added.map(step => step.name)).toEqual(["Reserve inventory", "Step 3", "Confirm order"]);
+    expect(moveCompensationStep(added, 2, 0).map(step => step.name)).toEqual(["Confirm order", "Reserve inventory", "Step 3"]);
+    expect(updateCompensationStep(added, 1, { name: "Reserve delivery" })[1].name).toBe("Reserve delivery");
+    expect(removeCompensationStep(added, 0).map(step => step.name)).toEqual(["Step 3", "Confirm order"]);
+    expect(nextCompensationStepName([{ name: "Step 2", activity: null, compensation: null }])).toBe("Step 3");
+  });
+
+  it("reports blank and duplicate names and a missing activity per row", () => {
+    const problems = compensationStepProblems([
+      { name: "Reserve", activity: leaf("a"), compensation: null },
+      { name: "Reserve ", activity: leaf("b"), compensation: null },
+      { name: " ", activity: leaf("c"), compensation: null },
+      { name: "Confirm", activity: null, compensation: null }
+    ]);
+
+    expect([...problems.entries()]).toEqual([
+      [0, 'Step "Reserve" is defined more than once.'],
+      [1, 'Step "Reserve" is defined more than once.'],
+      [2, "Step needs a name."],
+      [3, 'Step "Confirm" has no activity.']
+    ]);
+  });
+});
+
+describe("compensation scope validation targets", () => {
+  it("lands a row's validation path on that row's activity, inside the scope's Steps designer", () => {
+    const scope = reservationScope();
+
+    expect(compensationValidationTarget(scope, "scope/steps/1")).toBe("confirm");
+    const root: ActivityNode = {
+      nodeId: "root",
+      activityVersionId: "sequence-v1",
+      inputs: [],
+      outputs: [],
+      structure: { kind: "elsa.sequence.structure", schemaVersion: "1.0.0", payload: { activities: [scope] } }
+    };
+    expect(findNodeScopePath(root, "confirm")).toEqual([{ ownerNodeId: "scope", slotId: compensationStepsSlotId, label: expect.any(String) }]);
+  });
+
+  it("falls back to the scope for a row without an activity, an unrelated path or another node", () => {
+    const scope = scopeNode([{ name: "Empty", activity: null, compensation: null }]);
+
+    expect(compensationValidationTarget(scope, "scope/steps/0")).toBeNull();
+    expect(compensationValidationTarget(scope, "scope/inputs/faultAfterCompensation")).toBeNull();
+    expect(compensationValidationTarget(reservationScope(), "other/steps/0")).toBeNull();
+    expect(compensationValidationTarget(leaf("plain"), "plain/steps/0")).toBeNull();
+  });
+});
+
+describe("compensation scope from a pinned executable", () => {
+  it("rebuilds the steps in executable order from the named step and compensation slots", () => {
+    const leafNode = (id: string) => ({ executableNodeId: id, authoredActivityId: id, activityType: "Elsa.WriteLine", activityTypeVersion: "1.0.0" });
+    const graph = buildExecutableActivityGraph({
+      executableNodeId: "scope",
+      authoredActivityId: "scope",
+      activityType: "Elsa.Activities.Compensation.Activities.CompensationScope",
+      activityTypeVersion: "1.0.0",
+      structureKind: compensationScopeStructureKind,
+      childSlots: [
+        { name: "CompensationScope.Step[Reserve inventory]", activities: [leafNode("reserve")] },
+        { name: "CompensationScope.Compensation[Reserve inventory]", activities: [leafNode("release")] },
+        { name: "CompensationScope.Step[Confirm order]", activities: [leafNode("confirm")] }
+      ]
+    } as never, []);
+
+    expect(readCompensationSteps(graph.root).map(step => [step.name, step.activity?.nodeId, step.compensation?.nodeId ?? null])).toEqual([
+      ["Reserve inventory", "reserve", "release"],
+      ["Confirm order", "confirm", null]
+    ]);
+  });
+});
+
+describe("compensation runtime", () => {
+  it("shows a compensated run newest first with the recovery cause", () => {
+    const runtime = deriveCompensationRuntime(journeyScope(), [
+      execution("ae-scope", "scope", "Completed", "10", { outcomeNames: ["Compensated"] }),
+      execution("ae-1", "reserve", "Completed", "11", { parent: "ae-scope" }),
+      execution("ae-2", "deliver", "Completed", "12", { parent: "ae-scope" }),
+      execution("ae-3", "confirm", "Faulted", "13", { parent: "ae-scope" }),
+      execution("ae-4", "cancel", "Completed", "14", { parent: "ae-scope", handler: true, scheduledBy: "ae-2" }),
+      execution("ae-5", "release", "Completed", "15", { parent: "ae-scope", handler: true, scheduledBy: "ae-1" })
+    ], [incident("inc-1", "ae-3", "order.rejected", "Order rejected")]);
+
+    expect(runtime.phase).toBe("Compensated");
+    expect(runtime.rows.map(row => [row.step, row.forward.state, row.recovery.state, row.recovery.order])).toEqual([
+      ["Reserve inventory", "Completed", "Compensated", 2],
+      ["Reserve delivery", "Completed", "Compensated", 1],
+      ["Confirm order", "Faulted", "NotApplicable", undefined]
+    ]);
+    expect(runtime.cause).toEqual({
+      step: "Confirm order",
+      activityExecutionId: "ae-3",
+      incidentId: "inc-1",
+      failureType: "order.rejected",
+      message: "Order rejected"
+    });
+  });
+
+  it("shows pending and failed recovery while the scope is still compensating", () => {
+    const runtime = deriveCompensationRuntime(journeyScope(), [
+      execution("ae-scope", "scope", "Running", "10"),
+      execution("ae-1", "reserve", "Completed", "11", { parent: "ae-scope" }),
+      execution("ae-2", "deliver", "Completed", "12", { parent: "ae-scope" }),
+      execution("ae-3", "confirm", "Faulted", "13", { parent: "ae-scope" }),
+      execution("ae-4", "cancel", "Faulted", "14", { parent: "ae-scope", handler: true, scheduledBy: "ae-2" })
+    ], []);
+
+    expect(runtime.phase).toBe("Compensating");
+    expect(runtime.rows.map(row => row.recovery.state)).toEqual(["Pending", "Failed", "NotApplicable"]);
+  });
+
+  it("shows a step whose handler never ran as kept once a recovering scope has faulted", () => {
+    const runtime = deriveCompensationRuntime(journeyScope(), [
+      execution("ae-scope", "scope", "Faulted", "10"),
+      execution("ae-1", "reserve", "Completed", "11", { parent: "ae-scope" }),
+      execution("ae-2", "deliver", "Completed", "12", { parent: "ae-scope" }),
+      execution("ae-3", "confirm", "Faulted", "13", { parent: "ae-scope" }),
+      execution("ae-4", "cancel", "Completed", "14", { parent: "ae-scope", handler: true, scheduledBy: "ae-2" })
+    ], []);
+
+    expect(runtime.phase).toBe("Faulted");
+    expect(runtime.rows.map(row => row.recovery.state)).toEqual(["Kept", "Compensated", "NotApplicable"]);
+    expect(runtime.cause?.step).toBe("Confirm order");
+  });
+
+  it("shows a running scope's completed steps as undoable", () => {
+    const runtime = deriveCompensationRuntime(journeyScope(), [
+      execution("ae-scope", "scope", "Running", "10"),
+      execution("ae-1", "reserve", "Completed", "11", { parent: "ae-scope" }),
+      execution("ae-2", "deliver", "Running", "12", { parent: "ae-scope" })
+    ], []);
+
+    expect(runtime.phase).toBe("Running");
+    expect(runtime.rows.map(row => row.recovery.state)).toEqual(["Registered", "NotApplicable", "NotApplicable"]);
+  });
+
+  it("shows a completed scope's undoable steps as kept, since M1 cannot undo a finished scope", () => {
+    const runtime = deriveCompensationRuntime(journeyScope(), [
+      execution("ae-scope", "scope", "Completed", "10", { outcomeNames: ["Done"] }),
+      execution("ae-1", "reserve", "Completed", "11", { parent: "ae-scope" }),
+      execution("ae-2", "deliver", "Completed", "12", { parent: "ae-scope" }),
+      execution("ae-3", "confirm", "Completed", "13", { parent: "ae-scope" })
+    ], []);
+
+    expect(runtime.phase).toBe("Completed");
+    expect(runtime.rows.map(row => row.recovery.state)).toEqual(["Kept", "Kept", "NotNeeded"]);
+    expect(runtime.cause).toBeUndefined();
+  });
+
+  it("shows nothing as run before the scope starts", () => {
+    const runtime = deriveCompensationRuntime(journeyScope(), [], []);
+
+    expect(runtime.phase).toBe("NotStarted");
+    expect(runtime.rows.every(row => row.forward.state === "NotRun" && row.recovery.state === "NotApplicable")).toBe(true);
+  });
+
+  it("says not loaded, never not run, when the run's activity list is a bounded page", () => {
+    const runtime = deriveCompensationRuntime(journeyScope(), [
+      execution("ae-scope", "scope", "Running", "10"),
+      execution("ae-1", "reserve", "Completed", "11", { parent: "ae-scope" })
+    ], [], { complete: false });
+
+    expect(runtime.incomplete).toBe(true);
+    // A running scope with no visible recovery may have handlers on a later page.
+    expect(runtime.phase).toBe("NotLoaded");
+    expect(runtime.rows.map(row => [row.forward.state, row.recovery.state])).toEqual([
+      ["Completed", "NotLoaded"],
+      ["NotLoaded", "NotLoaded"],
+      ["NotLoaded", "NotLoaded"]
+    ]);
+    expect(deriveCompensationRuntime(journeyScope(), [], [], { complete: false }).phase).toBe("NotLoaded");
+  });
+
+  it("shows the scope occurrence the operator selected when the scope ran more than once", () => {
+    const activities = [
+      execution("ae-scope-1", "scope", "Completed", "10", { outcomeNames: ["Compensated"] }),
+      execution("ae-1", "reserve", "Completed", "11", { parent: "ae-scope-1" }),
+      execution("ae-3", "confirm", "Faulted", "13", { parent: "ae-scope-1" }),
+      execution("ae-scope-2", "scope", "Completed", "20", { outcomeNames: ["Done"] }),
+      execution("ae-21", "reserve", "Completed", "21", { parent: "ae-scope-2" })
+    ];
+
+    expect(deriveCompensationRuntime(journeyScope(), activities, []).scopeActivityExecutionId).toBe("ae-scope-2");
+    expect(deriveCompensationRuntime(journeyScope(), activities, [], { selectedActivityExecutionId: "ae-scope-1" }).phase).toBe("Compensated");
+    // Selecting one of the older occurrence's steps selects its scope too.
+    expect(deriveCompensationRuntime(journeyScope(), activities, [], { selectedActivityExecutionId: "ae-3" }).scopeActivityExecutionId).toBe("ae-scope-1");
+    // A selection elsewhere keeps the latest occurrence.
+    expect(deriveCompensationRuntime(journeyScope(), activities, [], { selectedActivityExecutionId: "elsewhere" }).scopeActivityExecutionId).toBe("ae-scope-2");
+  });
+
+  it("keeps what a partial page does prove: visible recovery, and a scope that completed without undoing", () => {
+    const recovering = deriveCompensationRuntime(journeyScope(), [
+      execution("ae-scope", "scope", "Running", "10"),
+      execution("ae-1", "reserve", "Completed", "11", { parent: "ae-scope" }),
+      execution("ae-2", "deliver", "Faulted", "12", { parent: "ae-scope" })
+    ], [], { complete: false });
+    expect(recovering.phase).toBe("Compensating");
+    expect(recovering.rows[0].recovery.state).toBe("NotLoaded");
+
+    const completed = deriveCompensationRuntime(journeyScope(), [
+      execution("ae-scope", "scope", "Completed", "10", { outcomeNames: ["Done"] }),
+      execution("ae-1", "reserve", "Completed", "11", { parent: "ae-scope" })
+    ], [], { complete: false });
+    expect(completed.phase).toBe("Completed");
+    expect(completed.rows[0].recovery.state).toBe("Kept");
+  });
+
+  it("finds the recovery cause's incident through its runtime metadata when it carries no execution id", () => {
+    const linked = { ...incident("inc-1", "ae-3", "order.rejected", "Order rejected"), activityExecutionId: null, metadata: { "runtime.activityExecutionId": " ae-3 " } };
+    const runtime = deriveCompensationRuntime(journeyScope(), [
+      execution("ae-scope", "scope", "Completed", "10", { outcomeNames: ["Compensated"] }),
+      execution("ae-3", "confirm", "Faulted", "13", { parent: "ae-scope" })
+    ], [linked as IncidentStateSummary]);
+
+    expect(runtime.cause?.failureType).toBe("order.rejected");
+  });
+
+  it("recognises handler executions by their scheduling cause", () => {
+    expect(isCompensationHandlerExecution({ provenance: { schedulingCause: "compensation" } })).toBe(true);
+    expect(isCompensationHandlerExecution({ provenance: { schedulingCause: "ActivityCompletion" } })).toBe(false);
+    expect(isCompensationHandlerExecution({})).toBe(false);
+    expect([1, 2, 3, 4, 11, 12, 21].map(ordinalLabel)).toEqual(["1st", "2nd", "3rd", "4th", "11th", "12th", "21st"]);
+  });
+});
+
+function leaf(nodeId: string, label?: string): ActivityNode {
+  return { nodeId, activityVersionId: `${nodeId}-v1`, inputs: [], outputs: [], ...(label ? { description: label } : {}) } as ActivityNode;
+}
+
+function scopeNode(steps: { name: string; activity: ActivityNode | null; compensation: ActivityNode | null }[]): ActivityNode {
+  return {
+    nodeId: "scope",
+    activityVersionId: "scope-v1",
+    inputs: [],
+    outputs: [],
+    structure: { kind: compensationScopeStructureKind, schemaVersion: "1.0.0", payload: { steps } }
+  };
+}
+
+function reservationScope(): ActivityNode {
+  return scopeNode([
+    { name: "Reserve inventory", activity: leaf("reserve"), compensation: leaf("release") },
+    { name: "Confirm order", activity: leaf("confirm"), compensation: null }
+  ]);
+}
+
+function journeyScope(): ActivityNode {
+  return scopeNode([
+    { name: "Reserve inventory", activity: leaf("reserve"), compensation: leaf("release") },
+    { name: "Reserve delivery", activity: leaf("deliver"), compensation: leaf("cancel") },
+    { name: "Confirm order", activity: leaf("confirm"), compensation: null }
+  ]);
+}
+
+function execution(
+  id: string,
+  nodeId: string,
+  status: string,
+  at: string,
+  options: { parent?: string; handler?: boolean; scheduledBy?: string; outcomeNames?: string[] } = {}
+): ActivityExecutionStateSummary {
+  return {
+    activityExecutionId: id,
+    workflowExecutionId: "wf-1",
+    executableNodeId: nodeId,
+    authoredActivityId: nodeId,
+    activityType: "Elsa.Test",
+    activityTypeVersion: "1.0.0",
+    status,
+    scheduledAt: `2026-10-19T10:00:${at}Z`,
+    // Run lists carry the parent only inside the provenance.
+    parentActivityExecutionId: null,
+    schedulingActivityExecutionId: options.scheduledBy ?? null,
+    outcomeNames: options.outcomeNames ?? null,
+    provenance: {
+      parentActivityExecutionId: options.parent ?? null,
+      schedulingActivityExecutionId: options.scheduledBy ?? null,
+      schedulingCause: options.handler ? "compensation" : "ActivityCompletion"
+    },
+    metadata: {}
+  };
+}
+
+function incident(incidentId: string, activityExecutionId: string, failureType: string, message: string): IncidentStateSummary {
+  return {
+    incidentId,
+    workflowExecutionId: "wf-1",
+    activityExecutionId,
+    severity: "Error",
+    status: "Resolved",
+    resolutionAction: "AbsorbFault",
+    failureType,
+    message,
+    createdAt: "2026-10-19T10:00:13Z",
+    isBlocking: false,
+    metadata: {}
+  };
+}

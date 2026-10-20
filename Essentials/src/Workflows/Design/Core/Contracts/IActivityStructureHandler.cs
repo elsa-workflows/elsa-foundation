@@ -37,6 +37,13 @@ public interface IActivityStructureHandler
 
     ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections);
 
+    /// <summary>
+    /// The direct children of <paramref name="activity"/> whose results this structure guarantees are committed
+    /// before the direct child <paramref name="childNodeId"/> runs, most relevant first. Expression authoring offers
+    /// their results to that child. <see langword="null"/> (the default) promises no order, so nothing is offered.
+    /// </summary>
+    IReadOnlyList<string>? ChildrenCompletedBefore(ActivityNode activity, string childNodeId) => null;
+
     ActivityNodeStructure CompileExecutableStructure(ActivityNode activity);
 
     /// <summary>
