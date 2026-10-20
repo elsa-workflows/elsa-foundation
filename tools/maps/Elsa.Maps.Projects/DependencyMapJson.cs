@@ -31,6 +31,8 @@ public static class DependencyMapJson
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         WriteIndented = true,
+        // LF on every platform, as the generator always wrote it: the derived and the committed bytes must agree on Windows too.
+        NewLine = "\n",
         // A data file, never embedded in HTML: keep '+' and '<' in ids and version ranges readable.
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };

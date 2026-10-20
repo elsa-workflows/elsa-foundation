@@ -65,6 +65,23 @@ public sealed class DerivedDatasetTests : IDisposable
         Assert.Contains(snapshot.Map.ByPath[Agent].Edges, edge => edge is { Kind: MapEdgeKind.Internal, Path: Tasks });
     }
 
+    /// <summary>
+    /// The derived bytes end lines with LF on every platform, as the generator writes the file: the serializer's default
+    /// is the platform's newline, and a CRLF copy on Windows would differ from every committed map byte for byte.
+    /// </summary>
+    [Fact]
+    public void The_derived_map_ends_its_lines_with_lf_on_every_platform()
+    {
+        var commit = CommitWithoutMap();
+        using var objects = new ObjectCache(repo.Calculator);
+        var tree = repo.Calculator.ListTree(commit).ToDictionary(entry => entry.Path, StringComparer.Ordinal);
+
+        var json = DependencyMapJson.Serialize(new CommitTree(objects, commit, tree));
+
+        Assert.DoesNotContain('\r', json);
+        Assert.EndsWith("}\n", json, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Committed_refuses_a_commit_without_the_map()
     {
