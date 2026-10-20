@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -18,7 +18,28 @@ import {
 } from "../module";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 
+const renderedPanelCleanups = new Set<() => Promise<void>>();
+
 describe("structured logs module", () => {
+  let originalEventSource: PropertyDescriptor | undefined;
+  let originalClipboard: PropertyDescriptor | undefined;
+
+  beforeEach(() => {
+    originalEventSource = Object.getOwnPropertyDescriptor(globalThis, "EventSource");
+    originalClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    StubEventSource.instances = [];
+    globalThis.EventSource = StubEventSource as unknown as typeof EventSource;
+  });
+
+  afterEach(async () => {
+    try {
+      await Promise.all([...renderedPanelCleanups].map(cleanup => cleanup()));
+    } finally {
+      restoreProperty(globalThis, "EventSource", originalEventSource);
+      restoreProperty(navigator, "clipboard", originalClipboard);
+    }
+  });
+
   it("registers navigation, route, and bottom panel contributions", () => {
     const api = stubApi();
 
@@ -56,9 +77,21 @@ describe("structured logs module", () => {
       .toBe("https://backend.example/_elsa/studio/diagnostics/structured-logs/stream?minLevel=Warning&category=Elsa.Workflows&source=server-1");
   });
 
+  it.each([
+    ["same-origin", `${window.location.origin}/`],
+    ["separate-origin", "https://backend.example/"]
+  ])("passes credentials to the rendered EventSource for a %s backend without changing its filter URL", async (_, baseUrl) => {
+    register(stubApi({ baseUrl }));
+
+    await renderPanel();
+
+    const source = StubEventSource.instances[0];
+    expect(StubEventSource.instances).toHaveLength(1);
+    expect(source?.url).toBe(new URL("/_elsa/studio/diagnostics/structured-logs/stream?minLevel=Information", baseUrl).toString());
+    expect(source?.initOptions).toEqual({ withCredentials: true });
+  });
+
   it("renders a minimum log level selector in the bottom panel", async () => {
-    const previousEventSource = globalThis.EventSource;
-    globalThis.EventSource = StubEventSource as unknown as typeof EventSource;
     register(stubApi({
       getJson: async url => url.includes("/sources") ? [] : []
     }));
@@ -68,12 +101,9 @@ describe("structured logs module", () => {
     expect(container.querySelector("[aria-label='Minimum log level']")).toBeTruthy();
 
     await unmount();
-    globalThis.EventSource = previousEventSource;
   });
 
   it("renders a structured log download action in the bottom panel", async () => {
-    const previousEventSource = globalThis.EventSource;
-    globalThis.EventSource = StubEventSource as unknown as typeof EventSource;
     register(stubApi({
       getJson: async url => url.includes("/sources") ? [] : [wireEntry(1)]
     }));
@@ -84,14 +114,10 @@ describe("structured logs module", () => {
     expect([...container.querySelectorAll("button")].some(button => button.textContent === "Download")).toBe(true);
 
     await unmount();
-    globalThis.EventSource = previousEventSource;
   });
 
   it("copies a single structured log message from the row action", async () => {
-    const previousEventSource = globalThis.EventSource;
-    const previousClipboard = navigator.clipboard;
     const copiedText: string[] = [];
-    globalThis.EventSource = StubEventSource as unknown as typeof EventSource;
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: { writeText: async (text: string) => copiedText.push(text) }
@@ -109,8 +135,6 @@ describe("structured logs module", () => {
     expect(copiedText).toEqual(["copy this message"]);
 
     await unmount();
-    Object.defineProperty(navigator, "clipboard", { configurable: true, value: previousClipboard });
-    globalThis.EventSource = previousEventSource;
   });
 
   it("exports visible rows as structured JSONL", () => {
@@ -190,11 +214,15 @@ describe("structured logs module", () => {
   });
 });
 
-function stubApi(http?: {
+function stubApi(options?: {
+  baseUrl?: string;
   getJson?: (url: string, init?: RequestInit) => Promise<unknown>;
 }) {
   return {
-    backend: { baseUrl: "https://backend.example/", http: { getJson: http?.getJson ?? (async () => []) } },
+    backend: {
+      baseUrl: options?.baseUrl ?? "https://backend.example/",
+      http: { getJson: options?.getJson ?? (async () => []) }
+    },
     navigation: registry(),
     routes: registry(),
     panels: registry()
@@ -209,19 +237,37 @@ async function renderPanel() {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
+  let mounted = true;
 
-  flushSync(() => {
-    root.render(React.createElement(StructuredLogsPanel));
-  });
-  await flushPromises();
+  const unmount = async () => {
+    if (!mounted)
+      return;
+
+    mounted = false;
+    try {
+      flushSync(() => root.unmount());
+    } finally {
+      container.remove();
+      renderedPanelCleanups.delete(unmount);
+    }
+    await flushPromises();
+  };
+
+  renderedPanelCleanups.add(unmount);
+
+  try {
+    flushSync(() => {
+      root.render(React.createElement(StructuredLogsPanel));
+    });
+    await flushPromises();
+  } catch (error) {
+    await unmount();
+    throw error;
+  }
 
   return {
     container,
-    unmount: async () => {
-      flushSync(() => root.unmount());
-      container.remove();
-      await flushPromises();
-    }
+    unmount
   };
 }
 
@@ -242,17 +288,29 @@ class StubEventSource extends EventTarget {
   onmessage: ((this: EventSource, ev: MessageEvent) => unknown) | null = null;
   onopen: ((this: EventSource, ev: Event) => unknown) | null = null;
   readyState = StubEventSource.OPEN;
+  static instances: StubEventSource[] = [];
   url: string;
-  withCredentials = false;
+  initOptions: EventSourceInit | undefined;
+  withCredentials: boolean;
 
-  constructor(url: string | URL) {
+  constructor(url: string | URL, initOptions?: EventSourceInit) {
     super();
     this.url = String(url);
+    this.initOptions = initOptions;
+    this.withCredentials = initOptions?.withCredentials ?? false;
+    StubEventSource.instances.push(this);
   }
 
   close() {
     this.readyState = StubEventSource.CLOSED;
   }
+}
+
+function restoreProperty(target: object, property: PropertyKey, descriptor: PropertyDescriptor | undefined) {
+  if (descriptor)
+    Object.defineProperty(target, property, descriptor);
+  else
+    Reflect.deleteProperty(target, property);
 }
 
 function registry() {

@@ -18,7 +18,7 @@
 
 **Purpose**: Prove the client regression before any product change; this checkpoint blocks implementation until root reviews the failing test.
 
-- [ ] T002 Add a rendered-page test in `Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/__tests__/module.test.ts` that records EventSource URL and init options, covers same-origin and separate-origin backend URLs with existing filter query semantics, and fails against the current one-argument constructor because `withCredentials` is not true; run that focused test-only RED and stop for root review before editing `src/module.tsx`.
+- [x] T002 Add a rendered-page test in `Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/__tests__/module.test.ts` that records EventSource URL and init options, covers same-origin and separate-origin backend URLs with existing filter query semantics, and fails against the current one-argument constructor because `withCredentials` is not true; run that focused test-only RED and stop for root review before editing `src/module.tsx`.
 
 **Checkpoint**: Root reviews the failing test and confirms the red result before T003.
 
@@ -77,3 +77,8 @@
 **MVP**: User Story 1 is the P1 product outcome: one existing constructor option, a rendered regression, and product-host proof that the authorized separate-origin page reaches Live. Story 2 and all preservation and final gates remain required before accepting the issue.
 
 **Incremental delivery**: Complete the reviewed RED checkpoint, apply the one-call-site correction and focused green test, add client and backend preservation evidence, integrate PR #3133 base-first, then complete actual-host behavior and exact-head/resulting-main qualification. Do not add an ingestion fixture, provider, transport, endpoint, auth architecture, or bearer-token behavior.
+
+
+## Root RED checkpoint
+
+At the test-only checkpoint, all twelve cases execute: the original ten pass and the two new same/separate-origin rendered regressions fail only because the actual EventSource init options are undefined rather than credentialed. The exact existing Information filter URL and single instance assertions pass. Root reviewed the full test diff, shared failure-safe DOM/global teardown, and complete `3132-credential-red.log`. `src/module.tsx` remains unchanged. Root accepts this as valid behavior RED before T003; it is not browser cookie or server authorization proof.
