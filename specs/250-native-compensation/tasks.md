@@ -12,7 +12,7 @@
   [contracts/semantics.md](contracts/semantics.md). Unit tests for each transition and FR-009.
 - [ ] T006 `ActivitiesCompensationFeature` registration and registration test.
 - [ ] T007 Reservation participant sample with failure injection.
-- [ ] T008 Integration tests: happy path `Done`; recovery `Compensated`; `afterCompensation = fault`; P1–P4 in
+- [ ] T008 Integration tests: happy path `Done`; recovery `Compensated`; `faultAfterCompensation`; P1–P4 in
   three modes; pinned handler across republish; negative controls.
 
 ## Inspection and Studio (PR 3)
