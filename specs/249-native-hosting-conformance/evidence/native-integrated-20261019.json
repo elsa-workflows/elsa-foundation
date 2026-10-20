@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "09a7e7dfc47da7df12fc75af6c44015b57bebc44",
+  "productionBaseCommit": "e996bf02a2d58e213b937fba108be58fdee09cd3",
+  "configuration": "Release",
+  "targetFramework": "net10.0",
+  "sdkVersion": "10.0.300",
+  "os": {
+    "name": "macOS",
+    "version": "26.6",
+    "build": "25G72",
+    "architecture": "arm64"
+  },
+  "sourceTreeState": "No code or configuration changes from sourceCommit during execution; only report, program, tasks and quickstart Markdown changed.",
+  "command": "dotnet test Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603 --filter 'FullyQualifiedName~WorkbenchBackgroundActivityRecoveryTests|FullyQualifiedName~NativeHostingConformanceTests|FullyQualifiedName~NativeHostingGracefulHandoffTests' --logger 'trx;LogFileName=native-integrated-matrix.trx' --results-directory /tmp/elsa-program-20261019/native-hosting-baseline/native-integrated-matrix",
+  "localEvidenceRoot": "/tmp/elsa-program-20261019/native-hosting-baseline",
+  "run": {
+    "id": "f2154ce9-d023-4d4d-a334-7453e42657c6",
+    "times": {
+      "creation": "2026-10-20T00:07:31.0516060+02:00",
+      "queuing": "2026-10-20T00:07:31.0516060+02:00",
+      "start": "2026-10-20T00:06:46.8805540+02:00",
+      "finish": "2026-10-20T00:21:19.0127280+02:00"
+    },
+    "counters": {
+      "total": 11,
+      "executed": 11,
+      "passed": 11,
+      "failed": 0,
+      "error": 0,
+      "timeout": 0,
+      "aborted": 0,
+      "inconclusive": 0,
+      "passedButRunAborted": 0,
+      "notRunnable": 0,
+      "notExecuted": 0,
+      "disconnected": 0,
+      "warning": 0,
+      "completed": 0,
+      "inProgress": 0,
+      "pending": 0
+    },
+    "result": "Completed"
+  },
+  "files": [
+    {
+      "path": "native-integrated-matrix.log",
+      "sha256": "2b224d74703bd8abba7a44eda3b3102512ee5dc60b3f769b1731a215cd46136a",
+      "bytes": 78428
+    },
+    {
+      "path": "native-integrated-matrix/native-integrated-matrix.trx",
+      "sha256": "847feeb90dd443b9acecbd04e5a18f19ca5228c49f9b55adb76778f8f64a4801",
+      "bytes": 45706
+    },
+    {
+      "path": "native-integrated-source-identity.json",
+      "sha256": "e518b678242c8b784e6bc89376b2c78276816cd79bf938b9660a331b7834d66f",
+      "bytes": 2064
+    }
+  ],
+  "buildArtifacts": [
+    {
+      "path": "Essentials/apps/Elsa.Workbench/bin/Release/net10.0/Elsa.Workbench.dll",
+      "sha256": "28b4ce771ac2bc8fbf2435e1ad1df0cc89d40298a653e1a6a05fabfca3001212",
+      "bytes": 303104
+    },
+    {
+      "path": "Essentials/tests/Workbench/Tests/bin/Release/net10.0/Elsa.Workbench.Tests.dll",
+      "sha256": "5af3fde0faaea85c745467918bcfa2fc45d63a5ef61319065b39f1c524fa04ba",
+      "bytes": 290304
+    },
+    {
+      "path": "Essentials/tests/Workbench/Fixtures/BackgroundActivities/bin/Release/net10.0/Elsa.Workbench.Tests.BackgroundActivities.dll",
+      "sha256": "70245c1c601c0c683f1f3cd40c4bf00e65cf7264a57fac9b6371c0861a3d06b8",
+      "bytes": 213504
+    },
+    {
+      "path": "Essentials/tests/Workbench/Fixtures/BackgroundActivities/elsa-package.json",
+      "sha256": "6cff2ebdf32af0d341a1c01033d060110b9d6cc740b782de8374eb01f84d43ef",
+      "bytes": 1144
+    },
+    {
+      "path": "Essentials/tests/Workbench/Tests/NativeHostingFixture.cs",
+      "sha256": "dbcb6b5dd48d1fa8b93ffe3daad697154c454400a968e5fefae552843adc83fe",
+      "bytes": 10542
+    },
+    {
+      "path": "Essentials/tests/Workbench/Tests/NativeHostingScenario.cs",
+      "sha256": "ca01c55a4255209aba27b814ec375b7e1dbf1b46a376d58482b1dffe34a35ff4",
+      "bytes": 19954
+    }
+  ],
+  "cases": [
+    {
+      "testName": "Elsa.Workbench.Tests.NativeHostingConformanceTests.Original_uncancelled_checkpoint_is_rejected_after_a_real_successor_acquires",
+      "outcome": "Passed",
+      "duration": "00:01:08.8253203",
+      "startTime": "2026-10-20T00:20:10.1465520+02:00",
+      "endTime": "2026-10-20T00:21:18.9722250+02:00"
+    },
+    {
+      "testName": "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Explicit_cancellation_stops_held_bodies_and_survives_process_restart(profile: InProcess)",
+      "outcome": "Passed",
+      "duration": "00:00:41.7160182",
+      "startTime": "2026-10-20T00:06:49.3085860+02:00",
+      "endTime": "2026-10-20T00:07:31.0057470+02:00"
+    },
+    {
+      "testName": "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Explicit_cancellation_stops_held_bodies_and_survives_process_restart(profile: Clustered)",
+      "outcome": "Passed",
+      "duration": "00:00:52.9736493",
+      "startTime": "2026-10-20T00:07:31.0320810+02:00",
+      "endTime": "2026-10-20T00:08:23.9808180+02:00"
+    },
+    {
+      "testName": "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Killed_workers_are_reclaimed_with_stable_invocations_and_one_native_continuation(profile: Clustered, first: \"left\", second: \"right\")",
+      "outcome": "Passed",
+      "duration": "00:02:47.5671279",
+      "startTime": "2026-10-20T00:14:13.2661700+02:00",
+      "endTime": "2026-10-20T00:17:00.8353820+02:00"
+    },
+    {
+      "testName": "Elsa.Workbench.Tests.NativeHostingConformanceTests.Departed_routing_owner_is_reclaimed_and_its_real_transport_command_completes_on_survivor(first: \"right\", second: \"left\")",
+      "outcome": "Passed",
+      "duration": "00:01:05.7334453",
+      "startTime": "2026-10-20T00:17:57.3541280+02:00",
+      "endTime": "2026-10-20T00:19:03.0875500+02:00"
+    },
+    {
+      "testName": "Elsa.Workbench.Tests.NativeHostingConformanceTests.Departed_routing_owner_is_reclaimed_and_its_real_transport_command_completes_on_survivor(first: \"left\", second: \"right\")",
+      "outcome": "Passed",
+      "duration": "00:01:07.0563319",
+      "startTime": "2026-10-20T00:19:03.0881750+02:00",
+      "endTime": "2026-10-20T00:20:10.1455150+02:00"
+    },
+    {
+      "testName": "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Remaining_lease_wait_is_zero_only_after_the_authored_lease_plus_one_poll",
+      "outcome": "Passed",
+      "duration": "00:00:00.0029560",
+      "startTime": "2026-10-20T00:08:23.9845240+02:00",
+      "endTime": "2026-10-20T00:08:23.9854110+02:00"
+    },
+    {
+      "testName": "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Killed_workers_are_reclaimed_with_stable_invocations_and_one_native_continuation(profile: Clustered, first: \"right\", second: \"left\")",
+      "outcome": "Passed",
+      "duration": "00:03:31.0793119",
+      "startTime": "2026-10-20T00:10:42.1705840+02:00",
+      "endTime": "2026-10-20T00:14:13.2653010+02:00"
+    },
+    {
+      "testName": "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Killed_workers_are_reclaimed_with_stable_invocations_and_one_native_continuation(profile: InProcess, first: \"left\", second: \"right\")",
+      "outcome": "Passed",
+      "duration": "00:01:07.3158692",
+      "startTime": "2026-10-20T00:08:23.9855710+02:00",
+      "endTime": "2026-10-20T00:09:31.3019310+02:00"
+    },
+    {
+      "testName": "Elsa.Workbench.Tests.NativeHostingGracefulHandoffTests.Draining_owner_hands_off_accepted_execution_while_survivor_admits_work",
+      "outcome": "Passed",
+      "duration": "00:00:56.5104397",
+      "startTime": "2026-10-20T00:17:00.8398330+02:00",
+      "endTime": "2026-10-20T00:17:57.3515480+02:00"
+    },
+    {
+      "testName": "Elsa.Workbench.Tests.WorkbenchBackgroundActivityRecoveryTests.Killed_workers_are_reclaimed_with_stable_invocations_and_one_native_continuation(profile: InProcess, first: \"right\", second: \"left\")",
+      "outcome": "Passed",
+      "duration": "00:01:10.8663923",
+      "startTime": "2026-10-20T00:09:31.3024050+02:00",
+      "endTime": "2026-10-20T00:10:42.1694960+02:00"
+    }
+  ],
+  "limits": [
+    "Captured during integrated matrix execution. Only report, program and task Markdown files differ from the source commit.",
+    "Fresh per-scenario content roots, SQLite databases, loopback ports and package ZIPs are owned and deleted by fixture disposal.",
+    "A single package is SHA256-pinned and copied to both hosts inside each case; fixture DLL hash below is not a claim that independently created package ZIPs are byte-identical across cases.",
+    "Earlier incremental run aliases are supporting evidence; this source/binary identity is not assigned to them.",
+    "Raw logs and TRX are retained locally, not downloadable from this repository."
+  ]
+}
