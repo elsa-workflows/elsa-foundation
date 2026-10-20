@@ -188,9 +188,17 @@ describe("Activity Definitions experience", () => {
     { label: "parallel active drafts", drafts: page([draft(), draft({ draftId: "draft-2" })]) },
     { label: "an incomplete draft page", drafts: page([{ ...draft(), actions: [{ action: "edit-draft", allowed: true }] }], { hasMore: true, continuation: "next" }) },
     { label: "a draft without edit permission", drafts: page([draft()]) },
-    { label: "an unreadable current head", drafts: page([]), versions: page([]), actions: [{ action: "create-draft", allowed: true }] }
-  ])("requires explicit selection for $label", async ({ drafts, versions, actions }) => {
-    const rendered = renderOverview({ drafts, versions, actions });
+    { label: "an unreadable current head", drafts: page([]), versions: page([]), actions: [{ action: "create-draft", allowed: true }] },
+    {
+      label: "an omitted current head",
+      drafts: page([]),
+      versions: page([]),
+      actions: [{ action: "create-draft", allowed: true }],
+      definitionView: definitionWithOmittedHead([{ action: "create-draft", allowed: true }])
+    }
+  ])("requires explicit selection for $label", async ({ drafts, versions, actions, definitionView }) => {
+    const postJson = vi.fn();
+    const rendered = renderOverview({ drafts, versions, actions, definitionView, postJson });
     await waitForText(rendered.container, "Build your activity");
     const primaryAction = rendered.container.querySelector<HTMLButtonElement>(".ad-primary-action")!;
     await waitFor(() => expect(primaryAction.disabled).toBe(false));
@@ -199,6 +207,8 @@ describe("Activity Definitions experience", () => {
     click(primaryAction);
     expect(new URLSearchParams(window.location.search).get("section")).toBe("drafts");
     expect(new URLSearchParams(window.location.search).has("draft")).toBe(false);
+    expect(rendered.container.querySelector("[role='dialog']")).toBeNull();
+    expect(postJson).not.toHaveBeenCalled();
     await rendered.unmount();
   });
 
@@ -1030,6 +1040,17 @@ function renderOverview({ drafts, versions = page([version()]), actions = [], po
 function definitionWithoutCurrentHead(actions: ActivityDefinitionManagementView["actions"] = []): ActivityDefinitionManagementView {
   const view = definition({ headVersionId: null, recommendedVersionId: null }, actions);
   return { ...view, lifecycle: { ...view.lifecycle, draftCount: 1, versionCount: 0, head: null, recommendation: null } };
+}
+
+function definitionWithOmittedHead(actions: ActivityDefinitionManagementView["actions"]): ActivityDefinitionManagementView {
+  const view = definitionWithoutCurrentHead(actions);
+  const definitionView = { ...view.definition };
+  delete definitionView.headVersionId;
+  return {
+    ...view,
+    definition: definitionView,
+    lifecycle: { ...view.lifecycle, draftCount: 0 }
+  };
 }
 
 function capabilities(includeAuthoring = false, includeFork = false) {

@@ -77,7 +77,7 @@ As a Studio author, I can understand what a save or publication action promises 
 
 - **FR-001**: The workflow toolbar action that opens the transient test setup MUST be labeled “Test Run” wherever the author can see or access it, including its accessible name.
 - **FR-002**: The generic workflow test setup MUST retain trigger-provided field labels and their association with the corresponding inputs, and MUST preserve a module-supplied submission label and accessible name; when no module-supplied submission label exists, its submission's visible label and accessible name MUST be “Start Test Run.”
-- **FR-003**: While the generic workflow test setup is loading, its visible and accessible loading copy MUST identify the Test Run setup.
+- **FR-003**: While the generic workflow test setup is loading, its visible and accessible loading copy MUST identify the Test Run setup. Existing Runtime-control and module-response loading announcements MUST also identify Test Run.
 - **FR-004**: The generic workflow test setup MUST retain the existing connected-environment and real-side-effects warning before submission.
 - **FR-005**: After a workflow test, the author MUST retain direct access to its result details and the complete accessible test-status text.
 - **FR-006**: Activity authoring MUST offer “Continue editing draft” only when the complete, confirmed active-draft list contains exactly one active draft that the author is allowed to edit; that action MUST continue that exact draft.
@@ -99,7 +99,7 @@ As a Studio author, I can understand what a save or publication action promises 
 
 ### Scope Boundaries
 
-This feature covers truthful authoring action and setup-loading copy, equivalent publication-entry copy, activity draft action copy, existing Test Run result/details access, and stable visibility and positioning of primary toolbar actions while statuses change for the same editor definition and viewport. It does not change Home routing, Runs detail naming, the separate actual published-workflow run action or its input-dialog copy, retry behavior, runtime behavior, publication semantics, autosave behavior, draft-selection semantics, the expression editor, or backend and SDK behavior.
+This feature covers truthful authoring action and setup-loading copy, equivalent publication-entry copy, activity draft action copy, existing Test Run result/details access, and stable visibility and positioning of primary toolbar actions while statuses change for the same editor definition and viewport. It does not change Home routing, Runs detail naming, the separate actual published-workflow run action or its input-dialog copy, retry behavior, runtime behavior, publication semantics, autosave behavior, confirmed draft-selection paths, the expression editor, or backend and SDK behavior. The bounded R1 refinement in [plan.md](plan.md) makes the blank-create shortcut require explicit null head evidence rather than treating an omitted field as absent; all confirmed draft and version paths remain unchanged.
 
 ### Success Criteria *(mandatory)*
 

@@ -10,10 +10,10 @@ The authoring view uses existing Activity Definition, draft-list, and version-li
 |---|---|---|
 | Continue editing draft | The active-draft list is complete and contains exactly one active draft; that exact draft allows edit-draft. This branch takes precedence even if the current head is unreadable or create-draft is denied. | Open the editor for that exact draftId. |
 | Create draft from current version | Complete confirmed active-draft list contains zero active drafts; the definition names a current head; that exact immutable version is resolved and allows clone-draft; definition allows create-draft. | Clone using that exact versionId as sourceVersionId. |
-| Create draft | Complete confirmed active-draft list contains zero active drafts; the definition explicitly has no current head; definition allows create-draft. | Open the existing starting point with no source version. |
+| Create draft | Complete confirmed active-draft list contains zero active drafts; the definition explicitly reports headVersionId as null; definition allows create-draft. | Open the existing starting point with no source version. |
 | Open drafts | None of the direct branches above can be confirmed. | Open the existing drafts chooser and retain exact draft identities. |
 
-A draft list is complete only when its existing request is for the initial page, has no query error or active fetch, has no privacy failure, and the response has neither hasMore nor a continuation token. An unconfirmed list or unreadable/unconfirmed current head must not be treated as an empty list or an absent head. These are presentation-selection rules over existing evidence; no record shape changes.
+A draft list is complete only when its existing request is for the initial page, has no query error or active fetch, has no privacy failure, and the response has neither hasMore nor a continuation token. An unconfirmed list or unreadable/unconfirmed current head must not be treated as an empty list or an absent head. An omitted optional headVersionId is unknown evidence and retains the chooser, as recorded in the bounded R1 refinement. No record shape changes.
 
 ## Existing workflow Test Run state
 

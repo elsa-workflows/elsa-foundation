@@ -207,7 +207,7 @@ export function WorkflowRuntimePanel({ testRun, context, currentDraftSignature, 
           <div><dt>Expires</dt><dd title={view.expiresAt ? formatDate(view.expiresAt) : "None"}>{view.expiresAt ? formatDate(view.expiresAt) : "None"}</dd></div>
         </dl>
         {ActionResult && runState.driverActionResult ? (
-          <Suspense fallback={<p role="status">Loading Test Drive response…</p>}>
+          <Suspense fallback={<p role="status">Loading Test Run response…</p>}>
             <ActionResult action={view.driverAction ?? { kind: runState.driverActionResult.value.kind }} result={runState.driverActionResult.value} />
           </Suspense>
         ) : null}

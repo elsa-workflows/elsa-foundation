@@ -84,8 +84,18 @@ Give the Activity publication entry a stable footprint sized for the measured lo
 The copy-only checkpoint passes all 134 tests in the seven targeted files. Root reconciled existing module/browser expectations only where they select the renamed transient test or workflow review entry; published Executable Run and its Run workflow dialog retain their existing labels and behavior.
 
 
-## Completed local qualification
+## Initial completed local qualification
 
 On the tree integrating main e656cc6042fd86d15d61c7278d846222054eb535, all 2133 Workflows tests across 167 files pass (nine cases added to the original 2124 baseline). Canonical workspace types/lint and the Workflows build/bundle budgets pass; lint retains 48 existing warnings and zero errors. All 63 targeted Chromium journeys pass with zero skips or flaky cases. The sixteen expanded geometry cases measure zero x/y movement of primary actions across the recorded status states at 320/768/1024/1440 in light and dark. The Activity matrix includes queued/saving/failed/retried saves and preparing/failed/ready publication review; workflow covers thirty save/result combinations per width/theme, full status text and natural Tab/Enter access to details. Root reviewed eight 320/1440 light/dark workflow/Activity screenshots. Fixture-only controls are outside the product surface.
 
 Locked architecture restore, all 578 architecture tests with zero skips and the dependency-map check pass. No documentation-map refresh is required or committed. These results establish local qualification only. The terminal lifecycle marker is included in the implementation PR as required by spec-lifecycle.md and becomes true on merge; independent review, exact-head hosted checks, resulting-main qualification and the composed Workbench checkpoint remain separate delivery gates.
+
+## R1 findings and bounded correction
+
+The independent correctness axis found that the falsy head test combines explicit `null` with omitted `undefined`, although `ActivityDefinitionIdentityView` in the Studio client permits both. FR-008/009 and the approved data model require explicit no-head evidence. The C# projection copies its nullable HeadVersionId into the response record; owner ActivitiesDesignJsonOptions does not configure null omission. This does not prove every host emits the same null shape. Root therefore approves a conservative explicit-null shortcut guard and a rendered click-through regression for omission. Confirmed editable-draft precedence, exact clone IDs, known-null blank creation and all permissions remain authoritative. This is the sole bounded eligibility correction to the original copy-only plan.
+
+The acceptance axis found two remaining accessible Test Drive loading strings in the Runtime controls and module response fallbacks. Their surrounding UI already identifies Test Run. Root expands the copy repair to those two fallbacks, with real deferred Suspense coverage and no runtime or module-provided-copy change. All three axes also found the stale quickstart pending statement; its current local status is corrected without claiming hosted or resulting-main completion.
+
+## R1 correction qualification
+
+Root approved the three expected RED failures before source edits, reviewed the bounded patch, and completed the repeated local gates. The [quickstart qualification record](quickstart.md#r1-correction-qualification) owns the current counts and evidence boundaries; independent reviews, exact-head hosted checks and resulting-main qualification remain separate public delivery gates.

@@ -112,3 +112,10 @@ Deliver US1 as the first independently validated checkpoint after the baseline a
 4. Apply a CSS repair only if the measured geometry requires it and root approves the bounded change.
 5. Complete root-owned browser, full local, architecture/map, spec lifecycle, exact-head review, and resulting-main gates.
 
+
+## R1 review corrections
+
+- [x] R1-01 Add and run rendered RED regressions for an omitted head retaining the drafts chooser and for both Test Run result/control loading announcements in the existing activityDefinitions.test.tsx and lazyTestDriveAnnouncement.test.tsx fixtures.
+- [x] R1-02 Apply the bounded explicit-null guard and two loading-copy corrections, correct quickstart status, and verify the affected tests and root-owned qualification.
+
+Delivery continues under T016: reply to each adopted finding with the pushed fix SHA and obtain fresh independent correctness, standards and acceptance reviews against that exact head. These GitHub delivery gates remain pending until their public receipts exist.
