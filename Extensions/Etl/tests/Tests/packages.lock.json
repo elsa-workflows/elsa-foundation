@@ -194,6 +194,7 @@
       "elsa.etl.runtime": {
         "type": "Project",
         "dependencies": {
+          "CShells.Abstractions": "[0.0.31, )",
           "Elsa.Etl.Core": "[4.0.0-dev, )"
         }
       },
