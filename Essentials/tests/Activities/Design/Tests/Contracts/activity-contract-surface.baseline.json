@@ -1054,6 +1054,15 @@
       ],
       "outputs": [
         {
+          "key": "Payload",
+          "name": "Payload",
+          "type": "System.Text.Json.JsonElement?",
+          "collectionKind": "Single",
+          "isRequired": false,
+          "isNullable": true,
+          "sourceRepresentation": null
+        },
+        {
           "key": "Result",
           "name": "EventName",
           "type": "String",

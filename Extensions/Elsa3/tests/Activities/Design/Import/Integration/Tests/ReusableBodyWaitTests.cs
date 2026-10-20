@@ -36,34 +36,32 @@ public sealed class ReusableBodyWaitTests(ITestOutputHelper output)
         Assert.True(delay.CompletedAt - delay.StartedAt >= TimeSpan.FromSeconds(2), $"Delay ran from {delay.StartedAt:O} to {delay.CompletedAt:O}.");
     }
 
-    [Fact]
-    public async Task A_reusable_body_that_waits_for_an_event_resumes_when_the_event_arrives()
+    /// <summary>The event is raised the way Elsa 3 workflows raise it: by an imported Publish Event, with or without a payload (#3107).</summary>
+    [Theory]
+    [InlineData("publish-event-publisher", null)]
+    [InlineData("publish-event-publisher-payload", PublishEventResumeTests.Elsa3ObjectLiteralPayload)]
+    public async Task A_reusable_body_that_waits_for_an_event_resumes_when_the_event_arrives(string publisherFixture, string? expectedPayload)
     {
         await using var host = await Elsa3ImportHost.StartAsync();
-        var (apply, items) = await host.ImportAsync("import-waits-event", "reusable-waits-event");
-        Assert.True((int)apply.StatusCode < 300, apply.Body.ToJsonString());
-        var reusable = Assert.Single(items);
+        var import = await host.ImportSelectionAsync($"import-waits-event-{publisherFixture}", ["reusable-waits-event", publisherFixture]);
+        Assert.True((int)import.Apply.StatusCode < 300, import.Apply.Body.ToJsonString());
+        var reusable = import.Item("waits-event-v1");
         var wrapper = await host.PublishWorkflowAsync(Elsa3ImportHost.Required(reusable, "workflowVersionId"));
+        var publisher = await host.PublishWorkflowAsync(Elsa3ImportHost.Required(import.Item($"{publisherFixture}-v1"), "workflowVersionId"));
 
         var waiting = await host.ExecuteAsync(wrapper, new JsonObject());
         await host.WaitForAsync(waiting, run => run.Activities.Any(state =>
-            state.Execution.ActivityType.EndsWith(".Event", StringComparison.Ordinal) && state.Status == ActivityExecutionStatus.Suspended));
-        // Raised through the runtime's stimulus API. An imported Publish Event cannot resume an Event wait yet, in any
-        // workflow: it sends its payload as the Event's trigger (elsa-foundation#3107).
-        var routed = await host.PostAsync("runtime/workflows/stimuli", new JsonObject
-        {
-            ["stimulusType"] = EventStimulus.StimulusType,
-            ["stimulusHash"] = EventStimulus.Hash("order.approved"),
-            ["input"] = new JsonObject { ["eventName"] = "order.approved" },
-            ["mode"] = "ResumeOnly"
-        });
-        Assert.Equal(1, (int?)routed["resumedCount"]);
+            PublishEventResumeTests.IsEvent(state) && state.Status == ActivityExecutionStatus.Suspended));
+        var published = await host.RunAsync(publisher);
         var run = await host.WaitForSettledAsync(waiting);
         output.WriteLine(run.Describe());
 
+        Assert.True(published.Workflow?.Status == WorkflowExecutionStatus.Completed, published.Describe());
         Assert.True(run.Workflow?.Status == WorkflowExecutionStatus.Completed, run.Describe());
+        Assert.Empty(run.Incidents);
         var activity = Assert.Single(run.Activities, state => state.Execution.ActivityType == Elsa3ImportHost.Required(reusable, "activityTypeKey"));
         Assert.Equal("Approved", activity.Completion?.OutcomeKey);
+        Assert.Equal(expectedPayload ?? "null", PublishEventResumeTests.PayloadOf(Assert.Single(run.Activities, PublishEventResumeTests.IsEvent)));
     }
 
     [Fact]
