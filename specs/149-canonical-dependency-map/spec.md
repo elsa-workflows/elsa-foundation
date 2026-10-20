@@ -5,6 +5,8 @@
 **Status**: Draft
 **Input**: Make one generated machine-readable dataset the source of truth for the repository's project graph, with the existing markdown maps becoming projections of it, so that publishing can resolve which project owns a file without depending on a documentation tool.
 
+Superseded in part by [spec 259](../259-derived-dependency-map/spec.md): the dataset is no longer committed; the versioning calculator derives it per commit with the shared scanner, so SC-005 now holds as "the calculator never runs the generator", not "never scans a project file".
+
 Decision of record: [ADR 0067](../../docs/adr/0067-package-versioning-uses-two-lines-with-computed-patch.md), which records that the dependency map "resolves file ownership for the patch computation and generates the `SharedAssemblies` list and the host compatibility manifest". Its Decision keeps each package's last published version in its own committed file, which only publishing writes, and not in this dataset; spec 150 specifies that record and consumes this dataset.
 
 ## User Scenarios & Testing *(mandatory)*

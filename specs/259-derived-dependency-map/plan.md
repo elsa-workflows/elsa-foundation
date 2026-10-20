@@ -6,7 +6,7 @@
 
 ## Summary
 
-The scan that writes `docs/maps/dependency-map.json` moves out of the maps generator into a small library, `tools/maps/Elsa.Maps.ProjectGraph`. The library reads files through one tree view, and has two implementations: the working tree for the generator, and a commit's git objects for the calculator. When a commit has no committed dataset, the calculator derives the dataset by serializing that commit's tree with the shared scanner, then parses it with its existing validator. A commit that has a committed dataset keeps using it, so every recorded fingerprint stays stable.
+The scan that writes `docs/maps/dependency-map.json` moves out of the maps generator into a small library, `tools/maps/Elsa.Maps.Projects`. The library reads files through one tree view, and has two implementations: the working tree for the generator, and a commit's git objects for the calculator. When a commit has no committed dataset, the calculator derives the dataset by serializing that commit's tree with the shared scanner, then parses it with its existing validator. A commit that has a committed dataset keeps using it, so every recorded fingerprint stays stable.
 
 A recorded comparison over 30 recent `main` commits proves both sources give identical versions and fingerprints. After that, the file is untracked, git-ignored and published with the other maps on `generated-maps`.
 
@@ -54,7 +54,7 @@ A recorded comparison over 30 recent `main` commits proves both sources give ide
 | Framework §2.1, §2.2, §2.3, §2.5/§2.23.1, §2.9, §2.20, §2.23.3 (product project, feature, persistence shape) | No: tooling only, with no product package, feature or persistence change | pass (n/a) |
 | Elsa §E2.2 Runtime ↛ Design; §E2.3; §E2.7 | No | pass (n/a) |
 | Elsa §E5: versions computed, not authored; bounded ranges | The calculator still computes every version from the commit and the record. The only change is where the per-project facts come from, and FR-008 proves they are identical. §E5's text names no dataset location (research R10) | pass; no amendment |
-| Elsa §E6 type naming | New types: `IRepositoryTree`, `CommitTree`, `DatasetSource`, `DependencyMapJson`, `Elsa.Maps.ProjectGraph`. Each has at most 4 components and no banned words. R4: none uses a reserved suffix in another sense | pass, re-checked at review |
+| Elsa §E6 type naming | New types: `IRepositoryTree`, `CommitTree`, `DatasetSource`, `DependencyMapJson`, `Elsa.Maps.Projects`. Each has at most 4 components and no banned words. R4: none uses a reserved suffix in another sense | pass, re-checked at review |
 | Repo rule: duplication beats dependency only for 5–10 lines | The scan is about 600 lines, so it is shared through a library rather than copied (research R3) | pass |
 | Sanctioned patterns (framework §2.24.2) | No runtime pattern. A tool library shared by two tools has a precedent: the Publisher references the Calculator | pass |
 | Governance: constitution changes land in-unit | §E5 and the framework were checked; neither names the committed file | no change needed (FR-016) |
@@ -82,8 +82,8 @@ specs/259-derived-dependency-map/
 ### Source code (repository root)
 
 ```text
-tools/maps/Elsa.Maps.ProjectGraph/                   # new library (moved from the generator)
-├── Elsa.Maps.ProjectGraph.csproj, packages.lock.json
+tools/maps/Elsa.Maps.Projects/                   # new library (moved from the generator)
+├── Elsa.Maps.Projects.csproj, packages.lock.json
 ├── IRepositoryTree.cs                               # new
 ├── RepoContext.cs                                   # moved; implements IRepositoryTree
 ├── RepoLayout.cs                                    # project-path part moved; + IsProjectPath
@@ -125,7 +125,7 @@ VersionLines.props, tools/versioning/README.md, tools/maps/generate-maps.{sh,ps1
 
 Everything ships in one PR, and the commits are ordered so that the gate in step 4 runs before the file disappears.
 
-1. **Extract.** Move the scan into `Elsa.Maps.ProjectGraph` behind `IRepositoryTree`, with no behavior change. The generator output must be byte-identical (FR-007). Add `project-graph-self-test`, update the slnx, the filters and the lock files.
+1. **Extract.** Move the scan into `Elsa.Maps.Projects` behind `IRepositoryTree`, with no behavior change. The generator output must be byte-identical (FR-007). Add `project-graph-self-test`, update the slnx, the filters and the lock files.
 2. **Derive.** Add `CommitTree`, `DatasetSource`, `--dataset` and the derived-dataset tests. Teach `SyntheticRepository` to write lock files. With `auto`, nothing changes yet, because every commit still has its file.
 3. **Consumers.** Point `DependencyMapTests` and `NuGetLockFileTests` at the scanner.
 4. **Validate (gate).** Run `validate-dataset-sources.sh 30` and record the table and the timings in the PR. Stop if any row differs.

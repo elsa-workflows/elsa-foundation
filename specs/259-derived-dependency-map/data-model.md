@@ -40,7 +40,7 @@ interface IRepositoryTree
 
 **Invariant**: for a clean checkout of commit C, `Serialize(RepoContext)` and `Serialize(CommitTree(C))` are byte-identical. A self-test and a calculator test pin it.
 
-## Shared library contents (`tools/maps/Elsa.Maps.ProjectGraph`)
+## Shared library contents (`tools/maps/Elsa.Maps.Projects`)
 
 | Type | From | Change |
 |---|---|---|
@@ -48,7 +48,7 @@ interface IRepositoryTree
 | `ProjectFile` | generator | `Load(IRepositoryTree, path)` parses from bytes |
 | `PackageVersions` | generator | `Load(IRepositoryTree)` |
 | `PinnedTransitiveDependencies` | generator | lock file via `IRepositoryTree.Read` |
-| `RepoLayout` (project-path part), with the new `IsProjectPath` | generator | `ProjectPathspecs` stays; the source/catalog pathspecs stay in the generator |
+| `RepoLayout`, with the new `IsProjectPath` | generator | moved whole, its source and catalog pathspecs included (research R12) |
 | `RepoContext` | generator | moves with the library; implements `IRepositoryTree` |
 | `DependencyMapJson.Serialize` | generator `DependencyMap` | new home of the dataset record and JSON options. `DependencyMap.Generate` keeps writing the file |
 

@@ -73,7 +73,7 @@ Comment on the program issue at every state transition. Every PR carries this re
 
 ## Refresh generated maps
 
-The documentation maps are not committed to `main`. Generate them locally with `dotnet run --project tools/maps/Elsa.Maps.Generator -- all` (same paths, git-ignored), or read the set CI publishes after each merge: browse <https://github.com/elsa-workflows/elsa-foundation/tree/generated-maps/docs/maps>, fetch raw files from `https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/generated-maps/docs/maps/<file>`, or run `git fetch origin generated-maps` and `git show origin/generated-maps:docs/maps/<file>`. `-- check` guards only the committed `docs/maps/dependency-map.json`; commit it and the solution filters only when they change. See [Generated maps](docs/contributing/generated-maps.md).
+The documentation maps are not committed to `main`. Generate them locally with `dotnet run --project tools/maps/Elsa.Maps.Generator -- all` (same paths, git-ignored), or read the set CI publishes after each merge: browse <https://github.com/elsa-workflows/elsa-foundation/tree/generated-maps/docs/maps>, fetch raw files from `https://raw.githubusercontent.com/elsa-workflows/elsa-foundation/generated-maps/docs/maps/<file>`, or run `git fetch origin generated-maps` and `git show origin/generated-maps:docs/maps/<file>`. The dependency-map dataset, `docs/maps/dependency-map.json`, is not committed either: the versioning calculator derives it from each commit's own tree (spec 259), and it is published with the maps. `-- check` guards the committed solution filters; commit them only when they change. See [Generated maps](docs/contributing/generated-maps.md).
 
 ## Personal operating preferences
 

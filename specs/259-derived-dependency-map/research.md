@@ -21,7 +21,7 @@ All findings were verified against `main` at `d628fc0da` on 2026-10-20.
 
 ## R3 — One scanner, two tree views (FR-006)
 
-- **Decision**: a new library project `tools/maps/Elsa.Maps.ProjectGraph` holds the scan. The generator and the calculator both reference it. It moves out of the generator unchanged in behavior:
+- **Decision**: a new library project `tools/maps/Elsa.Maps.Projects` holds the scan. The generator and the calculator both reference it. It moves out of the generator unchanged in behavior:
   - `ProjectFacts`, the edge records and `ProjectGraph` (`ProjectFacts.cs`);
   - `ProjectFile`;
   - `PackageVersions`;
@@ -122,3 +122,18 @@ All findings were verified against `main` at `d628fc0da` on 2026-10-20.
 
 - Spec 149's SC-005 ("the calculator never scans a project file") and its FR-006 wording ("consumers never run the generator") are superseded in part. The calculator now runs the shared scanner, though never the generator. Spec 149 is history: its text is not rewritten, but it gets a one-line pointer to this spec (owner-approved 2026-10-20; task T036a), so readers of 149 are not misled.
 - The solution filters stay committed. Removing them is a separate question: CI and IDEs read them directly.
+
+## R12 — Changes made during implementation
+
+Each of these changes the plan as written; none changes a requirement.
+
+- **Library name.** The library is `tools/maps/Elsa.Maps.Projects`, not `Elsa.Maps.ProjectGraph`. A namespace `Elsa.Maps.ProjectGraph` holding the class `ProjectGraph` makes every caller in `Elsa.Maps.*` resolve the simple name `ProjectGraph` to the namespace (CS0118).
+- **`RepoLayout` moved whole.** The source and catalog pathspecs moved with the project rule instead of staying in the generator. They are path rules too, and one file kept the diff a move.
+- **LF on every platform.** `JsonSerializer` writes indented output with `Environment.NewLine`, so on Windows the calculator's in-memory derived map had CRLF while every committed copy has LF. The generator never showed this, because `MarkdownTable.Write` normalizes line endings. `DependencyMapJson` now sets `NewLine = "\n"`, and `DerivedDatasetTests` pins it. The validation helper found it before the gate ran.
+- **Blob batch adopted (R5).** Deriving the map at `HEAD` took 54 s on Windows with a process per blob. `ObjectCache` now reads through one `git cat-file --batch` (`BlobBatch`), which it disposes with the computation; the same derivation takes about 3 s. `cat-file` was already the calculator's command, so `ReadOnlyCommands` is unchanged.
+- **`SyntheticRepository` keeps committing the map by default (T018).** The shared synthetic history uses the pre-consolidation `src/`/`tests/` layout, which the scan does not read. A lock file is also an owned file, and so a package input, so writing one beside every project would change the inputs every existing test asserts on. Lock files are therefore opt-in (`WriteLockFiles`). `DerivedDatasetTests` builds its own history in the `Essentials/`/`Extensions/` layout with lock files.
+- **`PinnedTransitiveDependencies.Read` is public.** The generator's `project-facts-self-test` calls it across the new assembly boundary.
+- **`project-graph-self-test` exit code.** Like every other generator self-test, it fails by throwing, which exits 2, not 1.
+- **CI failure summary.** `Generated maps fresh` keeps a failure summary, renamed "Explain a failed generator check". It drops the dataset-refresh hint and keeps the lock-file advice, because `publish` still scans the tree.
+- **Validation helper.** `dataset-bytes.cs` is a .NET file-based app beside the script. It reads each commit's git objects through the shared library to compare dataset bytes, and turns off AOT (reflection-based JSON) and lock-file restore, so it leaves no `packages.lock.json` in `specs/`.
+- **Local test runs on Windows.** The calculator suite's synthetic repositories fail their cleanup on Windows, because git marks object files read-only and `Directory.Delete` refuses them. Two `RecordTests` facts also compare LF output with CRLF-checked-out string literals. Both happen on `main` before this change as well (checked on `d9fb3e14e`). Local evidence here therefore classifies failures from TRX results: a failure that is only the cleanup exception counts as passed. CI runs on Linux.

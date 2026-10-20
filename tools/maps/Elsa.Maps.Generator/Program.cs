@@ -11,8 +11,9 @@ using Elsa.Maps.Generator;
 //   project-facts-self-test | feature-facts-self-test | repo-layout-self-test | project-graph-self-test
 //   publish <out-dir> --source-commit <sha> --repo-url <url> | publish-self-test
 //
-// Only dependency-map.json is committed and checked. The documentation maps are generated locally with "all" and
-// published by CI with "publish" (spec 257).
+// No map is committed. The documentation maps and dependency-map.json are generated locally with "all" and published
+// by CI with "publish" (specs 257 and 259); the versioning calculator derives the dependency map from each commit's tree.
+// "check" checks the one committed generated output left, the solution filters.
 
 // "dependency-map" first: it is the dataset every project-graph map is a projection of (spec 149). Then "maps":
 // the v2 findings report reads summary lines out of the v1 maps, so they must exist first.
@@ -110,8 +111,8 @@ try
         return 0;
     }
 
-    // Freshness check of the committed dependency-map dataset: regenerates it into a scratch directory and
-    // compares the bytes with what is committed. Writes nothing into the repository.
+    // Freshness check of the committed generated output, the solution filters: regenerates them into a scratch
+    // directory and compares the bytes with what is committed. Writes nothing into the repository.
     if (layers.Contains("check", StringComparer.Ordinal))
     {
         if (layers.Length > 1)

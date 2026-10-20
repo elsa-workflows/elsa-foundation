@@ -28,7 +28,7 @@ dotnet run --project tools/versioning/Elsa.Versioning.Calculator -- \
 | `all` | every layer, the dataset included | unchanged |
 | `check` | regenerates the dataset and byte-compares it with the committed file | checks the committed solution filters (same as `solution-filters-check`); exit 0 fresh, 1 stale, 2 error |
 | `publish <out> --source-commit <sha> --repo-url <url>` | the markdown set, manifest and findings | the same set plus `docs/maps/dependency-map.json`; relative links to it stay relative |
-| `project-graph-self-test` (new) | — | pins `RepoLayout.IsProjectPath`, the layout rule (research R3): on the live tree it selects what `git ls-files -- <ProjectPathspecs>` selects, and on synthetic paths it includes nested `src`/`tests` projects and excludes `Extensions/<cap>/studio/**`, `Studio/**` and `tools/**`; exit 0 pass, 1 fail. Working-tree vs git-tree equality is a calculator xunit test, because the git-tree view lives in the calculator |
+| `project-graph-self-test` (new) | — | pins `RepoLayout.IsProjectPath`, the layout rule (research R3): on the live tree it selects what `git ls-files -- <ProjectPathspecs>` selects, and on synthetic paths it includes nested `src`/`tests` projects and excludes `Extensions/<cap>/studio/**`, `Studio/**` and `tools/**`; exit 0 pass, 2 on failure, like every generator self-test (research R12). Working-tree vs git-tree equality is a calculator xunit test, because the git-tree view lives in the calculator |
 
 ## CI: `Generated maps fresh` (job id `generated-maps`)
 
