@@ -714,3 +714,4 @@ static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.BatchId(Elsa.Etl.Core.Runtime.Et
 static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.InvocationFingerprint(Elsa.Etl.Core.Runtime.EtlInvocation! invocation) -> string!
 static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.OutputIdentity(Elsa.Etl.Core.Runtime.EtlRunAdmission! admission, string! batchId, Elsa.Etl.Core.Runtime.EtlOutputRoute route) -> string!
 static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.OutputKey(Elsa.Etl.Core.Runtime.EtlRunAdmission! admission, string! batchId, Elsa.Etl.Core.Runtime.EtlOutputRoute route) -> string!
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ScopeKey(Elsa.Etl.Core.EtlScope! scope) -> string!

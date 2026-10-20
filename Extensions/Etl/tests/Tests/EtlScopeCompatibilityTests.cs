@@ -71,13 +71,19 @@ public sealed class EtlScopeCompatibilityTests
         var equivalentNullTenant = new EtlScope(null, "partition-a");
         var literalNull = new EtlScope("null", "partition-a");
         var literalDefault = new EtlScope("default", "partition-a");
+        var opaqueFirst = new EtlScope("tenant-\ud800", "partition-a");
+        var opaqueSecond = new EtlScope("tenant-\ud801", "partition-a");
         var registry = new HostFileBindings(
         [
             Output(nullTenant),
             Output(literalNull),
-            Output(literalDefault)
+            Output(literalDefault),
+            Output(opaqueFirst),
+            Output(opaqueSecond)
         ]);
 
+        Assert.NotEqual(registry.Resolve(opaqueFirst, "output", EtlFileRole.MainOutput).Handle,
+            registry.Resolve(opaqueSecond, "output", EtlFileRole.MainOutput).Handle);
         Assert.Equal(nullTenant, equivalentNullTenant);
         Assert.NotEqual(nullTenant, literalNull);
         Assert.NotEqual(nullTenant, literalDefault);

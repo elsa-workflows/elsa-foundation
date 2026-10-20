@@ -10,6 +10,12 @@ namespace Elsa.Etl.Core.Runtime;
 /// <remarks>Values are length-framed, lossless little-endian UTF-16 code units with a distinct null marker. No worker, attempt, lease or fence is included.</remarks>
 public static class EtlRuntimeIdentity
 {
+    public static string ScopeKey(EtlScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        return Hash("etl-scope-v1", scope.TenantId, scope.PersistencePartition);
+    }
+
     public static string InvocationFingerprint(EtlInvocation invocation)
     {
         ArgumentNullException.ThrowIfNull(invocation);

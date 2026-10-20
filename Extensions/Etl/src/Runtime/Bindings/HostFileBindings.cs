@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using Elsa.Etl.Core;
+using Elsa.Etl.Core.Runtime;
 
 namespace Elsa.Etl.Runtime.Bindings;
 
@@ -34,7 +35,7 @@ internal sealed class HostFileBindings
             var snapshot = binding with { Path = Path.GetFullPath(binding.Path), ExpectedSha256 = input ? binding.ExpectedSha256!.ToLowerInvariant() : null };
             var identity = JsonSerializer.SerializeToUtf8Bytes(new
             {
-                FormatVersion = 1, snapshot.Scope, snapshot.Alias, snapshot.Role, snapshot.Revision,
+                FormatVersion = 1, ScopeIdentity = EtlRuntimeIdentity.ScopeKey(snapshot.Scope), snapshot.Alias, snapshot.Role, snapshot.Revision,
                 snapshot.Path, snapshot.ExpectedSha256, snapshot.ImmutableInput, snapshot.AtomicPublication
             });
             var handle = Convert.ToHexString(SHA256.HashData(identity)).ToLowerInvariant();

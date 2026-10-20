@@ -9,6 +9,18 @@ namespace Elsa.Etl.Tests;
 public sealed class EtlRuntimeIdentityTests
 {
     [Fact]
+    public void Scope_key_preserves_null_named_and_opaque_tenants()
+    {
+        var scopes = new[]
+        {
+            new EtlScope(null, "partition"), new EtlScope("null", "partition"),
+            new EtlScope("default", "partition"), new EtlScope("tenant-\ud800", "partition"),
+            new EtlScope("tenant-\ud801", "partition"), new EtlScope(null, "other-partition")
+        };
+        Assert.Equal(scopes.Length, scopes.Select(EtlRuntimeIdentity.ScopeKey).Distinct().Count());
+    }
+
+    [Fact]
     public void Invocation_framing_preserves_opaque_scope_and_address_identity()
     {
         var invocation = EtlRuntimeFixtures.Admission().Invocation;

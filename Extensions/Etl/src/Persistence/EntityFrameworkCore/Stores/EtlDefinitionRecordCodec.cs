@@ -1,9 +1,9 @@
-using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using Elsa.Etl.Core;
+using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Design.Stores;
 using Elsa.Etl.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Persistence.EntityFramework;
@@ -25,34 +25,9 @@ internal static class EtlDefinitionRecordCodec
             EnsureIdentity(scope.TenantId, "tenant id");
         EnsureIdentity(scope.PersistencePartition, "persistence partition");
         return new(
-            HashScope(scope.TenantId, scope.PersistencePartition),
+            EtlRuntimeIdentity.ScopeKey(scope),
             scope.TenantId is null ? null : EfRelationalIdentity.Encode(scope.TenantId),
             EfRelationalIdentity.Encode(scope.PersistencePartition));
-    }
-
-    private static string HashScope(string? tenantId, string persistencePartition)
-    {
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        hash.AppendData("Elsa.Etl.Scope.v1"u8);
-        AppendScopeComponent(hash, tenantId);
-        AppendScopeComponent(hash, persistencePartition);
-        return Convert.ToHexString(hash.GetHashAndReset());
-    }
-
-    private static void AppendScopeComponent(IncrementalHash hash, string? value)
-    {
-        Span<byte> header = stackalloc byte[sizeof(byte) + sizeof(int)];
-        header[0] = value is null ? (byte)0 : (byte)1;
-        BinaryPrimitives.WriteInt32BigEndian(header[sizeof(byte)..], value?.Length ?? 0);
-        hash.AppendData(header);
-
-        if (value is null)
-            return;
-
-        var utf16 = new byte[checked(value.Length * sizeof(char))];
-        for (var index = 0; index < value.Length; index++)
-            BinaryPrimitives.WriteUInt16LittleEndian(utf16.AsSpan(index * sizeof(char), sizeof(char)), value[index]);
-        hash.AppendData(utf16);
     }
 
     public static DefinitionIdentity Definition(string definitionId)
