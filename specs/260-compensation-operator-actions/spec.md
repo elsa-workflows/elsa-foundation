@@ -24,7 +24,7 @@
 | OD13 | Who sees the actions? | Studio hides them unless a **server-provided, per-user signal** says the caller has `workflows/runtime:manage` for the run (the `permissions.canManage` shape). Studio still handles 401 and 403. |
 | OD14 | Where does action history come from? | From **incident resolution outcome metadata**: actor, reason, time and outcome, as `RetryFaultedActivity/1` already records them. No plans-by-run endpoint. |
 | OD15 | How does Studio read the journal? | A **read-only journal projection endpoint** per scope occurrence: entries, statuses, attempts with incident ids, operation keys, origin and hand-over, confirmations, cause and remaining handlers. Captured values honour `CanInspectSensitiveValuesAsync`. Permission `workflows/runtime:read`, tenant-scoped. Studio uses it instead of inferring where it can. |
-| OD16 | Which runs can an operator alter by id? | **Every run of the caller's tenant**, whatever execution authority started it, for alterations that name runs by id (FR-406). This matches run deletion. It applies to all alteration kinds. The run's authority is still captured for the concurrency check, and query targets keep the authority filter. |
+| OD16 | Which runs can an operator alter by id? | **Every run of the caller's tenant**, whatever execution authority started it, for alterations that name runs by id (FR-406). This matches run deletion, including its per-run authorization with the run as the permission resource. It applies to all alteration kinds. The run's authority is still captured for the concurrency check, and query targets keep the authority filter. |
 
 Choices made in this packet under OD12, recorded so they can be challenged ([research](research.md)):
 
@@ -170,7 +170,7 @@ A reviewer opens a compensated run. The scope shows an **Operator actions** list
 - **FR-403**: The runtime delivers the decision to the requester through a new callback (`IRuntimeActivityInterventionDecisionHandler`), as a structural evaluation that may defer (scheduling children or cancelling a child subtree), complete or fault, committed like any other structural evaluation. A requester that is no longer running acks the delivery without a callback. A repeated delivery is acked by its processed marker.
 - **FR-404**: The incident transition rule allows exactly one more replacement of a committed outcome: `WaitForIntervention` → `Resolved` with `OperatorDecision` from `OperatorDecisionAlteration`, on the same activity execution.
 - **FR-405**: `RetryFaultedActivity/1` refuses a source whose parent is not running (`SourceParentNotRunning`), so a retry never starts a handler under a cancelled scope (R9).
-- **FR-406**: An alteration that names runs by id captures every run of the caller's tenant, whatever execution authority started it. Query targets keep today's authority filter; bulk alteration stays parked (R10).
+- **FR-406**: An alteration that names runs by id captures every run of the caller's tenant, whatever execution authority started it, that the caller may manage. Each named run is authorized at submission as run deletion authorizes it: `workflows/runtime:manage` with the run's state as the permission resource, so a host's resource handler can refuse one run. A refused run is never captured or altered and fails `TargetNotFound`, exactly like a missing run; the other runs in the plan proceed. Query targets keep today's authority filter; bulk alteration stays parked (R10).
 
 **Compensation scope**
 
