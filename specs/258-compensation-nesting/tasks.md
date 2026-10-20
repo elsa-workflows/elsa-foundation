@@ -4,11 +4,11 @@
 
 ## Phase A — Runtime seams (PR 1)
 
-- [ ] T301 [P] R-1: `RuntimeAncestorSelector` (consumer key or activity type, optional authored id, `StopAtGraphBoundary`, `Optional`) and the selector overload of `RequestAncestorNotification`; the string overload maps to it. `ParentNotificationEvaluation.FindNearestAncestorAsync` matches by type and stops at an `elsa.graph-activity` ancestor when asked. Unit tests: type match, authored-id match, boundary stop, optional no-match sends nothing, required no-match faults with the existing code.
-- [ ] T302 [P] `ActivityChildNotifiedContext.ViaChildActivityExecutionId` / `ViaChildExecutableNodeId`, filled for direct and ancestor notifications. Unit test with a two-level ancestry.
-- [ ] T303 R-2: allow ancestor notifications from a child-completion evaluation ending `Complete`, enqueued ahead of the completion intent in one checkpoint. Keep refusing every other evaluation and continuation. Tests: ordering (ancestor evaluates first), refusal cases, restart between the two work items.
-- [ ] T304 R-3: `IRuntimeActivityDescendantFaultHandler` and `ActivityDescendantFaultedContext`; capability flag compiled into the executable node; delivery from the bypass branch of `WorkflowParentActivityCompletionSchedulerWorkHandler`. Absorption cancels the via-child's subtree; intervention keeps the incident blocking. Tests: Sequence, ForEach, While, For under a flagged parent; a Flowchart in between still suspends; a reusable boundary stops the walk; unflagged trees unchanged (the existing Sequence fault tests pass untouched).
-- [ ] T305 `EXTENSION_POINTS.md` (runtime) lists R-1 to R-3. Regenerate the maps.
+- [x] T301 [P] R-1: `RuntimeAncestorSelector` (consumer key or activity type, optional authored id, `StopAtGraphBoundary`, `Optional`) and the selector overload of `RequestAncestorNotification`; the string overload maps to it. `ParentNotificationEvaluation.FindNearestAncestorAsync` matches by type and stops at an `elsa.graph-activity` ancestor when asked. Unit tests: type match, authored-id match, boundary stop, optional no-match sends nothing, required no-match faults with the existing code.
+- [x] T302 [P] `ActivityChildNotifiedContext.ViaChildActivityExecutionId` / `ViaChildExecutableNodeId`, filled for direct and ancestor notifications. Unit test with a two-level ancestry.
+- [x] T303 R-2: allow ancestor notifications from a child-completion evaluation ending `Complete`, enqueued ahead of the completion intent in one checkpoint. Keep refusing every other evaluation and continuation. Tests: ordering (ancestor evaluates first), refusal cases, restart between the two work items.
+- [x] T304 R-3: `IRuntimeActivityDescendantFaultHandler` and `ActivityDescendantFaultedContext`; capability flag compiled into the executable node; delivery from the bypass branch of `WorkflowParentActivityCompletionSchedulerWorkHandler`. Absorption cancels the via-child's subtree; intervention keeps the incident blocking. Tests: Sequence, ForEach, While, For under a flagged parent; a Flowchart in between still suspends; a reusable boundary stops the walk; unflagged trees unchanged (the existing Sequence fault tests pass untouched).
+- [x] T305 `EXTENSION_POINTS.md` (runtime) lists R-1 to R-3. Regenerate the maps.
 
 ## Phase B — Scope v3, Confirm, Compensate (PR 2)
 

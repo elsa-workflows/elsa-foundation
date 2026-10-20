@@ -44,7 +44,7 @@ Citations are to `main` plus the M2 branch (`agent/claude/3045-compensation-unce
 ## R5 — The parent can schedule the inner handler, but must route it from provenance
 
 - **Evidence:**
-  - `ScheduleChildActivity` takes any executable node id and records the request (`Workflows/Runtime/Elsa.Workflows.Runtime/Services/ActivityExecutions/SimpleActivityExecutionContext.cs:93-106`); no structural slot check was found at the schedule seam. PR 2 adds a test that schedules a handler node owned by an inner scope's slot from the outer scope, and stops if the runtime refuses it.
+  - `ScheduleChildActivity` takes any executable node id and records the request (`Workflows/Runtime/Elsa.Workflows.Runtime/Services/ActivityExecutions/SimpleActivityExecutionContext.cs:93-106`); no structural slot check was found at the schedule seam. Confirmed in PR 1: `CrossSlotSchedulingExecutionTests` schedules a node from a completed inner composite's slot as the outer parent's child, and it runs with the outer parent as its parent.
   - A child's command metadata is the parent's inherited command metadata plus the request metadata (`Activities/Runtime/Elsa.Activities.Runtime/Services/SchedulerWorkItems.cs:140-149`). Request metadata becomes provenance metadata only when the parent gives no provenance (`SchedulerWorkItems.cs:118-136`).
   - M2 lesson: an operator retry rebuilds the successor's command from the source's provenance metadata (`Workflows/Runtime/Elsa.Workflows.Runtime/Services/Alterations/Handlers/RetryFaultedActivityAlterationHandler.cs:116,163`). Routing data held only in command metadata is lost on retry; the scope missed the successor's completion until that was fixed.
 - **Decision (FR-304, FR-307):** the scope puts all routing keys (role, scope, entry, attempt, origin) in both the request metadata and the provenance metadata of every child it schedules, handed-over handlers included.
@@ -53,7 +53,7 @@ Citations are to `main` plus the M2 branch (`agent/claude/3045-compensation-unce
 
 - **Evidence:** a completed scope closes its owned container frames (`StructuralParentEvaluationSupport.cs:425`, `RuntimeContainerScopeService.CloseOwnedFrames`), so values of containers inside the origin scope are gone once it completes.
 - **Decision:** a handed-over handler binds to the forward step's result and workflow variables. A design validator refuses a handler that reads a container-local variable declared inside its own scope or a container below it, but only where that scope can hand over (it has an enclosing scope and `confirmOnComplete` is off).
-- **Open check for PR 2:** an `ActivityResult` reference carries the producer's authored scope (`producerScopeId`). PR 2 must prove that it resolves when the handler runs as the outer scope's child; if not, the hand-over carries the forward result reference and the scope rebinds it.
+- **Checked in PR 1:** an `ActivityResult` reference carries the producer's authored scope (`producerScopeId`). It resolves when the handler runs as the outer parent's child: the causal lineage follows the scheduling identity to the forward step, and the producer-scope check compares the producer's own execution scope, not the consumer's (`CausalActivityResultResolver.cs:62-85,127-139`). Iteration identity sits on the loop body (the inner scope), not on its children, so a forward step inside a loop iteration stays visible to a handler scheduled outside it. `CrossSlotSchedulingExecutionTests` pins both.
 
 ## R7 — Cancellation
 
