@@ -15,7 +15,11 @@ Use `services.AddConnections()` to register defaults, then replace these service
   the document's and then increments it; otherwise, including after a delete, it throws
   `ConnectionConflictException` and writes nothing. Derive the replacement's tests from
   `ConnectionRepositoryContractTests` in `Essentials/tests/Connections/Tests/`.
-- `IConnectionManager` for lifecycle.
+- `IConnectionManager` for lifecycle. The default manager writes a new value for an owned secret the
+  stored connection already resolves only after the update's `SaveAsync` wins, expecting the secret
+  version it read first. A request that loses the save therefore leaves what the stored connection
+  resolves unchanged, and one that finds the secret rotated after its save gets
+  `ConnectionConflictException` rather than overwriting the newer value.
 - `IConnectionResolver` for point-of-use resolution.
 - `IConnectionGrantWriter` for compare-and-swap grant writes (expected secret version).
 - `IConnectionPublishTenantAccessor` — owned by `ConnectionsDesign` (principal tenant, then persistence scope).

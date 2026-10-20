@@ -3,6 +3,7 @@ using Elsa.Connections.Core.Exceptions;
 using Elsa.Connections.Core.Models;
 using Elsa.Connections.Http;
 using Elsa.Secrets.Core.Contracts;
+using Elsa.Secrets.Core.Exceptions;
 using Elsa.Secrets.Core.Models;
 
 namespace Elsa.Connections.Services;
@@ -105,6 +106,7 @@ internal sealed class DefaultConnectionManager(
 
         IDictionary<string, ConnectionSecretField>? previousSecretFields = null;
         IDictionary<string, ConnectionSecretField>? nextSecretFields = null;
+        var ownedSecretValues = new List<OwnedSecretValue>();
         if (request.DisplayName is not null)
             document.Definition.DisplayName = request.DisplayName.Trim();
         if (request.Settings is not null)
@@ -124,14 +126,17 @@ internal sealed class DefaultConnectionManager(
             previousSecretFields = document.Definition.SecretFields;
             await ValidateOwnedSecretWriteTargetsAsync(tenantId, document.Definition.Name, request.SecretFields, previousSecretFields, cancellationToken);
             nextSecretFields = await MergeSecretFieldsAsync(
-                tenantId, document.Definition.Name, previousSecretFields, request.SecretFields, cancellationToken);
+                tenantId, document.Definition.Name, previousSecretFields, request.SecretFields, ownedSecretValues, cancellationToken);
             document.Definition.SecretFields = nextSecretFields;
         }
 
         document.State.UpdatedAt = timeProvider.GetUtcNow();
         await repository.SaveAsync(document, cancellationToken);
+
+        // The save has committed, so finish its secret writes even when the request is cancelled now.
+        await WriteOwnedSecretValuesAsync(tenantId, document.Definition.Name, ownedSecretValues);
         if (previousSecretFields is not null && nextSecretFields is not null)
-            await DeleteReplacedOwnedSecretsAsync(tenantId, document.Definition.Name, previousSecretFields, nextSecretFields, cancellationToken);
+            await DeleteReplacedOwnedSecretsAsync(tenantId, document.Definition.Name, previousSecretFields, nextSecretFields, CancellationToken.None);
         return ToMetadata(document);
     }
 
@@ -312,7 +317,7 @@ internal sealed class DefaultConnectionManager(
     {
         foreach (var (fieldName, input) in inputs)
         {
-            var field = await WriteSecretFieldAsync(tenantId, connectionName, fieldName, input, false, false, cancellationToken);
+            var field = await WriteSecretFieldAsync(tenantId, connectionName, fieldName, input, false, cancellationToken);
             if (field is not null)
                 fields[fieldName] = field;
         }
@@ -323,6 +328,7 @@ internal sealed class DefaultConnectionManager(
         string connectionName,
         IDictionary<string, ConnectionSecretField> previous,
         IDictionary<string, ConnectionSecretFieldInput> inputs,
+        ICollection<OwnedSecretValue> ownedSecretValues,
         CancellationToken cancellationToken)
     {
         var fields = new Dictionary<string, ConnectionSecretField>(previous, StringComparer.Ordinal);
@@ -332,15 +338,58 @@ internal sealed class DefaultConnectionManager(
                 continue;
 
             var ownedSecretName = ConnectionName.OwnedSecretName(connectionName, fieldName);
-            var canRotateExistingOwnedSecret = WasOwnedSecret(previous, fieldName, ownedSecretName);
+            if (!string.IsNullOrWhiteSpace(input.Value) && WasOwnedSecret(previous, fieldName, ownedSecretName))
+            {
+                // The stored document already resolves this secret, so its new value waits for the save to win.
+                // A request that loses the save then leaves what the stored document resolves untouched.
+                var current = await secretManager.FindAsync(tenantId, ownedSecretName, cancellationToken);
+                ownedSecretValues.Add(new OwnedSecretValue(fieldName, ownedSecretName, input.Value, current));
+                fields[fieldName] = new ConnectionSecretField
+                {
+                    FieldName = fieldName,
+                    SourceKind = SourceKindOf(input),
+                    SecretName = ownedSecretName,
+                    IsOwnedSecret = true
+                };
+                continue;
+            }
+
             var retainExistingOwnedSecret = WasOwnedSecret(previous, fieldName, input.ExistingSecretName);
             var field = await WriteSecretFieldAsync(
-                tenantId, connectionName, fieldName, input, canRotateExistingOwnedSecret, retainExistingOwnedSecret, cancellationToken);
+                tenantId, connectionName, fieldName, input, retainExistingOwnedSecret, cancellationToken);
             if (field is not null)
                 fields[fieldName] = field;
         }
 
         return fields;
+    }
+
+    private async ValueTask WriteOwnedSecretValuesAsync(string tenantId, string connectionName, IEnumerable<OwnedSecretValue> values)
+    {
+        foreach (var value in values)
+        {
+            if (value.Current is null)
+            {
+                await CreateOwnedSecretAsync(tenantId, connectionName, value.FieldName, value.SecretName, value.Value, CancellationToken.None);
+                continue;
+            }
+
+            try
+            {
+                // Expecting the version read before the save keeps a later writer's value instead of overwriting it.
+                await secretManager.RotateAsync(tenantId, value.SecretName, new RotateSecretRequest
+                {
+                    Value = value.Value,
+                    ExpectedVersion = value.Current.CurrentVersion
+                }, CancellationToken.None);
+            }
+            catch (SecretVersionConflictException)
+            {
+                throw new ConnectionConflictException(
+                    connectionName,
+                    $"Connection '{connectionName}' credential '{value.FieldName}' was changed by another request, so this update did not write its new value. Its other changes were saved.");
+            }
+        }
     }
 
     private static bool WasOwnedSecret(
@@ -361,16 +410,13 @@ internal sealed class DefaultConnectionManager(
         string connectionName,
         string fieldName,
         ConnectionSecretFieldInput input,
-        bool canRotateExistingOwnedSecret,
         bool retainExistingOwnedSecret,
         CancellationToken cancellationToken)
     {
         var field = new ConnectionSecretField
         {
             FieldName = fieldName,
-            SourceKind = string.IsNullOrWhiteSpace(input.SourceKind)
-                ? ConnectionCredentialSourceKinds.Secret
-                : input.SourceKind.Trim()
+            SourceKind = SourceKindOf(input)
         };
 
         if (string.Equals(field.SourceKind, ConnectionCredentialSourceKinds.NamedCredential, StringComparison.OrdinalIgnoreCase))
@@ -390,30 +436,39 @@ internal sealed class DefaultConnectionManager(
             return null;
 
         var secretName = ConnectionName.OwnedSecretName(connectionName, fieldName);
-        var existing = await secretManager.FindAsync(tenantId, secretName, cancellationToken);
-        if (existing is null)
-        {
-            await secretManager.CreateAsync(tenantId, new CreateSecretRequest
-            {
-                Name = secretName,
-                DisplayName = $"{connectionName} {fieldName}",
-                TypeName = SecretTypeNames.Text,
-                StoreName = SecretStoreNames.Encrypted,
-                Value = input.Value,
-                Tags = ["owned-by-connection", connectionName]
-            }, cancellationToken);
-        }
-        else if (canRotateExistingOwnedSecret)
-        {
-            await secretManager.RotateAsync(tenantId, secretName, new RotateSecretRequest { Value = input.Value }, cancellationToken);
-        }
-        else
+        if (await secretManager.FindAsync(tenantId, secretName, cancellationToken) is not null)
             throw OwnedSecretNameConflict();
 
+        await CreateOwnedSecretAsync(tenantId, connectionName, fieldName, secretName, input.Value, cancellationToken);
         field.SecretName = secretName;
         field.IsOwnedSecret = true;
         return field;
     }
+
+    private static string SourceKindOf(ConnectionSecretFieldInput input) =>
+        string.IsNullOrWhiteSpace(input.SourceKind)
+            ? ConnectionCredentialSourceKinds.Secret
+            : input.SourceKind.Trim();
+
+    private async ValueTask CreateOwnedSecretAsync(
+        string tenantId,
+        string connectionName,
+        string fieldName,
+        string secretName,
+        string value,
+        CancellationToken cancellationToken) =>
+        await secretManager.CreateAsync(tenantId, new CreateSecretRequest
+        {
+            Name = secretName,
+            DisplayName = $"{connectionName} {fieldName}",
+            TypeName = SecretTypeNames.Text,
+            StoreName = SecretStoreNames.Encrypted,
+            Value = value,
+            Tags = ["owned-by-connection", connectionName]
+        }, cancellationToken);
+
+    /// <summary>A new value for an owned secret the stored document already resolves, written only after the save wins.</summary>
+    private sealed record OwnedSecretValue(string FieldName, string SecretName, string Value, SecretMetadata? Current);
 
     private static bool CarriesNewSecretValue(ConnectionSecretFieldInput input)
     {
