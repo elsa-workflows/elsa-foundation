@@ -62,6 +62,9 @@
   <Folder Name="/tools/ef/">
     <Project Path="tools/ef/Elsa.EntityFrameworkCore.Tooling/Elsa.EntityFrameworkCore.Tooling.csproj" />
   </Folder>
+  <Folder Name="/tools/hosting/">
+    <Project Path="tools/hosting/Orleans.Membership.Probe/Orleans.Membership.Probe.csproj" />
+  </Folder>
   <Folder Name="/tools/maps/">
     <Project Path="tools/maps/Elsa.Maps.Generator/Elsa.Maps.Generator.csproj" />
   </Folder>

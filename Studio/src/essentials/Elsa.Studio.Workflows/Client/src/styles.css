@@ -5619,12 +5619,14 @@ button.wf-reference-select {
 
 .wf-property-row {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 7px;
   container-type: inline-size;
 }
 
 .wf-property-row-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;

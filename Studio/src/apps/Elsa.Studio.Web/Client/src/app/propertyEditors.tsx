@@ -36,6 +36,7 @@ export const builtInPropertyEditors: StudioActivityPropertyEditorContribution[] 
   {
     id: "studio.property.multiselect",
     order: 90,
+    supportsValidationReporting: true,
     // Collection-scoped: owns the whole collection as a checklist when the input declares an option
     // source (so an enum/provider collection prevents duplicates instead of repeating dropdowns).
     supports: (descriptor, context) => isCollectionScope(context) && !hasUiHint(descriptor, "dropdown") && (hasUiHint(descriptor, "checklist") || hasOptionSource(descriptor)),
@@ -44,18 +45,21 @@ export const builtInPropertyEditors: StudioActivityPropertyEditorContribution[] 
   {
     id: "studio.property.dropdown",
     order: 100,
+    supportsValidationReporting: true,
     supports: (descriptor, context) => isElementScope(context) && (hasUiHint(descriptor, "dropdown") || hasOptionSource(descriptor)),
     component: DropdownEditor
   },
   {
     id: "studio.property.checkbox",
     order: 120,
+    supportsValidationReporting: true,
     supports: (descriptor, context) => isElementScope(context) && (hasUiHint(descriptor, "checkbox") || isBooleanDescriptor(descriptor)),
     component: CheckboxEditor
   },
   {
     id: "studio.property.timespan",
     order: 128,
+    supportsValidationReporting: true,
     // Element-scoped TimeSpan fields (scalar or collection element): typed input with a format hint and
     // inline validation, so an unparsable duration is flagged while authoring instead of at preflight.
     supports: (descriptor, context) => isElementScope(context) && !hasOptionSource(descriptor) && isTimeSpanDescriptor(descriptor),
@@ -64,6 +68,7 @@ export const builtInPropertyEditors: StudioActivityPropertyEditorContribution[] 
   {
     id: "studio.property.number",
     order: 130,
+    supportsValidationReporting: true,
     // Element-scoped numeric fields (scalar or collection element, e.g. an Int32[] item): a number
     // input that rejects non-numeric text inline rather than letting it reach the server as a literal.
     supports: (descriptor, context) => isElementScope(context) && !hasOptionSource(descriptor) && isNumericDescriptor(descriptor),
@@ -72,6 +77,7 @@ export const builtInPropertyEditors: StudioActivityPropertyEditorContribution[] 
   {
     id: "studio.property.password",
     order: 135,
+    supportsValidationReporting: true,
     // Ahead of multiline and singleline so a hint that would show the text in the clear never wins over
     // masking. Sensitivity alone does not claim a secret-only input, a password hint does: the Workflows
     // properties panel gives a secret-only input the secret picker (or its unavailable state) and mounts no
@@ -83,18 +89,21 @@ export const builtInPropertyEditors: StudioActivityPropertyEditorContribution[] 
   {
     id: "studio.property.multiline",
     order: 140,
+    supportsValidationReporting: true,
     supports: (descriptor, context) => isElementScope(context) && hasUiHint(descriptor, "multiline"),
     component: MultilineEditor
   },
   {
     id: "studio.property.singleline",
     order: 160,
+    supportsValidationReporting: true,
     supports: (descriptor, context) => isElementScope(context) && (hasUiHint(descriptor, "singleline") || isTextDescriptor(descriptor)),
     component: SinglelineEditor
   },
   {
     id: "studio.property.text-fallback",
     order: 10_000,
+    supportsValidationReporting: true,
     // Element-scoped only: in collection scope, declining here lets the panel fall back to its repeater.
     supports: (_descriptor, context) => isElementScope(context),
     component: SinglelineEditor
@@ -289,11 +298,16 @@ function MultilineEditor({ descriptor, value, disabled, onChange }: StudioActivi
   );
 }
 
-function NumericEditor({ descriptor, value, disabled, onChange }: StudioActivityPropertyEditorProps) {
+function NumericEditor({ descriptor, value, disabled, onChange, onValidationChange }: StudioActivityPropertyEditorProps) {
   const integer = isIntegerDescriptor(descriptor);
   const errorId = useId();
   const [text, setText] = useState(() => numericText(value));
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    onValidationChange?.(error != null);
+    return () => onValidationChange?.(false);
+  }, [error, onValidationChange]);
 
   // Reconcile external value changes (autosave round-trips numbers back as strings) without clobbering
   // an in-progress invalid entry: only re-seed the field when the incoming value differs numerically.
@@ -344,11 +358,16 @@ function NumericEditor({ descriptor, value, disabled, onChange }: StudioActivity
   );
 }
 
-function TimeSpanEditor({ descriptor, value, disabled, onChange }: StudioActivityPropertyEditorProps) {
+function TimeSpanEditor({ descriptor, value, disabled, onChange, onValidationChange }: StudioActivityPropertyEditorProps) {
   const errorId = useId();
   const hintId = useId();
   const [text, setText] = useState(() => (value == null ? "" : String(value)));
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    onValidationChange?.(error != null);
+    return () => onValidationChange?.(false);
+  }, [error, onValidationChange]);
 
   useEffect(() => {
     if (error) return;
