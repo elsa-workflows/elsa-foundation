@@ -242,7 +242,9 @@ public sealed class CompensationScope : StructuralActivity,
     /// <summary>
     /// A fault from inside a step or handler that is a Sequence or a loop, which do not handle their children's faults
     /// (spec 258 R-3). It is handled as a fault of that step or handler: the via child stands for it, and absorbing the
-    /// fault cancels the via child's subtree. The delivery's command metadata carries the via child's routing keys.
+    /// fault cancels the via child's subtree. The delivery's command metadata carries the via child's routing keys. An
+    /// operator retry of the faulted descendant runs again under the same via child, so a waiting scope tells the via
+    /// child's later outcome from a repeat delivery by the fault's incident, not by the via child's id.
     /// </summary>
     public ValueTask<RuntimeStructuralContinuation> OnDescendantFaultedAsync(ActivityDescendantFaultedContext context)
     {
@@ -510,7 +512,7 @@ public sealed class CompensationScope : StructuralActivity,
         CompensationScopeState state,
         ChildFault fault)
     {
-        if (WaitingStepEntry(navigator, state, fault.ExecutableNodeId, fault.ActivityExecutionId) is not { } entry)
+        if (WaitingStepEntry(navigator, state, fault.ExecutableNodeId, fault.IncidentId) is not { } entry)
             return null;
 
         var resumed = Replace(state, entry with { ForwardActivityExecutionId = fault.ActivityExecutionId, InterventionIncidentId = null })
@@ -551,7 +553,7 @@ public sealed class CompensationScope : StructuralActivity,
         ChildFault fault,
         IReadOnlyDictionary<string, string> metadata)
     {
-        if (HandlerEntry(runtimeContext, navigator, state, metadata, fault.ExecutableNodeId, fault.ActivityExecutionId) is not { } entry)
+        if (HandlerEntry(runtimeContext, navigator, state, metadata, fault.ExecutableNodeId, fault.ActivityExecutionId, fault.IncidentId) is not { } entry)
             return null;
 
         var incidentId = RequireIncident(runtimeContext, fault, entry.Step);
@@ -613,7 +615,7 @@ public sealed class CompensationScope : StructuralActivity,
         CompensationScopeState state,
         ActivityChildCompletedContext context)
     {
-        if (WaitingStepEntry(navigator, state, context.CompletedChildExecutableNodeId, context.CompletedChildActivityExecutionId) is not { } entry)
+        if (WaitingStepEntry(navigator, state, context.CompletedChildExecutableNodeId, faultIncidentId: null) is not { } entry)
             return null;
 
         var settled = entry with
@@ -690,7 +692,7 @@ public sealed class CompensationScope : StructuralActivity,
         ActivityChildCompletedContext context,
         IReadOnlyDictionary<string, string> metadata)
     {
-        if (HandlerEntry(runtimeContext, navigator, state, metadata, context.CompletedChildExecutableNodeId, context.CompletedChildActivityExecutionId) is not { } entry)
+        if (HandlerEntry(runtimeContext, navigator, state, metadata, context.CompletedChildExecutableNodeId, context.CompletedChildActivityExecutionId, faultIncidentId: null) is not { } entry)
             return null;
 
         var compensated = RecordAttempt(entry, new CompensationHandlerAttempt(CompensationAttemptResult.Completed, context.CompletedChildActivityExecutionId))
@@ -812,17 +814,19 @@ public sealed class CompensationScope : StructuralActivity,
 
     // The entry a handler outcome belongs to, when it is the latest attempt: the running attempt of a compensating
     // entry, or an operator retry of a failed entry. Anything else is a repeat delivery or a stale attempt (FR-215).
+    // A fault is passed with its incident (faultIncidentId); a completion without one.
     private static CompensationEntry? HandlerEntry(
         IRuntimeActivityExecutionContext runtimeContext,
         CompensationScopeNavigator navigator,
         CompensationScopeState state,
         IReadOnlyDictionary<string, string> metadata,
         string childExecutableNodeId,
-        string childActivityExecutionId)
+        string childActivityExecutionId,
+        string? faultIncidentId)
     {
         var entryId = metadata.GetValueOrDefault(MetadataKeys.Entry);
         var entry = state.Entries.FirstOrDefault(candidate => StringComparer.Ordinal.Equals(candidate.Id, entryId));
-        if (entry is null || entry.HandlerAttempts.Any(attempt => StringComparer.Ordinal.Equals(attempt.ActivityExecutionId, childActivityExecutionId)))
+        if (entry is null || entry.HandlerAttempts.Any(attempt => IsRecordedOutcome(attempt, childActivityExecutionId, faultIncidentId)))
             return null;
 
         var isLatest = entry.Status switch
@@ -841,6 +845,20 @@ public sealed class CompensationScope : StructuralActivity,
         return entry;
     }
 
+    // Whether an attempt already records this outcome. A fault is known by its incident: an operator retry of a faulted
+    // descendant runs under the same handler occurrence, whose id the faulted attempt recorded, and that occurrence's
+    // completion or next fault is new. An attempt recorded without an incident falls back to the occurrence id.
+    private static bool IsRecordedOutcome(CompensationHandlerAttempt attempt, string childActivityExecutionId, string? faultIncidentId)
+    {
+        if (faultIncidentId is null)
+            return attempt.Result == CompensationAttemptResult.Completed
+                   && StringComparer.Ordinal.Equals(attempt.ActivityExecutionId, childActivityExecutionId);
+
+        return attempt.IncidentId is null
+            ? StringComparer.Ordinal.Equals(attempt.ActivityExecutionId, childActivityExecutionId)
+            : StringComparer.Ordinal.Equals(attempt.IncidentId, faultIncidentId);
+    }
+
     // Whether a handler outcome with this attempt number belongs to the entry's running attempt. A handler that M1
     // scheduled carries no attempt number; the version-1 upcast gives its entry exactly one running attempt.
     internal static bool IsRunningAttempt(CompensationEntry entry, string? attempt) =>
@@ -849,12 +867,14 @@ public sealed class CompensationScope : StructuralActivity,
             ? entry.HandlerAttempts.Count == 1
             : StringComparer.Ordinal.Equals(attempt, entry.HandlerAttempts.Count.ToString(CultureInfo.InvariantCulture)));
 
-    // The uncertain entry without a handler that the scope waits on, when the child is an operator retry of its step.
+    // The uncertain entry without a handler that the scope waits on, when the child's outcome follows an operator retry
+    // of its step. A fault (faultIncidentId set) is new unless it is the incident the entry waits on; that is a repeat
+    // delivery. A retried descendant runs under the same step occurrence, so the occurrence id cannot tell them apart.
     private static CompensationEntry? WaitingStepEntry(
         CompensationScopeNavigator navigator,
         CompensationScopeState state,
         string childExecutableNodeId,
-        string childActivityExecutionId)
+        string? faultIncidentId)
     {
         var stepIndex = state.NextStepIndex - 1;
         if (stepIndex < 0 || navigator.StepIndexOfForward(childExecutableNodeId) != stepIndex)
@@ -867,7 +887,7 @@ public sealed class CompensationScope : StructuralActivity,
             && entry.Status == CompensationEntryStatus.Uncertain
             && entry.InterventionIncidentId is not null
             && step.Handler is null
-            && !StringComparer.Ordinal.Equals(entry.ForwardActivityExecutionId, childActivityExecutionId));
+            && !StringComparer.Ordinal.Equals(entry.InterventionIncidentId, faultIncidentId));
     }
 
     private RuntimeStructuralContinuation WaitForStep(

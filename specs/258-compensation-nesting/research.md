@@ -125,7 +125,6 @@ Each follows the rule "never undo something unconfirmed silently; never block fo
 
 ### R21 — Known limits
 
-- A descendant fault retried while the scope waits for intervention is not routed back to the waiting entry.
 - Notifications that arrive combined with a step's fault (`IRuntimeActivityChildOutcomeHandler`) are ignored; the scope's own notifications always arrive as separate ancestor notifications.
 - A child's command metadata inherits its parent's, so origin keys from an earlier handed-over handler can appear on a later own handler's command metadata. Routing uses the entry id and attempt, which are always set, so this is informational only.
 - B2 (a hand-over that arrives during recovery) and the operator retry in L2 are covered by callback tests and the T307 operator-retry journey, not by their own integration journeys.
@@ -145,3 +144,8 @@ Each follows the rule "never undo something unconfirmed silently; never block fo
 ### R24 — Cancelled scope wording
 
 - **Decision:** a cancelled scope reads "Cancelled — nothing undone" unless a row or handed-over entry shows `Compensated` (a compensation that was already running may finish, R20); then it reads "Cancelled".
+
+### R25 — An operator retry inside a composite step or handler
+
+- **Problem:** a fault inside a Sequence or loop step or handler reaches the scope as a fault of that composite (R-3), so the waiting entry, or the handler's faulted attempt, records the composite's execution id. An operator retry of the faulted activity runs again under the same composite, and the scope dropped the composite's later completion or fault as a repeat of the outcome it had already recorded, so it waited for good.
+- **Decision:** a waiting scope tells a repeat fault from a new one by its incident, which the entry and each faulted attempt already record, and treats a completion as new unless a completed attempt recorded it. Entry, cause and hand-over ids keep naming the step or handler occurrence, so no state version changes. Pinned by journeys in every persistence mode and by callback tests for the repeat deliveries.
