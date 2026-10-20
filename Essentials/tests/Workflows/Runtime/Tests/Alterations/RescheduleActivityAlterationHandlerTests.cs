@@ -97,6 +97,84 @@ public sealed class RescheduleActivityAlterationHandlerTests
     }
 
     [Fact]
+    public async Task PreflightAsync_SuccessorDropsTheSourcesPerInvocationMetadata_ExceptTheParentCompletionMarker()
+    {
+        // Named explicitly rather than read from the list under test, so a key dropped from that list fails here.
+        string[] perInvocationKeys =
+        [
+            RuntimeMetadataKeys.ActivityAttemptActivationClaim,
+            RuntimeMetadataKeys.ActivityAttemptActivationClaimWorkItemId,
+            RuntimeMetadataKeys.ActivityActivationCompletedWorkItemId,
+            RuntimeMetadataKeys.ActivityAttemptOrdinalHighWatermark,
+            RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId,
+            RuntimeMetadataKeys.ParentOutcomeWorkItemId,
+            RuntimeMetadataKeys.DescendantFaultProcessedWorkItemId,
+            RuntimeMetadataKeys.IncidentId,
+            RuntimeMetadataKeys.FaultSubStatus,
+            RuntimeMetadataKeys.FaultType,
+            RuntimeMetadataKeys.FaultMessage,
+            RuntimeMetadataKeys.FaultStackTrace,
+            RuntimeMetadataKeys.FaultInnerType,
+            RuntimeMetadataKeys.FaultInnerMessage,
+            RuntimeMetadataKeys.CausalIncidentId,
+            RuntimeMetadataKeys.CausalActivityExecutionId,
+            RuntimeMetadataKeys.CausalExecutableNodeId,
+            RuntimeMetadataKeys.CausationKind,
+            RuntimeMetadataKeys.BackgroundActivityWorkId
+        ];
+        var metadata = perInvocationKeys.ToDictionary(key => key, _ => "source-value", StringComparer.Ordinal);
+        metadata["custom.kept"] = "kept";
+        var source = Source(ActivityExecutionStatus.Faulted) with { Metadata = metadata };
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        await executableStore.SaveAsync(Executable());
+        var staging = new Staging();
+
+        var result = await Handler(executableStore).PreflightAsync(Context(source, staging));
+
+        Assert.True(result.IsAccepted);
+        var builder = Apply(Assert.IsAssignableFrom<IWorkflowAlterationRuntimeCheckpointStagedChange>(Assert.Single(staging.StagedChanges)));
+        var successor = Assert.Single(builder.ActivityExecutions, change => change.StateId != source.Execution.ActivityExecutionId).State;
+        Assert.Equal(
+            new Dictionary<string, string>
+            {
+                ["custom.kept"] = "kept",
+                // Kept until #3135 decides whether a parent that already evaluated the source's fault gets the outcome.
+                [RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId] = "source-value",
+                [RuntimeMetadataKeys.SupersedesActivityExecutionId] = source.Execution.ActivityExecutionId
+            },
+            successor.Metadata);
+        // The superseded source keeps its own record of what happened to it.
+        var superseded = Assert.Single(builder.ActivityExecutions, change => change.StateId == source.Execution.ActivityExecutionId).State;
+        Assert.Equal("source-value", superseded.Metadata[RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId]);
+    }
+
+    [Fact]
+    public async Task PreflightAsync_SuccessorCommandCarriesTheSchedulingMetadataItsParentGaveTheSource()
+    {
+        var source = Source(ActivityExecutionStatus.Waiting) with
+        {
+            ParentActivityExecutionId = "parent",
+            Provenance = ActivitySchedulingProvenance.From("workflow", "parent", "parent", null, null, null, "source", "test",
+                new Dictionary<string, string> { ["test.route"] = "step-1" })
+        };
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        await executableStore.SaveAsync(Executable());
+        var staging = new Staging();
+
+        var result = await Handler(executableStore).PreflightAsync(Context(source, staging));
+
+        Assert.True(result.IsAccepted);
+        var builder = Apply(Assert.IsAssignableFrom<IWorkflowAlterationRuntimeCheckpointStagedChange>(Assert.Single(staging.StagedChanges)));
+        var successor = Assert.Single(builder.ActivityExecutions, change => change.StateId != source.Execution.ActivityExecutionId).State;
+        Assert.Equal("step-1", successor.Provenance.Metadata["test.route"]);
+        var commandMetadata = Assert.Single(builder.PostCommitIntents).MaterializedSchedulerWorkItem!.CommandMetadata;
+        Assert.Equal("step-1", commandMetadata["test.route"]);
+        Assert.Equal("parent", commandMetadata[RuntimeMetadataKeys.ParentActivityExecutionId]);
+        Assert.Equal(source.Execution.ExecutableNodeId, commandMetadata[RuntimeMetadataKeys.ChildExecutableNodeId]);
+        Assert.Equal("RescheduleActivity", commandMetadata["runtime.alteration.kind"]);
+    }
+
+    [Fact]
     public async Task PreflightAsync_KeepsIntrinsicSuccessorScheduledEvenWhenInputsArePinned()
     {
         var source = Source(ActivityExecutionStatus.Faulted) with

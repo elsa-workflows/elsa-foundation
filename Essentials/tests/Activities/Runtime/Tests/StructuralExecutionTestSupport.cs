@@ -19,7 +19,10 @@ internal static class StructuralExecutionTestSupport
 {
     public const string ChildSlotName = "Test.Children";
 
-    public static WorkflowExecutable NewExecutable(ExecutableNode root, IReadOnlyCollection<string>? waitingNodeIds = null) =>
+    public static WorkflowExecutable NewExecutable(
+        ExecutableNode root,
+        IReadOnlyCollection<string>? waitingNodeIds = null,
+        IncidentStrategyReference? incidentStrategy = null) =>
         new(
             identity: WorkflowExecutionHarness.Identity,
             rootActivity: root,
@@ -34,7 +37,7 @@ internal static class StructuralExecutionTestSupport
                 StringComparer.Ordinal),
             createdAt: new DateTimeOffset(2026, 6, 12, 12, 0, 0, TimeSpan.Zero),
             compatibilityMetadata: new Dictionary<string, string>(),
-            incidentStrategy: IncidentStrategyBuiltIns.FaultReference);
+            incidentStrategy: incidentStrategy ?? IncidentStrategyBuiltIns.FaultReference);
 
     public static ExecutableNode NewStructuralNode(string nodeId, Type activityType, params ExecutableNode[] children) =>
         new(
