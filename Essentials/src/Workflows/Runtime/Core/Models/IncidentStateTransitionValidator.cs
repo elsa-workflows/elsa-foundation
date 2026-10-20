@@ -1,3 +1,4 @@
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Exceptions;
 
 namespace Elsa.Workflows.Runtime.Core.Models;
@@ -7,6 +8,8 @@ public static class IncidentStateTransitionValidator
 {
     /// <summary>
     /// Ensures a committed resolution outcome and its lifecycle effect cannot be changed. An exact replay remains valid.
+    /// The one allowed change is the intervention an outcome waits for: a blocking incident whose outcome is
+    /// <see cref="IncidentResolutionActionKinds.WaitForIntervention"/> may be resolved once by an operator retry.
     /// </summary>
     public static void EnsureResolutionOutcomeIsWriteOnce(IncidentState? existing, IncidentState candidate)
     {
@@ -14,6 +17,9 @@ public static class IncidentStateTransitionValidator
 
         var existingOutcome = existing?.ResolutionOutcome;
         if (existingOutcome is null)
+            return;
+
+        if (IsOperatorRetryOfInterventionWait(existing!, candidate))
             return;
 
         if (!OutcomesAreIdentical(existingOutcome, candidate.ResolutionOutcome) ||
@@ -39,6 +45,15 @@ public static class IncidentStateTransitionValidator
     /// <summary>The Append conflict, for a store whose atomic create-only insert reports the conflict itself.</summary>
     public static RuntimeCheckpointCommitValidationException AppendConflict(IncidentState candidate) =>
         new($"Incident '{candidate.IncidentId}' already exists for workflow execution '{candidate.WorkflowExecutionId}' and cannot be appended again.");
+
+    private static bool IsOperatorRetryOfInterventionWait(IncidentState existing, IncidentState candidate) =>
+        existing.Status == IncidentStatus.Blocking &&
+        StringComparer.Ordinal.Equals(existing.ResolutionOutcome?.ActionKind, IncidentResolutionActionKinds.WaitForIntervention) &&
+        candidate.Status == IncidentStatus.Resolved &&
+        candidate.ResolvedAt is not null &&
+        StringComparer.Ordinal.Equals(candidate.ResolutionOutcome?.ActionKind, IncidentResolutionActionKinds.OperatorRetry) &&
+        StringComparer.Ordinal.Equals(candidate.ResolutionOutcome?.SystemSource, IncidentResolutionSystemSources.OperatorRetryAlteration) &&
+        StringComparer.Ordinal.Equals(existing.ActivityExecutionId, candidate.ActivityExecutionId);
 
     private static bool OutcomesAreIdentical(
         IncidentResolutionOutcome existing,

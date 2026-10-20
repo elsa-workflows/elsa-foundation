@@ -132,11 +132,16 @@ internal static class SchedulerWorkItems
                         // Composite schedulers can carry local correlation scopes (such as Flowchart paths) in
                         // provenance. When the parent has a runtime execution scope, children belong to that
                         // hierarchy scope while local scope metadata remains available to the composite.
-                        ExecutionScopeId = childExecutionScopeId ?? request.SchedulingProvenance.ExecutionScopeId
+                        ExecutionScopeId = childExecutionScopeId ?? request.SchedulingProvenance.ExecutionScopeId,
+                        Metadata = WithAssignedOperationKeys(request.SchedulingProvenance.Metadata, request.Metadata)
                     },
                 request.IterationFrame);
 
             var childCommandMetadata = inheritedMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+            // Operation keys belong to the one occurrence they were assigned to. A keyed composite's children get
+            // their own keys (or their own defaults), never the composite's inherited through command metadata.
+            foreach (var key in AssignedOperationKeyNames)
+                childCommandMetadata.Remove(key);
             foreach (var item in request.Metadata)
                 childCommandMetadata[item.Key] = item.Value;
 
@@ -159,6 +164,31 @@ internal static class SchedulerWorkItems
                 executionScopeId: payload.SchedulingProvenance.ExecutionScopeId);
         }
     }
+
+    // Request metadata becomes durable provenance metadata only when the parent supplies no provenance of its own.
+    // Operation keys must be durable either way, so a parent that does supply provenance still has the keys it put
+    // in the request metadata copied over; keys already in its provenance win. Without keys this returns the input.
+    private static IReadOnlyDictionary<string, string> WithAssignedOperationKeys(
+        IReadOnlyDictionary<string, string> provenanceMetadata,
+        IReadOnlyDictionary<string, string> requestMetadata)
+    {
+        Dictionary<string, string>? merged = null;
+        foreach (var key in AssignedOperationKeyNames)
+        {
+            if (provenanceMetadata.ContainsKey(key) || !requestMetadata.TryGetValue(key, out var value))
+                continue;
+            merged ??= provenanceMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+            merged[key] = value;
+        }
+
+        return merged is null ? provenanceMetadata : RuntimeModelMetadata.Snapshot(merged);
+    }
+
+    private static readonly string[] AssignedOperationKeyNames =
+    [
+        RuntimeMetadataKeys.OperationKey,
+        RuntimeMetadataKeys.TargetOperationKey
+    ];
 
     /// <summary>
     /// Resolves the scope children should inherit: a placed activity boundary owns the scope opened for its body,

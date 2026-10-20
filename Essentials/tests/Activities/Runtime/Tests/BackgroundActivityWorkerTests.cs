@@ -41,6 +41,41 @@ public sealed class BackgroundActivityWorkerTests
     }
 
     [Fact]
+    public async Task Hands_the_body_the_operation_keys_resolved_at_admission()
+    {
+        ActivityExecutionContext? observed = null;
+        var probe = new Probe(context =>
+        {
+            observed = context;
+            return ActivityTransition.Complete(ActivityUnit.Value);
+        });
+        await using var harness = await Harness.CreateAsync<ActivityUnit>(probe, "{}",
+            configureRequest: request => request with { OperationKey = "scope/step/0/compensate", TargetOperationKey = "scope/step/0" });
+
+        await harness.RunAsync();
+
+        Assert.Equal("scope/step/0/compensate", observed!.OperationKey);
+        Assert.Equal("scope/step/0", observed.TargetOperationKey);
+    }
+
+    [Fact]
+    public async Task Work_admitted_without_operation_keys_uses_the_invocation_id()
+    {
+        ActivityExecutionContext? observed = null;
+        var probe = new Probe(context =>
+        {
+            observed = context;
+            return ActivityTransition.Complete(ActivityUnit.Value);
+        });
+        await using var harness = await Harness.CreateAsync<ActivityUnit>(probe, "{}");
+
+        await harness.RunAsync();
+
+        Assert.Equal(harness.Request.InvocationId, observed!.OperationKey);
+        Assert.Null(observed.TargetOperationKey);
+    }
+
+    [Fact]
     public async Task Records_unit_completion()
     {
         var probe = new Probe(_ => ActivityTransition.Complete(ActivityUnit.Value));
@@ -326,7 +361,8 @@ public sealed class BackgroundActivityWorkerTests
             string expectedJson,
             Func<IActivity>? activationOverride = null,
             WorkflowExecutableIdentity? requestIdentityOverride = null,
-            IWorkflowExecutableReader? executableReaderOverride = null)
+            IWorkflowExecutableReader? executableReaderOverride = null,
+            Func<BackgroundActivityWorkRequest, BackgroundActivityWorkRequest>? configureRequest = null)
         {
             var activityType = typeof(ProbeActivity<TResult>);
             var activityAlias = TypeAliasConvention.CanonicalAlias(activityType);
@@ -393,6 +429,7 @@ public sealed class BackgroundActivityWorkerTests
             var request = new BackgroundActivityWorkRequest(
                 "background-work-1", "workflow-1", "activity-execution-1", attempt, requestIdentity, "node-1",
                 contract.SchemaFingerprint, snapshot, coordinatorWork);
+            request = configureRequest?.Invoke(request) ?? request;
             var claim = store.InitializeClaim(request, "worker-1", now, "worker-test");
             return new Harness(provider, expectedJson, store,
                 (InMemoryWorkflowSchedulerWorkQueue)provider.GetRequiredService<IWorkflowSchedulerWorkQueue>(), request, claim);

@@ -271,6 +271,26 @@ public sealed class BackgroundActivityWorkLifecycleTests
         Assert.Same(ready, BackgroundActivityWorkLifecycle.RecordResult(ready, claim, result, Now.AddHours(1)));
     }
 
+    [Fact]
+    public void Operation_keys_survive_the_durable_json_round_trip_and_leave_the_receipt_digest_unchanged()
+    {
+        var options = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
+        var plain = Request("work-keys");
+        var keyed = plain with { OperationKey = "scope/step/0", TargetOperationKey = "scope/target" };
+
+        var item = System.Text.Json.JsonSerializer.Deserialize<BackgroundActivityWorkItem>(
+            System.Text.Json.JsonSerializer.Serialize(BackgroundActivityWorkLifecycle.CreatePending(keyed, Now), options), options)!;
+        var legacy = System.Text.Json.JsonSerializer.Deserialize<BackgroundActivityWorkItem>(
+            System.Text.Json.JsonSerializer.Serialize(BackgroundActivityWorkLifecycle.CreatePending(plain, Now), options), options)!;
+
+        Assert.Equal("scope/step/0", item.Request.OperationKey);
+        Assert.Equal("scope/target", item.Request.TargetOperationKey);
+        Assert.Null(legacy.Request.OperationKey);
+        Assert.Equal(
+            BackgroundActivityWorkReceipt.ComputeDigest(plain, Complete("{}")),
+            BackgroundActivityWorkReceipt.ComputeDigest(keyed, Complete("{}")));
+    }
+
     private static BackgroundActivityWorkRequest Request(string workId)
     {
         var attempt = new ActivityAttempt($"attempt-{workId}", $"invocation-{workId}", 1, ActivityAttemptReason.Initial, Now);

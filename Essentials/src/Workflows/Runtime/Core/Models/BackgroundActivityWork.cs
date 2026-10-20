@@ -81,6 +81,16 @@ public sealed record BackgroundActivityWorkRequest
     public ActivityInputSnapshot InputSnapshot { get; }
     public RuntimeSchedulerWorkItem CoordinatorWorkItem { get; }
     public string CoordinatorWorkItemId => CoordinatorWorkItem.WorkItemId;
+
+    /// <summary>
+    /// The occurrence's logical operation key, resolved at admission from the committed activity state, because the
+    /// worker never reads that state. <see langword="null"/> on work admitted before the key existed; the worker then
+    /// uses the invocation id.
+    /// </summary>
+    public string? OperationKey { get; init; }
+
+    /// <summary>The occurrence's assigned target operation key, resolved at admission like <see cref="OperationKey"/>.</summary>
+    public string? TargetOperationKey { get; init; }
 }
 
 /// <summary>Lease identity and fence presented by a worker for renewal or first receipt recording.</summary>
