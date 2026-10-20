@@ -12,8 +12,18 @@ internal sealed class CsvRecordReader
     private readonly int _maxRecordBytes;
     private readonly int _maxFields;
     private readonly int _bufferSize;
+    private readonly int _initialRecordOrdinal;
+    private readonly long _initialByteOffset;
+    private readonly bool _detectBom;
 
-    public CsvRecordReader(Stream stream, int maxRecordBytes, int maxFields, int bufferSize = 4096)
+    public CsvRecordReader(
+        Stream stream,
+        int maxRecordBytes,
+        int maxFields,
+        int bufferSize = 4096,
+        int initialRecordOrdinal = 0,
+        long initialByteOffset = 0,
+        bool detectBom = true)
     {
         ArgumentNullException.ThrowIfNull(stream);
         if (!stream.CanRead)
@@ -21,18 +31,30 @@ internal sealed class CsvRecordReader
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxRecordBytes);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxFields);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(bufferSize);
+        ArgumentOutOfRangeException.ThrowIfNegative(initialRecordOrdinal);
+        ArgumentOutOfRangeException.ThrowIfNegative(initialByteOffset);
 
         _stream = stream;
         _maxRecordBytes = maxRecordBytes;
         _maxFields = maxFields;
         _bufferSize = bufferSize;
+        _initialRecordOrdinal = initialRecordOrdinal;
+        _initialByteOffset = initialByteOffset;
+        _detectBom = detectBom;
     }
 
     public IAsyncEnumerable<CsvRecord> ReadAsync(CancellationToken cancellationToken = default) => ReadCoreAsync(cancellationToken);
 
     private async IAsyncEnumerable<CsvRecord> ReadCoreAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var parser = new Parser(_stream, _maxRecordBytes, _maxFields, _bufferSize);
+        var parser = new Parser(
+            _stream,
+            _maxRecordBytes,
+            _maxFields,
+            _bufferSize,
+            _initialRecordOrdinal,
+            _initialByteOffset,
+            _detectBom);
         await parser.InitializeAsync(cancellationToken);
 
         while (true)
@@ -71,16 +93,32 @@ internal sealed class CsvRecordReader
         private bool _atFieldStart = true;
         private bool _recordHasBytes;
 
-        public Parser(Stream stream, int maxRecordBytes, int maxFields, int bufferSize)
+        private readonly bool _detectBom;
+
+        public Parser(
+            Stream stream,
+            int maxRecordBytes,
+            int maxFields,
+            int bufferSize,
+            int initialRecordOrdinal,
+            long initialByteOffset,
+            bool detectBom)
         {
             _stream = stream;
             _maxRecordBytes = maxRecordBytes;
             _maxFields = maxFields;
             _buffer = new byte[bufferSize];
+            _recordOrdinal = initialRecordOrdinal;
+            _bytesConsumed = initialByteOffset;
+            _recordStartByteOffset = initialByteOffset;
+            _detectBom = detectBom;
         }
 
         public async ValueTask InitializeAsync(CancellationToken cancellationToken)
         {
+            if (!_detectBom)
+                return;
+
             while (_prefixLength < _prefix.Length)
             {
                 var next = await ReadFromStreamAsync(cancellationToken);
@@ -93,7 +131,7 @@ internal sealed class CsvRecordReader
             if (_prefixLength == Utf8Bom.Length && _prefix.AsSpan().SequenceEqual(Utf8Bom))
             {
                 _prefixPosition = _prefixLength;
-                _bytesConsumed = Utf8Bom.Length;
+                _bytesConsumed += Utf8Bom.Length;
                 _recordStartByteOffset = _bytesConsumed;
             }
         }
