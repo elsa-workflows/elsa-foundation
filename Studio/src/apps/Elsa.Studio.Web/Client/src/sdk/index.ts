@@ -619,6 +619,10 @@ export type StudioActivityCollectionKind = "Single" | "Array" | "List" | "HashSe
 export interface StudioActivityInputDescriptor extends StudioActivityPropertyDescriptor {
   /** Stable identity used to correlate authored bindings and runtime input evidence. */
   referenceKey?: string | null;
+  /** Presentation tier from the activity catalog; unknown values remain forward-compatible. */
+  tier?: string | null;
+  /** Whether the activity requires this input at runtime; independent of its presentation tier. */
+  isRequired?: boolean | null;
   /** Collection shape of the CLR type (elsa-foundation#945); absent on older backends. */
   collectionKind?: StudioActivityCollectionKind | null;
   isWrapped?: boolean;
@@ -726,11 +730,15 @@ export interface StudioActivityPropertyEditorProps {
   disabled?: boolean;
   context: StudioActivityPropertyEditorContext;
   onChange(value: unknown): void;
+  /** Reports only whether this mounted editor currently has a local blocking error. */
+  onValidationChange?: (hasError: boolean) => void;
 }
 
 export interface StudioActivityPropertyEditorContribution {
   id: string;
   order?: number;
+  /** Declares that all local blocking errors are reported through onValidationChange, or that none exist. */
+  supportsValidationReporting?: true;
   supports(descriptor: StudioActivityInputDescriptor, context: StudioActivityPropertyEditorContext): boolean;
   component: ComponentType<StudioActivityPropertyEditorProps>;
 }

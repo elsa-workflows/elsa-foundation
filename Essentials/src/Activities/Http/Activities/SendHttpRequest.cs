@@ -87,7 +87,7 @@ public sealed class SendHttpRequest(
     /// Optional http service connection. The binding holds a <see cref="ConnectionReference"/> (name and type
     /// only). Credentials resolve through the connection at send time and never enter workflow state.
     /// </summary>
-    [ActivityInput(Key = nameof(Connection), DisplayName = "Connection", Tier = InputTier.Optional)]
+    [ActivityInput(Key = nameof(Connection), DisplayName = "Connection", Tier = InputTier.Essential)]
     [ActivityConnection(ConnectionType = "http")]
     public ConnectionReference? Connection { get; set; }
 
