@@ -160,6 +160,29 @@ public sealed class CompensationScopeNestingTests
     }
 
     [Fact]
+    public async Task A_hand_over_is_received_only_once_every_batch_has_arrived_in_any_order()
+    {
+        var running = await StartAsync();
+        var first = new CompensationHandOver(InnerScope, 0, 2, [HandedOver("e1", "Reserve A", "release-a")]);
+        var last = new CompensationHandOver(InnerScope, 1, 2, [HandedOver("e2", "Reserve B", "release-b")]);
+
+        // The last batch arrives first: the origin is not complete yet, so the earlier batch is still accepted.
+        var afterLast = await NotifiedAsync(running.State, CompensationScope.Notifications.Register, last, via: "reserve-inventory");
+        Assert.Empty(StateOf(afterLast).ReceivedHandOvers);
+
+        var afterFirst = await NotifiedAsync(afterLast.State, CompensationScope.Notifications.Register, first, via: "reserve-inventory");
+
+        var state = StateOf(afterFirst);
+        Assert.Equal(["release-b", "release-a"], state.Entries.Select(entry => entry.HandlerExecutableNodeId));
+        Assert.Equal([InnerScope], state.ReceivedHandOvers);
+        Assert.Empty(state.HandOversInProgress);
+
+        // Once complete, a repeat of either batch changes nothing.
+        var repeated = await NotifiedAsync(afterFirst.State, CompensationScope.Notifications.Register, last, via: "reserve-inventory");
+        Assert.Null(repeated.Continuation.StateUpdate);
+    }
+
+    [Fact]
     public async Task A_transitive_hand_over_keeps_the_first_origin()
     {
         var running = await StartAsync();

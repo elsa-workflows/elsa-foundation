@@ -10,7 +10,7 @@ All journeys use the shared participant from spec 251 (operation-key deduplicati
 | N2 | Three levels: outer [middle [inner (A)], X (rejected)] | Transitive hand-over keeps the first origin. |
 | N3 | Inner scope without enclosing scope | Entries end kept; nothing sent. |
 | L1 | Outer [ForEach(3) { scope (Reserve item) }, Ship (rejected)] | One entry per iteration; undo newest iteration first (story 2). |
-| L2 | L1 with a crash re-attempt in iteration 2 and an operator retry in iteration 3 | Retries add no entries. |
+| L2 | L1 with a crash re-attempt after the first iteration's forward effect | The crash re-attempt adds no entry. An operator retry of a handed-over handler is covered separately (FR-304 journey). |
 | B1 | Outer [Parallel { branch: scope (A), branch: scope (B) }, X (rejected)] | Each branch's hand-over journaled; both undone. |
 | B2 | Outer recovering while a Parallel branch's scope completes | Late hand-over compensated in the current recovery. |
 | C1 | Scope [A, Confirm, B (rejected)] | A confirmed and kept, nothing undone for A (story 3). |
@@ -22,7 +22,8 @@ All journeys use the shared participant from spec 251 (operation-key deduplicati
 | E3 | Compensate stops a started step that has no handler | Scope faults `uncertain-unhandled` after recovery. |
 | X1 | Cancel during forward, during recovery, while waiting | No handler runs; journal readable (story 5). |
 | S1 | Steps that are Sequence, ForEach, While, For with a faulting leaf | Fault reaches the scope (story 6). |
-| S2 | Flowchart and Parallel steps; Sequence inside Flowchart | Unchanged; the nested case still blocks (known limit). |
+| S2 | Flowchart steps; Sequence inside Flowchart | Unchanged; in the nested case the fault never reaches the scope, the run faults and nothing is undone (known limit). |
+| S3 | Outer [P, inner (faultAfterCompensation) [Sequence { fail }], Ship] | The inner scope faults on the descendant fault; the outer scope receives it as a child fault and undoes P. |
 
 ## Restart injection points
 

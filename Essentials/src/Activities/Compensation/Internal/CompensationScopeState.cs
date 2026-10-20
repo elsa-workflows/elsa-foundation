@@ -72,7 +72,8 @@ internal sealed record CompensationScopeState
         CompensationRecoveryCause? cause = null,
         IReadOnlyList<CompensationEntry>? entries = null,
         IReadOnlyList<CompensationConfirmation>? confirmations = null,
-        IReadOnlyList<string>? receivedHandOvers = null)
+        IReadOnlyList<string>? receivedHandOvers = null,
+        IReadOnlyList<CompensationHandOverProgress>? handOversInProgress = null)
     {
         Phase = phase;
         NextStepIndex = nextStepIndex;
@@ -81,6 +82,7 @@ internal sealed record CompensationScopeState
         Entries = entries ?? [];
         Confirmations = confirmations ?? [];
         ReceivedHandOvers = receivedHandOvers ?? [];
+        HandOversInProgress = handOversInProgress ?? [];
     }
 
     public static CompensationScopeState Initial { get; } = new(CompensationScopePhase.Running, 0, 1);
@@ -102,6 +104,23 @@ internal sealed record CompensationScopeState
 
     /// <summary>Inner scope occurrences whose hand-over was fully journaled; a repeat delivery changes nothing.</summary>
     public IReadOnlyList<string> ReceivedHandOvers { get; init; }
+
+    /// <summary>Inner scope occurrences with some, not all, of their hand-over batches journaled.</summary>
+    public IReadOnlyList<CompensationHandOverProgress> HandOversInProgress { get; init; }
+}
+
+/// <summary>The hand-over batches journaled so far for one inner scope occurrence.</summary>
+internal sealed record CompensationHandOverProgress
+{
+    [JsonConstructor]
+    public CompensationHandOverProgress(string originScope, IReadOnlyList<int>? batches = null)
+    {
+        OriginScope = originScope;
+        Batches = batches ?? [];
+    }
+
+    public string OriginScope { get; init; }
+    public IReadOnlyList<int> Batches { get; init; }
 }
 
 /// <summary>One journal entry: a forward occurrence that completed or whose outcome is unknown, and its recovery progress.</summary>

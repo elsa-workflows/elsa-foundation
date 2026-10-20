@@ -36,6 +36,7 @@ internal static class CompensationScopeStateUpcaster
 
         state["confirmations"] ??= new JsonArray();
         state["receivedHandOvers"] ??= new JsonArray();
+        state["handOversInProgress"] ??= new JsonArray();
         return JsonSerializer.SerializeToElement(state);
     }
 
