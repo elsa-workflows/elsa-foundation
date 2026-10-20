@@ -1,7 +1,9 @@
 # Research: Studio Diagnostics Index
 
-**Spec**: [spec.md](spec.md)  
-**Product source baseline**: `e656cc6042fd86d15d61c7278d846222054eb535`  
+**Spec**: [spec.md](spec.md)
+
+**Product source baseline**: `e656cc6042fd86d15d61c7278d846222054eb535`
+
 **Approved spec commit**: `3cd7d16e9`
 
 ## Decisions

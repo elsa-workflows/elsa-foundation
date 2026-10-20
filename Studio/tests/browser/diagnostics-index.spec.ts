@@ -21,7 +21,7 @@ for (const theme of ["light", "dark"] as const) {
       await expect(page.getByText("Host diagnostics widget remains visible.")).toBeVisible();
 
       const links = destinations.map(([label]) => diagnostics.getByRole("link", { name: label }));
-      for (const [index, [label, path]] of destinations.entries()) {
+      for (const [index, [, path]] of destinations.entries()) {
         const link = links[index];
         await expect(link).toBeVisible();
         await expect(link).toHaveAttribute("href", path);

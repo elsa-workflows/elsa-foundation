@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-20
 
-**Status**: Approved
+**Status**: Implemented
 
 **Input**: User description: “Provide a task-oriented Diagnostics index in Elsa Studio that helps each user find the diagnostic tools available in their current app and access context. Explain unsupported OpenTelemetry views before entry, preserve each destination's own state, and present runtime payload capture controls as Runtime evidence settings without changing their behavior.”
 
