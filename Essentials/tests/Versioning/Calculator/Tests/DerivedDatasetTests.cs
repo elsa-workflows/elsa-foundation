@@ -143,7 +143,8 @@ public sealed class DerivedDatasetTests : IDisposable
         var head = git.ResolveCommit("HEAD");
         var tree = git.ListTree(head).ToDictionary(entry => entry.Path, StringComparer.Ordinal);
 
-        Assert.Equal(DependencyMapJson.Serialize(workingTree), DependencyMapJson.Serialize(new CommitTree(new ObjectCache(git), head, tree)));
+        using var objects = new ObjectCache(git);
+        Assert.Equal(DependencyMapJson.Serialize(workingTree), DependencyMapJson.Serialize(new CommitTree(objects, head, tree)));
     }
 
     public void Dispose() => repo.Dispose();
@@ -156,7 +157,11 @@ public sealed class DerivedDatasetTests : IDisposable
         return repo.Commit("no committed map");
     }
 
-    private CommitSnapshot Snapshot(string commit, DatasetSource source) => new(new ObjectCache(repo.Calculator), commit, source);
+    private CommitSnapshot Snapshot(string commit, DatasetSource source)
+    {
+        using var objects = new ObjectCache(repo.Calculator);
+        return new CommitSnapshot(objects, commit, source);
+    }
 
     private static string? CronosVersion(CommitSnapshot snapshot) =>
         snapshot.Map.ByPath[Tasks].Edges.Single(edge => edge is { Kind: MapEdgeKind.External, Id: "Cronos" }).Version;

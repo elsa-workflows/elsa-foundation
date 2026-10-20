@@ -287,16 +287,26 @@ internal sealed class CommitSnapshot
     }
 }
 
-/// <summary>Blobs and their parsed MSBuild facts, shared across commits: an unchanged file is read once.</summary>
-internal sealed class ObjectCache(GitRepository git)
+/// <summary>
+/// Blobs and their parsed MSBuild facts, shared across commits: an unchanged file is read once, through one
+/// <c>git cat-file --batch</c> that disposing closes. A read after that opens another.
+/// </summary>
+internal sealed class ObjectCache(GitRepository git) : IDisposable
 {
     private readonly Dictionary<string, byte[]> blobs = new(StringComparer.Ordinal);
     private readonly Dictionary<string, MsBuildFile> parsed = new(StringComparer.Ordinal);
+    private BlobBatch? batch;
 
     public GitRepository Git { get; } = git;
 
     public byte[] Read(string objectId) =>
-        blobs.TryGetValue(objectId, out var content) ? content : blobs[objectId] = Git.ReadBlob(objectId);
+        blobs.TryGetValue(objectId, out var content) ? content : blobs[objectId] = (batch ??= Git.OpenBlobBatch()).Read(objectId);
+
+    public void Dispose()
+    {
+        batch?.Dispose();
+        batch = null;
+    }
 
     public MsBuildFile Parse(string objectId) =>
         parsed.TryGetValue(objectId, out var file) ? file : parsed[objectId] = MsBuildFile.Parse(Read(objectId));

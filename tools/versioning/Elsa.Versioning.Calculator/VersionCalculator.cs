@@ -52,7 +52,7 @@ public static class VersionCalculator
         var commit = git.ResolveCommit(revision);
         RequireForwardOnly(git, commit, record);
 
-        var objects = new ObjectCache(git);
+        using var objects = new ObjectCache(git);
         var built = new CommitSnapshot(objects, commit, source);
         var snapshots = new Dictionary<string, CommitSnapshot>(StringComparer.Ordinal) { [commit] = built };
         CommitSnapshot Snapshot(string at)
