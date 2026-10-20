@@ -9,7 +9,6 @@
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <PackageReference Include="coverlet.collector" PrivateAssets="all" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/Core/Elsa.Etl.Core.csproj" />
@@ -17,5 +16,8 @@
     <ProjectReference Include="../../src/Design/Elsa.Etl.Design.csproj" />
     <ProjectReference Include="../../src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />
     <Using Include="Xunit" />
+  </ItemGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 </Project>
