@@ -1,5 +1,5 @@
 import { authSessionEndedEvent, authSessionStartedEvent } from "@elsa-workflows/studio-sdk";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 import {
   button,
   click,
@@ -26,6 +26,36 @@ async function openSecondPageEditor(fetchMock: typeof fetch) {
 }
 
 describe("workflow definition route browse session", () => {
+  it("clears retained folder actions when the endpoint context is replaced at the same base URL", async () => {
+    const folder = { id: "folder-context", parentId: null, name: "Previous context folder", normalizedName: "context", createdAt: "", lastModifiedAt: "" };
+    const currentFolder = { ...folder, name: "Current context folder" };
+    let detailRequests = 0;
+    let resolveDetail: ((value: Response) => void) | undefined;
+    onTestFinished(() => resolveDetail?.(response({ folder: currentFolder, ancestors: [] })));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/folders/folder-context")) {
+        if (++detailRequests === 1) return response({ folder, ancestors: [] });
+        return new Promise<Response>(resolve => { resolveDetail = resolve; });
+      }
+      return response({ items: [], nextContinuationToken: null });
+    });
+    const capabilities = pagedDefinitionCapabilities({ folders: true });
+    capabilities.capabilities[0].links.push({ rel: "workflow-folder-rename", href: "design/workflows/folders/{folderId}/rename", templated: true });
+    const { container, updateEndpoint } = await renderWorkflowRoute(
+      "/workflows/definitions?folderId=folder-context", fetchMock, capabilities
+    );
+    await waitForCondition(() => expect(container.querySelector(".wf-folder-actions")?.getAttribute("aria-label")).toBe("Actions for Previous context folder"));
+
+    updateEndpoint("https://server.example/");
+    await waitForCondition(() => expect(detailRequests).toBe(2));
+    expect(container.querySelector(".wf-folder-actions")).toBeNull();
+    expect(container.textContent).not.toContain("Previous context folder");
+
+    resolveDetail?.(response({ folder: currentFolder, ancestors: [] }));
+    await waitForCondition(() => expect(container.querySelector(".wf-folder-actions")?.getAttribute("aria-label")).toBe("Actions for Current context folder"));
+  });
+
   it("returns from an editor to the same cursor page and page size after folder capability resolves", async () => {
     const folder = { id: "folder-operations", parentId: null, name: "Operations", normalizedName: "operations", createdAt: "", lastModifiedAt: "" };
     const pageRequests: string[] = [];

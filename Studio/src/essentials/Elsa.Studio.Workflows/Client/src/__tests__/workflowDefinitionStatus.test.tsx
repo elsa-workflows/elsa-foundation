@@ -14,6 +14,33 @@ import {
 } from "./workflowDefinitionTestHelpers";
 
 describe("workflow definition request status", () => {
+  it("identifies a previous empty search while a different search is pending", async () => {
+    let resolveLatest: ((value: Response) => void) | undefined;
+    onTestFinished(() => resolveLatest?.(response({ items: [], nextContinuationToken: null })));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith("/definition-pages") && url.searchParams.get("searchTerm") === "latest") {
+        return new Promise<Response>(resolve => { resolveLatest = resolve; });
+      }
+      return response({ items: [], nextContinuationToken: null });
+    });
+    const { container } = await renderWorkflowRoute("/workflows/definitions?search=empty", fetchMock, pagedDefinitionCapabilities());
+    await waitForText(container, "No workflows match “empty”");
+
+    vi.useFakeTimers();
+    onTestFinished(() => { vi.useRealTimers(); });
+    await fill(input(container, "Search all workflows"), "latest");
+    expect(container.querySelector("[role='status']")?.textContent).toContain("The previous search “empty” on page 1 returned no workflows");
+    expect(container.textContent).not.toContain("No workflows match “latest”");
+    expect(container.querySelector(".wf-empty-state")).toBeNull();
+    await vi.advanceTimersByTimeAsync(250);
+    vi.useRealTimers();
+    await waitForCondition(() => expect(resolveLatest).toBeDefined());
+    expect(container.querySelector("[role='status']")?.textContent).toContain("returned no workflows");
+    resolveLatest?.(response({ items: [definition({ name: "Latest workflow" })], nextContinuationToken: null }));
+    await waitForText(container, "Latest workflow");
+  });
+
   it.each([true, false])("treats text entered after a failed search as pending, with previous data: %s", async hasPreviousData => {
     const requests: URL[] = [];
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {

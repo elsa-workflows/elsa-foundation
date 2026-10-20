@@ -40,6 +40,7 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   const renameButtonRef = useRef<HTMLButtonElement>(null);
   const moveButtonRef = useRef<HTMLButtonElement>(null);
   const breadcrumbIdentityRef = useRef<string | null>(null);
+  const breadcrumbContextRef = useRef(context);
   const {
     roots,
     children,
@@ -77,8 +78,9 @@ export function WorkflowFolderNavigation({ context, selection, onSelect, onAvail
   useEffect(() => {
     const id = selectedFolderId(selection);
     const identity = `${context.baseUrl}\u0000${id ?? ""}`;
-    const identityChanged = breadcrumbIdentityRef.current !== identity;
+    const identityChanged = breadcrumbIdentityRef.current !== identity || breadcrumbContextRef.current !== context;
     breadcrumbIdentityRef.current = identity;
+    breadcrumbContextRef.current = context;
     if (identityChanged || !available) {
       setCrumbs([]);
       setBreadcrumbError(null);

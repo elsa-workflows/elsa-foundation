@@ -240,6 +240,7 @@ for (const variant of searchStatusVariants) {
     await expect(page.getByRole("alert")).toHaveCount(0);
     await search.fill("");
     await expect(page).not.toHaveURL(/(?:[?&])search=/);
+    await expect(page.getByRole("status").filter({ hasText: "The previous search “empty” on page 1 returned no workflows" })).toBeVisible();
     await page.clock.runFor(250);
     await expect(page.getByText("First page renewal", { exact: true })).toBeVisible();
     const clearedRequest = (await recordedPageRequests(page)).at(-1);

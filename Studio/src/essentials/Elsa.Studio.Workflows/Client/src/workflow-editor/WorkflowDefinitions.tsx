@@ -454,12 +454,17 @@ export function WorkflowDefinitions({ context, ai, onOpen, session }: {
   };
 
   const displayState = requestsPaused ? "failed" : searchPending ? "loading" : requestState;
-  const staleStatus = hasPreviousData && snapshotVisible
+  const previousResultDescription = hasPreviousData && snapshotVisible
+    ? snapshotVisible.definitions.length === 0
+      ? `The previous search “${snapshotVisible.identity.search || "all workflows"}” on page ${snapshotVisible.identity.page} returned no workflows`
+      : `Showing previous results for “${snapshotVisible.identity.search || "all workflows"}” on page ${snapshotVisible.identity.page}`
+    : null;
+  const staleStatus = previousResultDescription
     ? displayState === "failed"
-      ? `Showing previous results for “${snapshotVisible.identity.search || "all workflows"}” on page ${snapshotVisible.identity.page}. The latest search “${search.trim() || "all workflows"}” failed.`
+      ? `${previousResultDescription}. The latest search “${search.trim() || "all workflows"}” failed.`
       : searchPending
-        ? `Showing previous results for “${snapshotVisible.identity.search || "all workflows"}” on page ${snapshotVisible.identity.page} while “${search.trim() || "all workflows"}” waits to refresh.`
-        : `Showing previous results for “${snapshotVisible.identity.search || "all workflows"}” on page ${snapshotVisible.identity.page} while “${search.trim() || "all workflows"}” refreshes.`
+        ? `${previousResultDescription} while “${search.trim() || "all workflows"}” waits to refresh.`
+        : `${previousResultDescription} while “${search.trim() || "all workflows"}” refreshes.`
     : null;
   const errorTitle = search.trim()
     ? `Couldn't load workflow definitions for “${search.trim()}”`
