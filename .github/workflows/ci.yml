@@ -50,6 +50,17 @@ name: CI
 #
 # Blocking is not available on push: the commit has already landed. A red run on main is a
 # request to fix forward or revert; the alert job at the bottom makes sure someone is told.
+#
+# DOCUMENTATION-ONLY FAST PATH (spec 257)
+# A pull request whose every changed path is documentation, specs or agent instructions skips the .NET
+# build and tests: tools/ci/change_scope.py classifies the diff as the first step of "Build & test", which
+# still runs its Python guards and the catalog link check (the files CatalogLinkGuardTests reads) and then
+# reports success under its own name, so the required context is a real result, never "skipped" or pending.
+# Architecture guards and Core-only build & test skip on that output. Any path a build or test reads
+# (EXTENSION_POINTS.md, the committed dependency map, spec contracts, build and analyzer config) forces the
+# full run, and so does anything the classifier cannot read. Push, schedule and dispatch are always full
+# runs, so main itself is never judged by the fast path. "Generated maps fresh" always runs in full; it
+# builds only the generator.
 
 on:
   pull_request:
@@ -85,11 +96,27 @@ jobs:
     # The native-hosting process matrix shares this job with the container-free suites.
     # The former 30-minute budget expired before that suite completed (#3056); per-test limits stay bounded.
     timeout-minutes: 45
+    outputs:
+      docs_only: ${{ steps.scope.outputs.docs_only }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Classify the change scope
+        id: scope
+        # Pull requests only; every other event is a full run. The classifier exits 0 whatever it finds, and a diff
+        # it cannot read classifies as a full run.
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python3 tools/ci/change_scope.py --self-test
+          if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then
+            python3 tools/ci/change_scope.py --base "$BASE_SHA" --head "$GITHUB_SHA"               --github-output "$GITHUB_OUTPUT" --summary "$GITHUB_STEP_SUMMARY"
+          else
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Check contributor checkpoint workflow guards
         run: python3 tools/contributor-checkpoints/test_workflow_guards.py
@@ -102,11 +129,18 @@ jobs:
           python3 tools/ci/studio_image_tags.py --self-test
           python3 tools/ci/test_studio_docker_publish.py
 
+      # Same files and rules as CatalogLinkGuardTests, without the build. It is the documentation-reading check a
+      # documentation-only PR can still break (by moving or deleting a doc a catalog or module README links to).
+      - name: Check catalog and module README links
+        run: python3 tools/maps/check-catalog-links.py
+
       - uses: actions/setup-dotnet@v4
+        if: steps.scope.outputs.docs_only != 'true'
         with:
           dotnet-version: 10.x
 
       - name: Cache NuGet packages
+        if: steps.scope.outputs.docs_only != 'true'
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
@@ -115,6 +149,7 @@ jobs:
             ${{ runner.os }}-nuget-
 
       - name: Generate container-free test solution filter
+        if: steps.scope.outputs.docs_only != 'true'
         # Run the fast unit tests only. Any test project that reaches Testcontainers spins up
         # Docker containers, so exclude those by reference -- the shared solution-filter generator
         # parses PackageReference elements rather than matching comments or other raw text, and
@@ -153,6 +188,7 @@ jobs:
           echo "Kept ${#keep[@]} test project(s) in the container-free filter."
 
       - name: Restore
+        if: steps.scope.outputs.docs_only != 'true'
         # Includes the isolated Debug dependency graph required by the Architecture
         # tests in the container-free filter while preserving ordinary Release assets.
         # Every restore in CI is locked (#2122): it restores exactly the versions the committed
@@ -162,9 +198,11 @@ jobs:
         run: bash tools/architecture/restore-ci-project-graph.sh --locked-mode -p:WarningsNotAsErrors=NU1603
 
       - name: Restore repository-local .NET tools
+        if: steps.scope.outputs.docs_only != 'true'
         run: dotnet tool restore
 
       - name: Build (full solution, including test projects)
+        if: steps.scope.outputs.docs_only != 'true'
         # Building the whole solution -- test projects included -- is what catches
         # semantic-merge compile breaks like #543.
         run: dotnet build Elsa.Server.slnx -c Release --no-restore -p:WarningsNotAsErrors=NU1603
@@ -173,6 +211,7 @@ jobs:
       # measurement (#1668, ADR 0073); the upload's if-no-files-found: error would otherwise fail
       # this job now that no test writes a plan.
       - name: Test (fast unit tests, no containers)
+        if: steps.scope.outputs.docs_only != 'true'
         run: dotnet test Elsa.Server.test.slnf -c Release --no-build -p:WarningsNotAsErrors=NU1603
 
   # The EF container jobs below run on the nightly schedule and on manual dispatch only (#2632): they are not
@@ -342,6 +381,7 @@ jobs:
   architecture-guards:
     name: Architecture guards
     needs: build-and-test
+    if: needs.build-and-test.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -374,8 +414,8 @@ jobs:
   #
   # The filter is generated from tools/solution-filters/profiles.json by expanding the dependency
   # closure of the named core roots, so it cannot drift: add a core-to-extension reference and the
-  # closure grows, the committed .slnf stops matching, and the "Generated maps fresh" job goes red
-  # alongside this one.
+  # closure grows, the committed .slnf stops matching, and the "Generated maps fresh" job's solution
+  # filter check goes red alongside this one.
   #
   # The ExtensionBoundary guard that enforces the rule directly also runs inside "Build & test",
   # because it lives under tests/ and references no Testcontainers, so it is already covered by a
@@ -384,6 +424,7 @@ jobs:
   core-only:
     name: Core-only build & test
     needs: build-and-test
+    if: needs.build-and-test.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -434,32 +475,29 @@ jobs:
     with:
       gate: CI
 
-  # Freshness gate for the committed maps under docs/maps/, the generated findings reports and the generated
-  # solution filters (Elsa.Server.*.slnf). It regenerates each into a scratch directory and byte-compares the
-  # result with what is committed. Generation itself stays manually initiated (docs/contributing/generated-maps.md); this job only
-  # reports. It exists because the committed maps once went three projects stale and carried 25 corrupted
-  # rows with nothing objecting.
+  # Freshness gate for the generated files that ARE committed: docs/maps/dependency-map.json, which the versioning
+  # calculator reads from each commit's tree, and the generated solution filters (Elsa.Server.*.slnf). Each is
+  # regenerated into a scratch directory and byte-compared with what is committed. It also runs the generator's own
+  # contract self-tests, including the publish link rewrite and the generated-maps branch writer.
+  #
+  # The documentation maps, their manifest and the findings reports are not committed (spec 257): every PR changed
+  # them, so concurrent PRs conflicted on them and this job turned unrelated PRs red. They are generated locally with
+  # `-- all` and published after every push to main by the "Publish generated maps" job below. Before #1274 this job
+  # ran on pull_request only and PR #1202 left main stale for the next three PRs (#1243, #1247, #1248); with only
+  # project-graph facts left to compare, a spec or docs change can no longer make it stale at all.
   #
   # "Generated maps fresh" is a required status check on main, matched by JOB name, so the name below is
   # load-bearing and must not be renamed. Until #2622 it lived in maps.yml and the filter check in
   # solution-filters.yml ("Solution filters fresh"); both were folded in here to cut the workflows a push
-  # queues. It runs on the same events as before, pull_request and push to main, plus this workflow's
-  # schedule. Until issue #1274 the maps check ran on pull_request only, so nothing evaluated main: PR #1202
-  # added a spec directory without regenerating, main went stale silently, and the next three unrelated PRs
-  # (#1243, #1247, #1248) went red on a check none of them had broken.
-  #
-  # Notify rather than auto-regenerate. Auto-regenerating and opening a PR would contradict docs/contributing/generated-maps.md
-  # ("Generated maps are committed snapshots and are never refreshed automatically"), would skip the
-  # findings-report review a refresh is supposed to trigger, and would need a third-party pull-request
-  # action, which the org Actions allow-list gates (see the POLICY DEPENDENCY note in docker.yml).
+  # queues. It runs on pull_request, push to main and this workflow's schedule, on every PR including
+  # documentation-only ones.
   #
   # This job is deliberately NOT among the alert job's needs, as it was never wired to main-red-alert.yml in
-  # maps.yml either: a stale map is a request to open a refresh PR, not a broken main, and the actionable
-  # output is the refresh command in the run summary. Add it to the alert's needs if stale maps start
-  # surviving on main the way they did before issue #1274.
+  # maps.yml either: a stale dependency map is a request to open a refresh PR, and the actionable output is the
+  # refresh command in the run summary.
   #
-  # The generator is built once and each check runs whenever that build succeeded, so stale maps do not
-  # hide stale solution filters or the reverse, just as when these were two workflows.
+  # The generator is built once and each check runs whenever that build succeeded, so a stale dependency map does
+  # not hide stale solution filters or the reverse.
   generated-maps:
     name: Generated maps fresh
     runs-on: ubuntu-latest
@@ -481,10 +519,32 @@ jobs:
         id: generator
         run: dotnet build tools/maps/Elsa.Maps.Generator -c Release -p:RestoreLockedMode=true
 
-      - name: Check generated maps against the tree
+      - name: Check the committed dependency map against the tree
         id: maps
         if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
         run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- check
+
+      - name: Exercise publish link rewrite contract
+        id: publish-self-test
+        if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
+        run: dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- publish-self-test
+
+      # Publishing into a scratch directory must succeed on every PR and leave the working tree untouched, so a
+      # generator change that would break the post-merge publication fails here, before it merges.
+      - name: Publish the documentation maps into a scratch directory
+        id: publish-dry-run
+        if: ${{ !cancelled() && steps.generator.outcome == 'success' }}
+        run: |
+          dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- \
+            publish "$RUNNER_TEMP/maps" --source-commit "$GITHUB_SHA" --repo-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "::error::publish wrote into the working tree:"; git status --porcelain; exit 1
+          fi
+
+      - name: Exercise the generated-maps branch writer
+        id: branch-writer
+        if: ${{ !cancelled() }}
+        run: bash tools/maps/test-publish-generated-maps.sh
 
       - name: Exercise project facts contract
         id: project-facts
@@ -523,31 +583,30 @@ jobs:
             dotnet sln "$filter" list >/dev/null
           done
 
-      - name: Explain how to refresh the maps
+      - name: Explain how to refresh the dependency map
         if: >-
           ${{ failure() && (steps.generator.outcome == 'failure' || steps.maps.outcome == 'failure'
-          || steps.project-facts.outcome == 'failure' || steps.feature-facts.outcome == 'failure') }}
+          || steps.project-facts.outcome == 'failure' || steps.feature-facts.outcome == 'failure'
+          || steps.publish-self-test.outcome == 'failure' || steps.publish-dry-run.outcome == 'failure'
+          || steps.branch-writer.outcome == 'failure') }}
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
-          ## Generated maps are stale
+          ## Generated maps check failed
 
-          The committed maps no longer describe the tree. The failing step above lists
-          the files that would change. To fix it:
+          If the dependency-map check failed, the committed `docs/maps/dependency-map.json` no longer
+          describes the project graph. Regenerate it and commit it:
 
           ```bash
-          dotnet run --project tools/maps/Elsa.Maps.Generator -- all
+          dotnet run --project tools/maps/Elsa.Maps.Generator -- dependency-map
           ```
 
           If the generator refuses a lock file, the tree's dependencies changed without it: run
           `dotnet restore Elsa.Server.slnx`, review and commit the changed `packages.lock.json`
           files, then generate again.
 
-          Then stage every changed map file by explicit path, `docs/maps/manifest.json`
-          included. The manifest carries no per-commit provenance, so it changes only when
-          the tree did, and this check compares it like any other generated file.
-
-          If this run is on `main`, main is already stale: open a PR with the refreshed
-          maps. Review the generated findings reports before merging.
+          The documentation maps are never committed (spec 257): do not stage them. A failing publish
+          or branch-writer step is a generator or `tools/maps` change to fix; see
+          `docs/contributing/generated-maps.md`.
           EOF
 
       - name: Explain how to refresh the solution filters
@@ -567,3 +626,51 @@ jobs:
 
           Commit every changed `.slnf` file together with any manifest or generator change.
           EOF
+
+  # Publishes the documentation maps for every push to main (spec 257): a build artifact of this run and a commit on
+  # the generated-maps branch, the stable home that AGENTS.md and docs/maps/README.md link to. Links into the source
+  # tree are pinned to this commit. Only this job writes that branch (the publish-state convention); ruleset
+  # generated-maps blocks its deletion and force pushes, and tools/repo-hygiene exempts it from the branch sweep.
+  #
+  # It needs no other job: the maps describe the tree whether or not its tests pass. The branch only moves forward
+  # along main (publish-generated-maps.sh skips an older commit), and a newer push supersedes a pending older one.
+  # Pushes made with GITHUB_TOKEN start no workflow run. Like generated-maps it is not among the alert job's needs:
+  # a failed publication leaves the previous set in place, and the next push to main catches the branch up.
+  publish-maps:
+    name: Publish generated maps
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    concurrency:
+      group: generated-maps
+      cancel-in-progress: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.x
+
+      - name: Build the generator
+        run: dotnet build tools/maps/Elsa.Maps.Generator -c Release -p:RestoreLockedMode=true
+
+      - name: Generate the documentation maps
+        run: |
+          dotnet run --project tools/maps/Elsa.Maps.Generator -c Release --no-build -- \
+            publish "$RUNNER_TEMP/maps" --source-commit "$GITHUB_SHA" --repo-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+
+      - name: Upload the maps as a build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-maps-${{ github.sha }}
+          path: ${{ runner.temp }}/maps
+          if-no-files-found: error
+
+      - name: Commit the maps to the generated-maps branch
+        run: bash tools/maps/publish-generated-maps.sh "$RUNNER_TEMP/maps" "$GITHUB_SHA"

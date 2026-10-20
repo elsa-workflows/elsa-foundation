@@ -27,8 +27,8 @@ Reports are point-in-time findings. They may become work units, but they are not
 - [Glossary coverage audit](glossary-coverage-audit.md)
 - [Unfinished work re-ranking](unfinished-work-reranking.md) - superseded point-in-time review.
 - [NotImplemented classification](notimplemented-classification.md)
-- [Maps v1 findings](maps-v1-findings.md)
-- [Maps v2 findings](maps-v2-findings.md)
+- [Maps v1 findings](https://github.com/elsa-workflows/elsa-foundation/blob/generated-maps/docs/reports/maps-v1-findings.md) - generated, published on the `generated-maps` branch; see the [maps index](../maps/README.md).
+- [Maps v2 findings](https://github.com/elsa-workflows/elsa-foundation/blob/generated-maps/docs/reports/maps-v2-findings.md) - generated, published on the `generated-maps` branch.
 - [Test maturity and weak implementation report](test-maturity-and-weak-implementation-report.md)
 - [Skills stabilization audit](skills-stabilization-audit.md)
 - [Zero-EF constitution review](zero-ef-constitution-review.md) - superseded historical review of the former Groundwork-only persistence boundary; ADR 0073 owns the opposite current direction.
