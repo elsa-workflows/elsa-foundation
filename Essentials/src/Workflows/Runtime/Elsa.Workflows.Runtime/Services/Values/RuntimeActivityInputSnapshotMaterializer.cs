@@ -48,7 +48,9 @@ public sealed class RuntimeActivityInputSnapshotMaterializer(
             // Issue #984: expose the lexically visible variables to JavaScript value expressions
             // (variables.X / getVariable('X') / get<Name>()) through the isolated engine's ambient read surface.
             visibleVariablesByName: RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes(executable, visibleFrames.Frames),
-            correlationId: projections.CorrelationId);
+            correlationId: projections.CorrelationId,
+            // ADR 0088 D2: Clock and UniqueId parameters read the snapshot's own materialization time.
+            evaluatedAt: materializedAt);
 
         return await inputMaterializer.MaterializeSnapshotAsync(
             executableNode,

@@ -36,7 +36,15 @@ public sealed class ExpressionParameterBindingWireTests
             ["WorkflowInstance"] = (
                 new WorkflowInstanceExpressionParameterBinding(WorkflowInstanceExpressionParameterBinding.Members.CorrelationId),
                 """{"kind":"WorkflowInstance","member":"correlationId"}"""),
+            ["Clock"] = (
+                new ClockExpressionParameterBinding(),
+                """{"kind":"Clock"}"""),
+            ["UniqueId"] = (
+                new UniqueIdExpressionParameterBinding(),
+                """{"kind":"UniqueId"}"""),
         };
+
+    private static readonly string[] OriginalKinds = ["Literal", "WorkflowRequest", "Variable", "ActivityResult"];
 
     [Theory]
     [InlineData("Literal")]
@@ -44,6 +52,8 @@ public sealed class ExpressionParameterBindingWireTests
     [InlineData("Variable")]
     [InlineData("ActivityResult")]
     [InlineData("WorkflowInstance")]
+    [InlineData("Clock")]
+    [InlineData("UniqueId")]
     public void A_binding_kind_keeps_its_discriminator_and_shape(string kind)
     {
         var (binding, json) = Kinds[kind];
@@ -93,7 +103,7 @@ public sealed class ExpressionParameterBindingWireTests
             "JavaScript",
             "args.a + args.b + args.c + args.d",
             new TypeReference("String"),
-            Kinds.Where(kind => kind.Key != "WorkflowInstance").ToDictionary(kind => kind.Key, kind => kind.Value.Binding),
+            Kinds.Where(kind => OriginalKinds.Contains(kind.Key)).ToDictionary(kind => kind.Key, kind => kind.Value.Binding),
             JsonSerializer.SerializeToElement(new { strict = true }),
             ExpressionCapabilityProfiles.BindingPureV1);
         var persistedDefinition = serializer.Serialize(definition);
@@ -136,5 +146,41 @@ public sealed class ExpressionParameterBindingWireTests
             """{"capabilityProfile":"binding-pure-v1","language":"JavaScript","metadata":{},"options":{},"parameters":{"correlation":{"kind":"WorkflowInstance","member":"correlationId"}},"resultType":{"alias":"String","collectionKind":"Single"},"source":"args.correlation"}""",
             persistedDefinition);
         Assert.Equal(persistedDefinition, serializer.Serialize(serializer.Deserialize<ExpressionDefinition>(persistedDefinition)));
+    }
+
+    [Fact]
+    public async Task Clock_and_unique_id_bindings_keep_their_persisted_bytes_and_change_the_fingerprint()
+    {
+        var services = SerializationServices.Compose();
+        new EventsFeature().ConfigureServices(services);
+        new ExpressionsFeature().ConfigureServices(services);
+        await using var provider = services.BuildServiceProvider();
+        await using (var scope = provider.CreateAsyncScope())
+            foreach (var startupTask in scope.ServiceProvider.GetServices<IStartupTask>())
+                await startupTask.ExecuteAsync(CancellationToken.None);
+        var serializer = provider.GetRequiredService<IPayloadSerializer>();
+
+        var definition = new ExpressionDefinition(
+            "JavaScript",
+            "args.now + args.id",
+            new TypeReference("String"),
+            new Dictionary<string, ExpressionParameterBinding> { ["now"] = Kinds["Clock"].Binding, ["id"] = Kinds["UniqueId"].Binding },
+            JsonSerializer.SerializeToElement(new { }),
+            ExpressionCapabilityProfiles.BindingPureV2);
+        var persistedDefinition = serializer.Serialize(definition);
+
+        Assert.Equal(
+            """{"capabilityProfile":"binding-pure-v2","language":"JavaScript","metadata":{},"options":{},"parameters":{"id":{"kind":"UniqueId"},"now":{"kind":"Clock"}},"resultType":{"alias":"String","collectionKind":"Single"},"source":"args.now \u002B args.id"}""",
+            persistedDefinition);
+        Assert.Equal(persistedDefinition, serializer.Serialize(serializer.Deserialize<ExpressionDefinition>(persistedDefinition)));
+
+        var withLiterals = new ExpressionDefinition(
+            "JavaScript",
+            "args.now + args.id",
+            new TypeReference("String"),
+            new Dictionary<string, ExpressionParameterBinding> { ["now"] = Kinds["Literal"].Binding, ["id"] = Kinds["Literal"].Binding },
+            JsonSerializer.SerializeToElement(new { }),
+            ExpressionCapabilityProfiles.BindingPureV2);
+        Assert.NotEqual(withLiterals.Fingerprint, definition.Fingerprint);
     }
 }

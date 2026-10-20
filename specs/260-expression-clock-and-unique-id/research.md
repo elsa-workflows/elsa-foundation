@@ -59,8 +59,8 @@ because only ISO strings parse. This is accepted and documented, since `toISOStr
 - `RuntimeActivityInputMaterializer.MaterializeSnapshotAsync(node, invocationId, context, materializedAt, ...)` is the
   only producer of an `ActivityInputSnapshot`. Its `materializedAt` becomes `ActivityInputSnapshot.MaterializedAt`.
 - It is reached only through `RuntimeActivityInputSnapshotMaterializer.MaterializeAsync`. The callers are the start
-  handler (`WorkflowStartActivitySchedulerWorkHandler.cs:367`) and the `While` re-materialization
-  (`WorkflowParentActivityCompletionSchedulerWorkHandler.cs:191`, with `TimeProvider.GetUtcNow()` at :192).
+  handler (`WorkflowStartActivitySchedulerWorkHandler.cs:368`) and the `While` re-materialization
+  (`WorkflowParentActivityCompletionSchedulerWorkHandler.cs:191`, with `TimeProvider.GetUtcNow()` at :193).
 - Parameters are resolved in `RuntimePortableExpressionEvaluator.MaterializeParametersAsync` from a
   `RuntimeInputBindingResolutionContext`, which today carries no instant.
 - The snapshot stores each input's evaluated value, not the parameter values. The `Clock` and `UniqueId` values are
@@ -73,7 +73,9 @@ because only ISO strings parse. This is accepted and documented, since `toISOStr
 **Decision.**
 
 - `RuntimeInputBindingResolutionContext` gains an optional `EvaluatedAt` (`DateTimeOffset?`).
-- `MaterializeSnapshotAsync` resolves with a context whose `EvaluatedAt` is `materializedAt`. If the caller's context
+- `RuntimeActivityInputSnapshotMaterializer` builds its context with `evaluatedAt: materializedAt`, so a replaced
+  `IRuntimeActivityInputMaterializer` receives the instant too. `MaterializeSnapshotAsync` also resolves with a context
+  whose `EvaluatedAt` is `materializedAt`. If the caller's context
   already has an instant that differs from `materializedAt`, it throws, so the two can never disagree (FR-010).
 - The intrinsic executor reads `timeProvider.GetUtcNow()` once per `MaterializeValueAsync` and sets it as
   `EvaluatedAt`. The intrinsic's completion commit fixes the result; a retry before that commit evaluates again,
@@ -86,7 +88,7 @@ because only ISO strings parse. This is accepted and documented, since `toISOStr
 | Site | Path | Instant | Fixed by |
 |---|---|---|---|
 | Activity inputs (every CLR activity, including `If`, `Switch`, `Inline` and the first entry of `While`/`Do`) | `RuntimeActivityInputMaterializer.EvaluateExpressionAsync` → shared evaluator | `startedAt` (`WorkflowStartActivitySchedulerWorkHandler.cs:288`) | The `ActivityStarted` commit of `InputSnapshot` (:350) |
-| `While` / `Do` pass | `StructuralParentEvaluationSupport.ConstructActivityAsync` with the re-materializer | `GetUtcNow()` at `WorkflowParentActivityCompletionSchedulerWorkHandler.cs:192` | The pass-decision commit with `ParentCompletionProcessedWorkItemId`; redelivery guard at :128-135 |
+| `While` / `Do` pass | `StructuralParentEvaluationSupport.ConstructActivityAsync` with the re-materializer | `GetUtcNow()` at `WorkflowParentActivityCompletionSchedulerWorkHandler.cs:193` | The pass-decision commit with `ParentCompletionProcessedWorkItemId`; redelivery guard at :129-136 |
 | Notification and bookmark-resume evaluation | `ConstructActivityAsync` without a re-materializer | none needed | Reads the pinned snapshot |
 | Engine intrinsics (`Set`, `Merge`, `Reduce`, `Return`, `Control`, `SetCorrelationId`, `SetInstanceName`, `SetOutput`, `Finish`) | `WorkflowIntrinsicExecutor.MaterializeValueAsync` (:586-635) | none today; added by R-2 | The intrinsic completion commit |
 | `GraphActivity` input and output mappings | `GraphActivity.NewEvaluator` (:285-362) calls `IPortableExpressionEvaluator` directly with literal parameters only, stamped v1 | not applicable | Entry and completion checkpoints |
@@ -115,10 +117,10 @@ rejection is needed, so FR-012 is a runtime guarantee plus a defensive failure.
 
 **Decision.**
 
-- `ExpressionCapabilityProfiles.BindingPureV2 = "binding-pure-v2"`, with `IsBindingPureProfile(string)` true for v1 and v2.
+- `ExpressionCapabilityProfiles.BindingPureV2 = "binding-pure-v2"`, with `ExpressionCapabilityProfiles.IsBindingPure(string)` true for v1 and v2.
 - `Resolve` gives v2 the same pure grant as v1, so v2 is binding-pure with no nondeterminism.
-- The dispatcher and the runtime evaluator accept both pure profiles. The Jint evaluator accepts both and passes the
-  profile to `IsolatedJintEngine.Create`. The Liquid handler keeps requiring v1, so a Liquid expression stamped v2 is
+- The dispatcher and the runtime evaluator accept both pure profiles. The Jint evaluator accepts both and creates the
+  engine with `clocklessDate: true` for v2. The Liquid handler keeps requiring v1, so a Liquid expression stamped v2 is
   rejected (FR-022).
 - `CompileExpressionInput` stamps v2 when the expression type is `JavaScript` (ordinal, ignoring case); every other
   language keeps the default. The deserialization default stays v1.
@@ -144,7 +146,12 @@ evaluates. `BindingPureArgsDeclarationContributor` declares only `args`. Neither
   - a call of `Date.now`;
   - a call of a member named `toLocaleString`, `toLocaleDateString` or `toLocaleTimeString`.
   The last one is reported as a warning, because the receiver may not be a date. The others are errors.
-- The typings contributor declares a `Date` with the allowed members only (FR-020).
+- The typings contributor is not changed (FR-020). The editor's standard library already declares `Date` with every
+  member, and a declaration cannot remove members (it would only add a duplicate identifier). The validator and the
+  documentation carry the removed forms instead.
+- Under v2, a prelude `TypeError` or the invalid-date `RangeError` is wrapped in `JavaScriptBindingEvaluationException`
+  with the rule's text as its message and the Jint error as its inner exception (framework §2.23.5). Other Jint errors
+  keep today's behavior.
 
 ## R-6 Authoring surface and UniqueId generation
 

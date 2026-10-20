@@ -7,7 +7,10 @@ dotnet test Essentials/tests/Expressions/Tests
 dotnet test Essentials/tests/Expressions/JavaScript/Jint/Tests
 dotnet test Essentials/tests/Workflows/Runtime/Tests --filter "FullyQualifiedName~Clock|FullyQualifiedName~UniqueId|FullyQualifiedName~BindingPureV2|FullyQualifiedName~CanonicalRuntimeInputBindingResolver"
 dotnet test Essentials/tests/Activities/Runtime/Tests --filter "FullyQualifiedName~ClockParameter|FullyQualifiedName~WorkflowInstanceParameter"
-dotnet test Essentials/tests/Activities/ControlFlow/Tests --filter "FullyQualifiedName~While"
+dotnet test Essentials/tests/Activities/ControlFlow/Tests --filter "FullyQualifiedName~While|FullyQualifiedName~Do"
+dotnet test Essentials/tests/Workflows/Publishing/Api/Tests
+dotnet test Essentials/tests/Workflows/Design/Tests
+dotnet test Essentials/tests/Activities/Http/Tests --filter "FullyQualifiedName~WriteHttpResponseExecutionTests"
 ```
 
 Expected after implementation:

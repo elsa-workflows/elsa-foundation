@@ -163,4 +163,19 @@ public sealed class ExpressionDefinitionContractTests
                 yield return nested;
         }
     }
+
+    [Theory]
+    [InlineData(ExpressionCapabilityProfiles.BindingPureV1, true)]
+    [InlineData(ExpressionCapabilityProfiles.BindingPureV2, true)]
+    [InlineData("binding-pure-v3", false)]
+    [InlineData("BINDING-PURE-V2", false)]
+    public void Only_the_binding_pure_profiles_resolve_to_the_pure_grant(string profile, bool pure)
+    {
+        var capabilities = ExpressionEvaluationCapabilities.Resolve(profile);
+
+        Assert.Equal(profile, capabilities.Profile);
+        Assert.Equal(pure, capabilities.IsBindingPure);
+        Assert.Equal(pure, ExpressionCapabilityProfiles.IsBindingPure(profile));
+        Assert.False(capabilities.AllowsNondeterminism);
+    }
 }

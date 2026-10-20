@@ -200,14 +200,19 @@ v2 succeeds; publish a new JavaScript and a new Liquid expression and check thei
 - **FR-005**: Both kinds MUST be valid under every capability profile and in every expression language that accepts
   parameters, MUST carry no dependency policy and MUST NOT be treated as sensitive.
 - **FR-006**: Both kinds MUST round-trip through the canonical wire format, and MUST contribute to the expression
-  fingerprint so that a definition using them differs from one that does not. Existing fingerprints MUST NOT change.
+  fingerprint so that a definition using them differs from one that does not. Existing expression fingerprints MUST
+  NOT change.
 
 **Recording (ADR 0088 D2)**
 
 - **FR-007**: `Clock` and `UniqueId` values MUST be pinned through the inputs evaluated from them: the input snapshot
   (or, for an intrinsic, its committed result) records the evaluated value, and no separate store records the
   parameter values.
-- **FR-008**: A retry of an invocation MUST read the committed input snapshot and therefore see the same values.
+- **FR-008**: A retry of a faulted CLR activity invocation (the `RetryFaultedActivity` alteration, or any redelivery
+  of a started invocation) MUST read the committed input snapshot and therefore see the same values.
+- **FR-008a**: An engine intrinsic that is retried before its completion commit has no committed result, so it MUST be
+  evaluated again, with a new instant and new IDs; ADR 0088 D2 allows this because nothing depended on the lost
+  values.
 - **FR-009**: A committed input snapshot MUST NOT be rebuilt; reading it back MUST return the recorded values.
 - **FR-010**: Each `While` pass MUST materialize its own values, and the `Clock` value of a pass MUST equal the
   materialization time used for that pass.
@@ -215,8 +220,9 @@ v2 succeeds; publish a new JavaScript and a new Liquid expression and check thei
   the condition again.
 - **FR-012**: Every runtime site that resolves declared expression parameters MUST supply the evaluation instant and
   MUST fix the evaluated result with a commit: activity input materialization (including each `While` and `Do` pass)
-  and engine intrinsics (`Set`, `Control` and the other intrinsic inputs). Resolving a `Clock` parameter without an
-  instant MUST fail with a stable message naming the node and input, never fall back to reading the clock.
+  and engine intrinsics (`Set`, `Control` and the other intrinsic inputs). Resolving a `Clock` or `UniqueId` parameter
+  without an instant MUST fail with a stable inner message (`VF-EXP-CLOCK-001`) naming the parameter, node and input,
+  wrapped like every other input-materialization failure, and MUST never fall back to reading the clock.
 
 **`binding-pure-v2` (ADR 0088 D4)**
 
@@ -230,22 +236,25 @@ v2 succeeds; publish a new JavaScript and a new Liquid expression and check thei
 - **FR-016**: Under `binding-pure-v2`, strings MUST parse as dates only in the ECMAScript date-time string format; any
   other string MUST produce an invalid date.
 - **FR-017**: Under `binding-pure-v2`, these forms MUST fail with a `TypeError` whose message names the form, says why
-  it is not allowed and gives the rewrite: `new Date()` with no argument, `Date()` called as a function, `Date.now()`,
+  it is not allowed and gives the rewrite, surfaced to the caller as a `JavaScriptBindingEvaluationException` whose
+  message is that text: `new Date()` with no argument, `Date()` called as a function, `Date.now()`,
   `toLocaleString()`, `toLocaleDateString()` and `toLocaleTimeString()`. The messages MUST be exactly the texts in
-  [the contract](contracts/clock-uniqueid-and-binding-pure-v2.md#messages), which follow ADR 0088 D4's examples, and calling `toISOString()` on an invalid date MUST say that only ISO 8601 date-time strings parse.
+  [the contract](contracts/clock-uniqueid-and-binding-pure-v2.md#messages), which follow ADR 0088 D4's examples, and calling `toISOString()` on an invalid date MUST fail
+  with a `RangeError` saying that only ISO 8601 date-time strings parse.
 - **FR-018**: `Temporal`, `Intl` and `Math.random` MUST stay unavailable under `binding-pure-v2`.
 - **FR-019**: Authoring validation MUST report the FR-017 messages, at the authored line and column, for each removed
   form it can identify without evaluating the source.
-- **FR-020**: The editor's declared globals MUST describe the `binding-pure-v2` surface, because every JavaScript
-  expression authored from now on publishes as `binding-pure-v2` (FR-021): `Date` is declared with only the allowed
-  members, and the removed members are not declared.
+- **FR-020**: The editor's declared globals MUST NOT change. The editor's standard library already declares `Date`
+  (including the removed members), and a declaration cannot remove members from it; the removed forms are reported by
+  authoring validation (FR-019) and the documentation (FR-025) instead.
 
 **Versioning (ADR 0088 D4)**
 
 - **FR-021**: A JavaScript expression authored as plain source MUST be stamped `binding-pure-v2` when it is published. An
   expression authored as a full portable definition keeps the profile it declares, so `binding-pure-v1` remains
   selectable. Reading an existing executable MUST keep the profile it was stamped with. As a consequence, republishing
-  an unchanged plain-source JavaScript definition once produces a new executable fingerprint.
+  an unchanged plain-source JavaScript definition once produces a new executable hash (the expression fingerprint
+  of a definition that already declares its profile is unchanged).
 - **FR-022**: Liquid expressions MUST stay stamped `binding-pure-v1`, and a Liquid expression stamped
   `binding-pure-v2` MUST be rejected.
 - **FR-023**: The runtime MUST select the JavaScript sandbox surface from the stamped profile: an expression stamped
@@ -278,13 +287,15 @@ v2 succeeds; publish a new JavaScript and a new Liquid expression and check thei
   valid UUID version 7.
 - **SC-003**: Every one of the six removed `Date` forms produces its documented message, verified by a test per form,
   and every allowed `Date` member is covered by at least one test.
-- **SC-004**: The same `binding-pure-v2` date expressions give identical results on hosts with at least three
-  different local time zones and cultures.
-- **SC-005**: No stored executable's fingerprint or behavior changes, and every existing `binding-pure-v1` evaluation
-  test still passes unchanged.
+- **SC-004**: The same `binding-pure-v2` date expressions give identical results under at least three different
+  current cultures, and the v2 engine's time system never consults the host's local time zone (its default zone is
+  UTC and its offset is always zero).
+- **SC-005**: No stored executable's hash or behavior changes, and every existing `binding-pure-v1` evaluation test
+  still passes unchanged. Tests that pin the profile stamped for newly compiled plain-source JavaScript, or a golden
+  executable hash that includes it, are updated with that reason.
 - **SC-006**: Each `Date` and ID pattern in the JTest corpus except the `wait(ms)` loops and `newShortGuid()` can be
-  written as a `binding-pure-v2` expression with `Clock` and `UniqueId` parameters (verified on a sample of each
-  pattern).
+  written as a `binding-pure-v2` expression with `Clock` and `UniqueId` parameters, verified by one test per pattern:
+  stamp now, ISO round-trip, parse a request date, elapsed milliseconds between two dates, and one or more new IDs.
 
 ## Out of Scope
 
