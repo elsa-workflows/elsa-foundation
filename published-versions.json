@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "7a95893176bbaa75afb4b12fc3d69e3f815320b8",
+  "last_publish_commit": "04ab513208cee2934dbe3765cae63d2b498aa5cb",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -329,8 +329,8 @@
     },
     {
       "package_id": "Elsa.Foundation.Identity",
-      "version": "4.0.13-preview",
-      "commit": "f4ddd62f20ee85292132888f473dd73d4fad6a74"
+      "version": "4.0.14-preview",
+      "commit": "04ab513208cee2934dbe3765cae63d2b498aa5cb"
     },
     {
       "package_id": "Elsa.Foundation.Identity.Api",
@@ -614,13 +614,13 @@
     },
     {
       "package_id": "Elsa.Workflows.Publishing",
-      "version": "4.0.27-preview",
-      "commit": "73451fd575d0e595a79603568896101184887805"
+      "version": "4.0.28-preview",
+      "commit": "04ab513208cee2934dbe3765cae63d2b498aa5cb"
     },
     {
       "package_id": "Elsa.Workflows.Publishing.Api",
-      "version": "4.0.17-preview",
-      "commit": "e6b652f27ed1d81ff33e15fbff4adc35ff2bbce4"
+      "version": "4.0.18-preview",
+      "commit": "04ab513208cee2934dbe3765cae63d2b498aa5cb"
     },
     {
       "package_id": "Elsa.Workflows.Publishing.Core",
@@ -699,23 +699,28 @@
     },
     {
       "package_id": "Elsa3.Activities.Design.Import",
-      "version": "4.0.14-preview",
-      "commit": "c976625675e93fe5724b8cdd02a4125bb21cf08c"
+      "version": "4.0.15-preview",
+      "commit": "04ab513208cee2934dbe3765cae63d2b498aa5cb"
     },
     {
       "package_id": "Elsa3.Activities.Design.Import.Persistence.EntityFrameworkCore",
-      "version": "4.0.20-preview",
-      "commit": "c976625675e93fe5724b8cdd02a4125bb21cf08c"
+      "version": "4.0.21-preview",
+      "commit": "04ab513208cee2934dbe3765cae63d2b498aa5cb"
+    },
+    {
+      "package_id": "Elsa3.Activities.Design.Import.Publishing",
+      "version": "4.0.0-preview",
+      "commit": "04ab513208cee2934dbe3765cae63d2b498aa5cb"
     },
     {
       "package_id": "Elsa3.Mapping",
-      "version": "4.0.17-preview",
-      "commit": "f7c417d0f0ed34b876537a50a7697a36743a971f"
+      "version": "4.0.18-preview",
+      "commit": "04ab513208cee2934dbe3765cae63d2b498aa5cb"
     },
     {
       "package_id": "Elsa3.Models",
-      "version": "4.0.9-preview",
-      "commit": "88e513b7e6f3e9af9f0a54936185b055e2c79be7"
+      "version": "4.0.10-preview",
+      "commit": "04ab513208cee2934dbe3765cae63d2b498aa5cb"
     },
     {
       "package_id": "dotnet-elsa",
