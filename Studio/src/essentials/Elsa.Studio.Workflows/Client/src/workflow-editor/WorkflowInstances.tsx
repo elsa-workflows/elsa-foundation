@@ -525,7 +525,7 @@ export function WorkflowInstances({ context, navigate }: {
                 }
               }}
             >
-              <span role="cell" className="wf-run-identity-cell">
+              <div role="cell" className="wf-run-identity-cell">
                 {canDeleteRuns ? <label className="wf-run-select"><input
                   type="checkbox"
                   aria-label={`Select workflow run ${instance.workflowExecutionId}`}
@@ -549,7 +549,7 @@ export function WorkflowInstances({ context, navigate }: {
                     <CopyableIdentifier label="Definition version ID" value={instance.definitionVersionId} />
                   </div>
                 </div>
-              </span>
+              </div>
               <span role="cell">{formatRunKind(instance.runKind)}</span>
               <span role="cell"><WorkflowStatusBadge status={instance.status} subStatus={instance.subStatus} /></span>
               <span role="cell"><CurrentIncidentHealthLabel instance={instance} /></span>
