@@ -32,7 +32,7 @@ export function ValidationPanel({
   draft: WorkflowDraft;
   errors?: ValidationError[];
   onRepair(nodeId: string | null): void;
-  onSelectNode?(nodeId: string): void;
+  onSelectNode?(nodeId: string, path?: string): void;
   /**
    * Applies the fix for a start-node fault: the two structural start errors report a node that cannot be
    * reached, and the fix is to make it the start. Absent when the canvas is not a Flowchart.
@@ -80,7 +80,7 @@ export function ValidationPanel({
                   <Wrench size={12} /> Repair
                 </button>
               ) : nodeId && onSelectNode ? (
-                <button type="button" className="wf-validation-repair wf-validation-node-action" onClick={() => onSelectNode(nodeId)}>
+                <button type="button" className="wf-validation-repair wf-validation-node-action" onClick={() => onSelectNode(nodeId, error.path ?? undefined)}>
                   <MapPin size={12} /> Go to
                 </button>
               ) : null}

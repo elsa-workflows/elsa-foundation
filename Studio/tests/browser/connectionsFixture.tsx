@@ -1,6 +1,7 @@
 import React from "react";
 import { createEndpointContext, type StudioDialogApi } from "@elsa-workflows/studio-sdk";
 import { ConnectionsPage } from "../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/ConnectionsPage";
+import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
 import "../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/styles.css";
 
 const context = createEndpointContext(new URLSearchParams(window.location.search).get("backend") || window.location.origin);

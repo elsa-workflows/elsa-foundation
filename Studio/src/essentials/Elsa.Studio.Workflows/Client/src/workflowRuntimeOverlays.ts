@@ -2,6 +2,7 @@ import type { Node } from "@xyflow/react";
 import type { ActivityCatalogItem, ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary } from "./workflowTypes";
 import { getChildSlots, latestActivityExecution, type ChildSlot, type WorkflowRuntimeNodeOverlay } from "./workflowAdapter";
 import type { ExecutableActivityGraph } from "./executableGraph";
+import { compensatedOutcome } from "./compensationRuntime";
 
 export function isActiveIncident(incident: Pick<IncidentStateSummary, "status">) {
   const status = incident.status.trim().toLowerCase();
@@ -126,6 +127,7 @@ export function applyRuntimeOverlays<TNodeData extends Record<string, unknown>>(
       containedAffectedActivityCount: containedAffectedNodeIds.length,
       containedPrimaryIncidentId: containedPrimaryIncident?.incidentId,
       containsBlockingIncident: uniqueContainedIncidents.some(incident => incident.isBlocking),
+      ...(latestActivity?.status === "Completed" && latestActivity.outcomeNames?.includes(compensatedOutcome) ? { compensated: true } : {}),
       selected
     };
 

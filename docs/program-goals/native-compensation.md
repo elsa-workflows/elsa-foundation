@@ -23,19 +23,19 @@ Releases and deployment are outside this program. Its PRs merge under
 |---|---|---|
 | [Unified Execution #2892](unified-execution.md) | Runs beside it; no dependency either way | Compensation consumes runtime contracts that predate #2892: `ActivityExecutionId` as invocation identity, `ActivityAttempt`, `ActivityInputSnapshot`, `SideEffectProfile.External`'s durable claim before the body runs, structural private state and fault absorption. It adds no scheduler, work ledger or lease. The **logical operation key** that external participants receive (stable across boundary retries, which mint a new `ActivityExecutionId`) is owned by this program; #2892 consumes it if its proposed "effect idempotency reference" needs one. |
 | [BPMN Engine](bpmn-engine.md) | Separate semantics | [ADR 0086](../adr/0086-native-and-bpmn-compensation-stay-separate.md): no shared compensation abstraction, adapter or BPMN change. A BPMN handler may bind native work through the ordinary binding. |
-| Incident retry [#2747](https://github.com/elsa-workflows/elsa-foundation/issues/2747) | Reuse, do not compete | Operator retry of a failed recovery handler uses the boundary-retry command that #2747 exposes. If M4 needs it before #2747 lands, this program implements that retry path under #2747's issue rather than a second retry protocol. |
+| Incident retry [#2747](https://github.com/elsa-workflows/elsa-foundation/issues/2747) | Reuse, do not compete | #2747 owns generic retry of a faulted activity. Retrying a failed *handler* is compensation-scope semantics: the scope re-schedules the handler for the same entry, behind its own durable intervention wait ([spec 250](../../specs/250-native-compensation/contracts/semantics.md)). It does not use or duplicate incident retry. Retrying a faulted *forward* step goes through #2747. |
 | Elsa 3 compensation, [elsa-core#8884](https://github.com/elsa-workflows/elsa-core/issues/8884) | Paused | Resumes after the #3043 design packet is reviewed, adapting the reviewed Elsa 4 contract or recording why not. |
 
 ## Delivery sequence
 
 | Milestone | Integrated outcome | Owning records |
 |---|---|---|
-| M0 | Native semantics and Studio authoring/inspection design contract | [Contract #3041](https://github.com/elsa-workflows/elsa-foundation/issues/3041), [design task #3043](https://github.com/elsa-workflows/elsa-foundation/issues/3043) |
+| M0 | Native semantics and Studio authoring/inspection design contract: [spec 250](../../specs/250-native-compensation/spec.md) | [Contract #3041](https://github.com/elsa-workflows/elsa-foundation/issues/3041), [design task #3043](https://github.com/elsa-workflows/elsa-foundation/issues/3043) |
 | M1 | Visually authored reservation journey that survives restart during recovery | [Epic #3037](https://github.com/elsa-workflows/elsa-foundation/issues/3037), [feature #3044](https://github.com/elsa-workflows/elsa-foundation/issues/3044) |
 | M2 | Uncertain effects, retries and intervention | [Epic #3038](https://github.com/elsa-workflows/elsa-foundation/issues/3038), [feature #3045](https://github.com/elsa-workflows/elsa-foundation/issues/3045) |
 | M3 | Nested/repeated occurrences, confirmation and native composition | [Epic #3039](https://github.com/elsa-workflows/elsa-foundation/issues/3039), [feature #3046](https://github.com/elsa-workflows/elsa-foundation/issues/3046) |
 | M4 | Accessible Studio recovery inspection and authorized operator controls | [Epic #3040](https://github.com/elsa-workflows/elsa-foundation/issues/3040), [feature #3047](https://github.com/elsa-workflows/elsa-foundation/issues/3047) |
-| M5 | Integrated qualification, documentation, samples and Elsa 3 follow-on assessment | [Feature #3048](https://github.com/elsa-workflows/elsa-foundation/issues/3048) |
+| M5 | Integrated qualification, documentation, samples and Elsa 3 follow-on assessment; the replay-safe warning deferred from M1 (spec 250 FR-014) | [Feature #3048](https://github.com/elsa-workflows/elsa-foundation/issues/3048) |
 
 The M0 design packet is a spec under `specs/` and settles the contract, state schema and visual notation.
 Later features are refined from it; do not pre-create implementation leaves before it is reviewed.

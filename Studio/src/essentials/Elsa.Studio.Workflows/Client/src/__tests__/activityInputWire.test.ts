@@ -16,6 +16,36 @@ describe("activity input wire adapter", () => {
     expect("text" in node).toBe(false);
   });
 
+  it("canonicalizes and expands activities held inside collection items, such as Switch cases and compensation steps", () => {
+    const scope: ActivityNode = {
+      nodeId: "scope",
+      activityVersionId: "scope-version",
+      inputs: [],
+      outputs: [],
+      structure: {
+        kind: "elsa.compensation-scope.structure",
+        schemaVersion: "1.0.0",
+        payload: {
+          steps: [
+            { name: "Reserve", activity: writeLine("reserve", { text: wrapped("reserved", "Literal") }), compensation: writeLine("release", { text: wrapped("released", "Literal") }) },
+            { name: "Confirm", activity: writeLine("confirm", { text: wrapped("confirmed", "Literal") }), compensation: null }
+          ]
+        }
+      }
+    };
+
+    const wireSteps = canonicalizeStateForWire(stateOf(scope)).rootActivity!.structure!.payload.steps as { name: string; activity: ActivityNode; compensation: ActivityNode | null }[];
+
+    expect(wireSteps.map(step => step.name)).toEqual(["Reserve", "Confirm"]);
+    expect(wireSteps[0].activity.inputs).toEqual([{ referenceKey: "text", value: { value: "reserved", expressionType: "Literal" } }]);
+    expect(wireSteps[0].compensation!.inputs).toEqual([{ referenceKey: "text", value: { value: "released", expressionType: "Literal" } }]);
+    expect(wireSteps[1].compensation).toBeNull();
+    expect("text" in wireSteps[0].activity).toBe(false);
+
+    const expanded = expandStateFromWire(canonicalizeStateForWire(stateOf(scope))).rootActivity!.structure!.payload.steps as { activity: Record<string, { expression: { value: unknown } }> }[];
+    expect(expanded[1].activity.text.expression.value).toBe("confirmed");
+  });
+
   it("carries the in-memory referenceKey onto the wire verbatim, whatever its shape", () => {
     const state = stateOf(writeLine("write-one", {
       "customer-id": wrapped("42", "Literal"),

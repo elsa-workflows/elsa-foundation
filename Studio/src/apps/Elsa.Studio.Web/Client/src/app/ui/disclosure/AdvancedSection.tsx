@@ -31,6 +31,10 @@ export function AdvancedSection({
 }: AdvancedSectionProps) {
   const [open, setOpen] = useDisclosureState(persistKey, defaultOpen, isDisclosureBoolean);
   const forced = isAdvancedSectionForced({ forceOpen, hasError, setCount, allowCollapseWhenSet });
+  const [revealedAfterForce, setRevealedAfterForce] = React.useState(false);
+  React.useEffect(() => {
+    if (forced) setRevealedAfterForce(true);
+  }, [forced]);
   const badge = setCount > 0
     ? <StatusPill tone={hasError ? "danger" : "accent"}>{setCount} set</StatusPill>
     : hasError ? <StatusPill tone="danger">Error</StatusPill> : null;
@@ -41,9 +45,12 @@ export function AdvancedSection({
       label={label}
       summary={summary}
       badge={badge}
-      open={open}
+      open={open || revealedAfterForce}
       forced={forced}
-      onOpenChange={setOpen}
+      onOpenChange={nextOpen => {
+        setRevealedAfterForce(false);
+        setOpen(nextOpen);
+      }}
     >
       {children}
     </DisclosureFold>

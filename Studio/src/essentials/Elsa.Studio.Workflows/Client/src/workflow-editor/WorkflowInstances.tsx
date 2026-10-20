@@ -2,7 +2,7 @@ import "./activityInspection.css";
 import { createCursorHistory, getPreviousCursor, moveCursorHistoryNext, moveCursorHistoryPrevious, reconcileCursorHistory } from "./cursorHistory";
 import { Component, lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { applyNodeChanges, ReactFlow, Background, Controls, MiniMap, type Edge, type Node, type NodeChange, type ReactFlowInstance } from "@xyflow/react";
-import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
+import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Undo2, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityInputDescriptor, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
 import { deleteWorkflowInstance, getActivityExecutionInspection, getExecutable, getExecutableInputSources, getWorkflowInstance, listWorkflowInstances, supportsActivityExecutionInspection, supportsWorkflowInstanceDeletion, supportsWorkflowInstanceHealthFilter, WorkflowInstanceHealthFilterUnavailableError, type WorkflowInstanceListPage } from "../api/runtime";
@@ -38,6 +38,9 @@ import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { nodeTypes, edgeTypes } from "./graph";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { ReadOnlyWorkflowSequence } from "./ReadOnlyWorkflowSequence";
+import { CompensationScopeDesigner } from "../graph-authoring/CompensationScopeDesigner";
+import { compensationStepsSlotId } from "../compensationScope";
+import { deriveCompensationRuntime, isCompensationHandlerExecution, type CompensationScopeRuntime } from "../compensationRuntime";
 import { buildBpmnCanvas, type BpmnNodeData } from "../bpmn/bpmnAdapter";
 import { CopyValueButton } from "./executableShared";
 import { useDialogFocus } from "./useDialogFocus";
@@ -1556,7 +1559,19 @@ function WorkflowInstanceCanvas({
           </div>
         ) : null}
         {definitionVersion && canvas.mode === "graph" && canvas.nodes.length === 0 ? <div className="wf-empty">No workflow activities are available for this executable.</div> : null}
-        {definitionVersion && canvas.mode === "sequence" ? (
+        {definitionVersion && canvas.mode === "compensation" && canvas.compensation ? (
+          <CompensationScopeDesigner
+            key={scopeKey}
+            owner={canvas.compensation.owner}
+            nodes={canvas.nodes}
+            selectedNodeId={null}
+            readOnly
+            runtime={canvas.compensation.runtime}
+            onSelect={nodeId => nodeId && onSelectActivity(nodeId)}
+            onSelectExecution={onSelectEvidence}
+            onOpenSlot={canvas.compensation.openSlot}
+          />
+        ) : definitionVersion && canvas.mode === "sequence" ? (
           <ReadOnlyWorkflowSequence
             key={scopeKey}
             nodes={canvas.nodes}
@@ -1662,7 +1677,12 @@ export function buildInstanceCanvas(
   onOpenIncident: (incidentId: string, nodeId?: string | null) => void = () => undefined,
   associationActivities: ActivityExecutionStateSummary[] = details.activities,
   executableGraph: ExecutableActivityGraph | null = null
-): { nodes: Node<WorkflowNodeData>[]; edges: Edge<WorkflowEdgeData>[]; mode: "sequence" | "graph" } {
+): {
+  nodes: Node<WorkflowNodeData>[];
+  edges: Edge<WorkflowEdgeData>[];
+  mode: "sequence" | "graph" | "compensation";
+  compensation?: { owner: ActivityNode; runtime: CompensationScopeRuntime; openSlot(ownerNodeId: string, ownerLabel: string, slot: ChildSlot): void };
+} {
   const root = definitionVersion?.state.rootActivity;
   if (!definitionVersion || !root) return { nodes: [], edges: [], mode: "graph" };
 
@@ -1711,6 +1731,22 @@ export function buildInstanceCanvas(
     applyRuntimeOverlays(readonlyNodes, associationActivities, Array.isArray(details.incidents) ? details.incidents : [], selectedEvidenceId, activityCatalog, executableGraph),
     baseCanvas.edges.map(edge => ({ ...edge, deletable: false }))
   );
+  if (support !== "unsupported" && scope?.slot.id === compensationStepsSlotId) {
+    return {
+      ...canvas,
+      mode: "compensation",
+      compensation: {
+        owner: scopeOwner,
+        runtime: deriveCompensationRuntime(scopeOwner, associationActivities, Array.isArray(details.incidents) ? details.incidents : [],
+          { complete: !details.activityNextContinuationToken, selectedActivityExecutionId: selectedEvidenceId }),
+        openSlot: (ownerNodeId, ownerLabel, slot) => {
+          const plan = planSlotNavigation(frames, scopeOwner, ownerNodeId, slot, slotCrumbLabel(ownerLabel, slot), activityCatalog);
+          if (plan) onNavigateToScope(plan.frames);
+        }
+      }
+    };
+  }
+
   return {
     ...canvas,
     mode: support !== "unsupported" && scope?.slot.mode === "sequence" && scope.slot.cardinality === "many"
@@ -1945,6 +1981,7 @@ function WorkflowInstanceInspector({
                   executableNodeFacts={findExecutableNodeFacts(executableGraph, selectedActivity)}
                   expressionEditors={expressionEditors}
                   focusInputKey={focusInputKey}
+                  onSelectEvidence={openActivityEvidence}
                 />
               ) : activeTab === "issues" ? (
                 <>
@@ -2131,13 +2168,31 @@ function resolveReportedCount(count: number | null | undefined, legacyIds: reado
   return count !== undefined ? count : Array.isArray(legacyIds) ? legacyIds.length : null;
 }
 
+// A compensation handler occurrence names the forward occurrence it undid, linked so the operator can go to it.
+function CompensatesRow({ forwardActivityExecutionId, stepName, onSelectEvidence }: {
+  forwardActivityExecutionId: string;
+  stepName?: string;
+  onSelectEvidence?(evidenceId: string): void;
+}) {
+  const target = stepName ? `${stepName} (occurrence ${forwardActivityExecutionId})` : `occurrence ${forwardActivityExecutionId}`;
+  return (
+    <p className="wf-activity-compensates">
+      <Undo2 size={14} aria-hidden="true" /> <span>Compensation · Compensates </span>
+      {onSelectEvidence ? (
+        <button type="button" className="wf-activity-compensates-link" onClick={() => onSelectEvidence(forwardActivityExecutionId)}>{target}</button>
+      ) : <code>{target}</code>}
+    </p>
+  );
+}
+
 export function WorkflowActivityExecutionDetails({
   context,
   activity,
   activityCatalog,
   executableNodeFacts,
   expressionEditors = [],
-  focusInputKey = null
+  focusInputKey = null,
+  onSelectEvidence
 }: {
   context: StudioEndpointContext;
   activity: ActivityExecutionStateSummary | null;
@@ -2145,6 +2200,7 @@ export function WorkflowActivityExecutionDetails({
   executableNodeFacts?: ExecutableGraphNodeFacts;
   expressionEditors?: StudioExpressionEditorContribution[];
   focusInputKey?: string | null;
+  onSelectEvidence?(evidenceId: string): void;
 }) {
   const selectedActivityExecutionId = activity?.activityExecutionId ?? null;
   const selectedWorkflowExecutionId = activity?.workflowExecutionId ?? null;
@@ -2293,6 +2349,14 @@ export function WorkflowActivityExecutionDetails({
           <ActivityMetadataValue label="Duration" value={durationLabel} copiedLabel="duration" onCopied={markCopied} onCopyFailed={markCopyFailed} />
           <ActivityMetadataValue label="Incidents" value={incidentCount == null ? "Unavailable" : String(incidentCount)} copiedLabel="incident count" onCopied={markCopied} onCopyFailed={markCopyFailed} />
         </dl>
+
+        {isCompensationHandlerExecution(activity) && activity.provenance?.schedulingActivityExecutionId ? (
+          <CompensatesRow
+            forwardActivityExecutionId={activity.provenance.schedulingActivityExecutionId}
+            stepName={currentInspectionState.status === "ready" ? currentInspectionState.inspection?.provenance?.metadata?.["compensation.step"] : undefined}
+            onSelectEvidence={onSelectEvidence}
+          />
+        ) : null}
 
         {copyStatus ? <p className="wf-copy-status" role="status" aria-live="polite">{copyStatus}</p> : null}
       </section>
