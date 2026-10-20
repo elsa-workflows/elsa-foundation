@@ -479,3 +479,8 @@ Essentials/apps/Elsa.Workbench/shells.Development.json
 
 # Nuplane lock file the Workbench generates on startup (ADR 0079, Generate mode)
 Essentials/apps/Elsa.Workbench/nuplane.lock.json
+
+# Speckit active-feature pointer: per-checkout working state written by speckit-specify, never shared.
+# Committing it made every pair of concurrent spec PRs conflict on one line.
+.specify/feature.json
+Studio/.specify/feature.json
