@@ -53,6 +53,26 @@ The 36 JTest definitions (not committed) were measured with a throwaway harness,
 JavaScript. Part 2 refuses nothing in the corpus today; it is a guard for workflows outside it. The trailing-comment
 case is a third gap of the same kind (converts, then cannot run) and is covered by User Story 4.
 
+## Clarifications
+
+### Session 2026-10-20
+
+- Q: Refuse an assignment to an undeclared name, or lower it by hoisting `let name;`? → A: Refuse. The corpus has no
+  use, and hoisting is not faithful when the name is read before its first assignment (Elsa 3 throws a ReferenceError,
+  the hoisted form returns `null`).
+- Q: Refuse `this` outside a method and writes through `arguments`, or leave both as run-time failures? → A: Refuse
+  what a static check proves: `this` at the top level (outside every non-arrow function), and a write that relies on
+  `arguments` aliasing (a write to `arguments[…]`, or to a parameter in a function that reads `arguments`). `this`
+  inside a function stays a documented difference, because whether it is called as a method is not static.
+- Q: `{ discount: undefined }` loses the key in Elsa 4 where Elsa 3 kept it as `null`: document it, or file an Elsa 4
+  issue? → A: Both. The Mapping README documents it in this unit; an Elsa 4 materializer issue is drafted, shown to the
+  maintainer, and filed as `needs-triage` only after approval.
+- Q: Must tests prove that a `null` bound to a typed, non-nullable input behaves as in Elsa 3? → A: No tests in this
+  unit. The plan's research records how Elsa 3 and Elsa 4 treat it; a difference becomes its own issue (shown to the
+  maintainer first), because it applies to every `null` binding, not only to this rewrite.
+- Q: File Elsa 4's one-line script wrapper (a trailing line comment breaks it) as its own issue? → A: Yes. Draft it,
+  show it to the maintainer, and file it as `needs-triage` after approval. FR-011 stays the converter-side guard.
+
 ## User Scenarios & Testing *(mandatory)*
 
 The actor is a workflow author or operator who converts Elsa 3 workflow definitions (JSON) to Elsa 4, through the
@@ -103,6 +123,9 @@ with the strict-mode diagnostic. Convert sources that are valid in both modes; t
 1. **Given** an expression or script that uses `with`, a legacy octal literal or escape, duplicate parameter names, `delete` of a plain name, or a strict-mode reserved word as a name, **When** it is converted, **Then** the definition is refused with the strict-mode diagnostic, whose message names the parser's reason and whose guidance says what to change in the Elsa 3 workflow.
 2. **Given** a source that parses in both modes, **When** it is converted, **Then** the result is the same as before this feature.
 3. **Given** a source that does not parse even in sloppy mode, **When** it is converted, **Then** the existing parse refusal is reported, not the strict-mode one.
+4. **Given** `this` outside every non-arrow function (top-level `this`, including inside a top-level arrow function), **When** it is converted, **Then** the definition is refused with guidance to read the value through a variable or input instead.
+5. **Given** a function that reads `arguments` and writes to `arguments[…]` or to one of its parameters, **When** it is converted, **Then** the definition is refused with guidance to copy the value into a local `let` instead.
+6. **Given** `this` inside a non-arrow function, or `arguments` that is only read, **When** it is converted, **Then** it converts; the README documents that `this` in a plainly called function is the Elsa 3 global object in Elsa 3 and `undefined` in Elsa 4.
 
 ---
 
@@ -174,10 +197,12 @@ runs it with the same result as without the comment.
 - **FR-006**: The converter MUST refuse an assignment, compound assignment, update, destructuring assignment or `for … in`/`for … of` head that writes to a name not declared in any enclosing scope of the source, with a stable diagnostic that names the variable and gives the guidance "declare it with `let`" in Elsa 3 terms. Expression and Script mode are both covered.
 - **FR-007**: The converter MUST NOT change Elsa 4's evaluators, the binding grammar, or the `undefined` rule of ADR 0083.
 - **FR-008**: Every behaviour of FR-001 MUST be proven by an equivalence test that evaluates the converted expression in the real Elsa 4 evaluator: a missing property, a function that falls through, `void x`, `a || b`, a comma expression, an explicit `null`, and the falsy values `0`, `""` and `false`.
-- **FR-009**: Every construct of FR-005 and FR-006 MUST have a refusal test, and every declared counterpart of FR-006 a conversion test.
-- **FR-010**: The Mapping README's migration story MUST move the two differences from "known differences that convert without a diagnostic" into the "what converts" and "what is refused" tables in the same unit.
+- **FR-009**: Every construct of FR-005, FR-006 and FR-013 MUST have a refusal test, and every counterpart that still converts (a declared name, `this` in a function, read-only `arguments`) a conversion test.
+- **FR-010**: The Mapping README's migration story MUST move the two differences from "known differences that convert without a diagnostic" into the "what converts" and "what is refused" tables in the same unit, and MUST keep two remaining differences documented: `this` in a plainly called function, and an `undefined` value nested in an object result (the key is dropped in Elsa 4, kept as `null` in Elsa 3).
 - **FR-011**: A converted RunJavaScript body MUST end so that a trailing line comment cannot swallow the end of Elsa 4's script wrapper (for example, by ending with a newline).
 - **FR-012**: The JTest corpus MUST be measured before and after with the spec 247/248 method, and the results recorded in this spec.
+- **FR-013**: The converter MUST refuse `this` outside every non-arrow function, and a write to `arguments[…]` or to a parameter inside a function that reads `arguments`, with a stable diagnostic and guidance in Elsa 3 terms. `this` inside a non-arrow function and read-only `arguments` MUST still convert.
+- **FR-014**: Two Elsa 4 issues MUST be drafted and shown to the maintainer, and filed as `needs-triage` only after approval: the nested-`undefined` difference (the README links it once filed), and the script wrapper that a trailing line comment breaks.
 
 ### Key Entities
 
@@ -189,7 +214,7 @@ runs it with the same result as without the comment.
 ### Measurable Outcomes
 
 - **SC-001**: Every converted expression in the FR-008 equivalence set gives Elsa 3's result when evaluated in Elsa 4; none fails with the `undefined` error.
-- **SC-002**: Every sloppy-only construct in User Story 2 and every undeclared-assignment shape in User Story 3 is refused at conversion; none converts and then fails at run time.
+- **SC-002**: Every sloppy-only construct and provable `this`/`arguments` case in User Story 2, and every undeclared-assignment shape in User Story 3, is refused at conversion; none converts and then fails at run time.
 - **SC-003**: The existing Elsa 3 Mapping test suite stays green, and the definitions that convert end to end in the JTest corpus today still convert.
 - **SC-004**: The JTest before and after numbers are recorded in this spec, including how many corpus sources each new refusal affects.
 - **SC-005**: Measured again with the baseline method: the 16 corpus expressions that fail with the `undefined` error today give `null` instead, the 2 corpus scripts ending in a line comment parse and run, and no corpus source that rewrites today is newly refused (the corpus has no strict-mode hazard).
@@ -198,21 +223,14 @@ runs it with the same result as without the comment.
 
 - `null` and `undefined` cannot be told apart in a converted expression's result: the result is stored as JSON, which
   has no `undefined`, and Elsa 3's `ToObject()` returned `null`. This is why FR-001 is faithful. It is about the
-  top-level result only; `undefined` nested inside an object or array is open question 3.
+  top-level result only; `undefined` nested inside an object or array is a documented
+  difference (Clarifications, FR-010).
+- How a `null` result reaches a typed, non-nullable input is not changed or tested by this unit; plan research records
+  the Elsa 3 and Elsa 4 behaviour.
 - Elsa 3 (3.5, the corpus's tool version) ran JavaScript in sloppy mode with top-level `return` allowed.
 - Diagnostics reuse the existing `VF-IMP-*` codes; no code is added, removed or renamed (to be confirmed in planning).
 - Elsa 4's one-line script wrapper breaks for any RunJavaScript body that ends in a line comment, not only converted
-  ones. Fixing the wrapper is an Elsa 4 change and out of scope; FR-011 only keeps converted scripts clear of it. Whether
-  to file the wrapper as its own issue is raised during clarification.
+  ones. Fixing the wrapper is an Elsa 4 change and out of scope; FR-011 only keeps converted scripts clear of it, and
+  the wrapper gets its own issue (FR-014).
 - Out of scope: Elsa 4 changes of any kind; emulating sloppy mode; the time and unique-value capability (#3026); spec
   235's JTest suite conversion.
-
-## Open questions for the maintainer
-
-Carried from the triage comment for `/speckit-clarify`.
-
-1. Lower an undeclared assignment by hoisting `let total;` instead of refusing it?
-2. Refuse `this` outside a method, and writes through `arguments`, or leave both as run-time failures?
-3. `{ discount: undefined }` loses the key in Elsa 4's JSON result where Elsa 3 kept it as `null`: document in the
-   Mapping README, or file as its own Elsa 4 issue?
-4. Must the tests check that a `null` binding into a typed, non-nullable input behaves as it did in Elsa 3?

@@ -34,6 +34,5 @@
 - The users are migrators who write JavaScript, so JavaScript constructs (`?? null`, `with`, `let`) are the domain
   language here, not implementation detail. The same holds for the stable `VF-IMP-*` diagnostic codes, as in specs 247
   and 248. Code structure, class names and the rewrite mechanism are left to the plan.
-- The four triage open questions are listed in the spec's "Open questions for the maintainer" section on purpose,
-  not as `[NEEDS CLARIFICATION]` markers: the maintainer asked for them at `/speckit-clarify`, each with a
-  recommendation.
+- The four triage open questions, plus the Elsa 4 script-wrapper question, were answered at `/speckit-clarify`
+  (2026-10-20) and recorded under Clarifications.
