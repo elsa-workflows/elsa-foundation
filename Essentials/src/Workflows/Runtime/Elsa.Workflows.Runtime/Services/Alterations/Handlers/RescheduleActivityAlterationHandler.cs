@@ -103,7 +103,7 @@ public sealed class RescheduleActivityAlterationHandler(
 
     // A parent that already evaluated the source's fault may have stopped tracking the child (a BPMN error boundary or
     // late-fault guard drops it), and the runtime cannot tell whether it still expects an outcome. Until that is
-    // decided (#3135), the successor keeps the source's parent-completion marker, so its outcome is not delivered.
+    // decided (#3135), the successor keeps the source's parent-completion marker, so its completion is not delivered.
     private static Dictionary<string, string> NewMetadata(ActivityExecutionState source)
     {
         var metadata = ActivitySuccessorStaging.SuccessorMetadata(source.Metadata, source.Execution.ActivityExecutionId);

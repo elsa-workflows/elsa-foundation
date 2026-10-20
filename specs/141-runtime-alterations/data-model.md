@@ -268,10 +268,12 @@ The source transitions to `Superseded`; the replacement retains pinned inputs an
 It is a fresh invocation: it keeps the source's metadata except the per-invocation runtime markers
 (activation claims, the attempt-ordinal watermark, parent-outcome and descendant-fault markers,
 background work id, incident, fault and causation metadata). It keeps the scheduling metadata the
-parent gave the source, and its schedule command carries that metadata, so the parent receives and
-routes its outcome as a new child outcome. A source whose fault its parent already evaluated passes on
-its parent-completion marker, so that parent is not told of the successor's outcome; whether it should
-be is open in #3135.
+parent gave the source in its provenance, and its schedule command carries that metadata, so a parent
+that routes on it recognises the successor's outcome. Routing data a parent kept only in the child's
+command metadata (for example `bpmn.tokenId`) is not durable and is lost, so such a parent resolves the
+successor as it resolves a resumed child. A source whose fault its parent already evaluated passes on
+its parent-completion marker, so the successor's completion is not delivered to that parent; whether it
+should be is open in #3135.
 
 ### Migrate/1
 
