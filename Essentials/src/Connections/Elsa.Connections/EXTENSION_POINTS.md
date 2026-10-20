@@ -10,7 +10,11 @@ Use `services.AddConnections()` to register defaults, then replace these service
 - `IConnectionRepository` for durable persistence. Phase 1 ships `InMemoryConnectionRepository` only:
   restarting the host drops connection definitions. Owned secrets (`connection:<name>:<field>`) stay
   in the encrypted secret store, so a published workflow that still names the connection faults until
-  the definition is created again. A Groundwork repository on the Secrets provider matrix is deferred.
+  the definition is created again. An EF Core repository is tracked in #2854. A replacement must keep
+  the compare-and-swap contract on `SaveAsync`: it saves only when the stored `State.Version` equals
+  the document's and then increments it; otherwise, including after a delete, it throws
+  `ConnectionConflictException` and writes nothing. Derive the replacement's tests from
+  `ConnectionRepositoryContractTests` in `Essentials/tests/Connections/Tests/`.
 - `IConnectionManager` for lifecycle.
 - `IConnectionResolver` for point-of-use resolution.
 - `IConnectionGrantWriter` for compare-and-swap grant writes (expected secret version).
