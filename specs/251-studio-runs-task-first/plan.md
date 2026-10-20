@@ -103,15 +103,18 @@ Studio/docs/ux/design-spec.md
 **Command references** (run each group from the indicated directory):
 ```sh
 # From Studio/src/apps/Elsa.Studio.Web/Client
-pnpm test -- src/app/ui/disclosure/__tests__/disclosure.test.tsx
-pnpm test
+pnpm exec vitest run src/app/ui/disclosure/__tests__/disclosure.test.tsx
+pnpm exec vitest run
+
+# From Studio/src/essentials/Elsa.Studio.Workflows/Client
+pnpm exec vitest run src/__tests__/RunWorkflowPicker.test.tsx src/__tests__/workflowRunHistory.test.tsx src/__tests__/workflowInstances.test.tsx src/__tests__/WorkflowInstanceDetailsLayout.test.tsx
 
 # From Studio/
 pnpm --filter @elsa-workflows/studio-ui build
 pnpm --filter @elsa-workflows/studio-workflows test
 pnpm --filter @elsa-workflows/studio-workflows typecheck
 pnpm --filter @elsa-workflows/studio-workflows build
-pnpm test:browser -- tests/browser/golden-runs.spec.ts
+pnpm exec playwright test tests/browser/golden-runs.spec.ts
 pnpm lint:css
 pnpm lint:layout
 

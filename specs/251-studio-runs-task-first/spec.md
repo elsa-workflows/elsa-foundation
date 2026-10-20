@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/codex/3062-runs-golden-path`
 **Created**: 2026-10-20
-**Status**: In progress
+**Status**: Implemented
 **Issue**: #3062
 **Program**: Epic #3057 · Program #2559 · Phase 2
 **Input**: User description from #3062: “Make Runs a task-first triage list with progressive filters.”

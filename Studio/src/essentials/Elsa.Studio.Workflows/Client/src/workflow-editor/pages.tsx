@@ -153,6 +153,7 @@ export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [
 }) {
   const workflowExecutionId = readWorkflowExecutionIdFromUrl();
   const searchParams = new URLSearchParams(window.location.search);
+  const initialReturnTo = searchParams.get("returnTo");
   const initialActivityExecutionId = searchParams.get("activityExecutionId")?.trim() || null;
   const requestedInspectorTab = searchParams.get("tab");
   const initialInspectorTab = requestedInspectorTab === "issues"
@@ -177,7 +178,7 @@ export function WorkflowInstanceDetailsPage({ context, ai, expressionEditors = [
       ) : null}
     >
       <WorkflowLazyBoundary label="workflow run">
-        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} expressionEditors={expressionEditors} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} navigate={navigate} />
+        <WorkflowInstanceDetailsWorkbench context={context} ai={ai} expressionEditors={expressionEditors} workflowExecutionId={workflowExecutionId} initialActivityExecutionId={initialActivityExecutionId} initialInspectorTab={initialInspectorTab} initialReturnTo={initialReturnTo} navigate={navigate} />
       </WorkflowLazyBoundary>
     </WorkflowsPageFrame>
   );

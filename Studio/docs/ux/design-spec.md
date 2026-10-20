@@ -61,7 +61,8 @@ code.
 | Bottom dock errors | `target, phase 2` | A status dot on the collapsed dock signals new errors. |
 | Page | `exists` | Content sits on the page surface. No wrapping card around a whole page. |
 | Page header | `target, phase 1` | Eyebrow, title, one-line description, actions. One `primary` button (see Principles). |
-| Lists | `target, phase 2` | A single filter row (search + segmented status + "More filters"), then the grid, then the pager. Filters apply live. |
+| Lists | `target, phase 2` | A single filter row (search + primary controls + "More filters"), then the grid, then the pager. Primary controls apply live; advanced criteria apply together on explicit Apply and remain visible as removable applied chips outside the disclosure. |
+| Runs | `exists` for the reference implementation | Workflow names lead, with exact copyable IDs available beside them. Bulk actions appear only after row selection and preserve the host's existing permission gates. Detail navigation returns to a validated local list query, including page size and cursor. Loading, empty, unsupported and request-error states stay distinct; failed requests offer Retry. |
 | Designer | `exists` | Palette / canvas / inspector. |
 | Designer tabs | `exists` for inspector / Runtime / Artifacts panel tabs (wrap + `title`, no ellipsis); remaining collapse-to-icon is `target, phase 1` | Tab labels never truncate. The inspector panel tabs wrap and keep a `title` plus keyboard access. Below the width they need they should collapse to icon + tooltip. |
 | Designer header | `exists` | Save, Review & publish and Run are all visible. None uses `StudioButton`. Run is the filled action (`.wf-run-button` uses `--studio-accent`). Review & publish is outlined (`.wf-review-button`). |
@@ -81,7 +82,7 @@ code.
 | Feedback | `exists` (primitives) / `target, phase 2` (rich pattern) | `EmptyState`, `SkeletonRows` and `StudioAlert` exist. The richer pattern — icon, title, one-line hint, optional action — is the phase 2 target. |
 | Overlays | `target, phase 3` | Popovers and dialogs animate in (fade + 4px slide/scale, ≤ 150ms) and honour `prefers-reduced-motion`. |
 | Icons | `exists` | lucide, 16px in controls, 20px in nodes and tiles. |
-| Disclosure kit | `exists` | `ui/disclosure/*`: `AddOption`, `RevealToggle`, `AdvancedSection`, `TechnicalDetails`, `OverflowMenu`, `ExpressionToggle`, `PeerViewSwitch`. Shared `persistKey` / `forceOpen`. A non-default, bound or invalid field is never hidden. Motion ≤ 150ms via `--studio-disclosure-duration`, honours `prefers-reduced-motion`. Keyboard + `aria-expanded` / `aria-controls`. Fixture at `/dev/disclosure` in dev builds only (`import.meta.env.DEV`) and `tests/browser/disclosure.html`. Not adopted on inspector, settings or other surfaces yet. |
+| Disclosure kit | `exists` | `ui/disclosure/*`: `AddOption`, `RevealToggle`, `AdvancedSection`, `TechnicalDetails`, `OverflowMenu`, `ExpressionToggle`, `PeerViewSwitch`. Shared `persistKey` / `forceOpen`. A non-default, bound or invalid field is never hidden. Runs opts into `AdvancedSection.allowCollapseWhenSet` only because its applied criteria stay visible as chips outside the disclosure; validation errors and explicit force-open still win. This exception does not change other forms. Motion ≤ 150ms via `--studio-disclosure-duration`, honours `prefers-reduced-motion`. Keyboard + `aria-expanded` / `aria-controls`. Fixture at `/dev/disclosure` in dev builds only (`import.meta.env.DEV`) and `tests/browser/disclosure.html`. Not adopted on inspector, settings or other surfaces yet. |
 
 ## Appearance
 

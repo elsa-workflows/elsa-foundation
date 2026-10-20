@@ -277,6 +277,48 @@ describe("AdvancedSection", () => {
     expect(host.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true");
     expect(host.textContent).toContain("Broken retry");
   });
+
+  it("allows an opted-in set section to collapse without unmounting its draft inputs", () => {
+    const host = mount(
+      <AdvancedSection label="More filters" setCount={2} defaultOpen allowCollapseWhenSet>
+        <input aria-label="Unapplied artifact" defaultValue="draft-artifact" />
+      </AdvancedSection>
+    );
+    const trigger = host.querySelector<HTMLButtonElement>(".studio-disclosure-fold-trigger")!;
+    const field = host.querySelector<HTMLInputElement>("input[aria-label='Unapplied artifact']")!;
+    const hiddenBody = host.querySelector<HTMLElement>("[id='" + trigger.getAttribute("aria-controls") + "']")!;
+
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(host.textContent).toContain("2 set");
+    field.value = "unfinished draft";
+    flushSync(() => trigger.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(hiddenBody.hasAttribute("hidden")).toBe(true);
+    expect(host.querySelector("input[aria-label='Unapplied artifact']")).toBe(field);
+    expect(field.value).toBe("unfinished draft");
+    expect(host.textContent).toContain("2 set");
+
+    flushSync(() => trigger.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(field.value).toBe("unfinished draft");
+  });
+
+  it("keeps errors and explicit force-open authoritative with opt-in collapse", () => {
+    for (const props of [{ setCount: 1, forceOpen: true }, { hasError: true }]) {
+      const host = mount(
+        <AdvancedSection label="More filters" allowCollapseWhenSet {...props}>
+          <span>Visible state</span>
+        </AdvancedSection>
+      );
+      const trigger = host.querySelector<HTMLButtonElement>(".studio-disclosure-fold-trigger")!;
+      expect(trigger.getAttribute("aria-expanded")).toBe("true");
+      flushSync(() => trigger.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+      expect(trigger.getAttribute("aria-expanded")).toBe("true");
+      cleanup?.();
+      cleanup = null;
+    }
+  });
 });
 
 describe("TechnicalDetails", () => {

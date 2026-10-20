@@ -13,8 +13,8 @@ import {
 
 vi.mock("../workflow-editor/WorkflowInstances", () => ({
   WorkflowInstances: () => <div>Runs list</div>,
-  WorkflowInstanceDetailsWorkbench: ({ initialInspectorTab, initialActivityExecutionId }: { initialInspectorTab?: string; initialActivityExecutionId?: string | null }) =>
-    <div data-initial-inspector-tab={initialInspectorTab} data-initial-activity-execution-id={initialActivityExecutionId ?? ""}>Run workbench</div>
+  WorkflowInstanceDetailsWorkbench: ({ initialInspectorTab, initialActivityExecutionId, initialReturnTo }: { initialInspectorTab?: string; initialActivityExecutionId?: string | null; initialReturnTo?: string | null }) =>
+    <div data-initial-inspector-tab={initialInspectorTab} data-initial-activity-execution-id={initialActivityExecutionId ?? ""} data-initial-return-to={initialReturnTo ?? ""}>Run workbench</div>
 }));
 
 let container: HTMLDivElement;
@@ -156,6 +156,22 @@ describe("Run detail page layout", () => {
     ));
 
     await vi.waitFor(() => expect(container.querySelector("[data-initial-inspector-tab]")?.getAttribute("data-initial-inspector-tab")).toBe("activity"));
+    expect(container.querySelector("[data-initial-activity-execution-id]")?.getAttribute("data-initial-activity-execution-id")).toBe("outer-execution");
+  });
+
+  it("preserves return context alongside an initial detail tab and activity selection", async () => {
+    const returnTo = "/workflows/instances?status=Running&pageSize=10&cursor=page-two";
+    window.history.replaceState({}, "", `/workflows/instances/run-1?tab=activity&activityExecutionId=outer-execution&returnTo=${encodeURIComponent(returnTo)}`);
+    flushSync(() => root.render(
+      <WorkflowInstanceDetailsPage
+        context={{} as StudioEndpointContext}
+        ai={{} as StudioAiContributionApi}
+        navigate={() => {}}
+      />
+    ));
+
+    await vi.waitFor(() => expect(container.querySelector("[data-initial-return-to]")?.getAttribute("data-initial-return-to")).toBe(returnTo));
+    expect(container.querySelector("[data-initial-inspector-tab]")?.getAttribute("data-initial-inspector-tab")).toBe("activity");
     expect(container.querySelector("[data-initial-activity-execution-id]")?.getAttribute("data-initial-activity-execution-id")).toBe("outer-execution");
   });
 });

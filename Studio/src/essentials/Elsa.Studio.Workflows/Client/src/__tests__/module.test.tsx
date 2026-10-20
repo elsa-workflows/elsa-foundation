@@ -3168,16 +3168,19 @@ describe("workflows module", () => {
     const { container, unmount } = await renderRegisteredRoute("/workflows/instances");
 
     await waitForText(container, "wfexec-1");
-    const definitionCell = () => container.querySelector(".wf-identity-cell");
-    expect(definitionCell()?.querySelector("strong")?.textContent).toBe("definition-1");
-    expect(definitionCell()?.querySelector("small")?.textContent).toBe("version-1");
-    expect(definitionCell()?.getAttribute("title")).toBe("definition-1 (version-1)");
+    const expectRunIdentity = (name: string) => {
+      const row = container.querySelector(".wf-grid-row");
+      expect(row?.querySelector('[aria-label="Inspect workflow run wfexec-1"] strong')?.textContent).toBe(name);
+      for (const [label, value] of [["Execution ID", "wfexec-1"], ["Definition ID", "definition-1"], ["Definition version ID", "version-1"]]) {
+        expect(row?.querySelector(`.studio-copyable-identifier__value[aria-label="${label}: ${value}"]`)?.getAttribute("title")).toBe(value);
+        expect([...row?.querySelectorAll("button") ?? []].some(button => button.getAttribute("aria-label") === `Copy ${label}`)).toBe(true);
+      }
+    };
+    expectRunIdentity("definition-1");
 
     resolveDefinitions(response({ items: [definition({ id: "definition-1", name: "Order fulfillment" })] }));
     await waitForText(container, "Order fulfillment");
-    expect(definitionCell()?.querySelector("strong")?.textContent).toBe("Order fulfillment");
-    expect(definitionCell()?.querySelector("small")?.textContent).toBe("definition-1 · version-1");
-    expect(definitionCell()?.getAttribute("title")).toBe("Order fulfillment (definition-1 · version-1)");
+    expectRunIdentity("Order fulfillment");
 
     await unmount();
   });
