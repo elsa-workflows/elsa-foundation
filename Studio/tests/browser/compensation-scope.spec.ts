@@ -94,7 +94,7 @@ test("a completed inner scope shows confirmed and compensable-by steps as text a
 test("a repeated scope picks its occurrence by keyboard, and names a Compensate request and a cancelled occurrence", async ({ page }) => {
   await page.goto("/?mode=compensation-scope&view=loop&theme=light");
 
-  const picker = page.getByRole("combobox", { name: "Occurrence" });
+  const picker = page.getByRole("combobox", { name: "Occurrence", exact: true });
   await expect(picker).toHaveAccessibleDescription("This scope ran 2 times. Choose the occurrence to show.");
   await expect(picker).toHaveValue("ae-scope-2");
   await expect(page.locator(".wf-compensation-phase")).toContainText("Cancelled — nothing undone");
@@ -125,7 +125,7 @@ for (const theme of ["light", "dark"]) {
         expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
         if (view === "loop") {
           // The page clips rather than scrolls, so check the picker itself stays inside the viewport.
-          const picker = await page.getByRole("combobox", { name: "Occurrence" }).boundingBox();
+          const picker = await page.getByRole("combobox", { name: "Occurrence", exact: true }).boundingBox();
           expect(picker!.x + picker!.width).toBeLessThanOrEqual(width);
         }
         expect(await seriousViolations(page)).toEqual([]);

@@ -264,7 +264,7 @@ describe("CompensationScopeDesigner nesting states (spec 258)", () => {
     } });
 
     const picker = container.querySelector<HTMLSelectElement>(".wf-compensation-occurrence select")!;
-    expect(picker.closest("label")?.textContent).toContain("Occurrence");
+    expect([...picker.labels!].map(label => label.textContent)).toEqual(["Occurrence"]);
     expect(picker.value).toBe("ae-inner-2");
     expect([...picker.options].map(option => option.textContent)).toEqual(["Occurrence 1 · iteration it-1 · Completed", "Occurrence 2 · iteration it-2 · Running"]);
     expect(document.getElementById(picker.getAttribute("aria-describedby")!)?.textContent).toBe("This scope ran 2 times. Choose the occurrence to show.");

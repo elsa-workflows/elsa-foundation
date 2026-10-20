@@ -100,9 +100,10 @@ export function CompensationScopeDesigner({
           </span>
         ) : null}
         {runtime?.occurrences && onSelectExecution ? (
-          <label className="wf-compensation-occurrence">
-            <span>Occurrence</span>
+          <div className="wf-compensation-occurrence">
+            <label htmlFor={`${headingId}-occurrence`}>Occurrence</label>
             <select
+              id={`${headingId}-occurrence`}
               value={runtime.scopeActivityExecutionId ?? ""}
               aria-describedby={`${headingId}-occurrences`}
               onChange={event => onSelectExecution(event.target.value)}
@@ -116,7 +117,7 @@ export function CompensationScopeDesigner({
             <span id={`${headingId}-occurrences`} className="wf-visually-hidden">
               This scope ran {runtime.occurrences.length} times. Choose the occurrence to show.
             </span>
-          </label>
+          </div>
         ) : null}
       </header>
 
