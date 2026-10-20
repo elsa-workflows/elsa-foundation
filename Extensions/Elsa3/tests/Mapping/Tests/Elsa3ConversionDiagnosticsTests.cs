@@ -196,7 +196,7 @@ public sealed class Elsa3ConversionDiagnosticsTests
                 node.CustomProperties = new Elsa3ActivityCustomProperties { CanStartWorkflow = true };
                 break;
             case "output-not-representable":
-                node = Activity("node", "Elsa.Event", ("eventName", Literal("e")), ("result", Captured("payload")));
+                node = Activity("node", "Elsa.If", ("condition", Literal("true", "Boolean")), ("result", Captured("outcome")));
                 break;
             case "required-input-unbound":
                 node = Activity("node", "Elsa.PublishEvent");
