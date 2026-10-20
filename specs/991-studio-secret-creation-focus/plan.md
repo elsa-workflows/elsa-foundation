@@ -26,7 +26,7 @@ Reorder the existing Secrets Create dialog so Technical name, Type, and the requ
 
 **Constraints**: Presentation-only. Preserve existing requiredness, normalization, defaults, Store and Type switching, Scope matching, expiry conversion, request shape and optional-field omissions, entered text, error and focus behavior, Show/Hide and remasking. Keep empty-Store recovery directly reachable. Preserve the no-stored-value-read boundary and do not expose authored Value or Configuration key in summaries or fixture metadata. Do not add name-generation, validation policy, provider, SDK/backend change, or public contract.
 
-**Scale/Scope**: One existing Secret creation dialog, its focused unit tests, actual-styles browser fixture, and the direct dependency on the existing UI package. The new direct package typecheck also requires removing the obsolete ambient SDK copy and accurately typing four existing generic API test doubles; use the current workspace SDK without changing it. No new module or backend work.
+**Scale/Scope**: One existing Secret creation dialog, its focused unit tests, actual-styles browser fixture, and the direct dependency on the existing UI package. The new direct package typecheck also requires removing the obsolete ambient SDK copy and accurately typing four existing generic API test doubles and the module-registration fixture; use the current workspace SDK without changing it. Add the package typecheck script so existing workspace CI enforces this coverage. No new module or backend work.
 
 ## Constitution Check
 
@@ -62,7 +62,8 @@ Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/
 ├── src/studio-sdk.d.ts                               # remove obsolete ambient SDK copy
 └── src/__tests__/
     ├── secretDialogs.test.tsx                       # creation behavior regressions
-    └── secretsApi.test.ts                           # generic fixture typing for direct tsc
+    ├── secretsApi.test.ts                           # generic fixture typing for direct tsc
+    └── module.test.tsx                              # real SDK registry/API fixture
 
 Studio/
 ├── pnpm-lock.yaml                                    # Secrets importer only
@@ -88,7 +89,7 @@ Studio/
 
 1. Add an actual-host-styles browser assertion and run it RED at 1280×800 before changing production UI. It must measure the whole Value control inside the visible dialog body before any scrolling; run the matching Configuration-key path as well. Record the baseline geometry. Run the existing Secrets unit suite before production changes.
 2. Add focused unit regressions for ordering, safe generic count, manual collapse/reopen, Store/Type switching, advisory Scope failure, and preserved request behavior. Run the focused assertion RED where applicable.
-   After root approves the baselines, remove `src/studio-sdk.d.ts`, whose ambient declaration shadows the current workspace SDK, and accurately type the four existing generic HTTP mocks in `secretsApi.test.ts`. Do not add SDK exports, suppress diagnostics, or alter API behavior. Verify the compiler outcome before the layout edit.
+   After root approves the baselines, remove `src/studio-sdk.d.ts`, whose ambient declaration shadows the current workspace SDK, and accurately type the four existing generic HTTP mocks in `secretsApi.test.ts` plus the module fixture in `module.test.tsx`. Use real SDK constructors for registries and API collaborators; add the package `typecheck` script to the existing recursive CI gate. Do not add SDK exports, suppress diagnostics, or alter API behavior. Verify the compiler outcome before the layout edit.
 3. Reorder the existing dialog and use `AdvancedSection`. Declare the direct Studio UI workspace dependency in the Secrets Client. Keep any picker change bounded to associating the caller-rendered canonical hint while preserving `aria-describedby`, local descriptions/errors, and default caller behavior.
 4. Add only synthetic Configuration-store fixture coverage. Keep fixture reads metadata-only and assert that the authored source is absent from returned metadata. Update the tall-error browser case: Expires is now primary and visible, so scroll to a real below-fold optional field or long help while retaining body-scroll, fixed-action, error, and focus assertions.
 5. Run the planned focused and full affected checks, then root-owned visual and keyboard review on the final source head. Use current semantic readiness and real geometry; do not use arbitrary sleeps or relax assertions to obtain green results.
