@@ -404,10 +404,12 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     /// <remarks>
     /// Activates the agent on <see cref="Partition"/>, so this pairs with executions started by
     /// <see cref="StartPublishedAsync"/> (or dispatched beneath one). A run started by
-    /// <see cref="RunAsync(WorkflowExecutable)"/> carries no partition at all and is not what this targets.
+    /// <see cref="RunAsync(WorkflowExecutable)"/> carries no partition at all and is not what this targets. Pass the
+    /// <paramref name="partition"/> a run was started on when it is not <see cref="Partition"/>.
     /// </remarks>
-    public async Task CancelAsync(string workflowExecutionId)
+    public async Task CancelAsync(string workflowExecutionId, WorkflowExecutionPartition? partition = null)
     {
+        partition ??= Partition;
         var agent = await _provider.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(
             new WorkflowExecutionActorActivationRequest(
                 workflowExecutionId: workflowExecutionId,
@@ -415,7 +417,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
                 requestedAt: Now,
                 requestedBy: "activity-behavioural-drive",
                 requiredCapabilities: WorkflowExecutionActorCapabilities.None,
-                partition: Partition));
+                partition: partition));
 
         var command = new WorkflowExecutionCommand(
             CommandId: $"command-cancel-{workflowExecutionId}",
@@ -433,7 +435,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
             enqueuedAt: Now,
             metadata: new Dictionary<string, string>(),
-            partition: Partition));
+            partition: partition));
         if (dispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted)
             throw new InvalidOperationException($"Cancel command was not accepted (status: {dispatch.Status}). Reason: {dispatch.Reason}");
     }

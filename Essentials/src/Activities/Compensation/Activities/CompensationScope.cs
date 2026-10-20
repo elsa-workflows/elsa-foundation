@@ -392,6 +392,10 @@ public sealed class CompensationScope : StructuralActivity,
             requestedBy: request?.RequestingActivityExecutionId ?? notification.NotifyingChildActivityExecutionId,
             target: target);
 
+        // A step that is the Compensate itself has no effect and is already completing: nothing to journal or stop.
+        if (StringComparer.Ordinal.Equals(notification.NotifyingChildActivityExecutionId, notification.ViaChildActivityExecutionId))
+            return ScheduleNextHandlerOrFinish(runtimeContext, navigator, state with { Phase = CompensationScopePhase.Compensating, Cause = state.Cause ?? cause });
+
         // The step was running, so it may have had an effect: it is journaled uncertain, and undone when it has a handler.
         var entry = NewEntry(runtimeContext, state, stepIndex, step.Name, notification.ViaChildActivityExecutionId, forwardIterationId: null,
             CompensationEntryStatus.Uncertain, CompensationForwardOutcome.Uncertain);
