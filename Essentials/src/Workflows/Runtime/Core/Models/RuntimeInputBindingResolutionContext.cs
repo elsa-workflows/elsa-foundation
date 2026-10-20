@@ -13,7 +13,8 @@ public sealed class RuntimeInputBindingResolutionContext
         IReadOnlyDictionary<string, ValueEnvelope>? workflowInputEnvelopes = null,
         IReadOnlyDictionary<RuntimeVariableValueAddress, ValueEnvelope>? variableEnvelopes = null,
         IReadOnlyDictionary<string, ValueEnvelope>? visibleVariablesByName = null,
-        string? correlationId = null)
+        string? correlationId = null,
+        DateTimeOffset? evaluatedAt = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(activityExecutionId);
@@ -27,6 +28,7 @@ public sealed class RuntimeInputBindingResolutionContext
         VariableEnvelopes = SnapshotEnvelopes(variableEnvelopes);
         VisibleVariablesByName = SnapshotEnvelopes(visibleVariablesByName);
         CorrelationId = correlationId;
+        EvaluatedAt = evaluatedAt;
     }
 
     public string WorkflowExecutionId { get; }
@@ -51,6 +53,27 @@ public sealed class RuntimeInputBindingResolutionContext
     /// <c>WorkflowInstance</c> expression parameter binding. Null when the instance has none.
     /// </summary>
     public string? CorrelationId { get; }
+
+    /// <summary>
+    /// The instant these inputs are evaluated at, read by <c>Clock</c> and <c>UniqueId</c> expression parameter
+    /// bindings: the snapshot's materialization time, or the instant an intrinsic reads before evaluating (ADR 0088 D2).
+    /// Null when the producer supplies none; those bindings then fail instead of reading the clock.
+    /// </summary>
+    public DateTimeOffset? EvaluatedAt { get; }
+
+    /// <summary>Returns a copy of this context evaluated at <paramref name="evaluatedAt"/>.</summary>
+    public RuntimeInputBindingResolutionContext WithEvaluatedAt(DateTimeOffset evaluatedAt) =>
+        new(
+            WorkflowExecutionId,
+            ActivityExecutionId,
+            ConsumerInvocation,
+            RuntimeView,
+            Executable,
+            WorkflowInputEnvelopes,
+            VariableEnvelopes,
+            VisibleVariablesByName,
+            CorrelationId,
+            evaluatedAt);
 
     private static IReadOnlyDictionary<string, ValueEnvelope> SnapshotEnvelopes(
         IReadOnlyDictionary<string, ValueEnvelope>? values) =>

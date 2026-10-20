@@ -377,6 +377,88 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
     }
 
     [Fact]
+    public async Task Materialization_binds_every_clock_parameter_to_the_snapshot_materialization_time()
+    {
+        // ADR 0088 D1/D2: a Clock parameter reads the snapshot's own MaterializedAt, so the evaluated input and the
+        // snapshot agree and the commit that pins the snapshot pins the value. All Clock parameters share one instant.
+        var materializedAt = new DateTimeOffset(2026, 10, 20, 8, 30, 0, 123, TimeSpan.FromHours(2)).AddTicks(4567);
+        var snapshot = await MaterializeEvaluationInstantParametersAsync(
+            new Dictionary<string, ExpressionParameterBinding>
+            {
+                ["first"] = new ClockExpressionParameterBinding(),
+                ["second"] = new ClockExpressionParameterBinding()
+            },
+            materializedAt);
+
+        var values = snapshot.Values["customer-id"].InlineValue!.Value;
+        Assert.Equal("2026-10-20T06:30:00.123Z", values.GetProperty("first").GetString());
+        Assert.Equal(values.GetProperty("first").GetString(), values.GetProperty("second").GetString());
+        Assert.Equal(materializedAt, snapshot.MaterializedAt);
+    }
+
+    [Fact]
+    public async Task Materialization_binds_a_distinct_version_7_unique_id_to_every_unique_id_parameter()
+    {
+        var materializedAt = new DateTimeOffset(2026, 10, 20, 8, 30, 0, TimeSpan.Zero);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var round = 0; round < 500; round++)
+        {
+            var snapshot = await MaterializeEvaluationInstantParametersAsync(
+                new Dictionary<string, ExpressionParameterBinding>
+                {
+                    ["a"] = new UniqueIdExpressionParameterBinding(),
+                    ["b"] = new UniqueIdExpressionParameterBinding()
+                },
+                materializedAt);
+
+            foreach (var name in new[] { "a", "b" })
+            {
+                var value = snapshot.Values["customer-id"].InlineValue!.Value.GetProperty(name).GetString()!;
+                Assert.Matches("^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$", value);
+                Assert.True(seen.Add(value), $"UniqueId '{value}' was generated twice.");
+            }
+        }
+
+        Assert.Equal(1000, seen.Count);
+    }
+
+    [Fact]
+    public async Task Materialization_refuses_a_context_evaluated_at_another_instant_than_the_snapshot()
+    {
+        var binding = EvaluationInstantBinding(new Dictionary<string, ExpressionParameterBinding> { ["now"] = new ClockExpressionParameterBinding() });
+        var materializer = new RuntimeActivityInputMaterializer(_resolver, new TestTypeRegistry(), new EchoAllParametersPortableExpressionEvaluator());
+        var context = new RuntimeInputBindingResolutionContext("workflow-1", "consumer", evaluatedAt: DateTimeOffset.UnixEpoch.AddSeconds(1));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => materializer.MaterializeSnapshotAsync(
+            NewConsumerNode(binding, inputType: new ValueTypeDescriptor("Elsa.Any")),
+            "consumer",
+            context,
+            DateTimeOffset.UnixEpoch).AsTask());
+
+        Assert.Contains("is materialized at", exception.Message, StringComparison.Ordinal);
+    }
+
+    private async Task<ActivityInputSnapshot> MaterializeEvaluationInstantParametersAsync(
+        IReadOnlyDictionary<string, ExpressionParameterBinding> parameters,
+        DateTimeOffset materializedAt)
+    {
+        var materializer = new RuntimeActivityInputMaterializer(_resolver, new TestTypeRegistry(), new EchoAllParametersPortableExpressionEvaluator());
+        return await materializer.MaterializeSnapshotAsync(
+            NewConsumerNode(EvaluationInstantBinding(parameters), inputType: new ValueTypeDescriptor("Elsa.Any")),
+            "consumer",
+            new RuntimeInputBindingResolutionContext("workflow-1", "consumer"),
+            materializedAt);
+    }
+
+    private static RuntimeInputBinding EvaluationInstantBinding(IReadOnlyDictionary<string, ExpressionParameterBinding> parameters) =>
+        new(
+            "customer-id",
+            new ValueTypeDescriptor("Elsa.Any"),
+            ValueProtectionPolicy.InstanceInline,
+            RuntimeInputBindingSource.Expression,
+            expression: new RuntimeExpressionBinding("Test", "args", parameters: parameters));
+
+    [Fact]
     public async Task Materialization_refuses_an_expression_that_reads_a_withheld_ambient_variable()
     {
         var exception = await Assert.ThrowsAsync<WithheldValueException>(() =>
@@ -863,6 +945,12 @@ public sealed class CanonicalRuntimeInputBindingResolverTests
     {
         public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request) =>
             ValueTask.FromResult(JsonSerializer.SerializeToElement(new { value = request.ParameterValues[parameterName] }));
+    }
+
+    private sealed class EchoAllParametersPortableExpressionEvaluator : IPortableExpressionEvaluator
+    {
+        public ValueTask<JsonElement> EvaluateAsync(ExpressionEvaluationRequest request) =>
+            ValueTask.FromResult(JsonSerializer.SerializeToElement(request.ParameterValues));
     }
 
     private sealed class TestTypeRegistry : IWellKnownTypeRegistry

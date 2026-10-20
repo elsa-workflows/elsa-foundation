@@ -33,8 +33,8 @@ internal sealed class RuntimePortableExpressionEvaluator(
     {
         ArgumentNullException.ThrowIfNull(expression);
         ArgumentNullException.ThrowIfNull(ownerPolicy);
-        if (!StringComparer.Ordinal.Equals(expression.CapabilityProfile, ExpressionCapabilityProfiles.BindingPureV1))
-            throw new InvalidOperationException($"Canonical expression input '{inputName}' on executable node '{nodeId}' requires capability profile '{ExpressionCapabilityProfiles.BindingPureV1}'.");
+        if (!ExpressionCapabilityProfiles.IsBindingPure(expression.CapabilityProfile))
+            throw new InvalidOperationException($"Canonical expression input '{inputName}' on executable node '{nodeId}' requires capability profile '{ExpressionCapabilityProfiles.BindingPureV1}' or '{ExpressionCapabilityProfiles.BindingPureV2}'.");
 
         var portableEvaluator = portableExpressionEvaluator
             ?? throw new InvalidOperationException($"Input '{inputName}' on executable node '{nodeId}' uses a portable '{expression.Language}' expression, but no '{nameof(IPortableExpressionEvaluator)}' is registered.");
@@ -180,6 +180,8 @@ internal sealed class RuntimePortableExpressionEvaluator(
                         new RuntimeVariableValueAddress(variable.DeclaringScopeNodeId, variable.VariableKey))?.Policy,
                 ActivityResultExpressionParameterBinding result => DetermineActivityResultPolicy(result, context, name, nodeId, inputName),
                 WorkflowInstanceExpressionParameterBinding => null,
+                ClockExpressionParameterBinding => null,
+                UniqueIdExpressionParameterBinding => null,
                 _ => null
             };
             if (parameterPolicy is null)
@@ -219,6 +221,28 @@ internal sealed class RuntimePortableExpressionEvaluator(
         _ => JsonSerializer.SerializeToElement(context.CorrelationId),
     };
 
+    /// <summary>
+    /// Clock and unique-ID values come from the instant the inputs are evaluated at, never a live clock read, so the
+    /// commit that pins the evaluated inputs also pins them (ADR 0088 D2).
+    /// </summary>
+    private static DateTimeOffset RequireEvaluatedAt(
+        ExpressionParameterBinding binding,
+        RuntimeInputBindingResolutionContext context,
+        string parameterName,
+        string nodeId,
+        string inputName) =>
+        context.EvaluatedAt
+        ?? throw new InvalidOperationException(
+            $"VF-EXP-CLOCK-001: Parameter '{parameterName}' on input '{inputName}' of executable node '{nodeId}' binds " +
+            $"'{(binding is ClockExpressionParameterBinding ? "Clock" : "UniqueId")}', but this evaluation has no evaluation instant.");
+
+    private static JsonElement ReadClockParameter(DateTimeOffset evaluatedAt) =>
+        JsonSerializer.SerializeToElement(
+            evaluatedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", System.Globalization.CultureInfo.InvariantCulture));
+
+    private static JsonElement ReadUniqueIdParameter(DateTimeOffset evaluatedAt) =>
+        JsonSerializer.SerializeToElement(Guid.CreateVersion7(evaluatedAt).ToString("D"));
+
     private async ValueTask<PortableExpressionParameters> MaterializeParametersAsync(
         RuntimeExpressionBinding expression,
         RuntimeInputBindingResolutionContext context,
@@ -237,6 +261,8 @@ internal sealed class RuntimePortableExpressionEvaluator(
                 VariableExpressionParameterBinding variable => await ReadVariableParameterAsync(variable, context, name, nodeId, inputName, cancellationToken),
                 ActivityResultExpressionParameterBinding result => await ReadActivityResultParameterAsync(result, context, name, nodeId, inputName, cancellationToken),
                 WorkflowInstanceExpressionParameterBinding instance => new PortableExpressionParameter(ReadWorkflowInstanceParameter(instance, context), null),
+                ClockExpressionParameterBinding => new PortableExpressionParameter(ReadClockParameter(RequireEvaluatedAt(binding, context, name, nodeId, inputName)), null),
+                UniqueIdExpressionParameterBinding => new PortableExpressionParameter(ReadUniqueIdParameter(RequireEvaluatedAt(binding, context, name, nodeId, inputName)), null),
                 _ => throw new InvalidOperationException($"Portable expression parameter '{name}' on input '{inputName}' uses unsupported binding type '{binding.GetType().Name}'.")
             };
             var materialized = ApplyParameterConversionPlan(expression, name, parameter, nodeId, inputName);

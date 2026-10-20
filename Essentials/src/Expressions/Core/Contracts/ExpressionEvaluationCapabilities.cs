@@ -8,8 +8,11 @@ namespace Elsa.Expressions.Core.Contracts;
 /// </summary>
 public sealed record ExpressionEvaluationCapabilities
 {
-    private static readonly ExpressionEvaluationCapabilities BindingPure = new(
+    private static readonly ExpressionEvaluationCapabilities BindingPureV1 = new(
         ExpressionCapabilityProfiles.BindingPureV1, true, false, false, false, false);
+
+    private static readonly ExpressionEvaluationCapabilities BindingPureV2 = new(
+        ExpressionCapabilityProfiles.BindingPureV2, true, false, false, false, false);
 
     private ExpressionEvaluationCapabilities(
         string profile,
@@ -44,8 +47,11 @@ public sealed record ExpressionEvaluationCapabilities
     public static ExpressionEvaluationCapabilities Resolve(string profile)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(profile);
-        return StringComparer.Ordinal.Equals(profile, ExpressionCapabilityProfiles.BindingPureV1)
-            ? BindingPure
-            : new ExpressionEvaluationCapabilities(profile, false, false, false, false, false);
+        return profile switch
+        {
+            ExpressionCapabilityProfiles.BindingPureV1 => BindingPureV1,
+            ExpressionCapabilityProfiles.BindingPureV2 => BindingPureV2,
+            _ => new ExpressionEvaluationCapabilities(profile, false, false, false, false, false)
+        };
     }
 }

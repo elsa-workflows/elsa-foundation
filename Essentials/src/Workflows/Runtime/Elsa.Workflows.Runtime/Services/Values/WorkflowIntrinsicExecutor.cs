@@ -606,7 +606,10 @@ public sealed class WorkflowIntrinsicExecutor(
             workflowInputEnvelopes: projections.WorkflowInputEnvelopes,
             variableEnvelopes: frameEnvelopes,
             visibleVariablesByName: RuntimeContainerScopeService.ProjectAmbientVisibleVariableEnvelopes(executable, visibleFrames),
-            correlationId: projections.CorrelationId);
+            correlationId: projections.CorrelationId,
+            // One instant per intrinsic evaluation for Clock and UniqueId parameters; the intrinsic's completion commit
+            // pins the result evaluated from it (ADR 0088 D2).
+            evaluatedAt: timeProvider.GetUtcNow());
         var resolved = inputBindingResolver.Resolve(binding, context);
         if (resolved.Source == RuntimeInputBindingSource.Expression)
         {

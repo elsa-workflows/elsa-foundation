@@ -109,6 +109,8 @@ public sealed class ExpressionDefinition : IEquatable<ExpressionDefinition>
 [JsonDerivedType(typeof(VariableExpressionParameterBinding), "Variable")]
 [JsonDerivedType(typeof(ActivityResultExpressionParameterBinding), "ActivityResult")]
 [JsonDerivedType(typeof(WorkflowInstanceExpressionParameterBinding), "WorkflowInstance")]
+[JsonDerivedType(typeof(ClockExpressionParameterBinding), "Clock")]
+[JsonDerivedType(typeof(UniqueIdExpressionParameterBinding), "UniqueId")]
 public abstract record ExpressionParameterBinding;
 
 public sealed record LiteralExpressionParameterBinding : ExpressionParameterBinding
@@ -199,9 +201,28 @@ public sealed record WorkflowInstanceExpressionParameterBinding : ExpressionPara
     }
 }
 
+/// <summary>
+/// Reads the instant at which the inputs containing this parameter were evaluated, as an ISO 8601 UTC string with
+/// millisecond precision. The value is pinned through the evaluated inputs. ADR 0088 D1 and D2.
+/// </summary>
+public sealed record ClockExpressionParameterBinding : ExpressionParameterBinding;
+
+/// <summary>
+/// Reads a new UUID version 7, as a lowercase hyphenated string. Each parameter gets its own value, pinned through the
+/// evaluated inputs. The value is unique and time-ordered, not secret. ADR 0088 D1 to D3.
+/// </summary>
+public sealed record UniqueIdExpressionParameterBinding : ExpressionParameterBinding;
+
 public static class ExpressionCapabilityProfiles
 {
     public const string BindingPureV1 = "binding-pure-v1";
+
+    /// <summary><see cref="BindingPureV1"/> plus a JavaScript <c>Date</c> that cannot read the clock (ADR 0088 D4).</summary>
+    public const string BindingPureV2 = "binding-pure-v2";
+
+    /// <summary>Whether <paramref name="profile"/> is one of the deterministic binding profiles.</summary>
+    public static bool IsBindingPure(string? profile) =>
+        StringComparer.Ordinal.Equals(profile, BindingPureV1) || StringComparer.Ordinal.Equals(profile, BindingPureV2);
 }
 
 /// <summary>A complete immutable parameter snapshot supplied to a pure evaluator.</summary>

@@ -682,3 +682,25 @@ override Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding
 override sealed Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.ExpressionParameterBinding? other) -> bool
 static Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.operator !=(Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? left, Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? right) -> bool
 static Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding.operator ==(Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? left, Elsa.Expressions.Core.Models.WorkflowInstanceExpressionParameterBinding? right) -> bool
+Elsa.Expressions.Core.Models.ClockExpressionParameterBinding
+Elsa.Expressions.Core.Models.ClockExpressionParameterBinding.ClockExpressionParameterBinding() -> void
+Elsa.Expressions.Core.Models.ClockExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.ClockExpressionParameterBinding? other) -> bool
+Elsa.Expressions.Core.Models.UniqueIdExpressionParameterBinding
+Elsa.Expressions.Core.Models.UniqueIdExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.UniqueIdExpressionParameterBinding? other) -> bool
+Elsa.Expressions.Core.Models.UniqueIdExpressionParameterBinding.UniqueIdExpressionParameterBinding() -> void
+const Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles.BindingPureV2 = "binding-pure-v2" -> string!
+override Elsa.Expressions.Core.Models.ClockExpressionParameterBinding.<Clone>$() -> Elsa.Expressions.Core.Models.ClockExpressionParameterBinding!
+override Elsa.Expressions.Core.Models.ClockExpressionParameterBinding.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.ClockExpressionParameterBinding.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.ClockExpressionParameterBinding.ToString() -> string!
+override Elsa.Expressions.Core.Models.UniqueIdExpressionParameterBinding.<Clone>$() -> Elsa.Expressions.Core.Models.UniqueIdExpressionParameterBinding!
+override Elsa.Expressions.Core.Models.UniqueIdExpressionParameterBinding.Equals(object? obj) -> bool
+override Elsa.Expressions.Core.Models.UniqueIdExpressionParameterBinding.GetHashCode() -> int
+override Elsa.Expressions.Core.Models.UniqueIdExpressionParameterBinding.ToString() -> string!
+override sealed Elsa.Expressions.Core.Models.ClockExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.ExpressionParameterBinding? other) -> bool
+override sealed Elsa.Expressions.Core.Models.UniqueIdExpressionParameterBinding.Equals(Elsa.Expressions.Core.Models.ExpressionParameterBinding? other) -> bool
+static Elsa.Expressions.Core.Models.ClockExpressionParameterBinding.operator !=(Elsa.Expressions.Core.Models.ClockExpressionParameterBinding? left, Elsa.Expressions.Core.Models.ClockExpressionParameterBinding? right) -> bool
+static Elsa.Expressions.Core.Models.ClockExpressionParameterBinding.operator ==(Elsa.Expressions.Core.Models.ClockExpressionParameterBinding? left, Elsa.Expressions.Core.Models.ClockExpressionParameterBinding? right) -> bool
+static Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles.IsBindingPure(string? profile) -> bool
+static Elsa.Expressions.Core.Models.UniqueIdExpressionParameterBinding.operator !=(Elsa.Expressions.Core.Models.UniqueIdExpressionParameterBinding? left, Elsa.Expressions.Core.Models.UniqueIdExpressionParameterBinding? right) -> bool
+static Elsa.Expressions.Core.Models.UniqueIdExpressionParameterBinding.operator ==(Elsa.Expressions.Core.Models.UniqueIdExpressionParameterBinding? left, Elsa.Expressions.Core.Models.UniqueIdExpressionParameterBinding? right) -> bool

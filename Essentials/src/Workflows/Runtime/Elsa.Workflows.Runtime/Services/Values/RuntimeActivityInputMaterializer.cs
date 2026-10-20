@@ -121,6 +121,12 @@ public sealed class RuntimeActivityInputMaterializer : IRuntimeActivityInputMate
             ?? throw new InvalidOperationException($"Executable node '{node.ExecutableNodeId}' has no pinned activity contract.");
         ValidateCompleteBindingSet(node, contract);
 
+        // Clock and UniqueId parameters read the snapshot's own materialization time, so the inputs evaluated from them
+        // and the snapshot's MaterializedAt agree, and the commit that pins the snapshot pins them (ADR 0088 D2).
+        if (resolutionContext.EvaluatedAt is { } evaluatedAt && evaluatedAt != materializedAt)
+            throw new InvalidOperationException($"Input snapshot for invocation '{invocationId}' is materialized at {materializedAt:O}, but its resolution context is evaluated at {evaluatedAt:O}.");
+        resolutionContext = resolutionContext.WithEvaluatedAt(materializedAt);
+
         var values = new Dictionary<string, ValueEnvelope>(StringComparer.Ordinal);
         foreach (var input in contract.Inputs.Values.OrderBy(input => input.Key, StringComparer.Ordinal))
         {
