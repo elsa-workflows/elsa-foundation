@@ -1,9 +1,10 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Elsa.Etl.Design.Api;
+namespace Elsa.Etl.Api;
 
 internal sealed class EtlCursorCodec
 {
@@ -93,16 +94,17 @@ internal sealed class EtlCursorCodec
         return state;
     }
 
-    private static bool IsValidState(EtlCursorState? state) =>
+    private static bool IsValidState([NotNullWhen(true)] EtlCursorState? state) =>
         state is not null &&
         state.Format == FormatVersion &&
-        (state.Kind is "definitions" or "versions" or "bindings") &&
+        (state.Kind is "definitions" or "versions" or "bindings" or "runs" or "partitions") &&
         IsLowercaseSha256(state.ScopeKey) &&
         IsBoundedOptional(state.ResourceId, MaximumDefinitionIdLength) &&
         state.Limit is >= 1 and <= MaximumPageSize &&
         IsBoundedOptional(state.LastId, MaximumDefinitionIdLength) &&
         state.LastVersion >= 0 &&
         state.ThroughVersion >= 0 &&
+        state.LastOrdinal is null or >= 0 &&
         IsBoundedOptional(state.LastAlias, MaximumScalarLength) &&
         IsBoundedOptional(state.LastRole, MaximumScalarLength);
 
@@ -160,7 +162,8 @@ internal sealed record EtlCursorState(
     int LastVersion,
     int ThroughVersion,
     string? LastAlias,
-    string? LastRole);
+    string? LastRole,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? LastOrdinal = null);
 
 [JsonSourceGenerationOptions(
     JsonSerializerDefaults.Web,

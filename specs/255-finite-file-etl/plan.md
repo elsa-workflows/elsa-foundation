@@ -55,11 +55,12 @@ Extensions/Etl/
   src/
     Core/                         Elsa.Etl.Core
     Design/Elsa.Etl.Design/        Elsa.Etl.Design
-    Runtime/                      Elsa.Etl.Runtime
+    Runtime/Elsa.Etl.Runtime/      Elsa.Etl.Runtime
     Persistence/EntityFrameworkCore/
                                   Elsa.Etl.Persistence.EntityFrameworkCore
     Design/Api/                   Elsa.Etl.Design.Api
-    Runtime/Api/                  runtime-only API (separate composition; later task)
+    Runtime/Api/                  Elsa.Etl.Runtime.Api (runtime-only inspection/cancel)
+    Api/                          internal shared ETL HTTP scope/cursor/problem infrastructure
     Workflows/Design/             Elsa.Etl.Workflows.Design
     Workflows/Runtime/            Elsa.Etl.Workflows.Runtime
   tests/Tests/                    Elsa.Etl.Tests with shared fixtures

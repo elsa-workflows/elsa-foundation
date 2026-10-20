@@ -98,20 +98,11 @@ internal sealed class EtlAcceptedOutputMaterializer(
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         EtlManifestPosition? after = null;
-        var pageSize = PageSize;
+        var pageSize = Math.Min(PageSize, store.MaximumPageSize);
+        if (pageSize <= 0) throw Invalid();
         while (true)
         {
-            IReadOnlyList<EtlManifestEntry> page;
-            try
-            {
-                page = await store.ListManifestAsync(admission.Invocation.Scope, admission.Invocation.RunId, after, pageSize, cancellationToken);
-            }
-            catch (ArgumentOutOfRangeException exception) when (exception.ParamName == "take" && pageSize > 1)
-            {
-                // A host may cap inspection below our preferred bound. Adapt without an EF-specific dependency.
-                pageSize /= 2;
-                continue;
-            }
+            var page = await store.ListManifestAsync(admission.Invocation.Scope, admission.Invocation.RunId, after, pageSize, cancellationToken);
             if (page.Count == 0)
                 yield break;
             foreach (var entry in page)

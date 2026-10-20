@@ -4,7 +4,7 @@ using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.AspNetCore.Http;
 
-namespace Elsa.Etl.Design.Api;
+namespace Elsa.Etl.Api;
 
 internal sealed class EtlRequestScope(IHttpContextAccessor http, NormalizedPrincipalValidator principals, IPersistenceAccessContextAccessor persistence)
 {

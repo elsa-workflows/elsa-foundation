@@ -1,17 +1,16 @@
 using System.Text.Json;
 using Elsa.Api.AspNetCore;
-using Elsa.Etl.Design.Api.Models;
 using Elsa.Primitives.Exceptions;
 using Microsoft.AspNetCore.Http;
 using NativeEndpoints;
 
-namespace Elsa.Etl.Design.Api;
+namespace Elsa.Etl.Api;
 
 internal sealed class EtlProblemWriter : IEndpointProblemWriter
 {
     public Task WriteAsync(HttpContext context, EndpointProblem problem) => WriteAsync(context, problem.StatusCode, "etl.request-invalid");
     internal static Task WriteAsync(HttpContext context, int status, string code) =>
-        Results.Json(new EtlApiProblem(status, code), EtlDesignJsonContext.WireContext.EtlApiProblem, statusCode: status).ExecuteAsync(context);
+        Results.Json(new EtlProblem(status, code), EtlProblemJsonContext.Default.EtlProblem, statusCode: status).ExecuteAsync(context);
 }
 
 internal sealed class EtlFaultRenderer : IEndpointFaultRenderer

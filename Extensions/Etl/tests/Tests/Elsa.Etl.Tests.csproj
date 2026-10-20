@@ -17,7 +17,8 @@
     <ProjectReference Include="../WorkerHost/Elsa.Etl.WorkerHost.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../src/Core/Elsa.Etl.Core.csproj" />
     <ProjectReference Include="../../src/Design/Api/Elsa.Etl.Design.Api.csproj" />
-    <ProjectReference Include="../../src/Runtime/Elsa.Etl.Runtime.csproj" />
+    <ProjectReference Include="../../src/Runtime/Api/Elsa.Etl.Runtime.Api.csproj" />
+    <ProjectReference Include="../../src/Runtime/Elsa.Etl.Runtime/Elsa.Etl.Runtime.csproj" />
     <ProjectReference Include="../../src/Design/Elsa.Etl.Design/Elsa.Etl.Design.csproj" />
     <ProjectReference Include="../../src/Workflows/Runtime/Elsa.Etl.Workflows.Runtime.csproj" />
     <ProjectReference Include="../../src/Workflows/Design/Elsa.Etl.Workflows.Design.csproj" />

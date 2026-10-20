@@ -751,3 +751,4 @@ override Elsa.Etl.Core.Runtime.EtlBindingSummary.GetHashCode() -> int
 override Elsa.Etl.Core.Runtime.EtlBindingSummary.ToString() -> string!
 static Elsa.Etl.Core.Runtime.EtlBindingSummary.operator !=(Elsa.Etl.Core.Runtime.EtlBindingSummary? left, Elsa.Etl.Core.Runtime.EtlBindingSummary? right) -> bool
 static Elsa.Etl.Core.Runtime.EtlBindingSummary.operator ==(Elsa.Etl.Core.Runtime.EtlBindingSummary? left, Elsa.Etl.Core.Runtime.EtlBindingSummary? right) -> bool
+Elsa.Etl.Core.Runtime.IEtlRuntimeStore.MaximumPageSize.get -> int

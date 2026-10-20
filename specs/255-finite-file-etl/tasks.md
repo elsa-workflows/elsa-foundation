@@ -72,7 +72,9 @@
 **Goal:** Authors publish the supported journey and operators understand run/partition recovery without database access.
 **Independent test:** Browser author/publish/invoke/inspect a fixture and distinguish rejected data, fault, cancellation and outstanding work.
 
-- [ ] T028 [US4] Add scope-filtered paginated run/partition inspection and idempotent cancel endpoints to `Extensions/Etl/src/Runtime/Api`; test permission failures, cross-tenant non-disclosure, missing features and runtime-only composition.
+- [x] T028 [US4] Add scope-filtered paginated run/partition inspection and idempotent cancel endpoints to `Extensions/Etl/src/Runtime/Api`; test permission failures, cross-tenant non-disclosure, missing features and runtime-only composition.
+**Runtime API checkpoint:** [T028 evidence](evidence/runtime-api.md) records four runtime-only scoped HTTP/SQLite inspection/cancel operations, safe retained input identity metadata and bounded signed paging. Final 346 ETL and 583 architecture tests passed, zero failures/skips, with a precise cursor-resource regression under removal and restoration. Studio and integrated ETL host/browser acceptance remain open.
+
 - [ ] T029 [P] [US4] Implement the structured stage/binding/schema editor and publish/version views in `Extensions/Etl/studio/Elsa.Studio.Etl`, with focused frontend tests for validation and state preservation.
 - [ ] T030 [P] [US4] Implement run list/detail/partition progress/recovery views in `Extensions/Etl/studio/Elsa.Studio.Etl`, including loading/empty/forbidden/error/missing-feature states and partial outputs.
 - [ ] T031 [US4] Add and execute rebuilt Workbench HTTP acceptance in `e2e-tests/etl/`, using fresh fixture storage, both native composites and the declared feature composition.

@@ -1,18 +1,15 @@
-using System.Security.Cryptography;
+using Elsa.Etl.Api;
 using CShells.AspNetCore.Features;
 using CShells.Features;
-using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities.Extensions;
 using Elsa.Api.Capabilities.Models;
 using Elsa.Etl.Design.Api.Models;
 using Elsa.Foundation.Identity.Extensions;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
-using Elsa.Workflows.Runtime.Core.Extensions;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using NativeEndpoints;
 
 namespace Elsa.Etl.Design.Api;
 
@@ -23,23 +20,14 @@ namespace Elsa.Etl.Design.Api;
 [ShellFeature(name: "EtlDesignApi", DisplayName = "ETL Design API", Description = "Author finite file ETL definitions and publish immutable versions.", DependsOn = new object[] { "ApiCapabilities", "EtlDesign" })]
 public sealed class EtlDesignApiFeature : IWebShellFeature
 {
-    private static readonly string ProcessCursorKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-
     /// <summary>Stable shared signing key for pagination across host replicas; defaults to a process-local key.</summary>
     [ManifestSetting(Secret = true)]
     public string? CursorSigningKey { get; set; }
 
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddElsaEndpoints();
-        services.AddDynamicEndpointApiExplorerRefresh();
-        services.AddHttpContextAccessor();
-        services.AddPersistenceCore();
-        services.TryAddSingleton(new EtlCursorCodec(CursorSigningKey ?? ProcessCursorKey));
-        services.TryAddScoped<EtlRequestScope>();
+        EtlApiServices.Add(services, CursorSigningKey, EtlDesignApi.OwnerId);
         services.TryAddScoped<IEtlDesignOperations, EtlDesignOperations>();
-        services.TryAddKeyedSingleton<IEndpointProblemWriter, EtlProblemWriter>(EtlDesignApi.OwnerId);
-        services.TryAddKeyedSingleton<IEndpointFaultRenderer, EtlFaultRenderer>(EtlDesignApi.OwnerId);
         services.AddPermissionContributor<EtlDesignPermissionContributor>();
         services.AddApiCapability(new ApiCapabilityDeclaration("elsa.api.etl-design", 1,
         [

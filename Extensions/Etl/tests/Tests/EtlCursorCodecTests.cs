@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
-using Elsa.Etl.Design.Api;
+using Elsa.Etl.Api;
 
 namespace Elsa.Etl.Tests;
 
@@ -86,6 +86,18 @@ public sealed class EtlCursorCodecTests
         Assert.Throws<ArgumentException>(() => codec.Encode(state with { Limit = 1001 }));
         Assert.Throws<ArgumentException>(() => codec.Encode(state with { LastVersion = -1 }));
         Assert.Throws<ArgumentException>(() => codec.Encode(state with { LastAlias = new string('x', 513) }));
+    }
+
+    [Fact]
+    public void Authoring_cursor_payload_remains_unchanged_when_runtime_boundary_is_absent()
+    {
+        var codec = new EtlCursorCodec(SigningKey);
+        var json = Encoding.UTF8.GetString(DecodePayload(codec.Encode(State())));
+        Assert.DoesNotContain("lastOrdinal", json);
+        Assert.Equal(State(), codec.Decode(Sign(json, SigningKey)));
+        var runtime = State() with { Kind = "partitions", LastOrdinal = 3 };
+        Assert.Equal(runtime, codec.Decode(codec.Encode(runtime)));
+        Assert.Throws<ArgumentException>(() => codec.Encode(runtime with { LastOrdinal = -1 }));
     }
 
     private static EtlCursorState State() => new(

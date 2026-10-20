@@ -12,8 +12,7 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore;
 [ShellFeature(
     name: "EtlRuntimeEntityFrameworkCore",
     DisplayName = "ETL Runtime EF Core Persistence",
-    Description = "SQLite persistence for finite ETL runs, reservations, accepted output and terminal delivery.",
-    DependsOn = new object[] { "EtlRuntime" })]
+    Description = "SQLite persistence for finite ETL runs, reservations, accepted output and terminal delivery.")]
 [UsesEfModule("EtlRuntime")]
 public sealed class EtlRuntimeEntityFrameworkCoreFeature : IShellFeature
 {

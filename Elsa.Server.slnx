@@ -14,11 +14,15 @@
   <Folder Name="/Extensions/Etl/" />
   <Folder Name="/Extensions/Etl/src/">
     <Project Path="Extensions/Etl/src/Core/Elsa.Etl.Core.csproj" />
-    <Project Path="Extensions/Etl/src/Runtime/Elsa.Etl.Runtime.csproj" />
+    <Project Path="Extensions/Etl/src/Api/Elsa.Etl.Api.csproj" />
   </Folder>
   <Folder Name="/Extensions/Etl/src/Design/">
     <Project Path="Extensions/Etl/src/Design/Elsa.Etl.Design/Elsa.Etl.Design.csproj" />
     <Project Path="Extensions/Etl/src/Design/Api/Elsa.Etl.Design.Api.csproj" />
+  </Folder>
+  <Folder Name="/Extensions/Etl/src/Runtime/">
+    <Project Path="Extensions/Etl/src/Runtime/Api/Elsa.Etl.Runtime.Api.csproj" />
+    <Project Path="Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Elsa.Etl.Runtime.csproj" />
   </Folder>
   <Folder Name="/Extensions/Etl/src/Persistence/">
     <Project Path="Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />

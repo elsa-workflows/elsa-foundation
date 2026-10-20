@@ -4,11 +4,11 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using NativeEndpoints;
 
-namespace Elsa.Etl.Design.Api.Endpoints;
+namespace Elsa.Etl.Api;
 
 /// <summary>Bounds the entire authoring envelope before typed JSON binding, including chunked requests.</summary>
 [AttributeUsage(AttributeTargets.Class)]
-internal sealed class EtlBoundedBodyAttribute : Attribute, IEndpointConventionAttribute
+internal sealed class EtlBoundedBodyAttribute(int maximumBodyBytes = EtlArtifact.MaximumByteLength + 4096) : Attribute, IEndpointConventionAttribute
 {
     internal const int MaximumBodyBytes = EtlArtifact.MaximumByteLength + 4096;
 
@@ -17,7 +17,7 @@ internal sealed class EtlBoundedBodyAttribute : Attribute, IEndpointConventionAt
         var next = endpoint.RequestDelegate ?? throw new InvalidOperationException("An ETL endpoint requires a request delegate.");
         endpoint.RequestDelegate = async context =>
         {
-            if (context.Request.ContentLength > MaximumBodyBytes)
+            if (context.Request.ContentLength > maximumBodyBytes)
             {
                 await EtlProblemWriter.WriteAsync(context, 413, "etl.request-too-large");
                 return;
@@ -29,9 +29,9 @@ internal sealed class EtlBoundedBodyAttribute : Attribute, IEndpointConventionAt
             try
             {
                 int read;
-                while ((read = await original.ReadAsync(buffer.AsMemory(0, Math.Min(buffer.Length, MaximumBodyBytes + 1 - (int)body.Length)), context.RequestAborted)) != 0)
+                while ((read = await original.ReadAsync(buffer.AsMemory(0, Math.Min(buffer.Length, maximumBodyBytes + 1 - (int)body.Length)), context.RequestAborted)) != 0)
                 {
-                    if (body.Length + read > MaximumBodyBytes)
+                    if (body.Length + read > maximumBodyBytes)
                     {
                         await EtlProblemWriter.WriteAsync(context, 413, "etl.request-too-large");
                         return;

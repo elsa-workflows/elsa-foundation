@@ -8,7 +8,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/Runtime/Elsa.Etl.Runtime.csproj" />
+    <ProjectReference Include="../../src/Runtime/Elsa.Etl.Runtime/Elsa.Etl.Runtime.csproj" />
     <ProjectReference Include="../../src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />
   </ItemGroup>
   <ItemGroup>

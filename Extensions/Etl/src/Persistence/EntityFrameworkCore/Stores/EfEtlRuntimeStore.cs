@@ -14,6 +14,8 @@ internal sealed class EfEtlRuntimeStore(
     TimeProvider clock,
     EtlRuntimeStoreOptions options) : IEtlRuntimeStore
 {
+    public int MaximumPageSize => options.MaximumPageSize;
+
     public async ValueTask<EtlAdmissionResult> AdmitAsync(EtlRunAdmission admission, CancellationToken cancellationToken = default)
     {
         db.ChangeTracker.Clear();

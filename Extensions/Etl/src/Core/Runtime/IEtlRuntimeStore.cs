@@ -9,6 +9,9 @@ namespace Elsa.Etl.Core.Runtime;
 /// </remarks>
 public interface IEtlRuntimeStore
 {
+    /// <summary>Positive maximum accepted take for each list call; consumers may compose bounded keyset pages.</summary>
+    int MaximumPageSize { get; }
+
     ValueTask<EtlAdmissionResult> AdmitAsync(EtlRunAdmission admission, CancellationToken cancellationToken = default);
     /// <summary>Durably returns a safe admission refusal to the waiting parent, even when no binding can be resolved.</summary>
     ValueTask<EtlTerminalSettlementResult> RejectAdmissionAsync(EtlInvocation invocation, EtlRunDiagnostic diagnostic, CancellationToken cancellationToken = default);
@@ -29,7 +32,11 @@ public interface IEtlRuntimeStore
     ValueTask<EtlTerminalSettlementResult> CancelAsync(EtlInvocation invocation, CancellationToken cancellationToken = default);
     ValueTask<EtlDeliveryLease?> ClaimDeliveryAsync(EtlScope scope, string workerId, CancellationToken cancellationToken = default);
     ValueTask<EtlStoreStatus> AcknowledgeDeliveryAsync(EtlDeliveryLease lease, EtlDeliveryDisposition disposition, CancellationToken cancellationToken = default);
+    /// <summary>Lists exact-scope runs in a stable total identity order. The supplied run ID is an exclusive boundary in that same provider order, not necessarily raw-string order.</summary>
+    /// <remarks>Return up to take rows; a short page means the current query is exhausted. Consumers must preserve this order. Pages are live views, not a frozen snapshot.</remarks>
     ValueTask<IReadOnlyList<EtlRunView>> ListRunsAsync(EtlScope scope, string? afterRunId, int take, CancellationToken cancellationToken = default);
+    /// <summary>Lists exact-scope run partitions by ascending ordinal, strictly after the supplied ordinal (-1 starts the traversal).</summary>
+    /// <remarks>Return up to take rows; a short page means the current query is exhausted. Retained claim metadata does not prove worker liveness.</remarks>
     ValueTask<IReadOnlyList<EtlPartitionView>> ListPartitionsAsync(EtlScope scope, string runId, int afterPartitionOrdinal, int take, CancellationToken cancellationToken = default);
     ValueTask<IReadOnlyList<EtlManifestEntry>> ListManifestAsync(EtlScope scope, string runId, EtlManifestPosition? after, int take, CancellationToken cancellationToken = default);
 }

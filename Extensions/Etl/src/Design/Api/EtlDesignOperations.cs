@@ -1,3 +1,4 @@
+using Elsa.Etl.Api;
 using Elsa.Etl.Core;
 using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Design.Api.Models;
@@ -6,7 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Etl.Design.Api;
 
-internal sealed class EtlDesignOperations(IServiceProvider services, EtlRequestScope requestScope, EtlCursorCodec cursors) : IEtlDesignOperations
+internal sealed class EtlDesignOperations(IServiceProvider services, EtlRequestScope requestScope, [FromKeyedServices(EtlDesignApi.OwnerId)] EtlCursorCodec cursors) : IEtlDesignOperations
 {
     public Task<EtlPage<EtlBindingSummary>> ListBindingsAsync(EtlPageRequest request, CancellationToken cancellationToken)
     {
@@ -143,7 +144,7 @@ internal sealed class EtlDesignOperations(IServiceProvider services, EtlRequestS
             "bindings" => state.LastAlias is not null && state.LastRole is not null && state.LastId is null && state.LastVersion == 0 && state.ThroughVersion == 0,
             _ => false
         };
-        return validBoundary ? state : throw InvalidCursor();
+        return validBoundary && state.LastOrdinal is null ? state : throw InvalidCursor();
     }
 
     private T Required<T>() where T : class => services.GetService<T>() ?? throw new EtlApiException(503, "etl.provider-unavailable");
@@ -165,10 +166,4 @@ internal sealed class EtlDesignOperations(IServiceProvider services, EtlRequestS
     private static EtlApiException Conflict() => new(409, "etl.definition-conflict");
     private static EtlApiException NotFound() => new(404, "etl.definition-not-found");
     private static EtlApiException InvalidCursor() => new(400, "etl.cursor-invalid");
-}
-
-internal sealed class EtlApiException(int status, string code) : Exception(code)
-{
-    public int Status { get; } = status;
-    public string Code { get; } = code;
 }

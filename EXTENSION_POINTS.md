@@ -172,6 +172,8 @@ not automatic constitution violations.
 |---|---|
 | Safe scoped binding discovery | [`Extensions/Etl/src/Core/EXTENSION_POINTS.md`](Extensions/Etl/src/Core/EXTENSION_POINTS.md) |
 | Draft and immutable publication metadata | [`Extensions/Etl/src/Design/Elsa.Etl.Design/EXTENSION_POINTS.md`](Extensions/Etl/src/Design/Elsa.Etl.Design/EXTENSION_POINTS.md) |
+| Shared ETL API transport | [`Extensions/Etl/src/Api/EXTENSION_POINTS.md`](Extensions/Etl/src/Api/EXTENSION_POINTS.md) |
+| Runtime inspection and cancellation API | [`Extensions/Etl/src/Runtime/Api/EXTENSION_POINTS.md`](Extensions/Etl/src/Runtime/Api/EXTENSION_POINTS.md) |
 | Authoring API operations and host composition | [`Extensions/Etl/src/Design/Api/EXTENSION_POINTS.md`](Extensions/Etl/src/Design/Api/EXTENSION_POINTS.md) |
 
 ### Legacy

@@ -5,6 +5,8 @@ namespace Elsa.Etl.Tests.Support;
 
 internal abstract class ForwardingEtlRuntimeStore(IEtlRuntimeStore inner) : IEtlRuntimeStore
 {
+    public int MaximumPageSize => inner.MaximumPageSize;
+
     protected IEtlRuntimeStore Inner { get; } = inner ?? throw new ArgumentNullException(nameof(inner));
 
     public virtual ValueTask<EtlAdmissionResult> AdmitAsync(EtlRunAdmission admission, CancellationToken cancellationToken = default) =>

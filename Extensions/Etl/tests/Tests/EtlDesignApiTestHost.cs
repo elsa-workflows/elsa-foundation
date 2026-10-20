@@ -12,6 +12,7 @@ using Elsa.Etl.Design;
 using Elsa.Etl.Design.Api;
 using Elsa.Etl.Persistence.EntityFrameworkCore;
 using Elsa.Etl.Runtime.Bindings;
+using Elsa.Etl.Runtime.Api;
 using Elsa.Foundation.Identity.Core.Authentication;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Extensions;
@@ -33,9 +34,9 @@ using Microsoft.Extensions.Options;
 namespace Elsa.Etl.Tests;
 
 /// <summary>
-/// A real TestServer around the ETL Design API, SQLite design store, migrations, and Foundation Identity
-/// permission pipeline. The test authentication and persistence headers stand in for host-selected identity
-/// and partition context; neither value is read from an authored ETL request body.
+/// Shared real TestServer around the ETL Design or runtime API, SQLite persistence, migrations, and Foundation
+/// Identity permission pipeline. The test authentication and persistence headers stand in for host-selected
+/// identity and partition context; neither value is read from an authored ETL request body.
 /// </summary>
 internal sealed class EtlDesignApiTestHost : IAsyncDisposable
 {
@@ -67,7 +68,10 @@ internal sealed class EtlDesignApiTestHost : IAsyncDisposable
         bool registerBindingCatalog = true,
         IReadOnlyList<HostFileBinding>? bindings = null,
         bool registerDesignPersistence = true,
-        Action<IServiceCollection>? configureServices = null)
+        Action<IServiceCollection>? configureServices = null,
+        bool runtimeOnly = false,
+        bool registerRuntimePersistence = true,
+        int maximumPageSize = 100)
     {
         var directory = Path.Combine(Path.GetTempPath(), "Elsa.Etl.Design.Api.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -91,19 +95,36 @@ internal sealed class EtlDesignApiTestHost : IAsyncDisposable
                     options.NormalizedAuthenticationTypes = new HashSet<string>([AuthenticationScheme], StringComparer.Ordinal));
 
                 new ApiCapabilitiesFeature().ConfigureServices(services);
-                new EtlDesignFeature().ConfigureServices(services);
-                if (registerDesignPersistence)
+                if (!runtimeOnly)
                 {
-                    new EtlDesignEntityFrameworkCoreFeature
+                    new EtlDesignFeature().ConfigureServices(services);
+                    if (registerDesignPersistence)
                     {
-                        Provider = "Sqlite",
-                        ConnectionString = connectionString
-                    }.ConfigureServices(services);
-                    services.Configure<EfMigrateOptions>(options => options.Policy = EfMigratePolicy.AutoMigrate);
+                        new EtlDesignEntityFrameworkCoreFeature
+                        {
+                            Provider = "Sqlite",
+                            ConnectionString = connectionString
+                        }.ConfigureServices(services);
+                        services.Configure<EfMigrateOptions>(options => options.Policy = EfMigratePolicy.AutoMigrate);
+                    }
+                    new EtlDesignApiFeature { CursorSigningKey = CursorSigningKey }.ConfigureServices(services);
                 }
-                new EtlDesignApiFeature { CursorSigningKey = CursorSigningKey }.ConfigureServices(services);
+                else
+                {
+                    if (registerRuntimePersistence)
+                    {
+                        new EtlRuntimeEntityFrameworkCoreFeature
+                        {
+                            Provider = "Sqlite",
+                            ConnectionString = $"Data Source={Path.Combine(directory, "etl-runtime.db")};Pooling=False",
+                            MaximumPageSize = maximumPageSize
+                        }.ConfigureServices(services);
+                        services.Configure<EfMigrateOptions>(options => options.Policy = EfMigratePolicy.AutoMigrate);
+                    }
+                    new EtlRuntimeApiFeature { CursorSigningKey = CursorSigningKey }.ConfigureServices(services);
+                }
 
-                if (registerBindingCatalog)
+                if (registerBindingCatalog && !runtimeOnly)
                 {
                     var configuredBindings = bindings ?? DefaultBindings(directory);
                     services.AddScoped(_ => new HostFileBindings(configuredBindings));
@@ -133,7 +154,13 @@ internal sealed class EtlDesignApiTestHost : IAsyncDisposable
                     await next();
                 });
                 app.UseAuthorization();
-                app.UseEndpoints(endpoints => EtlDesignApi.MapEtlDesignApi(endpoints));
+                app.UseEndpoints(endpoints =>
+                {
+                    if (runtimeOnly)
+                        EtlRuntimeApi.MapEtlRuntimeApi(endpoints);
+                    else
+                        EtlDesignApi.MapEtlDesignApi(endpoints);
+                });
             });
         });
 
@@ -150,6 +177,13 @@ internal sealed class EtlDesignApiTestHost : IAsyncDisposable
             throw;
         }
     }
+
+    public static Task<EtlDesignApiTestHost> StartRuntimeAsync(
+        bool registerRuntimePersistence = true,
+        int maximumPageSize = 100,
+        Action<IServiceCollection>? configureServices = null) =>
+        StartAsync(registerBindingCatalog: false, registerDesignPersistence: false, configureServices: configureServices,
+            runtimeOnly: true, registerRuntimePersistence: registerRuntimePersistence, maximumPageSize: maximumPageSize);
 
     public async Task<HttpResponseMessage> SendAsync(
         HttpMethod method,
