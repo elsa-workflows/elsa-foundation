@@ -73,8 +73,9 @@ Recovery started because "Confirm order" failed: ActivityReturnedFault — Order
 ```
 
 - Each state is an icon plus text: `✓ Completed`, `✕ Faulted`, `● Running`, `◌ Not run`, `⟲ Compensated`,
-  `… Pending`, `● Undoing`, `⚠ Undo failed`, `— Not applicable`, `Not needed`, and `Not loaded` when the run's
-  activity list is a bounded page that may hold the occurrence on a later page. In M1 `Undo failed` means the
+  `◌ Can be undone` (Registered: the step completed and has a handler, and no recovery started), `… Pending`,
+  `● Undoing`, `✕ Undo failed`, `— Not applicable`, `Not needed` (the step has no handler), and `Not loaded` when the
+  run's activity list is a bounded page that may hold the occurrence on a later page. In M1 `Undo failed` means the
   handler faulted and its incident blocks the run. M2 adds `⚠ Uncertain` and `✋ Needs action`.
 - The recovery cause shows the step and the fault's incident failure type and message. The activity's own fault code
   (such as `order.rejected`) needs the incident summary to carry it.
