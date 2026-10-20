@@ -480,6 +480,7 @@ public sealed class WorkflowSchedulerDrainer : IWorkflowSchedulerDrainer
             or WorkflowExecutionCommandKind.StartActivity
             or WorkflowExecutionCommandKind.InvokeActivity
             or WorkflowExecutionCommandKind.NotifyParentActivity
+            or WorkflowExecutionCommandKind.DeliverInterventionDecision
             or WorkflowExecutionCommandKind.RetryActivityBoundary
             or WorkflowExecutionCommandKind.CancelActivityScope;
 

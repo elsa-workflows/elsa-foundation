@@ -112,6 +112,21 @@ public interface IRuntimeActivityExecutionContext : IActivityExecutionContext
         string reason,
         IReadOnlyDictionary<string, string>? metadata = null);
 
+    /// <summary>
+    /// Stages the same request as <see cref="RequestChildFaultIntervention(string, string, IReadOnlyDictionary{string, string}?)"/>
+    /// and offers the <paramref name="decisions"/> an operator may take on the wait through the
+    /// <c>DecideIntervention</c> alteration (spec 260 R-5): 1 to 8 dotted lower-case codes of at most 64 characters, none
+    /// starting <c>runtime.</c>. The runtime records them, in offer order, as <c>runtime.interventionDecisions</c> on the
+    /// wait-for-intervention outcome metadata, with the requester as <c>runtime.interventionRequestedBy</c>, and later
+    /// delivers the chosen one to <c>IRuntimeActivityInterventionDecisionHandler</c>. Offering decisions from an
+    /// activity that does not implement that callback, or an invalid offer, faults the evaluation.
+    /// </summary>
+    void RequestChildFaultIntervention(
+        string incidentId,
+        string reason,
+        IReadOnlyDictionary<string, string>? metadata,
+        IReadOnlyCollection<string> decisions);
+
     IReadOnlyCollection<RuntimeChildFaultInterventionRequest> GetChildFaultInterventionRequests();
 
     /// <summary>

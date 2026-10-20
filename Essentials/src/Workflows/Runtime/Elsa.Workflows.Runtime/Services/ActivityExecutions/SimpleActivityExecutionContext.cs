@@ -161,6 +161,16 @@ public sealed class SimpleActivityExecutionContext(
         _childFaultInterventionRequests.Add(new RuntimeChildFaultInterventionRequest(incidentId, reason, metadata));
     }
 
+    public void RequestChildFaultIntervention(
+        string incidentId,
+        string reason,
+        IReadOnlyDictionary<string, string>? metadata,
+        IReadOnlyCollection<string> decisions)
+    {
+        ArgumentNullException.ThrowIfNull(decisions);
+        _childFaultInterventionRequests.Add(new RuntimeChildFaultInterventionRequest(incidentId, reason, metadata, decisions));
+    }
+
     public IReadOnlyCollection<RuntimeChildFaultInterventionRequest> GetChildFaultInterventionRequests() =>
         _childFaultInterventionRequests.ToArray();
 

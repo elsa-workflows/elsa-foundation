@@ -10,6 +10,7 @@ using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore;
 using Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Workflows.Runtime.Resumption;
+using Elsa.Workflows.Runtime.Services.Alterations;
 using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -30,6 +31,10 @@ public sealed class CompensationHost(PersistenceMode mode) : IDisposable
     private const string HierarchySigningKey = "compensation-nesting-hierarchy-signing-key-32";
 
     private readonly FakeTimeProvider _clock = new(DateTimeOffset.UtcNow);
+
+    // Alteration plans outlive a host generation in the SQLite store; their protected payloads need the same key ring,
+    // as a configured key ring gives every process.
+    private readonly WorkflowAlterationEphemeralKeyRing _alterationKeys = new();
     private readonly string _databasePath = Path.Join(Path.GetTempPath(), $"elsa-compensation-nesting-{Guid.NewGuid():N}.db");
 
     public PersistenceMode Mode => mode;
@@ -113,6 +118,7 @@ public sealed class CompensationHost(PersistenceMode mode) : IDisposable
                 services.Replace(ServiceDescriptor.Singleton<IRuntimeExecutionIdGenerator>(_ => new ShortRuntimeExecutionIdGenerator(TimeProvider.System)));
                 services.RemoveAll<TimeProvider>();
                 services.AddSingleton<TimeProvider>(_clock);
+                services.Replace(ServiceDescriptor.Singleton(_alterationKeys));
                 configure?.Invoke(services);
             })
             .Build();
