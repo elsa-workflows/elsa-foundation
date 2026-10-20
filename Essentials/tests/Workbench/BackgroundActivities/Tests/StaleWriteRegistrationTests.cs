@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workbench.BackgroundActivities.Tests;
 
-public class NativeStaleWriteWitnessRegistrationTests
+public class StaleWriteRegistrationTests
 {
     [Theory]
     [InlineData("missing-backend", "requires a selected runtime checkpoint backend")]
@@ -82,7 +82,7 @@ public class NativeStaleWriteWitnessRegistrationTests
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         using var scope = provider.CreateScope();
         var holder = CreateOwnedHolderFromPersistenceRegistration(services, scope.ServiceProvider);
-        var witness = new NativeStaleWriteEfCheckpointStoreWitness(holder, null!, null!);
+        var witness = new EfCheckpointWitness(holder, null!, null!);
 
         witness.Dispose();
         witness.Dispose();
@@ -107,7 +107,7 @@ public class NativeStaleWriteWitnessRegistrationTests
         using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         using var scope = provider.CreateScope();
         var holder = CreateOwnedHolderFromPersistenceRegistration(services, scope.ServiceProvider);
-        var witness = new NativeStaleWriteEfCheckpointStoreWitness(holder, null!, null!);
+        var witness = new EfCheckpointWitness(holder, null!, null!);
 
         await witness.DisposeAsync();
         await witness.DisposeAsync();

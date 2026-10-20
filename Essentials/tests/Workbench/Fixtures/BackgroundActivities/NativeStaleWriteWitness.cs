@@ -541,7 +541,7 @@ internal static class NativeStaleWriteWitnessRegistration
 
         var originalHolder = holder;
         services.Remove(holder);
-        services.AddScoped<NativeStaleWriteEfCheckpointStoreWitness>(provider =>
+        services.AddScoped<EfCheckpointWitness>(provider =>
         {
             var ownedHolder = CreateInner<CoalescingInner<IRuntimeCheckpointCommitStore>>(originalHolder, provider);
             if (ownedHolder.Value.GetType() != typeof(EfRuntimeCheckpointCommitStore))
@@ -550,11 +550,11 @@ internal static class NativeStaleWriteWitnessRegistration
                 throw new InvalidOperationException("Native stale-write observation expected CoalescingInner to retain the real EF checkpoint store.");
             }
 
-            return new NativeStaleWriteEfCheckpointStoreWitness(ownedHolder, provider,
+            return new EfCheckpointWitness(ownedHolder, provider,
                 provider.GetRequiredService<IOptions<NativeHostingObservationSettings>>().Value);
         });
         services.AddScoped<CoalescingInner<IRuntimeCheckpointCommitStore>>(provider =>
-            new CoalescingInner<IRuntimeCheckpointCommitStore>(provider.GetRequiredService<NativeStaleWriteEfCheckpointStoreWitness>()));
+            new CoalescingInner<IRuntimeCheckpointCommitStore>(provider.GetRequiredService<EfCheckpointWitness>()));
 
         var outer = RequireScoped<IRuntimeCheckpointCommitStore>(services);
         services.Remove(outer);
@@ -570,7 +570,7 @@ internal static class NativeStaleWriteWitnessRegistration
                 throw new InvalidOperationException("Native stale-write observation requires the actual API CoalescingRuntimeCheckpointCommitStore.");
             }
 
-            return new NativeStaleWriteOuterCheckpointStoreWitness(
+            return new OuterCheckpointWitness(
                 actualOuter,
                 provider,
                 provider.GetRequiredService<IOptions<NativeHostingObservationSettings>>().Value,
@@ -581,7 +581,7 @@ internal static class NativeStaleWriteWitnessRegistration
 
 }
 
-internal sealed class NativeStaleWriteOuterCheckpointStoreWitness(
+internal sealed class OuterCheckpointWitness(
     IRuntimeCheckpointCommitStore inner,
     IServiceProvider services,
     NativeHostingObservationSettings settings,
@@ -606,7 +606,7 @@ internal sealed class NativeStaleWriteOuterCheckpointStoreWitness(
     }
 }
 
-internal sealed class NativeStaleWriteEfCheckpointStoreWitness(
+internal sealed class EfCheckpointWitness(
     CoalescingInner<IRuntimeCheckpointCommitStore> ownedHolder,
     IServiceProvider services,
     NativeHostingObservationSettings settings) : IRuntimeCheckpointCommitStore, IDisposable, IAsyncDisposable
