@@ -17,7 +17,8 @@
 
 ## Decisions
 
-1. The documentation maps, `manifest.json` and the two generated findings reports leave the repository. CI generates them on main and publishes them as a build artifact. Attaching them to a release is done by the release process when it needs them.
+1. The documentation maps, `manifest.json` and the two generated findings reports leave `main`. CI regenerates them after every push to main and publishes them two ways: as a build artifact of that run, and as a commit on a CI-maintained `generated-maps` branch that no PR writes to. `publish-state` is the precedent for a branch the workflow token writes. Attaching them to a release is done by the release process when it needs them.
+6. The maps must stay findable for external AI agents and people who only browse the repository on GitHub, without CI access or the .NET SDK. A build artifact alone does not do that: it needs authentication and expires. The `generated-maps` branch gives stable browse and raw URLs, and `main` links to it.
 2. `docs/maps/dependency-map.json` stays committed in this unit, and so does its freshness check. Removing it requires the versioning calculator to derive the dataset from each commit's tree; that is a separate spec.
 3. The `Elsa.Server.*.slnf` solution filters stay committed and checked.
 4. The required check names `Generated maps fresh` and `Build & test` stay unchanged.
@@ -47,13 +48,15 @@ An agent or architect who needs the project, test, spec-status, domain, extensio
 
 **Why this priority**: The maps are the navigation surface that skills and `AGENTS.md` point at. Removing them without a replacement would degrade agent work.
 
-**Independent Test**: In a clean clone, run the documented command and confirm every removed map and report is produced at its usual path and is ignored by git. Separately, download the artifact from the latest main CI run and confirm it holds the same set for that commit.
+**Independent Test**: In a clean clone, run the documented command and confirm every removed map and report is produced at its usual path and is ignored by git. Separately, after a merge to main, confirm the `generated-maps` branch holds the same set for that commit, reachable through browse and raw URLs that `docs/maps/README.md` on main links to, and that the run's build artifact holds it too.
 
 **Acceptance Scenarios**:
 
 1. **Given** a clean clone, **when** the contributor runs the documented generation command, **then** every map and findings report is written at its documented path and `git status` shows no changes.
 2. **Given** a completed CI run on main, **when** someone opens its artifacts, **then** a maps artifact for that commit is available and names the commit it describes.
-3. **Given** any skill, `AGENTS.md` section or contributing doc that tells the reader to consult a map, **when** it is read, **then** it says how to generate or download the map instead of implying the map is committed.
+3. **Given** an external AI agent that reads the repository only through GitHub's web or raw URLs, with no CI access and no SDK, **when** it starts from `AGENTS.md` or `docs/maps/README.md` on `main`, **then** it reaches the current map set by following one link.
+4. **Given** a merge to main, **when** its CI run completes, **then** the `generated-maps` branch has a new commit that describes exactly that main commit and names it.
+5. **Given** any skill, `AGENTS.md` section or contributing doc that tells the reader to consult a map, **when** it is read, **then** it says how to generate or download the map instead of implying the map is committed.
 
 ---
 
@@ -79,7 +82,10 @@ A contributor opens a PR that only changes documentation, specs or agent-instruc
 - A PR changes the project graph. `dependency-map.json` must still be regenerated and committed in that PR, and its freshness check still blocks; that is unchanged by this unit.
 - A contributor's local clone still has the old committed maps after pulling. Pulling deletes the tracked copies. Regenerating writes them back, now ignored.
 - A doc or skill links to a removed map by relative path. The link is changed to point at the generation instructions, or labelled as generated locally, so the docs link checks don't fail.
-- The CI artifact expires under the retention policy. Anyone can still reproduce the set for any commit by checking it out and generating.
+- The CI artifact expires under the retention policy. The `generated-maps` branch keeps a commit per main commit, and anyone can also reproduce the set for any commit by checking it out and generating.
+- Two pushes to main land close together. Branch updates happen in main-commit order, an older run never overwrites a newer set, and a cancelled run leaves the branch at the last good set.
+- The branch update fails, for example on a permission or network error. Main stays green; the failure is reported like other post-merge publication failures, and the next main push catches the branch up.
+- Someone opens a PR against `generated-maps`, or pushes to it by hand. The branch is protected so that only the workflow writes to it.
 - `tools/consolidation/foundation-path-map.json` lists the removed map paths. Whatever reads it must not fail because those files are now absent.
 
 ## Requirements
@@ -90,6 +96,9 @@ A contributor opens a PR that only changes documentation, specs or agent-instruc
 - **FR-002**: The repository MUST keep tracking `docs/maps/dependency-map.json` and the `Elsa.Server.*.slnf` solution filters, and their existing freshness checks MUST keep blocking.
 - **FR-003**: One documented command MUST generate the full removed set locally at its usual paths, without changing any tracked file in a fresh checkout.
 - **FR-004**: Every CI run on main MUST generate the full map set and publish it as a build artifact identified by the commit it describes.
+- **FR-004a**: Every successful CI run on main MUST also commit that set to the `generated-maps` branch, in main-commit order, with the commit message naming the main commit it describes. The branch's file layout MUST match the paths the maps had on main, so existing relative links inside the maps still resolve.
+- **FR-004b**: Only the CI workflow MUST be able to write `generated-maps`. A ruleset MUST prevent deleting it and non-fast-forward updates to it, as for `publish-state`.
+- **FR-004c**: `docs/maps/README.md` and `AGENTS.md` on `main` MUST link to the `generated-maps` branch's browse URL and describe the raw-URL and `git fetch origin generated-maps` routes, so an agent without CI access or the SDK finds the maps from main in one step.
 - **FR-005**: The required `Generated maps fresh` check MUST keep its name and keep its generator self-tests (project facts, feature facts, solution filters, EF suite manifest). It MUST stop comparing the removed files.
 - **FR-006**: A PR whose changed paths all fall in the documentation-only set MUST get success from both required checks without running the full build and test matrix. The set is documentation, specs, agent instructions and skills, minus any path that is a build or test input.
 - **FR-007**: The documentation-only path MUST still run every check and test that reads documentation, specs or agent-instruction files.
@@ -99,7 +108,8 @@ A contributor opens a PR that only changes documentation, specs or agent-instruc
 
 ### Key Entities
 
-- **Documentation map set**: the generated maps, manifest and findings reports for one commit. They are for people and agents only, never committed, and published per main commit as a CI artifact.
+- **Documentation map set**: the generated maps, manifest and findings reports for one commit. They are for people and agents only and never committed to `main`. Each main commit's set is published as a CI artifact and as a commit on `generated-maps`.
+- **`generated-maps` branch**: a publication branch only CI writes. It is the stable, public, always-current home of the documentation map set.
 - **Committed generated inputs**: `dependency-map.json` and the solution filters. They are generated but read by tooling, so they stay committed and checked.
 - **Documentation-only change set**: the path classes whose changes alone justify the fast CI path. Build and test inputs are excluded even when they are markdown.
 
@@ -110,13 +120,15 @@ A contributor opens a PR that only changes documentation, specs or agent-instruc
 - **SC-001**: Over the first 30 days after delivery, no merge conflict on main is caused by a generated documentation file. The baseline is the current near-every-pair rate.
 - **SC-002**: Over the same window, PRs whose only purpose is refreshing documentation maps drop to zero.
 - **SC-003**: A documentation-only PR's required checks complete within 10 minutes, against the full matrix today.
-- **SC-004**: A contributor or agent can get a current map set within one minute: one command locally, or one download from the latest main run.
+- **SC-004**: A contributor or agent can get a current map set within one minute: one command locally, one link from `main`, or one download from the latest main run.
+- **SC-004a**: Within 30 minutes of any merge to main, the `generated-maps` branch describes that merge commit.
 - **SC-005**: No regression escapes to main through the fast path. Every test that reads documentation still runs on documentation-only PRs.
 
 ## Assumptions
 
 - Nothing in build, test, packaging, publishing or release reads the removed files. Verified on 2026-10-20 except for `tools/consolidation/foundation-path-map.json`, which planning must confirm.
 - Attaching the map set to a GitHub Release is left to the release process. GitHub Releases publish nothing until the 4.0 release cut (#2085), so this unit adds no release step.
+- The workflow token may push to a non-`main` branch, as `packages.yml` already does for `publish-state`. The org Actions allow-list is not affected, because no third-party action is needed.
 - Ruleset `main-2` keeps `strict_required_status_checks_policy: false`. No ruleset change is needed because both required check names stay.
 - Build artifacts use the repository's default retention. Older sets can be reproduced from any commit.
 
