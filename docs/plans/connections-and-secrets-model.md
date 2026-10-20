@@ -25,6 +25,7 @@ These override anything below that reads differently.
 | D8 | **Naming:** keep "Connection" in code and UI, and define it in the glossary as **"Service connection"** to separate it from flowchart edges, database connection strings, and `RuntimeConnectionToken`. |
 | D9 | **Environments:** same name in every environment. The environment decides what stands behind the name, through the connection's own settings and its secret fields' stores. No mapping layer. |
 | D10 | **Enforce `RequiresEncryption` in phase 0** through the sensitive-input guard. Check existing usages when writing the phase 0 spec. Fix spec 079's `ISecretResolver` to the real `ISecretValueResolver` when phase 0 touches it. |
+| D11 | **Added 2026-10-20 (owner decision, #2855).** Connections has no read or use permission. Listing connections (names, types and metadata, never secret values) is implied by `workflows/design:read`; binding one in a workflow is implied by `workflows/design:manage`, which every route that writes or promotes workflow state already requires. Draft validation never checks the caller, so the validations panel and the dashboard show every viewer the same findings. `connections:manage`, `connections:bind-secret` and `connections:test` stay as the administration rights. `connections:read` and `connections:use` are removed without a compatibility path. |
 
 **Verified since the first draft:** a cross-node lock abstraction exists (`IDistributedLockProvider`, `src/Elsa/Locking/Core/`), but the only shipped implementation is filesystem-based. Single-flight token refresh therefore cannot rely on the lock alone. Section 2.6 now requires the Grant write to be a compare-and-swap on the expected secret version, with the lock as an optimization.
 
@@ -259,12 +260,12 @@ Resolution is always **within the workflow instance's tenant.** A reference can 
 
 Proposed scope ladder, in priority order:
 
-1. **Tenant-owned, shared (v1, default).** Created by someone with `connections:manage`, usable by any workflow in the tenant whose *author* holds `connections:use` on it at bind and publish time.
+1. **Tenant-owned, shared (v1, default).** Created by someone with `connections:manage`, usable by any workflow in the tenant. Binding one is part of authoring the workflow, so it needs `workflows/design:manage` (D11).
 2. **Restricted.** The same connection with an allow-list of workflow definitions or tags. Use this instead of copying connections per workflow.
 3. **Per-workflow copies: not a scope.** A "workflow-scoped connection" is just a tenant connection restricted to one workflow. Avoids a second lookup rule.
 4. **User-delegated (v2, needs your input).** "OneDrive as Alice" for workflows triggered by a human. Runs into the unattended-execution problem: whose token when a timer fires at 3 a.m.? Proposal: defer, and when it lands, make it an explicit `runAs: invoker | owner` on the requirement, failing closed if there is no invoker.
 
-Permissions: `connections:read` (metadata), `connections:use` (bind and publish), `connections:manage` (create, rotate, revoke, delete). Runtime execution itself is by the engine, not the end user, so `use` is checked at *authoring and publish time*, not per run.
+Permissions (D11): listing metadata needs `workflows/design:read`, binding and publishing need `workflows/design:manage`, and `connections:manage` (create, rotate, revoke, delete), `connections:bind-secret` and `connections:test` guard administration. Runtime execution itself is by the engine, not the end user, so no permission is checked per run.
 
 ### 2.9 Serialization: never leak material
 

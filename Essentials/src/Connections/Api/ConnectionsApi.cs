@@ -27,6 +27,12 @@ public static class ConnectionsApi
     private const string ConnectionsRoute = "/connections";
     private const string ConnectionRoute = "/connections/{name}";
     private const string OwnerId = "Elsa.Connections.Api";
+
+    // Listing connections is implied by Workflow Design's read permission, which that domain owns and contributes.
+    // Connections does not reference the Workflow Design API, so it names the permission here; an architecture test
+    // (EndpointSecurityTests) compares this with the owner's declaration.
+    private const string WorkflowDesignRead = "workflows/design:read";
+
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
 
     public static void MapConnectionsApi(IEndpointRouteBuilder endpoints)
@@ -37,7 +43,7 @@ public static class ConnectionsApi
 
         api.MapUnboundOperation("GET", ConnectionsRoute, "ConnectionsList",
                 typeof(ListConnectionsResponse), StatusCodes.Status200OK, null, HandleListAsync, containFailures: false)
-            .RequireAnyPermission(PermissionKey.Wildcard, ConnectionsPermissions.Read);
+            .RequireAnyPermission(PermissionKey.Wildcard, WorkflowDesignRead);
 
         api.MapUnboundOperation("POST", ConnectionsRoute, "ConnectionsCreate",
                 typeof(ConnectionMetadata), StatusCodes.Status201Created, null, HandleCreateAsync, containFailures: false)
@@ -45,15 +51,15 @@ public static class ConnectionsApi
 
         api.MapUnboundOperation("GET", $"{ConnectionsRoute}/descriptors", "ConnectionsDescriptors",
                 typeof(ConnectionDescriptorsResponse), StatusCodes.Status200OK, null, HandleDescriptorsAsync, containFailures: false)
-            .RequireAnyPermission(PermissionKey.Wildcard, ConnectionsPermissions.Read);
+            .RequireAnyPermission(PermissionKey.Wildcard, WorkflowDesignRead);
 
         api.MapUnboundOperation("POST", $"{ConnectionsRoute}/picker", "ConnectionsPicker",
                 typeof(ConnectionPickerResponse), StatusCodes.Status200OK, null, HandlePickerAsync, containFailures: false)
-            .RequireAnyPermission(PermissionKey.Wildcard, ConnectionsPermissions.Use);
+            .RequireAnyPermission(PermissionKey.Wildcard, WorkflowDesignRead);
 
         api.MapUnboundOperation("GET", ConnectionRoute, "ConnectionsGet",
                 typeof(ConnectionMetadata), StatusCodes.Status200OK, null, HandleGetAsync, containFailures: false)
-            .RequireAnyPermission(PermissionKey.Wildcard, ConnectionsPermissions.Read);
+            .RequireAnyPermission(PermissionKey.Wildcard, WorkflowDesignRead);
 
         api.MapUnboundOperation("PUT", ConnectionRoute, "ConnectionsUpdate",
                 typeof(ConnectionMetadata), StatusCodes.Status200OK, null, HandleUpdateAsync, containFailures: false)

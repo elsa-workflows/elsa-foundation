@@ -14,4 +14,12 @@ The Connections API maps the REST surface for service connections and the OAuth 
 
 ## Permissions
 
-`connections:read`, `connections:use`, `connections:manage`, `connections:test`, contributed by `ConnectionsPermissionContributor`.
+`connections:manage`, `connections:bind-secret` and `connections:test`, contributed by `ConnectionsPermissionContributor`,
+guard administration: create, update, revoke, delete and the OAuth redirect URI need `connections:manage`, binding an
+existing secret or a named credential to a field also needs `connections:bind-secret`, and testing needs
+`connections:test`.
+
+The list, descriptors, picker and single-connection reads require `workflows/design:read`, which Workflow Design owns
+and contributes. The Connections API does not reference the Workflow Design API, so it names that permission itself;
+an architecture test compares the name with the owner's declaration. Binding a connection in a workflow needs no
+Connections permission: it is authorised by `workflows/design:manage` on the routes that write workflow state.
