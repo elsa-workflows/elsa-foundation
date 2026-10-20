@@ -175,6 +175,50 @@ public sealed class LiquidExplicitParametersTests
             Assert.Equal(2, result[1].GetInt32());
     }
 
+    [Fact]
+    public async Task Rejects_the_javascript_only_binding_pure_v2_profile()
+    {
+        // ADR 0088 D4: binding-pure-v2 adds a JavaScript Date; Liquid stays on binding-pure-v1.
+        var definition = new ExpressionDefinition(
+            "Liquid",
+            "{{ total }}",
+            new TypeReference("String"),
+            new Dictionary<string, ExpressionParameterBinding>(),
+            JsonSerializer.SerializeToElement(new { }),
+            ExpressionCapabilityProfiles.BindingPureV2);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await Handler().EvaluateAsync(new ExpressionEvaluationRequest(definition, new Dictionary<string, JsonElement>(), CancellationToken.None)));
+
+        Assert.Contains("binding-pure-v1", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Renders_clock_and_unique_id_parameters_as_their_string_values()
+    {
+        // ADR 0088 D1: the new kinds are parameter kinds, valid in every language; the runtime resolves them to strings.
+        var definition = new ExpressionDefinition(
+            "Liquid",
+            "{{ now }}/{{ id }}",
+            new TypeReference("String"),
+            new Dictionary<string, ExpressionParameterBinding>
+            {
+                ["now"] = new ClockExpressionParameterBinding(),
+                ["id"] = new UniqueIdExpressionParameterBinding()
+            },
+            JsonSerializer.SerializeToElement(new { }),
+            ExpressionCapabilityProfiles.BindingPureV1);
+        var values = new Dictionary<string, JsonElement>
+        {
+            ["now"] = JsonSerializer.SerializeToElement("2026-10-20T08:30:00.000Z"),
+            ["id"] = JsonSerializer.SerializeToElement("01929f1c-7e2a-7c3d-9b1e-4f2a6c8d0e11")
+        };
+
+        var result = await Handler().EvaluateAsync(new ExpressionEvaluationRequest(definition, values, CancellationToken.None));
+
+        Assert.Equal("2026-10-20T08:30:00.000Z/01929f1c-7e2a-7c3d-9b1e-4f2a6c8d0e11", result.GetString());
+    }
+
     private static PortableLiquidExpressionHandler Handler() => new(new FluidParser());
 
     private static ExpressionEvaluationRequest Request(

@@ -858,9 +858,18 @@ public sealed class RuntimeInputBindingCompiler(
             targetType: ToValueTypeDescriptor(inputDefinition),
             effectivePolicy: effectivePolicy,
             source: RuntimeInputBindingSource.Expression,
-            expression: new RuntimeExpressionBinding(value.ExpressionType, expressionText, resultType),
+            expression: new RuntimeExpressionBinding(value.ExpressionType, expressionText, resultType, capabilityProfile: PlainSourceCapabilityProfile(value.ExpressionType)),
             metadata: BuildInputMetadata(inputDefinition));
     }
+
+    /// <summary>
+    /// Plain-source JavaScript is published under binding-pure-v2, which adds a Date without a clock; every other
+    /// language keeps the binding-pure-v1 default. Stored executables keep the profile they were stamped with (ADR 0088 D4).
+    /// </summary>
+    private static string? PlainSourceCapabilityProfile(string expressionType) =>
+        string.Equals(expressionType, "JavaScript", StringComparison.OrdinalIgnoreCase)
+            ? ExpressionCapabilityProfiles.BindingPureV2
+            : null;
 
     private static RuntimeInputBinding CompilePortableExpressionInput(
         string nodeId,
