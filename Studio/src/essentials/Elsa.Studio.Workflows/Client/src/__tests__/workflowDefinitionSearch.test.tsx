@@ -105,6 +105,15 @@ describe("workflow definition search refresh", () => {
       expect(searched).toHaveLength(1);
       expect(searched[0].searchParams.get("searchTerm")).toBe("invoice");
     });
+    await fill(search, "");
+    expect(search?.value).toBe("");
+    expect(new URLSearchParams(window.location.search).has("search")).toBe(false);
+    await vi.advanceTimersByTimeAsync(250);
+    await waitForCondition(() => {
+      const pages = requests.map(url => new URL(url)).filter(url => url.pathname.endsWith("/definition-pages"));
+      expect(pages).toHaveLength(3);
+      expect(pages.at(-1)?.searchParams.has("searchTerm")).toBe(false);
+    });
   });
 
   it("keeps the debounce when text returns to the already-settled search", async () => {
@@ -159,7 +168,7 @@ describe("workflow definition search refresh", () => {
     await waitForText(container, "Refreshed workflow");
   });
 
-  it.each(["during the newer query's delay", "after the newer result"])("ignores an older response %s", async completion => {
+  it.each(["during the newer query's delay", "after the newer result", "after the newer result (failed older request)"])("ignores an older response %s", async completion => {
     const requests: string[] = [];
     let resolveAlpha: ((value: Response) => void) | undefined;
     let resolveBeta: ((value: Response) => void) | undefined;
@@ -207,12 +216,16 @@ describe("workflow definition search refresh", () => {
     vi.useRealTimers();
     resolveBeta?.(response({ items: [definition({ name: "Current beta workflow" })], nextContinuationToken: null }));
     await waitForText(container, "Current beta workflow");
-    resolveAlpha?.(response({ items: [definition({ name: "Stale alpha workflow" })], nextContinuationToken: null }));
+    resolveAlpha?.(completion === "after the newer result (failed older request)"
+      ? response("Late alpha failure.", 503)
+      : response({ items: [definition({ name: "Stale alpha workflow" })], nextContinuationToken: null }));
     // Let the resolved HTTP body finish before checking that it cannot replace beta.
     await new Promise<void>(resolve => window.setTimeout(resolve, 0));
     await settleReact();
     expect(text(container, "Stale alpha workflow")).toBe(false);
     expect(text(container, "Current beta workflow")).toBe(true);
+    expect(container.querySelector("[role='alert']")).toBeNull();
+    expect(container.querySelector(".wf-alert")).toBeNull();
   });
 
   it("keeps first-load waiting truthful when the first search request is pending", async () => {

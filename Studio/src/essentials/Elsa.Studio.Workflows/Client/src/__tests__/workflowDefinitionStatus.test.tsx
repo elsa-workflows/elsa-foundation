@@ -48,6 +48,11 @@ describe("workflow definition request status", () => {
     } else {
       expect(container.querySelector(".wf-grid[aria-busy='true']")).not.toBeNull();
     }
+    await fill(input(container, "Search all workflows"), "failed");
+    expect(container.querySelector("[role='alert']")).toBeNull();
+    expect(container.querySelector(".wf-alert")).toBeNull();
+    expect(container.textContent).not.toContain("Temporary search failure.");
+    await fill(input(container, "Search all workflows"), "latest");
     await vi.advanceTimersByTimeAsync(250);
     vi.useRealTimers();
     await waitForText(container, "Latest workflow");

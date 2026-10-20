@@ -4,9 +4,9 @@ import { defaultDefinitionPageSize } from "./constants";
 import {
   parseWorkflowDefinitionBrowseLocation,
   updateWorkflowDefinitionBrowseUrl,
+  workflowFolderSelectionKey,
   type WorkflowDefinitionBrowseLocation
 } from "./workflowDefinitionBrowseLocation";
-import type { WorkflowFolderSelection } from "./WorkflowFolderNavigation";
 
 export interface WorkflowDefinitionBrowseSession {
   browseLocation: WorkflowDefinitionBrowseLocation;
@@ -36,10 +36,6 @@ export interface WorkflowDefinitionBrowseSession {
   reportAccessDenied(message: string): void;
   retry(): void;
   resumeAfterReturn(): void;
-}
-
-export function workflowFolderSelectionKey(selection: WorkflowFolderSelection) {
-  return typeof selection === "object" ? `folder:${selection.id}` : selection;
 }
 
 export function useWorkflowDefinitionBrowseSession(context: StudioEndpointContext): WorkflowDefinitionBrowseSession {

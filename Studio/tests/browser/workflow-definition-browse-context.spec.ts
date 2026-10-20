@@ -175,7 +175,9 @@ for (const variant of searchStatusVariants) {
     await page.setViewportSize({ width: variant.width, height: variant.height });
     await openSecondPage(page, browseUrl.replace("/?", `/?theme=${variant.theme}&`));
     await expect(page.locator(".wf-pagination")).toBeVisible();
-    await page.clock.install();
+    const clockStart = new Date("2026-10-20T12:00:00Z");
+    await page.clock.install({ time: clockStart });
+    await page.clock.pauseAt(clockStart);
     await page.evaluate(() => {
       (window as Window & { workflowBrowseTestControl?: { deferNext(searchTerm: string): void } })
         .workflowBrowseTestControl?.deferNext("latest");
@@ -236,5 +238,12 @@ for (const variant of searchStatusVariants) {
     await expect(page.getByRole("heading", { name: "No workflows match “empty”" })).toBeVisible();
     await expect(page.getByText("Latest workflow result", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("alert")).toHaveCount(0);
+    await search.fill("");
+    await expect(page).not.toHaveURL(/(?:[?&])search=/);
+    await page.clock.runFor(250);
+    await expect(page.getByText("First page renewal", { exact: true })).toBeVisible();
+    const clearedRequest = (await recordedPageRequests(page)).at(-1);
+    expect(clearedRequest?.searchTerm).toBeUndefined();
+    expect(clearedRequest?.continuationToken).toBeUndefined();
   });
 }

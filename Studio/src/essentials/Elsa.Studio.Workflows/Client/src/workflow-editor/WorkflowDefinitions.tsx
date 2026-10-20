@@ -11,14 +11,11 @@ import { dispatchAiAction, findAiAction, getTotalPages } from "./editorListHelpe
 import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { DefinitionPager } from "./DefinitionPager";
 import { WorkflowFolderNavigation, type WorkflowFolderSelection, selectedFolderId } from "./WorkflowFolderNavigation";
-import { updateWorkflowDefinitionBrowseUrl } from "./workflowDefinitionBrowseLocation";
+import { updateWorkflowDefinitionBrowseUrl, workflowFolderSelectionKey } from "./workflowDefinitionBrowseLocation";
 import "./workflowFolders.css";
 import "./workflowDefinitionTable.css";
 import { LatestDefinitionVersion, PublishedDefinitionVersion } from "./DefinitionVersionCells";
-import {
-  workflowFolderSelectionKey,
-  type WorkflowDefinitionBrowseSession
-} from "./workflowDefinitionBrowseSession";
+import type { WorkflowDefinitionBrowseSession } from "./workflowDefinitionBrowseSession";
 
 const CreateWorkflowDialog = lazy(() =>
   import("./CreateWorkflowDialog").then(module => ({ default: module.CreateWorkflowDialog }))
@@ -44,6 +41,8 @@ interface BrowseSnapshot {
   totalCount: number;
   usesCursorPaging: boolean;
 }
+
+const noDefinitions: BrowseSnapshot["definitions"] = [];
 
 function sameBrowseIdentity(left: BrowseIdentity, right: BrowseIdentity) {
   return left.baseUrl === right.baseUrl
@@ -85,7 +84,20 @@ export function WorkflowDefinitions({ context, ai, onOpen, session }: {
     scopeRevision,
     effectiveFolderKey: savedEffectiveFolderKey,
     requestsPaused,
-    blockedReason
+    blockedReason,
+    changeSearch,
+    navigateBrowseLocation,
+    changePage,
+    changePageSize,
+    rebase,
+    recordNextCursor,
+    observeEffectiveFolder,
+    beginRequest,
+    finishRequest,
+    isRequestCurrent,
+    reportAccessDenied,
+    retry,
+    resumeAfterReturn
   } = session;
   const { folderSelection, listState, search } = browseLocation;
   const [requestState, setRequestState] = useState<"loading" | "ready" | "failed">("loading");
@@ -133,7 +145,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session }: {
     && !searchPending
     && !requestsPaused;
   const hasPreviousData = !!snapshotVisible && !isCurrentData;
-  const definitions = snapshotVisible?.definitions ?? [];
+  const definitions = snapshotVisible?.definitions ?? noDefinitions;
   const totalCount = snapshotVisible?.totalCount ?? 0;
   const usesCursorPaging = snapshotVisible?.usesCursorPaging ?? false;
   const visibleDefinitionIds = useMemo(() => definitions.map(definition => definition.id), [definitions]);
@@ -177,12 +189,12 @@ export function WorkflowDefinitions({ context, ai, onOpen, session }: {
 
   useEffect(() => {
     if (folderCapability === "unknown") return;
-    session.observeEffectiveFolder(effectiveFolderKey);
-  }, [effectiveFolderKey, folderCapability, session.observeEffectiveFolder]);
+    observeEffectiveFolder(effectiveFolderKey);
+  }, [effectiveFolderKey, folderCapability, observeEffectiveFolder]);
 
   useEffect(() => {
-    session.resumeAfterReturn();
-  }, [session.resumeAfterReturn]);
+    resumeAfterReturn();
+  }, [resumeAfterReturn]);
 
   useEffect(() => {
     setSelectedDefinitionIds(new Set());
@@ -196,7 +208,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session }: {
     const requestedFolderSelection = folderSelection;
     const identity: BrowseIdentity = { ...targetIdentity, search: settledSearch.trim() };
     const controller = new AbortController();
-    const generation = session.beginRequest(controller);
+    const generation = beginRequest(controller);
     setRequestState("loading");
     setRequestError(null);
     try {
@@ -209,31 +221,31 @@ export function WorkflowDefinitions({ context, ai, onOpen, session }: {
         folderId: folderCapability === "available" ? selectedFolderId(requestedFolderSelection) : null,
         unfiled: folderCapability === "available" && requestedFolderSelection === "unfiled"
       }, controller.signal);
-      if (!session.isRequestCurrent(generation)) return;
+      if (!isRequestCurrent(generation)) return;
       if (response.isPaged) {
         setLastSuccess({ identity, definitions: response.definitions, totalCount: 0, usesCursorPaging: true });
-        session.recordNextCursor(requestedPage, response.nextContinuationToken);
+        recordNextCursor(requestedPage, response.nextContinuationToken);
       } else {
         const effectiveTotalCount = response.totalCount;
         const effectiveTotalPages = getTotalPages(effectiveTotalCount, pageSize);
         if (effectiveTotalCount > 0 && requestedPage > effectiveTotalPages) {
-          session.changePage(effectiveTotalPages);
+          changePage(effectiveTotalPages);
           return;
         }
         setLastSuccess({ identity, definitions: response.definitions, totalCount: effectiveTotalCount, usesCursorPaging: false });
       }
       setRequestState("ready");
     } catch (e) {
-      if (!session.isRequestCurrent(generation)) return;
+      if (!isRequestCurrent(generation)) return;
       if (e instanceof StudioHttpError && (e.status === 401 || e.status === 403)) {
         setLastSuccess(null);
-        session.reportAccessDenied(e.message || "Your access changed. Refresh to retry this request.");
+        reportAccessDenied(e.message || "Your access changed. Refresh to retry this request.");
         return;
       }
       setRequestError({ identity, message: e instanceof Error ? e.message : String(e) });
       setRequestState("failed");
     } finally {
-      session.finishRequest(controller);
+      finishRequest(controller);
     }
   }, [
     context,
@@ -248,12 +260,12 @@ export function WorkflowDefinitions({ context, ai, onOpen, session }: {
     requestsPaused,
     searchPending,
     search,
-    session.beginRequest,
-    session.changePage,
-    session.finishRequest,
-    session.isRequestCurrent,
-    session.recordNextCursor,
-    session.reportAccessDenied,
+    beginRequest,
+    changePage,
+    finishRequest,
+    isRequestCurrent,
+    recordNextCursor,
+    reportAccessDenied,
     settledSearch,
     targetIdentity
   ]);
@@ -268,7 +280,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session }: {
   }, [endpointIdentityCurrent, load, requestNonce, requestsPaused, search, searchPending, settledSearch]);
 
   const currentError = blockedReason
-    ?? (requestError && sameBrowseIdentity(requestError.identity, targetIdentity) ? requestError.message : null);
+    ?? (!searchPending && requestError && sameBrowseIdentity(requestError.identity, targetIdentity) ? requestError.message : null);
 
   useEffect(() => {
     if (selectVisibleRef.current) {
@@ -335,11 +347,11 @@ export function WorkflowDefinitions({ context, ai, onOpen, session }: {
 
   const refreshAfterMutation = async () => {
     if (definitions.length === 1 && page > 1) {
-      session.changePage(page - 1);
+      changePage(page - 1);
       return;
     }
 
-    session.retry();
+    retry();
   };
 
   const clearSelection = () => setSelectedDefinitionIds(new Set());
@@ -358,7 +370,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session }: {
   }, [focusRefreshAfterMove, moveDialogOpen]);
 
   const movedDefinitions = async () => {
-    session.rebase(true);
+    rebase(true);
     const count = selectedDefinitionIds.size;
     setStatus(`Moved ${count === 1 ? "1 workflow definition" : `${count} workflow definitions`}`);
     setFocusRefreshAfterMove(true);
@@ -366,10 +378,10 @@ export function WorkflowDefinitions({ context, ai, onOpen, session }: {
 
   const foldersMutated = async (nextFolderSelection?: WorkflowFolderSelection) => {
     if (nextFolderSelection) {
-      session.navigateBrowseLocation({ ...browseLocation, folderSelection: nextFolderSelection }, "replace", true);
+      navigateBrowseLocation({ ...browseLocation, folderSelection: nextFolderSelection }, "replace", true);
       return;
     }
-    session.rebase(true);
+    rebase(true);
   };
 
   const toggleDefinitionSelection = (definitionId: string, selected: boolean) => {
@@ -393,11 +405,11 @@ export function WorkflowDefinitions({ context, ai, onOpen, session }: {
   };
 
   const changeListState = (nextState: DefinitionListState) => {
-    session.navigateBrowseLocation({ ...browseLocation, listState: nextState }, "push", true);
+    navigateBrowseLocation({ ...browseLocation, listState: nextState }, "push", true);
   };
 
   const changeFolder = (nextFolder: WorkflowFolderSelection) => {
-    session.navigateBrowseLocation({ ...browseLocation, folderSelection: nextFolder }, "push", true);
+    navigateBrowseLocation({ ...browseLocation, folderSelection: nextFolder }, "push", true);
   };
 
   const softDelete = async (definition: WorkflowDefinitionDetails["definition"]) => {
@@ -441,9 +453,6 @@ export function WorkflowDefinitions({ context, ai, onOpen, session }: {
     }
   };
 
-  const changeSearch = (value: string) => session.changeSearch(value);
-  const changePageSize = (value: number) => session.changePageSize(value);
-
   const displayState = requestsPaused ? "failed" : searchPending ? "loading" : requestState;
   const staleStatus = hasPreviousData && snapshotVisible
     ? displayState === "failed"
@@ -460,7 +469,6 @@ export function WorkflowDefinitions({ context, ai, onOpen, session }: {
   const selectedVisibleCurrentCount = visibleDefinitionIds.filter(id => selectedIds.has(id)).length;
   const allCurrentVisibleSelected = visibleDefinitionIds.length > 0 && selectedVisibleCurrentCount === visibleDefinitionIds.length;
   const renderResultRows = isCurrentData || hasPreviousData;
-  const handleRefresh = () => session.retry();
 
   useEffect(() => {
     let cancelled = false;
@@ -496,7 +504,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session }: {
             <input aria-label={searchLabel} value={search} onChange={event => changeSearch(event.target.value)} placeholder="Search definitions" />
           </label>
           {effectiveFolderSelection !== "all" ? <button type="button" onClick={() => changeFolder("all")}>Search all workflows</button> : null}
-          <button ref={refreshButtonRef} type="button" onClick={handleRefresh}>Refresh</button>
+          <button ref={refreshButtonRef} type="button" onClick={retry}>Refresh</button>
           <div className="wf-actions">
             <button type="button" title="Create workflow" onClick={openCreateDialog}><Plus size={15} /> Create</button>
           </div>
@@ -509,8 +517,8 @@ export function WorkflowDefinitions({ context, ai, onOpen, session }: {
             title={errorTitle}
             action={(
               <div className="wf-definition-search-actions">
-                <button type="button" className="wf-link-button" onClick={handleRefresh}>Retry current search</button>
-                {page > 1 ? <button type="button" className="wf-link-button" onClick={() => session.rebase()}>Restart from first page</button> : null}
+                <button type="button" className="wf-link-button" onClick={retry}>Retry current search</button>
+                {page > 1 ? <button type="button" className="wf-link-button" onClick={() => rebase()}>Restart from first page</button> : null}
               </div>
             )}
           />
@@ -628,7 +636,7 @@ export function WorkflowDefinitions({ context, ai, onOpen, session }: {
           totalCount={usesCursorPaging ? undefined : totalCount}
           itemCount={definitions.length}
           hasNextPage={Boolean(continuationTokens[page + 1])}
-          onPageChange={session.changePage}
+          onPageChange={changePage}
           onPageSizeChange={changePageSize}
         /> : null}
       </div>
