@@ -35,11 +35,16 @@ internal sealed class CompensationScopeStructureHandler : IActivityStructureHand
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
         var current = CompensationScopeAuthoredStructureReader.Read(activity);
+        // A Draft may hold steps that share a name (validation blocks only publication), so their slots share a name
+        // too. Take same-named slots in projection order, so each such step keeps its own activities.
+        var slots = childProjections
+            .GroupBy(slot => slot.Name, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => new Queue<ActivityChildProjection>(group), StringComparer.Ordinal);
         var steps = current.Steps
             .Select(step => new CompensationScopeAuthoredStep(
                 step.Name,
-                SingleChild(childProjections, CompensationScopeActivity.StepSlotName(step.Name)),
-                SingleChild(childProjections, CompensationScopeActivity.CompensationSlotName(step.Name))))
+                NextChild(slots, CompensationScopeActivity.StepSlotName(step.Name)),
+                NextChild(slots, CompensationScopeActivity.CompensationSlotName(step.Name))))
             .ToArray();
 
         return activity with
@@ -95,8 +100,8 @@ internal sealed class CompensationScopeStructureHandler : IActivityStructureHand
 
     private static IEnumerable<ActivityNode> ToSlot(ActivityNode? child) => child is null ? [] : [child];
 
-    private static ActivityNode? SingleChild(IReadOnlyCollection<ActivityChildProjection> childProjections, string slotName) =>
-        childProjections.FirstOrDefault(slot => StringComparer.Ordinal.Equals(slot.Name, slotName))?.Activities.FirstOrDefault();
+    private static ActivityNode? NextChild(IReadOnlyDictionary<string, Queue<ActivityChildProjection>> slots, string slotName) =>
+        slots.TryGetValue(slotName, out var queue) && queue.TryDequeue(out var slot) ? slot.Activities.FirstOrDefault() : null;
 
     private static string? Remap(string? nodeId, IReadOnlyDictionary<string, string> nodeIds) =>
         nodeId is not null && nodeIds.TryGetValue(nodeId, out var executableNodeId) ? executableNodeId : nodeId;
