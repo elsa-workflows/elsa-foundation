@@ -10,6 +10,20 @@ override Elsa.Etl.Core.EtlScope.GetHashCode() -> int
 override Elsa.Etl.Core.EtlScope.ToString() -> string!
 static Elsa.Etl.Core.EtlScope.operator !=(Elsa.Etl.Core.EtlScope? left, Elsa.Etl.Core.EtlScope? right) -> bool
 static Elsa.Etl.Core.EtlScope.operator ==(Elsa.Etl.Core.EtlScope? left, Elsa.Etl.Core.EtlScope? right) -> bool
+Elsa.Etl.Core.Runtime.EtlPublishedSelection
+Elsa.Etl.Core.Runtime.EtlPublishedSelection.ContentHash.get -> string!
+Elsa.Etl.Core.Runtime.EtlPublishedSelection.DefinitionId.get -> string!
+Elsa.Etl.Core.Runtime.EtlPublishedSelection.DefinitionVersion.get -> int
+Elsa.Etl.Core.Runtime.EtlPublishedSelection.EtlPublishedSelection(string! DefinitionId, int DefinitionVersion, string! ContentHash) -> void
+Elsa.Etl.Core.Runtime.EtlPublishedSelection.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlPublishedSelection!
+Elsa.Etl.Core.Runtime.EtlPublishedSelection.Equals(Elsa.Etl.Core.Runtime.EtlPublishedSelection? other) -> bool
+static Elsa.Etl.Core.Runtime.EtlPublishedSelection.Parse(string! token) -> Elsa.Etl.Core.Runtime.EtlPublishedSelection!
+Elsa.Etl.Core.Runtime.EtlPublishedSelection.ToToken() -> string!
+override Elsa.Etl.Core.Runtime.EtlPublishedSelection.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlPublishedSelection.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlPublishedSelection.ToString() -> string!
+static Elsa.Etl.Core.Runtime.EtlPublishedSelection.operator !=(Elsa.Etl.Core.Runtime.EtlPublishedSelection? left, Elsa.Etl.Core.Runtime.EtlPublishedSelection? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlPublishedSelection.operator ==(Elsa.Etl.Core.Runtime.EtlPublishedSelection? left, Elsa.Etl.Core.Runtime.EtlPublishedSelection? right) -> bool
 Elsa.Etl.Core.EtlArtifact
 Elsa.Etl.Core.EtlArtifact.ArtifactId.get -> string!
 Elsa.Etl.Core.EtlArtifact.ContentHash.get -> string!
@@ -716,4 +730,8 @@ static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.OutputIdentity(Elsa.Etl.Core.Run
 static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.OutputKey(Elsa.Etl.Core.Runtime.EtlRunAdmission! admission, string! batchId, Elsa.Etl.Core.Runtime.EtlOutputRoute route) -> string!
 static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ScopeKey(Elsa.Etl.Core.EtlScope! scope) -> string!
 Elsa.Etl.Core.Runtime.IEtlRuntimeStore.ReleasePartitionAsync(Elsa.Etl.Core.Runtime.EtlPartitionLease! lease, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlStoreStatus>
+Elsa.Etl.Core.Runtime.IEtlRunAdmissionService
+Elsa.Etl.Core.Runtime.IEtlRunAdmissionService.AdmitAsync(Elsa.Etl.Core.Runtime.EtlInvocation! invocation, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlAdmissionResult!>
+Elsa.Etl.Core.Runtime.IEtlResultDelivery
+Elsa.Etl.Core.Runtime.IEtlResultDelivery.DeliverAsync(Elsa.Etl.Core.Runtime.EtlDeliveryLease! delivery, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlDeliveryDisposition?>
 static Elsa.Etl.Core.EtlArtifactJson.CreateArtifactId(int formatVersion, string! definitionId, int definitionVersion, string! contentHash) -> string!

@@ -20,6 +20,10 @@
   <Folder Name="/Extensions/Etl/src/Persistence/">
     <Project Path="Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
+  <Folder Name="/Extensions/Etl/src/Workflows/">
+    <Project Path="Extensions/Etl/src/Workflows/Runtime/Elsa.Etl.Workflows.Runtime.csproj" />
+    <Project Path="Extensions/Etl/src/Workflows/Design/Elsa.Etl.Workflows.Design.csproj" />
+  </Folder>
   <Folder Name="/Extensions/Etl/tests/">
     <Project Path="Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj" />
   </Folder>

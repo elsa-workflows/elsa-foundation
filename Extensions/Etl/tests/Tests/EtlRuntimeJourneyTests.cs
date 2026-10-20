@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Channels;
 using CShells;
 using CShells.Configuration;
 using CShells.DependencyInjection;
@@ -10,7 +11,10 @@ using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Design;
 using Elsa.Etl.Design.Stores;
 using Elsa.Etl.Persistence.EntityFrameworkCore;
+using Elsa.Etl.Persistence.EntityFrameworkCore.Entities;
+using Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Etl.Runtime;
+using Elsa.Etl.Runtime.Bindings;
 using Elsa.Etl.Runtime.Execution;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Locking.FileSystem;
@@ -25,6 +29,107 @@ namespace Elsa.Etl.Tests;
 
 public sealed class EtlRuntimeJourneyTests
 {
+    [Fact]
+    public async Task Worker_acknowledges_terminal_delivery_only_after_adapter_returns_proof()
+    {
+        await using var files = new RuntimeFiles("id,name\n");
+        var delivery = new TestResultDelivery(EtlDeliveryDisposition.Consumed);
+        var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate, resultDelivery: delivery);
+        var invocation = files.Invocation(EtlTestPipelines.Create());
+        await files.AdmitAsync(host, invocation);
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        var delivered = await delivery.WaitForDeliveryAsync(timeout.Token);
+        Assert.Equal(invocation.RunId, delivered.RunId);
+        Assert.Equal(invocation.ResultAddress, delivered.Address);
+        var outbox = await files.WaitForOutboxAsync(host.Services, invocation.RunId,
+            row => row.Disposition == (int)EtlDeliveryDisposition.Consumed, timeout.Token);
+        Assert.Equal(delivered.DeliveryId, outbox.DeliveryId);
+        Assert.True(outbox.Attempts >= 1);
+        Assert.NotNull(outbox.AcknowledgedAtUtcTicks);
+    }
+
+    [Fact]
+    public async Task Worker_leaves_delivery_owed_until_adapter_returns_a_disposition()
+    {
+        await using var files = new RuntimeFiles("id,name\n");
+        var delivery = new TestResultDelivery(null);
+        var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate, resultDelivery: delivery, deliveryLeaseSeconds: 5);
+        var invocation = files.Invocation(EtlTestPipelines.Create());
+        await files.AdmitAsync(host, invocation);
+
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        var first = await delivery.WaitForDeliveryAsync(timeout.Token);
+        var retry = await delivery.WaitForDeliveryAsync(timeout.Token);
+        Assert.Equal(invocation.RunId, retry.RunId);
+        Assert.True(retry.Fence > first.Fence);
+
+        var outbox = await files.ReadOutboxAsync(host.Services, invocation.RunId);
+        Assert.NotNull(outbox);
+        Assert.True(outbox.Attempts >= 2);
+        Assert.Null(outbox.Disposition);
+        Assert.Null(outbox.AcknowledgedAtUtcTicks);
+    }
+
+    [Fact]
+    public async Task Worker_does_not_claim_delivery_when_no_adapter_is_configured()
+    {
+        await using var files = new RuntimeFiles("id,name\n");
+        var host = await files.StartHostAsync(EfMigratePolicy.AutoMigrate);
+        var invocation = files.Invocation(EtlTestPipelines.Create());
+        await files.AdmitAsync(host, invocation);
+        await files.WaitForTerminalAsync(host, invocation.RunId);
+        await Task.Delay(500);
+
+        var outbox = await files.ReadOutboxAsync(host.Services, invocation.RunId);
+        Assert.NotNull(outbox);
+        Assert.Equal(0, outbox.Attempts);
+        Assert.Null(outbox.Disposition);
+        await using var operation = host.Services.CreateAsyncScope();
+        var owed = await operation.ServiceProvider.GetRequiredService<IEtlRuntimeStore>()
+            .ClaimDeliveryAsync(files.Scope, "proof-check");
+        Assert.NotNull(owed);
+        Assert.Null((await files.ReadOutboxAsync(host.Services, invocation.RunId))!.Disposition);
+    }
+
+    [Fact]
+    public async Task Admission_service_resolves_trusted_bindings_and_reuses_the_first_pinned_revisions()
+    {
+        await using var files = new RuntimeFiles("id,name\n1,Ada\n");
+        var pipeline = EtlTestPipelines.Create();
+        var invocation = files.Invocation(pipeline);
+        var firstHost = await files.StartHostAsync(EfMigratePolicy.AutoMigrate, bindingRevision: "revision-one");
+
+        EtlRunBindings firstBindings;
+        await using (var operation = firstHost.Services.CreateAsyncScope())
+        {
+            var service = operation.ServiceProvider.GetRequiredService<IEtlRunAdmissionService>();
+            Assert.Same(operation.ServiceProvider.GetRequiredService<EtlExecution>(), service);
+            var result = await service.AdmitAsync(invocation);
+            Assert.Equal(EtlStoreStatus.Applied, result.Status);
+            firstBindings = Assert.IsType<EtlRunBindings>(Assert.IsType<EtlRunView>(result.Run).Bindings);
+        }
+
+        Assert.Equal("source", firstBindings.Source.Alias);
+        Assert.Equal("revision-one", firstBindings.Source.Revision);
+        Assert.False(string.IsNullOrWhiteSpace(firstBindings.Source.Handle));
+        Assert.False(string.IsNullOrWhiteSpace(firstBindings.Source.ExpectedSha256));
+        await files.WaitForTerminalAsync(firstHost, invocation.RunId);
+
+        var secondHost = await files.StartHostAsync(EfMigratePolicy.Validate, bindingRevision: "revision-two");
+        await using var secondOperation = secondHost.Services.CreateAsyncScope();
+        var currentSource = secondOperation.ServiceProvider.GetRequiredService<HostFileBindings>()
+            .Resolve(files.Scope, pipeline.Bindings.Source, EtlFileRole.Source);
+        Assert.Equal("revision-two", currentSource.Revision);
+        Assert.NotEqual(firstBindings.Source.Handle, currentSource.Handle);
+
+        var replay = await secondOperation.ServiceProvider.GetRequiredService<IEtlRunAdmissionService>().AdmitAsync(invocation);
+        Assert.Equal(EtlStoreStatus.Replay, replay.Status);
+        var replayBindings = Assert.IsType<EtlRunBindings>(Assert.IsType<EtlRunView>(replay.Run).Bindings);
+        Assert.Equal(firstBindings, replayBindings);
+        Assert.Equal("revision-one", replayBindings.Source.Revision);
+    }
+
     [Fact]
     public async Task Real_shell_starts_the_worker_and_awaits_its_unwind_when_disposed()
     {
@@ -187,18 +292,20 @@ public sealed class EtlRuntimeJourneyTests
             return EtlRuntimeFixtures.Admission(runId, Scope).Invocation with { Artifact = artifact };
         }
 
-        public async Task<IHost> StartHostAsync(EfMigratePolicy policy, bool includeBindings = true, bool useShell = false)
+        public async Task<IHost> StartHostAsync(EfMigratePolicy policy, bool includeBindings = true, bool useShell = false,
+            string bindingRevision = "v1", IEtlResultDelivery? resultDelivery = null, int deliveryLeaseSeconds = 30)
         {
             var builder = Host.CreateApplicationBuilder();
             var runtime = new EtlRuntimeFeature
             {
                 SnapshotRoot = SnapshotRoot,
-                FileBindings = includeBindings ? [Binding("source", "Source", _source), Binding("lookup", "Lookup", _lookup),
-                    Binding("output", "MainOutput", OutputRoot), Binding("errors", "ErrorOutput", ErrorRoot)] : []
+                FileBindings = includeBindings ? [Binding("source", "Source", _source, bindingRevision), Binding("lookup", "Lookup", _lookup, bindingRevision),
+                    Binding("output", "MainOutput", OutputRoot, bindingRevision), Binding("errors", "ErrorOutput", ErrorRoot, bindingRevision)] : []
             };
             var persistence = new EtlRuntimeEntityFrameworkCoreFeature
             {
-                ConnectionString = $"Data Source={Path.Combine(_directory, "runtime.db")};Pooling=False"
+                ConnectionString = $"Data Source={Path.Combine(_directory, "runtime.db")};Pooling=False",
+                DeliveryLeaseSeconds = deliveryLeaseSeconds
             };
             if (useShell)
                 builder.Services.AddCShells(shells => shells
@@ -217,6 +324,8 @@ public sealed class EtlRuntimeJourneyTests
                 runtime.ConfigureServices(builder.Services);
                 persistence.ConfigureServices(builder.Services);
             }
+            if (resultDelivery is not null)
+                builder.Services.AddSingleton<IEtlResultDelivery>(resultDelivery);
             builder.Services.Configure<EfMigrateOptions>(options => options.Policy = policy);
             var host = builder.Build();
             _hosts.Add(host);
@@ -248,6 +357,27 @@ public sealed class EtlRuntimeJourneyTests
             }
         }
 
+        public async Task<EtlRuntimeOutboxRecord?> ReadOutboxAsync(IServiceProvider services, string runId)
+        {
+            await using var operation = services.CreateAsyncScope();
+            var scopeKey = EtlRuntimeIdentity.ScopeKey(Scope);
+            var runKey = EtlRuntimeRecordCodec.EncodeIdentity(runId, "run id");
+            return await operation.ServiceProvider.GetRequiredService<EtlRuntimeDbContext>().Outbox.AsNoTracking()
+                .SingleOrDefaultAsync(row => row.ScopeKey == scopeKey && row.RunKey == runKey);
+        }
+
+        public async Task<EtlRuntimeOutboxRecord> WaitForOutboxAsync(IServiceProvider services, string runId,
+            Func<EtlRuntimeOutboxRecord, bool> condition, CancellationToken cancellationToken)
+        {
+            while (true)
+            {
+                var row = await ReadOutboxAsync(services, runId);
+                if (row is not null && condition(row))
+                    return row;
+                await Task.Delay(25, cancellationToken);
+            }
+        }
+
         public async Task<string> ReadRouteAsync(IReadOnlyList<EtlManifestEntry> manifest, EtlOutputRoute route)
         {
             var result = new StringBuilder();
@@ -269,10 +399,10 @@ public sealed class EtlRuntimeJourneyTests
             _hosts.Remove(host);
         }
 
-        private EtlHostFileBindingOptions Binding(string alias, string role, string path) => new()
+        private EtlHostFileBindingOptions Binding(string alias, string role, string path, string revision) => new()
         {
             TenantId = Scope.TenantId, PersistencePartition = Scope.PersistencePartition, Alias = alias,
-            Role = role, Revision = "v1", Path = path, IsCurrent = true,
+            Role = role, Revision = revision, Path = path, IsCurrent = true,
             ExpectedSha256 = role is "Source" or "Lookup" ? Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant() : null,
             ImmutableInput = role is "Source" or "Lookup", AtomicPublication = role is "MainOutput" or "ErrorOutput"
         };
@@ -283,5 +413,20 @@ public sealed class EtlRuntimeJourneyTests
                 await StopHostAsync(host);
             Directory.Delete(_directory, recursive: true);
         }
+    }
+
+    private sealed class TestResultDelivery(EtlDeliveryDisposition? disposition) : IEtlResultDelivery
+    {
+        private readonly Channel<EtlDeliveryLease> _deliveries = Channel.CreateUnbounded<EtlDeliveryLease>();
+
+        public ValueTask<EtlDeliveryDisposition?> DeliverAsync(EtlDeliveryLease delivery, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _deliveries.Writer.TryWrite(delivery);
+            return ValueTask.FromResult(disposition);
+        }
+
+        public Task<EtlDeliveryLease> WaitForDeliveryAsync(CancellationToken cancellationToken = default) =>
+            _deliveries.Reader.ReadAsync(cancellationToken).AsTask();
     }
 }

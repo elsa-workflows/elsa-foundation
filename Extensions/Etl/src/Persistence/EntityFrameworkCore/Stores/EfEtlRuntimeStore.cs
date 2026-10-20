@@ -1017,6 +1017,6 @@ internal sealed class EfEtlRuntimeStore(
     private long NowTicks() => clock.GetUtcNow().UtcDateTime.Ticks;
     private static string HashAscii(string value) => EtlRuntimeRecordCodec.HashText(value);
     private static string DeliveryId(string resultId) => HashAscii("etl-delivery-v1|" + resultId);
-    private static string OutboxHash(string invocationJson, string resultJson) => HashAscii("etl-result-envelope-v1|" + invocationJson + "|" + resultJson);
+    private static string OutboxHash(string invocationJson, string resultJson) => EtlRuntimeJson.ResultEnvelopeHash(invocationJson, resultJson);
     private static void EnsureSchema(string schemaVersion) => EtlRuntimeRecordCodec.EnsureSchema(schemaVersion);
 }

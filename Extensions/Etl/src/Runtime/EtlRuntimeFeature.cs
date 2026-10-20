@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Runtime.Bindings;
 using Elsa.Etl.Runtime.Execution;
 using Elsa.Etl.Runtime.Hosting;
@@ -59,6 +60,7 @@ public sealed class EtlRuntimeFeature : IShellFeature
         services.AddScoped(_ => new HostFileBindings(options.FileBindings));
         services.AddScoped<EtlExecutableReader>();
         services.AddScoped<EtlExecution>();
+        services.AddScoped<IEtlRunAdmissionService>(provider => provider.GetRequiredService<EtlExecution>());
         // The generic host owns IHostedService; CShells owns IBackgroundTask through Tasks.
         // Both paths resolve the same idempotently started worker for this provider generation.
         services.AddSingleton<EtlRuntimeWorker>();

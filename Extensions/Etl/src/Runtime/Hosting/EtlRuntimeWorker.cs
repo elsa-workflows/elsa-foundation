@@ -92,30 +92,42 @@ internal sealed class EtlRuntimeWorker(
                 return;
             }
             var execution = operation.ServiceProvider.GetRequiredService<EtlExecution>();
-            // Give each configured scope both work-class preferences before rotating scope priority.
+            var delivery = operation.ServiceProvider.GetService<IEtlResultDelivery>();
+            // Rotate scope priority and work kind so preparation, partitions and configured delivery share capacity fairly.
             var ticket = (ulong)Interlocked.Increment(ref _workOffset);
-            var start = (int)((ticket / 2) % (ulong)_scopes.Length);
-            var preferPartition = (ticket & 1) == 0;
+            var start = (int)((ticket / 3) % (ulong)_scopes.Length);
+            var preferredKind = (int)(ticket % 3);
             for (var offset = 0; offset < _scopes.Length; offset++)
             {
                 var scope = _scopes[(start + offset) % _scopes.Length];
-                for (var kind = 0; kind < 2; kind++)
+                for (var kindOffset = 0; kindOffset < 3; kindOffset++)
                 {
-                    if ((kind == 0) == preferPartition)
+                    switch ((preferredKind + kindOffset) % 3)
                     {
-                        var partition = await store.ClaimPartitionAsync(scope, null, _workerId, cancellationToken);
-                        if (partition is null)
-                            continue;
-                        await execution.ExecutePartitionAsync(partition, cancellationToken);
+                        case 0:
+                        {
+                            var preparation = await store.ClaimPreparationAsync(scope, _workerId, cancellationToken);
+                            if (preparation is null) continue;
+                            await execution.PrepareAsync(preparation, cancellationToken);
+                            return;
+                        }
+                        case 1:
+                        {
+                            var partition = await store.ClaimPartitionAsync(scope, null, _workerId, cancellationToken);
+                            if (partition is null) continue;
+                            await execution.ExecutePartitionAsync(partition, cancellationToken);
+                            return;
+                        }
+                        case 2 when delivery is not null:
+                        {
+                            var lease = await store.ClaimDeliveryAsync(scope, _workerId, cancellationToken);
+                            if (lease is null) continue;
+                            var disposition = await delivery.DeliverAsync(lease, cancellationToken);
+                            if (disposition is { } proof && Enum.IsDefined(proof))
+                                await store.AcknowledgeDeliveryAsync(lease, proof, cancellationToken);
+                            return;
+                        }
                     }
-                    else
-                    {
-                        var preparation = await store.ClaimPreparationAsync(scope, _workerId, cancellationToken);
-                        if (preparation is null)
-                            continue;
-                        await execution.PrepareAsync(preparation, cancellationToken);
-                    }
-                    return;
                 }
             }
         }

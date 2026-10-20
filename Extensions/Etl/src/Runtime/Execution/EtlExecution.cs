@@ -18,7 +18,7 @@ internal sealed class EtlExecution(
     EtlAttemptBudget budget,
     IServiceScopeFactory scopeFactory,
     TimeProvider clock,
-    ILogger<EtlExecution> logger)
+    ILogger<EtlExecution> logger) : IEtlRunAdmissionService
 {
     public async ValueTask<EtlAdmissionResult> AdmitAsync(EtlInvocation invocation, CancellationToken cancellationToken = default)
     {

@@ -2,7 +2,6 @@ using System.Security.Cryptography;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Elsa.Etl.Core;
 using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Persistence.EntityFrameworkCore.Entities;
@@ -15,7 +14,6 @@ internal static class EtlRuntimeRecordCodec
     private const int InvocationJsonMaximumBytes = 512 * 1024;
     private const int BindingJsonMaximumBytes = 64 * 1024;
     private const int TerminalJsonMaximumBytes = 16 * 1024;
-    private static readonly JsonSerializerOptions Options = CreateOptions();
 
     public static ScopeIdentity Scope(EtlScope scope)
     {
@@ -68,7 +66,7 @@ internal static class EtlRuntimeRecordCodec
         };
     }
 
-    public static string Write<T>(T value) => JsonSerializer.Serialize(value, Options);
+    public static string Write<T>(T value) => EtlRuntimeJson.Write(value);
 
     public static T Read<T>(string json)
     {
@@ -77,10 +75,7 @@ internal static class EtlRuntimeRecordCodec
             typeof(T) == typeof(EtlRunBindings) ? BindingJsonMaximumBytes :
             typeof(T) == typeof(EtlTerminalResult) ? TerminalJsonMaximumBytes :
             throw new InvalidOperationException($"No persisted ETL size bound is defined for {typeof(T).Name}.");
-        if (json.Length > maximumBytes || Encoding.UTF8.GetByteCount(json) > maximumBytes)
-            throw new InvalidDataException($"The persisted ETL {typeof(T).Name} document exceeds its size bound.");
-        return JsonSerializer.Deserialize<T>(json, Options)
-            ?? throw new InvalidDataException($"The persisted ETL {typeof(T).Name} document is empty.");
+        return EtlRuntimeJson.Read<T>(json, maximumBytes);
     }
 
     public static EtlInvocation ReadInvocation(string json)
@@ -300,42 +295,6 @@ internal static class EtlRuntimeRecordCodec
         if (string.IsNullOrWhiteSpace(value) || value.Length > maximum ||
             !StringComparer.Ordinal.Equals(value, value.Trim()) || value.Any(char.IsControl))
             throw new ArgumentException($"The ETL {label} must be a bounded exact nonblank value.", label);
-    }
-
-    private static JsonSerializerOptions CreateOptions()
-    {
-        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web)
-        {
-            UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-            PropertyNameCaseInsensitive = false
-        };
-        options.Converters.Add(new LosslessStringJsonConverter());
-        options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false));
-        return options;
-    }
-
-    // Private, unshipped v1 store values preserve every UTF-16 code unit. Fixed property names and
-    // the authored pipeline JsonElement are not transformed. No ordinary-JSON legacy fallback is accepted.
-    private sealed class LosslessStringJsonConverter : JsonConverter<string>
-    {
-        private const string Prefix = "u16:";
-
-        public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        {
-            if (reader.TokenType != JsonTokenType.String)
-                throw new JsonException("The persisted ETL string representation is invalid.");
-            var value = reader.GetString();
-            if (value is null || !value.StartsWith(Prefix, StringComparison.Ordinal))
-                throw new JsonException("The persisted ETL string representation is invalid.");
-            try { return EfRelationalIdentity.Decode(value[Prefix.Length..]); }
-            catch (InvalidOperationException exception)
-            {
-                throw new JsonException("The persisted ETL string representation is invalid.", exception);
-            }
-        }
-
-        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options) =>
-            writer.WriteStringValue(Prefix + EfRelationalIdentity.Encode(value));
     }
 
     internal sealed record ScopeIdentity(string Key, string? TenantId, string PersistencePartition);
