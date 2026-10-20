@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using CShells.Lifecycle;
@@ -489,13 +488,7 @@ public sealed class EtlNativeCompositeJourneyTests
                     await File.WriteAllTextAsync(snapshotRoot, "Host snapshot directory is unavailable.");
                 await File.WriteAllTextAsync(lookupPath, "id,category\n1,one\n", new UTF8Encoding(false));
 
-                var bindings = new[]
-                {
-                    Binding(scope, "source", "Source", "source-v1", sourcePath, true, false),
-                    Binding(scope, "lookup", "Lookup", "lookup-v1", lookupPath, true, false),
-                    Binding(scope, "output", "MainOutput", "output-v1", Path.Combine(directory, "output"), false, true),
-                    Binding(scope, "errors", "ErrorOutput", "errors-v1", Path.Combine(directory, "errors"), false, true)
-                };
+                var bindings = EtlNativeTestFileBindings.Create(scope, directory);
 
                 // RunEtl's production host worker requires the normal host lifetime service even though this harness starts
                 // it through IBackgroundTask. The same real Generic Host lifetime lets us exercise that production path.
@@ -835,29 +828,6 @@ public sealed class EtlNativeCompositeJourneyTests
                 .AsNoTracking()
                 .SingleAsync(row => row.ScopeKey == scopeKey && row.RunKey == runKey);
         }
-
-        private static EtlHostFileBindingOptions Binding(
-            EtlScope scope,
-            string alias,
-            string role,
-            string revision,
-            string path,
-            bool immutableInput,
-            bool atomicPublication) => new()
-        {
-            TenantId = scope.TenantId,
-            PersistencePartition = scope.PersistencePartition,
-            Alias = alias,
-            Role = role,
-            Revision = revision,
-            Path = path,
-            IsCurrent = true,
-            ExpectedSha256 = immutableInput
-                ? Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant()
-                : null,
-            ImmutableInput = immutableInput,
-            AtomicPublication = atomicPublication
-        };
 
         private static ExecutableNode Composite(ExecutableNode runEtl, ExecutableNode sibling, CompositeKind compositeKind, NativeOutcome outcome)
         {

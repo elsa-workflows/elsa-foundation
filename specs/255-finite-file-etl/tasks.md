@@ -44,6 +44,8 @@
 
 **Native checkpoint:** T017/T019 now have actual SQLite scheduler/worker evidence, including matching consumed receipts and acknowledged terminal results. Sequence, Flowchart and CompensationScope continue; a later scope fault preserves the ETL output and continues its outer Sequence. T020 is complete: the [terminal matrix](evidence/native-terminal-outcomes.md) covers business-error/fault/cancellation in all three composites through real SQLite/native execution. T022 is complete: [whole-parent cleanup](evidence/native-parent-cancellation.md) and [real placed-subtree/reversed-order evidence](evidence/native-subtree-cancellation.md) prove cancellation tombstones, native wait cleanup and no resurrection across all three composites. [Composite evidence and boundaries](evidence/native-composite-checkpoint.md).
 
+**Publication checkpoint:** [Persisted parent publication](evidence/persisted-parent-publication.md) exercises actual catalog persistence, draft promotion and ordinary workflow publication/compiler fan-in, followed by native Sequence/Flowchart execution in a separate runtime-only provider with the ETL design database offline. Publishing ETL v2 does not retarget the parent from v1. T018 remains unchecked until its paginated picker/catalog acceptance is complete; API/Studio acceptance remains owed.
+
 ## Phase 5 — US3: Recover and fence work
 
 **Goal:** Worker loss, retries and cancellation preserve accepted state and owed work.

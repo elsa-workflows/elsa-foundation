@@ -25,6 +25,32 @@ internal sealed record NativeEtlAuthoredComposite(ActivityNode Root,
     {
         var nodes = composite.DescendantsAndSelf().ToArray();
         var keys = nodes.Select(node => node.ActivityType).ToHashSet(StringComparer.Ordinal);
+        var catalog = CreateSourceCatalog(services, keys);
+        var byType = catalog.ToDictionary(item => item.Definition.ActivityTypeKey, item => item.Version, StringComparer.Ordinal);
+        var children = nodes.Where(node => node != composite).ToDictionary(node => node.ExecutableNodeId,
+            node => Leaf(node, byType[node.ActivityType].Id), StringComparer.Ordinal);
+        object authored = composite.ActivityType switch
+        {
+            var type when type == typeof(SequenceActivity).FullName => new SequenceAuthoredStructure(
+                composite.Structure!.Payload.Deserialize<SequenceExecutableStructure>(JsonOptions)!.Activities.Select(id => children[id]).ToArray()),
+            var type when type == typeof(FlowchartActivity).FullName => Flowchart(composite, children),
+            var type when type == typeof(CompensationActivity).FullName => new CompensationScopeAuthoredStructure(
+                composite.Structure!.Payload.Deserialize<CompensationScopeExecutableStructure>(JsonOptions)!.Steps
+                    .Select(step => new CompensationScopeAuthoredStep(step.Name, children[step.Activity!])).ToArray()),
+            _ => throw new InvalidOperationException("This fixture requires a supported real native composite.")
+        };
+        return new(new ActivityNode(composite.ExecutableNodeId, byType[composite.ActivityType].Id, [], [],
+            new ActivityNodeStructure(composite.Structure!.Kind, composite.Structure.SchemaVersion,
+                JsonSerializer.SerializeToElement(authored, authored.GetType(), JsonOptions))), catalog);
+    }
+
+    public static IReadOnlyCollection<(ActivityDefinition Definition, ActivityDefinitionVersion Version)> CreateSourceCatalog(
+        IServiceProvider services,
+        IReadOnlyCollection<string> typeKeys)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(typeKeys);
+        var keys = typeKeys.ToHashSet(StringComparer.Ordinal);
         var scanned = services.GetRequiredService<IClrAssemblyScanner>().Scan(AppContext.BaseDirectory)
             .Where(model => keys.Contains(model.ActivityTypeKey)).ToArray();
         Assert.Equal(keys.Order(StringComparer.Ordinal), scanned.Select(model => model.ActivityTypeKey).Order(StringComparer.Ordinal));
@@ -43,22 +69,7 @@ internal sealed record NativeEtlAuthoredComposite(ActivityNode Root,
             version.Definition = definition;
             return (Definition: definition, Version: version);
         }).ToArray();
-        var byType = catalog.ToDictionary(item => item.Definition.ActivityTypeKey, item => item.Version, StringComparer.Ordinal);
-        var children = nodes.Where(node => node != composite).ToDictionary(node => node.ExecutableNodeId,
-            node => Leaf(node, byType[node.ActivityType].Id), StringComparer.Ordinal);
-        object authored = composite.ActivityType switch
-        {
-            var type when type == typeof(SequenceActivity).FullName => new SequenceAuthoredStructure(
-                composite.Structure!.Payload.Deserialize<SequenceExecutableStructure>(JsonOptions)!.Activities.Select(id => children[id]).ToArray()),
-            var type when type == typeof(FlowchartActivity).FullName => Flowchart(composite, children),
-            var type when type == typeof(CompensationActivity).FullName => new CompensationScopeAuthoredStructure(
-                composite.Structure!.Payload.Deserialize<CompensationScopeExecutableStructure>(JsonOptions)!.Steps
-                    .Select(step => new CompensationScopeAuthoredStep(step.Name, children[step.Activity!])).ToArray()),
-            _ => throw new InvalidOperationException("This fixture requires a supported real native composite.")
-        };
-        return new(new ActivityNode(composite.ExecutableNodeId, byType[composite.ActivityType].Id, [], [],
-            new ActivityNodeStructure(composite.Structure!.Kind, composite.Structure.SchemaVersion,
-                JsonSerializer.SerializeToElement(authored, authored.GetType(), JsonOptions))), catalog);
+        return catalog;
     }
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

@@ -23148,6 +23148,11 @@
         },
         {
           "type": "internal",
+          "id": "Elsa.Mediator",
+          "path": "Essentials/src/Mediator/Elsa.Mediator/Elsa.Mediator.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Primitives.Hosting",
           "path": "Essentials/src/Primitives/Hosting/Elsa.Primitives.Hosting.csproj"
         },
@@ -23155,6 +23160,16 @@
           "type": "internal",
           "id": "Elsa.Tasks",
           "path": "Essentials/src/Tasks/Elsa.Tasks/Elsa.Tasks.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Persistence.EntityFrameworkCore",
+          "path": "Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Design.Validations",
+          "path": "Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/Elsa.Workflows.Design.Validations.csproj"
         },
         {
           "type": "internal",
@@ -23185,6 +23200,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime.Resumption",
           "path": "Essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Workflows.Runtime.Scheduling",
+          "path": "Essentials/src/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj"
         },
         {
           "type": "internal",

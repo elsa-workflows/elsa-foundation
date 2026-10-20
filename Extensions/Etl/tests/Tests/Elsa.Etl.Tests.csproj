@@ -22,6 +22,7 @@
     <ProjectReference Include="../../../../Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Elsa.Workflows.Publishing.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Events/Elsa.Events/Elsa.Events.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Mediator/Elsa.Mediator/Elsa.Mediator.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Primitives/Hosting/Elsa.Primitives.Hosting.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Expressions/Elsa.Expressions/Elsa.Expressions.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Activities/Graph/Design/Elsa.Activities.Graph.Design.csproj" />
@@ -29,6 +30,8 @@
     <ProjectReference Include="../../../../Essentials/src/Activities/Design/Api/Elsa.Activities.Design.Api.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Activities/Design/Reconciliation/Clr/Elsa.Activities.Design.Reconciliation.Clr.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Workflows/Design/Persistence/EntityFrameworkCore/Elsa.Workflows.Design.Persistence.EntityFrameworkCore.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Workflows/Design/Validations/Elsa.Workflows.Design.Validations/Elsa.Workflows.Design.Validations.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Workflows/Publishing/Api/Elsa.Workflows.Publishing.Api.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Workflows/Publishing/Persistence/EntityFrameworkCore/Elsa.Workflows.Publishing.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />
@@ -37,6 +40,7 @@
     <ProjectReference Include="../../../../Essentials/tests/Activities/Testing/Elsa.Activities.Testing.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Workflows/Runtime/Persistence/EntityFrameworkCore/Elsa.Workflows.Runtime.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Workflows/Runtime/Resumption/Elsa.Workflows.Runtime.Resumption.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Workflows/Runtime/Scheduling/Elsa.Workflows.Runtime.Scheduling.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Activities/Sequence/Elsa.Activities.Sequence.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Activities/Flowchart/Elsa.Activities.Flowchart.csproj" />
     <ProjectReference Include="../../../../Essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj" />
