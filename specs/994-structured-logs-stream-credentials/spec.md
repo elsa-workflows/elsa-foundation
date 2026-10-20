@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-20
 
-**Status**: In progress
+**Status**: Implemented
 
 **Input**: Deliver the remaining Studio UX epic #3057. Correct reproduced defect #3132: the standard signed-in Structured Logs page can read recent entries but cannot open its live stream when Studio and Workbench use the existing separate origins.
 
