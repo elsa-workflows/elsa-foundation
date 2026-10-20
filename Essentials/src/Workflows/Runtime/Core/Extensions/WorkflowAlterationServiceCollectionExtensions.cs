@@ -40,7 +40,7 @@ public static class WorkflowAlterationServiceCollectionExtensions
     private static void ValidateCustomDescriptor(WorkflowAlterationDescriptor descriptor)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
-        if (descriptor.Kind is "CancelWorkflow" or "ModifyVariable" or "ScheduleActivity" or "RescheduleActivity" or "Migrate")
+        if (descriptor.Kind is "CancelWorkflow" or "ModifyVariable" or "ScheduleActivity" or "RescheduleActivity" or "RetryFaultedActivity" or "Migrate")
             throw new ArgumentException($"'{descriptor.Kind}' is reserved for a Runtime-owned alteration.", nameof(descriptor));
         if (!descriptor.Kind.Contains('.', StringComparison.Ordinal) || descriptor.Kind.Split('.').Any(string.IsNullOrWhiteSpace))
             throw new ArgumentException("Custom workflow alteration kinds must be dotted and namespaced.", nameof(descriptor));

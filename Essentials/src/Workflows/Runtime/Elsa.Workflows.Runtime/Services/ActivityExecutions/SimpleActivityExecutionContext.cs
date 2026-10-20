@@ -70,6 +70,7 @@ public sealed class SimpleActivityExecutionContext(
     private readonly List<RuntimeChildActivityScheduleRequest> _childActivityScheduleRequests = [];
     private readonly List<RuntimeChildSubtreeCancellationRequest> _childSubtreeCancellationRequests = [];
     private readonly List<RuntimeChildFaultAbsorptionRequest> _childFaultAbsorptionRequests = [];
+    private readonly List<RuntimeChildFaultInterventionRequest> _childFaultInterventionRequests = [];
     private readonly List<RuntimeParentNotificationRequest> _parentNotificationRequests = [];
     private readonly List<RuntimeAncestorNotificationRequest> _ancestorNotificationRequests = [];
 
@@ -152,6 +153,17 @@ public sealed class SimpleActivityExecutionContext(
     public IReadOnlyCollection<RuntimeChildFaultAbsorptionRequest> GetChildFaultAbsorptionRequests() =>
         _childFaultAbsorptionRequests.ToArray();
 
+    public void RequestChildFaultIntervention(
+        string incidentId,
+        string reason,
+        IReadOnlyDictionary<string, string>? metadata = null)
+    {
+        _childFaultInterventionRequests.Add(new RuntimeChildFaultInterventionRequest(incidentId, reason, metadata));
+    }
+
+    public IReadOnlyCollection<RuntimeChildFaultInterventionRequest> GetChildFaultInterventionRequests() =>
+        _childFaultInterventionRequests.ToArray();
+
     public void RequestParentNotification(string code, JsonElement? payload = null)
     {
         _parentNotificationRequests.Add(new RuntimeParentNotificationRequest(code, payload));
@@ -170,14 +182,14 @@ public sealed class SimpleActivityExecutionContext(
 
     /// <summary>Projects the engine context to the deliberately smaller ordinary activity context.</summary>
     public ActivityExecutionContext ToActivityExecutionContext() =>
-        new(
+        new ActivityExecutionContext(
             WorkflowExecutionId,
             InvocationId,
             AttemptId,
             ExecutableNodeId,
             CancellationToken,
             TriggerPayload,
-            TriggerNodeId);
+            TriggerNodeId).WithResolvedOperationKeys(activityExecutionState);
 
     /// <summary>
     /// The visible container-scope chain threaded by the runtime for this concrete activity execution.

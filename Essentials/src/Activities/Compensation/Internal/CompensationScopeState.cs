@@ -8,6 +8,9 @@ internal enum CompensationScopePhase
 {
     Running,
     Compensating,
+
+    /// <summary>A step or handler waits on an operator: its incident stays blocking with Wait for intervention.</summary>
+    AwaitingIntervention,
     Completed,
     Compensated
 }
@@ -26,7 +29,30 @@ internal enum CompensationEntryStatus
     Compensating,
 
     /// <summary>The handler completed.</summary>
-    Compensated
+    Compensated,
+
+    /// <summary>The forward outcome is unknown: the effect may exist. Never treated as "no effect".</summary>
+    Uncertain,
+
+    /// <summary>The handler failed on every attempt; the scope waits for an operator.</summary>
+    Failed
+}
+
+/// <summary>What the forward occurrence reported. Kept when the entry's status changes. Persisted by name.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<CompensationForwardOutcome>))]
+internal enum CompensationForwardOutcome
+{
+    Completed,
+    Uncertain
+}
+
+/// <summary>The result of one handler run. Persisted by name.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<CompensationAttemptResult>))]
+internal enum CompensationAttemptResult
+{
+    Running,
+    Completed,
+    Faulted
 }
 
 /// <summary>
@@ -65,7 +91,7 @@ internal sealed record CompensationScopeState
     public IReadOnlyList<CompensationEntry> Entries { get; init; }
 }
 
-/// <summary>One journal entry: a completed forward occurrence and its recovery progress.</summary>
+/// <summary>One journal entry: a forward occurrence that completed or whose outcome is unknown, and its recovery progress.</summary>
 internal sealed record CompensationEntry
 {
     [JsonConstructor]
@@ -75,16 +101,22 @@ internal sealed record CompensationEntry
         int ordinal,
         CompensationEntryStatus status,
         string forwardActivityExecutionId,
+        string operationKey,
+        CompensationForwardOutcome forwardOutcome = CompensationForwardOutcome.Completed,
         string? forwardIterationId = null,
-        IReadOnlyList<string>? handlerActivityExecutionIds = null)
+        IReadOnlyList<CompensationHandlerAttempt>? handlerAttempts = null,
+        string? interventionIncidentId = null)
     {
         Id = id;
         Step = step;
         Ordinal = ordinal;
         Status = status;
         ForwardActivityExecutionId = forwardActivityExecutionId;
+        OperationKey = operationKey;
+        ForwardOutcome = forwardOutcome;
         ForwardIterationId = forwardIterationId;
-        HandlerActivityExecutionIds = handlerActivityExecutionIds ?? [];
+        HandlerAttempts = handlerAttempts ?? [];
+        InterventionIncidentId = interventionIncidentId;
     }
 
     public string Id { get; init; }
@@ -92,14 +124,41 @@ internal sealed record CompensationEntry
     public int Ordinal { get; init; }
     public CompensationEntryStatus Status { get; init; }
     public string ForwardActivityExecutionId { get; init; }
+
+    /// <summary>The operation key the forward step was given; its handler targets it.</summary>
+    public string OperationKey { get; init; }
+
+    public CompensationForwardOutcome ForwardOutcome { get; init; }
     public string? ForwardIterationId { get; init; }
-    public IReadOnlyList<string> HandlerActivityExecutionIds { get; init; }
+
+    /// <summary>Every run of the handler for this entry, oldest first. Only the last may be running.</summary>
+    public IReadOnlyList<CompensationHandlerAttempt> HandlerAttempts { get; init; }
+
+    /// <summary>The blocking incident this entry waits on, while the scope waits for intervention.</summary>
+    public string? InterventionIncidentId { get; init; }
 }
 
-/// <summary>Why recovery started. M1 records step faults; the fault's code and message stay on the incident.</summary>
+/// <summary>One run of an entry's handler. Its execution id is recorded when it completes or faults.</summary>
+internal sealed record CompensationHandlerAttempt
+{
+    [JsonConstructor]
+    public CompensationHandlerAttempt(CompensationAttemptResult result, string? activityExecutionId = null, string? incidentId = null)
+    {
+        Result = result;
+        ActivityExecutionId = activityExecutionId;
+        IncidentId = incidentId;
+    }
+
+    public CompensationAttemptResult Result { get; init; }
+    public string? ActivityExecutionId { get; init; }
+    public string? IncidentId { get; init; }
+}
+
+/// <summary>Why recovery started: a step fault, or a step whose outcome is unknown. Set once and never overwritten.</summary>
 internal sealed record CompensationRecoveryCause
 {
     public const string FaultKind = "fault";
+    public const string UncertainKind = "uncertain";
 
     [JsonConstructor]
     public CompensationRecoveryCause(string kind, string step, string activityExecutionId, string? incidentId = null)

@@ -299,7 +299,7 @@ public sealed class EventDrive : PrimitiveDrive
             resumeTargetId: resumeTargetId,
             stimulusType: EventStimulus.StimulusType,
             stimulusHash: EventStimulus.Hash(eventName),
-            input: JsonSerializer.SerializeToElement(new EventReceived(eventName)));
+            input: JsonSerializer.SerializeToElement(new { eventName = eventName }));
 
         recorder.Record(ActivityType, resumed, executableNodeId);
         Assert.Equal(ActivityExecutionStatus.Completed, resumed.State(executableNodeId).Status);

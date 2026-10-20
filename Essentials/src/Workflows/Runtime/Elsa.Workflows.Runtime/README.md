@@ -43,9 +43,12 @@ mandatory Runtime checkpoint, or stores one failed outcome and skips all non-app
 at-least-once; deterministic checkpoint IDs reconcile a lost acknowledgement without replaying an applied change.
 
 The built-in descriptors are `CancelWorkflow/1`, `ModifyVariable/1`, `ScheduleActivity/1`,
-`RescheduleActivity/1`, and `Migrate/1`. `CancelWorkflow` must be the sole envelope. Scheduling requires an
-activity-owned compiled scheduling capability; migration is limited to a quiescent suspended execution and an exact
-compatible executable artifact. Alterations never recover a workflow or resolve an incident implicitly.
+`RescheduleActivity/1`, `RetryFaultedActivity/1`, and `Migrate/1`. `CancelWorkflow` must be the sole envelope.
+Scheduling requires an activity-owned compiled scheduling capability; migration is limited to a quiescent suspended
+execution and an exact compatible executable artifact. Alterations never recover a workflow or resolve an incident
+implicitly. `RetryFaultedActivity/1` is the one explicit exception: it retries a faulted activity in a running run
+whose incident is waiting for intervention, resolving that incident with an `OperatorRetry` outcome and scheduling a
+successor that keeps the source's inputs, parent, scheduling cause, provenance metadata and operation keys.
 
 Deferred envelopes are encrypted before plan persistence. Plan and job reads contain stable descriptor identity,
 ordinal, status, bounded safe code/message, and structural IDs only—never an envelope payload, variable value,

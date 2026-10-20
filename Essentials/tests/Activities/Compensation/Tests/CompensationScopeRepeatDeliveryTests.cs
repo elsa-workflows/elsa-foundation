@@ -69,7 +69,7 @@ public sealed class CompensationScopeRepeatDeliveryTests
         var metadata = child.Metadata.ToDictionary(pair => pair.Key, pair => pair.Value);
         var context = NewContext(started.State, new Dictionary<string, string>());
         IReadOnlyDictionary<string, string> snapshot = faulted
-            ? new ActivityChildFaultedContext(context, "child", child.ExecutableNodeId, "incident", null, metadata).ChildSchedulingMetadata
+            ? new ActivityChildFaultedContext(context, "child", child.ExecutableNodeId, "incident", null, null, null, metadata).ChildSchedulingMetadata
             : new ActivityChildCompletedContext(context, "child", child.ExecutableNodeId, [ActivityOutcomes.Done], null, metadata).ChildSchedulingMetadata;
 
         metadata[CompensationScope.MetadataKeys.Scope] = "different-scope";
@@ -97,7 +97,7 @@ public sealed class CompensationScopeRepeatDeliveryTests
     {
         var context = NewContext(state, new Dictionary<string, string>());
         var continuation = await new CompensationScope().OnChildFaultedAsync(
-            new ActivityChildFaultedContext(context, childExecutionId, child.ExecutableNodeId, incidentId, null, child.Metadata));
+            new ActivityChildFaultedContext(context, childExecutionId, child.ExecutableNodeId, incidentId, null, null, null, child.Metadata));
         return new(continuation, context.GetChildActivityScheduleRequests().ToArray(), state);
     }
 

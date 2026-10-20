@@ -1,5 +1,7 @@
 # Native ETL composite checkpoint
 
+The subsequent [main integration receipt](native-composite-integration.md) records current combined compensation-M2 behavior and fresh validation. The counts and hashes below remain evidence for the original pre-integration checkpoint.
+
 Date: 2026-10-20. Active work: #3109 / draft PR #3111, following component checkpoint `73f79539a4b52f451c0af12b3d791b63923c8bc7`. This checkpoint implements T017/T019 and part of T020; it does not finish the finite-file ETL product or program #2892.
 
 ## Actual execution and the defect found

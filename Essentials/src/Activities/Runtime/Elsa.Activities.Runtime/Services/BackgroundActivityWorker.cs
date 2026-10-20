@@ -176,7 +176,8 @@ public sealed class BackgroundActivityWorker(
             if (activation.Activity.GetType() != pinnedActivityType)
                 throw new InvalidOperationException("BG-ACT-002: Activation returned a different type than the pinned background activity.");
             var transition = await activation.Activity.ExecuteAsync(new ActivityExecutionContext(
-                request.WorkflowExecutionId, request.InvocationId, request.AttemptId, request.ExecutableNodeId, cancellationToken));
+                request.WorkflowExecutionId, request.InvocationId, request.AttemptId, request.ExecutableNodeId, cancellationToken,
+                triggerPayload: null, triggerNodeId: null, request.OperationKey, request.TargetOperationKey));
             if (dispatch?.TakeWorkflowDispatch(request.WorkflowExecutionId, request.ActivityExecutionId) is not null ||
                 publish?.TakePublishStimuli(request.WorkflowExecutionId, request.ActivityExecutionId).Count > 0)
                 throw new InvalidOperationException("VF-BG-001: Background activity bodies cannot stage coordinator-owned effects.");
