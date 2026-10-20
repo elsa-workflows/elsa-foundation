@@ -37,7 +37,7 @@ tests to update), H2 (quickstart projects), H3 (retry is defined per FR-008/FR-0
   - 1,000 `UniqueId` values are distinct, lowercase UUID v7;
   - a context evaluated at another instant is refused.
   The missing-instant path (`VF-EXP-CLOCK-001`) has no public route, since both producers always set the instant. It stays a defensive guard with no test (FR-003–FR-005, SC-002).
-- [ ] T012 [US1] Run-level tests mirroring `WorkflowInstanceParameterRunTests`, in `Essentials/tests/Activities/Runtime/Tests/ClockParameterRunTests.cs` (new) (FR-007, FR-008, FR-008a, FR-012, SC-001):
+- [x] T012 [US1] Run-level tests mirroring `WorkflowInstanceParameterRunTests`, in `Essentials/tests/Activities/Runtime/Tests/ClockParameterRunTests.cs` (new) (FR-007, FR-008, FR-008a, FR-012, SC-001):
   - an activity input returning `args.now` and `args.id` records `MaterializedAt` and a v7 ID in its committed snapshot;
   - a faulted activity retried through `RetryFaultedActivity` sees the same values;
   - an intrinsic `Set` of `args.now` commits the instant read before evaluation;
@@ -45,8 +45,8 @@ tests to update), H2 (quickstart projects), H3 (retry is defined per FR-008/FR-0
 
 ## Phase 4: User Story 3 — Loops see time move (P1)
 
-- [ ] T013 [US3] Comment at the re-materialization call site (`:186-193`) naming ADR 0088 D2, and noting that the inspection timestamp at `:201-203` is not the `Clock` source, in `Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowParentActivityCompletionSchedulerWorkHandler.cs` (FR-010)
-- [ ] T014 [US3] Loop tests in `Essentials/tests/Activities/ControlFlow/Tests/While/WhileClockParameterTests.cs` (new) (FR-010, FR-011, SC-001):
+- [x] T013 [US3] Comment at the re-materialization call site (`:186-193`) naming ADR 0088 D2, and noting that the inspection timestamp at `:201-203` is not the `Clock` source, in `Essentials/src/Activities/Runtime/Elsa.Activities.Runtime/Services/WorkflowParentActivityCompletionSchedulerWorkHandler.cs` (FR-010)
+- [x] T014 [US3] Loop tests in `Essentials/tests/Activities/ControlFlow/Tests/While/WhileClockParameterTests.cs` (new) (FR-010, FR-011, SC-001):
   - `While` with a fake clock advanced between passes exits once `args.now` passes `args.deadline`, and each pass sees its own `Clock`;
   - `UniqueId` differs per pass;
   - a redelivered child completion after a committed pass does not evaluate again;
@@ -54,29 +54,29 @@ tests to update), H2 (quickstart projects), H3 (retry is defined per FR-008/FR-0
 
 ## Phase 5: User Story 6 — Existing executables keep their behavior (P1)
 
-- [ ] T015 [US6] Stamp `binding-pure-v2` for plain-source `JavaScript` in `CompileExpressionInput`, in `Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/RuntimeInputBindingCompiler.cs` (P-7, FR-021)
-- [ ] T015a [US6] Update the tests that pin the old stamp, giving the reason (FR-021, §2.21.1) (H1):
+- [x] T015 [US6] Stamp `binding-pure-v2` for plain-source `JavaScript` in `CompileExpressionInput`, in `Essentials/src/Workflows/Publishing/Elsa.Workflows.Publishing/Services/RuntimeInputBindingCompiler.cs` (P-7, FR-021)
+- [x] T015a [US6] Update the tests that pin the old stamp, giving the reason (FR-021, §2.21.1) (H1). Only the compiler assertion changed; the golden fixtures carry no profile and stayed byte-identical after regeneration:
   - `Essentials/tests/Workflows/Publishing/Api/Tests/WorkflowExecutableCompilerTests.cs:1289-1294` (plain JS now v2);
   - the golden `Essentials/tests/Workflows/Publishing/Api/Tests/Fixtures/CompilerGoldens/javascript-expression.json`, regenerated with `UPDATE_COMPILER_GOLDENS=1` (artifact hash includes the profile).
-- [ ] T016 [P] [US6] Stamping tests in `Essentials/tests/Workflows/Publishing/Api/Tests/ExpressionCapabilityProfileStampingTests.cs` (new) (FR-021, FR-023, SC-005):
+- [x] T016 [P] [US6] Stamping tests in `Essentials/tests/Workflows/Publishing/Api/Tests/ExpressionCapabilityProfileStampingTests.cs` (new) (FR-021, FR-023, SC-005):
   - plain JavaScript compiles to v2, and plain Liquid to v1;
   - a portable definition declaring v1 keeps v1;
   - a stored binding stamped v1 reads back as v1.
-- [ ] T017 [P] [US6] Liquid tests in `Essentials/tests/Expressions/Tests/LiquidExplicitParametersTests.cs` (FR-005, FR-022, M3):
+- [x] T017 [P] [US6] Liquid tests in `Essentials/tests/Expressions/Tests/LiquidExplicitParametersTests.cs` (FR-005, FR-022, M3):
   - a Liquid expression stamped v2 is rejected;
   - a Liquid v1 expression with `Clock` and `UniqueId` parameters receives their string values.
 
 ## Phase 6: User Story 4 — A Date without a clock (P2)
 
-- [ ] T018 [US4] `ClocklessDateRules` (internal static) in `Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/Services/ClocklessDateRules.cs`, holding the six forms, their messages and severities, the invalid-date message and the frozen prelude (P-9)
-- [ ] T019 [US4] Link `ClocklessDateRules.cs` into `Essentials/src/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj`
-- [ ] T020 [US4] `ClocklessTimeSystem : ITimeSystem` in `Essentials/src/Expressions/JavaScript/Jint/Services/ClocklessTimeSystem.cs` (FR-015, FR-016)
-- [ ] T021 [US4] `IsolatedJintEngine.Create(..., clocklessDate)` in `Essentials/src/Expressions/JavaScript/Jint/Services/IsolatedJintEngine.cs` (P-8, FR-018, FR-023)
-- [ ] T022 [US4] Changes to `Essentials/src/Expressions/JavaScript/Jint/Services/JintPortableJavaScriptEvaluator.cs` (P-6, P-12, C1, L5):
+- [x] T018 [US4] `ClocklessDateRules` (internal static) in `Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/Services/ClocklessDateRules.cs`, holding the six forms, their messages and severities, the invalid-date message and the frozen prelude (P-9)
+- [x] T019 [US4] Link `ClocklessDateRules.cs` into `Essentials/src/Expressions/JavaScript/Jint/Elsa.Expressions.JavaScript.Jint.csproj`
+- [x] T020 [US4] `ClocklessTimeSystem : ITimeSystem` in `Essentials/src/Expressions/JavaScript/Jint/Services/ClocklessTimeSystem.cs` (FR-015, FR-016)
+- [x] T021 [US4] `IsolatedJintEngine.Create(..., clocklessDate)` in `Essentials/src/Expressions/JavaScript/Jint/Services/IsolatedJintEngine.cs` (P-8, FR-018, FR-023)
+- [x] T022 [US4] Changes to `Essentials/src/Expressions/JavaScript/Jint/Services/JintPortableJavaScriptEvaluator.cs` (P-6, P-12, C1, L5):
   - accept v1 and v2; v2 gets `clocklessDate: true`;
   - under v2, exclude `Date` from the stripped list and wrap prelude `TypeError`s and the invalid-date `RangeError` in `JavaScriptBindingEvaluationException` with the rule's text as the message;
   - fix the "binding-pure-v1 evaluator" options message.
-- [ ] T023 [P] [US4] Sandbox tests in `Essentials/tests/Expressions/JavaScript/Jint/Tests/ClocklessDateTests.cs` (new) (FR-014–FR-016, FR-018, SC-003, SC-004):
+- [x] T023 [P] [US4] Sandbox tests in `Essentials/tests/Expressions/JavaScript/Jint/Tests/ClocklessDateTests.cs` (new) (FR-014–FR-016, FR-018, SC-003, SC-004):
   - every allowed contract member;
   - ISO forms parse, and non-ISO strings, `2026-02-30`, `T25:00` and four fraction digits give `NaN`;
   - local getters equal UTC getters;
@@ -84,8 +84,8 @@ tests to update), H2 (quickstart projects), H3 (retry is defined per FR-008/FR-0
   - `ClocklessTimeSystem` has a UTC default zone and a zero offset;
   - `instanceof`, `constructor`, subclassing and `JSON.stringify` work;
   - `Temporal`, `Intl` and `Math.random` stay undefined.
-- [ ] T024 [P] [US4] v1 regression in `Essentials/tests/Expressions/JavaScript/Jint/Tests/StrippedAmbientCapabilityDiagnosticTests.cs`: the same `Date` source fails under v1 as today and succeeds under v2 (FR-023)
-- [ ] T024a [P] [US4] Corpus-pattern tests (SC-006) in `ClocklessDateTests.cs`, one per pattern:
+- [x] T024 [P] [US4] v1 regression in `Essentials/tests/Expressions/JavaScript/Jint/Tests/StrippedAmbientCapabilityDiagnosticTests.cs`: the same `Date` source fails under v1 as today and succeeds under v2 (FR-023)
+- [x] T024a [P] [US4] Corpus-pattern tests (SC-006) in `ClocklessDateTests.cs`, one per pattern:
   - stamp now;
   - ISO round-trip;
   - parse a request date;
@@ -94,26 +94,26 @@ tests to update), H2 (quickstart projects), H3 (retry is defined per FR-008/FR-0
 
 ## Phase 7: User Story 5 — Clear diagnostics (P2)
 
-- [ ] T025 [P] [US5] Message tests in `Essentials/tests/Expressions/JavaScript/Jint/Tests/ClocklessDateDiagnosticTests.cs` (new) (FR-017, SC-003):
+- [x] T025 [P] [US5] Message tests in `Essentials/tests/Expressions/JavaScript/Jint/Tests/ClocklessDateDiagnosticTests.cs` (new) (FR-017, SC-003):
   - one test per removed form (six), each asserting a `JavaScriptBindingEvaluationException` with the exact contract message;
   - the invalid-date `toISOString()` message.
-- [ ] T026 [US5] Validator in `Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/Services/JavaScriptExpressionToolingProvider.cs` (P-10, FR-019):
+- [x] T026 [US5] Validator in `Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/Services/JavaScriptExpressionToolingProvider.cs` (P-10, FR-019):
   - after a successful parse, re-parse into an Acornima AST and report each removed form from `ClocklessDateRules` with its location;
   - `toLocale*` forms as warnings.
-- [ ] T027 [P] [US5] Validator tests in `Essentials/tests/Expressions/Tests/ExpressionToolingProviderContractTests.cs` (FR-019):
+- [x] T027 [P] [US5] Validator tests in `Essentials/tests/Expressions/Tests/ExpressionToolingProviderContractTests.cs` (FR-019):
   - each removed form reports its message, severity and location;
   - `new Date(args.now)`, `Date.parse(x)` and `obj.now()` report nothing.
 
 ## Phase 8: Polish and documentation
 
-- [ ] T030 [P] Update the parameter-kind list and add a `binding-pure-v2` section to `specs/095-value-flow-redesign/contracts/expression-and-import-contract.md` (FR-025)
-- [ ] T031 [P] Update four `EXTENSION_POINTS.md` files: `Essentials/src/Expressions/Elsa.Expressions/`, `Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/`, `Essentials/src/Expressions/Liquid/` and `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/`
-- [ ] T032 [P] Documentation and stale "v1" text (L5):
+- [x] T030 [P] Update the parameter-kind list and add a `binding-pure-v2` section to `specs/095-value-flow-redesign/contracts/expression-and-import-contract.md` (FR-025)
+- [x] T031 [P] Update four `EXTENSION_POINTS.md` files: `Essentials/src/Expressions/Elsa.Expressions/`, `Essentials/src/Expressions/JavaScript/Elsa.Expressions.JavaScript/`, `Essentials/src/Expressions/Liquid/` and `Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/`
+- [x] T032 [P] Documentation and stale "v1" text (L5):
   - add the author-facing table and rewrites to `Essentials/src/Workflows/Design/JavaScript/README.md`;
   - point the ADR 0083 profile sentence to ADR 0088;
   - fix the stale text in `Essentials/src/Activities/Primitives/Activities/Inline.cs:22`.
-- [ ] T033 Update `PublicAPI.Unshipped.txt` for the Expressions projects as the build reports
-- [ ] T034 Run the quickstart set and the architecture guard tests; check `docs/maps/dependency-map.json` (`git diff --stat` on Windows)
+- [x] T033 Update `PublicAPI.Unshipped.txt` for the Expressions projects as the build reports
+- [x] T034 Run the quickstart set and the architecture guard tests; check `docs/maps/dependency-map.json` (`git diff --stat` on Windows)
 - [ ] T035 After the owner accepts ADR 0088, set it to Accepted in the ADR and in `docs/adr/README.md`, and set spec status to Implemented, in the same PR (M8)
 
 Removed after analysis (M5): the editor typings change (former T028/T029). The editor's standard library already
