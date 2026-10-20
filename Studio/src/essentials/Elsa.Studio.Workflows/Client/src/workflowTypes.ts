@@ -1054,11 +1054,20 @@ export interface ActivityExecutionBookmarkSummary {
   payload?: unknown;
 }
 
+/** The action applied to an incident, with its provenance (the API's `resolutionOutcome`). */
+export interface IncidentResolutionOutcomeSummary {
+  actionKind: string;
+  appliedAt?: string | null;
+  strategy?: { alias: string; version: number } | null;
+  systemSource?: string | null;
+  metadata?: Record<string, string>;
+}
+
 export interface ActivityExecutionIncidentSummary {
   incidentId: string;
   severity: string;
   status: string;
-  resolutionAction: string;
+  resolutionOutcome?: IncidentResolutionOutcomeSummary | null;
   failureType: string;
   message: string;
   stackTrace?: string | null;
@@ -1241,7 +1250,7 @@ export interface IncidentStateSummary {
   executableNodeId?: string | null;
   severity: string;
   status: string;
-  resolutionAction: string;
+  resolutionOutcome?: IncidentResolutionOutcomeSummary | null;
   failureType: string;
   message: string;
   stackTrace?: string | null;

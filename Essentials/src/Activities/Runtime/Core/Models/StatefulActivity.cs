@@ -171,6 +171,8 @@ public sealed class ActivityStartContext<TTrigger>
         AttemptId = attempt.AttemptId;
         ExecutableNodeId = attempt.ExecutableNodeId;
         CancellationToken = attempt.CancellationToken;
+        OperationKey = attempt.OperationKey;
+        TargetOperationKey = attempt.TargetOperationKey;
         IsDirectInvocation = attempt.TriggerNodeId is null;
         IsTriggerDelivery = StringComparer.Ordinal.Equals(attempt.TriggerNodeId, attempt.ExecutableNodeId);
         HasTrigger = hasTrigger;
@@ -182,6 +184,13 @@ public sealed class ActivityStartContext<TTrigger>
     public string AttemptId { get; }
     public string ExecutableNodeId { get; }
     public CancellationToken CancellationToken { get; }
+
+    /// <inheritdoc cref="ActivityExecutionContext.OperationKey"/>
+    public string OperationKey { get; }
+
+    /// <inheritdoc cref="ActivityExecutionContext.TargetOperationKey"/>
+    public string? TargetOperationKey { get; }
+
     public bool IsDirectInvocation { get; }
     public bool IsTriggerDelivery { get; }
     public bool HasTrigger { get; }
@@ -294,6 +303,8 @@ public sealed class ActivityResumeContext<TState, TTrigger>
         AttemptId = attempt.AttemptId;
         ExecutableNodeId = attempt.ExecutableNodeId;
         CancellationToken = attempt.CancellationToken;
+        OperationKey = attempt.OperationKey;
+        TargetOperationKey = attempt.TargetOperationKey;
         State = alreadyMaterialized ? state : PersistableActivityValue.SnapshotAndMaterialize(state, "private state");
         Trigger = alreadyMaterialized ? trigger : PersistableActivityValue.SnapshotAndMaterialize(trigger, "trigger");
         RegistrationId = registrationId;
@@ -305,6 +316,13 @@ public sealed class ActivityResumeContext<TState, TTrigger>
     public string AttemptId { get; }
     public string ExecutableNodeId { get; }
     public CancellationToken CancellationToken { get; }
+
+    /// <inheritdoc cref="ActivityExecutionContext.OperationKey"/>
+    public string OperationKey { get; }
+
+    /// <inheritdoc cref="ActivityExecutionContext.TargetOperationKey"/>
+    public string? TargetOperationKey { get; }
+
     public TState State { get; }
     public TTrigger Trigger { get; }
     public string RegistrationId { get; }

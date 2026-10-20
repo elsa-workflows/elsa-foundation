@@ -165,7 +165,7 @@ const incident: IncidentStateSummary = {
   executableNodeId: "node-1",
   severity: "Error",
   status: "Blocking",
-  resolutionAction: "WaitForIntervention",
+  resolutionOutcome: { actionKind: "WaitForIntervention", metadata: {} },
   failureType: "InputMaterializationFailed",
   message: "Input failed to evaluate.",
   createdAt: "2026-07-09T10:00:03Z",

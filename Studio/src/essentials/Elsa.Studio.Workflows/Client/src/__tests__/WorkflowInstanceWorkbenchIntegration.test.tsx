@@ -1038,7 +1038,7 @@ function incident(overrides: Partial<IncidentStateSummary> = {}): IncidentStateS
     executableNodeId: "compiled-target",
     severity: "Error",
     status: "Open",
-    resolutionAction: "None",
+    resolutionOutcome: null,
     failureType: "ActivityInputFailed",
     message: "The Text input failed.",
     createdAt: "2026-10-01T12:00:00Z",

@@ -30,7 +30,7 @@ import {
 import { applyRuntimeOverlays, isActiveIncident } from "../workflowRuntimeOverlays";
 import { buildInputInspectionRows, evaluationPhase, evaluationSequence, type InputInspectionRow, type InputInspectionState } from "../inputInspectionRows";
 import { buildExecutableActivityGraph, findExecutableGraphNodeId, findExecutableNodeFacts, type ExecutableActivityGraph, type ExecutableGraphNodeFacts } from "../executableGraph";
-import { formatActivityVersion, formatDate, formatDuration, shortTypeName } from "../workflowFormatting";
+import { formatActivityVersion, formatDate, formatDuration, resolutionOutcomeLabel, shortTypeName } from "../workflowFormatting";
 import { WorkflowExecutionTimeline } from "../WorkflowInstanceTimeline";
 import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { PanelTabList } from "./PanelTabList";
@@ -1569,6 +1569,7 @@ function WorkflowInstanceCanvas({
             runtime={canvas.compensation.runtime}
             onSelect={nodeId => nodeId && onSelectActivity(nodeId)}
             onSelectExecution={onSelectEvidence}
+            onOpenIncident={incidentId => onOpenIncident(incidentId)}
             onOpenSlot={canvas.compensation.openSlot}
           />
         ) : definitionVersion && canvas.mode === "sequence" ? (
@@ -3136,7 +3137,7 @@ function IncidentTechnicalContent({ incident }: { incident: IncidentStateSummary
         <dt>Status</dt><dd>{incident.status}</dd>
         <dt>Severity</dt><dd>{incident.severity}</dd>
         <dt>Blocking</dt><dd>{incident.isBlocking ? "Yes" : "No"}</dd>
-        {incident.resolutionAction ? <><dt>Resolution action</dt><dd>{incident.resolutionAction}</dd></> : null}
+        {incident.resolutionOutcome ? <><dt>Resolution action</dt><dd>{resolutionOutcomeLabel(incident.resolutionOutcome)}</dd></> : null}
         <dt>Created</dt><dd>{formatDate(incident.createdAt)}</dd>
         {incident.resolvedAt ? <><dt>Resolved</dt><dd>{formatDate(incident.resolvedAt)}</dd></> : null}
         {innerType ? <><dt>Root cause type</dt><dd><code>{innerType}</code></dd></> : null}
@@ -3283,7 +3284,7 @@ function formatIncidentForClipboard(incident: IncidentStateSummary) {
     `Status: ${incident.status}`,
     `Severity: ${incident.severity}`,
     `Blocking: ${incident.isBlocking ? "Yes" : "No"}`,
-    incident.resolutionAction ? `Resolution action: ${incident.resolutionAction}` : "",
+    incident.resolutionOutcome ? `Resolution action: ${resolutionOutcomeLabel(incident.resolutionOutcome)}` : "",
     `Created: ${formatDate(incident.createdAt)}`,
     incident.resolvedAt ? `Resolved: ${formatDate(incident.resolvedAt)}` : "",
     "",
