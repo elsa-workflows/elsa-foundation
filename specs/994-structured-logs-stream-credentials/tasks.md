@@ -45,8 +45,8 @@
 
 - [x] T005 Extend the existing EventSource stub and rendered tests in `Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/__tests__/module.test.ts` to verify filter changes close the previous source and create one replacement with the selected level/source/category query and credential option, and that unmount closes the active source.
 - [x] T006 Add deterministic page-event regressions in `Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/__tests__/module.test.ts` for entry filtering and pause/resume buffer behavior; verify `onerror` preserves the disconnected UI state without client-created duplicate EventSource instances or changed cleanup behavior.
-- [ ] T007 Run the existing authorization matrix in `Essentials/tests/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj` (`StructuredLogsApiAuthorizationTests`); retain anonymous/insufficient denial and zero-SSE/no-subscription outcomes.
-- [ ] T008 Run the existing stream replay/filter/cleanup coverage in `Essentials/tests/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj` (`StreamEndpointTests`); preserve backend behavior without changing its source.
+- [x] T007 Run the existing authorization matrix in `Essentials/tests/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj` (`StructuredLogsApiAuthorizationTests`); retain anonymous/insufficient denial and zero-SSE/no-subscription outcomes.
+- [x] T008 Run the existing stream replay/filter/cleanup coverage in `Essentials/tests/Diagnostics/StructuredLogs/Tests/Elsa.Diagnostics.StructuredLogs.Tests.csproj` (`StreamEndpointTests`); preserve backend behavior without changing its source.
 
 ---
 
@@ -87,3 +87,8 @@ At the test-only checkpoint, all twelve cases execute: the original ten pass and
 ## Root focused GREEN checkpoint
 
 Root reviewed the one-call-site product diff and all new page/panel tests. The credential option makes both RED cases pass: 12/12. Two further rendered preservation cases bring the module suite to 14/14 and verify exact level/source/category query replacement, closing previous/active sources, entry rendering, pause buffering/resume, and disconnected/open callback behavior on the same source. Shared root/global cleanup remains failure-safe. Logs: `3132-credential-green.log` and `3132-preservation-green.log` in the external execution folder. Simulated callbacks do not prove browser cookie attachment or native reconnect; T010/T011 remain required. Backend safeguards, integrated base, full gates and delivery remain open.
+
+
+## Root backend preservation checkpoint
+
+On product checkpoint `533fab720`, the targeted Release test-project build passes with one existing CS8602 warning and no errors. The unchanged authorization matrix passes 16/16 with no skips; the unchanged stream replay/filter/cleanup suite passes 9/9 with no skips. All commands used the normal build-slot wrapper, and the stream suite completed in 829 ms despite machine contention; no failure or exclusion is attributed to load. Root reviewed complete command logs in the external execution folder: `3132-backend-target-build.log`, `3132-backend-authorization.log`, and `3132-backend-stream.log`. T007/T008 are complete. These safeguards do not establish browser cookie attachment or native retry; T009–T012 remain open.
