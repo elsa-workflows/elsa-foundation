@@ -178,7 +178,7 @@ public sealed class WorkbenchCompensationRecoveryTests
     {
         var path = Path.Combine(journal, key + ".calls");
         return File.Exists(path)
-            ? File.ReadAllLines(path).Select(line => line.Split('|')).Where(parts => parts.Length == 3)
+            ? File.ReadAllLines(path).Select(line => line.Split('|')).Where(parts => parts.Length >= 3)
                 .Select(parts => new ParticipantCall(parts[0], parts[1])).ToArray()
             : [];
     }
