@@ -1,4 +1,27 @@
 #nullable enable
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.ConnectionName.get -> string?
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.ConnectionName.set -> void
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.ConnectionString.get -> string?
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.ConnectionString.set -> void
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.DeliveryLeaseSeconds.get -> int
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.DeliveryLeaseSeconds.set -> void
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.EtlRuntimeEntityFrameworkCoreFeature() -> void
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.MaximumPageSize.get -> int
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.MaximumPageSize.set -> void
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.MaximumPartitionsPerRun.get -> int
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.MaximumPartitionsPerRun.set -> void
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.PartitionLeaseSeconds.get -> int
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.PartitionLeaseSeconds.set -> void
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.Pooling.get -> bool
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.Pooling.set -> void
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.PreparationLeaseSeconds.get -> int
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.PreparationLeaseSeconds.set -> void
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.Provider.get -> string!
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.Provider.set -> void
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.Schema.get -> string?
+Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.Schema.set -> void
 Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignEntityFrameworkCoreFeature
 Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignEntityFrameworkCoreFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignEntityFrameworkCoreFeature.ConnectionName.get -> string?
