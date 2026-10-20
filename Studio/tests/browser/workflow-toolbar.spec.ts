@@ -53,7 +53,7 @@ for (const width of [320, 768, 1024, 1440]) {
       expect(await definitions.boundingBox()).toEqual(initialDefinitions);
       expect(await breadcrumbChevron.boundingBox()).toEqual(initialChevron);
     }
-    await expect(toolbar.getByRole("button", { name: "Review and Publish" })).toBeVisible();
+    await expect(toolbar.getByRole("button", { name: "Review & publish" })).toBeVisible();
     if (width === 768) {
       await toolbar.getByRole("button", { name: "Publish options", exact: true }).click();
       await page.getByRole("menuitemradio", { name: "Publish", exact: true }).click();
@@ -101,7 +101,7 @@ test("makes secondary actions keyboard accessible and preserves autosave state",
   await expect(menu.getByRole("menuitem", { name: "Export BPMN" })).toBeFocused();
   await menu.getByRole("menuitem", { name: "Export BPMN" }).press("Shift+Tab");
   await expect(menu).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Run", exact: true })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Test Run", exact: true })).toBeFocused();
   await trigger.click();
   await page.getByLabel("Save status").click();
   await expect(menu).toHaveCount(0);
@@ -122,7 +122,7 @@ test("keeps the overflow menu inside a narrow viewport and primary commands dire
   await page.setViewportSize({ width: 320, height: 600 });
   await page.goto("/?mode=workflow-toolbar&theme=dark");
   const toolbar = page.locator(".wf-editor-toolbar");
-  for (const name of ["Save", "Review and Publish", "Run"]) {
+  for (const name of ["Save", "Review & publish", "Test Run"]) {
     await toolbar.getByRole("button", { name, exact: true }).click();
     await expect(page.getByText(`Selected action: ${name}`, { exact: true })).toBeVisible();
   }
@@ -144,7 +144,7 @@ test("supports keyboard publish-mode selection and repeats the remembered mode a
   await trigger.focus();
   await trigger.press("ArrowDown");
   const menu = page.getByRole("menu", { name: "Publish action" });
-  const review = menu.getByRole("menuitemradio", { name: "Review and Publish", exact: true });
+  const review = menu.getByRole("menuitemradio", { name: "Review & publish", exact: true });
   const publish = menu.getByRole("menuitemradio", { name: "Publish", exact: true });
   await expect(review).toBeFocused();
   await expect(review).toHaveAttribute("aria-checked", "true");
@@ -179,8 +179,7 @@ for (const theme of ["light", "dark"]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(`/?mode=workflow-toolbar&theme=${theme}`);
       const toolbar = page.locator(".wf-editor-toolbar");
-      // Select the primary publish action structurally while its approved wording is under test elsewhere.
-      const primary = toolbar.getByRole("button").filter({ hasText: /^(Review and Publish|Review & publish)$/ });
+      const primary = toolbar.getByRole("button", { name: "Review & publish", exact: true });
       const actions = [toolbar.locator(".wf-save-button"), primary, toolbar.locator(".wf-run-button")];
       const initial = await Promise.all(actions.map(action => action.boundingBox()));
       expect(initial.every(Boolean)).toBe(true);
@@ -190,7 +189,7 @@ for (const theme of ["light", "dark"]) {
         const status = toolbar.locator(".wf-test-run-trigger");
         if (state) {
           await expect(status).toBeVisible();
-          await expect(status).toHaveText(state === "rejected" ? /Test run rejected/i : state === "incidents" ? /Test run accepted with incidents/i : state === "runtime-issue" ? /Test run accepted with a runtime issue/i : state === "stale" ? /Earlier draft · Test run dispatched/i : /Test run dispatched/i);
+          await expect(status).toHaveText(state === "rejected" ? /Test Run rejected/ : state === "incidents" ? /Test Run accepted with incidents/ : state === "runtime-issue" ? /Test Run accepted with a runtime issue/ : state === "stale" ? /Earlier draft · Test Run dispatched/ : /Test Run dispatched/);
           await status.focus();
           await status.press("Enter");
           await expect(page.getByText("Selected action: Runtime details", { exact: true })).toBeVisible();

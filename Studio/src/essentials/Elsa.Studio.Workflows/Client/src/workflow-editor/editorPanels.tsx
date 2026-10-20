@@ -116,7 +116,7 @@ export function TestRunStatus({
         onClick={onOpenDetails}
       >
         {rejected || acceptedWithIncidents ? <AlertCircle size={16} /> : <Check size={16} />}
-        {stale ? "Earlier draft · " : ""}{rejected ? "Test run rejected" : acceptedWithIncidents ? acceptedRuntimeIssueLabel(testRun) : "Test run dispatched"}
+        {stale ? "Earlier draft · " : ""}{rejected ? "Test Run rejected" : acceptedWithIncidents ? acceptedRuntimeIssueLabel(testRun) : "Test Run dispatched"}
       </button>
     </div>
   );
@@ -231,8 +231,8 @@ function hasAcceptedRuntimeIssue(testRun: WorkflowTestRunView) {
 
 function acceptedRuntimeIssueLabel(testRun: WorkflowTestRunView) {
   return typeof testRun.incidentCount === "number" && testRun.incidentCount > 0
-    ? "Test run accepted with incidents"
-    : "Test run accepted with a runtime issue";
+    ? "Test Run accepted with incidents"
+    : "Test Run accepted with a runtime issue";
 }
 
 function formatEvidenceCount(count: number | null | undefined, label: string) {

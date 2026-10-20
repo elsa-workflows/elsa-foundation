@@ -105,7 +105,7 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
         <button type="button" className="wf-icon-button wf-save-button" title="Save workflow" disabled={props.busy} onClick={props.onSave}><Save size={15} aria-hidden="true" /><span className="wf-toolbar-sr-only">Save</span></button>
         <PublishActionButton busy={props.busy} saving={props.saving} onPublish={props.onPublish} />
         {props.runStatus}
-        <button type="button" className="wf-run-button" disabled={!props.canRun} title={props.runTitle} onClick={props.onRun}><Play size={15} aria-hidden="true" /> Run</button>
+        <button type="button" className="wf-run-button" disabled={!props.canRun} title={props.runTitle} onClick={props.onRun}><Play size={15} aria-hidden="true" /> Test Run</button>
         <button
           ref={triggerRef}
           type="button"

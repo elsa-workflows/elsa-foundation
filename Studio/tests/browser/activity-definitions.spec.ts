@@ -697,6 +697,30 @@ for (const theme of ["light", "dark"]) {
       const initial = await Promise.all(actions.map(action => action.boundingBox()));
       expect(initial.every(Boolean)).toBe(true);
       const observations = [];
+      let releaseSave!: () => void;
+      const savePending = new Promise<void>(resolve => { releaseSave = resolve; });
+      const savePath = "**/design/activities/drafts/activity-draft-browser";
+      const failSave = async (route: Route) => {
+        if (route.request().method() !== "PUT") return route.fallback();
+        await savePending;
+        await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ title: "Save unavailable" }) });
+      };
+      await page.route(savePath, failSave);
+      await openAdvancedDetails(page);
+      await page.getByRole("textbox", { name: /Draft label/ }).fill("Geometry draft");
+      await page.locator("details.ad-authoring-advanced > summary").click();
+      await expect(page.locator(".ad-save-chip")).toHaveText(/Saving( queued)?/);
+      observations.push({ state: "queued-or-saving", boxes: await Promise.all(actions.map(action => action.boundingBox())) });
+      await expect(page.locator(".ad-save-chip")).toHaveText("Saving");
+      observations.push({ state: "saving", boxes: await Promise.all(actions.map(action => action.boundingBox())) });
+      releaseSave();
+      await expect(page.locator(".ad-save-chip")).toHaveText("Save failed");
+      observations.push({ state: "save-failed", boxes: await Promise.all(actions.map(action => action.boundingBox())) });
+      await page.unroute(savePath, failSave);
+      await actions[2].click();
+      await expectSavedRevision(page, 2);
+      observations.push({ state: "saved", boxes: await Promise.all(actions.map(action => action.boundingBox())) });
+
       const preflightPath = /\/design\/activities\/drafts\/[^/]+\/publication-preflight$/;
       let releaseFailure!: () => void;
       const failurePending = new Promise<void>(resolve => { releaseFailure = resolve; });

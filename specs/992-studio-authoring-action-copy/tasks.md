@@ -37,8 +37,8 @@ Every task uses the required unchecked checklist form, sequential ID, optional p
 
 **Independent Test**: Pass the targeted WorkflowEditorToolbar, WorkflowTestDrivePanel, and lazy-loading component tests; the root-owned browser fixture verifies the actual status component and direct-details callback.
 
-- [ ] T008 [US1] Update the transient workflow action, setup/loading copy, and generic submission fallback in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditorToolbar.tsx, Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowTestDrivePanel.tsx, and Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/lazyTestDriveUi.tsx; preserve supplied startLabel, trigger/input labels and associations, connected-environment/side-effects warning, and all submit callback arguments.
-- [ ] T009 [US1] Align the existing TestRunStatus outcome prefix with “Test Run” in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorPanels.tsx while retaining complete accepted/rejected/runtime-issue text, stale-draft cue, and the existing onOpenDetails callback into Runtime details.
+- [x] T008 [US1] Update the transient workflow action, setup/loading copy, and generic submission fallback in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditorToolbar.tsx, Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowTestDrivePanel.tsx, and Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/lazyTestDriveUi.tsx; preserve supplied startLabel, trigger/input labels and associations, connected-environment/side-effects warning, and all submit callback arguments.
+- [x] T009 [US1] Align the existing TestRunStatus outcome prefix with “Test Run” in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorPanels.tsx while retaining complete accepted/rejected/runtime-issue text, stale-draft cue, and the existing onOpenDetails callback into Runtime details.
 
 ## Phase 4: User Story 2 — Choose the Truthful Activity Draft Action (P1)
 
@@ -46,7 +46,7 @@ Every task uses the required unchecked checklist form, sequential ID, optional p
 
 **Independent Test**: Pass Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityDefinitions.test.tsx with exact draftId/sourceVersionId assertions for direct, create, and chooser branches.
 
-- [ ] T010 [US2] Update only the primary action copy in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionWorkbench.tsx for a single editable draft, confirmed cloneable head, confirmed explicit no-head starting point, and fallback chooser; preserve branch precedence, permission checks, exact IDs, requests, and navigation.
+- [x] T010 [US2] Update only the primary action copy in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionWorkbench.tsx for a single editable draft, confirmed cloneable head, confirmed explicit no-head starting point, and fallback chooser; preserve branch precedence, permission checks, exact IDs, requests, and navigation.
 
 ## Phase 5: User Story 3 — Understand Save and Publication Status from Action Copy (P2)
 
@@ -54,13 +54,13 @@ Every task uses the required unchecked checklist form, sequential ID, optional p
 
 **Independent Test**: Pass Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/publishActionButton.test.tsx, Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityDefinitionAuthoring.test.tsx, and Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/activityDefinitionPublicationReview.test.tsx.
 
-- [ ] T011 [US3] Change the existing workflow review-mode primary and menu labels to “Review & publish” in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/PublishActionButton.tsx; preserve the separate “Publish” label, remembered choice, mode callback, Activity entry, “Continue publication review”, and “Save now” immediate flush behavior.
+- [x] T011 [US3] Change the existing workflow review-mode primary and menu labels to “Review & publish” in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/PublishActionButton.tsx; preserve the separate “Publish” label, remembered choice, mode callback, Activity entry, “Continue publication review”, and “Save now” immediate flush behavior.
 
 ## Phase 6: Polish and Cross-Cutting Verification
 
 **Purpose**: Apply only a measured layout repair if needed, then complete root-owned browser, workspace, repository, and delivery gates.
 
-- [ ] T012 Root: apply the smallest approved layout adjustment in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditorToolbar.css and/or Studio/src/essentials/Elsa.Studio.Workflows/Client/src/activityDefinitionAuthoring.css only if the approved pre-change baseline or post-copy measurement fails the 1 CSS pixel criterion; otherwise leave styles unchanged and record no repair was needed.
+- [ ] T012 Root: apply the smallest approved presentation adjustment in Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditorToolbar.tsx, Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditorToolbar.css and/or Studio/src/essentials/Elsa.Studio.Workflows/Client/src/activityDefinitionAuthoring.css only if the approved pre-change baseline or post-copy measurement fails the 1 CSS pixel criterion; otherwise leave styles unchanged and record no repair was needed.
 - [ ] T013 Root: verify the finished real-component browser matrix with CI=1 and one Playwright worker using Studio/tests/browser/workflow-toolbar.spec.ts and Studio/tests/browser/activity-definitions.spec.ts; cover 320/768/1024/1440 widths, light/dark themes, status transitions, accessible names, keyboard access, full Test Run details, exact action behavior, visibility, overflow, and same-definition geometry. This fixture evidence does not establish composed Workbench acceptance for #3075 or backend/deployment readiness.
 - [ ] T014 Root: run the final canonical workspace typecheck and lint, affected Workflows client typecheck/build and full unit suite, targeted Playwright suite, locked architecture restore and complete architecture test project, and dependency-map check using the exact commands in specs/992-studio-authoring-action-copy/quickstart.md; report original baseline and added tests separately.
 - [ ] T015 After implementation and required local gates pass, set the Status line in specs/992-studio-authoring-action-copy/spec.md to Implemented and remove specs/992-studio-authoring-action-copy/checklists/requirements.md in the same implementation PR before final reviews, as required by docs/reference/spec-lifecycle.md.

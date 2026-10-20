@@ -155,8 +155,8 @@ function WorkflowToolbarFixture() {
         onAutoLayout={selectAction("Auto-layout")}
         onBack={selectAction("Definitions")}
         onSave={selectAction("Save")}
-        onPublish={mode => selectAction(mode === "publish" ? "Publish" : "Review and Publish")()}
-        onRun={selectAction("Run")}
+        onPublish={mode => selectAction(mode === "publish" ? "Publish" : "Review & publish")()}
+        onRun={selectAction("Test Run")}
         canRun
         runStatus={runStatus ? <TestRunStatus testRun={toolbarTestRun(runStatus)} stale={runStatus === "stale"} onOpenDetails={selectAction("Runtime details")} /> : null}
         runTitle="Run a transient test of the current design"

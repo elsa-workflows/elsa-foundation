@@ -73,3 +73,12 @@ Root reviewed all seven targeted component test diffs and the final pre-producti
 Actual-component browser baseline: four existing save-status cases pass and all sixteen new geometry cases fail, across four widths and both themes. The expanded workflow matrix then reproduces the failure for all thirty combinations of save status and real TestRunStatus per width/theme. Workflow primary movement reaches 301.14 CSS pixels horizontally and 80 vertically; Activity publication states reach 308.98 horizontally and 46.39 vertically. The narrow Activity graph toolbar also overflows because Back remains beside the header. These measurements authorize only the planned bounded presentation repair; no eligibility or lifecycle correction is required. Logs, JSON geometry and traces are retained with the external issue execution record.
 
 Root approves the T007 gate: proceed with the specified copy changes, then the smallest measured responsive toolbar repair. Final green, visual/keyboard review, repository gates, independent reviews, hosted checks and resulting-main verification remain pending.
+
+
+## Measured layout decision
+
+Move the existing workflow result node into a separate full-width action row after the primary command group, reusing the existing action-button styling and preserving the full status text and details callback. Top-align the toolbar so a conditional secondary result row does not recenter the command row. Keep the result text able to wrap at narrow widths; do not use the save-status ellipsis for result evidence. The DOM order will follow the visual command/result order and requires keyboard verification.
+
+Give the Activity publication entry a stable footprint sized for the measured longest continuation label and a reserved single-line status area. Top-align its authoring actions and wrap the graph toolbar's Back/header composition at the existing narrow breakpoint. Keep publication phase text and primary actions fully visible. These are scoped presentation changes; tests must still verify all measured states, permissions, exact identities and action callbacks. Root received an independent read-only layout proposal and owns final implementation, visual review and QA.
+
+The copy-only checkpoint passes all 134 tests in the seven targeted files. Root reconciled existing module/browser expectations only where they select the renamed transient test or workflow review entry; published Executable Run and its Run workflow dialog retain their existing labels and behavior.
