@@ -149,10 +149,10 @@ describe("workflow definition search refresh", () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input));
       requests.push(url.toString());
-      return response({ items: [definition({ name: "Refreshed workflow" })], nextContinuationToken: null });
+      return response({ items: [definition({ name: url.searchParams.get("searchTerm") === "invoice" ? "Refreshed invoice workflow" : "Initial workflow" })], nextContinuationToken: null });
     });
     const { container } = await renderWorkflowRoute("/workflows/definitions", fetchMock, pagedDefinitionCapabilities());
-    await waitForText(container, "Refreshed workflow");
+    await waitForText(container, "Initial workflow");
 
     vi.useFakeTimers();
     onTestFinished(() => { vi.useRealTimers(); });
@@ -165,7 +165,7 @@ describe("workflow definition search refresh", () => {
     ).toHaveLength(1));
     await vi.advanceTimersByTimeAsync(300);
     expect(requests.filter(url => new URL(url).searchParams.get("searchTerm") === "invoice")).toHaveLength(1);
-    await waitForText(container, "Refreshed workflow");
+    await waitForText(container, "Refreshed invoice workflow");
   });
 
   it.each(["during the newer query's delay", "after the newer result", "after the newer result (failed older request)"])("ignores an older response %s", async completion => {

@@ -73,8 +73,8 @@ describe("workflow definition route browse session", () => {
         pageRequests.push(url.toString());
         const token = url.searchParams.get("continuationToken");
         return token === "opaque-page-two"
-          ? response({ items: [definition({ id: "definition-second", name: "Second page workflow" })], nextContinuationToken: "opaque-page-three" })
-          : response({ items: [definition({ name: "First page workflow" })], nextContinuationToken: "opaque-page-two" });
+          ? response({ items: [definition({ id: "definition-second", name: pageRequests.length > 3 ? "Returned second page workflow" : "Second page workflow" })], nextContinuationToken: "opaque-page-three" })
+          : response({ items: [definition({ name: url.searchParams.get("pageSize") === "25" ? "Resized first page workflow" : "First page workflow" })], nextContinuationToken: "opaque-page-two" });
       }
       if (url.pathname.endsWith("/definitions/definition-second")) {
         return response({
@@ -96,6 +96,7 @@ describe("workflow definition route browse session", () => {
     await waitForText(container, "First page workflow");
     await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "25");
     await waitForCondition(() => expect(new URL(pageRequests.at(-1)!).searchParams.get("pageSize")).toBe("25"));
+    await waitForText(container, "Resized first page workflow");
     await click(button(container, "Next"));
     await waitForText(container, "Second page workflow");
     expect(new URL(pageRequests.at(-1)!).searchParams.get("continuationToken")).toBe("opaque-page-two");
@@ -117,7 +118,7 @@ describe("workflow definition route browse session", () => {
     expect(returnedPage.searchParams.get("folderId")).toBe("folder-operations");
     expect(returnedPage.searchParams.get("state")).toBe("all");
     expect(returnedPage.searchParams.get("searchTerm")).toBe("approval");
-    await waitForText(container, "Second page workflow");
+    await waitForText(container, "Returned second page workflow");
   });
 
   it("uses the selected page cursor and rebases changed search, lifecycle, and page-size keys", async () => {
@@ -145,18 +146,23 @@ describe("workflow definition route browse session", () => {
     await click(button(container, "Deleted"));
     await waitForCondition(() => expect(new URL(pageRequests.at(-1)!).searchParams.get("state")).toBe("deleted"));
     expect(new URL(pageRequests.at(-1)!).searchParams.has("continuationToken")).toBe(false);
+    await waitForText(container, "deleted page one");
 
     await click(button(container, "Next"));
     await waitForCondition(() => expect(new URL(pageRequests.at(-1)!).searchParams.get("continuationToken")).toBe("opaque-page-two"));
+    await waitForText(container, "deleted page two");
     await fill(container.querySelector<HTMLInputElement>(".wf-search input"), "new search");
     await waitForCondition(() => expect(new URL(pageRequests.at(-1)!).searchParams.get("searchTerm")).toBe("new search"));
     expect(new URL(pageRequests.at(-1)!).searchParams.has("continuationToken")).toBe(false);
+    await waitForText(container, "new search page one");
 
     await click(button(container, "Next"));
     await waitForCondition(() => expect(new URL(pageRequests.at(-1)!).searchParams.has("continuationToken")).toBe(true));
+    await waitForText(container, "new search page two");
     await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "25");
     await waitForCondition(() => expect(new URL(pageRequests.at(-1)!).searchParams.get("pageSize")).toBe("25"));
     expect(new URL(pageRequests.at(-1)!).searchParams.has("continuationToken")).toBe(false);
+    await waitForText(container, "new search page one");
   });
 
   it("drops the saved cursor after an endpoint change while the editor is open", async () => {

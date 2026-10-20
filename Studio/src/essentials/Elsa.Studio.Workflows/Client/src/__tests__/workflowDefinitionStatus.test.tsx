@@ -184,6 +184,7 @@ describe("workflow definition request status", () => {
     await vi.advanceTimersByTimeAsync(250);
     await waitForCondition(() => expect(requests.some(url => new URL(url).searchParams.get("searchTerm") === "new query")).toBe(true));
     vi.useRealTimers();
+    await waitForCondition(() => expect(container.querySelector("[role='status']")?.textContent).toContain("The latest search “new query” failed."));
 
     const failedRequest = requests.map(url => new URL(url)).find(url => url.searchParams.get("searchTerm") === "new query");
     expect(failedRequest).toBeDefined();
