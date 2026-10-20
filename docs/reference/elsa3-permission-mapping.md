@@ -80,8 +80,8 @@ The execution evidence delete endpoint accepts `workflows/execution-evidence:del
 `workflows/execution-evidence:manage`.
 
 Connections has no read or use permission of its own. Listing connections, their types and their metadata, never a
-secret value, requires `workflows/design:read` or `connections:manage`. Binding a connection in a workflow requires
-`workflows/design:manage`, which every route that writes or promotes workflow state already requires; draft validation
+secret value, requires `workflows/design:read` or `connections:manage`. Binding a connection in a workflow draft requires
+`workflows/design:manage`, which the Workflow Design routes that write or promote drafts already require; draft validation
 never checks the caller, so every viewer sees the same findings. Otherwise the three Connections permissions guard
 administration.
 
