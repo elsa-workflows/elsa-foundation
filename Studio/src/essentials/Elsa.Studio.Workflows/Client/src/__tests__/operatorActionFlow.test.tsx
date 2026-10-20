@@ -18,7 +18,8 @@ import {
 } from "../operatorActions";
 import { AlterationRequestError } from "../api/alterations";
 import { useCompensationJournals, useOperatorActions, type CompensationJournals, type OperatorActionsApi } from "../workflow-editor/useOperatorActions";
-import type { IncidentStateSummary, WorkflowInstanceDetails } from "../workflowTypes";
+import { compensationScopeStructureKind } from "../compensationScope";
+import type { ActivityExecutionStateSummary, ActivityNode, IncidentStateSummary, WorkflowInstanceDetails } from "../workflowTypes";
 
 // Spec 260 T423: the submission flow. A key per dialog, the pending plan in session storage, polling with back-off and a
 // budget, "Applying…" until the run shows the change, refusals and HTTP errors as messages, and a reload that resumes
@@ -277,6 +278,43 @@ describe("useOperatorActions", () => {
   });
 });
 
+describe("an action opened from the incident list", () => {
+  it("reads the scope's journal when none is cached and builds the dialog from what it read", async () => {
+    // CodeRabbit on #3140: the journal read on click reached the dialog only on the next render, so the dialog fell back
+    // to run data: no operation key, no next compensation.
+    const getJson = vi.fn(async (url: string) => url.endsWith("capabilities")
+      ? { capabilities: [{ id: "elsa.api.runtime", contractVersion: "1", links: [...capabilities.capabilities[0].links, stateViewLink] }] }
+      : journalView());
+    const context = { baseUrl: `test://incident-journal-${Math.random()}`, http: { getJson } } as unknown as StudioEndpointContext;
+    const incidents = journalIncidents();
+    function JournalHarness() {
+      const journals = useCompensationJournals(context, "wf-1");
+      const api = useOperatorActions({
+        context,
+        workflowExecutionId: "wf-1",
+        details: { instance: { workflowExecutionId: "wf-1" } as WorkflowInstanceDetails["instance"], activities: [], incidents, permissions: { canManage: true, canInspectValues: false } },
+        root: journalScope(),
+        activities: journalRun(),
+        journals,
+        labelOf: () => undefined,
+        refreshRun: async () => null
+      });
+      return <>{api.dialog}{api.renderIncidentActions(incidents[1], "cancel", vi.fn(), vi.fn())}</>;
+    }
+    flushSync(() => root.render(<JournalHarness />));
+    await flush();
+    expect(getJson.mock.calls.some(call => String(call[0]).endsWith("/state-view"))).toBe(false);
+
+    flushSync(() => container.querySelector<HTMLButtonElement>(".wf-incident-operator-actions button")!.click());
+    await flush();
+
+    expect(getJson.mock.calls.filter(call => String(call[0]).endsWith("/state-view"))).toHaveLength(1);
+    const dialog = container.querySelector("[role=dialog]")!.textContent!;
+    expect(dialog).toContain("with the same operation key (ae-scope/step/1/compensate)");
+    expect(dialog).toContain('If it succeeds, recovery continues with the compensation of "Reserve inventory".');
+  });
+});
+
 describe("useCompensationJournals", () => {
   it("reads a live scope's journal once, never a completed scope's, and again after a reset", async () => {
     const getJson = vi.fn(async (url: string) => url.endsWith("capabilities")
@@ -474,3 +512,132 @@ const capabilities = {
     ]
   }]
 };
+
+const stateViewLink = { rel: "activity-execution-state-view", href: "runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/state-view", templated: true };
+const journalDecisions = ["compensation.resolve.effect-absent", "compensation.resolve.effect-accepted", "compensation.abandon"];
+
+// The spec 251 W state: Confirm order failed, Cancel delivery failed three times and waits for an operator.
+function journalScope(): ActivityNode {
+  const leaf = (nodeId: string): ActivityNode => ({ nodeId, activityVersionId: `${nodeId}-v1`, inputs: [], outputs: [] });
+  return {
+    nodeId: "scope",
+    activityVersionId: "scope-v1",
+    displayName: "Order",
+    inputs: [],
+    outputs: [],
+    structure: {
+      kind: compensationScopeStructureKind,
+      schemaVersion: "1.0.0",
+      payload: {
+        steps: [
+          { name: "Reserve inventory", activity: leaf("reserve"), compensation: leaf("release") },
+          { name: "Reserve delivery", activity: leaf("deliver"), compensation: leaf("cancel") },
+          { name: "Confirm order", activity: leaf("confirm"), compensation: null }
+        ]
+      }
+    }
+  } as ActivityNode;
+}
+
+function journalRun(): ActivityExecutionStateSummary[] {
+  const execution = (id: string, nodeId: string, status: string, at: string, handlerOf?: string): ActivityExecutionStateSummary => ({
+    activityExecutionId: id,
+    workflowExecutionId: "wf-1",
+    executableNodeId: nodeId,
+    authoredActivityId: nodeId,
+    activityType: nodeId === "scope" ? "Elsa.Activities.Compensation.Activities.CompensationScope" : "Elsa.Test",
+    activityTypeVersion: "1.0.0",
+    status,
+    scheduledAt: `2026-10-19T10:00:${at}Z`,
+    parentActivityExecutionId: null,
+    schedulingActivityExecutionId: handlerOf ?? null,
+    outcomeNames: null,
+    provenance: {
+      parentActivityExecutionId: id === "ae-scope" ? null : "ae-scope",
+      schedulingActivityExecutionId: handlerOf ?? null,
+      schedulingCause: handlerOf ? "compensation" : "ActivityCompletion"
+    },
+    metadata: {}
+  });
+  return [
+    execution("ae-scope", "scope", "Running", "10"),
+    execution("ae-1", "reserve", "Completed", "11"),
+    execution("ae-2", "deliver", "Completed", "12"),
+    execution("ae-3", "confirm", "Faulted", "13"),
+    execution("ae-4", "cancel", "Faulted", "14", "ae-2"),
+    execution("ae-5", "cancel", "Faulted", "15", "ae-2"),
+    execution("ae-6", "cancel", "Faulted", "16", "ae-2")
+  ];
+}
+
+function journalIncidents(): IncidentStateSummary[] {
+  const base = (incidentId: string, activityExecutionId: string): IncidentStateSummary => ({
+    incidentId,
+    workflowExecutionId: "wf-1",
+    activityExecutionId,
+    severity: "Error",
+    status: "Resolved",
+    resolutionOutcome: { actionKind: "AbsorbFault", systemSource: "StructuralFaultAbsorption", metadata: { "compensation.maxAttempts": "3" } },
+    failureType: "ActivityReturnedFault",
+    message: "Failed",
+    createdAt: `2026-10-19T10:00:${activityExecutionId.slice(3).padStart(2, "0")}Z`,
+    isBlocking: false,
+    metadata: {}
+  });
+  return [
+    base("inc-3", "ae-3"),
+    {
+      ...base("inc-6", "ae-6"),
+      status: "Blocking",
+      isBlocking: true,
+      resolvedAt: null,
+      resolutionOutcome: {
+        actionKind: "WaitForIntervention",
+        systemSource: "StructuralIntervention",
+        metadata: { "runtime.interventionDecisions": JSON.stringify(journalDecisions), "runtime.interventionRequestedBy": "ae-scope", "compensation.maxAttempts": "3" }
+      }
+    }
+  ];
+}
+
+function journalView() {
+  const entry = (id: string, step: string, ordinal: number, status: string, forward: string, handler: string, attempts: string[], waiting?: string) => ({
+    id,
+    step,
+    ordinal,
+    status,
+    forwardOutcome: "Completed",
+    operationKey: `ae-scope/step/${ordinal - 1}`,
+    forward: { activityExecutionId: forward, iterationId: null },
+    handler: { executableNodeId: handler, remaining: true },
+    attempts: attempts.map((attempt, index) => ({ number: index + 1, activityExecutionId: attempt, incidentId: `inc-${attempt.slice(3)}`, result: "Faulted" })),
+    waiting: waiting ? { incidentId: waiting, decisions: journalDecisions } : null,
+    resolution: null,
+    origin: null,
+    confirmedBy: null
+  });
+  return {
+    workflowExecutionId: "wf-1",
+    activityExecutionId: "ae-scope",
+    executableNodeId: "scope",
+    activityStatus: "Running",
+    available: true,
+    unavailableReason: null,
+    viewKind: "compensation.journal",
+    viewVersion: 1,
+    canInspectValues: false,
+    view: {
+      phase: "AwaitingIntervention",
+      stateVersion: 4,
+      cause: { kind: "fault", step: "Confirm order", activityExecutionId: "ae-3", incidentId: "inc-3", failureType: "order.rejected", message: null, messageWithheld: true },
+      entries: [
+        entry("e1", "Reserve inventory", 1, "Registered", "ae-1", "release", []),
+        entry("e2", "Reserve delivery", 2, "Failed", "ae-2", "cancel", ["ae-4", "ae-5", "ae-6"], "inc-6")
+      ],
+      remaining: ["e2", "e1"],
+      confirmations: [],
+      handOvers: { received: [], inProgress: [] },
+      abandonment: null
+    }
+  };
+}

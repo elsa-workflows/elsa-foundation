@@ -327,7 +327,9 @@ export function useOperatorActions({
     }
   };
 
-  const modelForIncident = (incident: IncidentStateSummary, activityLabel: string, action: "retry" | { decision: string }) => {
+  // `journal` is the requester's journal when the caller has just read it: `journals` is this render's snapshot, so a
+  // journal read after the click is not in it yet.
+  const modelForIncident = (incident: IncidentStateSummary, activityLabel: string, action: "retry" | { decision: string }, journal?: CompensationJournalSource) => {
     const requester = interventionRequesterOf(incident);
     const requesterActivity = requester ? activities.find(activity => activity.activityExecutionId === requester) : undefined;
     const scopeNode = requesterActivity && root
@@ -338,7 +340,7 @@ export function useOperatorActions({
         complete: !details?.activityNextContinuationToken,
         selectedActivityExecutionId: requester,
         root,
-        journal: journals.get(requester)
+        journal: journal ?? journals.get(requester)
       });
       const runtime = { ...derived, scopeLabel: labelOf(scopeNode.nodeId) ?? derived.scopeLabel };
       const row = [...runtime.rows, ...(runtime.received ?? [])].find(candidate => candidate.actions?.incidentId === incident.incidentId);
@@ -366,8 +368,13 @@ export function useOperatorActions({
     const decisions = offeredDecisions(incident);
     const launch = async (action: "retry" | { decision: string }) => {
       closeIncident();
-      if (requester && !journals.get(requester)) await journals.reload(requester).catch(() => undefined);
-      open(modelForIncident(incident, activityLabel, action), focusFallback);
+      // Read the journal when the run view has none yet (or is still reading it), and use what the read returned: the
+      // journals state only reaches this closure on the next render.
+      const cached = requester ? journals.get(requester) : undefined;
+      const journal = requester && (!cached || cached === "loading")
+        ? await journals.reload(requester).catch(() => undefined)
+        : cached;
+      open(modelForIncident(incident, activityLabel, action, journal), focusFallback);
     };
     return (
       <div className="wf-incident-operator-actions" role="group" aria-label="Operator actions">
