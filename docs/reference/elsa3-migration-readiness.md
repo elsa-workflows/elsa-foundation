@@ -26,8 +26,14 @@ differently.
 | End only in the workflow's root flowchart | `ELS3-ACTIVITY-UNSUPPORTED-MODE` | Elsa 4 behaviour |
 
 What this means today: a reusable workflow imports as a reusable activity when its body works from literal values and
-signals its result through **outcomes**. It may wait in its body (a Delay suspends and resumes, proven). It cannot
-return output values or compute from its inputs until #3023 and #3027 are done.
+signals its result through **outcomes**. It may wait in its body: a Delay, a mid-flow Event and a mid-flow HTTP Endpoint
+suspend and resume as in Elsa 3 (proven end to end). It cannot return output values or compute from its inputs until
+#3023 and #3027 are done.
+
+> **Known Elsa 4 issue, every workflow:** an Event wait woken by a **Publish Event** activity faults on resume today
+> ([#3107](https://github.com/elsa-workflows/elsa-foundation/issues/3107)); the import does not warn about it. An event
+> raised through the runtime's stimulus API (`POST runtime/workflows/stimuli`) resumes it correctly. Until #3107 is
+> fixed, list the workflows that pair Publish Event with an Event wait and test them after import.
 
 How Elsa 3 runs a reusable workflow matters for the fixes below: inside the execution of the workflow that uses it.
 Its variables are its own, but Correlate, Set Name and Finish act on that calling workflow.

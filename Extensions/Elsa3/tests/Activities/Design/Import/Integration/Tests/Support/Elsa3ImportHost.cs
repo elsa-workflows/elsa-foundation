@@ -173,15 +173,16 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     /// catalog holds the built-in activities an imported body converts to. Without <paramref name="withPublishing"/> the
     /// shell does not compose <c>Elsa3ImportActivitiesPublishing</c>; with <paramref name="withPublishSeam"/> it composes
     /// the test's publish seam around it (<see cref="Refusals"/>); with <paramref name="withScheduling"/> it composes the
-    /// scheduling activities (Delay).
+    /// scheduling activities (Delay); with <paramref name="withHttp"/> the HTTP activities, whose endpoints listen under
+    /// <c>/workflows/http</c>.
     /// </summary>
-    public static async Task<Elsa3ImportHost> StartAsync(bool withPublishing = true, bool withPublishSeam = false, bool withScheduling = false)
+    public static async Task<Elsa3ImportHost> StartAsync(bool withPublishing = true, bool withPublishSeam = false, bool withScheduling = false, bool withHttp = false)
     {
         var root = Directory.CreateTempSubdirectory("elsa3-import-");
         var warnings = new WarningLog();
         try
         {
-            var configuration = new ConfigurationBuilder().AddInMemoryCollection(ShellSettings(root.FullName, withPublishing, withPublishSeam, withScheduling)).Build();
+            var configuration = new ConfigurationBuilder().AddInMemoryCollection(ShellSettings(root.FullName, withPublishing, withPublishSeam, withScheduling, withHttp)).Build();
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
             builder.WebHost.UseTestServer();
             builder.Logging.ClearProviders();
@@ -232,6 +233,9 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
                     typeof(WorkflowsRuntimeRecurringTriggersFeature).Assembly,
                     typeof(WorkflowsRuntimeSchedulingFeature).Assembly,
                     typeof(Elsa.Activities.Scheduling.ActivitiesSchedulingFeature).Assembly,
+                    typeof(Elsa.Http.HttpFeature).Assembly,
+                    typeof(Elsa.Workflows.Runtime.Http.WorkflowsRuntimeHttpFeature).Assembly,
+                    typeof(Elsa.Activities.Http.ActivitiesHttpFeature).Assembly,
                     typeof(Elsa3MappingFeature).Assembly,
                     typeof(Elsa3ImportActivitiesFeature).Assembly,
                     typeof(Elsa3ImportActivitiesEntityFrameworkCoreFeature).Assembly,
@@ -265,7 +269,7 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         }
     }
 
-    private static Dictionary<string, string?> ShellSettings(string root, bool withPublishing, bool withPublishSeam, bool withScheduling)
+    private static Dictionary<string, string?> ShellSettings(string root, bool withPublishing, bool withPublishSeam, bool withScheduling, bool withHttp)
     {
         var features = $"CShells:Shells:{ShellName}:Features:";
         var design = Sqlite(Path.Join(root, "design.db"));
@@ -283,7 +287,8 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
         foreach (var feature in Features
                      .Concat(withPublishing ? ["Elsa3ImportActivitiesPublishing"] : [])
                      .Concat(withPublishSeam ? [Elsa3ImportPublishSeamFeature.Name] : [])
-                     .Concat(withScheduling ? ["ActivitiesScheduling"] : []))
+                     .Concat(withScheduling ? ["ActivitiesScheduling"] : [])
+                     .Concat(withHttp ? ["ActivitiesHttp"] : []))
             settings.TryAdd($"{features}{feature}", null);
         return settings;
     }
@@ -477,6 +482,20 @@ public sealed class Elsa3ImportHost : IAsyncDisposable
     /// "Builds on a shared machine"). No test relies on reaching it.
     /// </summary>
     public static readonly TimeSpan SettleTimeout = TimeSpan.FromSeconds(60);
+
+    /// <summary>Polls the run's committed state until <paramref name="condition"/> holds, for a run that is still waiting.</summary>
+    public async Task<RunState> WaitForAsync(string workflowExecutionId, Func<RunState, bool> condition)
+    {
+        var deadline = Stopwatch.StartNew();
+        while (true)
+        {
+            var run = await ReadRunAsync(workflowExecutionId);
+            if (condition(run))
+                return run;
+            Assert.True(deadline.Elapsed < SettleTimeout, $"Run '{workflowExecutionId}' did not reach the expected state: {run.Describe()}.");
+            await Task.Delay(100);
+        }
+    }
 
     /// <summary>
     /// Polls the run's committed state until its workflow is completed, faulted or cancelled; the drain may outlive the
