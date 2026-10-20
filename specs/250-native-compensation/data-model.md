@@ -87,6 +87,10 @@ Studio derives this view from the run data it already loads; there is no inspect
 | Phase | scope status; `Compensated` when its outcomes include `Compensated` |
 | Cause | the faulted forward step and the incident on its execution (failure type and message, under the incident disclosure policy) |
 
-`forward.state`: `NotRun` | `Running` | `Completed` | `Faulted` | `Cancelled`. `recovery.state`: `NotApplicable` (did not
-complete) | `NotNeeded` (no handler) | `Registered` (eligible, not recovering) | `Pending` | `Running` | `Compensated` |
-`Failed`. Run lists carry the parent execution inside `provenance`, so matching reads it there.
+`forward.state`: `NotLoaded` | `NotRun` | `Running` | `Completed` | `Faulted` | `Cancelled`. `recovery.state`: `NotLoaded` |
+`NotApplicable` (did not complete) | `NotNeeded` (no handler) | `Registered` (eligible, not recovering) | `Pending` |
+`Running` | `Compensated` | `Failed`. Phase: `NotLoaded` | `NotStarted` | `Running` | `Compensating` | `Completed` |
+`Compensated` | `Faulted` | `Cancelled`. When the activity list is a bounded page, an execution that may sit on a later
+page is `NotLoaded`, never `NotRun`, and the view is marked `incomplete`. When the scope ran more than once, the view
+shows the occurrence the operator selected (the scope or one of its steps or handlers), else the latest. Run lists carry
+the parent execution inside `provenance`, so matching reads it there.
