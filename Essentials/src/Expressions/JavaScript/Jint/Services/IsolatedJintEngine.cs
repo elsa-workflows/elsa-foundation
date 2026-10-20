@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Elsa.Expressions.JavaScript.Jint.Options;
+using Elsa.Expressions.JavaScript.Services;
 using Jint;
 using Jint.Native;
 using Jint.Runtime.Descriptors;
@@ -14,10 +15,19 @@ namespace Elsa.Expressions.JavaScript.Jint.Services;
 /// <summary>Builds the closed Jint value world shared by portable expressions and scripts.</summary>
 internal static class IsolatedJintEngine
 {
-    public static Engine Create(FeatureOptions configured, CancellationToken cancellationToken)
+    /// <param name="clocklessDate">
+    /// True for the <c>binding-pure-v2</c> profile: <c>Date</c> stays available without a clock, in UTC, parsing only ISO
+    /// strings (ADR 0088 D4). False keeps the <c>binding-pure-v1</c> sandbox, where <c>Date</c> is undefined.
+    /// </param>
+    public static Engine Create(FeatureOptions configured, CancellationToken cancellationToken, bool clocklessDate = false)
     {
         ArgumentNullException.ThrowIfNull(configured);
         var options = new JintOptions();
+        if (clocklessDate)
+        {
+            options.TimeSystem = ClocklessTimeSystem.Instance;
+            options.Culture = CultureInfo.InvariantCulture;
+        }
 
         if (configured.ExecutionTimeout is { } timeout && timeout > TimeSpan.Zero)
             options.TimeoutInterval(timeout);
@@ -34,7 +44,9 @@ internal static class IsolatedJintEngine
 
         var engine = new Engine(options);
         JintResultMaterializer.Initialize(engine);
-        DisableAmbientCapabilities(engine);
+        DisableAmbientCapabilities(engine, keepDate: clocklessDate);
+        if (clocklessDate)
+            engine.Execute(ClocklessDateRules.Prelude);
         return engine;
     }
 
@@ -149,10 +161,10 @@ internal static class IsolatedJintEngine
         return $"get{char.ToUpperInvariant(name[0])}{name[1..]}";
     }
 
-    private static void DisableAmbientCapabilities(Engine engine)
+    private static void DisableAmbientCapabilities(Engine engine, bool keepDate)
     {
         // Time, randomness, locale, and environment data enter through pinned args, never intrinsics.
-        foreach (var name in new[] { "Date", "Temporal", "Intl" })
+        foreach (var name in keepDate ? ["Temporal", "Intl"] : new[] { "Date", "Temporal", "Intl" })
             engine.Global.DefineOwnProperty(name, new PropertyDescriptor(JsValue.Undefined, writable: false, enumerable: false, configurable: false));
 
         engine.GetValue("Math").AsObject().DefineOwnProperty(

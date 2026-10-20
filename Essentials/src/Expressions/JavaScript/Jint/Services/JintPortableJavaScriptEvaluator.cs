@@ -34,10 +34,12 @@ internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> f
 
         var definition = request.Definition;
         if (!request.Capabilities.IsBindingPure ||
-            !StringComparer.Ordinal.Equals(request.Capabilities.Profile, ExpressionCapabilityProfiles.BindingPureV1))
-            throw new InvalidOperationException($"JavaScript binding evaluation requires capability profile '{ExpressionCapabilityProfiles.BindingPureV1}'.");
+            !ExpressionCapabilityProfiles.IsBindingPure(request.Capabilities.Profile))
+            throw new InvalidOperationException($"JavaScript binding evaluation requires capability profile '{ExpressionCapabilityProfiles.BindingPureV1}' or '{ExpressionCapabilityProfiles.BindingPureV2}'.");
         if (definition.Options.EnumerateObject().Any())
-            throw new InvalidOperationException("The JavaScript binding-pure-v1 evaluator does not support evaluator options.");
+            throw new InvalidOperationException("The JavaScript binding evaluator does not support evaluator options.");
+        var profile = request.Capabilities.Profile;
+        var clocklessDate = StringComparer.Ordinal.Equals(profile, ExpressionCapabilityProfiles.BindingPureV2);
 
         var isExpression = JavaScriptBindingSyntax.IsExpression(definition.Source);
         var prepared = Engine.PrepareScript(
@@ -48,7 +50,7 @@ internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> f
                 ParsingOptions = new() { AllowReturnOutsideFunction = !isExpression }
             });
 
-        var engine = IsolatedJintEngine.Create(featureOptions.Value, request.CancellationToken);
+        var engine = IsolatedJintEngine.Create(featureOptions.Value, request.CancellationToken, clocklessDate);
         IsolatedJintEngine.SetReadOnlyArgs(engine, request.ParameterValues, featureOptions.Value);
         IsolatedJintEngine.SetReadOnlyVariables(engine, request.AmbientVariables, featureOptions.Value);
 
@@ -63,14 +65,18 @@ internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> f
             // work item with no indication of why. When the expression reached for an ambient capability the
             // deterministic sandbox deliberately withholds, rethrow with an actionable message naming it. The
             // original error is preserved as the inner exception; the failure is not swallowed.
-            var reached = ReferencedStrippedCapabilities(definition.Source);
+            // ADR 0088 D4: under binding-pure-v2 a removed Date form throws its own guidance, which is the whole message.
+            if (clocklessDate && ClocklessDateRules.IsRuleMessage(exception.Message))
+                throw new JavaScriptBindingEvaluationException(exception.Message, exception);
+
+            var reached = ReferencedStrippedCapabilities(definition.Source, clocklessDate);
             if (reached.Length == 0)
                 throw;
 
             throw new JavaScriptBindingEvaluationException(
                 $"JavaScript binding expression '{definition.Source}' referenced ambient capability " +
                 $"[{string.Join(", ", reached)}], which is unavailable in the deterministic binding sandbox " +
-                $"(profile '{ExpressionCapabilityProfiles.BindingPureV1}'). Time, randomness, locale, and " +
+                $"(profile '{profile}'). Time, randomness, locale, and " +
                 "environment data must be supplied as workflow inputs or variables instead of read from ambient " +
                 $"JavaScript globals. Original evaluator error: {exception.Message}",
                 exception);
@@ -82,8 +88,9 @@ internal sealed class JintPortableJavaScriptEvaluator(IOptions<FeatureOptions> f
         return ValueTask.FromResult(JintResultMaterializer.Materialize(engine, result, featureOptions.Value));
     }
 
-    private static string[] ReferencedStrippedCapabilities(string source) =>
+    private static string[] ReferencedStrippedCapabilities(string source, bool clocklessDate) =>
         StrippedAmbientCapabilities
+            .Where(capability => !(clocklessDate && capability == "Date"))
             .Where(capability => IdentifierReference(capability).IsMatch(source))
             .ToArray();
 
