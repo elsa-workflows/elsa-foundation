@@ -35,19 +35,178 @@ The task-provided untouched-product baseline passed offline installation with th
 
 ## Composed Workbench comparison
 
-This is a separate, required gate. Build the complete frontend workspace, then the Workbench and Studio host projects. Use copied source configuration in fresh owned roots, loopback ports 5695/5689, and private SQLite/key stores. Preserve existing features and do not invoke optional providers or modify tracked/user configuration. The reviewed source-backed procedure and root execution amendments are in `/Users/sipke/Documents/Codex/2026-10-19/studio-ux-audit/execution/3073-isolated-workbench-procedure.md`.
+This is a separate, required gate. The recipe below runs both compositions from copied configuration under one fresh private root. It does not change tracked configuration or the user's normal database, package cache, key ring, browser profile, or ports. It uses the two QA allocations `127.0.0.1:5695` (Workbench) and `127.0.0.1:5689` (Studio); if either is already occupied, stop and have the QA owner assign an available pair. Do not stop an unknown listener or use the user's ports `5589`, `5595`, or `5089`.
 
-For normal, pair Workbench's normal shell with Studio's normal module configuration and sign in with its disposable Development identity. For baseline absence, pair `Essentials/apps/Elsa.Workbench/shells.baseline.json` with a copied Studio shell omitting only `OpenTelemetryStudio` and `StructuredLogsStudio`. Verify both are disabled in the returned `/_elsa/studio/modules` manifest. Backend baseline alone does not remove frontend registrations. Baseline has no matching seeded identity and proves anonymous composition only, not authenticated permission behavior. It retains Runtime evidence settings and Console, so it is not a zero-link case.
+The previous root-run before/after qualification and cleanup were recorded outside this repository. Those results are historical evidence for that run; they are not setup instructions and do not validate a later source revision. Root checked the portable snippets' syntax, generated both private configurations, verified their paths and baseline feature omission, and exercised guarded cleanup. The portable launch commands have not been rerun; they do not establish live qualification of a later revision. For a before/after comparison, point `REPO` at the approved base checkout for the before run and at the target checkout for the after run, preparing a new `RUN` each time. Never reuse either profile's database between source revisions.
 
-Copy Studio's JSONC base appsettings byte-for-byte; write overrides only in its valid Development JSON. Set both existing Studio backend URL values to the owned backend. Copy the Workbench JSON settings and set `ConnectionStrings:Elsa` and normal Diagnostics connection strings to absolute private databases. Replace CORS/normal identity return origins with the owned Studio origin. Disable package loading/reconciliation and directory watching, point existing feeds at empty owned package roots, and keep backend console-log streaming disabled for QA. Do not invent a package management key or activate an agent/provider.
+### Build the current checkout
 
-Isolate Data Protection through the existing `Elsa:DataProtection:EntityFrameworkCore` configuration: Enabled true, Provider Sqlite, absolute private keyring connection; use a distinct ApplicationName per profile. The source seam is `Essentials/src/Foundation/DataProtection/EntityFrameworkCore/Hosting/DataProtectionConfigurationExtensions.cs`. Confirm the private keyring table without reading key material. No HOME override or user keyring write is needed.
+Run these only when current build outputs are not already available. Keep builds serial and use the repository's build-slot wrapper.
 
-Launch with explicit `--contentRoot`, loopback `--urls`, and `--no-launch-profile`; require backend `/health/ready` and Studio assets/manifest to return 200. Compare before and after navigation, actual keyboard destinations and each destination's own states. Preserve request method/path/status/content type without bearer/cookie material. For settings, use only the private normal database, record the existing payload and restore its original policy after the writer check. Restricted/no-write behavior needs its separate component or authenticated-principal proof.
+```bash
+REPO=/absolute/path/to/elsa-foundation-checkout
+(cd "$REPO/Studio" && pnpm build)
+dotnet build "$REPO/Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj"
+dotnet build "$REPO/Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj"
+```
 
-After each profile, close its browser, terminate only exact owned host PIDs after checking their command lines, wait for their sessions, confirm both ports free, then remove only the validated runtime config/data roots. Retain evidence separately. The before and after roots must not share databases; the normal after profile was restarted only after a tool interruption authoritatively ended its handles, with state re-read before repeating any write.
+### Prepare private normal and baseline roots
 
-Root completed paired before/after proof and cleanup. After evidence is in `execution/3073-live-after/` under the external audit root above. Normal shows all four expected task links; baseline disables both optional telemetry modules and retains the other two. All sixteen composed index width/theme cases have no scoped axe violations or document overflow. Keyboard destinations match current routes and navigation. Normal settings save/restore succeeds; view-only/no-PUT behavior is separately tested. Full affected suites, frontend tools, both host builds, architecture and maps pass; task receipts record counts and failure/recovery limits.
+The configuration flow follows `Essentials/apps/Elsa.Workbench/Program.cs` and `Studio/src/apps/Elsa.Studio.Web/Program.cs`: both hosts read settings from their explicit content root, and the Workbench layers its selected `shells.json` over appsettings. The script uses Python's standard library only. It copies the normal Workbench shell without displaying or documenting its existing Development seed values; never print or paste the copied identity settings. Studio's base `appsettings.json` is JSONC, so it is copied byte-for-byte and overrides go into valid JSON `appsettings.Development.json` files.
+
+```bash
+set -eu
+umask 077
+REPO=/absolute/path/to/elsa-foundation-checkout
+test -f "$REPO/Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj"
+RUN="$(mktemp -d "${TMPDIR:-/tmp}/elsa-3073.XXXXXX")"
+chmod 700 "$RUN"
+printf 'Private QA root: %s\n' "$RUN"
+
+python3 - "$REPO" "$RUN" <<'PY'
+import json
+import os
+import shutil
+import sys
+from pathlib import Path
+
+repo, root = Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve()
+if not root.is_dir() or any(root.iterdir()) or root == repo or root in repo.parents or repo in root.parents:
+    raise SystemExit("QA root and repository must be separate")
+os.umask(0o077)
+os.chmod(root, 0o700)
+wb = Path("Essentials/apps/Elsa.Workbench")
+studio = Path("Studio/src/apps/Elsa.Studio.Web")
+origin, backend_url = "http://127.0.0.1:5689", "http://127.0.0.1:5695"
+def read(path):
+    return json.loads((repo / path).read_text(encoding="utf-8-sig"))
+def write(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    os.chmod(path, 0o600)
+def overlay(data, *keys, value):
+    for key in keys[:-1]:
+        data = data.setdefault(key, {})
+        if not isinstance(data, dict):
+            raise SystemExit("Source configuration shape changed")
+    data[keys[-1]] = value
+
+profiles = {}
+for profile in ("normal", "baseline"):
+    normal = profile == "normal"
+    wb_content, wb_data = root / "workbench" / profile / "content", root / "workbench" / profile / "data"
+    wb_packages, studio_content = wb_content / "packages", root / "studio" / profile / "content"
+    studio_packages = root / "studio" / profile / "packages"
+    for directory in (wb_packages, wb_data, studio_content, studio_packages):
+        directory.mkdir(parents=True, mode=0o700)
+
+    backend = read(wb / "appsettings.json")
+    backend["Cors"]["AllowedOrigins"] = [origin]
+    backend["ConnectionStrings"]["Elsa"] = f"Data Source={wb_data / 'elsa.db'}"
+    backend["Nuplane"]["Loading"]["Enabled"] = False
+    backend["Nuplane"]["Setup"]["AutomaticReconciliation"] = False
+    feeds = backend["Nuplane"]["Setup"]["Feeds"]
+    if len(feeds) != 1 or "Watch" not in feeds[0]["Directory"]:
+        raise SystemExit("Expected the current single Workbench directory feed")
+    feeds[0]["DirectoryPath"] = str(wb_packages)
+    feeds[0]["Directory"]["Watch"] = False
+    backend["Elsa"]["Diagnostics"]["ConsoleLogStreaming"]["Enabled"] = False
+    write(wb_content / "appsettings.json", backend)
+
+    backend_dev = read(wb / "appsettings.Development.json")
+    overlay(backend_dev, "Elsa", "Diagnostics", "ConsoleLogStreaming", "Enabled", value=False)
+    overlay(backend_dev, "Elsa", "DataProtection", "ApplicationName", value=f"ElsaStudioDiagnostics3073-{root.name}-{profile}")
+    overlay(backend_dev, "Elsa", "DataProtection", "EntityFrameworkCore", value={
+        "Enabled": True, "Provider": "Sqlite", "ConnectionString": f"Data Source={wb_data / 'keyring.db'}"
+    })
+    write(wb_content / "appsettings.Development.json", backend_dev)
+
+    shell_source = wb / ("shells.json" if normal else "shells.baseline.json")
+    backend_shell = read(shell_source)
+    features = backend_shell["CShells"]["Shells"]["default"]["Features"]
+    otel, logs = "DiagnosticsOpenTelemetryEntityFrameworkCore", "DiagnosticsStructuredLogsEntityFrameworkCore"
+    if normal:
+        features["FoundationIdentityAspNetCoreIdentity"]["AllowedReturnUrlOrigins"] = [origin]
+        for key in (otel, logs):
+            features[key]["ConnectionString"] = f"Data Source={wb_data / 'diagnostics.db'}"
+    write(wb_content / "shells.json", backend_shell)
+
+    shutil.copyfile(repo / studio / "appsettings.json", studio_content / "appsettings.json")
+    os.chmod(studio_content / "appsettings.json", 0o600)
+    studio_dev = read(studio / "appsettings.Development.json")
+    overlay(studio_dev, "Studio", "BackendBaseUrl", value=backend_url)
+    overlay(studio_dev, "Studio", "BackendServerBaseUrl", value=backend_url)
+    overlay(studio_dev, "Studio", "Auth", "Enabled", value=normal)
+    overlay(studio_dev, "Nuplane", "Loading", "Enabled", value=False)
+    overlay(studio_dev, "Nuplane", "Setup", "AutomaticReconciliation", value=False)
+    overlay(studio_dev, "Nuplane", "Setup", "Feeds", value=[{
+        "DirectoryPath": str(studio_packages), "Directory": {"Watch": False}
+    }])
+    write(studio_content / "appsettings.Development.json", studio_dev)
+
+    studio_shell = read(studio / "shells.json")
+    studio_features = studio_shell["CShells"]["Shells"]["Default"]["Features"]
+    if not normal:
+        for key in ("OpenTelemetryStudio", "StructuredLogsStudio"):
+            del studio_features[key]
+    write(studio_content / "shells.json", studio_shell)
+    profiles[profile] = {
+        "workbenchContentRoot": str(wb_content), "studioContentRoot": str(studio_content),
+        "workbenchData": str(wb_data), "studioPackages": str(studio_packages),
+    }
+
+manifest = {"purpose": "#3073 isolated composed-host QA", "root": str(root), "profiles": profiles}
+manifest_path = root / "manifest.json"
+manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+os.chmod(manifest_path, 0o600)
+print(f"Prepared private config roots: {manifest_path}")
+PY
+```
+
+The normal pair preserves `Essentials/apps/Elsa.Workbench/shells.json` and Studio's normal module shell. Baseline pairs `shells.baseline.json` with a copied Studio shell omitting only `OpenTelemetryStudio` and `StructuredLogsStudio`; this is necessary because the Studio manifest follows its own active features. Baseline is anonymous composition proof only: it retains Runtime evidence settings and Console, and does not prove zero links or authenticated permissions. The script gives each profile private `elsa.db` and keyring files; normal Diagnostics stores use private `diagnostics.db`. Both use the existing EF SQLite Data Protection settings, distinct application names, empty packages folders, disabled Nuplane loading/reconciliation/watch, and disabled Workbench console-log streaming. No optional provider is invoked, management key is invented, tracked file is changed, or HOME override is used.
+
+### Launch and inspect each profile
+
+Run each host in its own foreground terminal and wait for it to stop before reusing the allocated port for the other profile. The explicit content roots and URLs avoid the launch-profile ports. The selected appsettings and shell files already contain the private database and Nuplane paths, so the command line does not need credentials or config overrides.
+
+```bash
+PROFILE=normal
+DOTNET_ENVIRONMENT=Development ASPNETCORE_ENVIRONMENT=Development dotnet run \
+  --project "$REPO/Essentials/apps/Elsa.Workbench/Elsa.Workbench.csproj" \
+  --no-build --no-restore --no-launch-profile -- \
+  --contentRoot "$RUN/workbench/$PROFILE/content" --urls http://127.0.0.1:5695
+
+# In a second terminal, using the same REPO, RUN, and PROFILE values:
+DOTNET_ENVIRONMENT=Development ASPNETCORE_ENVIRONMENT=Development dotnet run \
+  --project "$REPO/Studio/src/apps/Elsa.Studio.Web/Elsa.Studio.Web.csproj" \
+  --no-build --no-restore --no-launch-profile -- \
+  --contentRoot "$RUN/studio/$PROFILE/content" --urls http://127.0.0.1:5689
+```
+
+For normal, sign in using the disposable Development identity from the copied source shell; do not record its credential values. Check `GET http://127.0.0.1:5695/health/ready`, then require `200` from `http://127.0.0.1:5689/studio/`, `/studio-runtime.js`, and `/_elsa/studio/modules`. Inspect the manifest for both expected modules, then capture navigation and destination evidence in the isolated browser. Preserve request method, path, status, and content type; exclude bearer and cookie data. Settings save/restore is limited to the private normal database, and the original test policy must be restored.
+
+Stop both foreground processes with Ctrl-C, wait for their sessions to exit, and verify the allocated ports are free before setting `PROFILE=baseline` and repeating the same two launch commands. Baseline Studio auth is disabled for anonymous composition inspection; verify its module manifest omits both telemetry modules while Runtime evidence settings and Console remain. Use separate normal and baseline data roots as prepared above. The authenticated read-only/no-write case remains covered by its component or authenticated-principal evidence, not by anonymous baseline.
+
+### Cleanup
+
+Close the isolated browser and stop only the two foreground sessions started for this run. After confirming they exited and both allocated ports are free, validate the exact private root before deleting it:
+
+```bash
+python3 - "$RUN" <<'PY'
+import json, shutil, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+if root.is_symlink() or not root.is_dir() or not root.name.startswith("elsa-3073."):
+    raise SystemExit("Refusing to remove an unexpected QA path")
+manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+if manifest.get("purpose") != "#3073 isolated composed-host QA" or Path(manifest.get("root", "")).resolve() != root.resolve():
+    raise SystemExit("QA manifest does not identify this exact root")
+shutil.rmtree(root)
+PY
+unset RUN
+```
+
+Keep qualification evidence outside the disposable runtime root, with no bearer/cookie material. Never use a port-wide kill, remove repository `wwwroot` output, or reuse one profile's database for the other.
 
 Two pre-existing functional defects remain independently tracked: #3131 for the OpenTelemetry request/DTO contract mismatch and #3132 for Structured Logs stream credentials. They block final qualification #3075. Index registration, destination error-state wording and scoped accessibility results do not establish working trace inspection/live log streaming or complete shell accessibility. Final exact-head reviews/CI, merge and resulting-main qualification remain required.
 
