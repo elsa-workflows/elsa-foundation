@@ -6,8 +6,8 @@ Applying framework §2.18's methodology to Elsa, the root-level domains are list
 reconciled against the shipped tree 2026-09-16)*. This table records only what a generated map cannot:
 each domain's purpose. It deliberately names no packages. Package names changed faster than this
 table was maintained, and by 2026-09-16 roughly a quarter of the names it listed no longer existed.
-The generated [domain map](../maps/domain-map.md) owns package enumeration and project counts,
-and it is regenerated with the tree, so it cannot drift the same way.
+The generated [domain map](https://github.com/elsa-workflows/elsa-foundation/blob/generated-maps/docs/maps/domain-map.md) owns package enumeration and project counts,
+and CI regenerates it after every merge (see the [maps index](../maps/README.md)), so it cannot drift the same way.
 
 | Domain | Purpose (one verb-led sentence) |
 |---|---|

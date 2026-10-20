@@ -1,4 +1,9 @@
 <!--
+SYNC IMPACT REPORT — 6.0.2 -> 6.0.3 (2026-10-20)
+PATCH: link only; the domain map is published on the generated-maps branch, not committed (spec 257). No Elsa rule changed.
+Approval: pending owner.
+-->
+<!--
 SYNC IMPACT REPORT — 6.0.1 -> 6.0.2 (2026-10-14)
 PATCH: re-pins framework v6.1.0 (§2.23.3: same-domain production grants under the sibling test, #2591). No Elsa specialization restates §2.23.3, and no Elsa rule changed.
 Approval: Sipke Schoorstra, 2026-10-14 (#2591).
@@ -19,7 +24,7 @@ Approval: Sipke Schoorstra, 2026-10-12 (#2578), on his authority alone; open to 
 -->
 # Elsa Workflow Engine Constitution
 
-**Version:** 6.0.2 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-10-14 | **Derives from:** [framework constitution](constitution-framework.md) **v6.1.0**
+**Version:** 6.0.3 | **Ratified:** 2026-08-08 | **Last Amended:** 2026-10-20 | **Derives from:** [framework constitution](constitution-framework.md) **v6.1.0**
 
 **Status:** Ratified 2026-08-08 by Sipke Schoorstra. Governance calls for consensus among Joey Barten, Sipke Schoorstra and Frans van Ek; this ratification was taken on Sipke Schoorstra's authority alone and is open to revision if the other architects dissent. Sections marked draft or provisional (§E2.8 activity versioning and Model X, §E2.9) are **not** covered by it.
 
@@ -44,7 +49,7 @@ The framework Gate index applies. Elsa-specific gates with an automated check (t
 
 ### §E2.1 The Elsa domain tree
 
-The pinned root-level domains (D1): `Elsa.Activities`, `Elsa.Agent`, `Elsa.Api`, `Elsa.Attention`, `Elsa.Caching`, `Elsa.Diagnostics`, `Elsa.Events`, `Elsa.Expressions`, `Elsa.Foundation`, `Elsa.Git`, `Elsa.Http`, `Elsa.Locking`, `Elsa.Mediator`, `Elsa.Modularity`, `Elsa.Persistence`, `Elsa.Pipelines`, `Elsa.Primitives`, `Elsa.Secrets`, `Elsa.Serialization`, `Elsa.Studio`, `Elsa.Tasks`, `Elsa.Workflows.Dashboard`, `Elsa.Workflows.Design`, `Elsa.Workflows.Publishing`, `Elsa.Workflows.Runtime`, `Elsa3`. Purposes: [docs/reference/elsa-domain-tree.md](../../docs/reference/elsa-domain-tree.md); packages: the generated [domain map](../../docs/maps/domain-map.md). `Elsa.Workbench`, `Elsa.Architecture`, `Elsa.Samples` and `Elsa.Testing` are host and test groupings, not domains.
+The pinned root-level domains (D1): `Elsa.Activities`, `Elsa.Agent`, `Elsa.Api`, `Elsa.Attention`, `Elsa.Caching`, `Elsa.Diagnostics`, `Elsa.Events`, `Elsa.Expressions`, `Elsa.Foundation`, `Elsa.Git`, `Elsa.Http`, `Elsa.Locking`, `Elsa.Mediator`, `Elsa.Modularity`, `Elsa.Persistence`, `Elsa.Pipelines`, `Elsa.Primitives`, `Elsa.Secrets`, `Elsa.Serialization`, `Elsa.Studio`, `Elsa.Tasks`, `Elsa.Workflows.Dashboard`, `Elsa.Workflows.Design`, `Elsa.Workflows.Publishing`, `Elsa.Workflows.Runtime`, `Elsa3`. Purposes: [docs/reference/elsa-domain-tree.md](../../docs/reference/elsa-domain-tree.md); packages: the generated [domain map](https://github.com/elsa-workflows/elsa-foundation/blob/generated-maps/docs/maps/domain-map.md) (published on the `generated-maps` branch). `Elsa.Workbench`, `Elsa.Architecture`, `Elsa.Samples` and `Elsa.Testing` are host and test groupings, not domains.
 
 ### §E2.2 Workflows.Design ↔ Workflows.Runtime bounded-context split
 
