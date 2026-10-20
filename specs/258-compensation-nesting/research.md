@@ -107,11 +107,11 @@ Each follows the rule "never undo something unconfirmed silently; never block fo
 
 ### R17 — Unmatched targets at run time
 
-- **Decision:** a Confirm or Compensate whose target matches no enclosing scope faults with the runtime's `runtime.ancestor-notification.target-not-found`, not `compensation.target-not-found`: the runtime refuses before the activity completes, and one code serves every ancestor notification. Publication catches literal targets in a workflow Draft (T314). An expression target, and one in a reusable activity's body (an activity Draft, which workflow Draft validators never see), are checked only at run time.
+- **Decision:** a Confirm whose named target matches no enclosing scope faults with the runtime's `runtime.ancestor-notification.target-not-found`, not `compensation.target-not-found`: the runtime refuses before the activity completes, and one code serves every ancestor notification. A Compensate always notifies the nearest scope and carries its target in the request, so an unmatched target is not refused: every enclosing scope recovers in turn and the outermost faults with `compensation.scope.compensate-requested`. Publication catches literal targets in a workflow Draft (T314). An expression target, and one in a reusable activity's body (an activity Draft, which workflow Draft validators never see), are checked only at run time.
 
 ### R18 — Container-local reads in a handed-over handler (T310)
 
-- **Decision:** deferred. R6 holds for workflow variables and `ActivityResult` references (Phase A). A handler that reads a container-local value the inner scope no longer has fails at run time, takes its retries and then waits for an operator; nothing is skipped silently. A validator follows with the Studio editors (T321).
+- **Decision:** deferred. R6 holds for workflow variables and `ActivityResult` references (Phase A). A handler that reads a container-local value the inner scope no longer has fails at run time, takes its retries and then waits for an operator; nothing is skipped silently. The publication check is tracked as T324.
 
 ### R19 — Reporting metadata (runtime seam R-4)
 

@@ -25,27 +25,33 @@ OnChildCompleted(child) — last step completed, phase Running:
     → Completed, Done   (private state is cleared by the runtime)
 
 OnChildNotified(code = compensation.register, via child c, payload):
+  phase Completed / Compensated: ignore
   if payload.originScope in receivedHandOvers: ignore (repeat)
-  append entries with fresh ordinals in payload order, keeping origin (first origin wins)
-  when the last batch of the hand-over is journaled: add originScope to receivedHandOvers
+  append entries with fresh ordinals in payload order, keeping origin (first origin wins);
+    an entry whose origin is already journaled is skipped (a repeated batch)
+  record payload.batch for originScope in handOversInProgress; once every batch 0..batchCount-1
+    is journaled, move originScope to receivedHandOvers (batches may arrive in any order)
   phase Running: stay Running (continue waiting for c's completion)
-  phase Compensating / AwaitingIntervention: new entries are eligible in the current recovery;
-    if no handler is running, schedule NextEligible
+  phase Compensating / AwaitingIntervention: schedule nothing now; the new entries are eligible,
+    so the next handler scheduled (when the running handler completes, or after an operator
+    retry ends the wait) is the newest of them
   → Defer
 
-OnChildNotified(code = compensation.confirm):
-  phase Running: mark every Registered / NoHandler / Uncertain entry Confirmed; record confirmation → Defer
-  otherwise: fault the notifying path with compensation.confirm-during-recovery (the Confirm activity faults)
+OnChildNotified(code = compensation.confirm, via child c):
+  phase Running and c is one of the scope's steps, not a repeat of the same Confirm:
+    mark every Registered / NoHandler / Uncertain entry Confirmed; record confirmation → Defer
+  otherwise (recovery running, or c is a handler): ignore, no fault (research R11)
 
 OnChildNotified(code = compensation.compensate, via child c):
-  notifying path is a handler: compensation.compensate-in-handler
-  target names an outer scope: compensate self, then fault with compensation.scope.compensate-requested
+  phase is not Running, or c is not the running step (recovery running, or c is a handler):
+    ignore, no fault (research R11)
   phase Running and c is the running step:
-    cause = { kind: explicit, step, requestedBy }
-    cancel c's subtree (seam A)
-    if c had started: journal Uncertain (handler or not)
-    start recovery as after a fault (NextEligible, newest first)
-  any other phase: ignore (recovery already running)
+    cause = { kind: explicit, step, requestedBy, target }   target = the request's target when it names
+      a scope other than this one (an outer scope), else none
+    c is the Compensate itself: nothing to journal or stop; recover as after a fault
+    otherwise: journal c Uncertain (handler or not), then
+      nothing eligible and the finish below faults: fault at once without stopping c (research R13)
+      else: cancel c's subtree (seam A) and recover as after a fault (NextEligible, newest first)
 
 OnChildFaulted(child, code = compensation.scope.compensate-requested), phase Running:
   cause = { kind: requested, step, activityExecutionId }; absorb; recover as after a fault
@@ -56,7 +62,14 @@ OnDescendantFaulted(via child c, incident) — R-3, phase Running and c is the r
 Recovery finished:
   if any entry is Uncertain without a handler created by Compensate:
     Faulted(compensation.scope.uncertain-unhandled)
+  else if cause.target is set: Faulted(compensation.scope.compensate-requested,
+    category compensation.target:{target}), so the next scope out recovers in turn
+  else if cause.kind is explicit or requested: Completed, Compensated (research R12)
   else as spec 251 (Compensated, or faultAfterCompensation)
+
+A target that matches no enclosing scope is not refused at run time: every enclosing scope recovers
+in turn and the outermost one faults with compensation.scope.compensate-requested. Publishing refuses
+a literal target that does not enclose the Compensate (FR-312).
 ```
 
 ## Rules

@@ -94,7 +94,7 @@ Add **Compensate** inside a step to undo the scope's work on purpose, for exampl
 - Give `scope` the node id of an outer scope to undo more: each scope in between undoes its own work, then the named scope recovers.
 - Inside a compensation, or once recovery started, Compensate has no effect.
 
-Publishing refuses a Confirm or Compensate without an enclosing scope, one whose `scope` names a scope that does not enclose it, and one placed in a compensation. A target given as an expression is checked when it runs: one that matches no enclosing scope faults with `runtime.ancestor-notification.target-not-found`.
+Publishing refuses a Confirm or Compensate without an enclosing scope, one whose `scope` names a scope that does not enclose it, and one placed in a compensation. A Compensate is also refused when its cascade would pass through a compensation of a scope on the way to its target. A target given as an expression is checked when it runs: a Confirm whose target matches no enclosing scope faults with `runtime.ancestor-notification.target-not-found`; a Compensate whose target matches no enclosing scope makes every enclosing scope undo its work in turn, and the outermost one then faults.
 
 ## Cancellation
 

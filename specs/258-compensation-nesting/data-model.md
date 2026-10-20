@@ -32,7 +32,7 @@ Extends [spec 251 data-model.md](../251-compensation-uncertainty/data-model.md).
 | `compensation.originScopeActivityExecutionId`, `compensation.originEntryId` | the scope, on a handed-over handler's scheduling metadata **and provenance** (FR-304) | the scope, Studio |
 | `compensation.cause` = `explicit` | the scope, on absorbed or cancelled step metadata after Compensate | Studio |
 
-Fault codes: `compensation.scope.compensate-requested` (category `compensation.target:{scopeNodeId}`), `compensation.scope.uncertain-unhandled` (category `outcome-unknown`), and the runtime's `runtime.ancestor-notification.target-not-found` for an unmatched target. `compensation.target-not-found`, `compensation.confirm-during-recovery` and `compensation.compensate-in-handler` are not used (research R11, R17).
+Fault codes: `compensation.scope.compensate-requested` (category `compensation.target:{scopeNodeId}`), `compensation.scope.uncertain-unhandled` (category `outcome-unknown`), and the runtime's `runtime.ancestor-notification.target-not-found` for a Confirm whose target matches no enclosing scope. `compensation.target-not-found`, `compensation.confirm-during-recovery` and `compensation.compensate-in-handler` are not used (research R11, R17).
 
 ## Private state — type `Elsa.CompensationScope.State`, version `3`
 
@@ -58,7 +58,8 @@ Fault codes: `compensation.scope.compensate-requested` (category `compensation.t
     }
   ],
   "confirmations": [ { "activityExecutionId": "ae-11", "entryIds": ["ae-scope/entry/1"] } ],
-  "receivedHandOvers": [ "ae-inner" ]
+  "receivedHandOvers": [ "ae-inner" ],
+  "handOversInProgress": [ { "originScope": "ae-inner-2", "batches": [ 1 ] } ]
 }
 ```
 
@@ -69,11 +70,12 @@ Fault codes: `compensation.scope.compensate-requested` (category `compensation.t
 | entry `origin` | new, optional. |
 | `cause.kind` | adds `explicit` (Compensate) and `requested` (cascade fault from an inner scope). `requestedBy` is new and optional. |
 | `confirmations` | new. Every Confirm (and `confirmOnComplete`) with the entries it confirmed. |
-| `receivedHandOvers` | new. Origin scope occurrences whose hand-over was fully journaled; de-duplicates repeats (FR-306). |
+| `receivedHandOvers` | new. Origin scope occurrences whose hand-over was fully journaled, every batch `0..batchCount-1`; de-duplicates repeats (FR-306). |
+| `handOversInProgress` | new. Per origin scope occurrence, the batch indexes journaled so far while some are missing. Batches are separate deliveries and may arrive in any order. |
 
 ## Upcast v2 → v3
 
-Every v2 field is kept. `confirmations` and `receivedHandOvers` become `[]`; entries get no `origin` and no `handlerExecutableNodeId`. No v2 status changes meaning. Version 3 is never downgraded.
+Every v2 field is kept. `confirmations`, `receivedHandOvers` and `handOversInProgress` become `[]`; entries get no `origin` and no `handlerExecutableNodeId`. No v2 status changes meaning. Version 3 is never downgraded.
 
 ## Entry status transitions (additions)
 

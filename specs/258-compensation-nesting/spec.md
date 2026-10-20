@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-20
 
-**Status**: Draft
+**Status**: In progress — runtime seams, scope v3, Confirm, Compensate, validators, journeys and docs land in [#3126](https://github.com/elsa-workflows/elsa-foundation/pull/3126); the Studio work (Phase C) and the container-local-read publication check (T324) remain.
 
 **Program**: [Native compensation #3035](https://github.com/elsa-workflows/elsa-foundation/issues/3035) → [Epic #3039](https://github.com/elsa-workflows/elsa-foundation/issues/3039) → [Feature #3046](https://github.com/elsa-workflows/elsa-foundation/issues/3046) (M3). Builds on [spec 250](../250-native-compensation/spec.md) (M1) and [spec 251](../251-compensation-uncertainty/spec.md) (M2). Their requirements and owner decisions still hold, except where this spec says otherwise.
 
@@ -139,11 +139,11 @@ An operator opens a run with nested scopes and a loop. The run view shows which 
 - The outer scope completes `Done` itself: it hands over both its own and the received entries, transitively, to its own enclosing scope.
 - A hand-over message is delivered twice: entries are de-duplicated by origin scope occurrence and origin entry id.
 - A handed-over entry's handler fails on every attempt: spec 251's retry and intervention rules apply, in the outer scope.
-- Confirm runs during recovery: refused with a coded fault; recovery decides.
-- Compensate runs inside a handler: refused with a coded fault (no recovery of recovery).
+- Confirm runs during recovery: ignored, with no fault; recovery decides (research R11). Publishing refuses a Confirm inside a handler.
+- Compensate runs inside a handler or during recovery: ignored, with no fault (no recovery of recovery, research R11). Publishing refuses a Compensate inside a handler, including one whose cascade would pass through a handler.
 - Cancel arrives while an inner scope is handing over: the hand-over either committed with the inner completion or not at all.
 - A reusable activity contains a scope: its entries end at the reusable boundary as kept unless that inner scope has its own enclosing scope inside the reusable activity.
-- A Sequence nested inside a Flowchart step: the Flowchart handles faults of its direct children only, so the Sequence still suspends and the step blocks as today (known limit, pinned by a test).
+- A Sequence nested inside a Flowchart step: the Flowchart handles faults of its direct children only, so the fault never reaches the scope; the run faults and nothing is undone (known limit, pinned by a test).
 - More entries than one hand-over message carries: sent as several ordered messages in the same checkpoint.
 
 ## Requirements
@@ -161,7 +161,7 @@ An operator opens a run with nested scopes and a loop. The run view shows which 
 
 - **FR-305**: When a scope completes `Done` and `confirmOnComplete` is off, it hands each entry that is `Registered`, `NoHandler` or `Uncertain` and not confirmed to the nearest enclosing scope (FR-301, stopping at the reusable boundary; a "maybe" delivery). Handed-over entries carry their step, operation key, forward execution and iteration, forward outcome, handler node and origin.
 - **FR-306**: The receiving scope journals handed-over entries with fresh completion ordinals, keeping their relative order, de-duplicated by (origin scope occurrence, origin entry id). In `Running` it just journals them. In `Compensating` or `AwaitingIntervention` it journals them as eligible for the current recovery. In `Completed` or `Compensated` the message cannot arrive (the scope has no live descendants).
-- **FR-307**: To compensate a handed-over entry, the scope schedules the entry's own handler node as its child, with the entry's own keys (spec 251 FR-202), the forward execution as scheduling identity, and origin metadata. The handler binds to the forward step's result and workflow variables; variables local to containers inside the origin scope are not available, and publishing refuses a handler that reads them.
+- **FR-307**: To compensate a handed-over entry, the scope schedules the entry's own handler node as its child, with the entry's own keys (spec 251 FR-202), the forward execution as scheduling identity, and origin metadata. The handler binds to the forward step's result and workflow variables; variables local to containers inside the origin scope are not available, and publishing refuses a handler that reads them (pending: T324; until then such a handler fails into retries and then waits for an operator, research R18).
 - **FR-308**: A scope inside a loop body yields one set of entries per iteration; each entry records its iteration. Retries never create a new entry (spec 251 FR-201).
 
 **Confirmation**
@@ -169,7 +169,7 @@ An operator opens a run with nested scopes and a loop. The run view shows which 
 - **FR-309**: A scope input `confirmOnComplete` (default `false`): when set, completing `Done` confirms the scope's entries instead of handing them over.
 - **FR-310**: A **Confirm** activity confirms the nearest enclosing scope, or the enclosing scope whose authored node it names. Confirmation marks every entry not already compensating, compensated, failed or confirmed as `Confirmed`, records the confirming occurrence, and never removes evidence.
 - **FR-311**: Confirmed entries are never compensated and are never handed over.
-- **FR-312**: Publishing refuses a Confirm or Compensate whose named target is not an enclosing compensation scope on the same side of every reusable-activity boundary. At run time a Confirm or Compensate with no matching enclosing scope faults with `compensation.target-not-found`; a Confirm during recovery faults with `compensation.confirm-during-recovery`; a Compensate inside a handler faults with `compensation.compensate-in-handler`.
+- **FR-312**: Publishing refuses a Confirm or Compensate whose named target is not an enclosing compensation scope on the same side of every reusable-activity boundary, and one placed in a compensation handler (for Compensate, in the handler of any scope its cascade passes through). At run time, a Confirm whose named target matches no enclosing scope faults with the runtime's `runtime.ancestor-notification.target-not-found`. A Compensate whose target matches no enclosing scope is not refused: each enclosing scope recovers in turn and the outermost faults with `compensation.scope.compensate-requested`. A Confirm during recovery, and a Confirm or Compensate inside a handler, are ignored with no fault (research R11, R17).
 
 **Explicit recovery**
 
@@ -222,7 +222,7 @@ An operator opens a run with nested scopes and a loop. The run view shows which 
 ## Assumptions
 
 - Completed scopes keep no private state (current runtime behaviour); the enclosing scope is the only place handed-over entries live.
-- Late handlers need only the forward result and workflow variables. Handlers that read container-local variables are refused at publication.
+- Late handlers need only the forward result and workflow variables. Refusing handlers that read container-local variables at publication is pending (T324).
 - Operators resume failed handed-over handlers through #2747's retry (spec 251).
 - Studio operator actions (retry button, mark resolved, abandon) are M4.
 
