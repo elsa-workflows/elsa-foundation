@@ -156,3 +156,556 @@ static Elsa.Etl.Core.EtlOutputField.operator !=(Elsa.Etl.Core.EtlOutputField? le
 static Elsa.Etl.Core.EtlOutputField.operator ==(Elsa.Etl.Core.EtlOutputField? left, Elsa.Etl.Core.EtlOutputField? right) -> bool
 static Elsa.Etl.Core.EtlPipeline.operator !=(Elsa.Etl.Core.EtlPipeline? left, Elsa.Etl.Core.EtlPipeline? right) -> bool
 static Elsa.Etl.Core.EtlPipeline.operator ==(Elsa.Etl.Core.EtlPipeline? left, Elsa.Etl.Core.EtlPipeline? right) -> bool
+Elsa.Etl.Core.Runtime.EtlAcceptanceResult
+Elsa.Etl.Core.Runtime.EtlAcceptanceResult.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlAcceptanceResult!
+Elsa.Etl.Core.Runtime.EtlAcceptanceResult.Deconstruct(out Elsa.Etl.Core.Runtime.EtlStoreStatus Status, out Elsa.Etl.Core.Runtime.EtlPartitionLease? Lease) -> void
+Elsa.Etl.Core.Runtime.EtlAcceptanceResult.Equals(Elsa.Etl.Core.Runtime.EtlAcceptanceResult? other) -> bool
+Elsa.Etl.Core.Runtime.EtlAcceptanceResult.EtlAcceptanceResult(Elsa.Etl.Core.Runtime.EtlStoreStatus Status, Elsa.Etl.Core.Runtime.EtlPartitionLease? Lease) -> void
+Elsa.Etl.Core.Runtime.EtlAcceptanceResult.Lease.get -> Elsa.Etl.Core.Runtime.EtlPartitionLease?
+Elsa.Etl.Core.Runtime.EtlAcceptanceResult.Lease.init -> void
+Elsa.Etl.Core.Runtime.EtlAcceptanceResult.Status.get -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlAcceptanceResult.Status.init -> void
+Elsa.Etl.Core.Runtime.EtlAdmissionResult
+Elsa.Etl.Core.Runtime.EtlAdmissionResult.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlAdmissionResult!
+Elsa.Etl.Core.Runtime.EtlAdmissionResult.Deconstruct(out Elsa.Etl.Core.Runtime.EtlStoreStatus Status, out Elsa.Etl.Core.Runtime.EtlRunView? Run) -> void
+Elsa.Etl.Core.Runtime.EtlAdmissionResult.Equals(Elsa.Etl.Core.Runtime.EtlAdmissionResult? other) -> bool
+Elsa.Etl.Core.Runtime.EtlAdmissionResult.EtlAdmissionResult(Elsa.Etl.Core.Runtime.EtlStoreStatus Status, Elsa.Etl.Core.Runtime.EtlRunView? Run) -> void
+Elsa.Etl.Core.Runtime.EtlAdmissionResult.Run.get -> Elsa.Etl.Core.Runtime.EtlRunView?
+Elsa.Etl.Core.Runtime.EtlAdmissionResult.Run.init -> void
+Elsa.Etl.Core.Runtime.EtlAdmissionResult.Status.get -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlAdmissionResult.Status.init -> void
+Elsa.Etl.Core.Runtime.EtlBatchAcceptance
+Elsa.Etl.Core.Runtime.EtlBatchAcceptance.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlBatchAcceptance!
+Elsa.Etl.Core.Runtime.EtlBatchAcceptance.AcceptedRecords.get -> long
+Elsa.Etl.Core.Runtime.EtlBatchAcceptance.AcceptedRecords.init -> void
+Elsa.Etl.Core.Runtime.EtlBatchAcceptance.Batch.get -> Elsa.Etl.Core.Runtime.EtlBatchDescriptor!
+Elsa.Etl.Core.Runtime.EtlBatchAcceptance.Batch.init -> void
+Elsa.Etl.Core.Runtime.EtlBatchAcceptance.Deconstruct(out Elsa.Etl.Core.Runtime.EtlBatchDescriptor! Batch, out long AcceptedRecords, out long RejectedRecords, out long FilteredRecords, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlOutputEffect!>! Effects) -> void
+Elsa.Etl.Core.Runtime.EtlBatchAcceptance.Effects.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlOutputEffect!>!
+Elsa.Etl.Core.Runtime.EtlBatchAcceptance.Effects.init -> void
+Elsa.Etl.Core.Runtime.EtlBatchAcceptance.Equals(Elsa.Etl.Core.Runtime.EtlBatchAcceptance? other) -> bool
+Elsa.Etl.Core.Runtime.EtlBatchAcceptance.EtlBatchAcceptance(Elsa.Etl.Core.Runtime.EtlBatchDescriptor! Batch, long AcceptedRecords, long RejectedRecords, long FilteredRecords, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlOutputEffect!>! Effects) -> void
+Elsa.Etl.Core.Runtime.EtlBatchAcceptance.FilteredRecords.get -> long
+Elsa.Etl.Core.Runtime.EtlBatchAcceptance.FilteredRecords.init -> void
+Elsa.Etl.Core.Runtime.EtlBatchAcceptance.RejectedRecords.get -> long
+Elsa.Etl.Core.Runtime.EtlBatchAcceptance.RejectedRecords.init -> void
+Elsa.Etl.Core.Runtime.EtlBatchDescriptor
+Elsa.Etl.Core.Runtime.EtlBatchDescriptor.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlBatchDescriptor!
+Elsa.Etl.Core.Runtime.EtlBatchDescriptor.BatchId.get -> string!
+Elsa.Etl.Core.Runtime.EtlBatchDescriptor.BatchId.init -> void
+Elsa.Etl.Core.Runtime.EtlBatchDescriptor.Deconstruct(out string! BatchId, out long StartOrdinal, out long EndOrdinalExclusive, out long InputBytes, out string! InputHash) -> void
+Elsa.Etl.Core.Runtime.EtlBatchDescriptor.EndOrdinalExclusive.get -> long
+Elsa.Etl.Core.Runtime.EtlBatchDescriptor.EndOrdinalExclusive.init -> void
+Elsa.Etl.Core.Runtime.EtlBatchDescriptor.Equals(Elsa.Etl.Core.Runtime.EtlBatchDescriptor? other) -> bool
+Elsa.Etl.Core.Runtime.EtlBatchDescriptor.EtlBatchDescriptor(string! BatchId, long StartOrdinal, long EndOrdinalExclusive, long InputBytes, string! InputHash) -> void
+Elsa.Etl.Core.Runtime.EtlBatchDescriptor.InputBytes.get -> long
+Elsa.Etl.Core.Runtime.EtlBatchDescriptor.InputBytes.init -> void
+Elsa.Etl.Core.Runtime.EtlBatchDescriptor.InputHash.get -> string!
+Elsa.Etl.Core.Runtime.EtlBatchDescriptor.InputHash.init -> void
+Elsa.Etl.Core.Runtime.EtlBatchDescriptor.StartOrdinal.get -> long
+Elsa.Etl.Core.Runtime.EtlBatchDescriptor.StartOrdinal.init -> void
+Elsa.Etl.Core.Runtime.EtlBatchReservation
+Elsa.Etl.Core.Runtime.EtlBatchReservation.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlBatchReservation!
+Elsa.Etl.Core.Runtime.EtlBatchReservation.Batch.get -> Elsa.Etl.Core.Runtime.EtlBatchDescriptor!
+Elsa.Etl.Core.Runtime.EtlBatchReservation.Batch.init -> void
+Elsa.Etl.Core.Runtime.EtlBatchReservation.Deconstruct(out Elsa.Etl.Core.Runtime.EtlBatchDescriptor! Batch, out bool Settled) -> void
+Elsa.Etl.Core.Runtime.EtlBatchReservation.Equals(Elsa.Etl.Core.Runtime.EtlBatchReservation? other) -> bool
+Elsa.Etl.Core.Runtime.EtlBatchReservation.EtlBatchReservation(Elsa.Etl.Core.Runtime.EtlBatchDescriptor! Batch, bool Settled) -> void
+Elsa.Etl.Core.Runtime.EtlBatchReservation.Settled.get -> bool
+Elsa.Etl.Core.Runtime.EtlBatchReservation.Settled.init -> void
+Elsa.Etl.Core.Runtime.EtlBindingRevision
+Elsa.Etl.Core.Runtime.EtlBindingRevision.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlBindingRevision!
+Elsa.Etl.Core.Runtime.EtlBindingRevision.Alias.get -> string!
+Elsa.Etl.Core.Runtime.EtlBindingRevision.Alias.init -> void
+Elsa.Etl.Core.Runtime.EtlBindingRevision.Deconstruct(out string! Alias, out string! Revision, out string! Handle, out string? ExpectedSha256) -> void
+Elsa.Etl.Core.Runtime.EtlBindingRevision.Equals(Elsa.Etl.Core.Runtime.EtlBindingRevision? other) -> bool
+Elsa.Etl.Core.Runtime.EtlBindingRevision.EtlBindingRevision(string! Alias, string! Revision, string! Handle, string? ExpectedSha256) -> void
+Elsa.Etl.Core.Runtime.EtlBindingRevision.ExpectedSha256.get -> string?
+Elsa.Etl.Core.Runtime.EtlBindingRevision.ExpectedSha256.init -> void
+Elsa.Etl.Core.Runtime.EtlBindingRevision.Handle.get -> string!
+Elsa.Etl.Core.Runtime.EtlBindingRevision.Handle.init -> void
+Elsa.Etl.Core.Runtime.EtlBindingRevision.Revision.get -> string!
+Elsa.Etl.Core.Runtime.EtlBindingRevision.Revision.init -> void
+Elsa.Etl.Core.Runtime.EtlDeliveryDisposition
+Elsa.Etl.Core.Runtime.EtlDeliveryDisposition.AlreadyConsumed = 1 -> Elsa.Etl.Core.Runtime.EtlDeliveryDisposition
+Elsa.Etl.Core.Runtime.EtlDeliveryDisposition.Consumed = 0 -> Elsa.Etl.Core.Runtime.EtlDeliveryDisposition
+Elsa.Etl.Core.Runtime.EtlDeliveryDisposition.ProvenParentTerminal = 2 -> Elsa.Etl.Core.Runtime.EtlDeliveryDisposition
+Elsa.Etl.Core.Runtime.EtlDeliveryLease
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlDeliveryLease!
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.Address.get -> Elsa.Etl.Core.Runtime.EtlNativeResultAddress!
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.Address.init -> void
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.Deconstruct(out Elsa.Etl.Core.EtlScope! Scope, out string! RunId, out string! DeliveryId, out string! Owner, out long Fence, out System.DateTimeOffset ExpiresAt, out Elsa.Etl.Core.Runtime.EtlNativeResultAddress! Address, out Elsa.Etl.Core.Runtime.EtlTerminalResult! Result, out string! PayloadHash) -> void
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.DeliveryId.get -> string!
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.DeliveryId.init -> void
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.Equals(Elsa.Etl.Core.Runtime.EtlDeliveryLease? other) -> bool
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.EtlDeliveryLease(Elsa.Etl.Core.EtlScope! Scope, string! RunId, string! DeliveryId, string! Owner, long Fence, System.DateTimeOffset ExpiresAt, Elsa.Etl.Core.Runtime.EtlNativeResultAddress! Address, Elsa.Etl.Core.Runtime.EtlTerminalResult! Result, string! PayloadHash) -> void
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.ExpiresAt.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.ExpiresAt.init -> void
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.Fence.get -> long
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.Fence.init -> void
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.Owner.get -> string!
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.Owner.init -> void
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.PayloadHash.get -> string!
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.PayloadHash.init -> void
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.Result.get -> Elsa.Etl.Core.Runtime.EtlTerminalResult!
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.Result.init -> void
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.RunId.get -> string!
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.RunId.init -> void
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.Scope.get -> Elsa.Etl.Core.EtlScope!
+Elsa.Etl.Core.Runtime.EtlDeliveryLease.Scope.init -> void
+Elsa.Etl.Core.Runtime.EtlInvocation
+Elsa.Etl.Core.Runtime.EtlInvocation.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlInvocation!
+Elsa.Etl.Core.Runtime.EtlInvocation.Artifact.get -> Elsa.Etl.Core.EtlArtifact!
+Elsa.Etl.Core.Runtime.EtlInvocation.Artifact.init -> void
+Elsa.Etl.Core.Runtime.EtlInvocation.Deconstruct(out Elsa.Etl.Core.EtlScope! Scope, out string! RunId, out Elsa.Etl.Core.EtlArtifact! Artifact, out Elsa.Etl.Core.Runtime.EtlNativeResultAddress! ResultAddress) -> void
+Elsa.Etl.Core.Runtime.EtlInvocation.Equals(Elsa.Etl.Core.Runtime.EtlInvocation? other) -> bool
+Elsa.Etl.Core.Runtime.EtlInvocation.EtlInvocation(Elsa.Etl.Core.EtlScope! Scope, string! RunId, Elsa.Etl.Core.EtlArtifact! Artifact, Elsa.Etl.Core.Runtime.EtlNativeResultAddress! ResultAddress) -> void
+Elsa.Etl.Core.Runtime.EtlInvocation.ResultAddress.get -> Elsa.Etl.Core.Runtime.EtlNativeResultAddress!
+Elsa.Etl.Core.Runtime.EtlInvocation.ResultAddress.init -> void
+Elsa.Etl.Core.Runtime.EtlInvocation.RunId.get -> string!
+Elsa.Etl.Core.Runtime.EtlInvocation.RunId.init -> void
+Elsa.Etl.Core.Runtime.EtlInvocation.Scope.get -> Elsa.Etl.Core.EtlScope!
+Elsa.Etl.Core.Runtime.EtlInvocation.Scope.init -> void
+Elsa.Etl.Core.Runtime.EtlManifestEntry
+Elsa.Etl.Core.Runtime.EtlManifestEntry.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlManifestEntry!
+Elsa.Etl.Core.Runtime.EtlManifestEntry.AcceptedAt.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlManifestEntry.AcceptedAt.init -> void
+Elsa.Etl.Core.Runtime.EtlManifestEntry.BatchId.get -> string!
+Elsa.Etl.Core.Runtime.EtlManifestEntry.BatchId.init -> void
+Elsa.Etl.Core.Runtime.EtlManifestEntry.Deconstruct(out Elsa.Etl.Core.Runtime.EtlManifestPosition! Position, out string! BatchId, out Elsa.Etl.Core.Runtime.EtlOutputEffect! Effect, out System.DateTimeOffset AcceptedAt) -> void
+Elsa.Etl.Core.Runtime.EtlManifestEntry.Effect.get -> Elsa.Etl.Core.Runtime.EtlOutputEffect!
+Elsa.Etl.Core.Runtime.EtlManifestEntry.Effect.init -> void
+Elsa.Etl.Core.Runtime.EtlManifestEntry.Equals(Elsa.Etl.Core.Runtime.EtlManifestEntry? other) -> bool
+Elsa.Etl.Core.Runtime.EtlManifestEntry.EtlManifestEntry(Elsa.Etl.Core.Runtime.EtlManifestPosition! Position, string! BatchId, Elsa.Etl.Core.Runtime.EtlOutputEffect! Effect, System.DateTimeOffset AcceptedAt) -> void
+Elsa.Etl.Core.Runtime.EtlManifestEntry.Position.get -> Elsa.Etl.Core.Runtime.EtlManifestPosition!
+Elsa.Etl.Core.Runtime.EtlManifestEntry.Position.init -> void
+Elsa.Etl.Core.Runtime.EtlManifestPosition
+Elsa.Etl.Core.Runtime.EtlManifestPosition.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlManifestPosition!
+Elsa.Etl.Core.Runtime.EtlManifestPosition.BatchStartOrdinal.get -> long
+Elsa.Etl.Core.Runtime.EtlManifestPosition.BatchStartOrdinal.init -> void
+Elsa.Etl.Core.Runtime.EtlManifestPosition.Deconstruct(out int PartitionOrdinal, out long BatchStartOrdinal, out Elsa.Etl.Core.Runtime.EtlOutputRoute Route) -> void
+Elsa.Etl.Core.Runtime.EtlManifestPosition.Equals(Elsa.Etl.Core.Runtime.EtlManifestPosition? other) -> bool
+Elsa.Etl.Core.Runtime.EtlManifestPosition.EtlManifestPosition(int PartitionOrdinal, long BatchStartOrdinal, Elsa.Etl.Core.Runtime.EtlOutputRoute Route) -> void
+Elsa.Etl.Core.Runtime.EtlManifestPosition.PartitionOrdinal.get -> int
+Elsa.Etl.Core.Runtime.EtlManifestPosition.PartitionOrdinal.init -> void
+Elsa.Etl.Core.Runtime.EtlManifestPosition.Route.get -> Elsa.Etl.Core.Runtime.EtlOutputRoute
+Elsa.Etl.Core.Runtime.EtlManifestPosition.Route.init -> void
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlNativeResultAddress!
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.ActivityExecutionId.get -> string!
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.ActivityExecutionId.init -> void
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.BookmarkId.get -> string!
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.BookmarkId.init -> void
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.Deconstruct(out int FormatVersion, out string! WorkflowExecutionId, out string! ActivityExecutionId, out string! ExecutableId, out string! ExecutableHash, out string! NodeId, out string! BookmarkId, out string! RegistrationId, out string! ResumeTargetId, out string! StimulusType, out string! StimulusHash, out string! PayloadTypeAlias, out int PayloadSchemaVersion, out string! DeduplicationPolicy, out string! ProviderId) -> void
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.DeduplicationPolicy.get -> string!
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.DeduplicationPolicy.init -> void
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.Equals(Elsa.Etl.Core.Runtime.EtlNativeResultAddress? other) -> bool
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.EtlNativeResultAddress(int FormatVersion, string! WorkflowExecutionId, string! ActivityExecutionId, string! ExecutableId, string! ExecutableHash, string! NodeId, string! BookmarkId, string! RegistrationId, string! ResumeTargetId, string! StimulusType, string! StimulusHash, string! PayloadTypeAlias, int PayloadSchemaVersion, string! DeduplicationPolicy, string! ProviderId) -> void
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.ExecutableHash.get -> string!
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.ExecutableHash.init -> void
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.ExecutableId.get -> string!
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.ExecutableId.init -> void
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.FormatVersion.get -> int
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.FormatVersion.init -> void
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.NodeId.get -> string!
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.NodeId.init -> void
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.PayloadSchemaVersion.get -> int
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.PayloadSchemaVersion.init -> void
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.PayloadTypeAlias.get -> string!
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.PayloadTypeAlias.init -> void
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.ProviderId.get -> string!
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.ProviderId.init -> void
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.RegistrationId.get -> string!
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.RegistrationId.init -> void
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.ResumeTargetId.get -> string!
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.ResumeTargetId.init -> void
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.StimulusHash.get -> string!
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.StimulusHash.init -> void
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.StimulusType.get -> string!
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.StimulusType.init -> void
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.WorkflowExecutionId.get -> string!
+Elsa.Etl.Core.Runtime.EtlNativeResultAddress.WorkflowExecutionId.init -> void
+Elsa.Etl.Core.Runtime.EtlObjectReference
+Elsa.Etl.Core.Runtime.EtlObjectReference.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlObjectReference!
+Elsa.Etl.Core.Runtime.EtlObjectReference.ByteLength.get -> long
+Elsa.Etl.Core.Runtime.EtlObjectReference.ByteLength.init -> void
+Elsa.Etl.Core.Runtime.EtlObjectReference.ContentHash.get -> string!
+Elsa.Etl.Core.Runtime.EtlObjectReference.ContentHash.init -> void
+Elsa.Etl.Core.Runtime.EtlObjectReference.Deconstruct(out string! Key, out string! ContentHash, out long ByteLength) -> void
+Elsa.Etl.Core.Runtime.EtlObjectReference.Equals(Elsa.Etl.Core.Runtime.EtlObjectReference? other) -> bool
+Elsa.Etl.Core.Runtime.EtlObjectReference.EtlObjectReference(string! Key, string! ContentHash, long ByteLength) -> void
+Elsa.Etl.Core.Runtime.EtlObjectReference.Key.get -> string!
+Elsa.Etl.Core.Runtime.EtlObjectReference.Key.init -> void
+Elsa.Etl.Core.Runtime.EtlOutputEffect
+Elsa.Etl.Core.Runtime.EtlOutputEffect.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlOutputEffect!
+Elsa.Etl.Core.Runtime.EtlOutputEffect.Chunk.get -> Elsa.Etl.Core.Runtime.EtlObjectReference!
+Elsa.Etl.Core.Runtime.EtlOutputEffect.Chunk.init -> void
+Elsa.Etl.Core.Runtime.EtlOutputEffect.Deconstruct(out Elsa.Etl.Core.Runtime.EtlOutputRoute Route, out Elsa.Etl.Core.Runtime.EtlObjectReference! Chunk, out long RecordCount) -> void
+Elsa.Etl.Core.Runtime.EtlOutputEffect.Equals(Elsa.Etl.Core.Runtime.EtlOutputEffect? other) -> bool
+Elsa.Etl.Core.Runtime.EtlOutputEffect.EtlOutputEffect(Elsa.Etl.Core.Runtime.EtlOutputRoute Route, Elsa.Etl.Core.Runtime.EtlObjectReference! Chunk, long RecordCount) -> void
+Elsa.Etl.Core.Runtime.EtlOutputEffect.RecordCount.get -> long
+Elsa.Etl.Core.Runtime.EtlOutputEffect.RecordCount.init -> void
+Elsa.Etl.Core.Runtime.EtlOutputEffect.Route.get -> Elsa.Etl.Core.Runtime.EtlOutputRoute
+Elsa.Etl.Core.Runtime.EtlOutputEffect.Route.init -> void
+Elsa.Etl.Core.Runtime.EtlOutputRoute
+Elsa.Etl.Core.Runtime.EtlOutputRoute.Error = 1 -> Elsa.Etl.Core.Runtime.EtlOutputRoute
+Elsa.Etl.Core.Runtime.EtlOutputRoute.Main = 0 -> Elsa.Etl.Core.Runtime.EtlOutputRoute
+Elsa.Etl.Core.Runtime.EtlPartitionLease
+Elsa.Etl.Core.Runtime.EtlPartitionLease.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlPartitionLease!
+Elsa.Etl.Core.Runtime.EtlPartitionLease.Deconstruct(out Elsa.Etl.Core.EtlScope! Scope, out string! RunId, out int PartitionOrdinal, out string! Owner, out long Fence, out System.DateTimeOffset ExpiresAt, out long StartOrdinal, out long EndOrdinalExclusive, out long NextOrdinal) -> void
+Elsa.Etl.Core.Runtime.EtlPartitionLease.EndOrdinalExclusive.get -> long
+Elsa.Etl.Core.Runtime.EtlPartitionLease.EndOrdinalExclusive.init -> void
+Elsa.Etl.Core.Runtime.EtlPartitionLease.Equals(Elsa.Etl.Core.Runtime.EtlPartitionLease? other) -> bool
+Elsa.Etl.Core.Runtime.EtlPartitionLease.EtlPartitionLease(Elsa.Etl.Core.EtlScope! Scope, string! RunId, int PartitionOrdinal, string! Owner, long Fence, System.DateTimeOffset ExpiresAt, long StartOrdinal, long EndOrdinalExclusive, long NextOrdinal) -> void
+Elsa.Etl.Core.Runtime.EtlPartitionLease.ExpiresAt.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlPartitionLease.ExpiresAt.init -> void
+Elsa.Etl.Core.Runtime.EtlPartitionLease.Fence.get -> long
+Elsa.Etl.Core.Runtime.EtlPartitionLease.Fence.init -> void
+Elsa.Etl.Core.Runtime.EtlPartitionLease.NextOrdinal.get -> long
+Elsa.Etl.Core.Runtime.EtlPartitionLease.NextOrdinal.init -> void
+Elsa.Etl.Core.Runtime.EtlPartitionLease.Owner.get -> string!
+Elsa.Etl.Core.Runtime.EtlPartitionLease.Owner.init -> void
+Elsa.Etl.Core.Runtime.EtlPartitionLease.PartitionOrdinal.get -> int
+Elsa.Etl.Core.Runtime.EtlPartitionLease.PartitionOrdinal.init -> void
+Elsa.Etl.Core.Runtime.EtlPartitionLease.RunId.get -> string!
+Elsa.Etl.Core.Runtime.EtlPartitionLease.RunId.init -> void
+Elsa.Etl.Core.Runtime.EtlPartitionLease.Scope.get -> Elsa.Etl.Core.EtlScope!
+Elsa.Etl.Core.Runtime.EtlPartitionLease.Scope.init -> void
+Elsa.Etl.Core.Runtime.EtlPartitionLease.StartOrdinal.get -> long
+Elsa.Etl.Core.Runtime.EtlPartitionLease.StartOrdinal.init -> void
+Elsa.Etl.Core.Runtime.EtlPartitionView
+Elsa.Etl.Core.Runtime.EtlPartitionView.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlPartitionView!
+Elsa.Etl.Core.Runtime.EtlPartitionView.Deconstruct(out int PartitionOrdinal, out long StartOrdinal, out long EndOrdinalExclusive, out long NextOrdinal, out string? Owner, out long Fence, out System.DateTimeOffset? ExpiresAt, out Elsa.Etl.Core.Runtime.EtlBatchReservation? OwedBatch) -> void
+Elsa.Etl.Core.Runtime.EtlPartitionView.EndOrdinalExclusive.get -> long
+Elsa.Etl.Core.Runtime.EtlPartitionView.EndOrdinalExclusive.init -> void
+Elsa.Etl.Core.Runtime.EtlPartitionView.Equals(Elsa.Etl.Core.Runtime.EtlPartitionView? other) -> bool
+Elsa.Etl.Core.Runtime.EtlPartitionView.EtlPartitionView(int PartitionOrdinal, long StartOrdinal, long EndOrdinalExclusive, long NextOrdinal, string? Owner, long Fence, System.DateTimeOffset? ExpiresAt, Elsa.Etl.Core.Runtime.EtlBatchReservation? OwedBatch) -> void
+Elsa.Etl.Core.Runtime.EtlPartitionView.ExpiresAt.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlPartitionView.ExpiresAt.init -> void
+Elsa.Etl.Core.Runtime.EtlPartitionView.Fence.get -> long
+Elsa.Etl.Core.Runtime.EtlPartitionView.Fence.init -> void
+Elsa.Etl.Core.Runtime.EtlPartitionView.NextOrdinal.get -> long
+Elsa.Etl.Core.Runtime.EtlPartitionView.NextOrdinal.init -> void
+Elsa.Etl.Core.Runtime.EtlPartitionView.OwedBatch.get -> Elsa.Etl.Core.Runtime.EtlBatchReservation?
+Elsa.Etl.Core.Runtime.EtlPartitionView.OwedBatch.init -> void
+Elsa.Etl.Core.Runtime.EtlPartitionView.Owner.get -> string?
+Elsa.Etl.Core.Runtime.EtlPartitionView.Owner.init -> void
+Elsa.Etl.Core.Runtime.EtlPartitionView.PartitionOrdinal.get -> int
+Elsa.Etl.Core.Runtime.EtlPartitionView.PartitionOrdinal.init -> void
+Elsa.Etl.Core.Runtime.EtlPartitionView.StartOrdinal.get -> long
+Elsa.Etl.Core.Runtime.EtlPartitionView.StartOrdinal.init -> void
+Elsa.Etl.Core.Runtime.EtlPreparationLease
+Elsa.Etl.Core.Runtime.EtlPreparationLease.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlPreparationLease!
+Elsa.Etl.Core.Runtime.EtlPreparationLease.Deconstruct(out Elsa.Etl.Core.EtlScope! Scope, out string! RunId, out string! Owner, out long Fence, out System.DateTimeOffset ExpiresAt) -> void
+Elsa.Etl.Core.Runtime.EtlPreparationLease.Equals(Elsa.Etl.Core.Runtime.EtlPreparationLease? other) -> bool
+Elsa.Etl.Core.Runtime.EtlPreparationLease.EtlPreparationLease(Elsa.Etl.Core.EtlScope! Scope, string! RunId, string! Owner, long Fence, System.DateTimeOffset ExpiresAt) -> void
+Elsa.Etl.Core.Runtime.EtlPreparationLease.ExpiresAt.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlPreparationLease.ExpiresAt.init -> void
+Elsa.Etl.Core.Runtime.EtlPreparationLease.Fence.get -> long
+Elsa.Etl.Core.Runtime.EtlPreparationLease.Fence.init -> void
+Elsa.Etl.Core.Runtime.EtlPreparationLease.Owner.get -> string!
+Elsa.Etl.Core.Runtime.EtlPreparationLease.Owner.init -> void
+Elsa.Etl.Core.Runtime.EtlPreparationLease.RunId.get -> string!
+Elsa.Etl.Core.Runtime.EtlPreparationLease.RunId.init -> void
+Elsa.Etl.Core.Runtime.EtlPreparationLease.Scope.get -> Elsa.Etl.Core.EtlScope!
+Elsa.Etl.Core.Runtime.EtlPreparationLease.Scope.init -> void
+Elsa.Etl.Core.Runtime.EtlPreparedRun
+Elsa.Etl.Core.Runtime.EtlPreparedRun.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlPreparedRun!
+Elsa.Etl.Core.Runtime.EtlPreparedRun.Deconstruct(out int FormatVersion, out Elsa.Etl.Core.Runtime.EtlObjectReference! Source, out Elsa.Etl.Core.Runtime.EtlObjectReference! Lookup, out Elsa.Etl.Core.Runtime.EtlObjectReference! SourceIndex, out long SourceRecordCount) -> void
+Elsa.Etl.Core.Runtime.EtlPreparedRun.Equals(Elsa.Etl.Core.Runtime.EtlPreparedRun? other) -> bool
+Elsa.Etl.Core.Runtime.EtlPreparedRun.EtlPreparedRun(int FormatVersion, Elsa.Etl.Core.Runtime.EtlObjectReference! Source, Elsa.Etl.Core.Runtime.EtlObjectReference! Lookup, Elsa.Etl.Core.Runtime.EtlObjectReference! SourceIndex, long SourceRecordCount) -> void
+Elsa.Etl.Core.Runtime.EtlPreparedRun.FormatVersion.get -> int
+Elsa.Etl.Core.Runtime.EtlPreparedRun.FormatVersion.init -> void
+Elsa.Etl.Core.Runtime.EtlPreparedRun.Lookup.get -> Elsa.Etl.Core.Runtime.EtlObjectReference!
+Elsa.Etl.Core.Runtime.EtlPreparedRun.Lookup.init -> void
+Elsa.Etl.Core.Runtime.EtlPreparedRun.Source.get -> Elsa.Etl.Core.Runtime.EtlObjectReference!
+Elsa.Etl.Core.Runtime.EtlPreparedRun.Source.init -> void
+Elsa.Etl.Core.Runtime.EtlPreparedRun.SourceIndex.get -> Elsa.Etl.Core.Runtime.EtlObjectReference!
+Elsa.Etl.Core.Runtime.EtlPreparedRun.SourceIndex.init -> void
+Elsa.Etl.Core.Runtime.EtlPreparedRun.SourceRecordCount.get -> long
+Elsa.Etl.Core.Runtime.EtlPreparedRun.SourceRecordCount.init -> void
+Elsa.Etl.Core.Runtime.EtlReservationResult
+Elsa.Etl.Core.Runtime.EtlReservationResult.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlReservationResult!
+Elsa.Etl.Core.Runtime.EtlReservationResult.Deconstruct(out Elsa.Etl.Core.Runtime.EtlStoreStatus Status, out Elsa.Etl.Core.Runtime.EtlBatchReservation? Reservation) -> void
+Elsa.Etl.Core.Runtime.EtlReservationResult.Equals(Elsa.Etl.Core.Runtime.EtlReservationResult? other) -> bool
+Elsa.Etl.Core.Runtime.EtlReservationResult.EtlReservationResult(Elsa.Etl.Core.Runtime.EtlStoreStatus Status, Elsa.Etl.Core.Runtime.EtlBatchReservation? Reservation) -> void
+Elsa.Etl.Core.Runtime.EtlReservationResult.Reservation.get -> Elsa.Etl.Core.Runtime.EtlBatchReservation?
+Elsa.Etl.Core.Runtime.EtlReservationResult.Reservation.init -> void
+Elsa.Etl.Core.Runtime.EtlReservationResult.Status.get -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlReservationResult.Status.init -> void
+Elsa.Etl.Core.Runtime.EtlRunAdmission
+Elsa.Etl.Core.Runtime.EtlRunAdmission.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlRunAdmission!
+Elsa.Etl.Core.Runtime.EtlRunAdmission.Bindings.get -> Elsa.Etl.Core.Runtime.EtlRunBindings!
+Elsa.Etl.Core.Runtime.EtlRunAdmission.Bindings.init -> void
+Elsa.Etl.Core.Runtime.EtlRunAdmission.Deconstruct(out Elsa.Etl.Core.Runtime.EtlInvocation! Invocation, out Elsa.Etl.Core.Runtime.EtlRunBindings! Bindings) -> void
+Elsa.Etl.Core.Runtime.EtlRunAdmission.Equals(Elsa.Etl.Core.Runtime.EtlRunAdmission? other) -> bool
+Elsa.Etl.Core.Runtime.EtlRunAdmission.EtlRunAdmission(Elsa.Etl.Core.Runtime.EtlInvocation! Invocation, Elsa.Etl.Core.Runtime.EtlRunBindings! Bindings) -> void
+Elsa.Etl.Core.Runtime.EtlRunAdmission.Invocation.get -> Elsa.Etl.Core.Runtime.EtlInvocation!
+Elsa.Etl.Core.Runtime.EtlRunAdmission.Invocation.init -> void
+Elsa.Etl.Core.Runtime.EtlRunBindings
+Elsa.Etl.Core.Runtime.EtlRunBindings.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlRunBindings!
+Elsa.Etl.Core.Runtime.EtlRunBindings.Deconstruct(out Elsa.Etl.Core.Runtime.EtlBindingRevision! Source, out Elsa.Etl.Core.Runtime.EtlBindingRevision! Lookup, out Elsa.Etl.Core.Runtime.EtlBindingRevision! Output, out Elsa.Etl.Core.Runtime.EtlBindingRevision! Errors) -> void
+Elsa.Etl.Core.Runtime.EtlRunBindings.Equals(Elsa.Etl.Core.Runtime.EtlRunBindings? other) -> bool
+Elsa.Etl.Core.Runtime.EtlRunBindings.Errors.get -> Elsa.Etl.Core.Runtime.EtlBindingRevision!
+Elsa.Etl.Core.Runtime.EtlRunBindings.Errors.init -> void
+Elsa.Etl.Core.Runtime.EtlRunBindings.EtlRunBindings(Elsa.Etl.Core.Runtime.EtlBindingRevision! Source, Elsa.Etl.Core.Runtime.EtlBindingRevision! Lookup, Elsa.Etl.Core.Runtime.EtlBindingRevision! Output, Elsa.Etl.Core.Runtime.EtlBindingRevision! Errors) -> void
+Elsa.Etl.Core.Runtime.EtlRunBindings.Lookup.get -> Elsa.Etl.Core.Runtime.EtlBindingRevision!
+Elsa.Etl.Core.Runtime.EtlRunBindings.Lookup.init -> void
+Elsa.Etl.Core.Runtime.EtlRunBindings.Output.get -> Elsa.Etl.Core.Runtime.EtlBindingRevision!
+Elsa.Etl.Core.Runtime.EtlRunBindings.Output.init -> void
+Elsa.Etl.Core.Runtime.EtlRunBindings.Source.get -> Elsa.Etl.Core.Runtime.EtlBindingRevision!
+Elsa.Etl.Core.Runtime.EtlRunBindings.Source.init -> void
+Elsa.Etl.Core.Runtime.EtlRunDiagnostic
+Elsa.Etl.Core.Runtime.EtlRunDiagnostic.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlRunDiagnostic!
+Elsa.Etl.Core.Runtime.EtlRunDiagnostic.Code.get -> string!
+Elsa.Etl.Core.Runtime.EtlRunDiagnostic.Code.init -> void
+Elsa.Etl.Core.Runtime.EtlRunDiagnostic.Deconstruct(out string! Code, out long? RecordOrdinal, out string? Field) -> void
+Elsa.Etl.Core.Runtime.EtlRunDiagnostic.Equals(Elsa.Etl.Core.Runtime.EtlRunDiagnostic? other) -> bool
+Elsa.Etl.Core.Runtime.EtlRunDiagnostic.EtlRunDiagnostic(string! Code, long? RecordOrdinal = null, string? Field = null) -> void
+Elsa.Etl.Core.Runtime.EtlRunDiagnostic.Field.get -> string?
+Elsa.Etl.Core.Runtime.EtlRunDiagnostic.Field.init -> void
+Elsa.Etl.Core.Runtime.EtlRunDiagnostic.RecordOrdinal.get -> long?
+Elsa.Etl.Core.Runtime.EtlRunDiagnostic.RecordOrdinal.init -> void
+Elsa.Etl.Core.Runtime.EtlRunStatus
+Elsa.Etl.Core.Runtime.EtlRunStatus.BusinessError = 3 -> Elsa.Etl.Core.Runtime.EtlRunStatus
+Elsa.Etl.Core.Runtime.EtlRunStatus.Cancelled = 5 -> Elsa.Etl.Core.Runtime.EtlRunStatus
+Elsa.Etl.Core.Runtime.EtlRunStatus.Faulted = 4 -> Elsa.Etl.Core.Runtime.EtlRunStatus
+Elsa.Etl.Core.Runtime.EtlRunStatus.Preparing = 0 -> Elsa.Etl.Core.Runtime.EtlRunStatus
+Elsa.Etl.Core.Runtime.EtlRunStatus.Running = 1 -> Elsa.Etl.Core.Runtime.EtlRunStatus
+Elsa.Etl.Core.Runtime.EtlRunStatus.Succeeded = 2 -> Elsa.Etl.Core.Runtime.EtlRunStatus
+Elsa.Etl.Core.Runtime.EtlRunView
+Elsa.Etl.Core.Runtime.EtlRunView.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlRunView!
+Elsa.Etl.Core.Runtime.EtlRunView.AcceptedRecords.get -> long
+Elsa.Etl.Core.Runtime.EtlRunView.AcceptedRecords.init -> void
+Elsa.Etl.Core.Runtime.EtlRunView.Bindings.get -> Elsa.Etl.Core.Runtime.EtlRunBindings?
+Elsa.Etl.Core.Runtime.EtlRunView.Bindings.init -> void
+Elsa.Etl.Core.Runtime.EtlRunView.Deconstruct(out Elsa.Etl.Core.Runtime.EtlInvocation! Invocation, out Elsa.Etl.Core.Runtime.EtlRunBindings? Bindings, out Elsa.Etl.Core.Runtime.EtlRunStatus Status, out Elsa.Etl.Core.Runtime.EtlPreparedRun? Prepared, out long OutstandingRecords, out long OutstandingBytes, out long AcceptedRecords, out long RejectedRecords, out long FilteredRecords, out Elsa.Etl.Core.Runtime.EtlTerminalResult? TerminalResult) -> void
+Elsa.Etl.Core.Runtime.EtlRunView.Equals(Elsa.Etl.Core.Runtime.EtlRunView? other) -> bool
+Elsa.Etl.Core.Runtime.EtlRunView.EtlRunView(Elsa.Etl.Core.Runtime.EtlInvocation! Invocation, Elsa.Etl.Core.Runtime.EtlRunBindings? Bindings, Elsa.Etl.Core.Runtime.EtlRunStatus Status, Elsa.Etl.Core.Runtime.EtlPreparedRun? Prepared, long OutstandingRecords, long OutstandingBytes, long AcceptedRecords, long RejectedRecords, long FilteredRecords, Elsa.Etl.Core.Runtime.EtlTerminalResult? TerminalResult) -> void
+Elsa.Etl.Core.Runtime.EtlRunView.FilteredRecords.get -> long
+Elsa.Etl.Core.Runtime.EtlRunView.FilteredRecords.init -> void
+Elsa.Etl.Core.Runtime.EtlRunView.Invocation.get -> Elsa.Etl.Core.Runtime.EtlInvocation!
+Elsa.Etl.Core.Runtime.EtlRunView.Invocation.init -> void
+Elsa.Etl.Core.Runtime.EtlRunView.OutstandingBytes.get -> long
+Elsa.Etl.Core.Runtime.EtlRunView.OutstandingBytes.init -> void
+Elsa.Etl.Core.Runtime.EtlRunView.OutstandingRecords.get -> long
+Elsa.Etl.Core.Runtime.EtlRunView.OutstandingRecords.init -> void
+Elsa.Etl.Core.Runtime.EtlRunView.Prepared.get -> Elsa.Etl.Core.Runtime.EtlPreparedRun?
+Elsa.Etl.Core.Runtime.EtlRunView.Prepared.init -> void
+Elsa.Etl.Core.Runtime.EtlRunView.RejectedRecords.get -> long
+Elsa.Etl.Core.Runtime.EtlRunView.RejectedRecords.init -> void
+Elsa.Etl.Core.Runtime.EtlRunView.Status.get -> Elsa.Etl.Core.Runtime.EtlRunStatus
+Elsa.Etl.Core.Runtime.EtlRunView.Status.init -> void
+Elsa.Etl.Core.Runtime.EtlRunView.TerminalResult.get -> Elsa.Etl.Core.Runtime.EtlTerminalResult?
+Elsa.Etl.Core.Runtime.EtlRunView.TerminalResult.init -> void
+Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlStoreStatus.Applied = 0 -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlStoreStatus.BudgetExceeded = 5 -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlStoreStatus.Conflict = 2 -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlStoreStatus.Invalid = 7 -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlStoreStatus.LeaseLost = 4 -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlStoreStatus.NotFound = 3 -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlStoreStatus.Replay = 1 -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlStoreStatus.Terminal = 6 -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlTerminalOutcome
+Elsa.Etl.Core.Runtime.EtlTerminalOutcome.BusinessError = 1 -> Elsa.Etl.Core.Runtime.EtlTerminalOutcome
+Elsa.Etl.Core.Runtime.EtlTerminalOutcome.Cancelled = 3 -> Elsa.Etl.Core.Runtime.EtlTerminalOutcome
+Elsa.Etl.Core.Runtime.EtlTerminalOutcome.Faulted = 2 -> Elsa.Etl.Core.Runtime.EtlTerminalOutcome
+Elsa.Etl.Core.Runtime.EtlTerminalOutcome.Succeeded = 0 -> Elsa.Etl.Core.Runtime.EtlTerminalOutcome
+Elsa.Etl.Core.Runtime.EtlTerminalProposal
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlTerminalProposal!
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.Deconstruct(out Elsa.Etl.Core.EtlScope! Scope, out string! RunId, out Elsa.Etl.Core.Runtime.EtlTerminalOutcome Outcome, out Elsa.Etl.Core.Runtime.EtlRunDiagnostic? Diagnostic, out string? PreparationOwner, out long? PreparationFence, out int? PartitionOrdinal, out string? PartitionOwner, out long? PartitionFence) -> void
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.Diagnostic.get -> Elsa.Etl.Core.Runtime.EtlRunDiagnostic?
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.Diagnostic.init -> void
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.Equals(Elsa.Etl.Core.Runtime.EtlTerminalProposal? other) -> bool
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.EtlTerminalProposal(Elsa.Etl.Core.EtlScope! Scope, string! RunId, Elsa.Etl.Core.Runtime.EtlTerminalOutcome Outcome, Elsa.Etl.Core.Runtime.EtlRunDiagnostic? Diagnostic, string? PreparationOwner = null, long? PreparationFence = null, int? PartitionOrdinal = null, string? PartitionOwner = null, long? PartitionFence = null) -> void
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.Outcome.get -> Elsa.Etl.Core.Runtime.EtlTerminalOutcome
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.Outcome.init -> void
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.PartitionFence.get -> long?
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.PartitionFence.init -> void
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.PartitionOrdinal.get -> int?
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.PartitionOrdinal.init -> void
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.PartitionOwner.get -> string?
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.PartitionOwner.init -> void
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.PreparationFence.get -> long?
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.PreparationFence.init -> void
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.PreparationOwner.get -> string?
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.PreparationOwner.init -> void
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.RunId.get -> string!
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.RunId.init -> void
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.Scope.get -> Elsa.Etl.Core.EtlScope!
+Elsa.Etl.Core.Runtime.EtlTerminalProposal.Scope.init -> void
+Elsa.Etl.Core.Runtime.EtlTerminalResult
+Elsa.Etl.Core.Runtime.EtlTerminalResult.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlTerminalResult!
+Elsa.Etl.Core.Runtime.EtlTerminalResult.AcceptedRecords.get -> long
+Elsa.Etl.Core.Runtime.EtlTerminalResult.AcceptedRecords.init -> void
+Elsa.Etl.Core.Runtime.EtlTerminalResult.Deconstruct(out string! ResultId, out Elsa.Etl.Core.Runtime.EtlTerminalOutcome Outcome, out long AcceptedRecords, out long RejectedRecords, out long FilteredRecords, out Elsa.Etl.Core.Runtime.EtlRunDiagnostic? Diagnostic, out System.DateTimeOffset SettledAt) -> void
+Elsa.Etl.Core.Runtime.EtlTerminalResult.Diagnostic.get -> Elsa.Etl.Core.Runtime.EtlRunDiagnostic?
+Elsa.Etl.Core.Runtime.EtlTerminalResult.Diagnostic.init -> void
+Elsa.Etl.Core.Runtime.EtlTerminalResult.Equals(Elsa.Etl.Core.Runtime.EtlTerminalResult? other) -> bool
+Elsa.Etl.Core.Runtime.EtlTerminalResult.EtlTerminalResult(string! ResultId, Elsa.Etl.Core.Runtime.EtlTerminalOutcome Outcome, long AcceptedRecords, long RejectedRecords, long FilteredRecords, Elsa.Etl.Core.Runtime.EtlRunDiagnostic? Diagnostic, System.DateTimeOffset SettledAt) -> void
+Elsa.Etl.Core.Runtime.EtlTerminalResult.FilteredRecords.get -> long
+Elsa.Etl.Core.Runtime.EtlTerminalResult.FilteredRecords.init -> void
+Elsa.Etl.Core.Runtime.EtlTerminalResult.Outcome.get -> Elsa.Etl.Core.Runtime.EtlTerminalOutcome
+Elsa.Etl.Core.Runtime.EtlTerminalResult.Outcome.init -> void
+Elsa.Etl.Core.Runtime.EtlTerminalResult.RejectedRecords.get -> long
+Elsa.Etl.Core.Runtime.EtlTerminalResult.RejectedRecords.init -> void
+Elsa.Etl.Core.Runtime.EtlTerminalResult.ResultId.get -> string!
+Elsa.Etl.Core.Runtime.EtlTerminalResult.ResultId.init -> void
+Elsa.Etl.Core.Runtime.EtlTerminalResult.SettledAt.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlTerminalResult.SettledAt.init -> void
+Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult
+Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult!
+Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult.Deconstruct(out Elsa.Etl.Core.Runtime.EtlStoreStatus Status, out Elsa.Etl.Core.Runtime.EtlTerminalResult? Result) -> void
+Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult.Equals(Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult? other) -> bool
+Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult.EtlTerminalSettlementResult(Elsa.Etl.Core.Runtime.EtlStoreStatus Status, Elsa.Etl.Core.Runtime.EtlTerminalResult? Result) -> void
+Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult.Result.get -> Elsa.Etl.Core.Runtime.EtlTerminalResult?
+Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult.Result.init -> void
+Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult.Status.get -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult.Status.init -> void
+Elsa.Etl.Core.Runtime.IEtlRuntimeStore
+Elsa.Etl.Core.Runtime.IEtlRuntimeStore.AcceptBatchAsync(Elsa.Etl.Core.Runtime.EtlPartitionLease! lease, Elsa.Etl.Core.Runtime.EtlBatchAcceptance! acceptance, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlAcceptanceResult!>
+Elsa.Etl.Core.Runtime.IEtlRuntimeStore.AcknowledgeDeliveryAsync(Elsa.Etl.Core.Runtime.EtlDeliveryLease! lease, Elsa.Etl.Core.Runtime.EtlDeliveryDisposition disposition, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlStoreStatus>
+Elsa.Etl.Core.Runtime.IEtlRuntimeStore.AdmitAsync(Elsa.Etl.Core.Runtime.EtlRunAdmission! admission, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlAdmissionResult!>
+Elsa.Etl.Core.Runtime.IEtlRuntimeStore.CancelAsync(Elsa.Etl.Core.Runtime.EtlInvocation! invocation, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult!>
+Elsa.Etl.Core.Runtime.IEtlRuntimeStore.ClaimDeliveryAsync(Elsa.Etl.Core.EtlScope! scope, string! workerId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlDeliveryLease?>
+Elsa.Etl.Core.Runtime.IEtlRuntimeStore.ClaimPartitionAsync(Elsa.Etl.Core.EtlScope! scope, string! runId, string! workerId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlPartitionLease?>
+Elsa.Etl.Core.Runtime.IEtlRuntimeStore.ClaimPreparationAsync(Elsa.Etl.Core.EtlScope! scope, string! workerId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlPreparationLease?>
+Elsa.Etl.Core.Runtime.IEtlRuntimeStore.CommitPreparationAsync(Elsa.Etl.Core.Runtime.EtlPreparationLease! lease, Elsa.Etl.Core.Runtime.EtlPreparedRun! prepared, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlStoreStatus>
+Elsa.Etl.Core.Runtime.IEtlRuntimeStore.FindRunAsync(Elsa.Etl.Core.EtlScope! scope, string! runId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlRunView?>
+Elsa.Etl.Core.Runtime.IEtlRuntimeStore.ListManifestAsync(Elsa.Etl.Core.EtlScope! scope, string! runId, Elsa.Etl.Core.Runtime.EtlManifestPosition? after, int take, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlManifestEntry!>!>
+Elsa.Etl.Core.Runtime.IEtlRuntimeStore.ListPartitionsAsync(Elsa.Etl.Core.EtlScope! scope, string! runId, int afterPartitionOrdinal, int take, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlPartitionView!>!>
+Elsa.Etl.Core.Runtime.IEtlRuntimeStore.ListRunsAsync(Elsa.Etl.Core.EtlScope! scope, string? afterRunId, int take, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlRunView!>!>
+Elsa.Etl.Core.Runtime.IEtlRuntimeStore.RejectAdmissionAsync(Elsa.Etl.Core.Runtime.EtlInvocation! invocation, Elsa.Etl.Core.Runtime.EtlRunDiagnostic! diagnostic, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult!>
+Elsa.Etl.Core.Runtime.IEtlRuntimeStore.RenewPartitionAsync(Elsa.Etl.Core.Runtime.EtlPartitionLease! lease, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlStoreStatus>
+Elsa.Etl.Core.Runtime.IEtlRuntimeStore.RenewPreparationAsync(Elsa.Etl.Core.Runtime.EtlPreparationLease! lease, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlStoreStatus>
+Elsa.Etl.Core.Runtime.IEtlRuntimeStore.ReserveBatchAsync(Elsa.Etl.Core.Runtime.EtlPartitionLease! lease, Elsa.Etl.Core.Runtime.EtlBatchDescriptor! batch, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlReservationResult!>
+Elsa.Etl.Core.Runtime.IEtlRuntimeStore.SettleTerminalAsync(Elsa.Etl.Core.Runtime.EtlTerminalProposal! proposal, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult!>
+const Elsa.Etl.Core.Runtime.EtlNativeResultAddress.CompletionProviderId = "elsa.etl.completion.v1" -> string!
+const Elsa.Etl.Core.Runtime.EtlNativeResultAddress.CurrentFormatVersion = 1 -> int
+const Elsa.Etl.Core.Runtime.EtlPreparedRun.CurrentFormatVersion = 1 -> int
+override Elsa.Etl.Core.Runtime.EtlAcceptanceResult.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlAcceptanceResult.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlAcceptanceResult.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlAdmissionResult.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlAdmissionResult.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlAdmissionResult.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlBatchAcceptance.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlBatchAcceptance.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlBatchAcceptance.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlBatchDescriptor.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlBatchDescriptor.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlBatchDescriptor.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlBatchReservation.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlBatchReservation.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlBatchReservation.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlBindingRevision.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlBindingRevision.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlBindingRevision.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlDeliveryLease.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlDeliveryLease.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlDeliveryLease.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlInvocation.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlInvocation.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlInvocation.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlManifestEntry.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlManifestEntry.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlManifestEntry.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlManifestPosition.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlManifestPosition.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlManifestPosition.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlNativeResultAddress.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlNativeResultAddress.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlNativeResultAddress.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlObjectReference.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlObjectReference.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlObjectReference.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlOutputEffect.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlOutputEffect.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlOutputEffect.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlPartitionLease.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlPartitionLease.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlPartitionLease.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlPartitionView.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlPartitionView.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlPartitionView.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlPreparationLease.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlPreparationLease.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlPreparationLease.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlPreparedRun.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlPreparedRun.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlPreparedRun.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlReservationResult.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlReservationResult.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlReservationResult.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlRunAdmission.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlRunAdmission.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlRunAdmission.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlRunBindings.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlRunBindings.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlRunBindings.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlRunDiagnostic.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlRunDiagnostic.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlRunDiagnostic.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlRunView.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlRunView.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlRunView.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlTerminalProposal.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlTerminalProposal.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlTerminalProposal.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlTerminalResult.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlTerminalResult.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlTerminalResult.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult.ToString() -> string!
+static Elsa.Etl.Core.Runtime.EtlAcceptanceResult.operator !=(Elsa.Etl.Core.Runtime.EtlAcceptanceResult? left, Elsa.Etl.Core.Runtime.EtlAcceptanceResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlAcceptanceResult.operator ==(Elsa.Etl.Core.Runtime.EtlAcceptanceResult? left, Elsa.Etl.Core.Runtime.EtlAcceptanceResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlAdmissionResult.operator !=(Elsa.Etl.Core.Runtime.EtlAdmissionResult? left, Elsa.Etl.Core.Runtime.EtlAdmissionResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlAdmissionResult.operator ==(Elsa.Etl.Core.Runtime.EtlAdmissionResult? left, Elsa.Etl.Core.Runtime.EtlAdmissionResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlBatchAcceptance.operator !=(Elsa.Etl.Core.Runtime.EtlBatchAcceptance? left, Elsa.Etl.Core.Runtime.EtlBatchAcceptance? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlBatchAcceptance.operator ==(Elsa.Etl.Core.Runtime.EtlBatchAcceptance? left, Elsa.Etl.Core.Runtime.EtlBatchAcceptance? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlBatchDescriptor.operator !=(Elsa.Etl.Core.Runtime.EtlBatchDescriptor? left, Elsa.Etl.Core.Runtime.EtlBatchDescriptor? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlBatchDescriptor.operator ==(Elsa.Etl.Core.Runtime.EtlBatchDescriptor? left, Elsa.Etl.Core.Runtime.EtlBatchDescriptor? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlBatchReservation.operator !=(Elsa.Etl.Core.Runtime.EtlBatchReservation? left, Elsa.Etl.Core.Runtime.EtlBatchReservation? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlBatchReservation.operator ==(Elsa.Etl.Core.Runtime.EtlBatchReservation? left, Elsa.Etl.Core.Runtime.EtlBatchReservation? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlBindingRevision.operator !=(Elsa.Etl.Core.Runtime.EtlBindingRevision? left, Elsa.Etl.Core.Runtime.EtlBindingRevision? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlBindingRevision.operator ==(Elsa.Etl.Core.Runtime.EtlBindingRevision? left, Elsa.Etl.Core.Runtime.EtlBindingRevision? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlDeliveryLease.operator !=(Elsa.Etl.Core.Runtime.EtlDeliveryLease? left, Elsa.Etl.Core.Runtime.EtlDeliveryLease? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlDeliveryLease.operator ==(Elsa.Etl.Core.Runtime.EtlDeliveryLease? left, Elsa.Etl.Core.Runtime.EtlDeliveryLease? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlInvocation.operator !=(Elsa.Etl.Core.Runtime.EtlInvocation? left, Elsa.Etl.Core.Runtime.EtlInvocation? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlInvocation.operator ==(Elsa.Etl.Core.Runtime.EtlInvocation? left, Elsa.Etl.Core.Runtime.EtlInvocation? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlManifestEntry.operator !=(Elsa.Etl.Core.Runtime.EtlManifestEntry? left, Elsa.Etl.Core.Runtime.EtlManifestEntry? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlManifestEntry.operator ==(Elsa.Etl.Core.Runtime.EtlManifestEntry? left, Elsa.Etl.Core.Runtime.EtlManifestEntry? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlManifestPosition.operator !=(Elsa.Etl.Core.Runtime.EtlManifestPosition? left, Elsa.Etl.Core.Runtime.EtlManifestPosition? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlManifestPosition.operator ==(Elsa.Etl.Core.Runtime.EtlManifestPosition? left, Elsa.Etl.Core.Runtime.EtlManifestPosition? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlNativeResultAddress.operator !=(Elsa.Etl.Core.Runtime.EtlNativeResultAddress? left, Elsa.Etl.Core.Runtime.EtlNativeResultAddress? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlNativeResultAddress.operator ==(Elsa.Etl.Core.Runtime.EtlNativeResultAddress? left, Elsa.Etl.Core.Runtime.EtlNativeResultAddress? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlObjectReference.operator !=(Elsa.Etl.Core.Runtime.EtlObjectReference? left, Elsa.Etl.Core.Runtime.EtlObjectReference? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlObjectReference.operator ==(Elsa.Etl.Core.Runtime.EtlObjectReference? left, Elsa.Etl.Core.Runtime.EtlObjectReference? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlOutputEffect.operator !=(Elsa.Etl.Core.Runtime.EtlOutputEffect? left, Elsa.Etl.Core.Runtime.EtlOutputEffect? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlOutputEffect.operator ==(Elsa.Etl.Core.Runtime.EtlOutputEffect? left, Elsa.Etl.Core.Runtime.EtlOutputEffect? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlPartitionLease.operator !=(Elsa.Etl.Core.Runtime.EtlPartitionLease? left, Elsa.Etl.Core.Runtime.EtlPartitionLease? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlPartitionLease.operator ==(Elsa.Etl.Core.Runtime.EtlPartitionLease? left, Elsa.Etl.Core.Runtime.EtlPartitionLease? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlPartitionView.operator !=(Elsa.Etl.Core.Runtime.EtlPartitionView? left, Elsa.Etl.Core.Runtime.EtlPartitionView? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlPartitionView.operator ==(Elsa.Etl.Core.Runtime.EtlPartitionView? left, Elsa.Etl.Core.Runtime.EtlPartitionView? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlPreparationLease.operator !=(Elsa.Etl.Core.Runtime.EtlPreparationLease? left, Elsa.Etl.Core.Runtime.EtlPreparationLease? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlPreparationLease.operator ==(Elsa.Etl.Core.Runtime.EtlPreparationLease? left, Elsa.Etl.Core.Runtime.EtlPreparationLease? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlPreparedRun.operator !=(Elsa.Etl.Core.Runtime.EtlPreparedRun? left, Elsa.Etl.Core.Runtime.EtlPreparedRun? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlPreparedRun.operator ==(Elsa.Etl.Core.Runtime.EtlPreparedRun? left, Elsa.Etl.Core.Runtime.EtlPreparedRun? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlReservationResult.operator !=(Elsa.Etl.Core.Runtime.EtlReservationResult? left, Elsa.Etl.Core.Runtime.EtlReservationResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlReservationResult.operator ==(Elsa.Etl.Core.Runtime.EtlReservationResult? left, Elsa.Etl.Core.Runtime.EtlReservationResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRunAdmission.operator !=(Elsa.Etl.Core.Runtime.EtlRunAdmission? left, Elsa.Etl.Core.Runtime.EtlRunAdmission? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRunAdmission.operator ==(Elsa.Etl.Core.Runtime.EtlRunAdmission? left, Elsa.Etl.Core.Runtime.EtlRunAdmission? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRunBindings.operator !=(Elsa.Etl.Core.Runtime.EtlRunBindings? left, Elsa.Etl.Core.Runtime.EtlRunBindings? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRunBindings.operator ==(Elsa.Etl.Core.Runtime.EtlRunBindings? left, Elsa.Etl.Core.Runtime.EtlRunBindings? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRunDiagnostic.operator !=(Elsa.Etl.Core.Runtime.EtlRunDiagnostic? left, Elsa.Etl.Core.Runtime.EtlRunDiagnostic? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRunDiagnostic.operator ==(Elsa.Etl.Core.Runtime.EtlRunDiagnostic? left, Elsa.Etl.Core.Runtime.EtlRunDiagnostic? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRunView.operator !=(Elsa.Etl.Core.Runtime.EtlRunView? left, Elsa.Etl.Core.Runtime.EtlRunView? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRunView.operator ==(Elsa.Etl.Core.Runtime.EtlRunView? left, Elsa.Etl.Core.Runtime.EtlRunView? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlTerminalProposal.operator !=(Elsa.Etl.Core.Runtime.EtlTerminalProposal? left, Elsa.Etl.Core.Runtime.EtlTerminalProposal? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlTerminalProposal.operator ==(Elsa.Etl.Core.Runtime.EtlTerminalProposal? left, Elsa.Etl.Core.Runtime.EtlTerminalProposal? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlTerminalResult.operator !=(Elsa.Etl.Core.Runtime.EtlTerminalResult? left, Elsa.Etl.Core.Runtime.EtlTerminalResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlTerminalResult.operator ==(Elsa.Etl.Core.Runtime.EtlTerminalResult? left, Elsa.Etl.Core.Runtime.EtlTerminalResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult.operator !=(Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult? left, Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult.operator ==(Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult? left, Elsa.Etl.Core.Runtime.EtlTerminalSettlementResult? right) -> bool
