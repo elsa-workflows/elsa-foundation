@@ -20,6 +20,20 @@ payload does not match". A start without a payload is fine, because a null start
 `POST runtime/workflows/stimuli` with `{ "eventName": ... }` works only because that object happens to deserialize
 into the record.
 
+**Baseline (T003, 2026-10-20, unchanged Event):** `PublishEventResumeRoutingTests` drives the real
+`PublishStimulusExecutor` → `StimulusRouter` → resume path. With no payload, JSON `null`, `"text"`, `[1,2]`, `42` or
+`true`, the waiting Event ended **Faulted**, broadcast and local alike. With `{"orderId":"1"}` it completed, but its
+result had no payload. After the fix, all nine cases complete and carry the payload.
+
+**End to end (T012/T013):** in `Elsa3ImportHost`, an imported Elsa 3 Publish Event payload authored as an `Object`
+literal arrives as the literal's text, a JSON string, because the import keeps the literal as text. The Event hands
+that string on unchanged.
+
+**Out of scope, found in passing:** an imported *regular* Elsa 3 workflow that declares a workflow-level variable
+fails to publish: "Activity node 'workflow' input '<variable>' does not declare an expression type". This happens
+with a `String` variable too. It is unrelated to Event, so the end-to-end waiter does not capture `Result`, and the
+`Result` → `Payload` carry is proven at conversion level instead.
+
 ## R-2 Fix in Event, by making `EventReceived` accept any JSON
 
 **Decision**: `EventReceived` becomes the event's delivered payload: `sealed record EventReceived(JsonElement? Payload

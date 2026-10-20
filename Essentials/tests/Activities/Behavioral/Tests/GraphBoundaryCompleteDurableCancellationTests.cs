@@ -88,7 +88,7 @@ public sealed class GraphBoundaryCompleteDurableCancellationTests
             resumeTargetId: WorkflowExecutableResumeTarget.ComposeScopedId(InsideEventNodeId, Event.ResumeTargetId),
             stimulusType: EventStimulus.StimulusType,
             stimulusHash: EventStimulus.Hash(InsideEventName),
-            input: JsonSerializer.SerializeToElement(new EventReceived(InsideEventName)));
+            input: JsonSerializer.SerializeToElement(new { eventName = InsideEventName }));
 
         Assert.Equal(ActivityExecutionStatus.Cancelled, resumed.State(InsideEventNodeId).Status);
         run.AssertOutcomes(GraphBoundaryCompleteTests.BoundaryNodeId, "Failed");
