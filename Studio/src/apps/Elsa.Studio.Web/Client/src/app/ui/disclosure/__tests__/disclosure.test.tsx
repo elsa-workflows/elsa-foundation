@@ -55,6 +55,13 @@ function giveElementLayout(element: HTMLElement) {
   });
 }
 
+function seedCollapsedPreference(persistKey: string) {
+  const storageKey = disclosureStorageKey(persistKey);
+  window.localStorage.setItem(storageKey, JSON.stringify(false));
+  const setItem = vi.spyOn(Storage.prototype, "setItem");
+  return { storageKey, setItem };
+}
+
 describe("never-hide invariant", () => {
   it("treats a non-default, bound or invalid value as forced", () => {
     expect(shouldForceReveal({ isNonDefault: true })).toBe(true);
@@ -301,6 +308,108 @@ describe("AdvancedSection", () => {
     );
     expect(host.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true");
     expect(host.textContent).toContain("Broken retry");
+  });
+
+  it("keeps an error reveal open through focused correction without persisting it", () => {
+    const persistKey = "connection.more-options";
+    const { storageKey, setItem } = seedCollapsedPreference(persistKey);
+
+    function Harness() {
+      const [hasError, setHasError] = useState(false);
+      const [value, setValue] = useState("before");
+      return <>
+        <button onClick={() => setHasError(true)}>Fail advanced value</button>
+        <AdvancedSection label="More options" persistKey={persistKey} hasError={hasError}>
+          <label>
+            Endpoint
+            <input
+              aria-label="Endpoint"
+              value={value}
+              onChange={event => {
+                setValue(event.target.value);
+                setHasError(false);
+              }}
+            />
+          </label>
+        </AdvancedSection>
+      </>;
+    }
+
+    const host = mount(<Harness />);
+    const trigger = host.querySelector<HTMLButtonElement>(".studio-disclosure-fold-trigger")!;
+    const input = host.querySelector<HTMLInputElement>("input")!;
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(window.localStorage.getItem(storageKey)).toBe("false");
+
+    flushSync(() => host.querySelector<HTMLButtonElement>("button")!.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    flushSync(() => trigger.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(setItem).not.toHaveBeenCalled();
+
+    input.focus();
+    flushSync(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "corrected");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector("input")).toBe(input);
+    expect(input.value).toBe("corrected");
+    expect(document.activeElement).toBe(input);
+    expect(window.localStorage.getItem(storageKey)).toBe("false");
+    expect(setItem).not.toHaveBeenCalled();
+
+    flushSync(() => trigger.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(host.querySelector("input")).toBe(input);
+    expect(input.value).toBe("corrected");
+    expect(window.localStorage.getItem(storageKey)).toBe("false");
+    expect(setItem).toHaveBeenCalledTimes(1);
+    expect(setItem).toHaveBeenCalledWith(storageKey, "false");
+  });
+
+  it.each(["forceOpen", "setCount"] as const)("retains a recovered %s reveal until manual collapse", reason => {
+    const persistKey = `connection.more-options.${reason}`;
+    const { storageKey, setItem } = seedCollapsedPreference(persistKey);
+
+    function Harness() {
+      const [forced, setForced] = useState(false);
+      return <>
+        <button onClick={() => setForced(true)}>Force open</button>
+        <button onClick={() => setForced(false)}>Recover</button>
+        <AdvancedSection
+          label="More options"
+          persistKey={persistKey}
+          forceOpen={reason === "forceOpen" && forced}
+          setCount={reason === "setCount" && forced ? 1 : 0}
+        >
+          <span>Forced content</span>
+        </AdvancedSection>
+      </>;
+    }
+
+    const host = mount(<Harness />);
+    const trigger = host.querySelector<HTMLButtonElement>(".studio-disclosure-fold-trigger")!;
+    const actionButtons = host.querySelectorAll<HTMLButtonElement>("button");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+
+    flushSync(() => actionButtons[0].click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    flushSync(() => trigger.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(setItem).not.toHaveBeenCalled();
+
+    flushSync(() => actionButtons[1].click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(window.localStorage.getItem(storageKey)).toBe("false");
+    expect(setItem).not.toHaveBeenCalled();
+
+    flushSync(() => trigger.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(window.localStorage.getItem(storageKey)).toBe("false");
+    expect(setItem).toHaveBeenCalledTimes(1);
+    expect(setItem).toHaveBeenCalledWith(storageKey, "false");
   });
 });
 
