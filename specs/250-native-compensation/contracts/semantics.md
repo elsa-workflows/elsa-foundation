@@ -42,7 +42,8 @@ ExecuteStructure (activation)
 
 OnChildCompleted(child)
   phase Running:
-    child is step[i]     -> append entry(i, child AEI, ordinal++ , Registered|NoHandler)
+    child is step[i], i = nextStepIndex - 1 (the running step), and no entry holds child AEI
+                         -> append entry(i, child AEI, ordinal++ , Registered|NoHandler)
                             if i is last -> phase Completed, complete Done
                             else schedule step[i+1], Defer
   phase Compensating:
