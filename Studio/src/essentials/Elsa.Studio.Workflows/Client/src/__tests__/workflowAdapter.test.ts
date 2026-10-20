@@ -572,6 +572,15 @@ describe("workflow adapter", () => {
     });
   });
 
+  it("marks a node whose latest execution completed through compensation", () => {
+    const canvas = buildCanvas(firstScope(sequenceRoot([node("write-line-1")])), [writeLine], []);
+    const compensated = applyRuntimeOverlays(canvas.nodes, [activityExecution({ status: "Completed", outcomeNames: ["Compensated"] })], []);
+    const done = applyRuntimeOverlays(canvas.nodes, [activityExecution({ status: "Completed", outcomeNames: ["Done"] })], []);
+
+    expect(compensated[0].data.runtime?.compensated).toBe(true);
+    expect(done[0].data.runtime?.compensated).toBeUndefined();
+  });
+
   it("groups repeated authored placements by the executable identity present on the canvas", () => {
     const canvas = buildCanvas(firstScope(sequenceRoot([node("shared-node")])), [writeLine], []);
     const templateNode = canvas.nodes[0]!;

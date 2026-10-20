@@ -33,6 +33,15 @@ public sealed class DefaultActivityStructureService : IActivityStructureService
             : [];
     }
 
+    public IReadOnlyList<string>? ChildrenCompletedBefore(ActivityNode activity, string childNodeId)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+        ArgumentException.ThrowIfNullOrWhiteSpace(childNodeId);
+        return TryGetHandler(activity.Structure, out var handler)
+            ? handler.ChildrenCompletedBefore(activity, childNodeId)
+            : null;
+    }
+
     public ActivityNode ReplaceChildren(ActivityNode activity, IReadOnlyCollection<ActivityChildProjection> childProjections)
     {
         ArgumentNullException.ThrowIfNull(activity);

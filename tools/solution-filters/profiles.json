@@ -8,6 +8,7 @@
     {
       "outputPath": "Elsa.Server.Core.slnf",
       "includeProjectNames": [
+        "Elsa.Activities.Compensation",
         "Elsa.Activities.ControlFlow",
         "Elsa.Activities.Design.Api",
         "Elsa.Activities.Design.Api.Tests",

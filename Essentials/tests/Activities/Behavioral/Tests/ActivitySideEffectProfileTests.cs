@@ -16,6 +16,7 @@ public sealed class ActivitySideEffectProfileTests
 {
     private static readonly Type[] ReplaySafeActivities =
     [
+        typeof(Compensation.Activities.CompensationScope),
         typeof(Do.Activities.Do),
         typeof(Flowchart.Activities.Flowchart),
         typeof(For.Activities.For),

@@ -1,0 +1,280 @@
+.wf-compensation-designer {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: .75rem;
+  overflow: auto;
+  padding: 1rem 1.25rem 2.5rem;
+  color: var(--studio-text);
+  background: var(--studio-bg);
+  font-family: var(--studio-font-ui);
+}
+
+.wf-compensation-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .25rem .75rem;
+}
+
+.wf-compensation-heading h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.wf-compensation-heading p {
+  flex: 1 1 18rem;
+  margin: 0;
+  color: var(--studio-text-muted);
+  font-size: var(--studio-label-size, .8125rem);
+}
+
+.wf-compensation-phase,
+.wf-compensation-state {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  padding: .15rem .55rem;
+  border: 1px solid var(--studio-border);
+  border-radius: 999px;
+  color: var(--studio-text);
+  background: var(--studio-surface);
+  font: inherit;
+  font-size: .75rem;
+  line-height: 1.3;
+}
+
+button.wf-compensation-state {
+  cursor: pointer;
+}
+
+.wf-compensation-phase[data-phase="Compensated"],
+.wf-compensation-phase[data-phase="Compensating"],
+.wf-compensation-state[data-state="Compensated"] {
+  border-color: color-mix(in srgb, var(--studio-warning) 55%, var(--studio-border));
+}
+
+.wf-compensation-state[data-state="Completed"],
+.wf-compensation-phase[data-phase="Completed"] {
+  border-color: color-mix(in srgb, var(--studio-success) 55%, var(--studio-border));
+}
+
+.wf-compensation-state[data-state="Faulted"],
+.wf-compensation-state[data-state="Failed"],
+.wf-compensation-phase[data-phase="Faulted"] {
+  border-color: color-mix(in srgb, var(--studio-danger) 60%, var(--studio-border));
+}
+
+.wf-compensation-cause {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem;
+  margin: 0;
+  padding: .5rem .75rem;
+  border: 1px solid color-mix(in srgb, var(--studio-danger) 45%, var(--studio-border));
+  border-radius: var(--studio-radius, .5rem);
+  background: var(--studio-surface);
+  font-size: .8125rem;
+}
+
+.wf-compensation-table,
+.wf-compensation-rows {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+
+.wf-compensation-columns,
+.wf-compensation-row {
+  display: grid;
+  grid-template-columns: 2rem minmax(12rem, 1fr) minmax(12rem, 1fr) auto;
+  align-items: start;
+  gap: .5rem .75rem;
+}
+
+.wf-compensation-columns {
+  padding: 0 .75rem;
+  color: var(--studio-text-muted);
+  font-size: .6875rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.wf-compensation-row {
+  padding: .625rem .75rem;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius, .5rem);
+  background: var(--studio-surface);
+  box-shadow: var(--studio-shadow-sm);
+}
+
+.wf-compensation-row.has-problem {
+  border-color: color-mix(in srgb, var(--studio-danger) 55%, var(--studio-border));
+}
+
+.wf-compensation-ordinal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  color: var(--studio-text-muted);
+  background: var(--studio-surface-muted);
+  font-size: .75rem;
+}
+
+.wf-compensation-step,
+.wf-compensation-handler {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .35rem;
+  min-width: 0;
+}
+
+.wf-compensation-name {
+  font-weight: 600;
+}
+
+.wf-compensation-name-input {
+  width: 100%;
+  padding: .25rem .4rem;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm, .25rem);
+  color: var(--studio-text);
+  background: var(--studio-bg);
+  font: inherit;
+  font-weight: 600;
+}
+
+.wf-compensation-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .3rem;
+  max-width: 100%;
+}
+
+.wf-compensation-activity {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  max-width: 100%;
+  padding: .3rem .55rem;
+  border: 1px solid var(--studio-border);
+  border-radius: var(--studio-radius-sm, .25rem);
+  color: var(--studio-text);
+  background: var(--studio-bg);
+  font: inherit;
+  font-size: .8125rem;
+  cursor: pointer;
+}
+
+.wf-compensation-cell.is-selected .wf-compensation-activity {
+  border-color: var(--studio-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--studio-accent) 22%, transparent);
+}
+
+.wf-compensation-activity-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-compensation-undoes,
+.wf-compensation-none {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  color: var(--studio-text-muted);
+  font-size: .75rem;
+}
+
+.wf-compensation-add,
+.wf-compensation-slot,
+.wf-compensation-link,
+.wf-compensation-icon-button,
+.wf-compensation-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  padding: .25rem .5rem;
+  border: 1px dashed var(--studio-border);
+  border-radius: var(--studio-radius-sm, .25rem);
+  color: var(--studio-text);
+  background: transparent;
+  font: inherit;
+  font-size: .75rem;
+  cursor: pointer;
+}
+
+.wf-compensation-slot,
+.wf-compensation-link,
+.wf-compensation-icon-button,
+.wf-compensation-actions button {
+  border-style: solid;
+}
+
+.wf-compensation-actions {
+  display: flex;
+  gap: .25rem;
+}
+
+.wf-compensation-actions button:disabled {
+  opacity: .45;
+  cursor: default;
+}
+
+.wf-compensation-problem {
+  display: flex;
+  grid-column: 2 / -1;
+  align-items: center;
+  gap: .3rem;
+  margin: 0;
+  color: var(--studio-danger);
+  font-size: .75rem;
+}
+
+.wf-compensation-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .5rem;
+  padding: 1.25rem;
+  border: 1px dashed var(--studio-border);
+  border-radius: var(--studio-radius, .5rem);
+}
+
+.wf-compensation-empty h4,
+.wf-compensation-empty p {
+  margin: 0;
+}
+
+.wf-compensation-footer {
+  display: flex;
+}
+
+.wf-compensation-designer :focus-visible {
+  outline: 2px solid var(--studio-focus);
+  outline-offset: 2px;
+}
+
+@media (width <= 48rem) {
+  .wf-compensation-columns {
+    display: none;
+  }
+
+  .wf-compensation-row {
+    grid-template-columns: 2rem minmax(0, 1fr);
+  }
+
+  .wf-compensation-handler,
+  .wf-compensation-actions {
+    grid-column: 2;
+  }
+}

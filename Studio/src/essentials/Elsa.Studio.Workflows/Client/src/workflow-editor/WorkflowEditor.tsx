@@ -74,6 +74,16 @@ import { useWorkflowScope } from "./useWorkflowScope";
 import { useWorkflowContextBridge } from "./useWorkflowContextBridge";
 import { ActivityPalettePanel } from "./ActivityPalettePanel";
 import { SequenceDesigner } from "../graph-authoring/SequenceDesigner";
+import { CompensationScopeDesigner, type CompensationActivityTarget } from "../graph-authoring/CompensationScopeDesigner";
+import {
+  addCompensationStep,
+  compensationStepsSlotId,
+  compensationValidationTarget,
+  readCompensationSteps,
+  updateCompensationStep,
+  withCompensationSteps,
+  type CompensationStep
+} from "../compensationScope";
 import { GraphAuthoringCanvas } from "../graph-authoring/GraphAuthoringCanvas";
 import { GraphAuthoringWorkbench } from "../graph-authoring/GraphAuthoringWorkbench";
 import { AddStepButton, authorsInline } from "../graph-authoring/AddStepButton";
@@ -325,7 +335,8 @@ export function WorkflowEditor({
     catalogByVersion,
     isUnsupportedDesigner,
     isBpmnDesigner,
-    canAddActivitiesToCanvas,
+    // A compensation scope's steps change only through its step list, never by a palette drop on the canvas.
+    canAddActivitiesToCanvas: canAddActivitiesToCanvas && scope?.slot.id !== compensationStepsSlotId,
     selectedNodeId,
     editDraft,
     editDraftAndSelect,
@@ -389,7 +400,9 @@ export function WorkflowEditor({
     frames,
     catalogByVersion,
     selectedNodeIds: selectedCanvasNodeIds,
-    disabled: isUnsupportedDesigner || !canAddActivitiesToCanvas,
+    // The compensation scope's Steps view is not a slot to paste into: an activity belongs to a step, so it is added
+    // through the scope designer.
+    disabled: isUnsupportedDesigner || !canAddActivitiesToCanvas || scope?.slot.id === compensationStepsSlotId,
     definitionId,
     editDraft,
     select: nodeId => {
@@ -700,6 +713,60 @@ export function WorkflowEditor({
     });
   }, [catalogByVersion, editDraft, scopeOwner?.nodeId]);
 
+  // A compensation scope's designer edits the owner's steps directly, as the BPMN canvas edits its payload.
+  const isCompensationScopeCanvas = scope?.slot.id === compensationStepsSlotId;
+  const [compensationPick, setCompensationPick] = useState<{ target: CompensationActivityTarget; clientX: number; clientY: number } | null>(null);
+  const updateCompensationSteps = useCallback((edit: (steps: CompensationStep[]) => CompensationStep[], nextStatus: string, selectNodeId?: string) => {
+    const ownerNodeId = scopeOwner?.nodeId;
+    if (!ownerNodeId) return;
+    const recipe = ({ draft: current }: { draft: WorkflowDraft | null }) => {
+      const rootActivity = current?.state.rootActivity;
+      if (!current || !rootActivity) return null;
+      // The edit runs against the scope as it is in this draft, not as it was when the designer rendered.
+      const owner = findActivityNode(rootActivity, ownerNodeId, catalogByVersion);
+      if (!owner) return null;
+      const nextOwner = withCompensationSteps(owner, edit(readCompensationSteps(owner)));
+      // Deleting a step, removing a compensation or replacing an activity drops nodes: forget their layout and
+      // presentation records, as replacing a slot activity does.
+      const kept = collectOwnedNodeIds(nextOwner, catalogByVersion, new Set<string>());
+      const removed = new Set([...collectOwnedNodeIds(owner, catalogByVersion, new Set<string>())].filter(nodeId => !kept.has(nodeId)));
+      return {
+        ...current,
+        ...forgetRemovedNodes(current, removed),
+        state: {
+          ...current.state,
+          rootActivity: updateActivity(rootActivity, ownerNodeId, () => nextOwner, catalogByVersion)
+        }
+      };
+    };
+    if (selectNodeId) editDraftAndSelect(recipe, selectNodeId);
+    else editDraft(recipe);
+    setStatus(nextStatus);
+  }, [catalogByVersion, editDraft, editDraftAndSelect, scopeOwner?.nodeId]);
+  const pickCompensationActivity = useCallback((activity: ActivityCatalogItem) => {
+    const pick = compensationPick;
+    setCompensationPick(null);
+    if (!pick || !scopeOwner) return;
+    const node = createActivityNode(activity, createNodeId(activity));
+    const label = getActivityDisplay(activity);
+    const { target } = pick;
+    if (target.kind === "new-step") {
+      updateCompensationSteps(steps => addCompensationStep(steps, target.index, node), `Added step ${label}`, node.nodeId);
+    } else if (target.kind === "step-activity") {
+      updateCompensationSteps(steps => updateCompensationStep(steps, target.index, { activity: node }), `Set ${label} as the step's activity`, node.nodeId);
+    } else {
+      const stepName = readCompensationSteps(scopeOwner)[target.index]?.name || `step ${target.index + 1}`;
+      updateCompensationSteps(steps => updateCompensationStep(steps, target.index, { compensation: node }), `${label} now undoes ${stepName}`, node.nodeId);
+    }
+  }, [compensationPick, scopeOwner, updateCompensationSteps]);
+  // On the compensation scope's canvas, a palette click adds a new last step with that activity.
+  const addCompensationStepFromPalette = useCallback((activity: ActivityCatalogItem) => {
+    if (!canAddActivitiesToCanvas || isUnsupportedDesigner) return;
+    const node = createActivityNode(activity, createNodeId(activity));
+    setCompensationPick(null);
+    updateCompensationSteps(steps => addCompensationStep(steps, steps.length, node), `Added step ${getActivityDisplay(activity)}`, node.nodeId);
+  }, [canAddActivitiesToCanvas, isUnsupportedDesigner, updateCompensationSteps]);
+
   // A start node is a Flowchart concept; a Sequence runs in authored order and has none.
   const isFlowchartScope = scope?.slot.mode === "flowchart";
   // The Flowchart start node is authored, not positional: this is the only writer besides the
@@ -857,6 +924,13 @@ export function WorkflowEditor({
     setInspectorCollapsed(false);
   }, [draft?.state.rootActivity, catalogByVersion, setInspectorCollapsed, navigateToScope]);
 
+  // "Go to" for a validation error: a compensation scope row's path selects that row's activity inside the scope.
+  const goToValidationNode = useCallback((nodeId: string, path?: string) => {
+    const currentRoot = draft?.state.rootActivity;
+    const scope = currentRoot ? findActivityNode(currentRoot, nodeId, catalogByVersion) : null;
+    repairVariableReference(compensationValidationTarget(scope, path) ?? nodeId);
+  }, [draft?.state.rootActivity, catalogByVersion, repairVariableReference]);
+
   const togglePaletteCategory = (category: string) => {
     setExpandedPaletteCategories(current => {
       const next = new Set(current);
@@ -945,7 +1019,7 @@ export function WorkflowEditor({
             groups={filteredPaletteGroups}
             expandedCategories={expandedPaletteCategories}
             onToggleCategory={togglePaletteCategory}
-            onActivityClick={onPaletteClick}
+            onActivityClick={isCompensationScopeCanvas ? addCompensationStepFromPalette : onPaletteClick}
             onActivityDragStart={onPaletteDragStart}
             onActivityDragEnd={onPaletteDragEnd}
             onActivityPointerDown={onPalettePointerDown}
@@ -1268,7 +1342,33 @@ export function WorkflowEditor({
           ) : (
           <>
           <ScopeBreadcrumb frames={visibleFrames} onNavigate={next => navigateToScope(next, null)} />
-          {scope?.slot.mode === "sequence" && scope.slot.cardinality === "many" && !isUnsupportedDesigner ? (
+          {isCompensationScopeCanvas && scopeOwner && !isUnsupportedDesigner ? (
+            <CompensationScopeDesigner
+              owner={scopeOwner}
+              nodes={nodes}
+              selectedNodeId={selectedNodeId}
+              readOnly={!canAddActivitiesToCanvas}
+              canvasRef={canvasRef}
+              onSelect={select}
+              onChangeSteps={(edit, nextStatus) => {
+                // An open picker targets a row by index; once rows change, that index may name another step.
+                setCompensationPick(null);
+                updateCompensationSteps(edit, nextStatus);
+              }}
+              onRequestActivity={(target, anchor) => setCompensationPick({ target, ...anchor })}
+              onOpenSlot={(ownerId, label, slot) => enterSlotScope(ownerId, slot, slotCrumbLabel(label, slot))}
+            >
+              {compensationPick ? (
+                <ConnectMenu
+                  clientX={compensationPick.clientX}
+                  clientY={compensationPick.clientY}
+                  activities={paletteCatalog}
+                  onPick={pickCompensationActivity}
+                  onClose={() => setCompensationPick(null)}
+                />
+              ) : null}
+            </CompensationScopeDesigner>
+          ) : scope?.slot.mode === "sequence" && scope.slot.cardinality === "many" && !isUnsupportedDesigner ? (
             <SequenceDesigner
               nodes={nodes}
               selectedNodeId={selectedNodeId}
@@ -1380,7 +1480,7 @@ export function WorkflowEditor({
             draft={draft}
             errors={combinedValidationErrors}
             onRepair={repairVariableReference}
-            onSelectNode={repairVariableReference}
+            onSelectNode={goToValidationNode}
             onSetAsStartNode={isFlowchartScope ? setStartNode : undefined}
             unavailable={draftValidations.available === false}
           />

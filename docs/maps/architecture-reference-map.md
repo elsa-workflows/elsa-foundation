@@ -8,7 +8,7 @@ Records direct project-reference signals only. A signal is a review prompt, not 
 
 - Runtime-to-design direct reference signals: 0
 - Design-to-runtime direct reference signals: 11
-- Projects directly referencing both design and runtime projects: 20
+- Projects directly referencing both design and runtime projects: 21
 
 ## Direct Design/Runtime Signals
 
@@ -31,6 +31,7 @@ Records direct project-reference signals only. A signal is a review prompt, not 
 | Project | Design references | Runtime references |
 |---|---|---|
 | [Elsa.Activities.Bpmn](../../Essentials/src/Activities/Bpmn/Elsa.Activities.Bpmn/Elsa.Activities.Bpmn.csproj) | Elsa.Workflows.Design.Core | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime<br>Elsa.Workflows.Runtime.Core |
+| [Elsa.Activities.Compensation](../../Essentials/src/Activities/Compensation/Elsa.Activities.Compensation.csproj) | Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Validations.Core | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.ControlFlow](../../Essentials/src/Activities/ControlFlow/Elsa.Activities.ControlFlow.csproj) | Elsa.Workflows.Design.Core<br>Elsa.Workflows.Design.Validations.Core | Elsa.Activities.Runtime.Core<br>Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Design.Persistence.EntityFrameworkCore](../../Essentials/src/Activities/Design/Persistence/EntityFrameworkCore/Elsa.Activities.Design.Persistence.EntityFrameworkCore.csproj) | Elsa.Activities.Design.Persistence.Core | Elsa.Workflows.Runtime.Core |
 | [Elsa.Activities.Design.Reconciliation](../../Essentials/src/Activities/Design/Reconciliation/Elsa.Activities.Design.Reconciliation/Elsa.Activities.Design.Reconciliation.csproj) | Elsa.Activities.Design.Core<br>Elsa.Activities.Design.Persistence.Core<br>Elsa.Workflows.Design.Persistence.Core | Elsa.Workflows.Runtime.Core |
