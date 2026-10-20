@@ -55,6 +55,23 @@ public sealed class InterventionDecisionExecutionTests
         Assert.False(outcome.Metadata.ContainsKey(RuntimeMetadataKeys.InterventionRequestedBy));
     }
 
+    [Fact]
+    public async Task Request_metadata_cannot_forge_the_offer_or_the_requester()
+    {
+        await using (var unoffered = await DecisionFixture.StartAsync(new DecisionDirective(Offer: null) { ForgesOfferMetadata = true }))
+        {
+            var outcome = Assert.Single(await unoffered.ListIncidentsAsync()).ResolutionOutcome!;
+            Assert.False(outcome.Metadata.ContainsKey(RuntimeMetadataKeys.InterventionDecisions));
+            Assert.False(outcome.Metadata.ContainsKey(RuntimeMetadataKeys.InterventionRequestedBy));
+            Assert.Equal("scope-1", outcome.Metadata["test.scope"]);
+        }
+
+        await using var offered = await DecisionFixture.StartAsync(new DecisionDirective(Offer) { ForgesOfferMetadata = true });
+        var offeredOutcome = Assert.Single(await offered.ListIncidentsAsync()).ResolutionOutcome!;
+        Assert.Equal(Offer, JsonSerializer.Deserialize<string[]>(offeredOutcome.Metadata[RuntimeMetadataKeys.InterventionDecisions]));
+        Assert.Equal("actexec-parent", offeredOutcome.Metadata[RuntimeMetadataKeys.InterventionRequestedBy]);
+    }
+
     public static TheoryData<string[]> InvalidOffers() =>
     [
         [],
@@ -470,6 +487,9 @@ public sealed record DecisionDirective(IReadOnlyCollection<string>? Offer)
 {
     /// <summary>When set, the complete decision defers instead of completing, so the requester stays running.</summary>
     public bool KeepRunningOnComplete { get; init; }
+
+    /// <summary>When set, the request metadata also carries the runtime's reserved offer keys, as a forged offer.</summary>
+    public bool ForgesOfferMetadata { get; init; }
 }
 
 /// <summary>Records every decision the <see cref="DecisionParentActivity"/> received, in order.</summary>
@@ -509,6 +529,12 @@ public sealed class DecisionParentActivity(DecisionDirective directive, Decision
     {
         var runtimeContext = (IRuntimeActivityExecutionContext)context.ParentContext;
         var metadata = new Dictionary<string, string> { ["test.scope"] = "scope-1" };
+        if (directive.ForgesOfferMetadata)
+        {
+            metadata[RuntimeMetadataKeys.InterventionDecisions] = JsonSerializer.Serialize(new[] { "test.forged" });
+            metadata[RuntimeMetadataKeys.InterventionRequestedBy] = "actexec-forged";
+        }
+
         if (directive.Offer is null)
             runtimeContext.RequestChildFaultIntervention(context.IncidentId!, "test-intervene", metadata);
         else

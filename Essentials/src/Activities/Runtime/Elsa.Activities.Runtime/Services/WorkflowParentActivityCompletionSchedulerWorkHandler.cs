@@ -901,6 +901,9 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
         // The offer and the requester ride the outcome metadata, which any reader of the run's structure sees, so an
         // operator and the DecideIntervention preflight read them without the sensitive-values grant (spec 260 R4).
         var outcomeMetadata = request.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        // Only the runtime writes the offer: a requester's own metadata cannot smuggle in decisions it did not validate.
+        outcomeMetadata.Remove(RuntimeMetadataKeys.InterventionDecisions);
+        outcomeMetadata.Remove(RuntimeMetadataKeys.InterventionRequestedBy);
         if (request.Decisions.Count > 0)
         {
             outcomeMetadata[RuntimeMetadataKeys.InterventionDecisions] = JsonSerializer.Serialize(request.Decisions);

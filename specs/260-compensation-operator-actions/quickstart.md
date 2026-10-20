@@ -45,7 +45,7 @@ Scope "Order": [ Reserve inventory ↔ Release inventory,
 
 ## Workbench owned process
 
-O1 + O2h + O4 over REST against the real Workbench process, with a process kill at injection point 2 for O2h. The run is started through an HTTP endpoint workflow, so FR-406 is proven on a run that today cannot be altered. Extends `Essentials/tests/Workbench/Tests/WorkbenchCompensationRecoveryTests.cs`.
+O1 + O2h + O4 over REST against the real Workbench process, with a process kill at injection point 2 for O2h. Each run is started as a Studio test run (execution authority `workflow-designer-test-run`), so FR-406 is proven on a run that before this PR could not be altered. Runs started by HTTP endpoints are covered by the FR-406 capture tests (T407), not by this journey. Extends `Essentials/tests/Workbench/Tests/WorkbenchCompensationRecoveryTests.cs`.
 
 ## Live browser journey (real backend)
 
