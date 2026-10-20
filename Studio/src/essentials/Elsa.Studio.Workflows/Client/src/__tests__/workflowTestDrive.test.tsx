@@ -42,6 +42,14 @@ afterEach(() => {
 });
 
 describe("workflow Test Run setup", () => {
+  it("uses Start Test Run as the generic submission label and accessible name", async () => {
+    const container = renderPanel();
+    await settle();
+    const submit = container.querySelector<HTMLButtonElement>("button[type='submit']")!;
+
+    expect(submit.getAttribute("aria-label") ?? submit.textContent?.trim()).toBe("Start Test Run");
+  });
+
   it("withholds start on the first commit before setup loading effects run", async () => {
     const onStart = vi.fn(async () => testRunView);
     const container = document.createElement("div");
@@ -120,7 +128,7 @@ describe("workflow Test Run setup", () => {
     await settle();
 
     changeSelect(container.querySelector<HTMLSelectElement>("select")!, "trigger:http-option");
-    expect(container.textContent).toContain("Loading Test Drive editor…");
+    const loadingAnnouncement = container.querySelector<HTMLElement>(".wf-test-drive-loading")?.textContent;
     expect(container.querySelector<HTMLFormElement>("form")?.style.display).toBe("none");
     expect(onStart).not.toHaveBeenCalled();
 
@@ -134,32 +142,42 @@ describe("workflow Test Run setup", () => {
     });
     expect(container.textContent).not.toContain("Loading Test Drive editor…");
     expect(onStart).not.toHaveBeenCalled();
+    expect(loadingAnnouncement).toBe("Loading Test Run editor…");
   });
 
   it("uses a public custom editor and keeps its data separate from workflow inputs", async () => {
     const customRegistry = createContributionRegistry<StudioTestStimulusEditorContribution>();
-    customRegistry.add(customEditor);
+    customRegistry.add({ ...customEditor, startLabel: "Send custom event" });
     const onStart = vi.fn(async () => testRunView);
     const container = renderPanel({ stimulusEditors: customRegistry.list(), onStart });
     await settle();
     const startSelector = container.querySelector<HTMLSelectElement>("select")!;
     expect(startSelector.value).toBe("direct");
+    expect(startSelector.labels).toHaveLength(1);
+    expect(startSelector.labels?.[0].querySelector("span")?.textContent?.trim()).toBe("Start");
     changeSelect(startSelector, "trigger:custom-option");
 
     const customControl = container.querySelector<HTMLInputElement>("input[aria-label='Custom stimulus']");
     expect(customControl).toBeTruthy();
+    expect(customControl!.getAttribute("aria-label")).toBe("Custom stimulus");
     changeValue(customControl!, '{"orderId":"stimulus-order"}');
     const workflowInput = container.querySelector<HTMLInputElement>(".wf-run-input-list input");
     expect(workflowInput).toBeTruthy();
+    expect(workflowInput!.getAttribute("aria-label")).toBe("Order ID");
+    expect(workflowInput!.labels?.[0]?.textContent).toContain("Order ID");
     changeValue(workflowInput!, "workflow-order");
+    expect(container.textContent).toContain("Test Run uses the connected environment. Workflow activities can still produce real side effects.");
+    expect(container.querySelector<HTMLButtonElement>("button[type='submit']")?.textContent?.trim()).toBe("Send custom event");
     flushSync(() => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
     await settle();
 
     expect(onStart).toHaveBeenCalledTimes(1);
-    const [snapshot, inputs, start] = onStart.mock.calls[0] as unknown as [WorkflowDraft, Record<string, unknown>, { kind: string; data?: unknown }];
+    const [snapshot, inputs, start, label, inputNames] = onStart.mock.calls[0] as unknown as [WorkflowDraft, Record<string, unknown>, { kind: string; data?: unknown }, string, string[]];
     expect(snapshot.state.rootActivity).toBeTruthy();
     expect(inputs).toEqual({ orderId: "workflow-order" });
     expect(start).toEqual({ kind: "trigger", optionId: "custom-option", modeId: "custom-mode", data: { orderId: "stimulus-order" } });
+    expect(label).toBe("Custom start · Deliver custom data");
+    expect(inputNames).toEqual(["orderId"]);
     expect(publishingMocks.getOptions).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ definitionId: "definition-1", snapshotId: expect.any(String) }));
   });
 

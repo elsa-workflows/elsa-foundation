@@ -22,6 +22,19 @@ public interface IRuntimeActivityChildFaultHandler
 }
 
 /// <summary>
+/// Engine-only opt-in for receiving faults of descendants below composites that do not handle their children's faults
+/// (Sequence and the loops). When such a composite's child faults, the runtime walks up from it and delivers the fault
+/// to the nearest ancestor that implements this interface, provided every composite in between handles no child
+/// faults and no reusable-activity boundary is in between. The receiver may absorb the fault, which cancels the
+/// subtree of the direct child it came through, or request intervention, exactly as in a child-fault evaluation. The
+/// capability is compiled into the executable node, so the runtime decides without constructing ancestors.
+/// </summary>
+public interface IRuntimeActivityDescendantFaultHandler
+{
+    ValueTask<RuntimeStructuralContinuation> OnDescendantFaultedAsync(ActivityDescendantFaultedContext context);
+}
+
+/// <summary>
 /// Engine-only opt-in for evaluating one intentional child fault together with the ordered notifications raised
 /// during that same child evaluation. The runtime delivers this as one callback and one durable parent checkpoint.
 /// </summary>

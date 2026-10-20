@@ -27,7 +27,9 @@ public sealed class RuntimeNotifyParentCommandPayload : IActivityCommandPayload
         string? notifyingChildIterationId,
         string code,
         System.Text.Json.JsonElement? payload,
-        string reason)
+        string reason,
+        string? viaChildActivityExecutionId = null,
+        string? viaChildExecutableNodeId = null)
     {
         ArgumentNullException.ThrowIfNull(pinnedExecutable);
         ArgumentException.ThrowIfNullOrWhiteSpace(executableNodeId);
@@ -47,6 +49,10 @@ public sealed class RuntimeNotifyParentCommandPayload : IActivityCommandPayload
             throw new ArgumentException($"A parent-notification code must be at most {RuntimeParentNotificationRequest.MaximumCodeLength} UTF-16 code units.", nameof(code));
         if (StringComparer.Ordinal.Equals(notifyingChildActivityExecutionId, activityExecutionId))
             throw new ArgumentException("A parent notification cannot target the notifying child itself.", nameof(notifyingChildActivityExecutionId));
+        if (viaChildActivityExecutionId is null != viaChildExecutableNodeId is null)
+            throw new ArgumentException("A via child is named by both its activity execution id and its executable node id, or not at all.", nameof(viaChildActivityExecutionId));
+        if (viaChildActivityExecutionId is not null && (string.IsNullOrWhiteSpace(viaChildActivityExecutionId) || string.IsNullOrWhiteSpace(viaChildExecutableNodeId)))
+            throw new ArgumentException("Via child ids cannot be blank when provided.", nameof(viaChildActivityExecutionId));
 
         PinnedExecutable = pinnedExecutable;
         ExecutableNodeId = executableNodeId;
@@ -59,6 +65,8 @@ public sealed class RuntimeNotifyParentCommandPayload : IActivityCommandPayload
         Code = code;
         Payload = payload?.Clone();
         Reason = reason;
+        ViaChildActivityExecutionId = viaChildActivityExecutionId;
+        ViaChildExecutableNodeId = viaChildExecutableNodeId;
     }
 
     /// <summary>The pinned executable artifact the target parent is reconstructed from.</summary>
@@ -93,4 +101,13 @@ public sealed class RuntimeNotifyParentCommandPayload : IActivityCommandPayload
 
     /// <summary>The checkpoint reason recorded for the notification evaluation.</summary>
     public string Reason { get; }
+
+    /// <summary>
+    /// For an ancestor notification: the target's direct child on the path from the notifying activity. <c>null</c>
+    /// when the notifying child is itself a direct child of the target.
+    /// </summary>
+    public string? ViaChildActivityExecutionId { get; }
+
+    /// <summary>The executable node id of <see cref="ViaChildActivityExecutionId"/>.</summary>
+    public string? ViaChildExecutableNodeId { get; }
 }

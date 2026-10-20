@@ -12,8 +12,9 @@ namespace Elsa.Activities.Compensation.Internal;
 internal static class CompensationScopeStatePersister
 {
     public const string StateTypeAlias = "Elsa.CompensationScope.State";
-    public const int StateSchemaVersion = 2;
+    public const int StateSchemaVersion = 3;
     private const int Version1 = 1;
+    private const int Version2 = 2;
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
@@ -22,15 +23,22 @@ internal static class CompensationScopeStatePersister
         if (activityExecutionState.PrivateState is not { } privateState)
             return null;
 
-        if (privateState.StateVersion is not (StateSchemaVersion or Version1) ||
+        if (privateState.StateVersion is not (StateSchemaVersion or Version2 or Version1) ||
             !StringComparer.Ordinal.Equals(privateState.Value.Type.Alias, StateTypeAlias) ||
             privateState.Value.InlineValue is not { } payload)
         {
             throw new CompensationScopeExecutionException("Compensation scope private state does not match the required type and schema version.");
         }
 
-        // A scope that started before M2 carries version 1; it is upgraded here and written as version 2 on its next commit.
-        return Deserialize(privateState.StateVersion == Version1 ? CompensationScopeStateUpcaster.FromVersion1(payload) : payload);
+        // A scope that started before M2 (version 1) or M3 (version 2) is upgraded here and written as the current
+        // version on its next commit. Upgrades chain, so a version-1 scope passes through version 2.
+        var current = privateState.StateVersion switch
+        {
+            Version1 => CompensationScopeStateUpcaster.FromVersion2(CompensationScopeStateUpcaster.FromVersion1(payload)),
+            Version2 => CompensationScopeStateUpcaster.FromVersion2(payload),
+            _ => payload
+        };
+        return Deserialize(current);
     }
 
     public static CompensationScopeState Deserialize(JsonElement payload)

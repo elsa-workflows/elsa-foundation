@@ -35,7 +35,7 @@ public sealed class CompensationScopeDesignTests : IDisposable
     public void Dispose() => _provider.Dispose();
 
     [Fact]
-    public void The_feature_registers_the_structure_handler_and_the_Draft_validator()
+    public void The_feature_registers_the_structure_handler_and_the_Draft_validators()
     {
         Assert.Equal(CompensationScope.StructureKind, _handler.Kind);
         Assert.Equal(CompensationScope.StructureSchemaVersion, _handler.SchemaVersion);
@@ -43,9 +43,9 @@ public sealed class CompensationScopeDesignTests : IDisposable
 
         var services = new ServiceCollection();
         new ActivitiesCompensationFeature().ConfigureServices(services);
-        var validator = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IDraftValidator));
-        Assert.Equal(typeof(CompensationScopeValidator), validator.ImplementationType);
-        Assert.Equal(ServiceLifetime.Scoped, validator.Lifetime);
+        var validators = services.Where(descriptor => descriptor.ServiceType == typeof(IDraftValidator)).ToArray();
+        Assert.Equal([typeof(CompensationScopeValidator), typeof(CompensationTargetValidator), typeof(CompensationHandlerVariableValidator)], validators.Select(validator => validator.ImplementationType));
+        Assert.All(validators, validator => Assert.Equal(ServiceLifetime.Scoped, validator.Lifetime));
     }
 
     [Fact]

@@ -8,7 +8,7 @@
 
 - compensation tests 58/58, including J1–J6 and every FR-216 injection point in Durable, Balanced and Ephemeral;
 - the Workbench owned-process journeys (M1, and J1 + J5 with a kill after the retry) 2/2;
-- the SC-204 negative controls, run by hand and reverted: dropping the handler operation key fails 6 tests, dropping the uncertain branch fails 5, dropping the intervention request fails 5;
+- three of the four SC-204 negative controls, the scope controls, run by hand and reverted: dropping the handler operation key fails 6 tests, dropping the uncertain branch fails 5, dropping the intervention request fails 5. The fourth, the retry alteration's idempotency, is covered by `SameIdempotencyKeyTwice_SchedulesOneSuccessor` but was not run as a negative control;
 - Studio Vitest, typecheck and lint.
 
 The Studio retry button for #2747 is M4.
