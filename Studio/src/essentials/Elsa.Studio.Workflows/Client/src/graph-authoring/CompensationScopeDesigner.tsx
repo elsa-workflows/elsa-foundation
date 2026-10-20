@@ -96,6 +96,12 @@ export function CompensationScopeDesigner({
         ) : null}
       </header>
 
+      {runtime?.incomplete ? (
+        <p className="wf-instance-note" role="note">
+          This run has more activity data than Studio loaded. A state shown as Not loaded may be on a later page.
+        </p>
+      ) : null}
+
       {runtime?.cause ? (
         <p className="wf-compensation-cause" role="note">
           <AlertTriangle size={14} aria-hidden="true" />

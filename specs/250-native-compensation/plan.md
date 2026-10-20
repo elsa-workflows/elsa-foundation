@@ -14,10 +14,10 @@ private-state contracts as they are.
 |---|---|---|
 | Activities `CompensationScope` | `Essentials/src/Activities/Compensation/` (new project `Elsa.Activities.Compensation`) | Follows `Elsa.Activities.ControlFlow` layout: `Activities/`, `Internal/`, `Models/`, feature class |
 | Structure handler, validator | same project, `Internal/` (internal types) | Design side references `Elsa.Workflows.Design.Core`, like Switch |
-| Inspection endpoint | `Essentials/src/Workflows/Runtime/Api` capability link plus handler that delegates to a projector registered by the compensation feature | Read-only; reuses activity-execution read authorization and disclosure |
+| Inspection | None: Studio derives the view from run data (FR-019, research R13) | Reuses the existing run endpoints and their read authorizationorization and disclosure |
 | Feature | `ActivitiesCompensationFeature` (CShells feature), enabled in Workbench `shells.json` | Registration test per ADR 0080 D1 risk-based rule |
-| Sample participant | `Extensions/Samples.Reservations/` | Test and sample use only, never in production compositions |
-| Studio | `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/compensation/` | `CompensationScopeDesigner`, run-view `CompensationScopeRunView`, `CompensationRecoveryPanel` |
+| Sample participant | `Essentials/tests/Workbench/Fixtures/Reservations` (test fixture package) | Test and sample use only, never in production compositions |
+| Studio | `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/graph-authoring/CompensationScopeDesigner.tsx`, `compensationScope.ts`, `compensationRuntime.ts` | One designer for authoring and the read-only run view, with the phase and cause summary |
 | Docs | `website/docs/` reference page; glossary rows | |
 
 ## Constitution and ADR checks
@@ -34,9 +34,9 @@ private-state contracts as they are.
 1. Spec 250 (this design packet), as a documentation PR.
 2. Runtime: activity, structure handler, validation, feature, unit and integration restart tests, sample
    participant.
-3. Inspection API and Studio: designer, run view, recovery panel, component tests.
+3. Studio: designer, run view derived from run data (no inspection API), component tests.
 4. End-to-end: owned-process Workbench restart test, opt-in live browser journey, remaining M1 gaps (repeat
-   deliveries, republish, captured values, row "Go to", mocked browser suite), docs, maps. Spec status becomes
-   `M1 implemented`.
+   deliveries, republish, captured values, row "Go to", mocked browser suite), docs, maps. Spec status stays
+   `In progress`, recording M1 as implemented.
 
 PRs 2 and 3 can be reviewed independently; PR 4 needs both merged.

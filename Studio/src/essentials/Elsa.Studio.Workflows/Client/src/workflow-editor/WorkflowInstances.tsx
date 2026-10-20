@@ -1737,7 +1737,8 @@ export function buildInstanceCanvas(
       mode: "compensation",
       compensation: {
         owner: scopeOwner,
-        runtime: deriveCompensationRuntime(scopeOwner, associationActivities, Array.isArray(details.incidents) ? details.incidents : []),
+        runtime: deriveCompensationRuntime(scopeOwner, associationActivities, Array.isArray(details.incidents) ? details.incidents : [],
+          { complete: !details.activityNextContinuationToken }),
         openSlot: (ownerNodeId, ownerLabel, slot) => {
           const plan = planSlotNavigation(frames, scopeOwner, ownerNodeId, slot, slotCrumbLabel(ownerLabel, slot), activityCatalog);
           if (plan) onNavigateToScope(plan.frames);

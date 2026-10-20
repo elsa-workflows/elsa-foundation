@@ -25,7 +25,7 @@
 - [x] T011 Captured values: `IActivityStructureHandler.ChildrenCompletedBefore` ranks the paired step's results first
   in expression authoring; the Workbench test binds a handler to its step's result and to a captured variable.
 - [x] T012 Validation path mapping for scope rows ("Go to").
-- [x] T013 Run view: read-only paired list with states, Recovery panel, handler "Compensates" link, timeline tag,
+- [x] T013 Run view: read-only paired list with states, recovery summary (phase and cause), handler "Compensates" link, timeline tag,
   scope badge.
 - [x] T014 Vitest coverage for T010–T013, and a mocked Playwright fixture with axe.
 
@@ -35,4 +35,4 @@
   its Workbench; P2 crash). A C# Workbench test rather than a PowerShell script, so it runs in CI.
 - [x] T016 Opt-in live browser journey `Studio/tests/live/compensation-journey.spec.ts` (`pnpm test:live` with
   `ELSA_STUDIO_URL`): authors, publishes, runs and inspects. Restart is proven by T015, not in the browser.
-- [x] T017 Reference docs, glossary, `EXTENSION_POINTS.md`, maps; spec status `Implemented`; program checkpoint.
+- [x] T017 Reference docs, glossary, `EXTENSION_POINTS.md`, maps; spec status `In progress` with M1 recorded as implemented (M2–M5 remain); program checkpoint.

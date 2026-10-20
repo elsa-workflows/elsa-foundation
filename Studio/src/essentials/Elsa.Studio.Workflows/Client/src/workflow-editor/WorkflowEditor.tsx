@@ -399,7 +399,9 @@ export function WorkflowEditor({
     frames,
     catalogByVersion,
     selectedNodeIds: selectedCanvasNodeIds,
-    disabled: isUnsupportedDesigner || !canAddActivitiesToCanvas,
+    // The compensation scope's Steps view is not a slot to paste into: an activity belongs to a step, so it is added
+    // through the scope designer.
+    disabled: isUnsupportedDesigner || !canAddActivitiesToCanvas || scope?.slot.id === compensationStepsSlotId,
     definitionId,
     editDraft,
     select: nodeId => {
@@ -719,12 +721,20 @@ export function WorkflowEditor({
     const recipe = ({ draft: current }: { draft: WorkflowDraft | null }) => {
       const rootActivity = current?.state.rootActivity;
       if (!current || !rootActivity) return null;
+      // The edit runs against the scope as it is in this draft, not as it was when the designer rendered.
+      const owner = findActivityNode(rootActivity, ownerNodeId, catalogByVersion);
+      if (!owner) return null;
+      const nextOwner = withCompensationSteps(owner, edit(readCompensationSteps(owner)));
+      // Deleting a step, removing a compensation or replacing an activity drops nodes: forget their layout and
+      // presentation records, as replacing a slot activity does.
+      const kept = collectOwnedNodeIds(nextOwner, catalogByVersion, new Set<string>());
+      const removed = new Set([...collectOwnedNodeIds(owner, catalogByVersion, new Set<string>())].filter(nodeId => !kept.has(nodeId)));
       return {
         ...current,
+        ...forgetRemovedNodes(current, removed),
         state: {
           ...current.state,
-          // The edit runs against the scope as it is in this draft, not as it was when the designer rendered.
-          rootActivity: updateActivity(rootActivity, ownerNodeId, owner => withCompensationSteps(owner, edit(readCompensationSteps(owner))), catalogByVersion)
+          rootActivity: updateActivity(rootActivity, ownerNodeId, () => nextOwner, catalogByVersion)
         }
       };
     };
@@ -748,6 +758,12 @@ export function WorkflowEditor({
       updateCompensationSteps(steps => updateCompensationStep(steps, target.index, { compensation: node }), `${label} now undoes ${stepName}`, node.nodeId);
     }
   }, [compensationPick, scopeOwner, updateCompensationSteps]);
+  // On the compensation scope's canvas, a palette click adds a new last step with that activity.
+  const addCompensationStepFromPalette = useCallback((activity: ActivityCatalogItem) => {
+    const node = createActivityNode(activity, createNodeId(activity));
+    setCompensationPick(null);
+    updateCompensationSteps(steps => addCompensationStep(steps, steps.length, node), `Added step ${getActivityDisplay(activity)}`, node.nodeId);
+  }, [updateCompensationSteps]);
 
   // A start node is a Flowchart concept; a Sequence runs in authored order and has none.
   const isFlowchartScope = scope?.slot.mode === "flowchart";
@@ -1001,7 +1017,7 @@ export function WorkflowEditor({
             groups={filteredPaletteGroups}
             expandedCategories={expandedPaletteCategories}
             onToggleCategory={togglePaletteCategory}
-            onActivityClick={onPaletteClick}
+            onActivityClick={isCompensationScopeCanvas ? addCompensationStepFromPalette : onPaletteClick}
             onActivityDragStart={onPaletteDragStart}
             onActivityDragEnd={onPaletteDragEnd}
             onActivityPointerDown={onPalettePointerDown}
@@ -1332,7 +1348,11 @@ export function WorkflowEditor({
               readOnly={!canAddActivitiesToCanvas}
               canvasRef={canvasRef}
               onSelect={select}
-              onChangeSteps={(edit, nextStatus) => updateCompensationSteps(edit, nextStatus)}
+              onChangeSteps={(edit, nextStatus) => {
+                // An open picker targets a row by index; once rows change, that index may name another step.
+                setCompensationPick(null);
+                updateCompensationSteps(edit, nextStatus);
+              }}
               onRequestActivity={(target, anchor) => setCompensationPick({ target, ...anchor })}
               onOpenSlot={(ownerId, label, slot) => enterSlotScope(ownerId, slot, slotCrumbLabel(label, slot))}
             >

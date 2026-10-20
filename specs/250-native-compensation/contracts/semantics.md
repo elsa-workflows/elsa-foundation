@@ -10,7 +10,7 @@ states and transitions marked **M1**. Later milestones add states without changi
 | `Running` | Forward steps are being scheduled in order. | M1 |
 | `Compensating` | Recovery started; handlers are being scheduled newest first. | M1 |
 | `AwaitingIntervention` | A handler failed after its retries; an operator must act (OD2). The scope holds a durable wait. | M2 |
-| `Completed` | All steps completed. The journal stays compensable until confirmed (OD3). Outcome `Done`. | M1 (outcome), M3 (late compensation) |
+| `Completed` | All steps completed. Outcome `Done`. The runtime clears the journal on completion, so late compensation (OD3) needs a durable journal that M3 must add. | M1 (outcome), M3 (late compensation) |
 | `Compensated` | Recovery finished; every registered entry is `Compensated` or explicitly resolved. Outcome `Compensated`. | M1 |
 | `Confirmed` | Entries are no longer eligible for compensation. | M3 |
 | `Abandoned` | An operator abandoned recovery. The scope faults with the cause; unresolved entries stay visible as unresolved. | M4 |
@@ -50,19 +50,27 @@ OnChildCompleted(child)
                          -> entry Compensated
                             next = highest-ordinal Registered entry
                             next exists -> entry(next) Compensating, schedule handler, Defer
-                            none        -> phase Compensated, complete Compensated (or Fault, see afterCompensation)
+                            none        -> phase Compensated, complete Compensated, or fault with the step's fault
+                                           when faultAfterCompensation is true
   any other child        -> ignore (repeat delivery or stale), Defer   [FR-009]
 
 OnChildFaulted(child, incident)
   phase Running and child is the current step
                          -> absorb(incident), cause = {step, AEI, incident, fault}
                             phase Compensating, schedule highest-ordinal Registered entry (as above)
-                            none registered -> phase Compensated, complete Compensated
+                            none registered -> phase Compensated, complete Compensated; when
+                                               faultAfterCompensation is true, do not absorb and fault
   phase Compensating and child is the running handler
                          -> M1: do not absorb; Defer. The blocking incident stays and the run's incident
                             strategy decides. Entry stays Compensating.            [M2: entry Failed, retry/intervene]
   otherwise              -> do not absorb; Defer
 ```
+
+"Current step" means the direct child the scope scheduled last. M1 supports leaf steps and steps whose faults
+reach the scope as a fault of that child (a Flowchart step re-faults). A fault that never reaches the scope as a
+direct-child fault — a Sequence step, which absorbs its children's faults — leaves the incident blocking and the
+scope running; the M3 composition matrix closes that gap. Any fault the scope does not own (a stale child, a child
+of a phase the scope left) is never absorbed and keeps blocking the run.
 
 "Schedule handler" passes:
 
@@ -101,6 +109,12 @@ modes, so the table above holds in each. What differs is how much replays: in Ba
 because the entry status commits together with the schedule request. Each mode is claimed only with its restart tests
 passing (FR-013).
 
+**Decision (19 October 2026):** M1 supports all three modes. Issue #3043 proposed Durable plus Balanced with a
+mandatory pre-effect boundary, and refusing Ephemeral for compensated external work. The pre-effect flush already
+applies to `External` activities in every mode, and the P1–P4 restart matrix passes in Durable, Balanced and
+Ephemeral, so refusing Ephemeral would remove a working mode without a failing case. A step or handler marked
+`ReplaySafe` loses that boundary in every mode; FR-014's warning (deferred to M5) covers it.
+
 ## Recovery cause
 
 The recovery cause is recorded in the scope's private state and returned by the inspection projection. Structural activities complete with an outcome only (`RuntimeStructuralContinuation`), so exposing the cause as an activity output needs structural output support (research R12). Its shape:
@@ -123,7 +137,10 @@ never as blank.
 - **M2 handler failure.** Bounded automatic retries (count and backoff via durable timers) per scope. When they
   are exhausted, the entry becomes `Failed` and the scope enters `AwaitingIntervention` through a durable bookmark
   that a recovery action resumes. The original cause and every handler attempt stay separate.
-- **M3 late compensation (OD3).** A completed scope's journal stays compensable. An enclosing scope that starts
+- **M3 late compensation (OD3).** A completed scope's journal stays compensable. Prerequisite: the runtime clears
+  structural private state on completion today, so M3 first needs a durable journal that outlives the scope (a
+  runtime opt-in or a compensation projection); execution metadata and incidents cannot reconstruct entry statuses,
+  ordinals or handler occurrences. An enclosing scope that starts
   recovery treats each completed inner scope as one entry and recovers it by re-entering the inner scope node in
   recovery mode with the inner journal. Confirmation (a `Confirm` activity or scope setting) moves entries to
   `Confirmed`.

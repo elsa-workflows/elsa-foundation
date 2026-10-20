@@ -2,20 +2,18 @@
 
 ## The reservation participant
 
-The sample module `Elsa.Samples.Reservations` (under `Extensions/Samples.Reservations`) provides a participant
-that persists independently of the workflow database: a JSON file per host, written atomically.
+Two participants stand in for an external system. Both apply each effect once per invocation id, as an
+idempotent participant does, and journal every call, so a test can tell a repeated call from a repeated effect.
 
-| Activity | Effect | Idempotency |
-|---|---|---|
-| `ReserveInventory(orderId, sku, quantity)` | Creates reservation `inv-…`; output `reservationId` | Keyed by invocation id: a repeat returns the existing reservation |
-| `ReleaseInventory(reservationId)` | Marks it released | A repeat of an already released reservation is a no-op |
-| `ReserveDelivery(orderId, slot)` / `CancelDelivery(reservationId)` | Same pattern | Same |
-| `ConfirmOrder(orderId, reject)` | Faults with `order.rejected` when `reject` is true | n/a |
-
-Failure injection (test hosts only, gated by the `Reservations:FailureInjection` setting): a "crash plan" file
-names an activity and a point (`afterEffect`). When that point is reached, the host process terminates with
-`Environment.FailFast` before the activity returns, so the effect is written and its completion is not
-committed.
+- **In-process** (`Essentials/tests/Activities/Compensation/Tests/Support/Participant.cs`): one shared instance
+  outlives both host generations of a restart test. `Rejecting(node)` faults a step with `order.rejected`;
+  `KillingHostAfterEffectOf(node)` and `KillingHostBeforeEffectOf(node)` stop the host at an injection point.
+- **Owned process** (`Essentials/tests/Workbench/Fixtures/Reservations`, the `ReservationParticipant` activity in a
+  fixture feed package): inputs `DirectoryPath`, `Key`, `Reject`, `HoldAfterEffect` and `Undoes`. It appends each
+  call to `{Key}.calls` (process id, invocation id, attempt id), applies its effect once per invocation id
+  (`{Key}.{invocationId}.effect`, `effects.log`), records the reservation it was asked to undo in `{Key}.undoes`, and
+  returns the reservation id `{Key}:{invocationId}`. With `HoldAfterEffect` it waits after the effect until
+  `{Key}.release` exists; the test kills the Workbench process during that hold.
 
 ## Injection points (SC-002)
 
@@ -23,7 +21,7 @@ committed.
 |---|---|---|
 | P1 | `ReserveDelivery` after effect | Delivery reservation exists once; recovery after `ConfirmOrder` fails releases it once |
 | P2 | `CancelDelivery` after effect | Cancelled once; `ReleaseInventory` then runs once |
-| P3 | Between `CancelDelivery` completion and `ReleaseInventory` scheduling (kill on the next claim) | `ReleaseInventory` runs once |
+| P3 | Between `CancelDelivery` completion and `ReleaseInventory` scheduling (kill when `ReleaseInventory` is claimed) | `ReleaseInventory` runs once |
 | P4 | `ReleaseInventory` after effect | Released once; scope completes `Compensated` |
 
 Each point runs in Durable, Balanced and Ephemeral modes.

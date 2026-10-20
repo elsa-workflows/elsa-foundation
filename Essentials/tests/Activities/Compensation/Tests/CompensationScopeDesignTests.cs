@@ -103,6 +103,21 @@ public sealed class CompensationScopeDesignTests : IDisposable
             step => Assert.Equal(("Confirm", "x-confirm", (string?)null), (step.Name, step.Activity, step.Compensation)));
     }
 
+    [Fact]
+    public void Steps_that_share_a_name_keep_their_own_activities_through_a_structure_round_trip()
+    {
+        // A Draft with a duplicate name is saved (the validator only blocks publication), so every structure rewrite
+        // in between must keep each step's own activities.
+        var node = ScopeNode("scope", ("Same", Leaf("first"), Leaf("first-undo")), ("Same", Leaf("second"), null));
+
+        var replaced = _handler.ReplaceChildren(node, _handler.ProjectChildren(node));
+
+        Assert.Collection(
+            CompensationScopeAuthoredStructureReader.Read(replaced).Steps,
+            step => Assert.Equal(("first", "first-undo"), (step.Activity?.NodeId, step.Compensation?.NodeId)),
+            step => Assert.Equal(("second", (string?)null), (step.Activity?.NodeId, step.Compensation?.NodeId)));
+    }
+
     [Theory]
     [InlineData(" ", "has a step without a name")]
     [InlineData("Same", "more than once")]

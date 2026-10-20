@@ -29,7 +29,7 @@ Order fulfilment  ›  Compensation scope "Reserve and confirm"
   `… › Reserve and confirm › Reserve inventory (compensation)`.
 - **Accessible names**: row `Step 2, Reserve delivery, compensated by Cancel delivery`; cell buttons
   `Open step Reserve delivery` and `Open compensation for Reserve delivery`; add button `Add compensation for Confirm order`.
-- **Inspector** for the scope: inputs (`afterCompensation`: "Finish with outcome Compensated" | "Fail with the
+- **Inspector** for the scope: inputs (`faultAfterCompensation`, boolean: off "Finish with outcome Compensated" | on "Fail with the
   original error"), outcomes `Done` and `Compensated`.
 - **Captured values**: a handler input's expression editor offers the paired step's results first, then the earlier
   steps' results, nearest first. The stored value is the ordinary activity-result reference, which resolves to the

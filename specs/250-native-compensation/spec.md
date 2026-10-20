@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-19
 
-**Status**: M1 implemented — design packet [#3043](https://github.com/elsa-workflows/elsa-foundation/issues/3043); M1 runtime, Studio and end-to-end proof under [#3044](https://github.com/elsa-workflows/elsa-foundation/issues/3044). FR-014 is deferred to M5 (see FR-014). M2–M5 follow.
+**Status**: In progress — M1 implemented: design packet [#3043](https://github.com/elsa-workflows/elsa-foundation/issues/3043); M1 runtime, Studio and end-to-end proof under [#3044](https://github.com/elsa-workflows/elsa-foundation/issues/3044). FR-014 is deferred to M5 (see FR-014). M2–M5 follow.
 
 **Program**: [Native compensation #3035](https://github.com/elsa-workflows/elsa-foundation/issues/3035) → [Contract #3041](https://github.com/elsa-workflows/elsa-foundation/issues/3041) → [Design #3043](https://github.com/elsa-workflows/elsa-foundation/issues/3043). Requirements: [PRD #3036](https://github.com/elsa-workflows/elsa-foundation/issues/3036). Boundary with BPMN: [ADR 0086](../../docs/adr/0086-native-and-bpmn-compensation-stay-separate.md).
 
@@ -68,8 +68,8 @@ An operator opens the run in Studio. The scope shows "Compensated" with text and
 **Acceptance Scenarios**:
 
 1. **Given** a compensated run, **when** the operator opens the scope, **then** each row shows forward state (Completed/Faulted/Not run) and recovery state (Compensated/Not needed/Pending/Running/Failed), each as text plus icon, never color alone.
-2. **Given** a handler occurrence, **when** it is selected, **then** the inspector shows "Compensates *Reserve delivery*", links to the exact forward occurrence, and shows the scope's recovery cause.
-3. **Given** the scope selected, **then** a Recovery panel lists the cause (step, fault code and message, subject to the existing payload disclosure policy) and the entries in recovery order.
+2. **Given** a handler occurrence, **when** it is selected, **then** the inspector shows "Compensates *Reserve delivery*", and links to the exact forward occurrence; the scope's step list shows the recovery cause.
+3. **Given** the scope selected, **then** a recovery summary shows the cause (step, fault code and message, subject to the existing payload disclosure policy) and each row shows its place in the recovery order.
 4. **Given** the run timeline, **then** handler occurrences are labelled as compensation and are distinguishable from forward work.
 
 ### User Story 4 - Uncertain effects and intervention (Priority: P2, M2)
@@ -102,14 +102,14 @@ An authorized operator retries a failed handler, marks an entry resolved manuall
 - **FR-001**: A **compensation scope** is a native structural activity whose authored structure is an ordered list of named steps. Each step has one forward activity and at most one compensation handler. Step names are unique within the scope and non-blank.
 - **FR-002**: The scope runs its steps one at a time, in order. Parallel steps are out of scope (PRD non-goal).
 - **FR-003**: When a step completes successfully, the scope appends a **compensation entry** to its journal in the same checkpoint as that completion's parent evaluation. The entry records the step name, the forward activity execution id, its iteration id, a scope-assigned completion ordinal, the handler node, and status `Registered` (or `NoHandler`).
-- **FR-004**: The journal lives in the scope's versioned private state (`ActivityExecutionState.PrivateState`). It is never pruned while the workflow exists, so it stays available for recovery, inspection and repeat-delivery protection.
+- **FR-004**: While the scope is active, the journal lives in its versioned private state (`ActivityExecutionState.PrivateState`) and is never pruned, so it serves recovery and repeat-delivery protection. The runtime clears structural private state when the scope completes. Completed-scope inspection is derived from run data (FR-019); late compensation of a completed scope (OD3, M3) requires a durable journal or compensation projection that survives completion, because execution metadata and incidents cannot reconstruct entry statuses, ordinals or handler occurrences.
 
 **Triggering and ordering**
 
 - **FR-005**: A fault of a direct step starts recovery: the scope absorbs the fault (spec 115 absorption, which resolves the incident atomically), records it as the **recovery cause** (step, activity execution id, incident id, fault code, message reference), stops scheduling forward steps and enters `Compensating`.
 - **FR-006**: Only `Registered` entries are compensated. A step that faulted, was cancelled or never ran has no entry and its handler does not run.
 - **FR-007**: Handlers run one at a time in descending completion ordinal. Each is scheduled with the forward step's activity execution id as its scheduling id, so its inputs bind to that exact forward occurrence through the causal result resolver (FR-010).
-- **FR-008**: Before scheduling a handler, the scope marks its entry `Compensating` in the same commit as the handler's schedule request. The runtime mints the handler's execution id inside that committed schedule work item, so a replay schedules the same execution. The scope records the id when the handler completes, matching it by the `compensation.entryId` metadata. When the handler completes, the entry becomes `Compensated`. After the last entry, the scope completes with outcome `Compensated` (OD1), or faults with the recovery cause when the scope's `afterCompensation` setting is `Fault`.
+- **FR-008**: Before scheduling a handler, the scope marks its entry `Compensating` in the same commit as the handler's schedule request. The runtime mints the handler's execution id inside that committed schedule work item, so a replay schedules the same execution. The scope records the id when the handler completes, matching it by the `compensation.entryId` metadata. When the handler completes, the entry becomes `Compensated`. After the last entry, the scope completes with outcome `Compensated` (OD1), or faults with the step's fault when the scope's boolean input `faultAfterCompensation` is true (default `false`). With nothing to undo and `faultAfterCompensation` true, the scope does not absorb the fault and faults at once.
 - **FR-009**: A repeat delivery of a handler completion, or a parent re-evaluation after restart, must not advance the cursor twice or schedule a handler for an entry that is already `Compensating` or `Compensated`.
 
 **Captured context and identity**
@@ -120,16 +120,16 @@ An authorized operator retries a failed handler, marks an entry resolved manuall
 
 **Durability**
 
-- **FR-013**: Compensation is supported in Durable, Balanced and Ephemeral modes. The pre-effect boundary is mode-independent: an activity whose side-effect profile is `External` (the default) has its invocation identity and input snapshot durably flushed before its body runs in every mode (`CoalescingRuntimeCheckpointPersistencePolicy`). Support for each mode is claimed only with that mode's restart tests passing. If a mode's tests cannot pass, publication refuses compensation scopes in that mode with a clear diagnostic. Support is never silently downgraded.
+- **FR-013**: Compensation is supported in Durable, Balanced and Ephemeral modes. The pre-effect boundary is mode-independent: an activity whose side-effect profile is `External` (the default) has its invocation identity and input snapshot durably flushed before its body runs in every mode (`CoalescingRuntimeCheckpointPersistencePolicy`). Support for each mode is claimed only with that mode's restart tests passing. If a mode's tests cannot pass, publication refuses compensation scopes in that mode with a clear diagnostic. Support is never silently downgraded. **Decision (19 October 2026):** all three modes are supported in M1, against #3043's proposal to refuse Ephemeral; see [contracts/semantics.md](contracts/semantics.md#persistence-modes).
 - **FR-014**: Publication warns, without blocking, when a step or handler activity is declared `ReplaySafe`. Its claim may be deferred, which is correct for in-workflow work but almost never what a compensated external effect wants. **Deferred to M5**: design-time validation has no side-effect profile for an activity version (the profile exists only on the compiled executable node), so the warning needs the activity catalog to carry it first.
 
 **Studio**
 
 - **FR-015**: Studio renders a scope's contents as a paired step list (OD4). Each row has an order number, the step name, the forward activity cell and the compensation cell. An empty compensation cell offers "Add compensation". Both cells support drill-in, replace and remove. Rows can be reordered, added and deleted.
 - **FR-016**: Expression authoring offers a step the results of the steps before it, and a handler its own step's result first, then the earlier steps' results, nearest first (`IActivityStructureHandler.ChildrenCompletedBefore`). Handler results are never offered: handlers run only on recovery.
-- **FR-017**: Publish validation errors for scope rows use the path `{scopeNodeId}/steps/{index}`, so "Go to" opens the scope's step list with that row's activity selected (the scope itself for a row without an activity).
+- **FR-017**: Publish validation errors for scope rows use the path `{scopeNodeId}/steps/{index}`, so "Go to" opens the scope's step list with that row's activity selected (the scope itself for a row without an activity). Paths cannot key on the step name: the validator also reports blank and duplicate names.
 - **FR-018**: Run inspection shows the paired list read-only, with forward and recovery state per row as text and icon. It also shows a recovery summary for the scope (its phase and the failure that started recovery) and, on a handler occurrence, a "Compensates" link to its forward occurrence. Handler occurrences are labelled as compensation in the timeline.
-- **FR-019**: Inspection adds no endpoint. Studio derives each row from the run data it already reads under the existing activity-execution permission and payload disclosure policy: the scope's latest execution, its children matched by the steps' node ids, handler executions recognised by scheduling cause `compensation`, and the absorbed incident for the cause (research R13). Raw private state is never exposed.
+- **FR-019**: Inspection adds no endpoint. Studio derives each row from the run data it already reads under the existing activity-execution permission and payload disclosure policy: the scope's latest execution, its children matched by the steps' node ids, handler executions recognised by scheduling cause `compensation`, and the absorbed incident for the cause (research R13). Raw private state is never exposed. Studio reads the activity executions' `provenance` (parent and scheduling ids, scheduling cause) and `outcomeNames`. When the run's activity list is paged (`activityNextContinuationToken`), Studio loads the remaining pages, or marks the recovery evidence incomplete, before it shows a definitive state.
 - **FR-020**: Every new Studio control is keyboard operable and has an accessible name, and every state is conveyed by text as well as color. The axe check in the browser test passes.
 
 ### Key Entities
