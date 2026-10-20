@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-20
 
-**Status**: Draft
+**Status**: In progress
 
 **Issue**: [#3012](https://github.com/elsa-workflows/elsa-foundation/issues/3012). The scope is the
 [triage comment](https://github.com/elsa-workflows/elsa-foundation/issues/3012#issuecomment-6291828214): its decision,
@@ -52,6 +52,25 @@ The 36 JTest definitions (not committed) were measured with a throwaway harness,
 **What this means for the scope**: Part 1 fixes a real, data-dependent run-time failure in 10 of the 33 definitions with
 JavaScript. Part 2 refuses nothing in the corpus today; it is a guard for workflows outside it. The trailing-comment
 case is a third gap of the same kind (converts, then cannot run) and is covered by User Story 4.
+
+## Measured after (JTest corpus, 2026-10-20, branch at `f2a060bae`)
+
+Same throwaway method as the baseline, deleted afterwards.
+
+| Measure | Baseline | After |
+|---|---|---|
+| Definitions that convert end to end | 6 | 6 (the same six) |
+| JavaScript sources that rewrite | 121 of 217 (112 expressions, 9 scripts) | 121 of 217 (112, 9); no new refusal |
+| Rewritten sources that parse as Elsa 4 parses them | 119 of 121 | 121 of 121 |
+| Expressions that fail with the `undefined` error (parameters `{}`) | 16 in 10 definitions | 0; all 16 give `null` |
+| Scripts that fail to parse because of a trailing line comment | 2 | 0 |
+
+No corpus source is refused by the new strict-mode, undeclared-write, `this` or `arguments` checks (SC-004, SC-005).
+
+**Found during implementation.** The converter dropped the closing parenthesis of a parenthesized single expression
+(`({ a: 1 })`, `(a, b)`) when it removed the statement semicolon, because the parser's expression range excludes the
+parentheses. Such an expression converted and then could not run in Elsa 4. It is fixed in this unit, in the same code
+that adds `?? null`, and covered by the User Story 1 tests. The corpus has no such expression.
 
 ## Clarifications
 
@@ -176,6 +195,7 @@ runs it with the same result as without the comment.
 - An expression that ends with a line comment: the added `?? null` must not be swallowed by the comment.
 - A top-level `return` with no argument already becomes `return null;` (spec 247); it stays that way.
 - `a || b ?? null` is a syntax error, so the original expression is always kept intact inside parentheses.
+- A parenthesized single expression (`({ a: 1 })`) keeps its own parentheses.
 - A sequence (comma) expression keeps its value as a whole: `(a, b) ?? null`, not `a, (b ?? null)`.
 - An undeclared assignment inside a nested function is still an undeclared assignment; a name declared later in the
   same scope with `var` or a function declaration counts as declared (hoisting), as it does in JavaScript.
