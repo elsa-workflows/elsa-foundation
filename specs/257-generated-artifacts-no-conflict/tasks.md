@@ -179,7 +179,7 @@ No test-first cadence is declared for repository tooling, so tests sit beside th
 - [X] T030 Run [quickstart.md](quickstart.md) "Local" end to end on Windows (PowerShell shims) and in Bash, and confirm byte-identical output (FR-010).
 - [ ] T031 Open the implementation PR. Confirm a full run with both required checks green. Then open and close the throwaway docs-only, mixed and two-concurrent-spec PRs from quickstart "CI", and record their run links and durations in the PR body (SC-003).
 - [ ] T032 After merge, verify quickstart "After merge": the `generated-maps` branch, the tip trailer naming the merge commit, pinned links, the artifact, and the existing ruleset `generated-maps` (id 25472440) applying to the branch.
-- [ ] T033 Set `**Status**: Implemented` in `specs/257-generated-artifacts-no-conflict/spec.md` in the implementation PR before it merges. No spec-status map regeneration is needed any more.
+- [X] T033 Set `**Status**: Implemented` in `specs/257-generated-artifacts-no-conflict/spec.md` in the implementation PR before it merges. No spec-status map regeneration is needed any more.
 
 ---
 

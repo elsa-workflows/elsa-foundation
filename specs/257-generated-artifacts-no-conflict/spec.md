@@ -2,7 +2,7 @@
 
 **Feature Branch**: `agent/claude/257-generated-artifacts-no-conflict`
 **Created**: 2026-10-20
-**Status**: Draft
+**Status**: Implemented
 **Input**: Owner request (2026-10-20): "We can never merge more than one PR to main before the maps must be refreshed, this triggers again a very long CI. [...] CI should not be blocked when there is not actual code implementation changed." Owner decisions recorded below under Decisions.
 
 ## Evidence and Context
