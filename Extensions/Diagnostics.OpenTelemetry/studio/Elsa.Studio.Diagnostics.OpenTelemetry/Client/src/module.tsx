@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import type { ElsaStudioModuleApi, StudioEndpointContext, StudioRouteComponentProps } from "@elsa-workflows/studio-sdk";
 import "./styles.css";
 
-type OTelSignalTab = "overview" | "traces" | "metrics" | "logs";
+type OTelSignalTab = "overview" | "traces";
 type OTelLoadStatus = "loading" | "ready" | "unavailable" | "unauthorized" | "failed";
 type SpanStatus = "Unset" | "Ok" | "Error";
 
@@ -164,7 +164,7 @@ export function OpenTelemetryPanel() {
   );
 }
 
-export function OpenTelemetryPage() {
+export function OpenTelemetryPage({ navigate }: { navigate?: StudioRouteComponentProps["navigate"] } = {}) {
   const state = useOpenTelemetry();
   const selectedTrace = state.selectedTrace;
   const selectedSpan = selectedTrace?.spans.find(span => span.spanId === state.selectedSpanId) ?? selectedTrace?.spans[0] ?? null;
@@ -179,13 +179,23 @@ export function OpenTelemetryPage() {
         <div className="otel-header-summary">
           <SignalCount label="Traces" value={state.overview?.traceCount} />
           <SignalCount label="Spans" value={state.overview?.spanCount} />
-          <SignalCount label="Metrics" value={state.overview?.metricCount} />
-          <SignalCount label="Logs" value={state.overview?.logCount} />
         </div>
       </header>
 
+      <aside className="otel-capability-note" aria-label="OpenTelemetry signal availability">
+        <p>Trace inspection is supported. Metrics and OpenTelemetry Logs are not available in this experience.</p>
+        <a
+          href="/diagnostics"
+          onClick={event => {
+            if (!navigate || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            navigate("/diagnostics");
+          }}
+        >Browse Diagnostics</a>
+      </aside>
+
       <div className="otel-tabs" role="tablist" aria-label="OpenTelemetry signals">
-        {(["overview", "traces", "metrics", "logs"] as OTelSignalTab[]).map(tab => (
+        {(["overview", "traces"] as OTelSignalTab[]).map(tab => (
           <button type="button" role="tab" aria-selected={state.activeTab === tab} className={state.activeTab === tab ? "active" : ""} onClick={() => state.setActiveTab(tab)} key={tab}>
             {getSignalTabLabel(tab)}
           </button>
@@ -194,8 +204,6 @@ export function OpenTelemetryPage() {
 
       {state.activeTab === "overview" ? <OverviewPanel state={state} /> : null}
       {state.activeTab === "traces" ? <TracesPanel state={state} selectedTrace={selectedTrace} selectedSpan={selectedSpan} /> : null}
-      {state.activeTab === "metrics" ? <SignalPlaceholder title="Metrics" status={state.status} message="Metric charts will appear here when the OpenTelemetry backend exposes metric instruments and datapoints." /> : null}
-      {state.activeTab === "logs" ? <SignalPlaceholder title="Logs" status={state.status} message="OpenTelemetry log records will appear here when the backend exposes the log signal. Structured application logs are available under Diagnostics / Structured logs." /> : null}
     </section>
   );
 }
@@ -331,9 +339,8 @@ function OverviewPanel({ state }: { state: OTelState }) {
         <h3>Signal Health</h3>
         <div className="otel-signal-cards">
           <SignalCard title="Traces" detail="Distributed request and workflow execution spans." status={state.status} count={state.overview?.traceCount} />
-          <SignalCard title="Metrics" detail="Measurements, counters, gauges, and histograms." status={state.overview?.metricCount ? "ready" : "unavailable"} count={state.overview?.metricCount} />
-          <SignalCard title="Logs" detail="OpenTelemetry log records correlated by trace/span IDs." status={state.overview?.logCount ? "ready" : "unavailable"} count={state.overview?.logCount} />
         </div>
+        <p className="otel-muted">Metrics and OpenTelemetry Logs are not available in this experience.</p>
       </section>
       <section>
         <h3>Sources</h3>
@@ -467,10 +474,6 @@ function SpanInspector({ span }: { span: OTelSpan }) {
       {span.resource ? <section><h4>Resource</h4><pre>{JSON.stringify(span.resource, null, 2)}</pre></section> : null}
     </aside>
   );
-}
-
-function SignalPlaceholder({ title, status, message }: { title: string; status: OTelLoadStatus; message: string }) {
-  return <div className="otel-placeholder"><h3>{title}</h3><p>{status === "unavailable" ? "OpenTelemetry diagnostics endpoint is unavailable." : message}</p></div>;
 }
 
 function SignalCount({ label, value }: { label: string; value?: number }) {
@@ -633,5 +636,5 @@ function formatValue(value: unknown) {
 }
 
 function getSignalTabLabel(tab: OTelSignalTab) {
-  return tab === "overview" ? "Overview" : tab === "traces" ? "Traces" : tab === "metrics" ? "Metrics" : "Logs";
+  return tab === "overview" ? "Overview" : "Traces";
 }
