@@ -154,15 +154,38 @@ public sealed class ExecutableNodeCompiler(
             descriptor: descriptor,
             inputBindings: inputBindings,
             outputCaptures: outputCaptures,
-            metadata: new Dictionary<string, string>
-            {
-                ["authoredNodeId"] = activity.NodeId,
-                [TriggerNodeMetadata.ExecutionTypeKey] = executionType
-            },
+            metadata: CompileNodeMetadata(activity.NodeId, executionType, clrActivityType),
             childSlots: childSlots,
             structure: structure,
             activityContract: activityContract,
             executionPlacement: activity.ExecutionPlacement);
+    }
+
+    private static Dictionary<string, string> CompileNodeMetadata(string nodeId, string executionType, Type? clrActivityType)
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            ["authoredNodeId"] = nodeId,
+            [TriggerNodeMetadata.ExecutionTypeKey] = executionType
+        };
+
+        // Spec 258 R-3: how the node handles faults below it, read by the runtime without constructing the activity.
+        if (StructuralFaultHandling(clrActivityType) is { } faultHandling)
+            metadata[RuntimeMetadataKeys.StructuralFaultHandling] = faultHandling;
+
+        return metadata;
+    }
+
+    private static string? StructuralFaultHandling(Type? clrActivityType)
+    {
+        if (clrActivityType is null)
+            return null;
+        if (typeof(IRuntimeActivityDescendantFaultHandler).IsAssignableFrom(clrActivityType))
+            return RuntimeMetadataKeys.StructuralFaultHandlingDescendant;
+        if (typeof(IRuntimeActivityChildFaultHandler).IsAssignableFrom(clrActivityType) ||
+            typeof(IRuntimeActivityChildOutcomeHandler).IsAssignableFrom(clrActivityType))
+            return RuntimeMetadataKeys.StructuralFaultHandlingChild;
+        return null;
     }
 
     private static void ValidateBackgroundExecution(

@@ -71,15 +71,53 @@ A scope that is waiting shows **Needs action**, and the compensation's row shows
 
 The retry resolves the incident and runs the compensation again with the same inputs and operation key. If it succeeds, recovery carries on with the remaining steps; if it fails, the scope waits again. Sending the same request twice (same `Idempotency-Key`) has no further effect. A Studio button for this follows in a later release.
 
+## Nest scopes and run them in loops
+
+A scope inside another scope's step hands its work to the outer scope when it finishes with `Done`. Its completed steps, and any it received from scopes inside it, become entries of the outer scope, which undoes them with their own compensations, operation keys and step results if a later step of the outer scope fails. Nothing is handed over across a reusable activity: a scope in a reusable activity's body keeps its entries.
+
+- **Loops.** A scope in a For Each, While or For body hands over once per iteration. The outer scope undoes the newest iteration first.
+- **Parallel branches.** Each branch's scope hands over when it finishes. A hand-over that arrives while the outer scope is already undoing is undone in that same recovery.
+- **No enclosing scope.** A scope with nothing around it keeps its entries when it finishes; nothing is sent.
+- **Keep the work.** Turn on the inner scope's `confirmOnComplete` input to confirm its entries instead of handing them over (see below).
+
+A retry, after a crash or by an operator, never adds an entry twice.
+
+## Confirm work that must not be undone
+
+Add **Confirm** as a step, or inside a step, when the work so far must survive a later failure: a payment captured, a ticket issued. It confirms every entry the nearest scope could still undo, and later recovery skips them. Give its `scope` input the node id of an enclosing scope to confirm that scope's entries too. Confirm only acts while the scope runs its steps; inside a compensation, or once recovery started, it has no effect.
+
+## Start recovery with Compensate
+
+Add **Compensate** inside a step to undo the scope's work on purpose, for example when a fraud check fails. The scope stops the running step, records the Compensate as the cause, undoes the completed steps newest first, and finishes with `Compensated` (whatever `faultAfterCompensation` says). The `reason` input is recorded with the cause.
+
+- The stopped step had started, so it may have had an effect: it is recorded as uncertain and its compensation runs first. If it has no compensation, the scope undoes the rest and then faults with `compensation.scope.uncertain-unhandled`, so an operator decides what to do with it.
+- Give `scope` the node id of an outer scope to undo more: each scope in between undoes its own work, then the named scope recovers.
+- Inside a compensation, or once recovery started, Compensate has no effect.
+
+Publishing refuses a Confirm or Compensate without an enclosing scope, one whose `scope` names a scope that does not enclose it, and one placed in a compensation. A Compensate is also refused when its cascade would pass through a compensation of a scope on the way to its target. A target given as an expression is checked when it runs: a Confirm whose target matches no enclosing scope faults with `runtime.ancestor-notification.target-not-found`; a Compensate whose target matches no enclosing scope makes every enclosing scope undo its work in turn, and the outermost one then faults.
+
+## Cancellation
+
+Cancelling a run never starts recovery. A scope that is cancelled while it runs its steps, undoes them or waits for an operator runs no further compensation, and its journal stays readable in the run view. A compensation that was already running when the cancellation arrived may finish.
+
+## Which steps report failures
+
+| Step activity | A failure inside it |
+|---|---|
+| A single activity, or a scope | reaches the scope directly |
+| Sequence, For Each, While, For | reaches the scope through the composite, which is stopped |
+| Flowchart | the Flowchart handles it; when the Flowchart faults, the scope sees that |
+| Sequence inside a Flowchart | stops at the Flowchart: the run faults and nothing is undone (known limit) |
+
 ## Inspect a run
 
 Open the run and the scope's **Steps**. Each row shows the forward state (`Completed`, `Uncertain`, `Faulted`, `Not run`) and the recovery state (`Can be undone` while the scope still runs, `Kept` once it has ended without undoing the step, `Waiting to undo` while recovery runs, `Compensated` with its order, `Undo failed`, `Needs action` with its attempts, `Not applicable`). A banner names the step whose failure started recovery. Select a state to open that occurrence; a compensation's activity details link to the occurrence it undid, and the timeline tags compensation runs.
 
 ## Current limits
 
-This is the first release of compensation scopes. These behaviours are planned and not yet available:
+These behaviours are planned and not yet available:
 
 - a delay between automatic retries of a failed compensation, and a Studio button to retry it;
-- undoing a scope that already completed, a scope nested in another scope, and loops;
-- compensation on cancellation;
+- Studio editors for Confirm and Compensate that offer only valid target scopes;
+- a failure inside a Sequence inside a Flowchart step does not reach the scope;
 - a warning when a step or compensation is marked safe to repeat, so its effect may not be committed before it runs.
