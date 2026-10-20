@@ -40,7 +40,7 @@ A compensation usually needs something the step produced: the reservation id to 
 
 ## Inspect a run
 
-Open the run and the scope's **Steps**. Each row shows the forward state (`Completed`, `Faulted`, `Not run`) and the recovery state (`Can be undone`, `Waiting to undo`, `Compensated` with its order, `Undo failed`, `Not applicable`). A banner names the step whose failure started recovery. Select a state to open that occurrence; a compensation's activity details link to the occurrence it undid, and the timeline tags compensation runs.
+Open the run and the scope's **Steps**. Each row shows the forward state (`Completed`, `Faulted`, `Not run`) and the recovery state (`Can be undone` while the scope still runs, `Kept` once it finished without recovery, `Waiting to undo`, `Compensated` with its order, `Undo failed`, `Not applicable`). A banner names the step whose failure started recovery. Select a state to open that occurrence; a compensation's activity details link to the occurrence it undid, and the timeline tags compensation runs.
 
 ## Current limits
 
