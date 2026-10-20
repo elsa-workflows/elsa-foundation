@@ -282,6 +282,33 @@ public sealed class RescheduleActivityAlterationHandlerTests
         Assert.Empty(staging.StagedChanges);
     }
 
+    [Theory]
+    [InlineData(IncidentResolutionActionKinds.AbsorbFault, "SourceFaultAbsorbed")]
+    [InlineData(IncidentResolutionActionKinds.ContinueWithIncidents, null)]
+    public async Task PreflightAsync_RejectsAFaultedSourceOnlyWhenItsParentAbsorbedTheFault(string actionKind, string? expectedCode)
+    {
+        var source = Source(ActivityExecutionStatus.Faulted);
+        var incidents = new InMemoryIncidentStateStore();
+        await incidents.SaveAsync(new IncidentState(
+            "incident", "workflow", source.Execution.ActivityExecutionId, source.Execution.ExecutableNodeId,
+            IncidentSeverity.Error,
+            actionKind == IncidentResolutionActionKinds.AbsorbFault ? IncidentStatus.Resolved : IncidentStatus.Open,
+            actionKind == IncidentResolutionActionKinds.AbsorbFault
+                ? new IncidentResolutionOutcome(actionKind, DateTimeOffset.UnixEpoch, strategy: null, systemSource: IncidentResolutionSystemSources.StructuralFaultAbsorption)
+                : new IncidentResolutionOutcome(actionKind, DateTimeOffset.UnixEpoch, IncidentStrategyBuiltIns.ContinueWithIncidentsReference, systemSource: null),
+            "TestFailure", "The source faulted.", DateTimeOffset.UnixEpoch,
+            actionKind == IncidentResolutionActionKinds.AbsorbFault ? DateTimeOffset.UnixEpoch : null));
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        await executableStore.SaveAsync(Executable());
+        var staging = new Staging();
+
+        var result = await Handler(executableStore, incidentStore: incidents).PreflightAsync(Context(source, staging));
+
+        Assert.Equal(expectedCode is null, result.IsAccepted);
+        Assert.Equal(expectedCode, result.Failure?.Code);
+        Assert.Equal(expectedCode is null ? 1 : 0, staging.StagedChanges.Count);
+    }
+
     [Fact]
     public async Task PreflightAsync_RejectsSourceChangedAfterCapture()
     {

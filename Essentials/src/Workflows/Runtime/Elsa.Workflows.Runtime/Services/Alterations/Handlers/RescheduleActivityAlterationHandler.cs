@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Contracts.Alterations;
 using Elsa.Workflows.Runtime.Core.Models;
@@ -56,6 +57,13 @@ public sealed class RescheduleActivityAlterationHandler(
         var blockingIncidents = await _incidentStateStore.ListBlockingAsync(workflow.WorkflowExecutionId, cancellationToken);
         if (blockingIncidents.Any(incident => incident.ActivityExecutionId is { } activityExecutionId && supersededSubtreeIds.Contains(activityExecutionId)))
             return WorkflowAlterationPreflightResult.Rejected("BlockingIncident", "The source activity has incident evidence and must be resolved through recovery before rescheduling.");
+        // A parent that absorbed the source's fault has consumed its outcome and no longer tracks it (a BPMN error
+        // boundary drops the child and routes the error path), so it has nowhere to route a successor's outcome.
+        if (source.Status == ActivityExecutionStatus.Faulted &&
+            (await _incidentStateStore.ListAsync(workflow.WorkflowExecutionId, cancellationToken)).Any(incident =>
+                StringComparer.Ordinal.Equals(incident.ActivityExecutionId, source.Execution.ActivityExecutionId) &&
+                StringComparer.Ordinal.Equals(incident.ResolutionOutcome?.ActionKind, IncidentResolutionActionKinds.AbsorbFault)))
+            return WorkflowAlterationPreflightResult.Rejected("SourceFaultAbsorbed", "The source activity's fault was absorbed by its parent, which no longer expects its outcome.");
 
         var executable = await _executableStore.FindAsync(workflow.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null || !Equals(executable.Identity, workflow.PinnedExecutable) || !executable.NodesById.TryGetValue(source.Execution.ExecutableNodeId, out var sourceNode))
