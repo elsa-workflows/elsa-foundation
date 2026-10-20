@@ -184,8 +184,8 @@ public sealed class ConnectionResolveRequest
     public string? RequiredType { get; init; }
     public string Owner { get; init; } = ConnectionOwners.Tenant;
     /// <summary>
-    /// When false, skip the current caller's <c>connections:use</c> check. A published workflow's run and
-    /// a connection test set it. Nothing is recorded against the publisher; the run just skips the check.
+    /// When false, skip the live principal use check. Set for already-published workflow runtime;
+    /// use was recorded against the publisher at publish time.
     /// </summary>
     public bool CheckUsePermission { get; init; } = true;
 }

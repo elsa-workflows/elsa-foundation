@@ -11,13 +11,8 @@ public interface IConnectionPermissionGate
     ValueTask EnsureManageAsync(string tenantId, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Required to bind a connection in a workflow. <c>ConnectionDraftValidator</c> checks it against the
-    /// current caller on every draft validation pass that meets a bound connection input, not only at
-    /// publish. That includes read paths such as the validations endpoint and the dashboard's invalid-draft
-    /// count. A refusal is an Error, so it blocks promotion and shows the draft as invalid to that caller.
-    /// <see cref="IConnectionResolver"/> also checks it unless
-    /// <see cref="Models.ConnectionResolveRequest.CheckUsePermission"/> is false, as it is for a published
-    /// workflow's run and for a connection test. Nothing is recorded against the publisher.
+    /// Required to publish a workflow that binds a connection. Recorded against the publisher at
+    /// publish time. Runtime of an already-published workflow does not call this against the run trigger.
     /// </summary>
     ValueTask EnsureUseAsync(string tenantId, CancellationToken cancellationToken = default);
 
