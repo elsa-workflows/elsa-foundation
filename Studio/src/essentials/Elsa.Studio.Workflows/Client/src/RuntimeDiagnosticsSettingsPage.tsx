@@ -81,7 +81,7 @@ export function RuntimeDiagnosticsSettingsPage({ context }: { context: StudioEnd
       <div className="wf-page-header">
         <div>
           <div className="wf-kicker">Workflows</div>
-          <h2><DatabaseZap size={18} /> Runtime diagnostics</h2>
+          <h2><DatabaseZap size={18} /> Runtime evidence settings</h2>
           <p className="wf-muted">Choose what evidence new runtime capture events retain. Evidence already captured is unchanged.</p>
         </div>
         <div className="wf-actions">

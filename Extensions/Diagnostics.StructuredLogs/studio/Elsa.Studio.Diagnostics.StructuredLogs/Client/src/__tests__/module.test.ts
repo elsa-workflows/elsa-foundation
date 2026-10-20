@@ -288,6 +288,116 @@ describe("structured logs module", () => {
     expect(classifyStructuredLogError(new Error("Status code '404'"))).toMatchObject({ status: "unavailable" });
     expect(classifyStructuredLogError(new Error("Status code '500'"))).toMatchObject({ status: "failed" });
   });
+
+  it("renders loading separately from an empty live result", async () => {
+    register(stubApi({ getJson: () => new Promise(() => {}) }));
+    const loading = await renderPanel(StructuredLogsPage);
+    await flushPromises();
+
+    expect(loading.container.textContent).toContain("Loading recent structured logs.");
+    expect(loading.container.textContent).not.toContain("No structured logs received yet.");
+    await loading.unmount();
+
+    register(stubApi());
+    const empty = await renderPanel(StructuredLogsPage);
+    await flushPromises();
+    const emptyStream = StubEventSource.instances.at(-1);
+    flushSync(() => emptyStream?.onopen?.call(emptyStream, new Event("open")));
+    await flushPromises();
+
+    expect(empty.container.textContent).toContain("live");
+    expect(empty.container.querySelector(".structured-logs-empty")?.textContent).toContain("No structured logs received yet.");
+    await empty.unmount();
+  });
+
+  it.each([
+    ["permission", "Status code '401'", /You do not have permission to view structured logs/],
+    ["permission", "Status code '403'", /You do not have permission to view structured logs/],
+    ["unavailable", "Status code '404'", /Structured logs are not available on this backend/],
+    ["failure", "Status code '500'", /Structured logs failed:/]
+  ])("renders a distinct structured logs %s state for %s", async (_state, message, expected) => {
+    register(stubApi({ getJson: async () => { throw new Error(message); } }));
+    const { container } = await renderPanel(StructuredLogsPage);
+    await flushPromises();
+
+    expect(container.textContent).toMatch(expected);
+    expect(container.querySelector(".structured-logs-empty")?.textContent).not.toContain("No structured logs received yet.");
+
+    const stream = StubEventSource.instances.at(-1);
+    const streamUrl = "https://backend.example/_elsa/studio/diagnostics/structured-logs/stream?minLevel=Information";
+    expect(stream).toBeDefined();
+    expect(StubEventSource.instances).toEqual([stream]);
+    expect(stream?.url).toBe(streamUrl);
+
+    flushSync(() => stream?.onerror?.call(stream, new Event("error")));
+    await flushPromises();
+
+    expect(container.textContent).toMatch(expected);
+    expect(StubEventSource.instances).toEqual([stream]);
+    expect(stream?.url).toBe(streamUrl);
+
+    flushSync(() => stream?.onopen?.call(stream, new Event("open")));
+    await flushPromises();
+
+    expect(container.textContent).toMatch(expected);
+    expect(StubEventSource.instances).toEqual([stream]);
+    expect(stream?.url).toBe(streamUrl);
+  });
+
+  it("keeps a recent-query permission state through pause/resume and recovers after filters change", async () => {
+    const recentUrls: string[] = [];
+    const permissionMessage = "You do not have permission to view structured logs.";
+    register(stubApi({
+      getJson: async url => {
+        if (url.endsWith("/sources"))
+          return [];
+
+        if (url.includes("/recent")) {
+          recentUrls.push(url);
+          if (recentUrls.length === 1)
+            throw new Error("Status code '403'");
+          return [];
+        }
+
+        throw new Error(`Unexpected structured logs request: ${url}`);
+      }
+    }));
+    const { container } = await renderPanel(StructuredLogsPage);
+    await flushPromises();
+
+    expect(recentUrls).toHaveLength(1);
+    expect(recentUrls[0]).toContain("minLevel=Information");
+    expect(container.querySelector(".structured-logs-empty")?.textContent).toBe(permissionMessage);
+
+    const originalStream = StubEventSource.instances.at(-1);
+    expect(originalStream).toBeDefined();
+    expect(StubEventSource.instances).toEqual([originalStream]);
+
+    clickButton(container, "Pause");
+    expect(container.querySelector(".structured-logs-empty")?.textContent).toBe(permissionMessage);
+
+    clickButton(container, "Resume");
+    expect(container.querySelector(".structured-logs-empty")?.textContent).toBe(permissionMessage);
+
+    await changeControlValue(container, "[aria-label='Minimum log level']", "Warning");
+    await flushPromises();
+
+    expect(recentUrls).toHaveLength(2);
+    expect(recentUrls[1]).toContain("minLevel=Warning");
+    expect(originalStream?.readyState).toBe(StubEventSource.CLOSED);
+
+    const replacementStream = StubEventSource.instances.at(-1);
+    expect(replacementStream).not.toBe(originalStream);
+    expect(StubEventSource.instances).toEqual([originalStream, replacementStream]);
+    expect(replacementStream?.url).toBe("https://backend.example/_elsa/studio/diagnostics/structured-logs/stream?minLevel=Warning");
+
+    flushSync(() => replacementStream?.onopen?.call(replacementStream, new Event("open")));
+    await flushPromises();
+
+    expect(container.querySelector(".structured-logs-status")?.classList.contains("live")).toBe(true);
+    expect(container.querySelector(".structured-logs-empty")?.textContent).toBe("No structured logs received yet.");
+    expect(container.textContent).not.toContain(permissionMessage);
+  });
 });
 
 function stubApi(options?: {
