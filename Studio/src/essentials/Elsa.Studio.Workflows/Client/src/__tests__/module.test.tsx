@@ -670,16 +670,20 @@ describe("workflows module", () => {
 
     await fill(container.querySelector<HTMLInputElement>('input[placeholder="Search definitions"]'), "Hello");
     await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("searchTerm=Hello"))).toBe(true));
+    // Request start can precede the current response; previous rows have no selection controls.
+    await waitForText(container, "1 selected");
     expect(container.textContent).toContain("1 selected");
     expect(checkboxByLabel(container, "Select workflow definition Hello World")?.checked).toBe(true);
 
     await select(container.querySelector<HTMLSelectElement>(".wf-page-size select"), "25");
     await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("pageSize=25"))).toBe(true));
+    await waitForText(container, "1 selected");
     expect(container.textContent).toContain("1 selected");
     expect(checkboxByLabel(container, "Select workflow definition Hello World")?.checked).toBe(true);
 
     await click(buttonByText(container, "Deleted"));
     await vi.waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes("state=deleted"))).toBe(true));
+    await vi.waitFor(() => expect(checkboxByLabel(container, "Select workflow definition Hello World")).not.toBeNull());
     expect(container.textContent).not.toContain("1 selected");
     expect(checkboxByLabel(container, "Select workflow definition Hello World")?.checked).toBe(false);
 
