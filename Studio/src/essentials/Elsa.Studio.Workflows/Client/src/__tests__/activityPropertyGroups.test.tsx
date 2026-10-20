@@ -435,13 +435,17 @@ describe("activity property organization", () => {
     })], { expressionEditors: [editor] });
     await nextFrame();
 
-    const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    const previousDisclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
     expect(container.textContent).toContain("Host-owned validation error");
-    expect(disclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true");
+    expect(previousDisclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("true");
 
     flushSync(() => replaceActivity(activity({ nodeId: "node-2" })));
     await nextFrame();
-    expect(disclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("false");
+    const currentDisclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    expect(currentDisclosure).not.toBe(previousDisclosure);
+    expect(previousDisclosure.isConnected).toBe(false);
+    expect(currentDisclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded")).toBe("false");
+    expect(container.textContent).not.toContain("Host-owned validation error");
     expect(container.textContent).toContain("Host-owned warning");
   });
 
@@ -592,16 +596,16 @@ describe("activity property organization", () => {
       editors: [reportingEditor("test.reporting-editor.v1")],
       draftId: "draft-1"
     });
-    const disclosure = container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    const currentDisclosure = () => container.querySelector<HTMLElement>(".studio-advanced-section")!;
     const reportError = () => {
-      if (disclosure.querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded") !== "true") {
-        flushSync(() => disclosure.querySelector<HTMLButtonElement>(".studio-disclosure-fold-trigger")!.click());
+      if (currentDisclosure().querySelector(".studio-disclosure-fold-trigger")?.getAttribute("aria-expanded") !== "true") {
+        flushSync(() => currentDisclosure().querySelector<HTMLButtonElement>(".studio-disclosure-fold-trigger")!.click());
       }
       const button = [...container.querySelectorAll<HTMLButtonElement>("button")]
         .find(candidate => candidate.textContent?.includes("Report local error"))!;
       flushSync(() => button.click());
     };
-    const hasError = () => disclosure.querySelector(".studio-status-pill")?.getAttribute("data-tone") === "danger";
+    const hasError = () => currentDisclosure().querySelector(".studio-status-pill")?.getAttribute("data-tone") === "danger";
 
     reportError();
     await nextFrame();
