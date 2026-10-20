@@ -261,7 +261,7 @@ public static class ConnectionsApi
                     statusCode: StatusCodes.Status500InternalServerError).ExecuteAsync(context);
                 return true;
             case ConnectionStoreException storeFailure:
-                // 500: a store fault, nothing confirmed saved, so a retry is safe. The message names the connection only; the inner failure stays in the logs.
+                // 500: a store fault, nothing confirmed saved. The message says whether a retry can help and names the connection only; the inner failure stays in the logs.
                 await Results.Json(
                     new { error = storeFailure.Message },
                     JsonOptions,

@@ -609,6 +609,145 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Create_RollbackRunsUncancelledAndRemovesTheRowWhenOnlyTheSecretDeleteFails()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var creates = 0;
+        var outage = new InvalidOperationException("Simulated secret create failure.");
+        var deleteFault = new TimeoutException("Simulated secret delete outage.");
+        _secretHooks.OnCreate = _ =>
+        {
+            if (++creates < 2)
+                return null;
+            cancellation.Cancel();
+            return outage;
+        };
+        _secretHooks.OnDelete = _ => deleteFault;
+
+        var failure = await Assert.ThrowsAsync<ConnectionStoreException>(() => _manager.CreateAsync(
+            Tenant, BearerConnection("rollback-secret", InlineFields(("token", "first"), ("extra", "second"))), cancellation.Token).AsTask());
+
+        // The create's own failure is reported, and the row is gone although the secret delete failed.
+        Assert.Same(outage, failure.InnerException);
+        Assert.Null(await _manager.FindAsync(Tenant, "rollback-secret"));
+        Assert.NotNull(await _secrets.FindAsync(Tenant, "connection:rollback-secret:token"));
+        Assert.Contains(_logger.Entries, entry => entry.Exception == deleteFault && entry.Message.Contains("connection:rollback-secret:token"));
+        // The caller cancelled mid-create; the rollback still ran with an uncancellable token.
+        Assert.NotEmpty(_secretHooks.DeleteTokens);
+        Assert.All(_secretHooks.DeleteTokens, token => Assert.False(token.CanBeCanceled));
+        Assert.NotEmpty(_interceptor.RepositoryDeleteTokens);
+        Assert.All(_interceptor.RepositoryDeleteTokens, token => Assert.False(token.CanBeCanceled));
+    }
+
+    [Fact]
+    public async Task Create_RollbackStillDeletesTheSecretsWhenTheRowDeleteFailsAndReportsTheOriginalFailure()
+    {
+        var creates = 0;
+        var outage = new InvalidOperationException("Simulated secret create failure.");
+        var rowFault = new IOException("Simulated connection store outage.");
+        _secretHooks.OnCreate = _ => ++creates >= 2 ? outage : null;
+        _interceptor.OnRepositoryDelete = () => rowFault;
+
+        var failure = await Assert.ThrowsAsync<ConnectionStoreException>(() =>
+            CreateConnectionAsync("rollback-row", InlineFields(("token", "first"), ("extra", "second"))).AsTask());
+
+        Assert.Same(outage, failure.InnerException);
+        Assert.Null(await _secrets.FindAsync(Tenant, "connection:rollback-row:token"));
+        Assert.Contains(_logger.Entries, entry => entry.Exception == rowFault && entry.Message.Contains("rollback-row"));
+    }
+
+    [Fact]
+    public async Task Create_ReportsADeletedSecretsHeldNameAsAConflictNotARetryableStoreFault()
+    {
+        await CreateConnectionAsync("held-create", TokenValue("first"));
+        Assert.True(await _manager.DeleteAsync(Tenant, "held-create"));
+
+        var outcome = await Record.ExceptionAsync(() => CreateConnectionAsync("held-create", TokenValue("second")).AsTask());
+
+        // Secrets keeps a deleted secret's name today, so this conflicts. Once it releases deleted names the create succeeds.
+        if (AssertHeldNameConflictOrNoError(outcome))
+            Assert.Null(await _manager.FindAsync(Tenant, "held-create"));
+        else
+            Assert.Equal("second", await RevealAsync("held-create"));
+    }
+
+    [Fact]
+    public async Task Create_RetriedAfterAFailureOnALaterFieldIsNotReportedAsRetryableWhenTheFirstNameIsHeld()
+    {
+        var creates = 0;
+        var outage = new InvalidOperationException("Simulated secret create failure.");
+        _secretHooks.OnCreate = _ => ++creates == 2 ? outage : null;
+        var fields = InlineFields(("token", "first"), ("extra", "second"));
+        await Assert.ThrowsAsync<ConnectionStoreException>(() => CreateConnectionAsync("held-again", fields).AsTask());
+
+        var outcome = await Record.ExceptionAsync(() => CreateConnectionAsync("held-again", fields).AsTask());
+
+        // The rolled-back secret keeps its name today, so the retry conflicts. Once Secrets releases deleted names it succeeds.
+        if (AssertHeldNameConflictOrNoError(outcome))
+            Assert.Null(await _manager.FindAsync(Tenant, "held-again"));
+        else
+            Assert.NotNull(await _manager.FindAsync(Tenant, "held-again"));
+    }
+
+    [Fact]
+    public async Task Update_ReportsADeletedSecretsHeldNameAsAConflictNotARetryableStoreFault()
+    {
+        await CreateConnectionAsync("held-update");
+        await CreateSecretAsync("connection:held-update:token", "stale");
+        await _secrets.DeleteAsync(Tenant, "connection:held-update:token");
+
+        var outcome = await Record.ExceptionAsync(() => _manager.UpdateAsync(Tenant, "held-update", new UpdateConnectionRequest
+        {
+            SecretFields = TokenValue("fresh")
+        }).AsTask());
+
+        // Secrets keeps a deleted secret's name today, so this conflicts. Once it releases deleted names the update succeeds.
+        if (!AssertHeldNameConflictOrNoError(outcome))
+            Assert.Equal("fresh", await RevealAsync("held-update"));
+    }
+
+    [Fact]
+    public async Task CreateAndUpdate_ReportAnOwnedSecretNameTakenByAConcurrentWriterLikeTheManagedNameCheck()
+    {
+        // The pre-save checks (one in the validation pass, one before the write) miss the secret a concurrent writer is creating.
+        await CreateSecretAsync("connection:raced-create:token", "external-value");
+        var createReads = 0;
+        _secretHooks.HideFind = name => name == "connection:raced-create:token" && createReads++ < 2;
+        var created = await Record.ExceptionAsync(() => CreateConnectionAsync("raced-create", TokenValue("mine")).AsTask());
+        Assert.IsType<ArgumentException>(created);
+        Assert.Null(await _manager.FindAsync(Tenant, "raced-create"));
+
+        _secretHooks.HideFind = null;
+        await CreateConnectionAsync("raced-update");
+        await CreateSecretAsync("connection:raced-update:token", "external-value");
+        var updateReads = 0;
+        _secretHooks.HideFind = name => name == "connection:raced-update:token" && updateReads++ < 2;
+        var updated = await Record.ExceptionAsync(() => _manager.UpdateAsync(Tenant, "raced-update", new UpdateConnectionRequest
+        {
+            SecretFields = TokenValue("mine")
+        }).AsTask());
+        Assert.IsType<ArgumentException>(updated);
+
+        _secretHooks.HideFind = null;
+        Assert.Equal(1, (await _secrets.FindAsync(Tenant, "connection:raced-create:token"))!.CurrentVersion);
+        Assert.Equal(1, (await _secrets.FindAsync(Tenant, "connection:raced-update:token"))!.CurrentVersion);
+    }
+
+    [Fact]
+    public async Task Create_DoesNotReportASecretStoreMisconfigurationAsRetryable()
+    {
+        var misconfiguration = new InvalidOperationException("Secret type is not compatible with the selected store.");
+        _secretHooks.OnCreate = _ => misconfiguration;
+
+        var failure = await Assert.ThrowsAsync<ConnectionStoreException>(() => CreateConnectionAsync("misconfigured", TokenValue("value")).AsTask());
+
+        Assert.Same(misconfiguration, failure.InnerException);
+        Assert.Contains("will not help", failure.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("safe to retry", failure.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(await _manager.FindAsync(Tenant, "misconfigured"));
+    }
+
+    [Fact]
     public async Task Rebind_DeletesThePreviousOwnedSecret()
     {
         await CreateConnectionAsync("rebind", new Dictionary<string, ConnectionSecretFieldInput>
@@ -950,6 +1089,34 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Update_KeepsAReplacedOwnedSecretThatAConcurrentUpdateRebound()
+    {
+        const string connectionName = "rebound-concurrently";
+        const string ownedSecretName = "connection:rebound-concurrently:token";
+        await CreateConnectionAsync(connectionName, TokenValue("owned-value"));
+        await CreateSecretAsync("rebound-replacement", "replacement-value");
+
+        // After this update's save has replaced the owned secret, another update binds it again as an existing secret.
+        _interceptor.AfterOuterSave = () => _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
+        {
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new() { ExistingSecretName = ownedSecretName }
+            }
+        }).AsTask();
+        await _manager.UpdateAsync(Tenant, connectionName, new UpdateConnectionRequest
+        {
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new() { ExistingSecretName = "rebound-replacement" }
+            }
+        });
+
+        Assert.NotNull(await _secrets.FindAsync(Tenant, ownedSecretName));
+        Assert.Equal("owned-value", await RevealAsync(connectionName));
+    }
+
+    [Fact]
     public async Task Update_SurfacesACleanupFailureAfterASuccessfulRotation()
     {
         const string connectionName = "cleanup-after-success";
@@ -1156,6 +1323,19 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     private ValueTask<ConnectionMetadata> CreateConnectionAsync(string name, IDictionary<string, ConnectionSecretFieldInput>? secretFields = null) =>
         _manager.CreateAsync(Tenant, BearerConnection(name, secretFields ?? new Dictionary<string, ConnectionSecretFieldInput>()));
 
+    /// <summary>Returns true after checking that an outcome is the held-name conflict, and false when there was no error.</summary>
+    private static bool AssertHeldNameConflictOrNoError(Exception? outcome)
+    {
+        if (outcome is null)
+            return false;
+
+        var conflict = Assert.IsType<ConnectionConflictException>(outcome);
+        Assert.Contains("different connection name", conflict.Message, StringComparison.Ordinal);
+        Assert.Contains("existing secret", conflict.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("retry", conflict.Message, StringComparison.OrdinalIgnoreCase);
+        return true;
+    }
+
     private ValueTask<SecretMetadata> CreateSecretAsync(string name, string value) =>
         _secrets.CreateAsync(Tenant, new CreateSecretRequest { Name = name, Value = value });
 
@@ -1180,6 +1360,7 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
         public Func<string, Exception?>? OnDelete { get; set; }
         public Func<string, bool>? HideFind { get; set; }
         public Func<string, Exception?>? OnFind { get; set; }
+        public List<CancellationToken> DeleteTokens { get; } = [];
 
         public ValueTask<SecretMetadata> CreateAsync(string tenantId, CreateSecretRequest request, CancellationToken cancellationToken = default)
         {
@@ -1213,6 +1394,7 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
 
         public ValueTask<bool> DeleteAsync(string tenantId, string name, CancellationToken cancellationToken = default)
         {
+            DeleteTokens.Add(cancellationToken);
             if (OnDelete?.Invoke(name) is { } fault)
                 throw fault;
             return Inner.DeleteAsync(tenantId, name, cancellationToken);
@@ -1226,6 +1408,8 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
     {
         public Func<Task>? BeforeOuterSave { get; set; }
         public Func<Task>? AfterOuterSave { get; set; }
+        public Func<Exception?>? OnRepositoryDelete { get; set; }
+        public List<CancellationToken> RepositoryDeleteTokens { get; } = [];
     }
 
     private sealed class InterceptingConnectionRepository(IConnectionRepository inner, SaveInterceptor interceptor) : IConnectionRepository
@@ -1274,8 +1458,13 @@ public sealed class ConnectionManagerAndResolverTests : IAsyncDisposable
                 await hook();
         }
 
-        public ValueTask<bool> DeleteAsync(string tenantId, string name, CancellationToken cancellationToken = default) =>
-            inner.DeleteAsync(tenantId, name, cancellationToken);
+        public ValueTask<bool> DeleteAsync(string tenantId, string name, CancellationToken cancellationToken = default)
+        {
+            interceptor.RepositoryDeleteTokens.Add(cancellationToken);
+            if (interceptor.OnRepositoryDelete?.Invoke() is { } fault)
+                throw fault;
+            return inner.DeleteAsync(tenantId, name, cancellationToken);
+        }
     }
 
 }

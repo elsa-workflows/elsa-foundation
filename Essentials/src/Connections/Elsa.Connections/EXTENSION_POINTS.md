@@ -15,48 +15,21 @@ Use `services.AddConnections()` to register defaults, then replace these service
   the document's and then increments it; otherwise, including after a delete, it throws
   `ConnectionConflictException` and writes nothing. Derive the replacement's tests from
   `ConnectionRepositoryContractTests` in `Essentials/tests/Connections/Tests/`.
-- `IConnectionManager` for lifecycle. The default manager writes a new value for an owned secret the
-  stored connection already resolves only after the update's `SaveAsync` wins, expecting the secret
-  version it read first. A request that loses the save therefore leaves what the stored connection
-  resolves unchanged, and one that finds an active secret rotated after its save gets
-  `ConnectionConflictException` (HTTP 409) rather than overwriting the newer value. The expected
-  version is read before the save, so a rotation between that read and the save also yields 409,
-  although the save then wins; so does a secret soft-deleted, or created under the same name, by a
-  concurrent writer. For the soft-deleted case the 409 message says so and that a plain retry will not
-  work: retrying with an inline value fails with `ConnectionCredentialWriteException` (HTTP 500) until
-  Secrets releases the names of deleted secrets (a separate Secrets change), so until then the field must
-  be re-pointed with `ExistingSecretName`. The check compares the secret's current version, so a secret with no active
-  version (revoked or expired) is rotated without an expected version; if Secrets then reports a
-  concurrent writer as a plain `InvalidOperationException` and the secret's version, status or
-  update time differs from what the manager read, that too is a 409. Every changed field is
-  attempted; the exception names the fields whose values were not written, and the update's other
-  changes stay saved. When a field also fails for another reason, that failure is not hidden behind
-  a 409: the update throws `ConnectionCredentialWriteException` (HTTP 500 from the API, with only the
-  connection and field names in the message), carrying the failed field names and the store's
-  failure as its inner exception (an `AggregateException` when several failed, each also logged).
-  Store exceptions after the save do not cross `IConnectionManager` unwrapped. Secrets the save
-  stopped referencing are deleted even then. After a successful rotation, a secret that cannot be
-  deleted still surfaces to the caller as `ConnectionCredentialWriteException` naming the field: the
-  update committed, and the secret stays Active and unreferenced (issue #2855 item 2.2 remains
-  open). Only when the rotation also failed is the cleanup failure logged and swallowed, so the
-  rotation failure is the one reported. A request that loses the save does not roll back a new
-  `connection:<name>:<field>` secret it created beforehand for a field moving to inline storage:
-  Secrets deletes softly and keeps the name, so removing it would block that field for good. The
-  secret stays Active and unreferenced, and a retried inline write for that field is rejected as a
-  managed-name conflict.
-  Known limits of this write path:
-  - A custom `ISecretAuditSink` that throws after Secrets committed a write makes that write look
-    failed: it is reported as not written (HTTP 500), or as a false 409 when the failure reads as a
-    concurrent change.
-  - A secret version that expires between the manager's read and the rotation gives a 409 that heals
-    on retry, because the retry reads the new state.
-  - A secret with no active version (revoked or expired) is rotated without an expected version, and
-    Secrets has no guard there, so concurrent updaters are last-writer-wins.
-  - A cleanup failure after a conflicted rotation is logged and not returned: the 409 is the one the
-    caller sees, and the replaced secret stays Active and unreferenced.
-  - A store failure before the save throws `ConnectionStoreException` (HTTP 500, no store detail in
-    the body) with nothing confirmed saved, so the request is safe to retry. `Revoke`, `Delete`,
-    `Find` and `List` do not wrap store failures.
+- `IConnectionManager` for lifecycle. A replacement must keep the compare-and-swap contract on
+  `IConnectionRepository.SaveAsync`, and the exception contract in the `IConnectionManager` XML docs:
+  `ArgumentException` (HTTP 400), `ConnectionConflictException` (409), `ConnectionUnavailableException`,
+  `ConnectionStoreException` for a store failure before the save (500), and `ConnectionCredentialWriteException`
+  for a failure after it (500). The default manager's write ordering and error classification are documented on
+  `DefaultConnectionManager` (issue #2855). Known limits:
+  - A custom `ISecretAuditSink` that throws after Secrets committed a write makes that write look failed: it is
+    reported as not written (500), or as a false 409 when the failure reads as a concurrent change.
+  - A secret with no active version (revoked or expired) is rotated without an expected version, and Secrets has
+    no guard there, so concurrent updaters are last-writer-wins.
+  - Secrets keeps the name of a deleted secret, so re-creating an inline credential under a deleted secret's name
+    fails (409) until Secrets releases deleted names.
+  - A cleanup failure after a conflicted rotation is logged and not returned, so the replaced secret stays Active
+    and unreferenced.
+  - `Revoke`, `Delete`, `Test`, `Find` and `List` do not wrap store failures (#3139).
 - `IConnectionResolver` for point-of-use resolution.
 - `IConnectionGrantWriter` for compare-and-swap grant writes (expected secret version).
 - `IConnectionPublishTenantAccessor` — owned by `ConnectionsDesign` (principal tenant, then persistence scope).

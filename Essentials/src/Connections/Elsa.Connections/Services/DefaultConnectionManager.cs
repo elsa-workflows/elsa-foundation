@@ -9,6 +9,57 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Connections.Services;
 
+/// <summary>
+/// Default connection lifecycle. How it orders its writes, and how a failure surfaces (see issue #2855):
+/// <list type="bullet">
+/// <item>
+/// <description>
+/// Create: the connection row is added first, then the owned secrets are written and the row saved. A failure rolls
+/// the row and the secrets back best-effort; each failed step is logged and the create's own failure is the one thrown.
+/// </description>
+/// </item>
+/// <item>
+/// <description>
+/// Update: a new value for an owned secret the stored connection already resolves is written only after the update's
+/// <c>SaveAsync</c> wins, expecting the secret version read first. A request that loses the save leaves what the stored
+/// connection resolves unchanged. A secret rotated after that read gives <see cref="ConnectionConflictException"/>
+/// (HTTP 409) instead of an overwrite, and so does one soft-deleted or created under the same name by a concurrent
+/// writer; for a deleted one the message says a plain retry will not work until Secrets releases deleted names, so the
+/// field must be re-pointed with <c>ExistingSecretName</c>. A secret with no active version (revoked or expired) is
+/// rotated without an expected version; if Secrets then reports a concurrent writer as a plain
+/// <see cref="InvalidOperationException"/> and the secret's version, status or update time differs from what was read,
+/// that is a 409 too.
+/// </description>
+/// </item>
+/// <item>
+/// <description>
+/// After the save every changed field is attempted and the secrets the save stopped referencing are deleted even when a
+/// rotation failed. A field that failed for another reason is not hidden behind a 409: it throws
+/// <see cref="ConnectionCredentialWriteException"/> (HTTP 500) carrying the field names and the store's failure (an
+/// <see cref="AggregateException"/> when several failed, each also logged). A replaced secret that cannot be deleted
+/// after a successful rotation throws that exception too; after a failed rotation the cleanup failure is logged and
+/// swallowed so the rotation failure is the one reported. The cleanup counts the connection's stored document as a
+/// reference, so a concurrent update that re-bound a replaced secret keeps it.
+/// </description>
+/// </item>
+/// <item>
+/// <description>
+/// Before the save, a store fault throws <see cref="ConnectionStoreException"/> (HTTP 500). A name that Secrets refuses
+/// as taken is read back: a secret that exists is a concurrent writer (400, like the managed-name check); one that does
+/// not is a deleted secret still holding its name (409, use another connection name or bind an existing secret). A
+/// store that cannot hold the credential type is a non-retryable <see cref="ConnectionStoreException"/>.
+/// </description>
+/// </item>
+/// <item>
+/// <description>
+/// A request that loses the save does not roll back a new <c>connection:&lt;name&gt;:&lt;field&gt;</c> secret it created
+/// beforehand for a field moving to inline storage: Secrets deletes softly and keeps the name, so removing it would
+/// block that field for good. The secret stays Active and unreferenced, and a retried inline write for that field is
+/// rejected as a managed-name conflict.
+/// </description>
+/// </item>
+/// </list>
+/// </summary>
 internal sealed class DefaultConnectionManager(
     IConnectionRepository repository,
     IConnectionTypeRegistry types,
@@ -84,12 +135,44 @@ internal sealed class DefaultConnectionManager(
         }
         catch
         {
-            await DeleteOwnedSecretsAsync(tenantId, name, document.Definition.SecretFields, cancellationToken);
-            await repository.DeleteAsync(tenantId, name, cancellationToken);
+            // The request's own failure is the one to report: the rollback never throws and ignores the request's cancellation.
+            await RollBackCreateAsync(tenantId, name, document.Definition.SecretFields);
             throw;
         }
 
         return ToMetadata(document);
+    }
+
+    /// <summary>
+    /// Removes what a failed create left behind. Every step is attempted whatever the earlier ones did (each owned
+    /// secret, then the connection row), each failure is logged, and none escapes, so the create's original failure
+    /// is the one the caller sees. A secret that could not be deleted stays Active and unreferenced.
+    /// </summary>
+    private async ValueTask RollBackCreateAsync(string tenantId, string name, IDictionary<string, ConnectionSecretField> fields)
+    {
+        foreach (var (fieldName, field) in fields)
+        {
+            try
+            {
+                await DeleteOwnedSecretAsync(tenantId, name, field, retainedFields: null, excludedConnectionName: name, CancellationToken.None);
+            }
+            catch (Exception exception)
+            {
+                logger.LogWarning(exception,
+                    "Could not roll back secret '{SecretName}' of connection '{ConnectionName}' field '{FieldName}' after its create failed; it stays Active and unreferenced.",
+                    field.SecretName, name, fieldName);
+            }
+        }
+
+        try
+        {
+            await repository.DeleteAsync(tenantId, name, CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception,
+                "Could not remove connection '{ConnectionName}' after its create failed; delete it before creating it again.", name);
+        }
     }
 
     public async ValueTask<ConnectionMetadata?> FindAsync(string tenantId, string name, CancellationToken cancellationToken = default)
@@ -120,11 +203,11 @@ internal sealed class DefaultConnectionManager(
 
     private static bool IsStoreFault(Exception exception) =>
         exception is not (ArgumentException or ConnectionConflictException or ConnectionUnavailableException
-            or ConnectionCredentialWriteException or OperationCanceledException);
+            or ConnectionCredentialWriteException or ConnectionStoreException or OperationCanceledException);
 
     private static ConnectionStoreException StoreFailure(string connectionName, string verb, Exception exception) =>
         new(connectionName,
-            $"Connection '{connectionName}' was not {verb}: the connection or secret store failed before the change was confirmed saved. It is safe to retry.",
+            $"Connection '{connectionName}' was not {verb}: the connection or secret store failed before the change was confirmed saved. Retry; if the retry reports a credential secret name as taken or held, use a different connection name or bind an existing secret.",
             exception);
 
     private async ValueTask<ConnectionMetadata?> UpdateCoreAsync(string tenantId, string name, UpdateConnectionRequest request, CancellationToken cancellationToken)
@@ -247,7 +330,8 @@ internal sealed class DefaultConnectionManager(
         if (document is null)
             return false;
 
-        await DeleteOwnedSecretsAsync(tenantId, document.Definition.Name, document.Definition.SecretFields, cancellationToken);
+        foreach (var field in document.Definition.SecretFields.Values)
+            await DeleteOwnedSecretAsync(tenantId, document.Definition.Name, field, retainedFields: null, excludedConnectionName: document.Definition.Name, cancellationToken);
         return await repository.DeleteAsync(tenantId, document.Definition.Name, cancellationToken);
     }
 
@@ -572,10 +656,54 @@ internal sealed class DefaultConnectionManager(
         if (await secretManager.FindAsync(tenantId, secretName, cancellationToken) is not null)
             throw OwnedSecretNameConflict();
 
-        await CreateOwnedSecretAsync(tenantId, connectionName, fieldName, secretName, input.Value, cancellationToken);
+        try
+        {
+            await CreateOwnedSecretAsync(tenantId, connectionName, fieldName, secretName, input.Value, cancellationToken);
+        }
+        catch (InvalidOperationException exception) when (IsNameTaken(exception))
+        {
+            throw await TakenOwnedSecretNameAsync(tenantId, connectionName, fieldName, secretName, exception, cancellationToken);
+        }
+        catch (InvalidOperationException exception) when (IsStoreMisconfiguration(exception))
+        {
+            throw new ConnectionStoreException(connectionName,
+                $"Connection '{connectionName}' was not saved: the secret store cannot hold its credentials as configured. Retrying will not help; the secret store configuration must be fixed.",
+                exception);
+        }
         field.SecretName = secretName;
         field.IsOwnedSecret = true;
         return field;
+    }
+
+    // Secrets reports both as a plain InvalidOperationException, so the message is the only thing that tells them apart.
+    private static bool IsNameTaken(InvalidOperationException exception) =>
+        exception.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsStoreMisconfiguration(InvalidOperationException exception) =>
+        exception.Message.Contains("not compatible with the selected store", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Secrets refused to create an owned secret because its name is taken, although the pre-save check found none.
+    /// A secret that reads back now was created by a concurrent writer. One that does not is a deleted secret whose
+    /// name Secrets still holds, and retrying the same inline value cannot succeed.
+    /// </summary>
+    private async ValueTask<Exception> TakenOwnedSecretNameAsync(
+        string tenantId,
+        string connectionName,
+        string fieldName,
+        string secretName,
+        InvalidOperationException nameTaken,
+        CancellationToken cancellationToken)
+    {
+        if (await secretManager.FindAsync(tenantId, secretName, cancellationToken) is not null)
+            return OwnedSecretNameConflict();
+
+        logger.LogWarning(nameTaken,
+            "Secret name '{SecretName}' for connection '{ConnectionName}' field '{FieldName}' is held by a deleted secret.",
+            secretName, connectionName, fieldName);
+        return new ConnectionConflictException(
+            connectionName,
+            $"Connection '{connectionName}' was not saved: the secret name for credential '{fieldName}' is still held by a deleted secret. Use a different connection name, or bind an existing secret to that credential.");
     }
 
     private static string SourceKindOf(ConnectionSecretFieldInput input) =>
@@ -687,7 +815,8 @@ internal sealed class DefaultConnectionManager(
 
             try
             {
-                await DeleteOwnedSecretAsync(tenantId, connectionName, field, next.Values, cancellationToken);
+                // No connection is excluded: the stored document (this save, or a concurrent update after it) counts as a reference.
+                await DeleteOwnedSecretAsync(tenantId, connectionName, field, next.Values, excludedConnectionName: null, cancellationToken);
             }
             catch (Exception exception)
             {
@@ -709,21 +838,12 @@ internal sealed class DefaultConnectionManager(
         }
     }
 
-    private async ValueTask DeleteOwnedSecretsAsync(
-        string tenantId,
-        string connectionName,
-        IDictionary<string, ConnectionSecretField> fields,
-        CancellationToken cancellationToken)
-    {
-        foreach (var field in fields.Values)
-            await DeleteOwnedSecretAsync(tenantId, connectionName, field, retainedFields: null, cancellationToken);
-    }
-
     private async ValueTask DeleteOwnedSecretAsync(
         string tenantId,
         string connectionName,
         ConnectionSecretField field,
         IEnumerable<ConnectionSecretField>? retainedFields,
+        string? excludedConnectionName,
         CancellationToken cancellationToken)
     {
         if (!field.IsOwnedSecret || string.IsNullOrWhiteSpace(field.SecretName))
@@ -733,7 +853,7 @@ internal sealed class DefaultConnectionManager(
                 SameSecretName(retained.SecretName, field.SecretName)) == true)
             return;
 
-        if (await repository.IsSecretReferencedAsync(tenantId, field.SecretName, connectionName, cancellationToken))
+        if (await repository.IsSecretReferencedAsync(tenantId, field.SecretName, excludedConnectionName, cancellationToken))
             return;
 
         await secretManager.DeleteAsync(tenantId, field.SecretName, cancellationToken);
