@@ -20,6 +20,7 @@ public sealed class Participant
     private readonly Dictionary<string, string> _delayed = new(StringComparer.Ordinal);
     private string? _killAfterEffectOf;
     private string? _killBeforeEffectOf;
+    private (string NodeId, int Call)? _killBeforeCall;
 
     /// <summary>Every call, including repeats the participant de-duplicated.</summary>
     public IReadOnlyList<ParticipantCall> Calls { get { lock (_gate) return _calls.ToArray(); } }
@@ -85,11 +86,26 @@ public sealed class Participant
         return this;
     }
 
+    /// <summary>Stops the host once, when the named node is called for the <paramref name="call"/>th time (1-based).</summary>
+    public Participant KillingHostBeforeCall(string nodeId, int call)
+    {
+        lock (_gate)
+            _killBeforeCall = (nodeId, call);
+        return this;
+    }
+
     /// <summary>Whether the host must stop now, before this node's effect. One-shot.</summary>
     public bool StopsBefore(string nodeId)
     {
         lock (_gate)
         {
+            if (_killBeforeCall is { } target && StringComparer.Ordinal.Equals(target.NodeId, nodeId) &&
+                _calls.Count(call => call.NodeId == nodeId) == target.Call - 1)
+            {
+                _killBeforeCall = null;
+                return true;
+            }
+
             if (!StringComparer.Ordinal.Equals(_killBeforeEffectOf, nodeId))
                 return false;
 
