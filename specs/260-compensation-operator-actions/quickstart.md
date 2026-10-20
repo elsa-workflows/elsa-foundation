@@ -78,6 +78,21 @@ O1 + O2h + O4 over REST against the real Workbench process, with a process kill 
 | Studio's `canManage` gate | the read-only Vitest and live step 8 |
 | The cause-message gate | J1 without the values grant |
 
+### Results for PR 1 (20 October 2026)
+
+Each safeguard was removed by hand, `Elsa.Activities.Compensation.Tests` rebuilt and the named journeys run in Durable, Balanced and Ephemeral; every change was reverted afterwards (`git checkout`), and the full suites pass again.
+
+| Safeguard removed | Where | Result |
+|---|---|---|
+| `InterventionNotPending` check | `DecideInterventionAlterationHandler` | O5 failed in all 3 modes (the stale decision was no longer refused as `InterventionNotPending`) |
+| Offered-decision check | `DecideInterventionAlterationHandler` | O5x failed in all 3 modes |
+| Requester-running check | `DecideInterventionAlterationHandler` | O5c failed in all 3 modes |
+| `SourceParentNotRunning` | `RetryFaultedActivityAlterationHandler` | O5c failed in all 3 modes |
+| Validator allowance for `OperatorDecision` | `IncidentStateTransitionValidator` | O2h failed in all 3 modes |
+| Abandon fault (complete instead) | `CompensationScope.OnAbandoned` | O4 failed in all 3 modes |
+| Cause-message gate | `CompensationJournalProjector` | J1's projector test `The_cause_message_is_shown_only_with_the_values_grant(false)` failed; the J1 journey checks only the `messageWithheld` flag |
+| Studio's `canManage` gate | Studio | Not run: Studio ships in PR 2 |
+
 ## Run locally
 
 ```bash
