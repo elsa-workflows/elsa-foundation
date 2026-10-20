@@ -86,7 +86,7 @@ An operator opens the run. The uncertain step reads "⚠ Uncertain" instead of "
 ### Edge Cases
 
 - A forward step reports an uncertain outcome and its handler also reports one: the entry stays uncertain, the handler attempt counts as failed, and the normal retry and intervention rules apply.
-- An operator retries an uncertain forward step without a handler (story 1.5) through #2747: the step runs again with the same operation key. If it completes, the scope journals it as registered and continues forward. If it fails or is uncertain again, the scope applies the M1 or M2 rule again.
+- An operator retries an uncertain forward step without a handler (story 1.5) through #2747: the step runs again with the same operation key. If it completes, the scope marks the entry as not needing a handler and continues forward. If it fails or is uncertain again, the scope applies the M1 or M2 rule again.
 - A late handler completion arrives for an entry that is already compensated, or for an older attempt after a newer one was scheduled: it is ignored and never advances recovery twice.
 - A stale owner commits after another owner took over the run: the commit is rejected by the existing fence, and the participant deduplicates by operation key when the step or handler runs under the new owner.
 - A scope that started on M1 is resumed by M2 code: its version-1 state is upgraded in place. Its existing entries keep their M1 identity, and their operation key is the one M1 participants saw (the forward invocation id).
@@ -119,7 +119,7 @@ An operator opens the run. The uncertain step reads "⚠ Uncertain" instead of "
 
 - **FR-211**: A runtime alteration **retry faulted activity** targets a faulted activity occurrence that has a blocking incident in a running run. In one checkpoint it resolves that incident with an operator-retry outcome (actor and reason recorded) and schedules the activity again with its original inputs, parent, scheduling identity, scheduling cause and metadata (including assigned operation keys). It is idempotent through the alteration's existing idempotency key, refuses a target whose incident is no longer blocking, requires runtime-manage permission and is fenced like any runtime alteration. Retrying a terminal (faulted) run stays out of scope.
 - **FR-212**: When an entry is `Failed` and its retried handler completes, the entry becomes `Compensated`, the scope returns to `Compensating` and recovery continues. When the retried handler faults, FR-210 applies again.
-- **FR-213**: When an uncertain step without a handler is retried (FR-206) and completes, the scope turns the entry `Registered` and continues forward. When it faults, the scope handles it as a new fault of the running step.
+- **FR-213**: When an uncertain step without a handler is retried (FR-206) and completes, the scope turns the entry `NoHandler` (keeping its uncertain forward outcome) and continues forward. When it faults, the scope handles it as a new fault of the running step.
 
 **Durability and repeats**
 
