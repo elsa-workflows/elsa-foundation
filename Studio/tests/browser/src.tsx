@@ -1715,6 +1715,11 @@ async function renderRequestedFixture() {
     root.render(<WorkflowPublishChoiceFixture />);
     return;
   }
+  if (searchParams.get("mode") === "workflow-creation-readiness") {
+    const { WorkflowCreationReadinessFixture } = await import("./workflowCreationReadinessFixture");
+    root.render(<WorkflowCreationReadinessFixture />);
+    return;
+  }
   if (searchParams.get("mode") === "activity-authoring") {
     const { ActivityAuthoringFixture } = await import("./activityAuthoringFixture");
     root.render(<ActivityAuthoringFixture />);
