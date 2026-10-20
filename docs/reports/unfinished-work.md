@@ -58,7 +58,7 @@ The table below preserves candidate signals from the last review. It is not an a
 | Code analyser enforcement is deferred | Elsa `§E2.9` and model comments | Plan code analyser epic after rules stabilize |
 | Lifecycle command topology remains partially open | Spec 003 research/quickstart mention lingering creation path and promote unit | Create lifecycle command shell work unit |
 | Workflow-as-activity spec is superseded by 006 | Spec 005 states producer goals retained and re-expressed in 006 | Keep as intent archive; do not implement directly from 005 |
-| Runtime diagnostics `canManage` is always true | Spec 260 research R12 (task T428): `RuntimeDiagnosticsPermissions.CanManage` defaults to `true` and `RuntimeDiagnosticsSettingsService` never evaluates the caller, so Studio's diagnostics page shows edits to a read-only user until the save returns 403 | Evaluate `workflows/runtime:manage` per caller, fail closed, as `IWorkflowRuntimeOperatorAccess` does for the run details; add API tests for manage, read-only and untrusted callers. File as a `needs-triage` issue |
+| Runtime diagnostics `canManage` is always true | Spec 260 research R12 (task T428): `RuntimeDiagnosticsPermissions.CanManage` defaults to `true` and `RuntimeDiagnosticsSettingsService` never evaluates the caller, so Studio's diagnostics page shows edits to a read-only user until the save returns 403 | Evaluate `workflows/runtime:manage` per caller, fail closed, as `IWorkflowRuntimeOperatorAccess` does for the run details; add API tests for manage, read-only and untrusted callers. Filed as [#3130](https://github.com/elsa-workflows/elsa-foundation/issues/3130) |
 
 ## Knowledge/workspace gaps
 
