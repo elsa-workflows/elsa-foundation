@@ -10,7 +10,7 @@ using Elsa.Etl.Runtime.Preparation;
 
 namespace Elsa.Etl.Tests;
 
-public sealed class EtlBatchProcessorTests
+public sealed partial class EtlBatchProcessorTests
 {
     private static readonly EtlBatchProcessor Processor = new(new FileChunkPublisherFactory());
     private const string MainJsonl = "{\"name\":\"A\",\"category\":\"keep\"}\n";

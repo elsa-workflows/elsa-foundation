@@ -19,7 +19,8 @@ public sealed class Endpoint(
     PublicationSnapshotReviewService reviews,
     TimeProvider timeProvider,
     IWorkflowExecutableCompiler compiler,
-    WorkflowPublicationPreflightReader preflightReader) : ApiEndpoint<PreflightWorkflowPublicationSnapshot, PublicationSnapshotPreflightView>
+    WorkflowPublicationPreflightReader preflightReader,
+    NormalizedPrincipalValidator principalValidator) : ApiEndpoint<PreflightWorkflowPublicationSnapshot, PublicationSnapshotPreflightView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -36,7 +37,7 @@ public sealed class Endpoint(
         var candidateHash = reviews.ComputeCandidateHash(request.State, request.Layout);
         var snapshotId = $"snapshot:{candidateHash}";
         var now = timeProvider.GetUtcNow();
-        var tenantId = PublicationRequestTenant.Resolve(HttpContext.User);
+        var tenantId = PublicationRequestTenant.Resolve(HttpContext.User, principalValidator);
         var executable = await compiler.CompileAsync(
             new WorkflowExecutableCompileRequest(snapshotId, WorkflowExecutableReferenceScope.Published, now, null, null,
                 "artifact-", new Dictionary<string, string> { ["slice"] = "workflow-publication-snapshot-preflight" },

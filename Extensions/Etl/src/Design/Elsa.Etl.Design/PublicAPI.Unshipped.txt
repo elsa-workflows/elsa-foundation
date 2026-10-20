@@ -9,7 +9,7 @@ Elsa.Etl.Design.EtlCompilationResult.Diagnostics.init -> void
 Elsa.Etl.Design.EtlCompilationResult.Equals(Elsa.Etl.Design.EtlCompilationResult? other) -> bool
 Elsa.Etl.Design.EtlCompilationResult.EtlCompilationResult(Elsa.Etl.Core.EtlArtifact? Artifact, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Design.EtlDiagnostic!>! Diagnostics) -> void
 Elsa.Etl.Design.EtlDesignFeature
-Elsa.Etl.Design.EtlDesignFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Etl.Design.EtlDesignFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 Elsa.Etl.Design.EtlDesignFeature.EtlDesignFeature() -> void
 Elsa.Etl.Design.EtlDiagnostic
 Elsa.Etl.Design.EtlDiagnostic.<Clone>$() -> Elsa.Etl.Design.EtlDiagnostic!

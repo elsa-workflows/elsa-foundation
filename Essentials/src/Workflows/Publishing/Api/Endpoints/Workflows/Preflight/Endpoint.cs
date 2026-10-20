@@ -19,7 +19,8 @@ namespace Elsa.Workflows.Publishing.Api.Endpoints.Workflows.Preflight;
 public sealed class Endpoint(
     TimeProvider timeProvider,
     IWorkflowExecutableCompiler compiler,
-    WorkflowPublicationPreflightReader preflightReader) : ApiEndpoint<PreflightWorkflowPublication, PublicationPreflightView>
+    WorkflowPublicationPreflightReader preflightReader,
+    NormalizedPrincipalValidator principalValidator) : ApiEndpoint<PreflightWorkflowPublication, PublicationPreflightView>
 {
     public override void Configure(ApiEndpointOptions options)
     {
@@ -42,7 +43,7 @@ public sealed class Endpoint(
                 ExpiresAt: null,
                 "artifact-",
                 new Dictionary<string, string> { ["slice"] = "workflow-execution-vertical-slice" },
-                TenantId: PublicationRequestTenant.Resolve(HttpContext.User)),
+                TenantId: PublicationRequestTenant.Resolve(HttpContext.User, principalValidator)),
             cancellationToken);
         var plan = await preflightReader.EvaluateAsync(
             executable,

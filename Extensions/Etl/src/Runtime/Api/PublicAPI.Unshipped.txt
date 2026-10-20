@@ -9,11 +9,11 @@ Elsa.Etl.Runtime.Api.Endpoints.ListRuns.Endpoint
 Elsa.Etl.Runtime.Api.Endpoints.ListRuns.Endpoint.Endpoint(Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations! operations) -> void
 Elsa.Etl.Runtime.Api.EtlRuntimeApi
 Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature
-Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature.CursorSigningKey.get -> string?
 Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature.CursorSigningKey.set -> void
 Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature.EtlRuntimeApiFeature() -> void
-Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void
+virtual Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void
 Elsa.Etl.Runtime.Api.EtlRuntimePermissions
 Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView
 Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView!

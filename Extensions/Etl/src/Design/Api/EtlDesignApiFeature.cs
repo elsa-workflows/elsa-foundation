@@ -18,13 +18,13 @@ namespace Elsa.Etl.Design.Api;
 [ManifestFeatureCategory("Design")]
 [ManifestFeatureCategory("API")]
 [ShellFeature(name: "EtlDesignApi", DisplayName = "ETL Design API", Description = "Author finite file ETL definitions and publish immutable versions.", DependsOn = new object[] { "ApiCapabilities", "EtlDesign" })]
-public sealed class EtlDesignApiFeature : IWebShellFeature
+public class EtlDesignApiFeature : IWebShellFeature
 {
     /// <summary>Stable shared signing key for pagination across host replicas; defaults to a process-local key.</summary>
     [ManifestSetting(Secret = true)]
     public string? CursorSigningKey { get; set; }
 
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         EtlApiServices.Add(services, CursorSigningKey, EtlDesignApi.OwnerId);
         services.TryAddScoped<IEtlDesignOperations, EtlDesignOperations>();
@@ -42,5 +42,5 @@ public sealed class EtlDesignApiFeature : IWebShellFeature
         ], "EtlDesignApi"));
     }
 
-    public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) => EtlDesignApi.MapEtlDesignApi(endpoints);
+    public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) => EtlDesignApi.MapEtlDesignApi(endpoints);
 }

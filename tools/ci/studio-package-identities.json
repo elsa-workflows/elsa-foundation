@@ -14,6 +14,7 @@
     { "id": "Elsa.Studio.Diagnostics.StructuredLogs", "project": "Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Elsa.Studio.Diagnostics.StructuredLogs.csproj" },
     { "id": "Elsa.Studio.ExpressionEditors.JavaScript", "project": "Extensions/ExpressionEditors.JavaScript/studio/Elsa.Studio.ExpressionEditors.JavaScript/Elsa.Studio.ExpressionEditors.JavaScript.csproj" },
     { "id": "Elsa.Studio.ExpressionEditors.Liquid", "project": "Extensions/ExpressionEditors.Liquid/studio/Elsa.Studio.ExpressionEditors.Liquid/Elsa.Studio.ExpressionEditors.Liquid.csproj" },
+    { "id": "Elsa.Studio.Etl", "project": "Extensions/Etl/studio/Elsa.Studio.Etl/Elsa.Studio.Etl.csproj", "introduced_after_consolidation": true },
     { "id": "Elsa.Studio.ExtensionBuilder", "project": "Extensions/ExtensionBuilder/studio/Elsa.Studio.ExtensionBuilder/Elsa.Studio.ExtensionBuilder.csproj" },
     { "id": "Elsa.Studio.FeatureManagement", "project": "Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Elsa.Studio.FeatureManagement.csproj" },
     { "id": "Elsa.Studio.Samples.WeatherForecast", "project": "Extensions/Samples.WeatherForecast/studio/Elsa.Studio.Samples.WeatherForecast/Elsa.Studio.Samples.WeatherForecast.csproj" },

@@ -18,6 +18,7 @@ internal sealed class EtlWorkerProcess(string root, string configurationPath, st
     public bool HasExited => !_started || _process.HasExited;
     public string AcceptancePath => EtlWorkerProtocol.AcceptancePath(root, role);
     public string CommittedAcceptancePath => EtlWorkerProtocol.CommittedAcceptancePath(root, role);
+    public string CommittedAcceptanceReceiptPath(int ordinal) => EtlWorkerProtocol.CommittedAcceptanceReceiptPath(root, role, ordinal);
     public string ReservationPath => EtlWorkerProtocol.ReservationPath(root, role);
     public string ReleasePath => EtlWorkerProtocol.ReleasePath(root, role);
 
@@ -49,6 +50,10 @@ internal sealed class EtlWorkerProcess(string root, string configurationPath, st
 
     public Task<EtlWorkerCommittedAcceptance> WaitForCommittedAcceptanceAsync(CancellationToken cancellationToken) =>
         WaitForJournalAsync<EtlWorkerCommittedAcceptance>(CommittedAcceptancePath, cancellationToken, AcceptancePath, ReservationPath);
+
+    public Task<EtlWorkerCommittedAcceptance> WaitForCommittedAcceptanceReceiptAsync(int ordinal,
+        CancellationToken cancellationToken) =>
+        WaitForJournalAsync<EtlWorkerCommittedAcceptance>(CommittedAcceptanceReceiptPath(ordinal), cancellationToken);
 
     public Task<EtlWorkerReservation> WaitForReservationAsync(CancellationToken cancellationToken) =>
         WaitForJournalAsync<EtlWorkerReservation>(ReservationPath, cancellationToken, AcceptancePath, CommittedAcceptancePath);

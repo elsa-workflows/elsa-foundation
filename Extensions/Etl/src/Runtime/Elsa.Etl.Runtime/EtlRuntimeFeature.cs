@@ -16,7 +16,7 @@ namespace Elsa.Etl.Runtime;
 [ManifestFeatureCategory("ETL")]
 [ManifestFeatureCategory("Runtime")]
 [ShellFeature(name: "EtlRuntime", DisplayName = "ETL Runtime", Description = "Bounded execution support for published finite file ETL pipelines.", DependsOn = new object[] { "Tasks" })]
-public sealed class EtlRuntimeFeature : IShellFeature
+public class EtlRuntimeFeature : IShellFeature
 {
     [ManifestSetting(DisplayName = "Snapshot root", Description = "Absolute host-approved root for bounded ETL source and lookup snapshots.", Category = "Storage")]
     public string SnapshotRoot { get; set; } = string.Empty;
@@ -51,7 +51,7 @@ public sealed class EtlRuntimeFeature : IShellFeature
     [ManifestSetting(DisplayName = "Maximum snapshot bytes", Description = "Maximum size of each host-approved ETL snapshot.", Category = "Capacity")]
     public long MaxSnapshotBytes { get; set; } = 4L * 1024 * 1024 * 1024;
 
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
         var options = EtlRuntimeOptions.Create(this);

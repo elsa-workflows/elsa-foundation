@@ -83,7 +83,9 @@
 ## Phase 7 — Integrated review and delivery
 
 - [x] T033 Document ETL feature contracts/tasks and retention/recovery/rollback limitations in `Extensions/Etl` README/catalogs, root `EXTENSION_POINTS.md` and the canonical glossary; keep parent connector/BPMN obligations explicit in `docs/program-goals/unified-execution.md`.
-- [x] T034 Run focused build/tests, architecture guards, affected migration/provider checks and solution-filter validation; regenerate local navigation maps, refresh/check the committed dependency dataset and solution filters, and validate lock files. Follow spec257: documentation maps/manifest/findings remain ignored and are not staged.
+- [ ] T034 Run focused build/tests, architecture guards, affected migration/provider checks and solution-filter validation; regenerate local navigation maps, refresh/check the committed dependency dataset and solution filters, and validate lock files. Follow spec257: documentation maps/manifest/findings remain ignored and are not staged.
+**Final-review checkpoint:** [Round 1 findings and repair evidence](evidence/round-1-review.md). Head `36420eb80` exposed two CI integration omissions (dependent Modularity test lock files and the new Studio package inventory) and review findings on durable completion delivery, independent byte-pressure/two-worker proof, feature extensibility and normalized publication tenant selection. T034 is reopened until repairs pass; T035 remains open. Earlier green local checks do not replace this failing head CI.
+
 - [ ] T035 Review the integrated diff through a bounded self-review loop under the owner’s standing authorization; use bounded worker reviews where useful, fix actionable findings and post exact-head validation/limits on the single #3109 PR; keep issue/project review state synchronized.
 - [ ] T036 Merge only through the normal green gate, verify resulting-main CI/maps/Studio and update #3109/#2908/#2892 acceptance and claim disposition. Mark spec implemented in the implementation PR; never claim parent/program complete from this slice.
 

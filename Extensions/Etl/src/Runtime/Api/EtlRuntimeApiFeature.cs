@@ -18,13 +18,13 @@ namespace Elsa.Etl.Runtime.Api;
 [ManifestFeatureCategory("Runtime")]
 [ManifestFeatureCategory("API")]
 [ShellFeature(name: "EtlRuntimeApi", DisplayName = "ETL Runtime API", Description = "Inspect finite ETL runs and request cancellation.", DependsOn = new object[] { "ApiCapabilities" })]
-public sealed class EtlRuntimeApiFeature : IWebShellFeature
+public class EtlRuntimeApiFeature : IWebShellFeature
 {
     /// <summary>Stable shared signing key for pagination across host replicas; defaults to a process-local key.</summary>
     [ManifestSetting(Secret = true)]
     public string? CursorSigningKey { get; set; }
 
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         EtlApiServices.Add(services, CursorSigningKey, EtlRuntimeApi.OwnerId);
         services.TryAddScoped<IEtlRuntimeOperations, EtlRuntimeOperations>();
@@ -38,5 +38,5 @@ public sealed class EtlRuntimeApiFeature : IWebShellFeature
         ], "EtlRuntimeApi"));
     }
 
-    public void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) => EtlRuntimeApi.MapEtlRuntimeApi(endpoints);
+    public virtual void MapEndpoints(IEndpointRouteBuilder endpoints, IHostEnvironment? environment) => EtlRuntimeApi.MapEtlRuntimeApi(endpoints);
 }

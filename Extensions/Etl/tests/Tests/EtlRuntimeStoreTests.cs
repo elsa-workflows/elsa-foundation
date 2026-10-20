@@ -383,6 +383,104 @@ public sealed class EtlRuntimeStoreTests
     }
 
     [Fact]
+    public async Task Outstanding_byte_budget_blocks_before_dispatch_without_charging_or_moving_cursor_and_recovers_after_acceptance()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.CreateContext();
+        var store = database.CreateStore(context);
+        var pipeline = EtlTestPipelines.Create() with
+        {
+            Limits = EtlTestPipelines.Create().Limits with
+            {
+                MaxRecordBytes = 100,
+                MaxBatchRecords = 2,
+                MaxBatchBytes = 100,
+                MaxOutstandingRecords = 4,
+                MaxOutstandingBytes = 150
+            }
+        };
+        var admission = CreateAdmission("run-byte-budget", new EtlScope("tenant-a", "partition-a"), pipeline);
+        await StartAsync(store, admission, 4);
+
+        var first = Assert.IsType<EtlPartitionLease>(await store.ClaimPartitionAsync(
+            admission.Invocation.Scope, admission.Invocation.RunId, "worker-a"));
+        var second = Assert.IsType<EtlPartitionLease>(await store.ClaimPartitionAsync(
+            admission.Invocation.Scope, admission.Invocation.RunId, "worker-b"));
+        Assert.Equal(0, first.PartitionOrdinal);
+        Assert.Equal(1, second.PartitionOrdinal);
+        Assert.Equal(2, first.EndOrdinalExclusive - first.StartOrdinal);
+        Assert.Equal(2, second.EndOrdinalExclusive - second.StartOrdinal);
+        var prepared = EtlRuntimeFixtures.Prepared(4);
+        var firstBatch = CreateBatch(admission, prepared, first.PartitionOrdinal,
+            first.StartOrdinal, first.StartOrdinal + 2, "byte-budget-a");
+        var secondBatch = CreateBatch(admission, prepared, second.PartitionOrdinal,
+            second.StartOrdinal, second.StartOrdinal + 2, "byte-budget-b");
+        Assert.Equal(100, firstBatch.InputBytes);
+        Assert.Equal(100, secondBatch.InputBytes);
+
+        Assert.Equal(EtlStoreStatus.Applied, (await store.ReserveBatchAsync(first, firstBatch)).Status);
+        var before = Assert.IsType<EtlRunView>(await store.FindRunAsync(admission.Invocation.Scope, admission.Invocation.RunId));
+        Assert.Equal(2, before.OutstandingRecords);
+        Assert.Equal(100, before.OutstandingBytes);
+        var partitionsBefore = await store.ListPartitionsAsync(admission.Invocation.Scope, admission.Invocation.RunId, -1, 10);
+        var reservationsBefore = await context.Reservations.AsNoTracking()
+            .OrderBy(row => row.PartitionOrdinal)
+            .Select(row => new { row.PartitionOrdinal, row.StartOrdinal, row.EndOrdinalExclusive, row.BatchId,
+                row.InputBytes, row.InputHash, row.Settled })
+            .ToArrayAsync();
+        var outboxBefore = await context.Outbox.AsNoTracking().ToArrayAsync();
+        Assert.Single(reservationsBefore);
+        Assert.Empty(outboxBefore);
+        Assert.Equal(firstBatch, Assert.IsType<EtlBatchReservation>(partitionsBefore[0].OwedBatch).Batch);
+        Assert.Equal(first.StartOrdinal, partitionsBefore[0].NextOrdinal);
+        Assert.Null(partitionsBefore[1].OwedBatch);
+        Assert.Equal(second.StartOrdinal, partitionsBefore[1].NextOrdinal);
+
+        // Two records are still available, so only the 150-byte durable ceiling can reject this 100-byte batch.
+        Assert.Equal(EtlStoreStatus.BudgetExceeded, (await store.ReserveBatchAsync(second, secondBatch)).Status);
+        var afterRefusal = Assert.IsType<EtlRunView>(await store.FindRunAsync(admission.Invocation.Scope, admission.Invocation.RunId));
+        Assert.Equal((before.OutstandingRecords, before.OutstandingBytes),
+            (afterRefusal.OutstandingRecords, afterRefusal.OutstandingBytes));
+        Assert.Equal(partitionsBefore,
+            await store.ListPartitionsAsync(admission.Invocation.Scope, admission.Invocation.RunId, -1, 10));
+        Assert.Equal(reservationsBefore, await context.Reservations.AsNoTracking()
+            .OrderBy(row => row.PartitionOrdinal)
+            .Select(row => new { row.PartitionOrdinal, row.StartOrdinal, row.EndOrdinalExclusive, row.BatchId,
+                row.InputBytes, row.InputHash, row.Settled })
+            .ToArrayAsync());
+        Assert.Equal(outboxBefore, await context.Outbox.AsNoTracking().ToArrayAsync());
+
+        Assert.Equal(EtlStoreStatus.Applied,
+            (await store.AcceptBatchAsync(first, CreateAcceptance(admission, firstBatch, 2, 0, 0))).Status);
+        var afterAcceptance = Assert.IsType<EtlRunView>(await store.FindRunAsync(admission.Invocation.Scope, admission.Invocation.RunId));
+        Assert.Equal(0, afterAcceptance.OutstandingRecords);
+        Assert.Equal(0, afterAcceptance.OutstandingBytes);
+        Assert.Empty(await context.Outbox.AsNoTracking().ToArrayAsync());
+        var afterFirstAcceptance = await store.ListPartitionsAsync(admission.Invocation.Scope, admission.Invocation.RunId, -1, 10);
+        Assert.Equal(first.EndOrdinalExclusive, afterFirstAcceptance[0].NextOrdinal);
+        Assert.Equal(second.StartOrdinal, afterFirstAcceptance[1].NextOrdinal);
+        Assert.Null(afterFirstAcceptance[1].OwedBatch);
+
+        Assert.Equal(EtlStoreStatus.Applied, (await store.ReserveBatchAsync(second, secondBatch)).Status);
+        var recoveredCapacity = Assert.IsType<EtlRunView>(await store.FindRunAsync(admission.Invocation.Scope, admission.Invocation.RunId));
+        Assert.Equal(2, recoveredCapacity.OutstandingRecords);
+        Assert.Equal(secondBatch.InputBytes, recoveredCapacity.OutstandingBytes);
+        var secondPartition = (await store.ListPartitionsAsync(admission.Invocation.Scope, admission.Invocation.RunId, -1, 10))[1];
+        Assert.Equal(second.StartOrdinal, secondPartition.NextOrdinal);
+        Assert.Equal(secondBatch, Assert.IsType<EtlBatchReservation>(secondPartition.OwedBatch).Batch);
+
+        Assert.Equal(EtlStoreStatus.Applied,
+            (await store.AcceptBatchAsync(second, CreateAcceptance(admission, secondBatch, 2, 0, 0))).Status);
+        var completed = Assert.IsType<EtlRunView>(await store.FindRunAsync(admission.Invocation.Scope, admission.Invocation.RunId));
+        Assert.Equal(EtlRunStatus.Succeeded, completed.Status);
+        Assert.Equal(4, completed.AcceptedRecords);
+        Assert.Equal(0, completed.OutstandingRecords);
+        Assert.Equal(0, completed.OutstandingBytes);
+        Assert.Equal(2, await context.Reservations.AsNoTracking().CountAsync());
+        Assert.Single(await context.Outbox.AsNoTracking().ToArrayAsync());
+    }
+
+    [Fact]
     public async Task Expired_delivery_claim_is_fenced_until_consumer_proof_settles_once()
     {
         await using var database = await TestDatabase.CreateAsync();

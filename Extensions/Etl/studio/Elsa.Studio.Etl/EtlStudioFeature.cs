@@ -11,9 +11,9 @@ namespace Elsa.Studio.Etl;
 [StudioModule("etl", "ETL pipelines", "navigation", "routes", "http", "property-editors")]
 [ShellFeature(name: "EtlStudio", DisplayName = "ETL Studio module",
     Description = "Authors finite ETL pipelines, selects published versions and inspects durable runs.")]
-public sealed class EtlStudioFeature : IShellFeature
+public class EtlStudioFeature : IShellFeature
 {
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
     }
 }

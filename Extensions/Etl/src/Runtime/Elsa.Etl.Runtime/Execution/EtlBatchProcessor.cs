@@ -58,7 +58,7 @@ internal sealed class EtlBatchProcessor
         }
         catch (EtlBindingException exception)
         {
-            return Failed(new EtlPreparationDiagnostic(exception.Code));
+            return Failed(EtlPreparationDiagnostic.Fault(exception.Code, exception));
         }
 
         EtlRowTransformer transformer;

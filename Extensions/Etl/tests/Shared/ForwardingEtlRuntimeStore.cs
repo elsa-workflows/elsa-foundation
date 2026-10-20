@@ -51,6 +51,9 @@ internal abstract class ForwardingEtlRuntimeStore(IEtlRuntimeStore inner) : IEtl
     public virtual ValueTask<EtlDeliveryLease?> ClaimDeliveryAsync(EtlScope scope, string workerId,
         CancellationToken cancellationToken = default) => Inner.ClaimDeliveryAsync(scope, workerId, cancellationToken);
 
+    public virtual ValueTask<EtlDeliveryLease?> ClaimNextDeliveryAsync(string workerId,
+        CancellationToken cancellationToken = default) => Inner.ClaimNextDeliveryAsync(workerId, cancellationToken);
+
     public virtual ValueTask<EtlStoreStatus> AcknowledgeDeliveryAsync(EtlDeliveryLease lease, EtlDeliveryDisposition disposition,
         CancellationToken cancellationToken = default) => Inner.AcknowledgeDeliveryAsync(lease, disposition, cancellationToken);
 

@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Elsa.Etl.Runtime.Hosting;
 
-/// <summary>Runs bounded attempts over only the host's explicitly configured scopes.</summary>
+/// <summary>Runs bounded compute attempts over configured scopes and delivers persisted terminal results across them.</summary>
 internal sealed class EtlRuntimeWorker(
     IServiceScopeFactory scopes,
     EtlRuntimeOptions options,
@@ -66,7 +66,8 @@ internal sealed class EtlRuntimeWorker(
                     await attempts[index];
                     attempts.RemoveAt(index);
                 }
-                while (_scopes.Length > 0 && attempts.Count < options.MaxConcurrentAttempts)
+                // Even an empty file-binding registry must keep polling persisted terminal delivery.
+                while (attempts.Count < options.MaxConcurrentAttempts)
                     attempts.Add(RunOneAsync(stoppingToken));
                 await Task.Delay(TimeSpan.FromMilliseconds(250), clock, stoppingToken);
             }
@@ -93,10 +94,11 @@ internal sealed class EtlRuntimeWorker(
             }
             var execution = operation.ServiceProvider.GetRequiredService<EtlExecution>();
             var delivery = operation.ServiceProvider.GetService<IEtlResultDelivery>();
-            // Rotate scope priority and work kind so preparation, partitions and configured delivery share capacity fairly.
+            // Rotate configured work scopes and work kind; terminal delivery is discovered from persisted outbox state.
             var ticket = (ulong)Interlocked.Increment(ref _workOffset);
-            var start = (int)((ticket / 3) % (ulong)_scopes.Length);
+            var start = _scopes.Length == 0 ? 0 : (int)((ticket / 3) % (ulong)_scopes.Length);
             var preferredKind = (int)(ticket % 3);
+            var deliveryAttempted = false;
             for (var offset = 0; offset < _scopes.Length; offset++)
             {
                 var scope = _scopes[(start + offset) % _scopes.Length];
@@ -120,16 +122,20 @@ internal sealed class EtlRuntimeWorker(
                         }
                         case 2 when delivery is not null:
                         {
-                            var lease = await store.ClaimDeliveryAsync(scope, _workerId, cancellationToken);
-                            if (lease is null) continue;
-                            var disposition = await delivery.DeliverAsync(lease, cancellationToken);
-                            if (disposition is { } proof && Enum.IsDefined(proof))
-                                await store.AcknowledgeDeliveryAsync(lease, proof, cancellationToken);
-                            return;
+                            if (deliveryAttempted)
+                                continue;
+                            deliveryAttempted = true;
+                            if (await TryDeliverNextAsync(store, delivery, cancellationToken))
+                                return;
+                            continue;
                         }
                     }
                 }
             }
+            // Delivery responsibility is discovered from persisted outbox state. It must survive a restart even
+            // when the host no longer has any file-binding scopes for preparation or partition execution.
+            if (!deliveryAttempted && delivery is not null)
+                await TryDeliverNextAsync(store, delivery, cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
         catch (Exception exception)
@@ -138,5 +144,17 @@ internal sealed class EtlRuntimeWorker(
             try { await Task.Delay(TimeSpan.FromSeconds(2), clock, cancellationToken); }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
         }
+    }
+
+    private async ValueTask<bool> TryDeliverNextAsync(IEtlRuntimeStore store, IEtlResultDelivery delivery,
+        CancellationToken cancellationToken)
+    {
+        var lease = await store.ClaimNextDeliveryAsync(_workerId, cancellationToken);
+        if (lease is null)
+            return false;
+        var disposition = await delivery.DeliverAsync(lease, cancellationToken);
+        if (disposition is { } proof && Enum.IsDefined(proof))
+            await store.AcknowledgeDeliveryAsync(lease, proof, cancellationToken);
+        return true;
     }
 }

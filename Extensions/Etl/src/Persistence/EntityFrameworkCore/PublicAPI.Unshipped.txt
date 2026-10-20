@@ -1,6 +1,6 @@
 #nullable enable
 Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature
-Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.ConnectionName.get -> string?
 Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.ConnectionName.set -> void
 Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.ConnectionString.get -> string?
@@ -23,7 +23,7 @@ Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.Pr
 Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.Schema.get -> string?
 Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEntityFrameworkCoreFeature.Schema.set -> void
 Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignEntityFrameworkCoreFeature
-Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignEntityFrameworkCoreFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignEntityFrameworkCoreFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignEntityFrameworkCoreFeature.ConnectionName.get -> string?
 Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignEntityFrameworkCoreFeature.ConnectionName.set -> void
 Elsa.Etl.Persistence.EntityFrameworkCore.EtlDesignEntityFrameworkCoreFeature.ConnectionString.get -> string?

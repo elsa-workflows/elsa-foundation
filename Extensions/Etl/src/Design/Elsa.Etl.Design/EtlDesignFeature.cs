@@ -8,7 +8,7 @@ namespace Elsa.Etl.Design;
 [ManifestFeatureCategory("ETL")]
 [ManifestFeatureCategory("Design")]
 [ShellFeature(name: "EtlDesign", DisplayName = "ETL Design", Description = "Validate and compile finite file ETL definitions.")]
-public sealed class EtlDesignFeature : IShellFeature
+public class EtlDesignFeature : IShellFeature
 {
-    public void ConfigureServices(IServiceCollection services) => services.AddScoped<IEtlArtifactCompiler, EtlArtifactCompiler>();
+    public virtual void ConfigureServices(IServiceCollection services) => services.AddScoped<IEtlArtifactCompiler, EtlArtifactCompiler>();
 }

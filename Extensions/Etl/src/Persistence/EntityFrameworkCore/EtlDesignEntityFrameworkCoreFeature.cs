@@ -15,7 +15,7 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore;
     Description = "SQLite persistence for ETL drafts and immutable published artifacts.",
     DependsOn = new object[] { "EtlDesign" })]
 [UsesEfModule("EtlDesign")]
-public sealed class EtlDesignEntityFrameworkCoreFeature : IShellFeature
+public class EtlDesignEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(DisplayName = "Provider", Description = "Relational provider. This initial ETL design module supports SQLite.", Category = "Persistence")]
     public string Provider { get; set; } = "Sqlite";
@@ -32,7 +32,7 @@ public sealed class EtlDesignEntityFrameworkCoreFeature : IShellFeature
     [ManifestSetting(DisplayName = "Pooled contexts", Description = "Reuse the ETL design DbContext from a pool.", Category = "Persistence")]
     public bool Pooling { get; set; }
 
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         var options = new EtlDesignEntityFrameworkCoreOptions
         {

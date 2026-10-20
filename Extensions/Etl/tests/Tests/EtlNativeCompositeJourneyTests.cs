@@ -63,7 +63,7 @@ namespace Elsa.Etl.Tests;
 /// over SQLite. The harness is not itself a Generic Host, so the test starts its registered IBackgroundTask through
 /// its production lifecycle contract after running the registered migration initializers.
 /// </summary>
-public sealed class EtlNativeCompositeJourneyTests
+public sealed partial class EtlNativeCompositeJourneyTests
 {
     [Theory]
     [InlineData(CompositeKind.Sequence)]
@@ -331,9 +331,10 @@ public sealed class EtlNativeCompositeJourneyTests
         }
     }
 
-    private static async Task WithJourneyAsync(CompositeKind kind, NativeOutcome outcome, Func<NativeEtlJourney, Task> test, AdmissionGate? gate = null)
+    private static async Task WithJourneyAsync(CompositeKind kind, NativeOutcome outcome, Func<NativeEtlJourney, Task> test,
+        AdmissionGate? gate = null, bool includeBindings = true)
     {
-        await using var journey = await NativeEtlJourney.CreateAsync(kind, outcome, gate);
+        await using var journey = await NativeEtlJourney.CreateAsync(kind, outcome, gate, includeBindings);
         try
         {
             await test(journey);
@@ -464,7 +465,8 @@ public sealed class EtlNativeCompositeJourneyTests
         public EtlScope Scope { get; }
         public string OutputRoot { get; }
 
-        public static async Task<NativeEtlJourney> CreateAsync(CompositeKind compositeKind, NativeOutcome outcome = NativeOutcome.Succeeded, AdmissionGate? gate = null)
+        public static async Task<NativeEtlJourney> CreateAsync(CompositeKind compositeKind,
+            NativeOutcome outcome = NativeOutcome.Succeeded, AdmissionGate? gate = null, bool includeBindings = true)
         {
             var directory = Path.Combine(Path.GetTempPath(), "Elsa.Etl.NativeCompositeJourney", Guid.NewGuid().ToString("N"));
             IHost? lifetimeHost = null;
@@ -525,7 +527,7 @@ public sealed class EtlNativeCompositeJourneyTests
                     .WithFeature(services => new EtlRuntimeFeature
                     {
                         SnapshotRoot = snapshotRoot,
-                        FileBindings = bindings.ToList()
+                        FileBindings = includeBindings ? bindings.ToList() : []
                     }.ConfigureServices(services))
                     .WithFeature(services => new EtlRuntimeEntityFrameworkCoreFeature
                     {
@@ -652,7 +654,7 @@ public sealed class EtlNativeCompositeJourneyTests
             }
         }
 
-        public async Task<EtlInvocation> StartSuspendedAsync(bool activityBoundary = false)
+        public async Task<EtlInvocation> StartSuspendedAsync(bool activityBoundary = false, bool expectTerminal = false)
         {
             var reference = await PublishWorkflowAsync(activityBoundary);
             var started = await Harness.StartPublishedAsync(reference, WorkflowExecutionId);
@@ -670,7 +672,10 @@ public sealed class EtlNativeCompositeJourneyTests
                 if (bookmark is null || admitted is null)
                     return false;
                 EtlNativeBoundary.EnsureBookmark(invocation.ResultAddress, bookmark);
-                Assert.Null(admitted.TerminalResult);
+                if (expectTerminal)
+                    Assert.Equal(EtlRunStatus.BusinessError, admitted.Status);
+                else
+                    Assert.Null(admitted.TerminalResult);
                 Assert.DoesNotContain(native.Activities, state => state.Execution.ExecutableNodeId == AfterEtlNodeId);
                 return true;
             });
@@ -817,6 +822,13 @@ public sealed class EtlNativeCompositeJourneyTests
             await using var operation = await OpenPartitionScopeAsync();
             return await operation.ServiceProvider.GetRequiredService<IEtlRuntimeStore>()
                 .ListManifestAsync(scope, runId, null, 20);
+        }
+
+        public async Task<IReadOnlyList<EtlPartitionView>> ReadPartitionsAsync(EtlScope scope, string runId)
+        {
+            await using var operation = await OpenPartitionScopeAsync();
+            return await operation.ServiceProvider.GetRequiredService<IEtlRuntimeStore>()
+                .ListPartitionsAsync(scope, runId, -1, 20);
         }
 
         public async Task<EtlRuntimeOutboxRecord> ReadOutboxAsync(EtlScope scope, string runId)

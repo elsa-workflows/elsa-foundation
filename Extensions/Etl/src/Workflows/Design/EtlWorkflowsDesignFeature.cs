@@ -16,9 +16,9 @@ namespace Elsa.Etl.Workflows.Design;
     DisplayName = "ETL Workflows (Design)",
     Description = "Pins exact published ETL artifacts into native RunEtl workflow nodes.",
     DependsOn = new object[] { "EtlDesign", "WorkflowsPublishing" })]
-public sealed class EtlWorkflowsDesignFeature : IShellFeature
+public class EtlWorkflowsDesignFeature : IShellFeature
 {
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
         services.TryAddEnumerable(ServiceDescriptor.Scoped<IExecutableCompilationSource, EtlPublishedArtifactPinSource>());

@@ -14,7 +14,7 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore;
     DisplayName = "ETL Runtime EF Core Persistence",
     Description = "SQLite persistence for finite ETL runs, reservations, accepted output and terminal delivery.")]
 [UsesEfModule("EtlRuntime")]
-public sealed class EtlRuntimeEntityFrameworkCoreFeature : IShellFeature
+public class EtlRuntimeEntityFrameworkCoreFeature : IShellFeature
 {
     [ManifestSetting(DisplayName = "Provider", Description = "Relational provider. This initial ETL runtime module supports SQLite.", Category = "Persistence")]
     public string Provider { get; set; } = "Sqlite";
@@ -46,7 +46,7 @@ public sealed class EtlRuntimeEntityFrameworkCoreFeature : IShellFeature
     [ManifestSetting(DisplayName = "Maximum page size", Description = "Host cap on ETL run, partition and manifest page size.", Category = "Runtime")]
     public int MaximumPageSize { get; set; } = 100;
 
-    public void ConfigureServices(IServiceCollection services)
+    public virtual void ConfigureServices(IServiceCollection services)
     {
         var options = new EtlRuntimeEntityFrameworkCoreOptions
         {

@@ -5,6 +5,8 @@ using Elsa.Etl.Core;
 using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
 
 namespace Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
 
@@ -12,7 +14,8 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
 internal sealed class EfEtlRuntimeStore(
     EtlRuntimeDbContext db,
     TimeProvider clock,
-    EtlRuntimeStoreOptions options) : IEtlRuntimeStore
+    EtlRuntimeStoreOptions options,
+    ILogger<EfEtlRuntimeStore>? logger = null) : IEtlRuntimeStore
 {
     public int MaximumPageSize => options.MaximumPageSize;
 
@@ -527,22 +530,111 @@ internal sealed class EfEtlRuntimeStore(
             new EtlRunDiagnostic("cancelled"), null, cancellationToken);
     }
 
-    public async ValueTask<EtlDeliveryLease?> ClaimDeliveryAsync(EtlScope scope, string workerId, CancellationToken cancellationToken = default)
+    public ValueTask<EtlDeliveryLease?> ClaimDeliveryAsync(EtlScope scope, string workerId, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        return ClaimDeliveryCoreAsync(scope, workerId, cancellationToken);
+    }
+
+    public ValueTask<EtlDeliveryLease?> ClaimNextDeliveryAsync(string workerId, CancellationToken cancellationToken = default) =>
+        ClaimDeliveryCoreAsync(null, workerId, cancellationToken);
+
+    private async ValueTask<EtlDeliveryLease?> ClaimDeliveryCoreAsync(EtlScope? requestedScope, string workerId,
+        CancellationToken cancellationToken)
     {
         db.ChangeTracker.Clear();
-        ArgumentNullException.ThrowIfNull(scope);
         EtlRuntimeRecordCodec.ValidateIdentity(workerId, "worker id");
-        var scopeKey = EtlRuntimeRecordCodec.Scope(scope).Key;
+        var scopeKey = requestedScope is null ? null : EtlRuntimeRecordCodec.Scope(requestedScope).Key;
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken);
         var now = NowTicks();
-        var outbox = await db.Outbox.Where(x => x.ScopeKey == scopeKey && x.Disposition == null &&
-                (x.ExpiresAtUtcTicks == null || x.ExpiresAtUtcTicks <= now))
-            .OrderBy(x => x.RunKey).FirstOrDefaultAsync(cancellationToken);
-        if (outbox is null) return null;
+        IQueryable<EtlRuntimeOutboxRecord> eligible = db.Outbox.AsNoTracking().Where(x => x.Disposition == null &&
+            (x.ExpiresAtUtcTicks == null || x.ExpiresAtUtcTicks <= now));
+        if (scopeKey is not null)
+            eligible = eligible.Where(x => x.ScopeKey == scopeKey);
+        if (requestedScope is not null)
+        {
+            var outbox = await eligible.OrderBy(x => x.ScopeKey).ThenBy(x => x.RunKey).FirstOrDefaultAsync(cancellationToken);
+            if (outbox is null)
+                return null;
+            var validated = await ValidateDeliveryCandidateAsync(outbox, requestedScope, cancellationToken);
+            return await ClaimDeliveryCandidateAsync(tx, outbox, validated, workerId, cancellationToken);
+        }
+
+        var afterScopeKey = (string?)null;
+        var afterRunKey = (string?)null;
+        Exception? firstInvalidCandidate = null;
+        while (true)
+        {
+            var pageQuery = eligible;
+            if (afterScopeKey is not null)
+                pageQuery = pageQuery.Where(x => x.ScopeKey.CompareTo(afterScopeKey) > 0 ||
+                    (x.ScopeKey == afterScopeKey && x.RunKey.CompareTo(afterRunKey!) > 0));
+            var page = await pageQuery.OrderBy(x => x.ScopeKey).ThenBy(x => x.RunKey)
+                .Take(options.MaximumPageSize).ToListAsync(cancellationToken);
+            if (page.Count == 0)
+                break;
+
+            foreach (var candidate in page)
+            {
+                ValidatedDeliveryCandidate validated;
+                try
+                {
+                    validated = await ValidateDeliveryCandidateAsync(candidate, null, cancellationToken);
+                }
+                catch (Exception exception) when (IsPersistedDataException(exception))
+                {
+                    firstInvalidCandidate ??= exception;
+                    db.ChangeTracker.Clear();
+                    logger?.LogWarning("ETL global delivery found invalid persisted candidate {CandidateId} ({FailureType}); it remains pending while later candidates are checked.",
+                        DeliveryCandidateId(candidate), exception.GetType().Name);
+                    continue;
+                }
+
+                var lease = await ClaimDeliveryCandidateAsync(tx, candidate, validated, workerId, cancellationToken);
+                // The claim transaction must roll back if its lease expired before commit; don't commit it
+                // accidentally while moving on to another candidate in this transaction.
+                return lease;
+            }
+
+            var last = page[^1];
+            afterScopeKey = last.ScopeKey;
+            afterRunKey = last.RunKey;
+        }
+
+        if (firstInvalidCandidate is not null)
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(firstInvalidCandidate).Throw();
+        return null;
+    }
+
+    private async ValueTask<ValidatedDeliveryCandidate> ValidateDeliveryCandidateAsync(EtlRuntimeOutboxRecord outbox,
+        EtlScope? requestedScope, CancellationToken cancellationToken)
+    {
         var run = await db.Runs.SingleOrDefaultAsync(x => x.ScopeKey == outbox.ScopeKey && x.RunKey == outbox.RunKey, cancellationToken);
         var terminal = await db.Terminals.SingleOrDefaultAsync(x => x.ScopeKey == outbox.ScopeKey && x.RunKey == outbox.RunKey, cancellationToken);
         if (run is null || terminal is null) throw new InvalidDataException("The ETL terminal outbox row has no run or terminal result.");
-        ValidateRun(run, scope, EtlRuntimeRecordCodec.DecodeIdentity(run.RunId, "run id"));
+        EtlInvocation invocation;
+        EtlScope scope;
+        string runId;
+        if (requestedScope is not null)
+        {
+            scope = requestedScope;
+            runId = EtlRuntimeRecordCodec.DecodeIdentity(run.RunId, "run id");
+            ValidateRun(run, scope, runId);
+            invocation = EtlRuntimeRecordCodec.ReadInvocation(run.InvocationJson);
+            if (requestedScope != invocation.Scope)
+                throw new InvalidDataException("The ETL terminal outbox invocation does not match its requested scope.");
+        }
+        else
+        {
+            invocation = EtlRuntimeRecordCodec.ReadInvocation(run.InvocationJson);
+            scope = invocation.Scope;
+            runId = EtlRuntimeRecordCodec.DecodeIdentity(run.RunId, "run id");
+            if (!StringComparer.Ordinal.Equals(outbox.ScopeKey, EtlRuntimeRecordCodec.Scope(scope).Key))
+                throw new InvalidDataException("The ETL terminal outbox scope does not match its retained invocation.");
+            ValidateRun(run, scope, runId);
+        }
+        if (!StringComparer.Ordinal.Equals(invocation.RunId, runId))
+            throw new InvalidDataException("The ETL terminal outbox invocation does not match its retained run.");
         EnsureSchema(outbox.SchemaVersion);
         EnsureSchema(terminal.SchemaVersion);
         var result = ReadTerminal(terminal);
@@ -550,18 +642,36 @@ internal sealed class EfEtlRuntimeStore(
             throw new InvalidDataException("The ETL terminal outbox delivery ID does not match its result.");
         if (!StringComparer.Ordinal.Equals(outbox.PayloadHash, OutboxHash(run.InvocationJson, terminal.ResultJson)))
             throw new InvalidDataException("The ETL terminal outbox payload hash does not match its frozen invocation and result.");
-        now = NowTicks();
+
+        return new(scope, runId, invocation, result);
+    }
+
+    private async ValueTask<EtlDeliveryLease?> ClaimDeliveryCandidateAsync(IDbContextTransaction tx,
+        EtlRuntimeOutboxRecord outbox, ValidatedDeliveryCandidate validated, string workerId, CancellationToken cancellationToken)
+    {
+        var now = NowTicks();
+        var expiresAtUtcTicks = Expiry(now, options.DeliveryLease);
+        var expiresAt = EtlRuntimeRecordCodec.ReadUtc(expiresAtUtcTicks);
+        db.Outbox.Attach(outbox);
         outbox.Owner = EtlRuntimeRecordCodec.EncodeIdentity(workerId, "worker id");
         outbox.Fence = checked(outbox.Fence + 1);
-        outbox.ExpiresAtUtcTicks = Expiry(now, options.DeliveryLease);
+        outbox.ExpiresAtUtcTicks = expiresAtUtcTicks;
         outbox.Attempts = checked(outbox.Attempts + 1);
         await db.SaveChangesAsync(cancellationToken);
         if (outbox.ExpiresAtUtcTicks <= NowTicks()) return null;
         await tx.CommitAsync(cancellationToken);
-        var invocation = EtlRuntimeRecordCodec.ReadInvocation(run.InvocationJson);
-        return new(scope, EtlRuntimeRecordCodec.DecodeIdentity(run.RunId, "run id"), outbox.DeliveryId,
-            workerId, outbox.Fence, EtlRuntimeRecordCodec.ReadUtc(outbox.ExpiresAtUtcTicks.Value), invocation.ResultAddress, result, outbox.PayloadHash);
+        return new(validated.Scope, validated.RunId, outbox.DeliveryId,
+            workerId, outbox.Fence, expiresAt, validated.Invocation.ResultAddress, validated.Result, outbox.PayloadHash);
     }
+
+    private sealed record ValidatedDeliveryCandidate(EtlScope Scope, string RunId,
+        EtlInvocation Invocation, EtlTerminalResult Result);
+
+    private static bool IsPersistedDataException(Exception exception) =>
+        exception is InvalidDataException or System.Text.Json.JsonException;
+
+    private static string DeliveryCandidateId(EtlRuntimeOutboxRecord outbox) =>
+        HashAscii(outbox.ScopeKey + "|" + outbox.RunKey)[..16];
 
     public async ValueTask<EtlStoreStatus> AcknowledgeDeliveryAsync(EtlDeliveryLease lease, EtlDeliveryDisposition disposition, CancellationToken cancellationToken = default)
     {

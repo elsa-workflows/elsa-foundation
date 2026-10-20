@@ -19,11 +19,11 @@ Elsa.Etl.Design.Api.Endpoints.ValidateDraft.Endpoint
 Elsa.Etl.Design.Api.Endpoints.ValidateDraft.Endpoint.Endpoint(Elsa.Etl.Design.Api.Models.IEtlDesignOperations! operations) -> void
 Elsa.Etl.Design.Api.EtlDesignApi
 Elsa.Etl.Design.Api.EtlDesignApiFeature
-Elsa.Etl.Design.Api.EtlDesignApiFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Etl.Design.Api.EtlDesignApiFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 Elsa.Etl.Design.Api.EtlDesignApiFeature.CursorSigningKey.get -> string?
 Elsa.Etl.Design.Api.EtlDesignApiFeature.CursorSigningKey.set -> void
 Elsa.Etl.Design.Api.EtlDesignApiFeature.EtlDesignApiFeature() -> void
-Elsa.Etl.Design.Api.EtlDesignApiFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void
+virtual Elsa.Etl.Design.Api.EtlDesignApiFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void
 Elsa.Etl.Design.Api.EtlDesignPermissions
 Elsa.Etl.Design.Api.Models.EtlApiProblem
 Elsa.Etl.Design.Api.Models.EtlApiProblem.<Clone>$() -> Elsa.Etl.Design.Api.Models.EtlApiProblem!

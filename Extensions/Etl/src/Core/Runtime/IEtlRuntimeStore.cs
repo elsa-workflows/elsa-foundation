@@ -31,6 +31,8 @@ public interface IEtlRuntimeStore
     ValueTask<EtlTerminalSettlementResult> SettleTerminalAsync(EtlTerminalProposal proposal, CancellationToken cancellationToken = default);
     ValueTask<EtlTerminalSettlementResult> CancelAsync(EtlInvocation invocation, CancellationToken cancellationToken = default);
     ValueTask<EtlDeliveryLease?> ClaimDeliveryAsync(EtlScope scope, string workerId, CancellationToken cancellationToken = default);
+    /// <summary>Claims one persisted pending terminal delivery across this store's scopes for a composition-local worker.</summary>
+    ValueTask<EtlDeliveryLease?> ClaimNextDeliveryAsync(string workerId, CancellationToken cancellationToken = default);
     ValueTask<EtlStoreStatus> AcknowledgeDeliveryAsync(EtlDeliveryLease lease, EtlDeliveryDisposition disposition, CancellationToken cancellationToken = default);
     /// <summary>Lists exact-scope runs in a stable total identity order. The supplied run ID is an exclusive boundary in that same provider order, not necessarily raw-string order.</summary>
     /// <remarks>Return up to take rows; a short page means the current query is exhausted. Consumers must preserve this order. Pages are live views, not a frozen snapshot.</remarks>

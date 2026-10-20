@@ -34,12 +34,13 @@ var builder = Host.CreateApplicationBuilder([]);
 var runtime = new EtlRuntimeFeature
 {
     SnapshotRoot = Path.Combine(root, "snapshots"),
-    FileBindings = configuration.Bindings
+    FileBindings = configuration.Bindings,
+    // Keep each child process to one active attempt so journal gates can coordinate which
+    // process owns each partition; the process still runs the real runtime worker loop.
+    MaxConcurrentAttempts = 1
 };
 // A held delivery must not be reclaimed by another attempt in the same fixture process.
 // The recovery case deliberately delegates that next claim to the replacement process.
-if (configuration.StoreGate == EtlWorkerStoreGate.AfterDeliveryClaim)
-    runtime.MaxConcurrentAttempts = 1;
 runtime.ConfigureServices(builder.Services);
 if (configuration.WritePause != EtlWorkerWritePause.None)
     builder.Services.Replace(ServiceDescriptor.Singleton<IFileChunkPublisherFactory>(
@@ -83,6 +84,7 @@ internal sealed class AcceptanceGate(string root, string role, EtlWorkerStoreGat
 {
     private readonly TaskCompletionSource _markerPublication = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _publicationStarted;
+    private int _committedAcceptanceOrdinal;
 
     public Task WaitBeforeAcceptanceAsync(EtlPartitionLease lease, EtlBatchAcceptance acceptance,
         CancellationToken cancellationToken) =>
@@ -107,6 +109,17 @@ internal sealed class AcceptanceGate(string root, string role, EtlWorkerStoreGat
         await WaitAsync(EtlWorkerStoreGate.AfterAcceptanceCommit,
             token => EtlWorkerProtocol.WriteCommittedAcceptanceAsync(root, role,
                 new EtlWorkerCommittedAcceptance(lease, acceptance, result, Environment.ProcessId), token), cancellationToken);
+    }
+
+    public Task RecordCommittedAcceptanceAsync(EtlPartitionLease lease, EtlBatchAcceptance acceptance,
+        EtlAcceptanceResult result, CancellationToken cancellationToken)
+    {
+        if (result.Status != EtlStoreStatus.Applied)
+            return Task.CompletedTask;
+
+        var ordinal = Interlocked.Increment(ref _committedAcceptanceOrdinal);
+        return EtlWorkerProtocol.WriteCommittedAcceptanceReceiptAsync(root, role, ordinal,
+            new EtlWorkerCommittedAcceptance(lease, acceptance, result, Environment.ProcessId), cancellationToken);
     }
 
     public Task WaitAfterDeliveryClaimAsync(EtlDeliveryLease lease, CancellationToken cancellationToken) =>
@@ -157,6 +170,7 @@ internal sealed class AcceptanceGateStore(IEtlRuntimeStore inner, AcceptanceGate
     {
         await gate.WaitBeforeAcceptanceAsync(lease, acceptance, cancellationToken);
         var result = await Inner.AcceptBatchAsync(lease, acceptance, cancellationToken);
+        await gate.RecordCommittedAcceptanceAsync(lease, acceptance, result, cancellationToken);
         await gate.WaitAfterAcceptanceCommitAsync(lease, acceptance, result, cancellationToken);
         return result;
     }

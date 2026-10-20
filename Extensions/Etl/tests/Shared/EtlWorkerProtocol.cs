@@ -47,6 +47,13 @@ internal static class EtlWorkerProtocol
         return Path.Combine(JournalDirectory(root), $"{role}.committed-acceptance.json");
     }
 
+    public static string CommittedAcceptanceReceiptPath(string root, string role, int ordinal)
+    {
+        ValidateRole(role);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(ordinal);
+        return Path.Combine(JournalDirectory(root), $"{role}.committed-acceptance-{ordinal:D4}.json");
+    }
+
     public static string DeliveryPath(string root, string role)
     {
         ValidateRole(role);
@@ -104,6 +111,10 @@ internal static class EtlWorkerProtocol
     public static Task WriteCommittedAcceptanceAsync(string root, string role, EtlWorkerCommittedAcceptance acceptance,
         CancellationToken cancellationToken = default) =>
         WriteJournalAsync(root, CommittedAcceptancePath(root, role), acceptance, cancellationToken);
+
+    public static Task WriteCommittedAcceptanceReceiptAsync(string root, string role, int ordinal,
+        EtlWorkerCommittedAcceptance acceptance, CancellationToken cancellationToken = default) =>
+        WriteJournalAsync(root, CommittedAcceptanceReceiptPath(root, role, ordinal), acceptance, cancellationToken);
 
     public static Task WriteDeliveryAsync(string root, string role, EtlWorkerDelivery delivery,
         CancellationToken cancellationToken = default) =>

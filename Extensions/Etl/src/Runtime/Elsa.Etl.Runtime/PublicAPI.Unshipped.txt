@@ -22,7 +22,7 @@ Elsa.Etl.Runtime.EtlHostFileBindingOptions.Role.set -> void
 Elsa.Etl.Runtime.EtlHostFileBindingOptions.TenantId.get -> string?
 Elsa.Etl.Runtime.EtlHostFileBindingOptions.TenantId.set -> void
 Elsa.Etl.Runtime.EtlRuntimeFeature
-Elsa.Etl.Runtime.EtlRuntimeFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+virtual Elsa.Etl.Runtime.EtlRuntimeFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
 Elsa.Etl.Runtime.EtlRuntimeFeature.EtlRuntimeFeature() -> void
 Elsa.Etl.Runtime.EtlRuntimeFeature.FileBindings.get -> System.Collections.Generic.List<Elsa.Etl.Runtime.EtlHostFileBindingOptions!>!
 Elsa.Etl.Runtime.EtlRuntimeFeature.FileBindings.set -> void
