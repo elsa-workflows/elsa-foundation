@@ -6,9 +6,19 @@ import { ThemeProvider } from "../../src/apps/Elsa.Studio.Web/Client/src/app/com
 import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
 import "../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/styles.css";
 
+const scenario = new URLSearchParams(window.location.search).get("scenario") ?? "default";
+const extraSettings = scenario === "tall-error"
+  ? Array.from({ length: 12 }, (_, index) => ({
+    name: `extra-${index + 1}`,
+    displayName: `Extra setting ${index + 1}`,
+    editorHint: "text"
+  }))
+  : [];
+
 const descriptors = {
   types: [{ name: "http", displayName: "HTTP", supportedSchemes: ["bearer"], settings: [
-    { name: "baseUrl", displayName: "Base URL", editorHint: "url" }
+    { name: "baseUrl", displayName: "Base URL", editorHint: "url" },
+    ...extraSettings
   ] }],
   schemes: [{ name: "bearer", displayName: "Bearer", fields: [
     { name: "token", displayName: "Token", sensitive: true, editorHint: "password", required: true }
@@ -30,6 +40,10 @@ function Fixture() {
           ].filter(item => `${item.name} ${item.displayName}`.toLowerCase().includes(search)), canCreateInline: false } as T;
         }
         if (url === "/connections") {
+          if (scenario === "tall-error") {
+            const details = Array.from({ length: 24 }, () => "The test service rejected this connection after validating its configuration and credentials.").join(" ");
+            throw new Error(`Fixture connection create failed. ${details}`);
+          }
           setPayload(body);
           return { ...(body as object), tenantId: "default", displayName: "Customer API", status: "Ready", secretFieldNames: ["token"], tags: [] } as T;
         }
