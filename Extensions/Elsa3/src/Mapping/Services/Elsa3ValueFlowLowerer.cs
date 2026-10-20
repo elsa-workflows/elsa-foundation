@@ -815,16 +815,44 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     }
 
     /// <summary>
+    /// The declared Elsa 3 type in the Elsa 4 shape normalization has already put the value in (spec 248 R-4): Elsa 3's
+    /// generic list syntax (<c>List&lt;String&gt;</c>) is a list of its element, and the Elsa 3 names below are what
+    /// their Elsa 4 member holds. <c>HttpStatusCode</c> is an integer because the narrowed contract (R5) turned a status
+    /// name into its number and refused an expression declared as the enum.
+    /// </summary>
+    private static TypeReference ReadNormalizedType(JsonElement value)
+    {
+        if (value.TryGetProperty("typeName", out var typeName) && typeName.ValueKind == JsonValueKind.String &&
+            typeName.GetString() is { } token && token.IndexOf('<') is var open and > 0 && token.EndsWith('>') &&
+            SimpleName(token[..open]) is "List" or "IList" or "ICollection" or "IEnumerable" or "IReadOnlyList" or "IReadOnlyCollection" &&
+            token[(open + 1)..^1] is var element && element.IndexOfAny([',', '<']) < 0)
+            return new TypeReference(SimpleName(element), CollectionKind.List);
+
+        var declared = ReadType(value);
+        return Elsa3TypeShapes.GetValueOrDefault(declared.Alias) ?? declared;
+    }
+
+    private static readonly IReadOnlyDictionary<string, TypeReference> Elsa3TypeShapes = new Dictionary<string, TypeReference>(StringComparer.Ordinal)
+    {
+        ["HttpStatusCode"] = new("Int32"),
+        ["HttpHeaders"] = new("String[]", CollectionKind.Dictionary),
+        ["ObjectDictionary"] = new("Object", CollectionKind.Dictionary),
+    };
+
+    /// <summary>
     /// Whether a value of type <paramref name="value"/> may bind a member of type <paramref name="member"/>. Aliases are
     /// compared by simple name (Elsa 3 writes <c>String</c>, the catalog <c>System.String</c> or
     /// <c>System.Text.Json.JsonElement?</c>). An untyped side (<c>Object</c>, <c>JsonElement</c>, <c>Any</c>) matches
-    /// anything, and a String value may bind a scalar member, which Elsa 4 converts from text (a URI, a number, an enum).
+    /// anything, or any element of the same collection kind, and a String value may bind a scalar member, which Elsa 4
+    /// converts from text (a URI, a number, an enum).
     /// </summary>
     private static bool TypesMatch(TypeReference value, TypeReference member)
     {
         var valueName = SimpleName(value.Alias);
         var memberName = SimpleName(member.Alias);
         if (IsUntyped(value, valueName) || IsUntyped(member, memberName))
+            return true;
+        if ((IsUntypedName(valueName) || IsUntypedName(memberName)) && value.CollectionKind == member.CollectionKind)
             return true;
         if (valueName.Equals("String", StringComparison.OrdinalIgnoreCase) &&
             value.CollectionKind == CollectionKind.Single &&
@@ -840,7 +868,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     /// </summary>
     private static bool ValueFits(ActivityProperty property, TypeReference member)
     {
-        var declared = ReadType(property.Value);
+        var declared = ReadNormalizedType(property.Value);
         if (property.Expression is null ||
             !property.Expression.Type.Equals("Literal", StringComparison.OrdinalIgnoreCase) ||
             !SimpleName(declared.Alias).Equals("String", StringComparison.OrdinalIgnoreCase) ||
@@ -862,7 +890,9 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     }
 
     private static bool IsUntyped(TypeReference type, string simpleName) =>
-        type.CollectionKind == CollectionKind.Single &&
+        type.CollectionKind == CollectionKind.Single && IsUntypedName(simpleName);
+
+    private static bool IsUntypedName(string simpleName) =>
         simpleName is "Object" or "object" or "JsonElement" or "JsonNode" or "Any" or "ExpandoObject";
 
     private static string SimpleName(string alias)

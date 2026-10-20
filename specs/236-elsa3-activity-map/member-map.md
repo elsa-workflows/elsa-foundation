@@ -36,7 +36,7 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 | `name` | — | R9 |
 | `metadata` (designer position, size, display text) | layout sibling (out of scope) | R9 |
 | `type`, `version` | `ActivityVersionId` via resolution (spec FR-007, FR-008) | R1 |
-| `customProperties.canStartWorkflow` | `CanStartWorkflow` input on HttpEndpoint and Event; Cron and Timer are start-only | R1 where the input exists; on Cron/Timer `true` is required (else R6, mid-flow wait); elsewhere R3 (default false) |
+| `customProperties.canStartWorkflow` | `CanStartWorkflow` input on HttpEndpoint and Event; Cron and Timer are start-only | R1 where the input exists; on Cron/Timer `true` is required (else R6, mid-flow wait). Elsewhere (a non-trigger) R8: Elsa 3 only uses the flag to pick a flowchart's start when no trigger fired (`Flowchart.GetStartActivity`, 3.5.3), so graph conversion reads it for `startNodeId` and it is then dropped (spec 248; was R3, amended 2026-10-19 with the maintainer) |
 | `customProperties.runAsynchronously` | — | R3 (default false) |
 | `customProperties.commitStrategy` | — | R3 (default absent) |
 | output `converter {id, settings}` | `ArgumentState.Conversion` (Auto/None/Json/Xml/Profile) | R5: Auto/None/Json/Xml carried; any other converter id → unconvertible |
@@ -98,7 +98,7 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 
 | Activity.member | Elsa 4 | Rule | JTest |
 |---|---|---|---|
-| WriteLine.Text | `text` | R1 | 39 |
+| WriteLine.Text | `text` | R1; unset or empty → R2 `""` (Elsa 3 writes an empty line; spec 248, amended 2026-10-19) | 39 |
 | ReadLine.Result | `Result` | R1 | 0 |
 | Fault.Code / Category / FaultType / Message | `code` / `category` / `faultType` / `message` | R1 + R2 (emit `"0"`, `"General"`, `"System"` when unset; Message has no Elsa 3 default) | 0 |
 | SetVariable.Variable | `elsa.intrinsic.set@1` `variable` (`VariableReference`) | R7 (declaring scope computed) | 20 |
@@ -192,10 +192,10 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 ## Elsa 4 required members with no Elsa 3 source
 
 A converted node must not leave a required Elsa 4 input unbound. These become unconvertible when the Elsa 3 node does
-not supply them: SendHttpRequest.Url, HttpEndpoint.Path, Event.EventName, PublishEvent.EventName, WriteLine.text,
+not supply them: SendHttpRequest.Url, HttpEndpoint.Path, Event.EventName, PublishEvent.EventName,
 Cron.Expression, DispatchWorkflow.WorkflowDefinitionId, RunJavaScript.script (an empty string counts as unbound), and
 every intrinsic input (`variable`+`value`, `name`+`value`, `value`, `outcome`). Timer.Interval and Finish.outcome are
-covered by R2.
+covered by R2, and so is WriteLine.text (`""`, spec 248): a blank R2 default counts as bound.
 
 ## SetOutput in reusable workflows
 
