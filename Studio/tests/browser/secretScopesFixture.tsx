@@ -9,6 +9,10 @@ import "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/styles
 
 const scenario = new URLSearchParams(window.location.search).get("scenario") ?? "default";
 
+const tallDescription = scenario === "tall-error"
+  ? Array.from({ length: 16 }, () => "This explanatory text is intentionally long so the create dialog has enough content to test its own scrolling area.").join(" ")
+  : undefined;
+
 const suggestedScopes = [
   { name: "Integration:CRM", displayName: "CRM integration", description: "Credentials used by the CRM integration.", source: "CRM Connector" },
   { name: "Integration.Legacy-CRM", displayName: "Legacy CRM integration", description: "Existing CRM credential scope.", source: "Legacy CRM Provider" },
@@ -21,8 +25,8 @@ const suggestedScopes = [
 ];
 
 const descriptors: SecretDescriptorsResponse = {
-  types: [{ name: "text", displayName: "Text", editorHint: "text", supportedStoreNames: ["encrypted"] }],
-  stores: [{ name: "encrypted", displayName: "Encrypted", isReadOnly: false }],
+  types: [{ name: "text", displayName: "Text", description: tallDescription, editorHint: "text", supportedStoreNames: ["encrypted"] }],
+  stores: [{ name: "encrypted", displayName: "Encrypted", description: tallDescription, isReadOnly: false }],
   scopes: suggestedScopes
 };
 
@@ -74,6 +78,10 @@ function Fixture() {
       },
       postJson: async <T,>(url: string, body: unknown) => {
         if (url !== "/secrets") throw new Error(`Unexpected fixture POST ${url}`);
+        if (scenario === "tall-error") {
+          const details = Array.from({ length: 24 }, () => "The test service rejected this secret after validating its metadata and selected storage configuration.").join(" ");
+          throw new Error(`Fixture secret creation failed. ${details}`);
+        }
         const request = body as CreateSecretRequest;
         const metadata: SecretMetadata = {
           id: `fixture-${request.name}`,

@@ -13,7 +13,11 @@
       "displayName": "Background activity witness",
       "dependencies": [
         { "featureId": "BackgroundActivities", "optional": false },
-        { "featureId": "WorkflowsRuntimeEntityFrameworkCore", "optional": false }
+        { "featureId": "WorkflowsRuntimeEntityFrameworkCore", "optional": false },
+        { "featureId": "WorkflowsRuntimeApi", "optional": true },
+        { "featureId": "WorkflowsRuntimeDistributed", "optional": true },
+        { "featureId": "WorkflowsRuntimeDistributedEntityFrameworkCorePersistence", "optional": true },
+        { "featureId": "WorkflowsRuntimeDistributedCommandTransportEntityFrameworkCorePersistence", "optional": true }
       ],
       "extensions": { "cshellsFeatureName": "BackgroundActivityWitness" }
     }
