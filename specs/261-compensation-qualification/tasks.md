@@ -1,0 +1,56 @@
+# Tasks: qualifying native compensation (M5)
+
+**Input**: [spec.md](spec.md), [plan.md](plan.md), [research.md](research.md), [data-model.md](data-model.md), [contracts/](contracts/), [quickstart.md](quickstart.md)
+
+Each task names its files and its test. `[P]` marks a task that can run in parallel with the others in its phase. Tasks assume the recommended option of OD17–OD20; [plan.md](plan.md#if-the-owner-chooses-differently) lists what changes otherwise.
+
+## Phase A — Runtime seam R-7 (PR 1)
+
+- [ ] T501 Settle research R2 before any production change: failing tests for the four checks (the hop publishes a not-yet-due item; the immediate dispatch delivers it; a Balanced and an Ephemeral drain flush it durably with its `AvailableAt`; the recovery candidate selector and run health ignore a run whose only work is a pending delayed item). If one needs new machinery, stop and re-plan on the structural timer fallback (research R1 option 2) with the owner. Test: the four new tests, red, in `Essentials/tests/Workflows/Runtime/Tests`.
+- [ ] T502 [P] Core surface: the `ScheduleChildActivity` overload with `notBefore`, `RuntimeChildActivityScheduleRequest.NotBefore`, `RuntimePostCommitIntent.NotBefore`, `RuntimeDelayedScheduleOptions`, `IRuntimeDelayedScheduleCapability`, the two fault codes ([contracts/runtime-seam.md](contracts/runtime-seam.md)). Unit tests: argument checks; past or present `notBefore` behaves as null; `MaxDelay` exceeded and capability missing fault the evaluation (D6); the old overload is unchanged.
+- [ ] T503 Commit path: the committer maps `NotBefore` to the outbox item's `AvailableAt` and marks the checkpoint mandatory; the in-process hop and the immediate dispatch skip a not-yet-due intent; the coalescing session flushes an undelivered one as `Pending`. Tests D1, D2, D3, D7, D9 with the test structural activity, on the in-memory and SQLite stores; T501's tests turn green.
+- [ ] T504 Delivery: `WorkflowScheduleActivitySchedulerWorkHandler` acknowledges a schedule whose parent is not `Running`, whose run is terminal or whose run is gone, and creates no child. Tests D5 (parent cancelled, run cancelled, run faulted, run deleted); the existing schedule-handler suites pass unchanged.
+- [ ] T505 Liveness and restart: the recovery candidate selector and run health treat pending delayed items as expected work (FR-504); the capability is registered by the feature that registers the outbox sweep. Tests D4 (kill after the commit, restart after the due time), D8.
+- [ ] T506 [P] `EXTENSION_POINTS.md` (Workflows.Runtime, Activities.Runtime): R-7, its staging rules and fault codes; `Elsa.Workflows.Runtime/README.md`. Regenerate the maps locally (not committed). Test: the catalog link check.
+
+## Phase B — Scope backoff (PR 1)
+
+- [ ] T507 [P] Scope inputs `handlerRetryDelay`, `handlerRetryBackoffMultiplier`, `handlerRetryMaxDelay` with their defaults (data model); validator errors `InvalidRetryDelay`, `InvalidBackoffMultiplier`, `InvalidRetryMaxDelay` at `{scope}/inputs/{key}` in `CompensationScopeValidator`. Unit tests: each rule and boundary; defaults valid; an expression input is not validated at design time.
+- [ ] T508 [P] State v5: attempt `notBefore` and `delayClamped`; `CompensationScopeStatePersister` reads 1–5 and writes 5; `CompensationScopeStateUpcaster.FromVersion4`. Unit tests: v1–v4 payloads upcast to v5 and round-trip; no downgrade; an unknown version throws.
+- [ ] T509 Backoff in `CompensationScope`: inject `TimeProvider`; in `OnHandlerFaulted` compute `wait(n)` with the clamp; `ScheduleHandler` passes `notBefore` when the wait is positive and records it on the new attempt; operator retries unchanged. Callback tests: delay 0 stages exactly what M4 stages (BK0, SC-501); the formula over four attempts; the cap; the clamp of an out-of-range expression value; a retried handler's keys and scheduling id unchanged.
+- [ ] T510 [P] `CompensationJournalProjector`: `notBefore` and `delayClamped` on attempts. Projector tests: present for a scheduled retry, absent otherwise; the J1 snapshot otherwise unchanged.
+- [ ] T511 Journeys BK0–BK6 in Durable, Balanced and Ephemeral with the three backoff restart points, in `Essentials/tests/Activities/Compensation/Tests`; a Workbench owned-process journey with `handlerRetryDelay` and a process kill while the retry waits (`WorkbenchCompensationRecoveryTests`). Test: the journeys themselves.
+
+## Phase C — Replay-safe warning and Studio (PR 1)
+
+- [ ] T512 [P] `IActivitySideEffectProfileReader` in `Elsa.Activities.Runtime.Core`; its Publishing implementation shares one helper with `ExecutableNodeCompiler.ResolveSideEffectProfile`. First check research R5's facet question and record the answer in research.md. Unit tests: a `ReplaySafe` CLR activity, an unmarked one (`External`), a reusable graph activity (`External`), an unknown version (null); the compiler's profile tests pass unchanged.
+- [ ] T513 `CompensationReplaySafeValidator` (Warnings `ReplaySafeStep`, `ReplaySafeHandler`), registered by `ActivitiesCompensationFeature`; skips structural nodes; no reader means no warning. Unit tests W1–W5; an API test for W6 (validations carry `Severity: Warning`, promotion succeeds).
+- [ ] T514 Studio publication review: `ValidationError.severity`; split errors and warnings in `useWorkflowOperations.ts` and `PublicationReviewDialog.tsx`; warnings listed with text and icon, **Publish** enabled. First confirm research R6 (whether the saved draft already carries warnings). Vitest: warnings only → Publish enabled; an error and a warning → blocked; a missing severity reads as error; the Connections warning case.
+- [ ] T515 [P] Studio **Retry scheduled** state from the journal's `notBefore` in `compensationRuntime.ts` and `CompensationScopeDesigner.tsx`. Vitest per label (scheduled, due, then retrying); the mocked browser fixture gains a waiting-retry run with axe at 390 and 1200 px in light and dark.
+- [ ] T516 PR 1 docs: guide rows A2, A3, A11, A15 and the two removed limits of A12 ([contracts/docs-and-samples.md](contracts/docs-and-samples.md#audit)); glossary "Scheduled retry (compensation)" and "Replay-safe warning"; compensation `EXTENSION_POINTS.md` (the inputs, the reader contract, the validator); spec 250 FR-014 and spec 251 OD7 gain "implemented by spec 261". Test: docs build and link check.
+- [ ] T517 Run negative controls N501–N506 once by hand on the full suites, each reverted; record the failing counts in the PR and in quickstart.md.
+
+## Phase D — Qualification (PR 2, after #3140 and PR 1 merge)
+
+- [ ] T518 `Studio/tests/live/support/journey.ts` (sign in, pick, fill, rename, publish through **Review & publish**, start a **Test Run**, open a scope, wait for a phase, axe at both widths); `compensation-journey.spec.ts` and `operator-actions-journey.spec.ts` use it; repair the M1 journey (#3142) and assert its publish step lists the FR-014 warnings and still publishes. Test: both journeys against the candidate pair.
+- [ ] T519 [P] `Studio/tests/live/nesting-journey.spec.ts` per [quickstart](quickstart.md#live-browser-journeys-real-backend). Test: the journey against the candidate pair.
+- [ ] T520 [P] The backoff step in `operator-actions-journey.spec.ts` (**Retry scheduled**, no action offered, then **Retrying**). Test: the journey.
+- [ ] T521 `CompensationHost` takes a provider; `Essentials/tests/Activities/Compensation/Persistence/EntityFrameworkCore/ProviderTests` runs S1–S7 in each mode on PostgreSQL, SQL Server and MySQL with the runtime provider fixtures and `ELSA_COMPENSATION_EF_REQUIRE_NATIVE_PROVIDERS`; suite `compensation` in `tools/ci/ef-suites.json`; regenerate solution filters. Test: the suite locally with Docker, `ef-suites-self-test`, and a dispatched `CI` run on the PR head.
+- [ ] T522 [P] In-memory smoke J1, N1, O2h without restart (Q7). Test: the smoke.
+- [ ] T523 [P] Upcast integration U1–U4 (FR-518). Test: the four journeys in Durable.
+- [ ] T524 Retention: first settle research R10 by reading `ITestRunRootCanceller` and the test-scope cleanup, and record the answer; then R1–R4 (FR-519). File a defect if R10 finds a waiting test run left unresumable. Test: R1–R4 API and integration tests.
+- [ ] T525 [P] #3130: `RuntimeDiagnosticsPermissions.CanManage` evaluated per caller through `IWorkflowRuntimeOperatorAccess`'s rule, failing closed. API tests for manage, read-only and untrusted callers; the Studio diagnostics Vitest for a read-only user.
+- [ ] T526 [P] Pinning in every mode: `A_republish_mid_recovery_keeps_the_handlers_of_the_pinned_executable` becomes a theory over the three modes (Q10). Test: the theory.
+- [ ] T527 Review pass over the M1–M4 runtime and Studio code (`Activities/Compensation`, the R-1 to R-6 seams, `compensationRuntime.ts`, `CompensationScopeDesigner.tsx`, the operator-action files): fix what is in scope, file the rest with `needs-triage`, and list each in the qualification record (FR-521). Test: the fixes' own regression tests.
+- [ ] T528 Qualification run: every matrix row on the PR 2 head, live journeys against one recorded Studio and Workbench pair, the EF suite dispatched; write `docs/reports/native-compensation-qualification.md` sections 1–4 and 8 ([contracts/release-readiness.md](contracts/release-readiness.md#outline)). Test: no supported row without a recorded result (SC-504).
+- [ ] T529 PR 2 docs: the rest of A12 (not-qualified rows, the in-memory claim, the test-run window, due-time precision). Test: docs build and link check.
+
+## Phase E — Samples, docs and records (PR 3)
+
+- [ ] T530 `samples/Elsa.Samples.Compensation` per [contracts/docs-and-samples.md](contracts/docs-and-samples.md#samples-od19-a): the feature, `Reserve` and `Release`, the ledger, the three workflows, the README. Unit tests for the participant contract (repeat, tombstone, late refusal, `outcome-unknown`, `FailTimes`).
+- [ ] T531 `Essentials/tests/Workbench/Tests/WorkbenchCompensationSampleTests.cs`: S1 and S2 to the end, S3 to **Needs action** and resolved over REST; assert the ledgers and outcomes. Test: the test, in `Build & test`.
+- [ ] T532 Guide rows A5, A6 (the snippet from the sample), A13 (the four-way table), A14 (glossary reconciliation rows) and a "Samples" section. Test: docs build and link check; the snippet compiles as part of the sample.
+- [ ] T533 Finish the qualification record: known limits, open follow-ups, review findings (sections 5–7); list it in `docs/reports/README.md`. Test: docs link check.
+- [ ] T534 [P] `docs/reports/native-compensation-elsa3-follow-on.md` per [contracts/elsa3-follow-on.md](contracts/elsa3-follow-on.md); the program charter's Elsa 3 row and M5 row point to it and to the record; list it in `docs/reports/README.md`. Test: docs link check.
+- [ ] T535 Spec 261 status becomes `Implemented` with the validation evidence; this PR closes #3048.
+- [ ] T536 After PR 3 merges (no PR): record the `main` CI run and a dispatched nightly EF run on the merge commit as a comment on #3048 and on #3035, as the record's section 8 says.
