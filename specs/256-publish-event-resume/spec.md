@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-20
 
-**Status**: Draft
+**Status**: Implemented — via [#3115](https://github.com/elsa-workflows/elsa-foundation/pull/3115)
 
 **Issue**: [#3107](https://github.com/elsa-workflows/elsa-foundation/issues/3107)
 

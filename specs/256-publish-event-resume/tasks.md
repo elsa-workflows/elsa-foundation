@@ -77,8 +77,8 @@ into the same target, with no Lost diagnostic.
 
 - [X] T032 Regenerate maps with `dotnet run --project tools/maps/Elsa.Maps.Generator -- all`. Review `git diff --stat docs/` (CRLF caveat on Windows), and stage the changed maps by explicit path, including `docs/maps/manifest.json`
 - [X] T033 Check `EXTENSION_POINTS.md` and the activity docs (e.g. `docs/` pages describing Event outputs) for Event's output list, and update any that list only `Result`
-- [ ] T034 Set spec 256 `Status: Implemented` in `specs/256-publish-event-resume/spec.md` in the finishing PR, before merge
-- [ ] T035 Commit. Ask the owner before pushing and opening a draft PR against `main` that notes the stack on #3031
+- [X] T034 Set spec 256 `Status: Implemented` in `specs/256-publish-event-resume/spec.md` in the finishing PR, before merge
+- [X] T035 Commit. Ask the owner before pushing and opening a draft PR against `main` that notes the stack on #3031
 
 ## Dependencies & execution order
 
