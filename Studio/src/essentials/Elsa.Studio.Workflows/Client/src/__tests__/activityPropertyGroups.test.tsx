@@ -810,7 +810,10 @@ describe("activity property organization", () => {
     expect(disclosure.querySelector(".studio-status-pill")?.getAttribute("data-tone")).toBe("danger");
   });
 
-  it("changes HTTP method without clearing body, authored defaults, conversions, or unknown extras", () => {
+  it.each([
+    { syntax: "JavaScript", value: "headers()" },
+    { syntax: "Variable", value: "request-headers" }
+  ])("preserves $syntax binding, body, defaults, conversions and extras through HTTP methods and disclosure", ({ syntax, value }) => {
     const contentType = {
       typeName: "System.String",
       expression: { type: "Literal", value: "text/plain" },
@@ -819,7 +822,7 @@ describe("activity property organization", () => {
     };
     const headers = {
       typeName: "System.String",
-      expression: { type: "JavaScript", value: "headers()" },
+      expression: { type: syntax, value },
       argumentExtras: { source: "foreign-template" }
     };
     const changes: ActivityNode[] = [];
@@ -849,7 +852,18 @@ describe("activity property organization", () => {
     expect(changes.at(-1)?.contentType).toEqual(contentType);
     expect(changes.at(-1)?.requestHeaders).toEqual(headers);
     expect(changes.at(-1)?.unrelatedExtra).toEqual({ preserve: true });
-    expect(container.querySelector(".studio-advanced-section .wf-property-row")).not.toBeNull();
+    const section = container.querySelector<HTMLElement>(".studio-advanced-section")!;
+    const trigger = section.querySelector<HTMLButtonElement>(".studio-disclosure-fold-trigger")!;
+    const rows = [...section.querySelectorAll(".wf-property-row")];
+    flushSync(() => trigger.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(section.querySelector(".studio-status-pill")?.textContent).toBe("2 set");
+    expect(section.querySelector(".studio-disclosure-fold-body")?.hasAttribute("hidden")).toBe(true);
+    flushSync(() => trigger.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect([...section.querySelectorAll(".wf-property-row")]).toEqual(rows);
+    expect(changes).toHaveLength(3);
+    expect(changes.at(-1)).toEqual({ ...initial, method: "GET" });
   });
 
   it("places the syntax picker inline with the checkbox contribution", () => {

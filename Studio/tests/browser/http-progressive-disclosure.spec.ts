@@ -60,6 +60,16 @@ for (const theme of ["light", "dark"] as const) {
     await requestHeaders.fill("headers()");
     await expect(disclosure.getByText("Request headers expression is invalid.")).toHaveCount(0);
     await expect(requestHeaders).toHaveValue("headers()");
+    const configuredState = await inspector.getByTestId("authored-state").textContent();
+    await trigger.click();
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await expect(trigger).toContainText("set");
+    await expect(contentType).toBeHidden();
+    expect(await inspector.getByTestId("authored-state").textContent()).toBe(configuredState);
+    await trigger.press("Enter");
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await expect(contentType).toHaveValue("string:text/plain");
+    await expect(requestHeaders).toHaveValue("headers()");
 
     const body = inspector.getByRole("textbox", { name: "Content", exact: true });
     await expect(body).toHaveValue("existing request body");

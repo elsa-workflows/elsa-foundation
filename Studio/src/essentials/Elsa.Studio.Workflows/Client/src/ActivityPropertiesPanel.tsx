@@ -267,6 +267,8 @@ export function ActivityPropertiesPanel({
         <AdvancedSection
           label="More options"
           setCount={configuredOptionalCount}
+          defaultOpen={configuredOptionalCount > 0}
+          allowCollapseWhenSet
           hasError={optionalHasError}
           forceOpen={optionalHasFailure || optionalHasUnreportedEditor}
         >

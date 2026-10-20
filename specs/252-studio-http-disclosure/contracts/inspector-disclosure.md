@@ -8,7 +8,7 @@ The design catalog remains authoritative. Consume existing per-input tier and is
 | Essential / Setting | Directly visible |
 | Missing, null or unknown tier | Directly visible |
 | Optional, no stored state/error | Under one shared More options section |
-| Optional, explicitly stored default/nondefault/binding/conversion/extras | Visible or clearly flagged; existing shared component may force open |
+| Optional, explicitly stored default/nondefault/binding/conversion/extras | Initially open, then collapsible with a configured badge; values remain mounted and unchanged |
 | Current host-owned validation error | Visible/error indicated; section opens |
 | Current private error from a reporting-capable property editor | Visible/error indicated; section opens |
 | Selected property editor without reporting capability, or selected inline expression editor | Directly visible conservative fallback; a separate diagnostics provider is not a completeness guarantee |
