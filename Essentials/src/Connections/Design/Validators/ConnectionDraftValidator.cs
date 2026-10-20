@@ -16,7 +16,7 @@ namespace Elsa.Connections.Design.Validators;
 /// dashboard and the promotion gate all run this as whoever asks, and every viewer sees the same result. The right to
 /// bind a connection is <c>workflows/design:manage</c>, which the Workflow Design routes that write drafts or
 /// versions, or promote drafts, require. The gate runs at promotion only: <c>versions/ingest</c> and
-/// <c>definitions/submit</c> write versions without draft validators (pre-existing).
+/// <c>definitions/submit</c> write versions without draft validators (#3141).
 /// </remarks>
 public sealed class ConnectionDraftValidator(
     IActivityStructureService activityStructureService,

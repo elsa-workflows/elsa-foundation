@@ -81,9 +81,9 @@ The execution evidence delete endpoint accepts `workflows/execution-evidence:del
 
 Connections has no read or use permission of its own. Listing connections, their types and their metadata, never a
 secret value, requires `workflows/design:read` or `connections:manage`. Binding a connection in a workflow draft requires
-`workflows/design:manage`, which the Workflow Design routes that write drafts or versions, or promote drafts, already require; draft validation
-never checks the caller, so every viewer sees the same findings. Otherwise the three Connections permissions guard
-administration.
+`workflows/design:manage`, which the Workflow Design routes that write drafts or versions, or promote drafts, already
+require; draft validation never checks the caller, so every viewer sees the same findings. Otherwise the three
+Connections permissions guard administration.
 
 ## Elsa 3.9 to Elsa 4
 
