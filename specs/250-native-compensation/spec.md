@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-19
 
-**Status**: In progress — design packet [#3043](https://github.com/elsa-workflows/elsa-foundation/issues/3043); M1 runtime under [#3044](https://github.com/elsa-workflows/elsa-foundation/issues/3044), Studio and end-to-end proof to follow.
+**Status**: In progress — design packet [#3043](https://github.com/elsa-workflows/elsa-foundation/issues/3043); M1 runtime and Studio under [#3044](https://github.com/elsa-workflows/elsa-foundation/issues/3044), end-to-end proof to follow.
 
 **Program**: [Native compensation #3035](https://github.com/elsa-workflows/elsa-foundation/issues/3035) → [Contract #3041](https://github.com/elsa-workflows/elsa-foundation/issues/3041) → [Design #3043](https://github.com/elsa-workflows/elsa-foundation/issues/3043). Requirements: [PRD #3036](https://github.com/elsa-workflows/elsa-foundation/issues/3036). Boundary with BPMN: [ADR 0086](../../docs/adr/0086-native-and-bpmn-compensation-stay-separate.md).
 
@@ -69,7 +69,7 @@ An operator opens the run in Studio. The scope shows "Compensated" with text and
 
 1. **Given** a compensated run, **when** the operator opens the scope, **then** each row shows forward state (Completed/Faulted/Not run) and recovery state (Compensated/Not needed/Pending/Running/Failed), each as text plus icon, never color alone.
 2. **Given** a handler occurrence, **when** it is selected, **then** the inspector shows "Compensates *Reserve delivery*", links to the exact forward occurrence, and shows the scope's recovery cause.
-3. **Given** the scope selected, **then** a Recovery panel lists the cause (step, fault code and message, subject to the existing payload disclosure policy) and the entries in recovery order.
+3. **Given** the scope selected, **then** a Recovery panel lists the cause (step, the incident's failure type and message, subject to the existing payload disclosure policy) and the entries in recovery order.
 4. **Given** the run timeline, **then** handler occurrences are labelled as compensation and are distinguishable from forward work.
 
 ### User Story 4 - Uncertain effects and intervention (Priority: P2, M2)

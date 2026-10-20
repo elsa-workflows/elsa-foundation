@@ -69,11 +69,15 @@ Run 4f2c… › Compensation scope "Reserve and confirm"            ⟲ Compensa
 │ 2  │ Reserve delivery   │ ✓ Completed  │ Cancel delivery      │ ⟲ Compensated (1st) │
 │ 3  │ Confirm order      │ ✕ Faulted    │ —                    │ — Not applicable    │
 └────┴────────────────────┴──────────────┴──────────────────────┴──────────────┘
-Recovery started because "Confirm order" failed: order.rejected — Order rejected.   [Show incident]
+Recovery started because "Confirm order" failed: ActivityReturnedFault — Order rejected.   [Show incident]
 ```
 
 - Each state is an icon plus text: `✓ Completed`, `✕ Faulted`, `● Running`, `◌ Not run`, `⟲ Compensated`,
-  `… Pending`, `● Undoing`, `— Not applicable`, `Not needed`. M2 adds `⚠ Uncertain`, `⚠ Failed`, `✋ Needs action`.
+  `… Pending`, `● Undoing`, `⚠ Undo failed`, `— Not applicable`, `Not needed`, and `Not loaded` when the run's
+  activity list is a bounded page that may hold the occurrence on a later page. In M1 `Undo failed` means the
+  handler faulted and its incident blocks the run. M2 adds `⚠ Uncertain` and `✋ Needs action`.
+- The recovery cause shows the step and the fault's incident failure type and message. The activity's own fault code
+  (such as `order.rejected`) needs the incident summary to carry it.
 - Clicking a Forward or Recovery cell selects that occurrence, using the existing `selectedEvidenceId`.
 - **Handler occurrence inspector**: header `Compensation · Cancel delivery`; first row `Compensates: Reserve
   delivery (occurrence ae-5)` as a link, then the normal input/output evidence.

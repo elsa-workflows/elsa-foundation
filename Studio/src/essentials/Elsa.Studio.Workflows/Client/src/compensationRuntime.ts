@@ -62,8 +62,13 @@ export function deriveCompensationRuntime(
     const forward = step.activity ? latest(children.filter(activity => matchesNode(activity, step.activity!.nodeId) && !isCompensationHandlerExecution(activity))) : undefined;
     return forward && forward.status === "Faulted" ? [{ index, forward }] : [];
   });
-  const phase = !scopeExecution && !complete ? "NotLoaded" : runPhase(scopeExecution, handlerExecutions.length > 0 || forwardFaulted.length > 0);
+  const knownPhase = runPhase(scopeExecution, handlerExecutions.length > 0 || forwardFaulted.length > 0);
+  // A running scope with no visible recovery may be recovering on a later page.
+  const phase = !complete && (!scopeExecution || knownPhase === "Running") ? "NotLoaded" : knownPhase;
   const recovering = phase === "Compensating" || phase === "Compensated" || (phase === "Faulted" && handlerExecutions.length > 0);
+  // Only a scope that completed normally or was cancelled settles that no handler ran; otherwise a handler missing from
+  // a partial page may simply not be loaded.
+  const handlerMayBeUnloaded = !complete && phase !== "Completed" && phase !== "Cancelled";
 
   const rows = steps.map((step): CompensationRowRuntime => {
     const forward = step.activity
@@ -78,7 +83,9 @@ export function deriveCompensationRuntime(
       step: step.name,
       forward: { state: forwardState, activityExecutionId: forward?.activityExecutionId },
       recovery: {
-        state: recoveryStateOf(forwardState, !!step.compensation, handler, recovering),
+        state: forwardState === "Completed" && step.compensation && !handler && handlerMayBeUnloaded
+          ? "NotLoaded"
+          : recoveryStateOf(forwardState, !!step.compensation, handler, recovering),
         activityExecutionId: handler?.activityExecutionId,
         order: handler ? handlerOrder.get(handler.activityExecutionId) : undefined
       }

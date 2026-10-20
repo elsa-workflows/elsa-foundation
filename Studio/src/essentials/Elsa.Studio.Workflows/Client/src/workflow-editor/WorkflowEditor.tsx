@@ -335,7 +335,8 @@ export function WorkflowEditor({
     catalogByVersion,
     isUnsupportedDesigner,
     isBpmnDesigner,
-    canAddActivitiesToCanvas,
+    // A compensation scope's steps change only through its step list, never by a palette drop on the canvas.
+    canAddActivitiesToCanvas: canAddActivitiesToCanvas && scope?.slot.id !== compensationStepsSlotId,
     selectedNodeId,
     editDraft,
     editDraftAndSelect,
@@ -760,10 +761,11 @@ export function WorkflowEditor({
   }, [compensationPick, scopeOwner, updateCompensationSteps]);
   // On the compensation scope's canvas, a palette click adds a new last step with that activity.
   const addCompensationStepFromPalette = useCallback((activity: ActivityCatalogItem) => {
+    if (!canAddActivitiesToCanvas || isUnsupportedDesigner) return;
     const node = createActivityNode(activity, createNodeId(activity));
     setCompensationPick(null);
     updateCompensationSteps(steps => addCompensationStep(steps, steps.length, node), `Added step ${getActivityDisplay(activity)}`, node.nodeId);
-  }, [updateCompensationSteps]);
+  }, [canAddActivitiesToCanvas, isUnsupportedDesigner, updateCompensationSteps]);
 
   // A start node is a Flowchart concept; a Sequence runs in authored order and has none.
   const isFlowchartScope = scope?.slot.mode === "flowchart";
