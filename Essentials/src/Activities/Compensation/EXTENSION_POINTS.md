@@ -14,6 +14,8 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   scope receives, addressed by activity type key `Elsa.Activities.Compensation.Activities.CompensationScope` with a
   stop at reusable-activity boundaries; their payloads carry identities and keys only (spec 258 data model).
 - The `Confirm` and `Compensate` activities, with `scope` (an enclosing scope's node id) and, on Compensate, `reason`.
+  The `scope` input carries the UI hint `compensation-confirm-target` or `compensation-compensate-target`, which
+  Studio's target picker claims (spec 258 R23).
 - The fault codes `compensation.scope.compensated`, `compensation.scope.compensate-requested` (category
   `compensation.target:{scopeNodeId}` while a cascade passes outward) and `compensation.scope.uncertain-unhandled`
   (category `outcome-unknown`).
@@ -35,3 +37,9 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   (`Compensation/TargetNotEnclosing`) and one placed in a compensation handler (`Compensation/InsideHandler`), with
   the node id as path. It resolves the node's catalog version through `IActivityDefinitionLookup`
   (`Elsa.Activities.Design.Core`).
+- `CompensationHandlerVariableValidator` implements `IDraftValidator`. For a scope that can hand over, it reports a
+  compensation handler that uses a variable declared by a container between that scope and the outermost scope its
+  entries can reach (`Compensation/HandlerUsesContainerVariable`, path `{nodeId}/inputs/{key}`,
+  `{nodeId}/outputs/{key}` or `{nodeId}/variable`). It reads container declarations through
+  `IActivityStructureService.ProjectScopedVariables` and checks structured `Variable` references only; script
+  expressions are not analyzed (spec 258 R18).

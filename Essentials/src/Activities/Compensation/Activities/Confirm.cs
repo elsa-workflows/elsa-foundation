@@ -24,8 +24,11 @@ namespace Elsa.Activities.Compensation.Activities;
 [Activity(Icon = "BadgeCheck")]
 public sealed class Confirm : StructuralActivity, IRuntimeStructuralActivity
 {
+    /// <summary>Asks Studio for the target picker that lists the enclosing compensation scopes (spec 258 FR-320).</summary>
+    public const string TargetUIHint = "compensation-confirm-target";
+
     /// <summary>The node id of an enclosing compensation scope to confirm too; blank confirms the nearest one only.</summary>
-    [ActivityInput(Key = "scope")]
+    [ActivityInput(Key = "scope", UIHint = TargetUIHint)]
     public string? Scope { get; set; }
 
     public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext runtimeContext)

@@ -16,7 +16,7 @@
 - [x] T307 Routing keys in request metadata and provenance metadata for every scheduled child; outcome matching falls back to provenance (FR-304). Test: operator retry of a handed-over handler routes back to the outer scope.
 - [x] T308 Hand-over on `Done` (R-1 optional, boundary stop, R-2, batches of 16) and `confirmOnComplete`. Scope implements `IRuntimeActivityChildNotificationHandler` and `IRuntimeActivityChildOutcomeHandler` (research R8).
 - [x] T309 Receiving hand-overs in every phase, de-duplication, fresh ordinals, transitive origin; scheduling handed-over handlers (FR-307). First test: the runtime accepts a handler node owned by an inner scope's slot as the outer scope's child (research R5); stop and re-plan if it does not.
-- [x] T310 Late handler bindings: prove an `ActivityResult` reference to the inner forward step resolves when the handler runs under the outer scope (research R6); validator refuses container-local reads in a scope that can hand over. (The publication check is deferred to T324: research R18.)
+- [x] T310 Late handler bindings: prove an `ActivityResult` reference to the inner forward step resolves when the handler runs under the outer scope (research R6); validator refuses container-local reads in a scope that can hand over. (The publication check landed as T324: research R18.)
 - [x] T311 `Confirm` activity and the scope's confirm transition; refusal during recovery.
 - [x] T312 `Compensate` activity, explicit cause, stopping the running step (uncertain journaling, R9), cascade through intermediate scopes, refusal inside a handler.
 - [x] T313 Descendant-fault handling in the scope (`OnDescendantFaultedAsync`, R-3).
@@ -28,9 +28,9 @@
 
 ## Phase C — Studio (PR 3)
 
-- [ ] T319 `compensationRuntime.ts`: origin scope and iteration per entry, `Confirmed` with the confirming occurrence, "Compensable by {scope}", explicit cause, per-occurrence grouping for repeated scopes. Vitest per state and for partial pages.
-- [ ] T320 `CompensationScopeDesigner.tsx` run view: origin link, "✓ Confirmed", occurrence picker (keyboard and screen reader), cancelled scope shows "Cancelled — nothing undone". Text plus icon for every state.
-- [ ] T321 Confirm and Compensate property editors with a target picker limited to valid enclosing scopes; validation messages from T314.
-- [ ] T322 Mocked browser suite with axe at both widths and both themes for nested, loop and confirmed runs.
-- [ ] T324 Publication check: refuse a compensation handler that reads variables local to containers inside a scope that can hand over (FR-307, research R18). Unit tests per container kind.
-- [ ] T323 Spec 258 status becomes `Implemented`, with the validation evidence. Close #3046.
+- [x] T319 `compensationRuntime.ts`: origin scope and iteration per entry, `Confirmed` with the confirming occurrence, "Compensable by {scope}", explicit cause, per-occurrence grouping for repeated scopes. Vitest per state and for partial pages.
+- [x] T320 `CompensationScopeDesigner.tsx` run view: origin link, "✓ Confirmed", occurrence picker (keyboard and screen reader), cancelled scope shows "Cancelled — nothing undone". Text plus icon for every state.
+- [x] T321 Confirm and Compensate property editors with a target picker limited to valid enclosing scopes; validation messages from T314.
+- [x] T322 Mocked browser suite with axe at both widths and both themes for nested, loop and confirmed runs.
+- [x] T324 Publication check: refuse a compensation handler that reads variables local to containers inside a scope that can hand over (FR-307, research R18). Unit tests per container kind.
+- [x] T323 Spec 258 status becomes `Implemented`, with the validation evidence. Close #3046 (when PR 3 merges).

@@ -236,8 +236,14 @@ public sealed class AncestorNotificationExecutionTests
 
         var executable = CompletionNotifierGraph(typeof(CompletingAncestorNotifierActivity));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => harness.RunAsync(executable, allowPendingWorkOnTerminalCompletion: true));
-        // The notifier's completion and both work items it enqueued committed together before the stop.
-        Assert.Empty(log.Entries.Where(entry => entry.Contains(":notified:", StringComparison.Ordinal)));
+        Assert.DoesNotContain(log.Entries, entry => entry.Contains(":notified:", StringComparison.Ordinal));
+        // The notifier's completion, the notification and the relay's completion form one commit unit, so the stop
+        // discards all three: the notifier is still running and the leaf's completion is still queued, unclaimed. No
+        // claim was taken on the durable queue, so the restart has no visibility timeout to wait out; it replays the
+        // leaf's completion and delivers the notification and the completion afresh.
+        var stopped = await harness.ReadRunAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+        Assert.Equal(ActivityExecutionStatus.Running, stopped.State("node-notifier").Status);
+        Assert.Equal(ActivityExecutionStatus.Completed, stopped.State("node-leaf").Status);
 
         await harness.SweepUntilQuietAsync();
 

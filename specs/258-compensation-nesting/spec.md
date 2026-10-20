@@ -4,7 +4,11 @@
 
 **Created**: 2026-10-20
 
-**Status**: In progress — runtime seams, scope v3, Confirm, Compensate, validators, journeys and docs land in [#3126](https://github.com/elsa-workflows/elsa-foundation/pull/3126); the Studio work (Phase C) and the container-local-read publication check (T324) remain.
+**Status**: Implemented — the three phases, in [#3126](https://github.com/elsa-workflows/elsa-foundation/pull/3126) (Phases A and B) and the Studio PR (Phase C), under [#3046](https://github.com/elsa-workflows/elsa-foundation/issues/3046): runtime seams R-1 to R-4 (Phase A), scope state v3 with hand-over, Confirm, Compensate, cancellation, descendant faults, target validators, the handler-variable publication check (T324) and docs (Phase B), and the Studio run view states and target picker (Phase C). Evidence:
+
+- Phase A: the R-1 to R-4 runtime suites (ancestor selector, ancestor notification, cross-slot scheduling, descendant fault, structural child report metadata) 38/38;
+- Phase B: compensation tests 199/199, including the handler-variable validator per container kind, operator retries inside a Sequence step and handler, and every [quickstart](quickstart.md) journey in Durable, Balanced and Ephemeral with the four restart injection points, and the UI hints of the Confirm and Compensate targets; the Workbench owned-process journey N1 + C1 with a process kill; five of the six SC-305 negative controls run by hand and reverted, the sixth having no code to remove (research R7, [quickstart](quickstart.md));
+- Phase C: Studio Vitest 3048/3048 across the workspace (nesting derivation, designer states, target editor), typecheck, lint with 0 errors, and the mocked browser suite `compensation-scope.spec.ts` 31/31, with axe at 390 and 1200 px in light and dark for the author, run, waiting, nested, confirmed and loop views (SC-306).
 
 **Program**: [Native compensation #3035](https://github.com/elsa-workflows/elsa-foundation/issues/3035) → [Epic #3039](https://github.com/elsa-workflows/elsa-foundation/issues/3039) → [Feature #3046](https://github.com/elsa-workflows/elsa-foundation/issues/3046) (M3). Builds on [spec 250](../250-native-compensation/spec.md) (M1) and [spec 251](../251-compensation-uncertainty/spec.md) (M2). Their requirements and owner decisions still hold, except where this spec says otherwise.
 
@@ -161,7 +165,7 @@ An operator opens a run with nested scopes and a loop. The run view shows which 
 
 - **FR-305**: When a scope completes `Done` and `confirmOnComplete` is off, it hands each entry that is `Registered`, `NoHandler` or `Uncertain` and not confirmed to the nearest enclosing scope (FR-301, stopping at the reusable boundary; a "maybe" delivery). Handed-over entries carry their step, operation key, forward execution and iteration, forward outcome, handler node and origin.
 - **FR-306**: The receiving scope journals handed-over entries with fresh completion ordinals, keeping their relative order, de-duplicated by (origin scope occurrence, origin entry id). In `Running` it just journals them. In `Compensating` or `AwaitingIntervention` it journals them as eligible for the current recovery. In `Completed` or `Compensated` the message cannot arrive (the scope has no live descendants).
-- **FR-307**: To compensate a handed-over entry, the scope schedules the entry's own handler node as its child, with the entry's own keys (spec 251 FR-202), the forward execution as scheduling identity, and origin metadata. The handler binds to the forward step's result and workflow variables; variables local to containers inside the origin scope are not available, and publishing refuses a handler that reads them (pending: T324; until then such a handler fails into retries and then waits for an operator, research R18).
+- **FR-307**: To compensate a handed-over entry, the scope schedules the entry's own handler node as its child, with the entry's own keys (spec 251 FR-202), the forward execution as scheduling identity, and origin metadata. The handler binds to the forward step's result and workflow variables; variables local to containers between the origin scope and the scope that runs the handler are not available, and publishing refuses a handler that uses them through a variable reference (T324, research R18).
 - **FR-308**: A scope inside a loop body yields one set of entries per iteration; each entry records its iteration. Retries never create a new entry (spec 251 FR-201).
 
 **Confirmation**
@@ -222,7 +226,7 @@ An operator opens a run with nested scopes and a loop. The run view shows which 
 ## Assumptions
 
 - Completed scopes keep no private state (current runtime behaviour); the enclosing scope is the only place handed-over entries live.
-- Late handlers need only the forward result and workflow variables. Refusing handlers that read container-local variables at publication is pending (T324).
+- Late handlers need only the forward result and workflow variables. Publishing refuses a handler that reads a container-local variable it would outlive (T324); script expressions are not analyzed (research R18).
 - Operators resume failed handed-over handlers through #2747's retry (spec 251).
 - Studio operator actions (retry button, mark resolved, abandon) are M4.
 

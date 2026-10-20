@@ -9,7 +9,8 @@ namespace Elsa.Activities.Compensation;
 
 /// <summary>
 /// Adds the native <c>CompensationScope</c> activity with <c>Confirm</c> and <c>Compensate</c>: the scope's design-side
-/// structure handler and the Draft validators for scopes and for Confirm and Compensate targets.
+/// structure handler and the Draft validators for scopes, for Confirm and Compensate targets, and for the variables a
+/// handed-over compensation handler uses.
 /// Native compensation is separate from BPMN compensation (ADR 0086).
 /// </summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
@@ -27,5 +28,6 @@ public class ActivitiesCompensationFeature : IShellFeature
         services.AddSingleton<IActivityStructureHandler, CompensationScopeStructureHandler>();
         services.AddScoped<IDraftValidator, CompensationScopeValidator>();
         services.AddScoped<IDraftValidator, CompensationTargetValidator>();
+        services.AddScoped<IDraftValidator, CompensationHandlerVariableValidator>();
     }
 }

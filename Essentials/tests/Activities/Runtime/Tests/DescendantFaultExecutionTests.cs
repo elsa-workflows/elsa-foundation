@@ -240,7 +240,8 @@ public sealed class DescendantFaultExecutionTests
             harness.RunAsync(executable, allowPendingWorkOnTerminalCompletion: true, allowAcceptedButFaulted: true));
         Assert.Empty(log.Deliveries);
 
-        // The stopped drain's ownership lease outlives it; a restarted process waits it out.
+        // The fault committed, so the delivery sits on the durable queue under the stopped drain's claim, hidden until
+        // its visibility timeout passes; a restarted process waits it out.
         clock.Advance(TimeSpan.FromHours(1));
 
         await harness.SweepUntilQuietAsync();

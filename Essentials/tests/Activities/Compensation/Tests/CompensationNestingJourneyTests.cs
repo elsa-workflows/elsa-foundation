@@ -383,6 +383,77 @@ public sealed class CompensationNestingJourneyTests
         Assert.Single(participant.Calls, call => call.NodeId == "release-a");
     }
 
+    /// <summary>
+    /// An uncertain step without a handler that is a Sequence waits for an operator. The operator retries the faulted
+    /// activity inside it, which runs again under the same Sequence; the Sequence's completion reaches the waiting scope,
+    /// which moves on.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Modes))]
+    public async Task An_operator_retry_inside_a_waiting_Sequence_step_lets_the_scope_move_on(PersistenceMode mode)
+    {
+        using var host = new CompensationHost(mode);
+        var participant = new Participant().LosingResponseAfterEffectOf("confirm-order");
+        var root = Scope(
+            new Step("Reserve A", Participant("reserve-a"), Participant("release-a")),
+            new Step("Confirm order", SequenceNode("node-confirm", Participant("confirm-order"), Participant("notify"))),
+            new Step("Ship", Participant("ship")));
+
+        await using var harness = await host.StartHostAsync(participant);
+        await CompensationHost.StartAsync(harness, root);
+        await harness.SweepUntilQuietAsync();
+        var waiting = Assert.Single(await harness.Services.GetRequiredService<IIncidentStateStore>().ListBlockingAsync(CompensationHost.WorkflowExecutionId));
+        var stopped = await harness.ReadRunAsync(CompensationHost.WorkflowExecutionId);
+        Assert.Equal("confirm-order", stopped.ActivityStates.Single(state => state.Execution.ActivityExecutionId == waiting.ActivityExecutionId).Execution.ExecutableNodeId);
+        Assert.Equal(CompensationScopePhase.AwaitingIntervention, CompensationScopeStatePersister.Load(stopped.State(ScopeNodeId))?.Phase);
+
+        await OperatorRetry.RetryAsync(harness, CompensationHost.WorkflowExecutionId, waiting.ActivityExecutionId!, "retry-in-sequence", CompensationHost.DefaultPartition);
+
+        var run = await harness.ReadRunAsync(CompensationHost.WorkflowExecutionId);
+        run.AssertWorkflowCompleted();
+        run.AssertOutcomes(ScopeNodeId, ActivityOutcomes.Done);
+        Assert.Single(run.States("node-confirm"));
+        Assert.Equal(["reserve-a", "confirm-order", "notify", "ship"], participant.EffectOrder);
+        Assert.Empty(await harness.Services.GetRequiredService<IIncidentStateStore>().ListBlockingAsync(CompensationHost.WorkflowExecutionId));
+    }
+
+    /// <summary>
+    /// A compensation that is a Sequence fails on every attempt and waits for an operator. The operator retries the
+    /// faulted activity inside the last attempt's Sequence; that Sequence's completion finishes the recovery.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Modes))]
+    public async Task An_operator_retry_inside_a_waiting_Sequence_compensation_finishes_the_recovery(PersistenceMode mode)
+    {
+        using var host = new CompensationHost(mode);
+        var participant = new Participant().Rejecting("charge").FailingTimes("cancel-delivery", 3);
+        var root = Scope(
+            new Step("Reserve A", Participant("reserve-a"), Participant("release-a")),
+            new Step("Reserve delivery", Participant("reserve-delivery"), SequenceNode("node-cancel", Participant("cancel-delivery"))),
+            new Step("Charge", Participant("charge")));
+
+        await using var harness = await host.StartHostAsync(participant);
+        await CompensationHost.StartAsync(harness, root);
+        await harness.SweepUntilQuietAsync();
+        var waiting = Assert.Single(await harness.Services.GetRequiredService<IIncidentStateStore>().ListBlockingAsync(CompensationHost.WorkflowExecutionId));
+        var stopped = await harness.ReadRunAsync(CompensationHost.WorkflowExecutionId);
+        Assert.Equal("cancel-delivery", stopped.ActivityStates.Single(state => state.Execution.ActivityExecutionId == waiting.ActivityExecutionId).Execution.ExecutableNodeId);
+        Assert.Equal(3, stopped.States("node-cancel").Count);
+        Assert.Equal(CompensationScopePhase.AwaitingIntervention, CompensationScopeStatePersister.Load(stopped.State(ScopeNodeId))?.Phase);
+
+        await OperatorRetry.RetryAsync(harness, CompensationHost.WorkflowExecutionId, waiting.ActivityExecutionId!, "retry-in-compensation", CompensationHost.DefaultPartition);
+
+        var run = await harness.ReadRunAsync(CompensationHost.WorkflowExecutionId);
+        run.AssertWorkflowCompleted();
+        run.AssertOutcomes(ScopeNodeId, CompensationScope.CompensatedOutcome);
+        Assert.Equal(3, run.States("node-cancel").Count);
+        // An activity inside a composite compensation gets its own default operation key (spec 251), so the participant
+        // witnesses the order of the calls here, not which effect they undid.
+        Assert.Equal(["reserve-a", "reserve-delivery", "cancel-delivery", "release-a"], participant.EffectOrder);
+        Assert.Equal(4, participant.Calls.Count(call => call.NodeId == "cancel-delivery"));
+        Assert.Empty(await harness.Services.GetRequiredService<IIncidentStateStore>().ListBlockingAsync(CompensationHost.WorkflowExecutionId));
+    }
+
     /// <summary>Injection point 1: the host stops after the hand-over commits and before the outer scope journals it.</summary>
     [Theory]
     [MemberData(nameof(Modes))]

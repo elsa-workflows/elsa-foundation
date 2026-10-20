@@ -3,6 +3,7 @@ using Elsa.Activities.Compensation.Activities;
 using Elsa.Activities.Compensation.Internal;
 using Elsa.Activities.Compensation.Models;
 using Elsa.Activities.Compensation.Tests.Support;
+using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Expressions.Core.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
@@ -101,6 +102,17 @@ public sealed class CompensationTargetValidatorTests
         };
 
         Assert.Empty(await ValidateAsync(Scope("scope", ("Check", node, null))));
+    }
+
+    [Theory]
+    [InlineData(typeof(Confirm), "compensation-confirm-target")]
+    [InlineData(typeof(Compensate), "compensation-compensate-target")]
+    public void The_target_input_asks_Studio_for_the_enclosing_scope_picker(Type activityType, string uiHint)
+    {
+        // Studio's target editor (spec 258 T321) claims these hints; renaming one silently drops the picker.
+        var input = activityType.GetProperty("Scope")!.GetCustomAttributes(typeof(ActivityInputAttribute), false).Cast<ActivityInputAttribute>().Single();
+
+        Assert.Equal(("scope", uiHint), (input.Key, input.UIHint));
     }
 
     private async Task<IReadOnlyList<ValidationError>> ValidateAsync(ActivityNode root) =>

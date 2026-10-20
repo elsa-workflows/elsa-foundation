@@ -111,7 +111,8 @@ Each follows the rule "never undo something unconfirmed silently; never block fo
 
 ### R18 — Container-local reads in a handed-over handler (T310)
 
-- **Decision:** deferred. R6 holds for workflow variables and `ActivityResult` references (Phase A). A handler that reads a container-local value the inner scope no longer has fails at run time, takes its retries and then waits for an operator; nothing is skipped silently. The publication check is tracked as T324.
+- **Decision:** implemented in T324 as `CompensationHandlerVariableValidator`, a Draft validator. A handed-over handler runs as a child of the receiving scope, so it sees only the variable frames of that scope's ancestors (`RuntimeContainerScopeService.BuildVisibleFramesAsync` follows the execution parent chain). For a scope that can hand over (an enclosing scope, `confirmOnComplete` not the literal `true`), the validator follows the entries outward while each receiving scope can hand over too, and refuses a handler that uses a variable declared by a container between the scope and that outermost receiver: a `Variable`-bound input or output, or a Set, Merge or Reduce target. Containers inside the handler, containers above the outermost receiver, workflow variables and `ActivityResult` references are allowed. Of today's containers only Sequence and Flowchart (and BPMN) declare variables; loops do not, so a loop counts through the Sequence in its body.
+- **Not analyzed:** script expressions (JavaScript, Liquid and others) and loop iteration values such as `currentItem`, which are read by name at run time. Such a handler still fails when it runs, takes its retries and then waits for an operator. A reference to a container the handler cannot see at all, such as one in the step, is already refused as `Expressions/UnresolvedVariable`.
 
 ### R19 — Reporting metadata (runtime seam R-4)
 
@@ -124,7 +125,27 @@ Each follows the rule "never undo something unconfirmed silently; never block fo
 
 ### R21 — Known limits
 
-- A descendant fault retried while the scope waits for intervention is not routed back to the waiting entry.
 - Notifications that arrive combined with a step's fault (`IRuntimeActivityChildOutcomeHandler`) are ignored; the scope's own notifications always arrive as separate ancestor notifications.
 - A child's command metadata inherits its parent's, so origin keys from an earlier handed-over handler can appear on a later own handler's command metadata. Routing uses the entry id and attempt, which are always set, so this is informational only.
 - B2 (a hand-over that arrives during recovery) and the operator retry in L2 are covered by callback tests and the T307 operator-retry journey, not by their own integration journeys.
+
+## Decisions taken while building Phase C
+
+### R22 — Studio derives the nesting states from run data, not private state
+
+- **Problem:** a completed scope clears its private state, and provenance metadata is redacted unless the reader may inspect sensitive values, so Studio cannot read the journal of a completed inner scope or the routing keys of a handed-over handler.
+- **Decision:** `compensationRuntime.ts` infers every M3 state from activity executions, incidents and the design graph. A handed-over handler is the outer scope's child, scheduled with cause `compensation` by the inner forward step, and runs the inner handler node. A Confirm reaches its nearest scope and the scope its literal `scope` input names; an entry is confirmed when it became eligible before the Confirm completed. A Compensate is the explicit cause; the step it stopped shows as uncertain. Origin iteration comes from scheduling provenance. An expression `scope` input on Confirm or Compensate is not resolved, so only its nearest scope is shown as reached.
+- **Consequence:** the view stays correct for readers without sensitive-inspect permission. Times are compared by completion (or scheduling) time, so a Confirm and a step completing in the same instant count as confirmed.
+
+### R23 — Target picker by UI hint
+
+- **Decision:** the `scope` input of Confirm and Compensate carries the UI hints `compensation-confirm-target` and `compensation-compensate-target`; Studio's property editor claims those hints, lists the enclosing scopes nearest first (through any container, marking the handler side), and shows the message T314's validator would report for the stored value. A stored target that is not an enclosing scope stays visible and selected, marked invalid, so the author sees what publishing will refuse. Pinned by a .NET test on the attribute and by Vitest on the editor.
+
+### R24 — Cancelled scope wording
+
+- **Decision:** a cancelled scope reads "Cancelled — nothing undone" unless a row or handed-over entry shows `Compensated` (a compensation that was already running may finish, R20); then it reads "Cancelled".
+
+### R25 — An operator retry inside a composite step or handler
+
+- **Problem:** a fault inside a Sequence or loop step or handler reaches the scope as a fault of that composite (R-3), so the waiting entry, or the handler's faulted attempt, records the composite's execution id. An operator retry of the faulted activity runs again under the same composite, and the scope dropped the composite's later completion or fault as a repeat of the outcome it had already recorded, so it waited for good.
+- **Decision:** a waiting scope tells a repeat fault from a new one by its incident, which the entry and each faulted attempt already record, and treats a completion as new unless a completed attempt recorded it. Entry, cause and hand-over ids keep naming the step or handler occurrence, so no state version changes. Pinned by journeys in every persistence mode and by callback tests for the repeat deliveries.
