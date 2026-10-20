@@ -2792,14 +2792,14 @@
 .wf-status-badge[data-status="completed"] {
   border-color: color-mix(in srgb, var(--wf-success) 35%, var(--wf-border));
   background: var(--wf-success-soft);
-  color: var(--wf-success);
+  color: var(--studio-success-fg);
 }
 
 .wf-status-badge[data-status="faulted"],
 .wf-status-badge[data-status="cancelled"] {
   border-color: color-mix(in srgb, var(--wf-danger) 35%, var(--wf-border));
   background: var(--wf-danger-soft);
-  color: var(--wf-danger);
+  color: var(--studio-danger-fg);
 }
 
 .wf-status-badge[data-status="suspended"] {
@@ -3070,6 +3070,12 @@
   box-sizing: border-box;
 }
 
+.wf-create-dialog {
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
 .wf-dialog form {
   display: grid;
   gap: 18px;
@@ -3195,11 +3201,22 @@
   transition: border-color 0.12s ease, background 0.12s ease;
 }
 
-.wf-root-card:hover {
+.wf-root-card:not(:where([aria-disabled="true"])):hover {
   border-color: color-mix(in srgb, var(--wf-accent) 32%, var(--wf-border));
   background:
     linear-gradient(color-mix(in srgb, var(--wf-accent) 6%, transparent) 0 0),
     var(--wf-panel-muted);
+}
+
+.wf-root-card[aria-disabled="true"] {
+  border-style: dashed;
+  cursor: not-allowed;
+}
+
+.wf-root-card-unavailable {
+  color: var(--wf-muted-text);
+  font-size: 0.85rem;
+  line-height: 1.35;
 }
 
 .wf-root-card[data-checked] {
@@ -3341,11 +3358,12 @@
 .wf-editor-body {
   display: grid;
   min-height: 0;
+  min-width: 0;
   flex: 1;
   grid-template-columns:
     var(--wf-palette-width, 260px)
     10px
-    minmax(360px, 1fr)
+    minmax(0, 1fr)
     10px
     var(--wf-inspector-width, 320px);
 }
@@ -5573,12 +5591,14 @@ button.wf-reference-select {
 
 .wf-property-row {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 7px;
   container-type: inline-size;
 }
 
 .wf-property-row-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -6904,7 +6924,7 @@ button.wf-reference-select {
     grid-template-columns:
       var(--wf-palette-width, 180px)
       10px
-      minmax(260px, 1fr)
+      minmax(0, 1fr)
       10px
       var(--wf-inspector-width, 42px);
   }

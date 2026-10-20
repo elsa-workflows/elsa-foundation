@@ -71,6 +71,7 @@ import type {
 } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/activityDefinitionTypes";
 import { getTheme, themeTokenNames } from "../../src/apps/Elsa.Studio.Web/Client/src/app/themes/presets";
 import "../../src/apps/Elsa.Studio.Web/Client/src/app/ui/tokens.css";
+import "../../src/apps/Elsa.Studio.Web/Client/src/app/ui/disclosure/disclosure.css";
 import "../../src/essentials/Elsa.Studio.Workflows/Client/src/styles.css";
 import "../../../Extensions/Secrets/studio/Elsa.Studio.Secrets/Client/src/styles.css";
 import "../../../Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/styles.css";
@@ -1705,6 +1706,11 @@ if (activityIconsFixture && searchParams.get("host-override") === "1") {
 const root = createRoot(document.getElementById("root")!);
 
 async function renderRequestedFixture() {
+  if (searchParams.get("mode") === "http-progressive-disclosure") {
+    const { HttpProgressiveDisclosureFixture } = await import("./httpProgressiveDisclosureFixture");
+    root.render(<HttpProgressiveDisclosureFixture />);
+    return;
+  }
   if (searchParams.get("mode") === "connections") {
     const { ConnectionsFixture } = await import("./connectionsFixture");
     root.render(<ConnectionsFixture />);
@@ -1713,6 +1719,11 @@ async function renderRequestedFixture() {
   if (workflowPublishChoiceFixture) {
     const { WorkflowPublishChoiceFixture } = await import("./workflowPublishChoiceFixture");
     root.render(<WorkflowPublishChoiceFixture />);
+    return;
+  }
+  if (searchParams.get("mode") === "workflow-creation-readiness") {
+    const { WorkflowCreationReadinessFixture } = await import("./workflowCreationReadinessFixture");
+    root.render(<WorkflowCreationReadinessFixture />);
     return;
   }
   if (searchParams.get("mode") === "activity-authoring") {

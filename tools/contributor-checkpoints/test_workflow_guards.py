@@ -115,6 +115,28 @@ class WorkflowGuardTests(unittest.TestCase):
         self.assertEqual(1, none.returncode)
         self.assertEqual(1, invalid_sha.returncode)
 
+    def test_studio_workflow_gate_supports_bare_and_ref_qualified_ci_paths(self) -> None:
+        workflow = (SCRIPT.parents[2] / ".github/workflows/studio-docker.yml").read_text()
+        self.assertIn("workflows: [Studio CI]", workflow)
+        self.assertIn("github.event.workflow_run.path == '.github/workflows/studio-ci.yml'", workflow)
+        self.assertIn("startsWith(github.event.workflow_run.path, '.github/workflows/studio-ci.yml@')", workflow)
+        self.assertNotIn("pull_request:", workflow.split("permissions:", 1)[0])
+        packages = (SCRIPT.parents[2] / ".github/workflows/studio-packages.yml").read_text()
+        self.assertNotIn("\n  push:", packages.split("env:", 1)[0])
+
+    def test_studio_registry_writes_require_immutable_publish_authority(self) -> None:
+        workflow = (SCRIPT.parents[2] / ".github/workflows/studio-docker.yml").read_text()
+        authority = "github.event_name == 'workflow_run' || inputs.publish == true"
+        self.assertNotIn("steps.image.outputs.publish", workflow)
+        self.assertNotIn("MANUAL_PUBLISH:", workflow)
+        self.assertIn("push: ${{ " + authority + " }}", workflow)
+        for name in ("Log in to Docker Hub", "Promote the verified main digest to latest"):
+            step = workflow.split("- name: " + name, 1)[1].split("\n      - name:", 1)[0]
+            self.assertIn(authority, step)
+        self.assertIn('sys.path.insert(0, os.environ["STUDIO_IMAGE_VALIDATORS"])', workflow)
+        self.assertIn('require_preview_above_floor(os.environ["PREVIEW_IMAGE_TAG"], read_preview_floor())', workflow)
+        self.assertLess(workflow.index("Preserve trusted image validators"), workflow.index("Checkout the verified source commit"))
+
     def test_workflow_wiring_and_removal_mutant(self) -> None:
         repo = SCRIPT.parents[2]
         packages = (repo / ".github/workflows/packages.yml").read_text()

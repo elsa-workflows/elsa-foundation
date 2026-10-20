@@ -785,12 +785,13 @@ public sealed class ClrAssemblyScannerTests
     {
         // WriteLine and Parallel still declare no tier, so they keep the origin/main snapshot at
         // 14dd6f6e7 (#2716). HttpEndpoint's version and ResponseMode default changed; SendHttpRequest
-        // declares tiers. Those catalog changes move their snapshots with this PR. Icon facets are present
+        // declares tiers; #3064 promotes only its Connection tier to Essential. Those catalog changes move
+        // their snapshots with their owning changes. Icon facets are present
         // on the descriptors but excluded from descriptor hashes.
         { typeof(HttpEndpoint), "3432C91C232D91852818ED02A289497FD4DD17112199328DC65BBE1239FA84DA" },
         { typeof(WriteLine), "618BB61870A3FADC2551123EA520F7F5852CB0D00CD4AE5E6DB8A80D7677EF2C" },
         { typeof(ParallelActivity), "A466AC1D4873108D85B6BA08D2058ACD9FD51A60571E8BA043043A17B20CCC82" },
-        { typeof(SendHttpRequest), "814577E3C1A0BFA2C780181584463ACC1ECE7BD74382D106EC80B2AFC8A8B8E6" }
+        { typeof(SendHttpRequest), "833CA49E624946FFF5E504A53B84354334501EE7E45F20505C34B48525B376A5" }
     };
 
     [Theory]
@@ -818,7 +819,8 @@ public sealed class ClrAssemblyScannerTests
         Assert.Equal(ActivityInputTiers.Essential, sendInputs[nameof(SendHttpRequest.Content)].Tier);
         Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.ContentType)].Tier);
         Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.RequestHeaders)].Tier);
-        Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.Connection)].Tier);
+        Assert.Equal(ActivityInputTiers.Essential, sendInputs[nameof(SendHttpRequest.Connection)].Tier);
+        Assert.False(sendInputs[nameof(SendHttpRequest.Connection)].IsRequired);
         Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.ExpectedStatusCodes)].Tier);
         Assert.Equal(ActivityInputTiers.Optional, sendInputs[nameof(SendHttpRequest.Timeout)].Tier);
 
