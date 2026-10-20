@@ -16,9 +16,11 @@ namespace Elsa.Workflows.Runtime.Services.Alterations.Handlers;
 /// it, and keeps the source's operation keys, so an external participant sees the same logical operation.
 /// </summary>
 /// <remarks>
-/// Only an incident that is waiting for intervention (outcome <c>WaitForIntervention</c>, from a structural parent or
-/// from the workflow's incident strategy) can be retried. A blocking incident still without an outcome is waiting for
-/// its parent or its strategy; retrying it would race that decision, so it is refused.
+/// A source whose parent is no longer running is refused (<c>SourceParentNotRunning</c>), so a retry never starts work
+/// under a cancelled or finished structural parent. Only an incident that is waiting for intervention (outcome
+/// <c>WaitForIntervention</c>, from a structural parent or from the workflow's incident strategy) can be retried. A
+/// blocking incident still without an outcome is waiting for its parent or its strategy; retrying it would race that
+/// decision, so it is refused.
 /// </remarks>
 public sealed class RetryFaultedActivityAlterationHandler(
     IWorkflowExecutableStore executableStore,
@@ -69,6 +71,12 @@ public sealed class RetryFaultedActivityAlterationHandler(
             return WorkflowAlterationPreflightResult.Rejected(sourceConflict.Code, sourceConflict.Message);
         if (source.Status != ActivityExecutionStatus.Faulted)
             return WorkflowAlterationPreflightResult.Rejected("SourceActivityNotFaulted", "Only a faulted activity can be retried.");
+        // A parent that is no longer running never consumes the successor's outcome, but the successor's effect would
+        // still happen, for example a compensation handler under a scope a Compensate cancelled (spec 260 R9).
+        if (source.ParentActivityExecutionId is { } parentActivityExecutionId &&
+            activities.SingleOrDefault(state => StringComparer.Ordinal.Equals(state.Execution.ActivityExecutionId, parentActivityExecutionId)) is { } parent &&
+            parent.Status != ActivityExecutionStatus.Running)
+            return WorkflowAlterationPreflightResult.Rejected("SourceParentNotRunning", "The source activity's parent is not running, so a retry cannot run under it.");
 
         var supersededSubtree = ActivitySuccessorStaging.SupersededSubtree(source, activities);
         var supersededSubtreeIds = supersededSubtree
@@ -243,10 +251,10 @@ public sealed class RetryFaultedActivityAlterationHandler(
             incidentMetadata);
     }
 
-    private const string AlterationJobIdKey = "runtime.alteration.jobId";
-    private const string AlterationPlanIdKey = "runtime.alteration.planId";
-    private const string AlterationSubmittedByKey = "runtime.alteration.submittedBy";
-    private const string AlterationReasonKey = "runtime.alteration.reason";
+    private const string AlterationJobIdKey = AlterationOutcomeMetadataKeys.JobId;
+    private const string AlterationPlanIdKey = AlterationOutcomeMetadataKeys.PlanId;
+    private const string AlterationSubmittedByKey = AlterationOutcomeMetadataKeys.SubmittedBy;
+    private const string AlterationReasonKey = AlterationOutcomeMetadataKeys.Reason;
 
     private static bool TryReadPayload(JsonElement payload, out string sourceId, out string? reason)
     {

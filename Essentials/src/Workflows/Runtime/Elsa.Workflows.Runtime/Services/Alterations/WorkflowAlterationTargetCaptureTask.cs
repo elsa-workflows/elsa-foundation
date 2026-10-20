@@ -105,8 +105,12 @@ public sealed class WorkflowAlterationTargetCaptureTask
         foreach (var executionId in executionIds)
         {
             var state = await _workflowExecutions.FindAsync(executionId, cancellationToken);
+            // An explicit target names one run of the caller's tenant, whatever execution authority started it, as
+            // run deletion does (spec 260 FR-406, owner decision OD16). The run's authority is still captured below for
+            // the concurrency check, so a run whose authority changes after capture fails. Query targets keep the
+            // authority filter.
             targets.Add(state is not null &&
-                        MatchesAuthority(state, plan.AuthorityScope)
+                        MatchesTenant(state, plan.AuthorityScope)
                 ? await ToCapturedTargetAsync(state, activityConcurrencyIds, cancellationToken)
                 : new WorkflowAlterationCapturedTarget(
                     executionId,
@@ -155,16 +159,10 @@ public sealed class WorkflowAlterationTargetCaptureTask
                 state.Authority));
     }
 
-    private static bool MatchesAuthority(WorkflowExecutionState state, WorkflowAlterationAuthorityScope scope) =>
+    private static bool MatchesTenant(WorkflowExecutionState state, WorkflowAlterationAuthorityScope scope) =>
         StringComparer.Ordinal.Equals(
             state.TenantId ?? WorkflowExecutionPartition.DefaultValue,
-            scope.TenantPartition) &&
-        state.Authority is { } authority &&
-        WorkflowExecutionAuthoritySnapshot.Matches(
-            authority,
-            scope.SystemIdentity,
-            scope.RootInitiator,
-            scope.Metadata);
+            scope.TenantPartition);
 
     private IReadOnlyCollection<string> ReadActivityConcurrencyIds(WorkflowAlterationPlanState plan)
     {

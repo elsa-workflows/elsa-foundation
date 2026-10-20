@@ -81,6 +81,34 @@ public sealed class RetryFaultedActivityAlterationHandlerTests
         Assert.Equal("SourceActivityNotFaulted", result.Failure!.Code);
     }
 
+    [Theory]
+    [InlineData(ActivityExecutionStatus.Cancelled)]
+    [InlineData(ActivityExecutionStatus.Completed)]
+    [InlineData(ActivityExecutionStatus.Faulted)]
+    public async Task PreflightAsync_RejectsASourceWhoseParentIsNotRunning(ActivityExecutionStatus parentStatus)
+    {
+        // Spec 260 R9: a retry under a cancelled scope would start its handler while nothing receives the outcome.
+        var fixture = await Fixture.CreateAsync();
+        var staging = new Staging();
+        var parent = Source("parent") with { Status = parentStatus, ParentActivityExecutionId = null, IncidentIds = [] };
+
+        var result = await fixture.Handler.PreflightAsync(Context(Payload("source"), staging, [fixture.Source, parent], []));
+
+        Assert.Equal("SourceParentNotRunning", result.Failure!.Code);
+        Assert.Empty(staging.StagedChanges);
+    }
+
+    [Fact]
+    public async Task PreflightAsync_AcceptsASourceWhoseParentIsRunning()
+    {
+        var fixture = await Fixture.CreateAsync();
+        var parent = Source("parent") with { Status = ActivityExecutionStatus.Running, ParentActivityExecutionId = null, IncidentIds = [] };
+
+        var result = await fixture.Handler.PreflightAsync(Context(Payload("source"), new Staging(), [fixture.Source, parent], []));
+
+        Assert.True(result.IsAccepted, result.Failure?.Message);
+    }
+
     [Fact]
     public async Task PreflightAsync_RejectsASourceWithoutABlockingIncident()
     {

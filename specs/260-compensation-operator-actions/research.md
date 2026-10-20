@@ -163,3 +163,12 @@ Citations are to `main` at `e9a3d18aa` (20 October 2026). Paths are under `Essen
 ## R17 — Reasons are visible to readers
 
 - **Decision:** the reason is outcome metadata, readable by anyone who can inspect the run's structure, as for a retry today. The dialog says so ("Visible to everyone who can view this run; do not include secrets"). The reason is trimmed, 1 to 500 characters, without control characters (as `RetryFaultedActivityAlterationHandler.cs:251-273`).
+
+## R18 — Implementation notes from PR 1
+
+Recorded while building Phases A and B; each one corrects or sharpens the packet against the code.
+
+- **The decision evaluation may notify an ancestor.** A resolve `EffectAccepted` on the last step completes the scope `Done`, and a completing scope hands its entries over with an ancestor notification (`CompensationScope.HandOver`, spec 258 R-2). The delivery evaluation therefore accepts ancestor notifications with a `Complete` continuation, exactly as a child-completion evaluation does (`Activities/Runtime/Elsa.Activities.Runtime/Services/StructuralCallbackEvaluation.cs`). The contract's list of what the callback may do now names it.
+- **One evaluation helper for notifications and decisions.** `StructuralCallbackEvaluation` holds the reactivation and commit both `WorkflowNotifyParentActivitySchedulerWorkHandler` and `WorkflowInterventionDecisionSchedulerWorkHandler` use (T405). It refuses a child-fault intervention staged in either evaluation, where a notification evaluation used to drop it silently; no consumer staged one.
+- **"Parent not running" for FR-405** is the parent's committed status other than `Running`, the same gate the parent-completion and notification handlers use before they consume a child's outcome: a parent in any other status never receives the successor's outcome. A source without a parent (a root activity) is not refused.
+

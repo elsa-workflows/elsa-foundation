@@ -100,7 +100,7 @@ public sealed record ActivityInterventionDecidedContext(
 ```
 
 - The handler reactivates the requester from its pinned snapshot, like a notification. A requester that is no longer `Running` acks the item without a callback.
-- The callback may: schedule children, request a child subtree cancellation (with `Defer` or `Complete` only), stage private state, and return `Defer`, `Complete` or `Fault`. It may not absorb or request intervention: there is no fault being evaluated.
+- The callback may: schedule children, request a child subtree cancellation (with `Defer` or `Complete` only), stage private state, notify its parent, notify an ancestor (with `Complete` only, as in a child-completion evaluation, so a scope that completes `Done` after a resolve still hands over; research R18), and return `Defer`, `Complete` or `Fault`. It may not absorb or request intervention: there is no fault being evaluated.
 - The delivery records `runtime.interventionDecisionProcessedWorkItemId` on the requester; a repeated item is acked.
 - A requester that offered decisions must accept any of them while its incident waits. It may ignore a decision for an incident it no longer waits on (a repeat); that changes nothing.
 
