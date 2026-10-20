@@ -135,6 +135,50 @@ public sealed class SecretManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task Create_After_Delete_Starts_An_Independent_Secret_And_Keeps_The_Deleted_One_As_History()
+    {
+        var original = await CreateEncryptedAsync("payments.api", value: "first-value");
+        await _manager.RotateAsync(TenantId, "payments.api", new RotateSecretRequest { Value = "second-value" });
+        Assert.True(await _manager.DeleteAsync(TenantId, "payments.api"));
+
+        var recreated = await CreateEncryptedAsync("payments.api", value: "third-value");
+
+        Assert.NotEqual(original.Id, recreated.Id);
+        Assert.Equal(1, recreated.CurrentVersion);
+        Assert.Equal(recreated.Id, (await _manager.FindAsync(TenantId, "payments.api"))!.Id);
+        Assert.Equal("third-value", (await _resolver.ResolveAsync(TenantId, new SecretReference("payments.api"))).Value);
+        // Nothing of the deleted secret shows through: the new one rotates on from its own first version.
+        Assert.Equal(2, (await _manager.RotateAsync(TenantId, "payments.api", new RotateSecretRequest { Value = "fourth-value" })).CurrentVersion);
+        Assert.Single((await _manager.ListAsync(TenantId, new SecretQuery())).Items);
+
+        var deleted = Assert.Single((await _repository.ListPageAsync(
+            TenantId,
+            new SecretRepositoryListRequest(status: SecretStatus.Deleted))).Items);
+        Assert.Equal(original.Id, deleted.Id);
+        Assert.Equal([1, 2], deleted.Versions.Select(version => version.Version));
+
+        Assert.True(await _manager.DeleteAsync(TenantId, "payments.api"));
+        Assert.Null(await _manager.FindAsync(TenantId, "payments.api"));
+        Assert.Equal(2, (await _repository.ListPageAsync(
+            TenantId,
+            new SecretRepositoryListRequest(status: SecretStatus.Deleted))).TotalCount);
+    }
+
+    [Fact]
+    public async Task Create_Is_Still_Refused_While_A_Revoked_Secret_Holds_The_Name()
+    {
+        var original = await CreateEncryptedAsync("payments.api", value: "first-value");
+        await _manager.RevokeAsync(TenantId, "payments.api");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await CreateEncryptedAsync("payments.api", value: "replacement-value"));
+
+        var holder = (await _manager.FindAsync(TenantId, "payments.api"))!;
+        Assert.Equal(original.Id, holder.Id);
+        Assert.Equal(SecretStatus.Revoked, holder.Status);
+    }
+
+    [Fact]
     public async Task Configuration_Store_Resolves_Host_Configuration_Value()
     {
         await _manager.CreateAsync(TenantId, new CreateSecretRequest

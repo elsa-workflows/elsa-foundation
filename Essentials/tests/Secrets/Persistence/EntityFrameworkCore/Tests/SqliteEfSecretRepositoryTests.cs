@@ -2,6 +2,7 @@ using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
+using Elsa.Secrets.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.Support;
 using Microsoft.Data.Sqlite;
@@ -52,7 +53,36 @@ public sealed class SqliteEfSecretRepositoryTests
         current.Secret.Status = SecretStatus.Deleted;
         await repository.SaveAsync(current.Secret);
         Assert.Equal(SecretStatus.Deleted, (await repository.FindAsync("tenant-a", alpha.Name))!.Status);
-        Assert.False(await repository.TryAddAsync(Secret("tenant-a", alpha.Name, "reserved")));
+        var successor = Secret("tenant-a", alpha.Name, "successor");
+        Assert.True(await repository.TryAddAsync(successor));
+        Assert.Equal(successor.Id, (await repository.FindAsync("tenant-a", alpha.Name))!.Id);
+    }
+
+    [Fact]
+    public async Task A_deleted_name_is_free_while_the_key_admits_one_row_holding_the_name_on_sqlite()
+    {
+        await using var fixture = await SqliteFixture.CreateAsync();
+        await using var bypass = await fixture.CreateSiblingAsync();
+        await SecretNameReuseScenario.RunAsync(fixture.Context, bypass.Context);
+    }
+
+    [Fact]
+    public async Task Saving_an_earlier_secrets_deleted_copy_leaves_its_successor_holding_the_name()
+    {
+        await using var fixture = await SqliteFixture.CreateAsync();
+        var repository = fixture.Repository;
+        var earlier = Secret("tenant-a", "payments.api", "earlier");
+        await repository.SaveAsync(earlier);
+        earlier.Status = SecretStatus.Deleted;
+        await repository.SaveAsync(earlier);
+        var successor = Secret("tenant-a", earlier.Name, "successor");
+        Assert.True(await repository.TryAddAsync(successor));
+
+        await repository.SaveAsync(earlier);
+
+        var holder = (await repository.FindAsync("tenant-a", earlier.Name))!;
+        Assert.Equal(successor.Id, holder.Id);
+        Assert.Equal(SecretStatus.Active, holder.Status);
     }
 
     [Fact]
@@ -164,7 +194,7 @@ public sealed class SqliteEfSecretRepositoryTests
 
         // Load an intentionally stale tracked row in the second context before the first writer
         // advances the optimistic token. SaveAsync must refresh and apply the later writer.
-        _ = await second.Context.Secrets.FindAsync([seed.TenantId, seed.Name]);
+        _ = await second.Context.Secrets.FindAsync([seed.TenantId, seed.Name, ""]);
         await first.Repository.SaveAsync(Secret("tenant-a", "racing.update", "first"));
         await second.Repository.SaveAsync(Secret("tenant-a", "racing.update", "second"));
 
@@ -389,13 +419,58 @@ public sealed class SqliteEfSecretRepositoryTests
         var migrator = context.GetService<IMigrator>();
         await migrator.MigrateAsync(migrations[Array.IndexOf(migrations, stampMigration) - 1]);
         await using (var preStamp = new SecretsSqliteDbContext(PreStampSecretsModel.Use(SqliteOptions(connection)).Options))
-            await new EfSecretRepository(preStamp).SaveAsync(Secret("tenant-a", "payments.api", "alpha"));
+            await PreStampSecretsModel.WriteAsync(preStamp, Secret("tenant-a", "payments.api", "alpha"));
 
         await migrator.MigrateAsync();
 
         Assert.Equal(SecretsEfModule.SchemaVersion, (await context.Secrets.AsNoTracking().SingleAsync()).SchemaVersion);
         Assert.Equal("alpha", (await new EfSecretRepository(context).FindAsync("tenant-a", "payments.api"))!.LatestActiveVersion!.Payload.Value);
         Assert.False(await new SecretsProjectionReindex().AuditAsync(context));
+    }
+
+    /// <summary>
+    /// Rows written under the old key, one per name whatever their status, upgrade into the key that frees a deleted
+    /// secret's name: the live row keeps its name, the deleted row moves aside and keeps its history, the deleted name
+    /// takes a new secret, and the startup audit, which now pages by the whole key, reads every row as current.
+    /// </summary>
+    [Fact]
+    public async Task Rows_written_before_names_could_be_reused_upgrade_with_deleted_names_freed()
+    {
+        await using var database = new TemporarySqliteDatabase("secrets-ef-prereuse");
+        await using var connection = new SqliteConnection(database.ConnectionString);
+        await connection.OpenAsync();
+        await using var context = new SecretsSqliteDbContext(SqliteOptions(connection).Options);
+        var migrations = context.Database.GetMigrations().ToArray();
+        var stampMigration = Assert.Single(migrations, migration => migration.EndsWith("_SchemaVersionStamp", StringComparison.Ordinal));
+        var migrator = context.GetService<IMigrator>();
+        await migrator.MigrateAsync(migrations[Array.IndexOf(migrations, stampMigration) - 1]);
+        var deletedBeforeUpgrade = Secret("tenant-a", "deleted.before.upgrade", "deleted-value");
+        deletedBeforeUpgrade.Status = SecretStatus.Deleted;
+        await using (var preStamp = new SecretsSqliteDbContext(PreStampSecretsModel.Use(SqliteOptions(connection)).Options))
+        {
+            await PreStampSecretsModel.WriteAsync(preStamp, Secret("tenant-a", "live.before.upgrade", "live-value"));
+            await PreStampSecretsModel.WriteAsync(preStamp, deletedBeforeUpgrade);
+        }
+
+        await migrator.MigrateAsync();
+
+        var rows = await context.Secrets.AsNoTracking().OrderBy(row => row.NormalizedName).ToListAsync();
+        Assert.Equal(["deleted.before.upgrade", "live.before.upgrade"], rows.Select(row => row.NormalizedName));
+        Assert.NotEqual("", rows[0].Tombstone);
+        Assert.Equal("", rows[1].Tombstone);
+        Assert.False(await new SecretsProjectionReindex().AuditAsync(context));
+
+        var repository = new EfSecretRepository(context);
+        Assert.Equal("live-value", (await repository.FindAsync("tenant-a", "live.before.upgrade"))!.LatestActiveVersion!.Payload.Value);
+        Assert.False(await repository.TryAddAsync(Secret("tenant-a", "live.before.upgrade", "duplicate")));
+        var successor = Secret("tenant-a", deletedBeforeUpgrade.Name, "successor-value");
+        Assert.True(await repository.TryAddAsync(successor));
+        Assert.Equal(successor.Id, (await repository.FindAsync("tenant-a", deletedBeforeUpgrade.Name))!.Id);
+        var history = Assert.Single((await repository.ListPageAsync(
+            "tenant-a",
+            new SecretRepositoryListRequest(status: SecretStatus.Deleted))).Items);
+        Assert.Equal(deletedBeforeUpgrade.Id, history.Id);
+        Assert.Equal("deleted-value", Assert.Single(history.Versions).Payload.Value);
     }
 
     /// <summary>
@@ -410,7 +485,9 @@ public sealed class SqliteEfSecretRepositoryTests
         await connection.OpenAsync();
         await using var context = new SecretsSqliteDbContext(SqliteOptions(connection).Options);
         await context.Database.MigrateAsync();
-        await using var preStamp = new SecretsSqliteDbContext(PreStampSecretsModel.Use(SqliteOptions(connection)).Options);
+        await using var preStamp = new SecretsSqliteDbContext(SqliteOptions(connection)
+            .ReplaceService<IModelCustomizer, UnstampedSecretsModel>()
+            .Options);
 
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(
             () => new EfSecretRepository(preStamp).SaveAsync(Secret("tenant-a", "payments.api", "alpha")).AsTask());
@@ -557,6 +634,16 @@ public sealed class SqliteEfSecretRepositoryTests
 
             await _release.Task.WaitAsync(cancellationToken);
             return result;
+        }
+    }
+
+    /// <summary>The current model without the stamp column, so the only thing a write with it leaves out is the stamp.</summary>
+    private sealed class UnstampedSecretsModel(ModelCustomizerDependencies dependencies) : ModelCustomizer(dependencies)
+    {
+        public override void Customize(ModelBuilder modelBuilder, DbContext context)
+        {
+            base.Customize(modelBuilder, context);
+            modelBuilder.Entity<SecretRecord>().Ignore(record => record.SchemaVersion);
         }
     }
 

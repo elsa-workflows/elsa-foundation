@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
+using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,8 +9,10 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 /// <summary>
 /// Audits and repairs projection fields written before the persisted Unicode algorithm was pinned.
 /// Reindexing is an explicit operator action; ordinary startup only validates and fails closed.
-/// Both paths page by the <c>(TenantId, NormalizedName)</c> key so each bounded batch is a single
-/// forward seek rather than a growing OFFSET rescan.
+/// Both paths page by the <c>(TenantId, NormalizedName, Tombstone)</c> key so each bounded batch is a single
+/// forward seek rather than a growing OFFSET rescan. The cursor carries the whole key: a name shared by the secret
+/// holding it and secrets deleted under it is several rows, and a cursor without the tombstone would skip those of
+/// them that fall after a page boundary, reporting them current without ever reading them.
 /// </summary>
 public static class SecretsProjectionContract
 {
@@ -121,9 +124,9 @@ public static class SecretsProjectionContract
         }
     }
 
-    private readonly record struct SeekCursor(string TenantId, string NormalizedName);
+    private readonly record struct SeekCursor(string TenantId, string NormalizedName, string Tombstone);
 
-    private static SeekCursor Cursor(SecretRecord record) => new(record.TenantId, record.NormalizedName);
+    private static SeekCursor Cursor(SecretRecord record) => new(record.TenantId, record.NormalizedName, record.Tombstone);
 
     private static Task<List<SecretRecord>> TakePageAsync(
         IQueryable<SecretRecord> records,
@@ -138,13 +141,15 @@ public static class SecretsProjectionContract
 
         var tenantId = cursor.TenantId;
         var normalizedName = cursor.NormalizedName;
+        var tombstone = cursor.Tombstone;
         return records.Where(record =>
             record.TenantId.CompareTo(tenantId) > 0 ||
-            (record.TenantId == tenantId && record.NormalizedName.CompareTo(normalizedName) > 0));
+            (record.TenantId == tenantId && record.NormalizedName.CompareTo(normalizedName) > 0) ||
+            (record.TenantId == tenantId && record.NormalizedName == normalizedName && record.Tombstone.CompareTo(tombstone) > 0));
     }
 
     private static IOrderedQueryable<SecretRecord> Ordered(IQueryable<SecretRecord> records) =>
-        records.OrderBy(record => record.TenantId).ThenBy(record => record.NormalizedName);
+        records.OrderBy(record => record.TenantId).ThenBy(record => record.NormalizedName).ThenBy(record => record.Tombstone);
 
     private static bool IsCurrent(SecretRecord record)
     {
@@ -190,10 +195,13 @@ public static class SecretsProjectionContract
             throw SecretsProjectionException.ForPayload(record, exception);
         }
 
+        // A deleted secret in the row that holds its name would keep the name taken, and a live one under a tombstone
+        // would be invisible to every lookup; either way the row is not where its document says it belongs.
         if (!string.Equals(stored.TenantId, record.TenantId, StringComparison.Ordinal) ||
             !string.Equals(stored.NormalizedName, record.NormalizedName, StringComparison.Ordinal) ||
             !string.Equals(current.TenantId, record.TenantId, StringComparison.Ordinal) ||
-            !string.Equals(current.NormalizedName, record.NormalizedName, StringComparison.Ordinal))
+            !string.Equals(current.NormalizedName, record.NormalizedName, StringComparison.Ordinal) ||
+            (stored.Secret.Status == SecretStatus.Deleted) == (record.Tombstone.Length == 0))
         {
             throw SecretsProjectionException.ForIdentity(record);
         }

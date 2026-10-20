@@ -176,6 +176,8 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20260928002150_SchemaVersionStamp.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20260928040738_SchemaFinalization.Designer.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20260928040738_SchemaFinalization.cs",
+        "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20261020202445_FreeNameOnDelete.Designer.cs",
+        "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/20261020202445_FreeNameOnDelete.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/MySql/SecretsMySqlDbContextModelSnapshot.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260910210216_Initial.Designer.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260910210216_Initial.cs",
@@ -187,6 +189,8 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260928002110_SchemaVersionStamp.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260928040734_SchemaFinalization.Designer.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20260928040734_SchemaFinalization.cs",
+        "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20261020202251_FreeNameOnDelete.Designer.cs",
+        "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/20261020202251_FreeNameOnDelete.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/PostgreSql/SecretsPostgreSqlDbContextModelSnapshot.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260910210213_Initial.Designer.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260910210213_Initial.cs",
@@ -198,6 +202,8 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260928002031_SchemaVersionStamp.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260928040730_SchemaFinalization.Designer.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20260928040730_SchemaFinalization.cs",
+        "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20261020202043_FreeNameOnDelete.Designer.cs",
+        "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/20261020202043_FreeNameOnDelete.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/SqlServer/SecretsSqlServerDbContextModelSnapshot.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260910210210_Initial.Designer.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260910210210_Initial.cs",
@@ -207,6 +213,8 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260928002001_SchemaVersionStamp.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260928040726_SchemaFinalization.Designer.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20260928040726_SchemaFinalization.cs",
+        "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20261020201900_FreeNameOnDelete.Designer.cs",
+        "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/20261020201900_FreeNameOnDelete.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/Migrations/Sqlite/SecretsSqliteDbContextModelSnapshot.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/SecretsDbContext.cs",
         "Essentials/src/Secrets/Persistence/EntityFrameworkCore/SecretsEfModule.cs",
@@ -313,7 +321,8 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsSearchKeysTests.cs",
         "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SqliteEfSecretRepositoryTests.cs",
         "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/PersistenceCliProcessRunner.cs",
-        "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/PreStampSecretsModel.cs"
+        "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/PreStampSecretsModel.cs",
+        "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/SecretNameReuseScenario.cs"
     ];
 
     [Fact]

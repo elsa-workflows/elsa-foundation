@@ -225,6 +225,54 @@ public sealed class SecretsProjectionContractTests
         }
     }
 
+    /// <summary>
+    /// A name the secret holding it shares with secrets deleted under it is several rows. When a page ends on the first
+    /// of them, the next page must still start inside that name: a cursor without the tombstone would skip the rest, and
+    /// the audit would call the database current without ever reading the rows it skipped.
+    /// </summary>
+    [Fact]
+    public async Task Audit_and_reindex_reach_every_row_of_a_name_that_straddles_a_page_boundary()
+    {
+        await using var fixture = await SqliteProjectionFixture.CreateAsync();
+        for (var index = 0; index < 99; index++)
+            fixture.Context.Secrets.Add(SecretDocument.FromSecret(CreateSecret("text", $"a.current.{index:D3}")).ToRecord());
+        fixture.Context.Secrets.Add(SecretDocument.FromSecret(CreateSecret("text", "b.shared")).ToRecord());
+        var deleted = CreateSecret("ƛ", "b.shared");
+        deleted.Status = SecretStatus.Deleted;
+        fixture.Context.Secrets.Add((SecretDocument.FromSecret(deleted) with { TypeNameLookupKey = "ƛ" }).ToRecord());
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        Assert.True(await SecretsProjectionContract.HasLegacyProjectionsAsync(fixture.Context));
+        Assert.Equal(1, await SecretsProjectionContract.ReindexAsync(fixture.Context));
+        Assert.False(await SecretsProjectionContract.HasLegacyProjectionsAsync(fixture.Context));
+        var repaired = await fixture.Context.Secrets.AsNoTracking().SingleAsync(record => record.Tombstone == deleted.Id);
+        Assert.Equal("Ƛ", repaired.TypeNameLookupKey);
+    }
+
+    /// <summary>
+    /// A deleted secret in the row that holds its name would keep the name taken for good, and a live secret under a
+    /// tombstone would be invisible to every lookup. Either way the row is not where its document belongs.
+    /// </summary>
+    [Theory]
+    [InlineData(SecretStatus.Deleted, false)]
+    [InlineData(SecretStatus.Active, true)]
+    public async Task A_row_whose_tombstone_disagrees_with_its_secrets_status_fails_closed(SecretStatus status, bool tombstoned)
+    {
+        await using var fixture = await SqliteProjectionFixture.CreateAsync();
+        var secret = CreateSecret("text", "misplaced");
+        secret.Status = status;
+        var record = SecretDocument.FromSecret(secret).ToRecord();
+        record.Tombstone = tombstoned ? secret.Id : "";
+        fixture.Context.Secrets.Add(record);
+        await fixture.Context.SaveChangesAsync();
+        fixture.Context.ChangeTracker.Clear();
+
+        var exception = await Assert.ThrowsAsync<SecretsProjectionException>(
+            () => SecretsProjectionContract.EnsureCurrentAsync(fixture.Context));
+        Assert.Equal("misplaced", exception.NormalizedName);
+    }
+
     [Fact]
     public async Task Damaged_payload_wraps_json_exception_with_row_identity_and_rolls_back()
     {

@@ -58,7 +58,7 @@ public sealed class SqlServerEfSecretRepositoryTests(SqlServerContainerFixture f
         await migrator.MigrateAsync("20260910210213_Initial");
 
         await using (var preStamp = CreatePreStampContext(connectionString))
-            await new EfSecretRepository(preStamp).SaveAsync(Secret("tenant-a", "before.upgrade", "preserved", scope: "Finance"));
+            await PreStampSecretsModel.WriteAsync(preStamp, Secret("tenant-a", "before.upgrade", "preserved", scope: "Finance"));
         var repository = new EfSecretRepository(context);
         await EfDatabaseMigrator.ApplyAsync(context, SecretsSqlServerDbContext.ExpectedProviderName);
         Assert.Equal(
@@ -112,6 +112,18 @@ public sealed class SqlServerEfSecretRepositoryTests(SqlServerContainerFixture f
         await SecretsProjectionContract.EnsureCurrentAsync(context);
         var expectedTypeKey = SecretsSearchKeys.LookupKey(SecretTypeNames.Text);
         Assert.Equal(101, await context.Secrets.CountAsync(record => record.TypeNameLookupKey == expectedTypeKey));
+    }
+
+    [SkippableFact]
+    public async Task A_deleted_name_is_free_while_the_key_admits_one_row_holding_the_name_on_sql_server()
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
+        var connectionString = await fixture.CreateIsolatedDatabaseAsync();
+        await using var context = CreateContext(connectionString);
+        await EfDatabaseMigrator.ApplyAsync(context, SecretsSqlServerDbContext.ExpectedProviderName);
+        await using var bypass = CreateContext(connectionString);
+
+        await SecretNameReuseScenario.RunAsync(context, bypass);
     }
 
     private static SecretsSqlServerDbContext CreateContext(string connectionString) => new(Options(connectionString).Options);

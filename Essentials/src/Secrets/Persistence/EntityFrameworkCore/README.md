@@ -82,11 +82,25 @@ different policy from its neighbours sets that key under its own `Configuration`
 
 ## Schema
 
-Table `elsa_secrets`. Key: `TenantId` + `NormalizedName`. Projected list/search columns
+Table `elsa_secrets`. Key: `TenantId` + `NormalizedName` + `Tombstone`. Projected list/search columns
 carry the searchable and filterable values. Full `Secret` document in `Payload`.
 OCC is an explicit `ConcurrencyToken` stamped on save — **not** cross-provider
 `IsRowVersion()` (Sqlite inserts NULL). On Sqlite, `MaxActiveVersionExpiresAt` is
 stored as UTC ticks (`INTEGER`) so active-only expiry comparisons translate.
+
+A soft delete frees the name. `Tombstone` is empty for the secret that holds a name and is the
+secret's id once it is deleted, so the key admits one row holding each tenant's name and any number
+of deleted secrets beside it, each with its versions. Deleting moves the row out of the empty
+tombstone in one save, guarded by the row's revision; a new secret then takes the name with an id
+and versions of its own. Lookups by name return the secret holding it, or, when none does, a deleted
+one, so a reader can tell "deleted" from "never existed". This is a plain key on every provider:
+no filtered index, which MySQL lacks, and no dependence on how a provider treats nulls in a unique
+index. The `FreeNameOnDelete` migration gives rows that were already deleted the tombstone
+`-deleted-before-reuse`, because their ids live in the JSON payload and a migration cannot read them
+there without raw SQL, which a host-configured schema cannot redirect. On MySQL the key moves in one
+raw `ALTER TABLE`: `MySql.EntityFrameworkCore` generates no SQL for `DropPrimaryKey` or `AddPrimaryKey`,
+so a migration relying on them applies and is recorded while the old key stays. MySQL refuses a
+configured schema, so raw SQL cannot be misdirected there.
 
 Derived contexts: `SecretsSqliteDbContext`, `SecretsSqlServerDbContext`,
 `SecretsPostgreSqlDbContext`, and `SecretsMySqlDbContext`. The SQLite, SQL Server, and PostgreSQL
@@ -113,13 +127,14 @@ dotnet elsa persistence post-migrate --modules Secrets --provider <provider>
 ```
 
 `SecretsProjectionReindex` rewrites the stored projection columns and document copies from the
-authoritative `Secret` payload in bounded keyset transactions over `(TenantId, NormalizedName)`
-while preserving concurrency tokens. Rows created on a host whose runtime casing data differed from
-this pinned table otherwise remain unreadable through canonical lookups. Host startup — and
-`apply`/`validate` — audit every row in bounded, read-only keyset pages over
-`(TenantId, NormalizedName)` and fail closed naming `post-migrate` instead of silently serving a
-partially readable store. No command ever reindexes as a side effect; only `post-migrate` does
-(ADR 0076 D8).
+authoritative `Secret` payload in bounded keyset transactions over the whole key
+`(TenantId, NormalizedName, Tombstone)` while preserving concurrency tokens. Rows created on a host
+whose runtime casing data differed from this pinned table otherwise remain unreadable through
+canonical lookups. Host startup — and `apply`/`validate` — audit every row in bounded, read-only
+keyset pages over the same key and fail closed naming `post-migrate` instead of silently serving a
+partially readable store. The audit also fails closed on a row whose tombstone disagrees with its
+secret's status: a deleted secret holding its name, or a live one under a tombstone. No command ever
+reindexes as a side effect; only `post-migrate` does (ADR 0076 D8).
 
 The mapping deviates from plain Unicode 16 only at the exact, exhaustively tested boundary `U+017F`
 and `U+16EBB` through `U+16ED3`. This module persists projected text rather than a separate
