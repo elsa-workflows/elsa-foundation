@@ -2,6 +2,16 @@
 
 Run from the repository root on .NET 10 with local NuGet dependencies available. Real Workbench tests build the host and fixture, use fresh owned directories and ephemeral loopback ports. POSIX is required for suspension. Keep the shared build-slot wrapper enabled; a queued build is not hung.
 
+For the inspection-repair integration and failed-request diagnostic change, run the complete affected Workbench project. This includes the focused diagnostic cases and the real-process matrix below; do not add their repeated results together as unique tests.
+
+```bash
+dotnet test Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603 --logger 'trx;LogFileName=native-diagnostics-workbench-full.trx' --results-directory /tmp/elsa-native-hosting-results
+```
+
+For a fast diagnostic development check, select `FullyQualifiedName~NativeHostingScenarioTests` with the same project/configuration. The non-JSON HTTP400 case must fail immediately with method, path, status, raw body and owned-host output, and send exactly once. To prove that assertion, temporarily remove only the body from the shared sender's failure message, require the focused case to fail at its missing-body assertion, restore the source and require the whole diagnostic class to pass. Never commit the mutation. This tests diagnostic retention, not the historical HTTP400 cause.
+
+The process-only subset is useful when diagnosing a specific recovery scenario:
+
 ```bash
 uptime
 dotnet test Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj -c Release --no-restore -p:WarningsNotAsErrors=NU1603 --filter 'FullyQualifiedName~WorkbenchBackgroundActivityRecoveryTests|FullyQualifiedName~NativeHostingConformanceTests|FullyQualifiedName~NativeHostingGracefulHandoffTests' --logger 'trx;LogFileName=native-integrated-matrix.trx' --results-directory /tmp/elsa-native-hosting-results
