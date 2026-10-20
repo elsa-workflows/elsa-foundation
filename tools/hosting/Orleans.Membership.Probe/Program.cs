@@ -19,25 +19,40 @@ const string mainScriptSha = "623c15320e640cdd3e84d0668dcae481312f2631ac4977bf2e
 const string clusteringScriptSha = "39dff7cbb72a390223cd48a9bc7d4a90252092dcba5677318bd510cc9fc1af08";
 string? mutation = null;
 string? outputPath = null;
+var mode = "report";
 for (var index = 0; index < args.Length; index++)
 {
     if (args[index] == "--mutation" && index + 1 < args.Length) mutation = args[++index];
     else if (args[index] == "--output" && index + 1 < args.Length) outputPath = args[++index];
+    else if (args[index] == "--mode" && index + 1 < args.Length) mode = args[++index];
     else
     {
-        Console.Error.WriteLine("usage: dotnet run -- [--output <json-path>] [--mutation hide-report-read|ignore-incarnation]");
+        Console.Error.WriteLine("usage: dotnet run -- [--mode report|admission-red] [--output <json-path>] [--mutation hide-report-read|ignore-incarnation]");
         return 2;
     }
+}
+if (mode is not ("report" or "admission-red"))
+{
+    Console.Error.WriteLine("mode must be report or admission-red");
+    return 2;
 }
 if (mutation is not null && mutation is not ("hide-report-read" or "ignore-incarnation"))
 {
     Console.Error.WriteLine("mutation must be hide-report-read or ignore-incarnation");
     return 2;
 }
+if (mode == "admission-red" && mutation is not null)
+{
+    Console.Error.WriteLine("report mutations cannot be combined with admission-red mode");
+    return 2;
+}
 
 var result = new ProbeResult
 {
-    Candidate = "A: PostgreSQL ADO.NET clustering plus same-database report facet",
+    Mode = mode,
+    Candidate = mode == "admission-red"
+        ? "Unguarded PostgreSQL ADO.NET membership writes against probe-owned admission mapping"
+        : "A: PostgreSQL ADO.NET clustering plus same-database report facet",
     OrleansVersion = "10.4.0",
     MainScriptSha256 = mainScriptSha,
     ClusteringScriptSha256 = clusteringScriptSha,
@@ -56,6 +71,22 @@ try
     result.PostgreSqlVersion = await ReadServerVersion(connectionString);
     phase = "database-initialize";
     await InitializeDatabase(connectionString);
+    if (mode == "admission-red")
+    {
+        phase = "admission-red-controls";
+        result.Provider = "Orleans.Clustering.AdoNet / Npgsql public IMembershipTable; provider initialized directly through supported DI; host not started";
+        result.Admission = await AdmissionProbe.RunAsync(connectionString);
+        result.Assertions = ["initial-admission-serializes-missing-host-row", "old-heartbeat-refused-after-remap", "old-status-update-refused-after-remap"];
+        result.Outcome = "failed";
+        result.FailureReason = result.Admission.Heartbeat.UnsafeCommitObserved && result.Admission.Status.UnsafeCommitObserved
+            ? "stale-write-rejection-assertion-failed"
+            : "unsafe-control-not-reproduced";
+        result.Detail = result.FailureReason == "stale-write-rejection-assertion-failed"
+            ? "Expected red result: both actual ADO provider calls committed after the probe-owned host mapping moved to the successor generation. No guard is installed."
+            : "The unguarded actual-provider controls did not reproduce both stale commits; inspect the per-case receipt before proceeding.";
+    }
+    else
+    {
     var ports = AllocatePorts(4);
     var (siloPortA, siloPortB, gatewayPortA, gatewayPortB) = (ports[0], ports[1], ports[2], ports[3]);
     await using var first = new SiloHandle(await StartSilo(connectionString, siloPortA, gatewayPortA, "probe-silo-a"));
@@ -154,12 +185,19 @@ try
     result.AllMemberProjectionCount = afterNewPublish.Members.Count;
     result.Assertions = ["two-active-silos", "both-hosts-same-membership-table", "missing-report-unknown", "repeatable-read-held-at-revision-one", "fresh-read-revision-two-and-capability-removal", "stale-cas-rejected", "same-name-rejoin-new-generation", "new-incarnation-report-unknown", "new-report-visible-from-silo-b", "late-old-key-isolated", "unsupported-schema-unknown", "report-read-failed-closed"];
     result.Outcome = "passed";
+    }
 }
 catch (Exception exception)
 {
     result.Outcome = "failed";
     result.FailureReason = exception is ProbeFailure failure ? failure.Code : $"probe-exception:{phase}";
-    result.Detail = $"{exception.GetType().Name}: {exception.Message}";
+    result.Detail = mode == "admission-red"
+        ? exception is PostgresException postgresException
+            ? $"{exception.GetType().Name}; SQLSTATE={postgresException.SqlState}"
+            : exception is ProbeFailure probeFailure
+                ? $"{exception.GetType().Name}; {probeFailure.Code}: {probeFailure.Message}"
+            : exception.GetType().Name
+        : $"{exception.GetType().Name}: {exception.Message}";
 }
 try
 {
@@ -170,7 +208,7 @@ catch (Exception exception)
 {
     result.Outcome = "failed";
     result.FailureReason ??= "container-cleanup-failed";
-    result.Detail ??= exception.Message;
+    result.Detail ??= mode == "admission-red" ? exception.GetType().Name : exception.Message;
 }
 var json = JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
 Console.WriteLine(json);
@@ -458,6 +496,7 @@ internal sealed class SiloHandle(IHost host) : IAsyncDisposable
 }
 internal sealed class ProbeResult
 {
+    public string Mode { get; set; } = "report";
     public string Candidate { get; set; } = "";
     public string? Provider { get; set; }
     public string OrleansVersion { get; set; } = "";
@@ -474,6 +513,7 @@ internal sealed class ProbeResult
     public int? FreshReadCapabilityCount { get; set; }
     public int? HeldReadCapabilityCount { get; set; }
     public bool? IncarnationIsolation { get; set; }
+    public AdmissionSuiteReceipt? Admission { get; set; }
     public bool ContainerCleanupCompleted { get; set; }
     public string[] Assertions { get; set; } = [];
     public string Outcome { get; set; } = "failed";

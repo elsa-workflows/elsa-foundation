@@ -22,6 +22,20 @@ The default path asserts that a missing report stays unknown, an actual PostgreS
 
 Optional mutation `hide-report-read` replays the initial unknown report snapshot at the later read to model loss of authoritative report refresh. `ignore-incarnation` strips the generation from report storage and lookup keys to model an incomplete identity key. Both must fail with a stable assertion reason.
 
+## Admission race red control (#3101)
+
+Status: deferred by the owner on 20 October 2026. This branch preserves an unfinished red-case harness; no admission guard or production Orleans provider is implemented. The work is not a prerequisite for the next native/ETL/agent slices. Resume only after explicit reprioritization.
+
+The bounded admission mode exercises actual Orleans 10.4.0 ADO.NET `IMembershipTable` calls against PostgreSQL 16 without starting an Orleans host or its background membership loops:
+
+```sh
+dotnet run --project tools/hosting/Orleans.Membership.Probe/Orleans.Membership.Probe.csproj --no-restore -- --mode admission-red --output /tmp/elsa-program-20261019/orleans-admission3101/admission-red.json
+```
+
+This mode is an intentional red control and exits nonzero when it reproduces the unsafe behavior. It records a fresh-incumbent race on an initially absent probe host row, then separately delays an actual provider heartbeat and status update behind a PostgreSQL row lock, terminates the modeled admission backend, and lets a successor remap the probe-owned host row after re-reading the incumbent's actual Orleans `StartTime` and `IAmAliveTime`. Releasing the barrier must show the unguarded provider call commit against the displaced incarnation. The heartbeat receipt also requires Orleans membership `TableVersion` to remain unchanged; the status receipt records the captured row etag and table version and proves they stayed current through remap.
+
+`probe_host_admission` and `probe_host_incarnation` are disposable fixture tables, not production schema. Host IDs in this mode are explicit fixture labels; the probe makes no claim that every production silo derives a stable host identity from its Orleans silo name or hostname. A successor mapping remains `pending`, so the receipt does not claim that it is admitted or serving. The initial contender race models host-row enrollment and refusal against a pre-seeded fresh Orleans row; it does not test the guarded provider's `InsertRowAsync` enrollment path. This one liveness expiry and skew policy applies only to the modeled ordering. The probe does not prove host process lifecycle, lease adoption, mixed provider-query cache behavior, operator rollout, cleanup semantics, terminal `Dead` transitions, or safety against direct SQL writers. Receipt and command log are written outside the checkout under `/tmp/elsa-program-20261019/orleans-admission3101/`.
+
 [Root verification receipts](evidence/20261020-root.json) retain one baseline, both intended failures and restoration, with source/binary hashes and the observed backend image. They are pre-commit file-bound results, not a claim that their base commit already contained this probe.
 
 ## Script provenance
