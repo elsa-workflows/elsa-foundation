@@ -89,7 +89,7 @@ export function register(api: ElsaStudioModuleApi) {
         { id: "workflows-runs", title: "Runs", path: "/workflows/instances", iconColor: "#0ea5e9", placement: "main", order: 30 },
         { id: "workflows-executables", title: "Executables", path: "/workflows/executables", iconColor: "#d97706", placement: "more", order: 10 },
         { id: "workflows-activity-definitions", title: "Activity definitions", path: "/workflows/activity-definitions", iconColor: "#8b5cf6", placement: "more", order: 20 },
-        { id: "workflows-runtime-diagnostics", title: "Runtime diagnostics", path: "/workflows/runtime-diagnostics", iconColor: "#0ea5e9", placement: "more", order: 40 },
+        { id: "workflows-runtime-diagnostics", title: "Runtime evidence settings", path: "/workflows/runtime-diagnostics", iconColor: "#0ea5e9", placement: "more", order: 40 },
         { id: "workflows-activity-availability", title: "Activity availability", path: "/workflows/activity-availability", iconColor: "#0d9488", placement: "more", order: 50 }
       ]
     },
@@ -151,8 +151,8 @@ export function register(api: ElsaStudioModuleApi) {
       {
         id: "workflows-runtime-diagnostics",
         path: "/workflows/runtime-diagnostics",
-        label: "Runtime diagnostics",
-        component: () => deferred("runtime diagnostics", <RuntimeDiagnosticsSettingsPage context={api.backend} />)
+        label: "Runtime evidence settings",
+        component: () => deferred("Runtime evidence settings", <RuntimeDiagnosticsSettingsPage context={api.backend} />)
       }
     ]
   });

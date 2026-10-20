@@ -34,8 +34,8 @@
 
 **Independent Test**: The host tests prove accessible destinations, custom-entry fallback, and parity with existing navigation.
 
-- [ ] T009 [US1] Pass `filterAccessibleNavigation(navigation, access)`'s existing result from `Studio/src/apps/Elsa.Studio.Web/Client/src/app/App.tsx` into the Diagnostics index and render accurate descriptors for known built-ins plus existing custom entries. Preserve exact custom labels, destinations, gates, widget content/state behavior, ShellFrame navigation behavior, and direct-route behavior; do not add a second access rule or guess unrelated routes.
-- [ ] T010 [US1] Run the US1 host checks from `specs/993-studio-diagnostics-index/quickstart.md` (`overview.test.tsx`, `navPlacement.test.ts`, and `app-routing.test.ts`) and verify index/sidebar/dock/direct destinations agree for the current filtered navigation.
+- [x] T009 [US1] Pass `filterAccessibleNavigation(navigation, access)`'s existing result from `Studio/src/apps/Elsa.Studio.Web/Client/src/app/App.tsx` into the Diagnostics index and render accurate descriptors for known built-ins plus existing custom entries. Preserve exact custom labels, destinations, gates, widget content/state behavior, ShellFrame navigation behavior, and direct-route behavior; do not add a second access rule or guess unrelated routes.
+- [x] T010 [US1] Run the US1 host checks from `specs/993-studio-diagnostics-index/quickstart.md` (`overview.test.tsx`, `navPlacement.test.ts`, and `app-routing.test.ts`) and verify index/sidebar/dock/direct destinations agree for the current filtered navigation.
 
 **Checkpoint**: Story 1 is testable independently; the baseline candidate still retains Runtime evidence settings when that Workflows entry is registered and accessible.
 
@@ -47,8 +47,8 @@
 
 **Independent Test**: Empty and fully-filtered candidate sets produce the no-links message; any eligible destination suppresses it.
 
-- [ ] T011 [US2] Update the empty-navigation state in `Studio/src/apps/Elsa.Studio.Web/Client/src/app/App.tsx` so it appears only when the current filtered candidate set has no diagnostic links and makes no backend-health, outage, or empty-data claim.
-- [ ] T012 [US2] Run the US2 empty/filtered cases in `Studio/src/apps/Elsa.Studio.Web/Client/src/__tests__/overview.test.tsx`, including the synthetic empty candidate set; do not use the baseline composition as proof of a zero-link state.
+- [x] T011 [US2] Update the empty-navigation state in `Studio/src/apps/Elsa.Studio.Web/Client/src/app/App.tsx` so it appears only when the current filtered candidate set has no diagnostic links and makes no backend-health, outage, or empty-data claim.
+- [x] T012 [US2] Run the US2 empty/filtered cases in `Studio/src/apps/Elsa.Studio.Web/Client/src/__tests__/overview.test.tsx`, including the synthetic empty candidate set; do not use the baseline composition as proof of a zero-link state.
 
 **Checkpoint**: Stories 1 and 2 work independently; restricted destinations remain undisclosed.
 
@@ -60,8 +60,8 @@
 
 **Independent Test**: OpenTelemetry and Structured Logs DOM tests distinguish supported trace states from unsupported, inaccessible, unavailable, and failed destinations.
 
-- [ ] T013 [P] [US3] Update `Extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Client/src/module.tsx` so Metrics and OpenTelemetry Logs are explained as unsupported before users can enter placeholder content; offer a direct Structured Logs link only when registration and access are both established, otherwise use the neutral Diagnostics handoff. Preserve supported trace behavior. In `Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/module.tsx`, correct only the misleading successful-empty row copy during connecting or failure, using the existing state/detail without changing requests, classification, stream/buffer or subscription behavior.
-- [ ] T014 [US3] Run both telemetry DOM suites from `specs/993-studio-diagnostics-index/quickstart.md` and verify all loading, empty, permission, unavailable, and failure states remain distinct; classifier assertions alone do not satisfy this check.
+- [x] T013 [P] [US3] Update `Extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Client/src/module.tsx` so Metrics and OpenTelemetry Logs are explained as unsupported before users can enter placeholder content; offer a direct Structured Logs link only when registration and access are both established, otherwise use the neutral Diagnostics handoff. Preserve supported trace behavior. In `Extensions/Diagnostics.StructuredLogs/studio/Elsa.Studio.Diagnostics.StructuredLogs/Client/src/module.tsx`, correct only the misleading successful-empty row copy during connecting or failure, using the existing state/detail without changing requests, classification, stream/buffer or subscription behavior.
+- [x] T014 [US3] Run both telemetry DOM suites from `specs/993-studio-diagnostics-index/quickstart.md` and verify all loading, empty, permission, unavailable, and failure states remain distinct; classifier assertions alone do not satisfy this check.
 
 **Checkpoint**: Users can identify the supported trace task and are not sent into unsupported placeholder views.
 
@@ -73,8 +73,8 @@
 
 **Independent Test**: View-only and authorized-save cases preserve route, authorization, payload, policy, and widget outcomes.
 
-- [ ] T015 [P] [US4] Present the existing `/workflows/runtime-diagnostics` destination as “Runtime evidence settings” in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/module.tsx` and `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/RuntimeDiagnosticsSettingsPage.tsx`; retain its current view access, separate write authorization, policy, and save behavior.
-- [ ] T016 [US4] Run `runtimeDiagnosticsSettings.test.tsx` and the Diagnostics widget assertions in `overview.test.tsx`; verify view-only access issues no write request, authorized saves retain the exact existing payload, and a failing widget does not hide unrelated widgets or tool links.
+- [x] T015 [P] [US4] Present the existing `/workflows/runtime-diagnostics` destination as “Runtime evidence settings” in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/module.tsx` and `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/RuntimeDiagnosticsSettingsPage.tsx`; retain its current view access, separate write authorization, policy, and save behavior.
+- [x] T016 [US4] Run `runtimeDiagnosticsSettings.test.tsx` and the Diagnostics widget assertions in `overview.test.tsx`; verify view-only access issues no write request, authorized saves retain the exact existing payload, and a failing widget does not hide unrelated widgets or tool links.
 
 **Checkpoint**: Stories 1–4 work with the existing settings and contribution contracts intact.
 
@@ -115,3 +115,7 @@ The first useful increment is US1, with US2 completed alongside it before the in
 Before any product edit, the corrected focused suites execute 60 cases: 50 pass and 10 fail for intended behavior gaps (Web 23/5, OpenTelemetry 10/1, Structured Logs 13/2, Runtime settings 4/2; pass/fail). Existing widget, helper/classifier, route and save/permission guards remain covered. The initial OpenTelemetry import failure is excluded: declaring the two existing DOM test dev dependencies fixes collection, with a bounded lockfile diff and successful offline frozen install. Root removed a redundant fabricated-route test; real module registration and composed-route checks remain authoritative.
 
 The mounted browser fixture also fails on the expected missing Console index link at 320px/light; a separately selected single-case run confirms the same behavior without max-failure interruption. The other seven viewport/theme cases await the full post-implementation run. Logs and traces are retained under the external execution folder; no fixture result is described as composed Workbench proof. Root reviewed all changed test/fixture paths and recorded the state-presentation refinement before allowing implementation.
+
+## Root implementation checkpoint
+
+Root reviewed the complete product/fixture diff. The four focused suites pass all 60 cases (28 Web/navigation/route, 11 OpenTelemetry, 15 Structured Logs, 6 Runtime settings). A first Web assertion incorrectly included unrelated sidebar text; root scoped it to the Diagnostics index while preserving the exact destination expectation. The synthetic click is cancelable, matching a browser event and avoiding a jsdom navigation diagnostic. The initial full fixture run passes all eight width/theme cases; final screenshots and composed-host proof remain pending after root copy polish. Root retained user-facing task wording, kept the lazy Runtime evidence settings label consistent, and allowed the OpenTelemetry capability note to wrap at narrow widths.

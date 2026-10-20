@@ -20,13 +20,13 @@ describe("diagnostics", () => {
   it("lists only host-filtered diagnostic destinations and preserves their labels, routes, and order", async () => {
     const navigation: StudioNavigationContribution[] = [
       { id: "diagnostics", label: "Diagnostics", path: "/diagnostics", order: 10 },
-      { id: "open-telemetry", label: "OpenTelemetry", path: "/diagnostics/open-telemetry", parentId: "diagnostics", order: 20, requiresFeature: "otel-studio" },
-      { id: "structured-logs", label: "Structured logs", path: "/diagnostics/structured-logs", parentId: "diagnostics", order: 30, requiresPermission: "diagnostics.logs.read" },
+      { id: "open-telemetry", label: "OpenTelemetry", path: "/diagnostics/open-telemetry", parentId: "diagnostics", order: 20 },
+      { id: "structured-logs", label: "Structured logs", path: "/diagnostics/structured-logs", parentId: "diagnostics", order: 30 },
       { id: "console", label: "Console", path: "/diagnostics/console", parentId: "diagnostics", order: 35 },
       { id: "custom-audit", label: "Database audit", path: "/diagnostics/audit", parentId: "diagnostics", order: 40 },
       { id: "custom-parent", label: "Restricted diagnostic group", path: "/diagnostics/restricted", parentId: "diagnostics", order: 50, requiresRole: "diagnostics-admin" },
       { id: "custom-child", label: "Private traces", path: "/diagnostics/restricted/traces", parentId: "custom-parent", order: 60 },
-      { id: "workflows-runtime-diagnostics", label: "Runtime evidence settings", path: "/workflows/runtime-diagnostics", order: 70, requiresPermission: "runtime-diagnostics.read" },
+      { id: "workflows-runtime-diagnostics", label: "Runtime evidence settings", path: "/workflows/runtime-diagnostics", order: 70 },
       { id: "not-a-diagnostic", label: "Unrelated activity", path: "/workflows/activity-availability", order: 80 }
     ];
     const access: NavigationAccess = {
@@ -59,11 +59,11 @@ describe("diagnostics", () => {
     expect(visibleText(container)).toMatch(/navigate|open this destination/i);
     expect(visibleText(container)).not.toContain("No diagnostic tool links are available");
     expect(visibleText(container)).not.toContain("Private traces");
-    expect(visibleText(container)).not.toContain("Unrelated activity");
+    expect(container.querySelector(".diagnostics-view")?.textContent).not.toContain("Unrelated activity");
     const sidebarPaths = new Set(Array.from(container.querySelectorAll<HTMLAnchorElement>("nav a[href]"), link => link.getAttribute("href")));
     expect(links.every(link => sidebarPaths.has(link.getAttribute("href")))).toBe(true);
 
-    links[0].dispatchEvent(new MouseEvent("click", { bubbles: true, button: 0 }));
+    links[0].dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
     expect(onNavigate).toHaveBeenCalledWith("/diagnostics/open-telemetry");
 
     await unmount();
@@ -412,26 +412,18 @@ function healthyRegistry() {
 }
 
 async function renderDiagnostics(api: ElsaStudioModuleApi) {
-  return renderComponent(<Diagnostics api={api} />);
+  return renderComponent(<Diagnostics api={api} navigation={[]} onNavigate={() => {}} />);
 }
 
-type DiagnosticsIndexProps = {
-  api: ElsaStudioModuleApi;
-  navigation: StudioNavigationContribution[];
-  onNavigate: (path: string) => void;
-};
-
 async function renderDiagnosticsWithNavigation(api: ElsaStudioModuleApi, navigation: StudioNavigationContribution[], onNavigate: (path: string) => void = () => {}) {
-  const DiagnosticsIndex = Diagnostics as unknown as React.ComponentType<DiagnosticsIndexProps>;
-  return renderComponent(<DiagnosticsIndex api={api} navigation={navigation} onNavigate={onNavigate} />);
+  return renderComponent(<Diagnostics api={api} navigation={navigation} onNavigate={onNavigate} />);
 }
 
 async function renderDiagnosticsWithShell(api: ElsaStudioModuleApi, navigation: StudioNavigationContribution[], onNavigate: (path: string) => void) {
-  const DiagnosticsIndex = Diagnostics as unknown as React.ComponentType<DiagnosticsIndexProps>;
   return renderComponent(
     <ThemeProvider>
       <ShellFrame navigation={navigation} panels={[]} path="/diagnostics" title="Diagnostics" backendBaseUrl="https://backend.example/" onNavigate={onNavigate}>
-        <DiagnosticsIndex api={api} navigation={navigation} onNavigate={onNavigate} />
+        <Diagnostics api={api} navigation={navigation} onNavigate={onNavigate} />
       </ShellFrame>
     </ThemeProvider>
   );

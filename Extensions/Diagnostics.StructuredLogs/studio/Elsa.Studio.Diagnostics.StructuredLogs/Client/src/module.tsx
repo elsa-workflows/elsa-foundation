@@ -485,7 +485,7 @@ function StructuredLogRows({ state, panelMode = false }: { state: StructuredLogs
       </div>
       {state.rows.length === 0 ? (
         <div className="structured-logs-empty">
-          {state.status === "unavailable" || state.status === "unauthorized" ? state.detail : "No structured logs received yet."}
+          {state.status === "live" || state.status === "paused" ? "No structured logs received yet." : state.detail}
         </div>
       ) : null}
       {state.rows.map(row => (

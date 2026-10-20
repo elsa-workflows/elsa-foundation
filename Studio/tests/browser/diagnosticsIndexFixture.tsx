@@ -8,13 +8,6 @@ import { writeAppearancePreferences } from "../../src/apps/Elsa.Studio.Web/Clien
 import type { ElsaStudioModuleApi, StudioNavigationContribution } from "../../src/apps/Elsa.Studio.Web/Client/src/sdk";
 import "../../src/apps/Elsa.Studio.Web/Client/src/app/styles.css";
 
-type DiagnosticsIndexProps = {
-  api: ElsaStudioModuleApi;
-  navigation: StudioNavigationContribution[];
-  onNavigate: (path: string) => void;
-};
-
-const DiagnosticsIndex = Diagnostics as unknown as React.ComponentType<DiagnosticsIndexProps>;
 const theme = new URLSearchParams(window.location.search).get("theme") === "dark" ? "dark" : "light";
 writeAppearancePreferences({ themeId: "classic", mode: theme, navigation: "left" });
 
@@ -64,7 +57,7 @@ export function DiagnosticsIndexFixture() {
         onNavigate={navigate}
       >
         <output data-testid="diagnostics-route" aria-live="polite">{path}</output>
-        <DiagnosticsIndex api={api} navigation={filteredNavigation} onNavigate={navigate} />
+        <Diagnostics api={api} navigation={filteredNavigation} onNavigate={navigate} />
       </ShellFrame>
     </ThemeProvider>
   );
