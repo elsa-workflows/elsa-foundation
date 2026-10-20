@@ -23,7 +23,7 @@ committed.
 |---|---|---|
 | P1 | `ReserveDelivery` after effect | Delivery reservation exists once; recovery after `ConfirmOrder` fails releases it once |
 | P2 | `CancelDelivery` after effect | Cancelled once; `ReleaseInventory` then runs once |
-| P3 | Between `CancelDelivery` completion and `ReleaseInventory` scheduling (kill on the next claim) | `ReleaseInventory` runs once |
+| P3 | Between `CancelDelivery` completion and `ReleaseInventory` scheduling (kill when `ReleaseInventory` is claimed) | `ReleaseInventory` runs once |
 | P4 | `ReleaseInventory` after effect | Released once; scope completes `Compensated` |
 
 Each point runs in Durable, Balanced and Ephemeral modes.

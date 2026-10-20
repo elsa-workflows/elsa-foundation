@@ -32,23 +32,20 @@ Child slots, declared with `[ActivityChildSlot]` like Switch cases:
 ## Executable structure — same kind and schema
 
 ```json
-{ "steps": [ { "name": "Reserve inventory", "activity": "x-a1", "compensation": "x-h1" }, … ],
-  "afterCompensation": "complete" }
+{ "steps": [ { "name": "Reserve inventory", "activity": "x-a1", "compensation": "x-h1" }, … ] }
 ```
 
-Executable node ids are remapped by the structure handler. `afterCompensation` (`complete` | `fault`) is an
-activity input that publication pins.
+Executable node ids are remapped by the structure handler. `faultAfterCompensation` (boolean, default `false`) is
+an ordinary activity input that publication pins; it is not part of the structure payload.
 
-## Private state — type `elsa.compensation-scope.state`, version `1`
+## Private state — type `Elsa.CompensationScope.State`, version `1`
 
 ```json
 {
   "phase": "Compensating",
-  "nextStep": 3,
-  "currentStepActivityExecutionId": null,
+  "nextStepIndex": 3,
   "nextOrdinal": 3,
-  "cause": { "kind": "fault", "step": "Confirm order", "activityExecutionId": "ae-7",
-             "incidentId": "inc-2", "faultCode": "order.rejected" },
+  "cause": { "kind": "fault", "step": "Confirm order", "activityExecutionId": "ae-7", "incidentId": "inc-2" },
   "entries": [
     { "id": "e1", "step": "Reserve inventory", "ordinal": 1, "status": "Registered",
       "forwardActivityExecutionId": "ae-3", "forwardIterationId": null,
@@ -59,6 +56,14 @@ activity input that publication pins.
   ]
 }
 ```
+
+`nextStepIndex` is the index of the next step to schedule; the running step is `nextStepIndex - 1`. It advances in
+the same staged state as the entry the completed step appends, so the append and the cursor move commit together.
+The fault's code and message stay on the absorbed incident; the cause references it by `incidentId`.
+
+The runtime clears structural private state when the scope completes. The journal therefore lives only while the
+scope is active. Completed-scope inspection (M1) is derived from run data (FR-019); late compensation of a
+completed scope (OD3, M3) needs the runtime to keep a durable journal past completion, which does not exist yet.
 
 - The fault message is not copied into private state. Inspection reads it from the incident record through the
   existing disclosure policy.
