@@ -265,6 +265,9 @@ Rules:
 | `sourceActivityExecutionId` | string | Scheduled/Waiting/Suspended/Faulted source |
 
 The source transitions to `Superseded`; the replacement retains pinned inputs and records lineage.
+It is a fresh invocation: it keeps the source's metadata except the per-invocation runtime markers
+(activation claims, parent-completion and parent-outcome markers, background work id, incident,
+fault and causation metadata), so its structural parent receives its outcome as a new child outcome.
 
 ### Migrate/1
 

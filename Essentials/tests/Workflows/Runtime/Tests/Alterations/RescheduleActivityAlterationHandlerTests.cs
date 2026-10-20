@@ -97,6 +97,33 @@ public sealed class RescheduleActivityAlterationHandlerTests
     }
 
     [Fact]
+    public async Task PreflightAsync_SuccessorDropsTheSourcesPerInvocationMetadata()
+    {
+        var metadata = ActivitySuccessorStaging.PerInvocationMetadataKeys.ToDictionary(key => key, _ => "source-value", StringComparer.Ordinal);
+        metadata["custom.kept"] = "kept";
+        var source = Source(ActivityExecutionStatus.Faulted) with { Metadata = metadata };
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        await executableStore.SaveAsync(Executable());
+        var staging = new Staging();
+
+        var result = await Handler(executableStore).PreflightAsync(Context(source, staging));
+
+        Assert.True(result.IsAccepted);
+        var builder = Apply(Assert.IsAssignableFrom<IWorkflowAlterationRuntimeCheckpointStagedChange>(Assert.Single(staging.StagedChanges)));
+        var successor = Assert.Single(builder.ActivityExecutions, change => change.StateId != source.Execution.ActivityExecutionId).State;
+        Assert.Equal(
+            new Dictionary<string, string>
+            {
+                ["custom.kept"] = "kept",
+                [RuntimeMetadataKeys.SupersedesActivityExecutionId] = source.Execution.ActivityExecutionId
+            },
+            successor.Metadata);
+        // The superseded source keeps its own record of what happened to it.
+        var superseded = Assert.Single(builder.ActivityExecutions, change => change.StateId == source.Execution.ActivityExecutionId).State;
+        Assert.Equal("source-value", superseded.Metadata[RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId]);
+    }
+
+    [Fact]
     public async Task PreflightAsync_KeepsIntrinsicSuccessorScheduledEvenWhenInputsArePinned()
     {
         var source = Source(ActivityExecutionStatus.Faulted) with

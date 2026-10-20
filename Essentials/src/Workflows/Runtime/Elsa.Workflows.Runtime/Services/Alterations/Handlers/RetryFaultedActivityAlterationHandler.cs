@@ -152,10 +152,6 @@ public sealed class RetryFaultedActivityAlterationHandler(
             metadata);
     }
 
-    // The successor is a fresh invocation of the same occurrence. It keeps the source's metadata except the markers
-    // the runtime keeps per invocation: carried over, they would tell the parent-completion handler the successor's
-    // outcome was already processed, point a background coordinator at the source's work record, and describe a
-    // fault the successor never had.
     // The source's own schedule command is gone, so its successor's command is rebuilt from the durable scheduling
     // provenance, the way an ordinary child schedule carries the parent's request metadata. A structural parent reads
     // its routing data from the child's command metadata, so this is what lets it receive the successor's outcome as
@@ -171,34 +167,11 @@ public sealed class RetryFaultedActivityAlterationHandler(
 
     private static Dictionary<string, string> NewMetadata(ActivityExecutionState source)
     {
+        // The shared successor metadata already drops the source's per-invocation markers.
         var metadata = ActivitySuccessorStaging.SuccessorMetadata(source.Metadata, source.Execution.ActivityExecutionId);
-        foreach (var key in PerInvocationMetadataKeys)
-            metadata.Remove(key);
         metadata[RuntimeMetadataKeys.RetryOfActivityExecutionId] = source.Execution.ActivityExecutionId;
         return metadata;
     }
-
-    private static readonly string[] PerInvocationMetadataKeys =
-    [
-        RuntimeMetadataKeys.ActivityAttemptActivationClaim,
-        RuntimeMetadataKeys.ActivityAttemptActivationClaimWorkItemId,
-        RuntimeMetadataKeys.ActivityActivationCompletedWorkItemId,
-        RuntimeMetadataKeys.ActivityAttemptOrdinalHighWatermark,
-        RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId,
-        RuntimeMetadataKeys.ParentOutcomeWorkItemId,
-        RuntimeMetadataKeys.IncidentId,
-        RuntimeMetadataKeys.FaultSubStatus,
-        RuntimeMetadataKeys.FaultType,
-        RuntimeMetadataKeys.FaultMessage,
-        RuntimeMetadataKeys.FaultStackTrace,
-        RuntimeMetadataKeys.FaultInnerType,
-        RuntimeMetadataKeys.FaultInnerMessage,
-        RuntimeMetadataKeys.CausalIncidentId,
-        RuntimeMetadataKeys.CausalActivityExecutionId,
-        RuntimeMetadataKeys.CausalExecutableNodeId,
-        RuntimeMetadataKeys.CausationKind,
-        RuntimeMetadataKeys.BackgroundActivityWorkId
-    ];
 
     private static IncidentState ResolveRetriedIncident(
         IncidentState incident,
