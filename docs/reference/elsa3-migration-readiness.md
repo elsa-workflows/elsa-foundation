@@ -20,14 +20,17 @@ differently.
 | Limit for a reusable workflow | Code | Kind |
 |---|---|---|
 | No start trigger in the body | `ELS3-REUSABLE-UNSUPPORTED-START-TRIGGER`, `ELS3-REUSABLE-UNSUPPORTED-TRIGGER` | Elsa 4 behaviour |
-| No SetVariable, SetOutput, Correlate or SetName | `ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED` | Gap, [#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023) |
-| No reads of its own inputs, its variables or other activities' results | `ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED` | Gap, [#3027](https://github.com/elsa-workflows/elsa-foundation/issues/3027) |
+| No SetVariable, SetOutput, Correlate, SetName or Finish, and no captured HTTP Endpoint headers or query string | `ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED` | Gap, [#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023) |
+| No reads of its own inputs, its variables or other activities' results, and no output captured into a variable | `ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED` | Gap, [#3027](https://github.com/elsa-workflows/elsa-foundation/issues/3027) |
 | Outcomes: each Complete names one literal outcome, not `done` | `ELS3-ACTIVITY-UNSUPPORTED-MODE` | Elsa 4 behaviour |
 | End only in the workflow's root flowchart | `ELS3-ACTIVITY-UNSUPPORTED-MODE` | Elsa 4 behaviour |
 
 What this means today: a reusable workflow imports as a reusable activity when its body works from literal values and
-signals its result through **outcomes**. It cannot return output values or compute from its inputs until #3023 and #3027
-are done.
+signals its result through **outcomes**. It may wait in its body (a Delay suspends and resumes, proven). It cannot
+return output values or compute from its inputs until #3023 and #3027 are done.
+
+How Elsa 3 runs a reusable workflow matters for the fixes below: inside the execution of the workflow that uses it.
+Its variables are its own, but Correlate, Set Name and Finish act on that calling workflow.
 
 ## Checklist per reusable workflow
 
@@ -39,21 +42,36 @@ are done.
    - A custom activity type the import does not know counts as a trigger. If it is not one, clear *Can start workflow*
      on it and check that the flowchart still starts where it should: Elsa 3 then starts at the first activity nothing
      leads into.
-2. **No setting values.** The body uses no SetVariable, SetOutput, Correlate or SetName activity. No JavaScript or
-   Liquid assigns a value either (`setVariable`, `setOutput`, `setInput`, `setResult`, a generated `set{Name}(...)`,
-   `setCorrelationId`, `setWorkflowInstanceName`, `variables.x = ...`, Liquid `assign`): that is refused in every
-   workflow (`VF-IMP-005`), and the Set, Correlate or Set Name activity its guidance points to is not available in a
-   reusable body yet.
+2. **No setting values.** Elsa 4 graph activities cannot run these yet ([#3023](https://github.com/elsa-workflows/elsa-foundation/issues/3023));
+   each is refused with `ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED`, whose guidance gives the fix for that activity:
+
+   | In the reusable body | Fix in Elsa 3 |
+   |---|---|
+   | Set Variable | Nothing outside the body sees its variables. If nothing in the body reads the variable, delete the Set Variable. If something does, that read is refused too (item 3): wait for #3023 and #3027, or make the workflow regular (below). |
+   | Set Output | If no caller reads the output, delete it. If one does, wait for #3023, or make the workflow regular (below). |
+   | Correlate | It sets the **caller's** correlation id. Delete it, and add a Correlate with the same value to each caller, directly before the activity. |
+   | Set Name | It names the **caller's** instance. Delete it, and add a Set Name with the same value to each caller, directly before or after the activity. |
+   | Finish | It ends the **whole calling workflow**. Replace it with a Complete that names a new, declared outcome (for example `Finished`), and in each caller connect that outcome to a Finish. |
+   | HTTP Endpoint with *Headers* or *Query String Data* captured | Remove the capture; nothing in the body can read it yet. |
+
+   Do not move Correlate, Set Name or Finish into a regular workflow called by Dispatch or Execute Workflow instead:
+   there they would act on the called workflow, not the caller.
+
+   No JavaScript or Liquid assigns a value either (`setVariable`, `setOutput`, `setInput`, `setResult`, a generated
+   `set{Name}(...)`, `setCorrelationId`, `setWorkflowInstanceName`, `variables.x = ...`, Liquid `assign`): that is
+   refused in every workflow (`VF-IMP-005`), and the Set, Correlate or Set Name activity its guidance points to is not
+   available in a reusable body yet.
 3. **No reading values.** No activity in the body reads a value: in JavaScript `getInput(...)`, `getVariable(...)`,
    `variables.x` or a generated `get{Name}()` accessor; in Liquid `Input.x`, `Variables.x` or `Output.x`; and no property
    bound to a variable or to another activity's output (an Elsa 3 memory reference). Use literal values.
+   - No output captured into a variable either: nothing in the body can read it, so remove the capture.
    - Allowed: `getWorkflowInstanceId()` and `getCorrelationId()` read the running workflow instance, as in Elsa 3.
    - The JavaScript guidance "pass the value in as a workflow input" or "capture the output into a variable" does not
      help inside a reusable body, because the body cannot read either yet. Keep that logic in the calling workflow, or
      make the reusable workflow a regular one (see below). Declared inputs may stay on the workflow, and callers may pass them,
    but the body cannot read them yet.
 4. **Outcomes.** Each Complete names exactly one literal outcome; not a list, not an expression, and not `done`, which
-   collides with Elsa 4's natural outcome. Declare the outcomes on the workflow: an undeclared one is declared anyway with
+   collides with Elsa 4's natural outcome (rename it, and change the callers that route on it). Declare the outcomes on the workflow: an undeclared one is declared anyway with
    `ELS3-BEHAVIOUR-OUTCOME-UNDECLARED`, and a declared one no Complete reaches is dropped with
    `ELS3-BEHAVIOUR-OUTCOME-UNREACHED`. End is allowed only in the workflow's root flowchart.
 5. **Version numbers.** If the workflow changed, it has a new version number in Elsa 3. An Elsa 4 version that is
@@ -72,6 +90,10 @@ with **Dispatch Workflow** or **Execute Workflow** instead; otherwise that calle
 - Publish the called workflow before the caller.
 - Execute Workflow becomes a durable dispatch in Elsa 4 rather than an in-process call
   (`ELS3-BEHAVIOUR-EXECUTE-WORKFLOW-DURABLE`); review whether the caller depends on in-process behaviour.
+- **Outputs do not carry over.** A captured Execute Workflow result is refused (`ELS3-ACTIVITY-OUTPUT-NOT-REPRESENTABLE`),
+  so remove the capture before exporting. After import, a caller that needs an output reads it from the Elsa 4 Dispatch
+  Workflow's `Result`, which holds the called workflow's outputs when it waits for completion.
+- Correlate, Set Name and Finish now act on the called workflow, not the caller (see item 2 of the checklist).
 
 ## Checklist per collection
 
