@@ -131,6 +131,12 @@
   flex-wrap: wrap;
 }
 
+.wf-operator-dialog .wf-dialog-actions button[type="submit"] {
+  border-color: color-mix(in srgb, var(--studio-accent) 60%, var(--studio-border));
+  color: var(--studio-text);
+  background: color-mix(in srgb, var(--studio-accent) 12%, var(--studio-surface));
+}
+
 .wf-operator-dialog .wf-dialog-actions button[type="submit"][data-tone="danger"] {
   border-color: color-mix(in srgb, var(--studio-danger) 55%, var(--studio-border));
   color: var(--studio-danger-fg);
@@ -182,6 +188,9 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin: 0 0 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--studio-border);
 }
 
 .wf-incident-operator-actions button {
