@@ -175,7 +175,7 @@ export function findCompositionActivity(activities: ActivityCatalogItem[], kind:
   return activities.find(activity => getCompositionKind(activity) === kind);
 }
 
-function getCompositionKind(activity: ActivityCatalogItem | undefined) {
+export function getCompositionKind(activity: ActivityCatalogItem | undefined) {
   if (!activity) {
     return null;
   }

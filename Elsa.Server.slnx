@@ -610,6 +610,9 @@
   <Folder Name="/Essentials/tests/Workbench/">
     <Project Path="Essentials/tests/Workbench/Tests/Elsa.Workbench.Tests.csproj" />
   </Folder>
+  <Folder Name="/Essentials/tests/Workbench/BackgroundActivities/">
+    <Project Path="Essentials/tests/Workbench/BackgroundActivities/Tests/Elsa.Workbench.BackgroundActivities.Tests.csproj" />
+  </Folder>
   <Folder Name="/Essentials/tests/Workbench/Fixtures/">
     <Project Path="Essentials/tests/Workbench/Fixtures/BackgroundActivities/BackgroundActivities.csproj" />
   </Folder>

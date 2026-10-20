@@ -43,10 +43,10 @@ name: CI
 # The push run is deliberately the SAME job, not a scoped-down variant. Scoping it would mean
 # a second job name (the required-check context is tied to this one) and a second thing to
 # keep in step with the PR gate, in exchange for saving one run per merge. This workflow takes
-# ~13 minutes end to end, measured over its recent successful runs; every push to main already
-# pays ~8-10 for Docker Images, which builds two multi-platform images, and ~3 for Packages.
-# Those run in parallel with this one, so the answer to "is main broken" arrives ~13 minutes
-# after a merge and the merge itself is not held up by any of it.
+# as long as the complete build and container-free suites need. The native-hosting process
+# matrix also runs here, so this job has its own bounded budget rather than an end-to-end
+# duration promise. Docker Images and Packages run in parallel; post-merge verification waits
+# for the actual results rather than treating their completion as test evidence.
 #
 # Blocking is not available on push: the commit has already landed. A red run on main is a
 # request to fix forward or revert; the alert job at the bottom makes sure someone is told.
@@ -82,7 +82,9 @@ jobs:
   build-and-test:
     name: Build & test
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The native-hosting process matrix shares this job with the container-free suites.
+    # The former 30-minute budget expired before that suite completed (#3056); per-test limits stay bounded.
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
