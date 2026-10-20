@@ -15,11 +15,11 @@ in sequence. Build and test only `Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Map
 ## Phase 1: Setup
 
 - [x] T001 Create the worktree `../w3012` on `agent/claude/3012-elsa3-undefined-strict` from `origin/main`, and claim #3012 (done during specify)
-- [ ] T002 Merge `origin/main` into the branch (no rebase), then build `Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj` and run it once to record the green baseline
+- [x] T002 Merge `origin/main` into the branch (no rebase), then build `Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj` and run it once to record the green baseline
 
 ## Phase 2: Foundational
 
-- [ ] T003 Add two message/guidance factories to the rewriter, both under `Elsa3ImportDiagnosticCodes.UnsupportedShape` (`VF-IMP-007`), with the guidance text exactly as in the contract, in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs`:
+- [x] T003 Add two message/guidance factories to the rewriter, both under `Elsa3ImportDiagnosticCodes.UnsupportedShape` (`VF-IMP-007`), with the guidance text exactly as in the contract, in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs`:
   - a private static `StrictModeIssue(string reason)` for the strict-parse refusal;
   - private constants or helpers for the undeclared-write, `this`, `arguments`-write and top-level `arguments` refusals.
 
@@ -30,7 +30,7 @@ in sequence. Build and test only `Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Map
 **Independent test**: `Elsa3UndefinedResultTests` passes. Each converted expression evaluates in `PortableJavaScript`
 to Elsa 3's result.
 
-- [ ] T004 [US1] Create `Extensions/Elsa3/tests/Mapping/Tests/Elsa3UndefinedResultTests.cs`. Follow `Elsa3TopLevelReturnTests`: convert with `ConvertTextAsync`, evaluate with `PortableJavaScript.EvaluateAsync`, compare `GetRawText()`. Add a theory over single expressions, statement forms and top-level returns:
+- [x] T004 [US1] Create `Extensions/Elsa3/tests/Mapping/Tests/Elsa3UndefinedResultTests.cs`. Follow `Elsa3TopLevelReturnTests`: convert with `ConvertTextAsync`, evaluate with `PortableJavaScript.EvaluateAsync`, compare `GetRawText()`. Add a theory over single expressions, statement forms and top-level returns:
   - a missing property: `({}).discount`, and `getVariable('order').discount` with `args.order = {}`, giving `null`;
   - a function that falls through: `(function () {})()`, and `function f() {}\nf()`, giving `null`;
   - `void 0`, giving `null`;
@@ -42,19 +42,19 @@ to Elsa 3's result.
   - `if (true) { return ({}).a }\nreturn 1`, giving `null`;
   - `var x = ({}).a;\nx`, giving `null`;
   - `return 'a' // trailing comment`, and `({}).a // trailing comment`, giving `"a"` and `null`.
-- [ ] T005 [US1] In `Elsa3UndefinedResultTests.cs`, add facts that pin the source shape:
+- [x] T005 [US1] In `Elsa3UndefinedResultTests.cs`, add facts that pin the source shape:
   - `getVariable('o').x` becomes exactly `(args.o.x) ?? null`. This covers the same-offset edit order of D-2.
   - A statement form ends with `return (<e>) ?? null`.
   - A nested `function (x) { return x * 2 }` keeps its `return` unchanged.
   - A RunJavaScript body (Script mode) gets no `?? null`.
-- [ ] T006 [US1] Run T004–T005 on unchanged code. Confirm that the `undefined` cases fail with "A JavaScript binding must produce a value", and that the shape facts fail.
-- [ ] T007 [US1] Implement D-1/D-2 in `RewriteJavaScript` in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs`:
+- [x] T006 [US1] Run T004–T005 on unchanged code. Confirm that the `undefined` cases fail with "A JavaScript binding must produce a value", and that the shape facts fail.
+- [x] T007 [US1] Implement D-1/D-2 in `RewriteJavaScript` in `Extensions/Elsa3/src/Mapping/Services/Elsa3ExpressionRewriter.cs`:
   - **Single-expression path:** insert `(` at `last.Expression.Start` and `) ?? null` at `last.Expression.End`.
   - **Statement path:** change the inserted `return ` to `return (`, and insert `) ?? null` at `last.Expression.End`.
   - **Top-level-return path:** in Expression mode only, add both edits around every `ReturnStatement.Argument`, and around a trailing `ExpressionStatement`. The bare `return;` → `return null;` edit stays.
   - **Order:** add all wrap edits after `analyzer.Edits`.
   - Update the XML doc on `Rewrite`/`RewriteJavaScript` to say where `?? null` is applied.
-- [ ] T008 [US1] Update the exact expected sources that now carry `?? null`, changing nothing else:
+- [x] T008 [US1] Update the exact expected sources that now carry `?? null`, changing nothing else:
   - `Extensions/Elsa3/tests/Mapping/Tests/Elsa3TopLevelReturnTests.cs`;
   - `Extensions/Elsa3/tests/Mapping/Tests/Elsa3JavaScriptConversionTests.cs`;
   - `Extensions/Elsa3/tests/Mapping/Tests/Elsa3GeneratedAccessorTests.cs`;

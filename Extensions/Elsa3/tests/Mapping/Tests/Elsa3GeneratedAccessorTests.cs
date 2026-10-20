@@ -24,7 +24,7 @@ public sealed class Elsa3GeneratedAccessorTests
 
         Assert.True(accessor.Succeeded, Describe(accessor.Diagnostics));
         var converted = ReadExpression(accessor);
-        Assert.Equal("args.HttpRequestBody.text", converted.Source);
+        Assert.Equal("(args.HttpRequestBody.text) ?? null", converted.Source);
         Assert.Equal(ReadExpression(explicitRead).Parameters, converted.Parameters);
         Assert.IsType<VariableExpressionParameterBinding>(converted.Parameters["HttpRequestBody"]);
     }

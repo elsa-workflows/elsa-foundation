@@ -62,9 +62,9 @@ public sealed class Elsa3JavaScriptConversionTests
     }
 
     [Theory]
-    [InlineData("1 + 1;", "1 + 1")]
-    [InlineData("'a' /* note */", "'a' /* note */")]
-    [InlineData("'a' // note", "'a' // note\n")]
+    [InlineData("1 + 1;", "(1 + 1) ?? null")]
+    [InlineData("'a' /* note */", "('a') ?? null /* note */")]
+    [InlineData("'a' // note", "('a') ?? null // note\n")]
     public async Task One_expression_stays_one_expression(string expression, string expected)
     {
         var result = await ConvertTextAsync(expression);
@@ -79,7 +79,7 @@ public sealed class Elsa3JavaScriptConversionTests
         var result = await ConvertTextAsync("var greeting = 'hi'; greeting + '!'");
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.Equal("(function () {\nvar greeting = 'hi'; return greeting + '!'\n})()", Source(Input(Node(result.Value!.State, "node"), "text")));
+        Assert.Equal("(function () {\nvar greeting = 'hi'; return (greeting + '!') ?? null\n})()", Source(Input(Node(result.Value!.State, "node"), "text")));
     }
 
     [Fact]
