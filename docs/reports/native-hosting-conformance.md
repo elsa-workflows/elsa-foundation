@@ -1,6 +1,6 @@
-# Native hosting conformance: implementation checkpoint
+# Native hosting conformance: qualification record
 
-Status: **implementation merged; resulting-main verification in progress**, 20 October 2026. [Task #3056](https://github.com/elsa-workflows/elsa-foundation/issues/3056) is the active leaf under feature #2905 and program #2892. Acceptance and remaining work live in [spec 249](../../specs/249-native-hosting-conformance/spec.md) and its [tasks](../../specs/249-native-hosting-conformance/tasks.md); this report records evidence, not new architecture.
+Status: **native built-in qualification verified**, 20 October 2026. [Task #3056](https://github.com/elsa-workflows/elsa-foundation/issues/3056) records this bounded slice under feature #2905 and program #2892. Acceptance and remaining work live in [spec 249](../../specs/249-native-hosting-conformance/spec.md) and its [tasks](../../specs/249-native-hosting-conformance/tasks.md); this report records evidence, not new architecture.
 
 ## Integrated source and retained artifacts
 
@@ -117,14 +117,16 @@ Resulting-main evidence below is bound to exact merge `7d4d2183`; it does not re
 
 | Gate | Exact-main evidence | Outcome and boundary |
 |---|---|---|
-| Backend, core and architecture | [CI 39359646875](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39359646875) | Running; final job results and counts remain required. |
+| Backend, core and architecture | [CI 39359646875](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39359646875), [final verified receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3087#issuecomment-6282572580) | Backend 16,705/0/32, core 4,021/0/1, architecture 578/0/0; overlapping per-job totals. Backend includes Workbench 55/0/0, fixture 44/0/0 and fast runtime EF 1,001/0/0, without provider containers. Backend/core builds had 245/40 warnings respectively and zero errors; package advisories remain. |
 | Generated maps and solution filters | CI 39359646875, job 118422545763 | Passed; actual map/filter freshness and negative-control contract checks passed. |
 | Studio | [CI 39359646767](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39359646767), [verified receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3087#issuecomment-6282165586) | .NET 462/0/0; frontend baseline 2,927 passed; Chromium 203/0/5. Three shuffled runs each repeat the same 2,041 Workflows tests and are not added. Three workspace invocations had no test files. Lint: 46 warnings, zero errors. |
 | CodeQL | [CI 39359646764](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39359646764), [verified receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3087#issuecomment-6282303207) | All four language jobs passed; C# scanned 5,900/5,900 source files and uploaded results. Build-mode `none`; both solution restores and 91 project restores failed, plus three missing-package probes. An explicit probe found six feeds reachable, while the subsequent inherited-feed probe reported none reachable; the cause and relation to the restore failures remain unproven. Dependency/type information may be incomplete. This job did not build/test the repository and is not full security-clearance evidence. |
 | Packages | [Run 39359646726](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39359646726) | Build passed; release and feed publication skipped. No manual release or deployment was performed. |
 
-## Remaining delivery gates
+## Qualification and bookkeeping boundary
 
-Backend/core/architecture completion and final source/public reconciliation remain required before closing #3056. The report/task follow-up records the implementation merge's evidence and does not rerun native qualification merely to update documentation. Its ordinary PR gates still apply. Feature #2905 and Program #2892 remain open; Orleans, cross-model hosting and the broader production scope are not qualified by this native slice.
+The original implementation's exact-main gates are verified. This docs-only follow-up reconciles their report/task records; its ordinary PR review and checks apply without creating another native qualification obligation. After its merge, the delivery owner records the final receipt on [#3056](https://github.com/elsa-workflows/elsa-foundation/issues/3056), closes the issue, releases exact claim `6280881810` and syncs its board status. Those external transitions are required and recorded there, rather than requiring another documentation PR to attest to this PR's own merge. Until that transition, the issue and claim remain open. Feature #2905 and Program #2892 remain open after this bounded slice; Orleans, cross-model hosting and the broader production scope are not qualified here.
+
+The owner-assigned historical [main-red umbrella #2293](https://github.com/elsa-workflows/elsa-foundation/issues/2293) was refreshed with the current green gate and retained evidence limits. It is not closed or taken over from this green run alone.
 
 The concurrent routing case begins at a quiescent background wait after the original native execution lease was released. The original stale-write case above supplies separate active-lease fencing evidence. SQLite local-process results do not qualify other databases, multi-machine partitions, clock skew, Orleans or other execution models. Physical external effects remain at least once. The historical receipt and HTTP timeout causes remain unproven by these passing runs.
