@@ -257,3 +257,4 @@ Notes come only from explicit `**Notes**:` metadata; see [Spec status metadata](
 | [247-elsa3-js-host-functions](../../specs/247-elsa3-js-host-functions/spec.md) | Elsa 3 JavaScript host functions: convert what Elsa 4 runs the same, refuse the rest clearly | In progress — draft PR [#3028](https://github.com/elsa-workflows/elsa-foundation/pull/3028) | - | 41 | 0 | - |
 | [249-native-hosting-conformance](../../specs/249-native-hosting-conformance/spec.md) | Native hosting conformance | Implemented | - | 23 | 0 | - |
 | [252-studio-http-disclosure](../../specs/252-studio-http-disclosure/spec.md) | Guide HTTP activity configuration with safe progressive disclosure | Implemented — #3064; the implementation PR carries this transition and the final delivery receipt under the spec lifecycle. | - | 14 | 2 | - |
+| [253-connection-picker-failure](../../specs/253-connection-picker-failure/spec.md) | Explain Connection picker load failures | Implemented | - | 9 | 3 | - |

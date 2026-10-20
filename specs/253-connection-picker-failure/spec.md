@@ -2,8 +2,8 @@
 
 **Feature Branch**: `agent/codex/3102-connection-picker-failure`
 **Created**: 2026-10-20
-**Status**: Approved
-**Delivery State**: Root reviewed the specification, plan and task sequence on 2026-10-20; implementation authorized. Verification and delivery remain pending.
+**Status**: Implemented
+**Delivery State**: Implemented and locally exercised on 2026-10-20. Independent review, exact-head CI, merge and resulting-main verification remain pending.
 **Input**: Issue [#3102](https://github.com/elsa-workflows/elsa-foundation/issues/3102), “Studio UX: Explain Connection picker load failures before offering Retry.”
 
 ## Evidence and Context

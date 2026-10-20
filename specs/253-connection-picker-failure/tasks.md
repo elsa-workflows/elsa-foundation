@@ -39,12 +39,12 @@ No foundational changes are required.
 
 ### Tests for User Story 1
 
-- [ ] T001 [US1] Add a focused React DOM regression for rejection, generic accessible guidance, disabled selection, retry/loading, and recovery with a retained reference in `Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/__tests__/connectionPickerEditor.test.tsx`; run it against the current editor and record the expected failure before implementation.
-- [ ] T002 [P] [US1] Extend the existing failure/retry browser proof for accessible explanation, keyboard recovery, narrow/desktop widths, and light/dark themes using its metadata-only fixture in `Studio/tests/browser/connection-syntax-layout.spec.ts`; confirm the new assertion fails before the UI change.
+- [x] T001 [US1] Add a focused React DOM regression for rejection, generic accessible guidance, disabled selection, retry/loading, and recovery with a retained reference in `Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/__tests__/connectionPickerEditor.test.tsx`; run it against the current editor and record the expected failure before implementation.
+- [x] T002 [P] [US1] Extend the existing failure/retry browser proof for accessible explanation, keyboard recovery, narrow/desktop widths, and light/dark themes using its metadata-only fixture in `Studio/tests/browser/connection-syntax-layout.spec.ts`; confirm the new assertion fails before the UI change.
 
 ### Implementation for User Story 1
 
-- [ ] T003 [US1] Render a generic accessible load-failure explanation beside the existing Retry action in `Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/ConnectionPickerEditor.tsx`, preserving the current request lifecycle, context and unmount guards, disabled selection, stored reference, and unavailable-reference behavior; do not add status-specific messaging or a new error format (depends on T001 and T002).
+- [x] T003 [US1] Render a generic accessible load-failure explanation beside the existing Retry action in `Extensions/Connections/studio/Elsa.Studio.Connections/Client/src/ConnectionPickerEditor.tsx`, preserving the current request lifecycle, context and unmount guards, disabled selection, stored reference, and unavailable-reference behavior; do not add status-specific messaging or a new error format (depends on T001 and T002).
 
 **Checkpoint**: The failing component and browser assertions pass after the UI change, and all three issue acceptance criteria are covered.
 
@@ -52,12 +52,12 @@ No foundational changes are required.
 
 **Purpose**: Run focused and integration acceptance checks, then complete the documented delivery gates.
 
-- [ ] T004 Run the focused picker Vitest regression from `specs/253-connection-picker-failure/quickstart.md`; record its exact-head result and confirm the component-level acceptance behavior without claiming a permission-denied journey.
-- [ ] T005 Run the full Connections client Vitest suite and build with the package scripts in `Extensions/Connections/studio/Elsa.Studio.Connections/Client/package.json`; record exact-head results.
-- [ ] T006 Run canonical Studio workspace typecheck and lint with `pnpm --dir Studio typecheck` and `pnpm --dir Studio lint`; record exact-head results.
-- [ ] T007 Run the browser accessibility/layout proof in `Studio/tests/browser/connection-syntax-layout.spec.ts` using `pnpm --dir Studio exec playwright test tests/browser/connection-syntax-layout.spec.ts --workers=1`; verify accessible failure guidance, keyboard recovery, narrow and desktop widths, light and dark themes, and metadata-only fixtures.
-- [ ] T008 Run the complete architecture guard suite serially and reconcile discovered/executed/passed/failed/skipped test counts, then run the authoritative generated-maps check from `specs/253-connection-picker-failure/quickstart.md`; do not run a full-solution local build. If the spec inventory/status makes a map stale, deliberately refresh only the relevant maps layer, review generated findings, and explicitly stage each changed generated map path including `docs/maps/manifest.json` when changed.
-- [ ] T009 Review the complete diff for scope, DRY, and repository/constitution compliance; confirm focused and integration evidence is exact-head. Re-read issue #3102 comments and open PRs immediately before delivery to catch a competing claim.
+- [x] T004 Run the focused picker Vitest regression from `specs/253-connection-picker-failure/quickstart.md`; record its exact-head result and confirm the component-level acceptance behavior without claiming a permission-denied journey.
+- [x] T005 Run the full Connections client Vitest suite and build with the package scripts in `Extensions/Connections/studio/Elsa.Studio.Connections/Client/package.json`; record exact-head results.
+- [x] T006 Run canonical Studio workspace typecheck and lint with `pnpm --dir Studio typecheck` and `pnpm --dir Studio lint`; record exact-head results.
+- [x] T007 Run the browser accessibility/layout proof in `Studio/tests/browser/connection-syntax-layout.spec.ts` using `pnpm --dir Studio exec playwright test tests/browser/connection-syntax-layout.spec.ts --workers=1`; verify accessible failure guidance, keyboard recovery, narrow and desktop widths, light and dark themes, and metadata-only fixtures.
+- [x] T008 Run the complete architecture guard suite serially and reconcile discovered/executed/passed/failed/skipped test counts, then run the authoritative generated-maps check from `specs/253-connection-picker-failure/quickstart.md`; do not run a full-solution local build. If the spec inventory/status makes a map stale, deliberately refresh only the relevant maps layer, review generated findings, and explicitly stage each changed generated map path including `docs/maps/manifest.json` when changed.
+- [x] T009 Review the complete diff for scope, DRY, and repository/constitution compliance; confirm focused and integration evidence is exact-head. Re-read issue #3102 comments and open PRs immediately before delivery to catch a competing claim.
 - [ ] T010 Commit with the Elsa Workflows GitHub App identity, push the issue branch, open a PR containing `Fixes #3102`, comment `pr: <url>` on the issue, request optional review from `@elsa-workflows-bot review`, and attach the created PR to this task.
 - [ ] T011 Obtain three independent reviews with isolated outputs, one on each axis (correctness, repository/constitution conformance, and spec/issue conformance), and include all relevant PR review threads and issue comments. Run a clean self-review loop on the PR diff, fixing findings in new commits and reviewing each new head, with no more than six rounds. Verify all required checks are green and no check has failed on the exact latest reviewed head; confirm no human hold, changes-requested review, open review thread, or `blocked`/`needs:decision` label exists and standing self-merge conditions hold. Code Review is optional; do not wait for an unavailable review. Before merging, add `self-merged` and post the required audit comment with rounds, findings fixed, remaining low notes, and reviewed SHA; merge under standing authorization and record the audit comment URL in the merge commit.
 - [ ] T012 Verify resulting-main CI and generated-maps gates, reconcile the merged result with issue #3102 and its program/project status, then release the issue claim with the completion evidence.
@@ -113,5 +113,5 @@ The unit is small and has one active implementation leaf. T001 and T002 are the 
 
 ## Notes
 
-- All checkboxes are intentionally unchecked: this file plans future implementation and verification; no implementation or tests were performed during specification preparation.
+- Checkboxes record completed work only. T001–T009 have component and browser red/green, full Connections client, build, canonical typecheck/lint, architecture/map and root diff-review evidence; PR, independent review/CI and resulting-main delivery gates remain pending.
 - No implementation, test, commit, push, map refresh, or GitHub delivery action was performed during this planning result. T004-T012 describe future gates and remain unchecked.
