@@ -51,13 +51,14 @@ No setup: existing projects only.
 ## Phase 6: Polish & cross-cutting
 
 - [X] T014 Run the touched test projects listed in specs/254-http-structured-response-body/quickstart.md
-- [ ] T015 Throwaway JTest check (not committed): `javascript-array-methods` and `javascript-object-methods` convert end to end and the only remaining `content` refusal is the computed content type; record the result in the PR evidence
-- [ ] T016 Regenerate the maps with `Elsa.Maps.Generator -- all` after ticking this file; stage only the files whose content really changed (CRLF caveat)
+- [X] T015 Throwaway JTest check (not committed): `javascript-array-methods` and `javascript-object-methods` convert end to end and the only remaining `content` refusal is the computed content type; record the result in the PR evidence
+- [ ] T016 Set this spec's `**Status**:` to `Implemented` with the PR link, before the PR merges (spec-lifecycle transition rule; never a separate status PR) in specs/254-http-structured-response-body/spec.md
+- [ ] T017 Regenerate the maps with `Elsa.Maps.Generator -- all` after ticking this file; stage only the files whose content really changed (CRLF caveat)
 
 ## Dependencies
 
 T001 → T002 → (US1, US2). T003 precedes T004, T005 and T008. US3 (T009–T013) depends only on T001 (the catalog alias) and
-can run in parallel with US1/US2. T014–T016 come last.
+can run in parallel with US1/US2. T014–T017 come last.
 
 ## Parallel example
 
