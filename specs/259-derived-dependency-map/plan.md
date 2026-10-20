@@ -30,7 +30,7 @@ A recorded comparison over 30 recent `main` commits proves both sources give ide
   - the validation script in [quickstart.md](quickstart.md) §3.
 - **Target Platform**: GitHub-hosted `ubuntu-latest`, and contributor machines on Windows, macOS and Linux.
 - **Project Type**: repository tooling and CI.
-- **Performance Goals**: a CI calculator run takes no more than 1.5× its current wall time (research R5).
+- **Performance Goals**: a calculator run with `--dataset derived` takes no more than 1.5× the `--dataset committed` run. The measure is the mean ratio over the 30 timed pairs in the validation script, on the machine that runs it (research R5, R8).
 - **Constraints**:
   - calculator results are a function of commit and record only (spec 150 FR-009);
   - no checkout or restore inside the calculator;

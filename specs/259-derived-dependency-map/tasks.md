@@ -28,7 +28,7 @@
 
 - [ ] T004 Add `tools/maps/Elsa.Maps.ProjectGraph/IRepositoryTree.cs` with `ProjectFiles()`, `Exists(path)` and `Read(path)`, as in data-model.md "Repository tree view", with XML docs in the generator's comment style.
 - [ ] T005 Move `RepoContext.cs` into the library, make it implement `IRepositoryTree`, and keep `Discover`, `ListFiles`, `Absolute` and its `--others` listing. `ProjectFiles()` is `ListFiles(RepoLayout.ProjectPathspecs)`.
-- [ ] T006 Move the project-path part of `RepoLayout` (`ProjectPathspecs`, `IsTestPath`, `IsTestProjectPath`, `Kind`) into `tools/maps/Elsa.Maps.ProjectGraph/RepoLayout.cs` and add `IsProjectPath(string path)`. It must match git's default pathspec wildcard rule, where `*` also matches `/` (research R3). The source and catalog pathspecs and `SourceFiles` stay in the generator, in a generator-side type such as `SourceLayout`, or as a second static class. Update every caller in `tools/maps/Elsa.Maps.Generator/*.cs`.
+- [ ] T006 Move the project-path part of `RepoLayout` (`ProjectPathspecs`, `IsTestPath`, `IsTestProjectPath`, `Kind`) into `tools/maps/Elsa.Maps.ProjectGraph/RepoLayout.cs` and add `IsProjectPath(string path)`, the layout rule from research R3: a `.csproj` under `Essentials/{src,apps,tests}/` or `Extensions/<capability>/{src,tests}/`, at any depth. `RepoContext.ProjectFiles()` filters its `ls-files` output through it, so both tree views use one rule. The source and catalog pathspecs and `SourceFiles` stay in the generator, in a generator-side type such as `SourceLayout`, or as a second static class. Update every caller in `tools/maps/Elsa.Maps.Generator/*.cs`.
 - [ ] T007 Move `ProjectFacts.cs` (records and `ProjectGraph`), `ProjectFile.cs`, `PackageVersions.cs` and `PinnedTransitiveDependencies.cs` into the library. Replace every `File.Exists`, `File.ReadAllBytes`, `XDocument.Load(path)` and `repo.Absolute` with `IRepositoryTree` calls. `ProjectFile.Load(IRepositoryTree, path)` parses from bytes. `ProjectGraph.Read(IRepositoryTree)` uses `tree.ProjectFiles()`. Keep every exception message as it is. Change the namespace to `Elsa.Maps.ProjectGraph`, and add `using` lines in the generator.
 - [ ] T008 Add `tools/maps/Elsa.Maps.ProjectGraph/DependencyMapJson.cs` with the dataset record, `SchemaVersion = 2`, the JSON options from `DependencyMap.cs:40-46`, and `string Serialize(IRepositoryTree tree)`. The result is the JSON with a trailing `\n`, the generator string still `tools/maps/Elsa.Maps.Generator`, built from `PinnedTransitiveDependencies.Attach(tree, ProjectGraph.Read(tree))`. Reduce `tools/maps/Elsa.Maps.Generator/DependencyMap.cs` to writing `DependencyMapJson.Serialize(repo)` through `MarkdownTable.Write`, and keep `RelativePath`.
 - [ ] T009 Point `Essentials/tests/Architecture/Tests` at the moved types. `PinnedTransitivePackTests.cs` (`using Elsa.Maps.Generator`; `RepoContext.Discover`, `PinnedTransitiveDependencies.Attach`) and `SpecScannerTests.cs` (`RepoContext.Discover`) gain `using Elsa.Maps.ProjectGraph`. Add a direct library `ProjectReference` in `Elsa.Architecture.Tests.csproj` if transitive access is not enough. If `ArchitectureGuardTests.InternalsVisibleTo.cs` (`:243`, `MapsGenerator`) allow-lists test-to-tool references by path, add `tools/maps/Elsa.Maps.ProjectGraph/Elsa.Maps.ProjectGraph.csproj` there too. (`ProjectGraph.ReferencedProjectPaths` and `ProjectGraph.ElsaProjectPaths` in the tests are the test suite's own helper, not the generator's type; check for a name clash after the `using` change.)
@@ -42,7 +42,7 @@
 
 **Goal**: pin the shared scanner's contract so a second implementation cannot creep back.
 
-- [ ] T011 [US3] Add `tools/maps/Elsa.Maps.Generator/ProjectGraphContractTests.cs`, following the existing `*ContractTests.cs` self-test pattern. It asserts that `RepoLayout.IsProjectPath` selects what `git ls-files -- <ProjectPathspecs>` selects on the live tree. It also covers synthetic paths: `Extensions/A/src/X.csproj` (in), `Extensions/A/src/Sub/X.csproj` (in), `Extensions/A/studio/X.csproj` (out), `Studio/src/X.csproj` (out), `tools/x/X.csproj` (out) and `Essentials/tests/A/B/X.csproj` (in).
+- [ ] T011 [US3] Add `tools/maps/Elsa.Maps.Generator/ProjectGraphContractTests.cs`, following the existing `*ContractTests.cs` self-test pattern. It asserts that `RepoLayout.IsProjectPath` selects what `git ls-files -- <ProjectPathspecs>` selects on the live tree. It also covers synthetic paths: `Extensions/A/src/X.csproj` (in), `Extensions/A/src/Sub/X.csproj` (in), `Extensions/A/tests/Sub/X.csproj` (in), `Extensions/A/studio/X.csproj` (out), `Extensions/A/studio/src/X.csproj` (out, though git's pathspec would match it), `Studio/src/X.csproj` (out), `tools/x/X.csproj` (out) and `Essentials/tests/A/B/X.csproj` (in).
 - [ ] T012 [US3] Wire `project-graph-self-test` into `tools/maps/Elsa.Maps.Generator/Program.cs`, with its dispatch, the usage string at `:121` and the header comment.
 - [ ] T013 [US3] In `.github/workflows/ci.yml`, add the step "Exercise project graph contract" (`-- project-graph-self-test`) to the `generated-maps` job, beside the other self-tests, with the same `if:` guard.
 
@@ -67,7 +67,7 @@
 - [ ] T016 [US2] In `tools/versioning/Elsa.Versioning.Calculator/VersionCalculator.cs`:
   - add `DatasetSource source = DatasetSource.Auto` to `Compute` and pass it to every `CommitSnapshot`;
   - update the class remarks (`:13-16`, "the dependency map committed in them");
-  - in `RequireMapDescribesTree` (`:138-155`), name the source in the message, and give the "Regenerate it with" hint only for a committed dataset. For a derived one, say the scanner and the calculator's project discovery disagree, which is a tool bug.
+  - in `RequireMapDescribesTree` (`:138-155`), name the source in the message, and give the "Regenerate it with" hint only for a committed dataset. For a derived one, list the projects each side found that the other did not, with their paths, and point to the layout rule in `RepoLayout.IsProjectPath`. Assign no blame: the cause can be a project on an unsupported path or a scanner defect.
 - [ ] T017 [US2] Add `--dataset auto|committed|derived` to `tools/versioning/Elsa.Versioning.Calculator/Program.cs`: the argument whitelist at `:21-22`, the usage at `:6-14`, parsing with exit 2 on an unknown value, and passing it to `Compute`. `Elsa.Versioning.Publisher` does not change (contracts/cli.md).
 - [ ] T018 [US2] Update `Essentials/tests/Versioning/Calculator/Tests/Support/SyntheticRepository.cs` (`:48`, `:164`). Write a minimal version-2 `packages.lock.json` beside each synthetic project, as the scanner requires: `Direct` entries for its package references, `Project` entries for its reference closure, and `CentralTransitive` for pinned transitive packages the test declares. Stop writing `docs/maps/dependency-map.json` by default. Keep an opt-in that writes the committed dataset, generated through `DependencyMapJson.Serialize` over the synthetic working tree. Existing calculator tests must pass unchanged in intent.
 - [ ] T019 [P] [US2] Add `Essentials/tests/Versioning/Calculator/Tests/DerivedDatasetTests.cs` with xunit facts:
@@ -75,7 +75,7 @@
   - (b) `Auto` on a commit without one derives it;
   - (c) `Committed` without a file exits with the FR-004 message;
   - (d) a derivation failure (a stale lock file) names the commit and the lock file, and computes nothing;
-  - (e) on the real repository at `HEAD` of a clean checkout, `DependencyMapJson.Serialize(new CommitTree(HEAD))` equals `DependencyMapJson.Serialize(RepoContext.Discover())` byte for byte (FR-003);
+  - (e) on the real repository, `DependencyMapJson.Serialize(new CommitTree(HEAD))` equals `DependencyMapJson.Serialize(RepoContext.Discover())` byte for byte (FR-003). Because `RepoContext` also lists untracked files, the fact returns early, saying why, when `git status --porcelain -- Essentials Extensions Directory.Build.props Directory.Packages.props VersionLines.props` shows any change. CI checkouts are clean, so it always runs there;
   - (f) a record commit with a committed dataset and a built commit without one give an unchanged package its recorded version and no `affected` flag.
 - [ ] T020 [P] [US2] Add CLI cases to `Essentials/tests/Versioning/Calculator/Tests/CliTests.cs` for `--dataset derived`, `--dataset committed` on a commit without a file (exit 2), and `--dataset bogus` (exit 2 with usage).
 - [ ] T021 [US2] Write `specs/259-derived-dependency-map/validate-dataset-sources.sh` (research R8). The argument is N, default 30. For each of the last N `git rev-list --first-parent origin/main` commits, it:
@@ -83,10 +83,11 @@
   - builds the calculator once (`-c Release`) and runs it with `--dataset committed` and `--dataset derived` into a scratch directory;
   - byte-compares the outputs, and also compares the committed and derived dataset bytes for diagnosis;
   - times both runs;
-  - prints a Markdown table (commit, record revision, versions/fingerprints `same|differs`, dataset bytes `same|differs`, seconds committed/derived) and exits 1 on any `differs` in the versions column.
+  - for the commit and every commit its record revision names, compares the committed dataset bytes with `DependencyMapJson.Serialize` over that commit's tree. Byte equality covers the mixed post-switch configuration (research R8). An old-layout record commit stops the script with a message; none is expected;
+  - prints a Markdown table (commit, record revision, versions/fingerprints `same|differs`, dataset bytes `same|differs` for the commit and its record commits, seconds committed/derived) and the mean time ratio, and exits 1 on any `differs` in either column.
 
   It uses `python`/`python3` detection for JSON and needs no `jq`.
-- [ ] T022 [US2] **Gate.** Run `bash specs/259-derived-dependency-map/validate-dataset-sources.sh 30` before any Phase 5 commit. Post the table as a PR comment headed "Spec 259 dataset-source validation (FR-008)". If any versions row differs, stop: diagnose with the dataset diff, fix the scanner or the tree view, and re-run. Do not continue to Phase 5 on a difference. If derived wall time exceeds 1.5× committed, apply the research R5 fallback in `tools/versioning/Elsa.Versioning.Calculator/GitRepository.cs` (one long-lived `git cat-file --batch`), and re-run.
+- [ ] T022 [US2] **Gate.** Run `bash specs/259-derived-dependency-map/validate-dataset-sources.sh 30` before any Phase 5 commit. Post the table as a PR comment headed "Spec 259 dataset-source validation (FR-008)". If any row differs, in versions or in dataset bytes, stop: diagnose with the dataset diff, fix the scanner or the tree view, and re-run. Do not continue to Phase 5 on a difference. If the mean derived/committed time ratio exceeds 1.5, apply the research R5 fallback in `tools/versioning/Elsa.Versioning.Calculator/GitRepository.cs` (one long-lived `git cat-file --batch`), and re-run.
 
 **Checkpoint**: US2 is proven; the file can be removed safely.
 
@@ -111,6 +112,7 @@
   - in `.github/workflows/ci.yml`, remove the "Check the committed dependency map against the tree" step and the "Explain how to refresh the dependency map" step (`:587-600`), rewrite the job comment block (`:478-500`), and keep `name: Generated maps fresh`;
   - in `tools/ci/change_scope.py`, drop `:39` and the self-test case at `:105`. Add `(["Essentials/src/X/packages.lock.json"], False)` if it is not already covered.
 - [ ] T027 [US1] Run quickstart §4–§6 locally: `git ls-files` is empty, `check-ignore` matches, `-- check` exits 0, `change_scope.py --self-test` passes, the calculator computes at `HEAD` with `--record-ref origin/publish-state`, and the three architecture test classes pass after a restore. Record the results for the PR evidence.
+- [ ] T027a [US1] SC-005 check: from the PR head, create two local throwaway branches that each add one packable project with its lock file under `Extensions/Probe/src/` (different names). Merge the first into the second and confirm that `git merge` reports no conflict and that `dotnet run --project tools/maps/Elsa.Maps.Generator -- check` passes. Push neither branch; delete both afterwards and record the result for the PR evidence.
 
 **Checkpoint**: the PR's `Generated maps fresh` and `Build & test` pass, and no file under `docs/maps/` is tracked except `README.md`.
 
@@ -134,7 +136,8 @@
 
 - [ ] T035 Constitution (FR-016): re-read `.specify/memory/constitution.md` §E5 (`:103-107`), its gate-index row (`:42`) and `.specify/memory/constitution-framework.md` for any rule naming the committed dataset. Research R10 found none. If one turns up, amend it in this PR as a PATCH, with a sync-impact note, and update the `AGENTS.md` constitution-version line.
 - [ ] T036 Run `dotnet run --project tools/maps/Elsa.Maps.Generator -- solution-filters-check` and the touched test projects only (`Essentials/tests/Versioning/Calculator/Tests`, `Essentials/tests/Architecture/Tests` filtered to the three classes). Leave the full matrix to CI, per AGENTS.md "Builds on a shared machine".
-- [ ] T037 Set `**Status**: Implemented` in `specs/259-derived-dependency-map/spec.md` in this same PR. Post the gate evidence comment (T010, T022 and T027 results), then request review with `@elsa-workflows-bot review`.
+- [ ] T036a Add one line under the **Input** line of `specs/149-canonical-dependency-map/spec.md`: "Superseded in part by [spec 259](../259-derived-dependency-map/spec.md): the dataset is no longer committed; the versioning calculator derives it per commit with the shared scanner, so SC-005 now holds as 'the calculator never runs the generator', not 'never scans a project file'." Change nothing else in spec 149.
+- [ ] T037 Set `**Status**: Implemented` in `specs/259-derived-dependency-map/spec.md` in this same PR. Post the gate evidence comment (T010, T022, T027 and T027a results). List as pending, to check after merge: SC-001 (no generated `docs/maps/` file changes on `main`), SC-003 (the first `packages.yml` run advances only packages with real input changes) and the `generated-maps` copy of the dataset (quickstart §7). Then request review with `@elsa-workflows-bot review`.
 
 ---
 
@@ -143,7 +146,7 @@
 - Phase 1 → Phase 2 → Phase 3 (US3) → Phase 4 (US2, ending with the T022 gate) → Phase 5 (US1) → Phase 6 (US4) → Phase 7.
 - US2 depends on US3's shared library. US1 depends on US2's gate. US4 depends on US1, because the docs describe the post-removal state.
 - Within Phase 4: T014 → T015 → T016 → T017. T018 comes before T019 and T020, which run in parallel. T021 → T022.
-- Within Phase 5: T023, T024 and T025 run in parallel, then T026, then T027.
+- Within Phase 5: T023, T024 and T025 run in parallel, then T026, then T027, then T027a.
 - Within Phase 6: T028–T032 run in parallel, and T033 and T034 follow.
 
 ## Parallel examples
