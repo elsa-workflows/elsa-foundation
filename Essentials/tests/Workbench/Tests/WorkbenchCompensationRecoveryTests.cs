@@ -15,7 +15,9 @@ namespace Elsa.Workbench.Tests;
 /// handler exhausts its attempts and the scope waits until an operator retries it, and the process is killed after the
 /// retry commits. Spec 258 (M3): an inner scope hands its reservations to the outer scope, a Confirm keeps the payment,
 /// and the process is killed after the first handed-over handler's effect. In all, the participant applies each effect
-/// once and the scope finishes Compensated.
+/// once and the scope finishes Compensated. Spec 260 (M4): an operator retries, resolves and abandons over REST on runs
+/// a Studio test run started, and the process is killed after a resolve's alteration checkpoint and before the decision
+/// reaches the scope.
 /// </summary>
 /// <remarks>
 /// The participant keeps its state in files under the content root, which outlive the killed process. The recovery
@@ -189,6 +191,133 @@ public sealed class WorkbenchCompensationRecoveryTests
         Assert.Contains("Done", Activity(completed, "inner")["outcomeNames"]!.AsArray().Select(outcome => outcome!.GetValue<string>()));
         Assert.Contains("Compensated", Activity(completed, "scope")["outcomeNames"]!.AsArray().Select(outcome => outcome!.GetValue<string>()));
         Assert.Equal("compensation", Activity(completed, "delivery-cancel")["provenance"]!["schedulingCause"]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// Spec 260 (M4), over REST against the real Workbench process, on runs a Studio test run started (execution
+    /// authority <c>workflow-designer-test-run</c>, which only FR-406 lets an operator alter by id): O1 retries the failed
+    /// handler; O4 abandons a recovery, which faults the run and keeps the journal; O2h resolves the failed handler as
+    /// effect absent, and the process is killed after the alteration checkpoint committed and before the decision reached
+    /// the scope (injection point 2). The restarted process applies the decision once.
+    /// </summary>
+    [Fact]
+    public async Task Operator_actions_retry_resolve_and_abandon_over_rest_and_a_resolve_survives_a_kill_before_delivery()
+    {
+        await using var original = await WorkbenchProcess.StartAsync(WitnessShell(), PrepareContentRoot);
+        await LoginAsync(original);
+        var journal = Path.Combine(original.ContentRoot, "reservations");
+        var reservations = new Reservations(await ActivityVersionAsync(original, ParticipantType), journal);
+
+        // O1: the retried cancellation (third call) succeeds and the recovery finishes.
+        var retried = await StartWaitingTestRunAsync(original, reservations, "o1");
+        var retryRun = await WaitForStateAsync(original, retried, instance => WaitingIncident(instance) is not null);
+        Assert.True(retryRun["permissions"]!["canManage"]!.GetValue<bool>());
+        await AssertJournalAsync(original, retryRun, "AwaitingIntervention");
+        await SubmitRetryAsync(original, retried, WaitingIncident(retryRun)!["activityExecutionId"]!.GetValue<string>(), "o1-retry");
+        var completedRetry = await WaitForStateAsync(original, retried, instance => instance["instance"]?["status"]?.GetValue<string>() == "Completed");
+        Assert.Contains("Compensated", Activity(completedRetry, "scope")["outcomeNames"]!.AsArray().Select(outcome => outcome!.GetValue<string>()));
+        Assert.Equal(3, Calls(journal, "o1-delivery-cancel").Length);
+        Assert.Single(Calls(journal, "o1-inventory-release"));
+
+        // O4: abandon faults the scope with the coded fault, the run faults, and the journal stays readable.
+        var abandoned = await StartWaitingTestRunAsync(original, reservations, "o4", failTimes: 10);
+        var abandonRun = await WaitForStateAsync(original, abandoned, instance => WaitingIncident(instance) is not null);
+        var abandonIncident = WaitingIncident(abandonRun)!;
+        Assert.Contains("compensation.abandon", abandonIncident["resolutionOutcome"]!["metadata"]!["runtime.interventionDecisions"]!.GetValue<string>());
+        await SubmitDecisionAsync(original, abandoned, abandonIncident["incidentId"]!.GetValue<string>(), "compensation.abandon", "o4-abandon");
+        var faulted = await WaitForStateAsync(original, abandoned, instance => instance["instance"]?["status"]?.GetValue<string>() == "Faulted", stopOnTerminal: false);
+        Assert.Equal("Faulted", Activity(faulted, "scope")["status"]!.GetValue<string>());
+        var abandonedJournal = await AssertJournalAsync(original, faulted, "Abandoned");
+        Assert.Equal(abandonIncident["incidentId"]!.GetValue<string>(), abandonedJournal["abandonment"]!["incidentId"]!.GetValue<string>());
+        Assert.Empty(Calls(journal, "o4-inventory-release"));
+        var decided = Assert.Single(faulted["incidents"]!.AsArray(), item => item?["incidentId"]?.GetValue<string>() == abandonIncident["incidentId"]!.GetValue<string>());
+        Assert.Equal("OperatorDecision", decided!["resolutionOutcome"]!["actionKind"]!.GetValue<string>());
+        Assert.Equal("OperatorDecisionAlteration", decided["resolutionOutcome"]!["systemSource"]!.GetValue<string>());
+
+        // O2h: resolve the failed handler as effect absent; the delivery holds and the process is killed before it.
+        var resolved = await StartWaitingTestRunAsync(original, reservations, "o2h", failTimes: 10);
+        var resolveRun = await WaitForStateAsync(original, resolved, instance => WaitingIncident(instance) is not null);
+        var resolveIncident = WaitingIncident(resolveRun)!["incidentId"]!.GetValue<string>();
+        File.WriteAllText(Path.Combine(journal, "decision-delivery.hold"), "hold");
+        await SubmitDecisionAsync(original, resolved, resolveIncident, "compensation.resolve.effect-absent", "o2h-resolve");
+        await WaitForAsync(original, () => File.Exists(Path.Combine(journal, "decision-delivery.held")),
+            "the decision delivery to hold after the alteration checkpoint", () => Describe(journal));
+        var committed = await WaitForStateAsync(original, resolved, instance => instance["incidents"]!.AsArray()
+            .Any(item => item?["incidentId"]?.GetValue<string>() == resolveIncident && item["status"]?.GetValue<string>() == "Resolved"));
+        Assert.Equal("Running", committed["instance"]!["status"]!.GetValue<string>());
+        Assert.Empty(Calls(journal, "o2h-inventory-release"));
+
+        await using var restarted = await original.CrashAndRestartAsync(directory =>
+            File.WriteAllText(Path.Combine(directory, "reservations", "decision-delivery.release"), "release"));
+        await LoginAsync(restarted);
+        var completed = await WaitForStateAsync(restarted, resolved, instance => instance["instance"]?["status"]?.GetValue<string>() == "Completed");
+
+        Assert.Contains("Compensated", Activity(completed, "scope")["outcomeNames"]!.AsArray().Select(outcome => outcome!.GetValue<string>()));
+        Assert.Single(Calls(journal, "o2h-inventory-release"));
+        Assert.Equal(2, Calls(journal, "o2h-delivery-cancel").Length);
+        // The operator said the delivery was undone elsewhere: its reservation is still present here.
+        Assert.True(File.Exists(EffectMarkerPath(journal, Assert.Single(Calls(journal, "o2h-delivery")).OperationKey)));
+        var outcome = Assert.Single(completed["incidents"]!.AsArray(), item => item?["incidentId"]?.GetValue<string>() == resolveIncident)!["resolutionOutcome"]!;
+        Assert.Equal("OperatorDecision", outcome["actionKind"]!.GetValue<string>());
+        Assert.Equal("compensation.resolve.effect-absent", outcome["metadata"]!["runtime.interventionDecision"]!.GetValue<string>());
+        Assert.Equal("Witness reason", outcome["metadata"]!["runtime.alteration.reason"]!.GetValue<string>());
+        Assert.Equal(1, Directory.EnumerateFiles(journal, "decision-delivery.held").Count());
+    }
+
+    // Publishes a scope whose delivery cancellation fails its two attempts, starts it as a Studio test run, and returns
+    // the run id. With failTimes 2 the third call (an operator retry) succeeds.
+    private static async Task<string> StartWaitingTestRunAsync(WorkbenchProcess host, Reservations reservations, string prefix, int failTimes = 2)
+    {
+        var versionId = await SubmitScopeAsync(host, $"Compensation operator witness {prefix}",
+            [Input("faultAfterCompensation", false), Input("handlerMaxAttempts", 2)],
+            Step("Reserve inventory", reservations.Participant("inventory", $"{prefix}-inventory"),
+                reservations.Participant("inventory-release", $"{prefix}-inventory-release")),
+            Step("Reserve delivery", reservations.Participant("delivery", $"{prefix}-delivery"),
+                reservations.Participant("delivery-cancel", $"{prefix}-delivery-cancel", failTimes: failTimes)),
+            Step("Confirm order", reservations.Participant("confirm", $"{prefix}-confirm", reject: true), null));
+        var testRun = await PostAsync(host, $"/publishing/workflows/{versionId}/test-runs", new { });
+        return testRun["workflowExecutionId"]?.GetValue<string>()
+               ?? throw new InvalidOperationException($"The test run did not start a run: {testRun}\n{host.Output}");
+    }
+
+    private static async Task<string> SubmitScopeAsync(WorkbenchProcess host, string name, JsonNode[] scopeInputs, params JsonObject[] steps)
+    {
+        var scope = await ActivityVersionAsync(host, ScopeType);
+        var root = Node("scope", scope, scopeInputs, ScopeStructure(steps));
+        var definition = await PostAsync(host, "/design/workflows/definitions/submit", new
+        {
+            name, description = "Reservations an operator acts on",
+            state = new { variables = Array.Empty<object>(), inputs = Array.Empty<object>(), outputs = Array.Empty<object>(), rootActivity = root }
+        });
+        return definition["version"]!["id"]!.GetValue<string>();
+    }
+
+    private static async Task<JsonNode> AssertJournalAsync(WorkbenchProcess host, JsonNode instance, string phase)
+    {
+        var scopeExecutionId = Activity(instance, "scope")["activityExecutionId"]!.GetValue<string>();
+        var executionId = instance["instance"]!["workflowExecutionId"]!.GetValue<string>();
+        var view = await host.Client.GetFromJsonAsync<JsonNode>($"/runtime/workflows/instances/{executionId}/activity-executions/{scopeExecutionId}/state-view");
+        Assert.True(view!["available"]!.GetValue<bool>(), view.ToJsonString());
+        Assert.Equal("compensation.journal", view["viewKind"]!.GetValue<string>());
+        Assert.Equal(phase, view["view"]!["phase"]!.GetValue<string>());
+        return view["view"]!;
+    }
+
+    private static async Task SubmitDecisionAsync(WorkbenchProcess host, string executionId, string incidentId, string decision, string idempotencyKey)
+    {
+        var body = new
+        {
+            target = new { executionIds = new[] { executionId } },
+            alterations = new[]
+            {
+                new { kind = "DecideIntervention", schemaVersion = 1, payload = new { incidentId, decision, reason = "Witness reason" } }
+            }
+        };
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/runtime/workflows/alteration-plans") { Content = JsonContent.Create(body) };
+        request.Headers.Add("Idempotency-Key", idempotencyKey);
+        using var response = await host.Client.SendAsync(request);
+        var text = await response.Content.ReadAsStringAsync();
+        Assert.True(response.IsSuccessStatusCode, $"Decision submission: {(int)response.StatusCode} {text}\n{host.Output}");
     }
 
     private static JsonNode? WaitingIncident(JsonNode instance) => instance["incidents"]?.AsArray().LastOrDefault(item =>
@@ -377,7 +506,7 @@ public sealed class WorkbenchCompensationRecoveryTests
         return JsonNode.Parse(text)!;
     }
 
-    private static async Task<JsonNode> WaitForStateAsync(WorkbenchProcess host, string executionId, Func<JsonNode, bool> predicate)
+    private static async Task<JsonNode> WaitForStateAsync(WorkbenchProcess host, string executionId, Func<JsonNode, bool> predicate, bool stopOnTerminal = true)
     {
         JsonNode? last = null;
         var deadline = DateTimeOffset.UtcNow + Patience;
@@ -385,7 +514,7 @@ public sealed class WorkbenchCompensationRecoveryTests
         {
             last = await host.Client.GetFromJsonAsync<JsonNode>($"/runtime/workflows/instances/{executionId}");
             if (last is not null && predicate(last)) return last;
-            if (last?["instance"]?["status"]?.GetValue<string>() is "Faulted" or "Cancelled") break;
+            if (stopOnTerminal && last?["instance"]?["status"]?.GetValue<string>() is "Faulted" or "Cancelled") break;
             await Task.Delay(200);
         }
         throw new InvalidOperationException($"Workflow did not reach the expected state: {last}\n{host.Output}");
@@ -407,7 +536,7 @@ public sealed class WorkbenchCompensationRecoveryTests
         var path = Path.Combine(directory, "shells.json");
         var shells = JsonNode.Parse(File.ReadAllText(path))!;
         var features = shells["CShells"]!["Shells"]!["default"]!["Features"]!.AsObject();
-        features["ReservationWitness"] = new JsonObject();
+        features["ReservationWitness"] = new JsonObject { ["HoldDecisionDeliveryDirectory"] = Path.Combine(directory, "reservations") };
         // A restarted process reclaims the killed process's execution once its ownership lease expires.
         features["WorkflowsRuntimeResumption"] = new JsonObject
         {

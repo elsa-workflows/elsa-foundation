@@ -25,7 +25,7 @@ Each task names its files and its test. `[P]` marks a task that can run in paral
 - [x] T414 `CompensationJournalProjector` (`compensation.journal/1`), registered by `ActivitiesCompensationFeature`: every field of the contract; `remaining` in recovery order; offered decisions from the incident; cause message gated. Unit tests per phase (J1) and with and without the values grant.
 - [x] T415 [P] Permission signal: `IWorkflowRuntimeOperatorAccess` and its HTTP implementation (permission evaluator, tenant, run as resource, fail closed); `WorkflowInstanceDetailsView.Permissions`. API tests: manage → true; read-only → false; anonymous or untrusted → false; other tenant → 404 as today.
 - [x] T416 Journeys O1–O8 and J1 in Durable, Balanced and Ephemeral, with the three O8 injection points, in `Essentials/tests/Activities/Compensation/Tests`. SC-403 assertion: a refused action leaves activity, incident and scope state unchanged (snapshot compare).
-- [ ] T417 Workbench owned-process journey: O1 + O2h + O4 over REST on a run started by an HTTP endpoint, with a kill at injection point 2 (`WorkbenchCompensationRecoveryTests`).
+- [x] T417 Workbench owned-process journey: O1 + O2h + O4 over REST on a run started by an HTTP endpoint, with a kill at injection point 2 (`WorkbenchCompensationRecoveryTests`).
 - [ ] T418 Run the eight SC-404 negative controls once by hand and record the results in the PR and in quickstart.md.
 
 ## Phase C — Studio (PR 2)
