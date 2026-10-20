@@ -188,6 +188,10 @@ committed value. A runtime build that predates this kind cannot read an executab
 is accepted, not mitigated. The Elsa 3 converter lowers `getCorrelationId()` and `getWorkflowInstanceId()` to it
 (spec 247).
 
+**Amendment (issue #3026): time and unique values.** [ADR 0088](0088-expressions-read-time-and-unique-values-through-recorded-parameters.md)
+specifies the deterministic capability this section leaves room for: `Clock` and `UniqueId` parameter kinds whose values
+are recorded with the input snapshot, and a `binding-pure-v2` JavaScript profile that adds a `Date` without a clock.
+
 ### 6. Separate activity contracts, activations, and invocations
 
 An activity contract is immutable versioned metadata. A published executable pins the activity type

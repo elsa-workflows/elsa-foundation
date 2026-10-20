@@ -76,6 +76,7 @@ A new ADR, Extension Builder ones included, takes the highest number in the main
 | 0084 | [Runtime Commits Append One Journal Row And The Per-Activity Tables Become Read Models](0084-runtime-commit-journal.md) | Proposed |
 | 0085 | [Elsa 3.8/3.9 Parity: Identity Administration and Scope](0085-elsa-3-parity-identity-administration-and-scope.md) | Accepted |
 | 0086 | [Native And BPMN Compensation Stay Separate Semantics Over Shared Runtime Identity](0086-native-and-bpmn-compensation-stay-separate.md) | Accepted |
+| 0088 | [Expressions Read Time And Unique Values Through Recorded Parameters](0088-expressions-read-time-and-unique-values-through-recorded-parameters.md) | Proposed |
 | EB-0001 | [Extension Builder Git identity](EB-0001-extension-builder-git-identity.md) | Accepted |
 | EB-0002 | [Extension Builder managed repository remotes](EB-0002-extension-builder-managed-repository-remotes.md) | Accepted |
 | EB-0003 | [Extension Builder build and promotion source](EB-0003-extension-builder-build-and-promotion-source.md) | Accepted |
