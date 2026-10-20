@@ -1752,6 +1752,11 @@ async function renderRequestedFixture() {
     root.render(<DefinitionVersionsFixture />);
     return;
   }
+  if (searchParams.get("mode") === "workflow-definition-browse") {
+    const { WorkflowDefinitionBrowseFixture } = await import("./workflowDefinitionBrowseFixture");
+    root.render(<WorkflowDefinitionBrowseFixture />);
+    return;
+  }
   if (navBeforeFixture) {
     const { NavBeforeFixture } = await import("./navBeforeFixture");
     root.render(<NavBeforeFixture />);

@@ -18,7 +18,7 @@
 
 **Purpose**: Prepare a real-route test harness while leaving production source unchanged, so every new search/status/route regression can be run against the same baseline.
 
-- [ ] T002 Prepare a browser-only fixture path in `Studio/tests/browser/src.tsx` that composes the existing `WorkflowManagementPage` and makes its current page/search/cursor requests observable to `Studio/tests/browser/workflow-definition-browse-context.spec.ts`; inspect the direct mounts at `src.tsx:978,1126` without changing production files.
+- [x] T002 Prepare a browser-only fixture path in `Studio/tests/browser/src.tsx` that composes the existing `WorkflowManagementPage` and makes its current page/search/cursor requests observable to `Studio/tests/browser/workflow-definition-browse-context.spec.ts`; inspect the direct mounts at `src.tsx:978,1126` without changing production files.
 
 **Checkpoint**: Test fixture preparation is complete; production files remain at the unchanged baseline while all new regressions are added and run.
 
@@ -30,7 +30,7 @@
 
 ### Tests for User Story 1
 
-- [ ] T003 [US1] Add rapid-edit, first-load, supersession-before-debounce, and later-page prior-result cases (including old search/page labeling and hidden current-view controls) in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowDefinitionSearch.test.tsx`; run the focused Vitest file against the baseline and record the actual outcome before implementation.
+- [x] T003 [US1] Add rapid-edit, first-load, supersession-before-debounce, and later-page prior-result cases (including old search/page labeling and hidden current-view controls) in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowDefinitionSearch.test.tsx`; run the focused Vitest file against the baseline and record the actual outcome before implementation.
 
 **Checkpoint**: Search regression tests have been run against unchanged production; no search behavior implementation begins until all story baselines are recorded.
 
@@ -42,8 +42,8 @@
 
 ### Tests for User Story 2
 
-- [ ] T004 [US2] Add same-view refresh, empty-versus-failure, current-search retry, and previous-rows-after-failure behavior tests in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowDefinitionStatus.test.tsx`; run against the baseline and record actual results before implementation.
-- [ ] T005 [US2] Add baseline route tests using the existing exported `WorkflowManagementPage` in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowDefinitionRoute.test.tsx`; cover endpoint change and public auth-session start/end while the editor is open, plus a current typed 401/403 result, and run them against unchanged production without importing a not-yet-created helper.
+- [x] T004 [US2] Add same-view refresh, empty-versus-failure, current-search retry, and previous-rows-after-failure behavior tests in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowDefinitionStatus.test.tsx`; run against the baseline and record actual results before implementation.
+- [x] T005 [US2] Add baseline route tests using the existing exported `WorkflowManagementPage` in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowDefinitionRoute.test.tsx`; cover endpoint change and public auth-session start/end while the editor is open, plus a current typed 401/403 result, and run them against unchanged production without importing a not-yet-created helper.
 
 **Checkpoint**: Status and access-boundary regressions have recorded actual baseline outcomes against unchanged production. Expected failures are not implementation evidence.
 
@@ -55,8 +55,8 @@
 
 ### Tests for User Story 3
 
-- [ ] T006 [US3] Add baseline route-state tests in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowDefinitionRoute.test.tsx` for definition-only/same-browse `popstate`, changed browse-key reset, explicit page navigation with an observed cursor, page-size/filter reset, and unresolved-then-resolved folder capability; exercise only currently existing modules and record already-green versus actually failing cases.
-- [ ] T007 [US3] Add a Playwright regression using the real `WorkflowManagementPage` in `Studio/tests/browser/workflow-definition-browse-context.spec.ts` and the prepared fixture in `Studio/tests/browser/src.tsx`; verify editor Back, browser Back, page/cursor restoration, synthetic definition-only `popstate` ordering, and full-remount defaults against unchanged production and record the observed baseline.
+- [x] T006 [US3] Add baseline route-state tests in `Studio/src/essentials/Elsa.Studio.Workflows/Client/src/__tests__/workflowDefinitionRoute.test.tsx` for definition-only/same-browse `popstate`, changed browse-key reset, explicit page navigation with an observed cursor, page-size/filter reset, and unresolved-then-resolved folder capability; exercise only currently existing modules and record already-green versus actually failing cases.
+- [x] T007 [US3] Add a Playwright regression using the real `WorkflowManagementPage` in `Studio/tests/browser/workflow-definition-browse-context.spec.ts` and the prepared fixture in `Studio/tests/browser/src.tsx`; verify editor Back, browser Back, page/cursor restoration, synthetic definition-only `popstate` ordering, and full-remount defaults against unchanged production and record the observed baseline.
 
 **Checkpoint**: Search, status, authority, route-state, and browser return regressions have all been run against unchanged production before any production file is edited. Record actual outcomes; existing-green cases are not reported as new failures.
 
@@ -147,3 +147,7 @@ Complete Setup and test-harness preparation, capture every story baseline agains
 - The task list specifies behavior tests because the UI logic, request races, access boundaries, and route cursor transitions are at risk; it does not invent a general Studio TypeScript TDD policy.
 - Existing tests may already pass some baseline cases. Record actual results; do not call an expected failure RED until a test was run and failed.
 - No tests, builds, browser scenarios, architecture checks, maps checks, or hosted gates are claimed as run by this task-generation phase.
+
+## Baseline execution record
+
+Root integrated and reviewed the test-only baseline at production source f43438ee5 (main61):15 focused unit cases,8 existing guards pass and7 behavior assertions fail;4 focused browser cases,2 pass and2 Back-restoration assertions fail. The additional older-response-during-delay case passes against the existing immediate-load generation guard; it is a preservation guard for the new debounce, not a newly reproduced defect. Existing module suite137passed after the shared harness change. Workflows typecheck passes after test-only readonly-context/timer callback corrections. No production edits or implementation acceptance are claimed by these test tasks. Exact commands and full raw logs are retained externally; public issue comments are the delivery record.
