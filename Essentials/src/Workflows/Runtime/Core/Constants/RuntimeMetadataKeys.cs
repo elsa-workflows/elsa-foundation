@@ -284,6 +284,18 @@ public static class RuntimeMetadataKeys
     public const string BoundaryReferenceKey = "runtime.boundaryReferenceKey";
     public const string RetrySourceActivityExecutionId = "runtime.retrySourceActivityExecutionId";
     public const string RetryReason = "runtime.retryReason";
+    /// <summary>
+    /// Logical operation key a structural parent assigns to a child in its scheduling metadata. The runtime surfaces it
+    /// as <c>ActivityExecutionContext.OperationKey</c>; without it the key falls back to the first-attempt identity and
+    /// then the invocation id. It is copied to boundary-retry and operator-retry successors.
+    /// </summary>
+    public const string OperationKey = "runtime.operationKey";
+    /// <summary>Operation key of the effect a child acts on, assigned by its structural parent like <see cref="OperationKey"/>.</summary>
+    public const string TargetOperationKey = "runtime.targetOperationKey";
+    /// <summary>Activity execution id of the structural parent that kept a child fault's incident blocking for intervention.</summary>
+    public const string InterventionRequestedBy = "runtime.interventionRequestedBy";
+    /// <summary>Author-supplied reason a structural parent kept a child fault's incident blocking for intervention.</summary>
+    public const string InterventionReason = "runtime.interventionReason";
     public const string ScopeCancellationReason = "runtime.scopeCancellationReason";
     /// <summary>Activity execution id of the structural parent that staged a child-subtree cancellation.</summary>
     public const string SubtreeCancellationRequestedBy = "runtime.subtreeCancellationRequestedBy";
