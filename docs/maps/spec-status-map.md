@@ -262,4 +262,4 @@ Notes come only from explicit `**Notes**:` metadata; see [Spec status metadata](
 | [252-studio-http-disclosure](../../specs/252-studio-http-disclosure/spec.md) | Guide HTTP activity configuration with safe progressive disclosure | Implemented — #3064; the implementation PR carries this transition and the final delivery receipt under the spec lifecycle. | - | 14 | 2 | - |
 | [253-connection-picker-failure](../../specs/253-connection-picker-failure/spec.md) | Explain Connection picker load failures | Implemented | - | 9 | 3 | - |
 | [254-connection-creation-disclosure](../../specs/254-connection-creation-disclosure/spec.md) | Connection Creation Disclosure | Implemented | - | 17 | 5 | - |
-| [256-publish-event-resume](../../specs/256-publish-event-resume/spec.md) | Publish Event resumes a waiting Event without faulting | Implemented — via [#3115](https://github.com/elsa-workflows/elsa-foundation/pull/3115) | - | 34 | 1 | - |
+| [258-publish-event-resume](../../specs/258-publish-event-resume/spec.md) | Publish Event resumes a waiting Event without faulting | Implemented — via [#3115](https://github.com/elsa-workflows/elsa-foundation/pull/3115) | - | 34 | 1 | - |

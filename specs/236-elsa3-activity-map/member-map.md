@@ -166,7 +166,7 @@ non-generic activities and misses plain properties and `SetOutput`; this table c
 | Activity.member | Elsa 4 | Rule | JTest |
 |---|---|---|---|
 | Event.EventName | `EventName` | R1 | 1 |
-| Event.Result (payload) | `Payload` output (`Result` is the event name) | R1: carried to `Payload` (spec 256, #3107; was R4, amended 2026-10-20 with the maintainer) | 1 (captured → converts) |
+| Event.Result (payload) | `Payload` output (`Result` is the event name) | R1: carried to `Payload` (spec 258, #3107; was R4, amended 2026-10-20 with the maintainer) | 1 (captured → converts) |
 | Event `canStartWorkflow` | `CanStartWorkflow`, default true | R2: emit the Elsa 3 value (default false) | 1 |
 | PublishEvent.EventName, CorrelationId, IsLocalEvent | same | R1 | 1 |
 | PublishEvent.Payload | `JsonElement?` | R5 (JSON) | 1 |

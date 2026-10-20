@@ -2,7 +2,7 @@
 
 **Branch**: `agent/claude/3107-publish-event-resume` | **Date**: 2026-10-20 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `specs/256-publish-event-resume/spec.md`
+**Input**: Feature specification from `specs/258-publish-event-resume/spec.md`
 
 ## Summary
 
@@ -70,7 +70,7 @@ test arrange lines change mechanically (research R-3).
 ### Documentation (this feature)
 
 ```text
-specs/256-publish-event-resume/
+specs/258-publish-event-resume/
 ├── spec.md
 ├── plan.md              # this file
 ├── research.md

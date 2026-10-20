@@ -69,7 +69,7 @@ into the same target, with no Lost diagnostic.
 - [X] T026 [US4] In `Extensions/Elsa3/src/Mapping/ActivityMap/Elsa3BuiltInActivityMap.Entries.cs`, replace `Lost("Result")` with `CarryOutput("Result", "Payload")` on the Event entry (D-4)
 - [X] T027 [US4] Update `Extensions/Elsa3/tests/Mapping/Tests` expectations that pin Event `Result` as Lost (search `Event` + `Lost`/`ELS3` output diagnostics and `Fixtures/elsa3-activity-surface.json` coverage), and add a conversion test where a captured Event `Result` maps to `Payload`
 - [X] T028 [US4] (Changed: an imported regular workflow with a workflow variable fails to publish, a separate pre-existing issue, so the capture is proven by `Elsa3BuiltInConversionTests.A_captured_event_result_is_read_from_the_elsa4_payload_output` instead.) In `publish-event-waiter.json`, capture the Event `Result` into a variable, and assert in `PublishEventResumeTests.cs` that the variable holds the published payload after resume
-- [X] T029 [P] [US4] Amend the `Event.Result (payload)` row in `specs/236-elsa3-activity-map/member-map.md` to R1 → `Payload`, citing spec 256 and the owner's 2026-10-20 decision. Update the Elsa 3 mapping README if it lists Event `Result` as Lost
+- [X] T029 [P] [US4] Amend the `Event.Result (payload)` row in `specs/236-elsa3-activity-map/member-map.md` to R1 → `Payload`, citing spec 258 and the owner's 2026-10-20 decision. Update the Elsa 3 mapping README if it lists Event `Result` as Lost
 - [X] T030 [P] [US4] In `docs/reference/elsa3-migration-readiness.md`, remove the #3107 known-issue note, and state that Publish Event → Event works with or without a payload, with the payload on the Event's `Payload` output (FR-009)
 - [X] T031 [US4] Run `Elsa3.Mapping.Tests` and `Elsa3.Activities.Design.Import.Integration.Tests`: all green
 
@@ -77,7 +77,7 @@ into the same target, with no Lost diagnostic.
 
 - [X] T032 Regenerate maps with `dotnet run --project tools/maps/Elsa.Maps.Generator -- all`. Review `git diff --stat docs/` (CRLF caveat on Windows), and stage the changed maps by explicit path, including `docs/maps/manifest.json`
 - [X] T033 Check `EXTENSION_POINTS.md` and the activity docs (e.g. `docs/` pages describing Event outputs) for Event's output list, and update any that list only `Result`
-- [X] T034 Set spec 256 `Status: Implemented` in `specs/256-publish-event-resume/spec.md` in the finishing PR, before merge
+- [X] T034 Set spec 258 `Status: Implemented` in `specs/258-publish-event-resume/spec.md` in the finishing PR, before merge
 - [X] T035 Commit. Ask the owner before pushing and opening a draft PR against `main` that notes the stack on #3031
 
 ## Dependencies & execution order
