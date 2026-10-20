@@ -5,7 +5,7 @@ Submitted through the existing alteration plan endpoints. It has the same author
 ## Envelope
 
 ```json
-{ "kind": "RetryFaultedActivity/1", "payload": { "sourceActivityExecutionId": "ae-8", "reason": "Delivery service restored" } }
+{ "kind": "RetryFaultedActivity", "schemaVersion": 1, "payload": { "sourceActivityExecutionId": "ae-8", "reason": "Delivery service restored" } }
 ```
 
 `sourceActivityExecutionId` is required. `reason` is optional and at most 500 characters. No other property is accepted.
@@ -20,6 +20,7 @@ Submitted through the existing alteration plan endpoints. It has the same author
 | `SourceActivityNotFaulted` | The source status is not `Faulted`. |
 | `NoBlockingIncident` | The source has no blocking incident. This covers a retry that already happened, or an incident that was absorbed. |
 | `BlockingIncidentOutsideSource` | A blocking incident in the source's subtree belongs to a descendant, not to the source. |
+| `IncidentNotAwaitingIntervention` | A blocking incident on the source has no `WaitForIntervention` outcome yet: its parent or the incident strategy has not decided. |
 | `SourceWorkClaimed` | The source subtree has claimed scheduler work. |
 | `PinnedExecutableUnavailable` | The source node is missing from the pinned executable. |
 | captured-concurrency codes | As for `RescheduleActivity`. |
