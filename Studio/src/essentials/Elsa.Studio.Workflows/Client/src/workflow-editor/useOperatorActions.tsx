@@ -316,12 +316,13 @@ export function useOperatorActions({
       ? findActivityNode(root, requesterActivity.authoredActivityId) ?? findActivityNode(root, requesterActivity.executableNodeId)
       : undefined;
     if (requester && scopeNode && isCompensationScope(scopeNode)) {
-      const runtime = deriveCompensationRuntime(scopeNode, activities, details?.incidents ?? [], {
+      const derived = deriveCompensationRuntime(scopeNode, activities, details?.incidents ?? [], {
         complete: !details?.activityNextContinuationToken,
         selectedActivityExecutionId: requester,
         root,
         journal: journals.get(requester)
       });
+      const runtime = { ...derived, scopeLabel: labelOf(scopeNode.nodeId) ?? derived.scopeLabel };
       const row = [...runtime.rows, ...(runtime.received ?? [])].find(candidate => candidate.actions?.incidentId === incident.incidentId);
       if (row) {
         const scopeContext = { workflowExecutionId, runtime, labelOf };

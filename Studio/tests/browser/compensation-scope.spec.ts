@@ -129,7 +129,7 @@ test("retries a failed handler by keyboard: the dialog names target and effect, 
   await expect(dialog).toContainText('Scope "Order" › step "Reserve delivery" › compensation "Cancel delivery"');
   await expect(dialog).toContainText("Attempt 4 (limit 3 reached) · incident inc-5 · run wf-42");
   await expect(dialog).toContainText('Runs "Cancel delivery" again with the same operation key (ae-scope/step/1/compensate).');
-  await expect(dialog).toContainText('If it succeeds, recovery continues with "Release inventory".');
+  await expect(dialog).toContainText('If it succeeds, recovery continues with "Release inventory", the compensation of "Reserve inventory".');
   const reason = dialog.getByRole("textbox", { name: "Reason (optional)", exact: true });
   await expect(reason).toBeFocused();
   await expect(reason).toHaveAccessibleDescription(/Visible to everyone who can view this run\. Do not include secrets\./);
@@ -154,7 +154,7 @@ test("resolves only after an outcome and a reason, and abandons with a danger co
   const outcomes = resolve.getByRole("group", { name: "Outcome" });
   await expect(outcomes.getByRole("radio", { name: "Effect absent or undone" })).toBeFocused();
   await expect(outcomes.getByRole("radio", { name: "Effect absent or undone" })).toHaveAccessibleDescription("The effect does not exist: it never happened, or it was undone outside Elsa.");
-  await expect(resolve).toContainText('Recovery continues with "Release inventory".');
+  await expect(resolve).toContainText('Recovery continues with "Release inventory", the compensation of "Reserve inventory".');
   const confirm = resolve.getByRole("button", { name: "Resolve", exact: true });
   await expect(confirm).toBeDisabled();
   await resolve.getByRole("textbox", { name: "Reason (required)" }).fill("Refunded manually, ticket FIN-221");

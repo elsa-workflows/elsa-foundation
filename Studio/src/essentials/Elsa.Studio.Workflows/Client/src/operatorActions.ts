@@ -125,14 +125,17 @@ function handlerName(row: CompensationRowRuntime, context: OperatorActionScopeCo
   return context.labelOf(row.handlerNodeId) ?? `the compensation of ${row.step}`;
 }
 
-// What recovery runs next after this row, when the journal says (remaining is in recovery order).
+// What recovery runs next after this row, when the journal says (remaining is in recovery order): the handler's name
+// and the step it undoes, which is the name an operator knows.
 function nextAfter(row: CompensationRowRuntime, context: OperatorActionScopeContext): string | null | undefined {
   const remaining = context.runtime.remaining;
   if (!remaining) return undefined;
-  const others = remaining.filter(item => item.step !== row.step);
-  const next = others[0];
+  const next = remaining.find(item => item.step !== row.step);
   if (!next) return null;
-  return context.labelOf(next.handlerNodeId) ?? `the compensation of ${next.step}`;
+  const handler = context.labelOf(next.handlerNodeId);
+  return handler && handler !== next.step
+    ? `${quote(handler)}, the compensation of ${quote(next.step)}`
+    : `the compensation of ${quote(next.step)}`;
 }
 
 function attemptLine(row: CompensationRowRuntime, actions: NonNullable<CompensationRowRuntime["actions"]>, workflowExecutionId: string) {
@@ -157,7 +160,7 @@ export function retryActionModel(row: CompensationRowRuntime, context: OperatorA
   const effect = handler
     ? [
       `Runs ${quote(handlerLabel)} again${key}.`,
-      `${next ? `If it succeeds, recovery continues with ${quote(next)}.` : next === null ? "If it succeeds, the scope finishes its recovery." : "If it succeeds, recovery continues."} If it fails, the scope waits again.`
+      `${next ? `If it succeeds, recovery continues with ${next}.` : next === null ? "If it succeeds, the scope finishes its recovery." : "If it succeeds, recovery continues."} If it fails, the scope waits again.`
     ]
     : [
       `Runs ${quote(row.step)} again${key}.`,
@@ -201,7 +204,7 @@ export function resolveActionModel(row: CompensationRowRuntime, context: Operato
   const outcomes = resolveOutcomes.filter(outcome => actions.decisions.includes(outcome.decision));
   const next = nextAfter(row, context);
   const effect = actions.target === "handler"
-    ? [next ? `Recovery continues with ${quote(next)}.` : next === null ? "The scope finishes its recovery." : "Recovery continues with the next step to undo."]
+    ? [next ? `Recovery continues with ${next}.` : next === null ? "The scope finishes its recovery." : "Recovery continues with the next step to undo."]
     : [
       ...(outcomes.some(outcome => outcome.decision === compensationDecisions.resolveEffectAbsent)
         ? ["Effect absent: the completed steps are undone, newest first."] : []),

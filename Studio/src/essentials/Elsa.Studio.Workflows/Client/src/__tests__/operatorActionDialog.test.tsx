@@ -48,7 +48,7 @@ describe("operator action models", () => {
     ]);
     expect(model.effect).toEqual([
       'Runs "Cancel delivery" again with the same operation key (ae-scope/step/1/compensate).',
-      'If it succeeds, recovery continues with "Release inventory". If it fails, the scope waits again.'
+      'If it succeeds, recovery continues with "Release inventory", the compensation of "Reserve inventory". If it fails, the scope waits again.'
     ]);
     expect(model.reasonRequired).toBe(false);
     expect(operatorActionPlan(model, { reason: "" })).toEqual({
@@ -67,7 +67,7 @@ describe("operator action models", () => {
 
   it("shows only the resolve effect lines that apply to the row", () => {
     const handler = resolveActionModel(waitingRow(), scopeContext());
-    expect(handler.effect).toEqual(['Recovery continues with "Release inventory".', "The entry is never undone afterwards."]);
+    expect(handler.effect).toEqual(['Recovery continues with "Release inventory", the compensation of "Reserve inventory".', "The entry is never undone afterwards."]);
     expect(handler.outcomes?.map(outcome => outcome.label)).toEqual(["Effect absent or undone", "Effect present, keep it"]);
     expect(handler.reasonRequired).toBe(true);
 

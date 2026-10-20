@@ -174,6 +174,20 @@
   border: 0;
 }
 
+/* In the run view's toolbar the line wraps below the buttons, so the page's grid rows stay as they are. */
+.wf-toolbar:has(> .wf-operator-status:not(:empty)) {
+  flex-wrap: wrap;
+}
+
+.wf-toolbar > .wf-operator-status {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
+.wf-toolbar > .wf-operator-status:empty {
+  flex: 0 0 0;
+}
+
 .wf-operator-status[data-tone="error"] {
   border-color: color-mix(in srgb, var(--studio-danger) 50%, var(--studio-border));
   color: var(--studio-danger-fg);

@@ -1212,8 +1212,8 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
             <Sparkles size={13} /> Explain
           </button>
         ) : null}
+        {operator.status}
       </div>
-      {operator.status}
       {operator.dialog}
       {state === "loading" ? <div className="wf-empty">Loading workflow run...</div> : null}
       {state === "failed" ? <WfErrorCard message={error} /> : null}
@@ -1824,12 +1824,17 @@ export function buildInstanceCanvas(
     const options = { complete: !details.activityNextContinuationToken, selectedActivityExecutionId: selectedEvidenceId, root };
     const derived = deriveCompensationRuntime(scopeOwner, associationActivities, incidents, options);
     const journal = journalOf?.(derived.scopeActivityExecutionId);
+    // The scope's name as the canvas shows it, for the operator actions' labels.
+    const scopeLabel = resolveActivityLabel(
+      definitionVersion.activityPresentation?.find(record => record.nodeId === scopeOwner.nodeId),
+      scopeOwnerCatalogItem,
+      scopeOwner.activityVersionId);
     return {
       ...canvas,
       mode: "compensation",
       compensation: {
         owner: scopeOwner,
-        runtime: journal ? deriveCompensationRuntime(scopeOwner, associationActivities, incidents, { ...options, journal }) : derived,
+        runtime: { ...(journal ? deriveCompensationRuntime(scopeOwner, associationActivities, incidents, { ...options, journal }) : derived), scopeLabel },
         openSlot: (ownerNodeId, ownerLabel, slot) => {
           const plan = planSlotNavigation(frames, scopeOwner, ownerNodeId, slot, slotCrumbLabel(ownerLabel, slot), activityCatalog);
           if (plan) onNavigateToScope(plan.frames);
