@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "classification": "completed test failure; original HTTP400 cause unproven",
+  "sourceCommit": "b656e3a8ed8bc59d02291da4af3912fd16b7139b",
+  "ciRun": {
+    "id": 39341212215,
+    "url": "https://github.com/elsa-workflows/elsa-foundation/actions/runs/39341212215",
+    "conclusion": "failure"
+  },
+  "backendJob": {
+    "id": 118362942845,
+    "conclusion": "failure",
+    "started_at": "2026-10-19T23:23:03Z",
+    "completed_at": "2026-10-20T00:01:22Z"
+  },
+  "completedSuiteSummaries": {
+    "count": 91,
+    "passed": 16695,
+    "failed": 1,
+    "skipped": 32,
+    "total": 16728
+  },
+  "affectedSuites": {
+    "Elsa.Workbench.BackgroundActivities.Tests.dll": {
+      "passed": 44,
+      "failed": 0,
+      "skipped": 0,
+      "total": 44
+    },
+    "Elsa.Workbench.Tests.dll": {
+      "passed": 52,
+      "failed": 1,
+      "skipped": 0,
+      "total": 53
+    }
+  },
+  "failure": {
+    "test": "WorkbenchBackgroundActivityRecoveryTests.Killed_workers_are_reclaimed_with_stable_invocations_and_one_native_continuation",
+    "profile": "Clustered",
+    "first": "left",
+    "second": "right",
+    "observation": "HTTP400 from instance-detail GET after second branch release",
+    "responseBodyRetained": false,
+    "ownedHostOutputRetainedOnThisFailurePath": false,
+    "exactCauseProven": false
+  },
+  "downstreamJobs": {
+    "Core-only build & test": "skipped",
+    "Architecture guards": "skipped"
+  },
+  "retainedLog": {
+    "file": "pr3087-b656-backend-raw.log",
+    "bytes": 598966,
+    "sha256": "c5733d625938df8602e12347b7433c22f16ba453c7ef3d536a4cc5e0bb96990c"
+  },
+  "prerequisite": {
+    "issue": 3090,
+    "pullRequest": 3091,
+    "mergeCommit": "8df68f10e2625d505e41a16428070a0e7cf48ad4",
+    "mechanismProven": "separate deterministic actual-EF count/page interleaving",
+    "originalIncidentCausalityProven": false
+  },
+  "limits": [
+    "The earlier deadline cancellation and this completed failure are separate outcomes.",
+    "Later passing CI does not establish the missing historical response or exact cause.",
+    "The historical receipt timeout and prior HTTP timeout remain causally unexplained."
+  ]
+}

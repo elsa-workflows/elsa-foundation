@@ -35,7 +35,10 @@ test("Activity Definition graph authoring shares the designer without workflow l
   const rootCardFor = (radio: typeof flowchartRadio) => radio.locator("xpath=ancestor::label[contains(concat(' ', normalize-space(@class), ' '), ' wf-root-card ')]");
   const flowchartCard = rootCardFor(flowchartRadio);
   const sequenceCard = rootCardFor(sequenceRadio);
-  const cardBackground = (card: typeof flowchartCard) => card.evaluate(element => getComputedStyle(element).backgroundColor);
+  const cardBackground = (card: typeof flowchartCard) => card.evaluate(async element => {
+    await Promise.all(element.getAnimations().map(animation => animation.finished));
+    return getComputedStyle(element).backgroundColor;
+  });
   await expect(flowchartRadio).toBeEnabled();
   await expect(sequenceRadio).toBeEnabled();
   await expect(flowchartRadio).toBeChecked();

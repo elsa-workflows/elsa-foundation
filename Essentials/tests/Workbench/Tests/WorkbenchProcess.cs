@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Net.Http.Json;
 using System.Text;
 
@@ -17,23 +18,61 @@ public sealed class WorkbenchProcess : IAsyncDisposable
     private const string ActivationFailureLog = "Default shell preparation failed";
 
     /// <summary>
+    /// Keep the Workbench as the shell supervisor's child on POSIX. The managed Process tracks the supervisor, which
+    /// remains runnable while the Workbench is stopped, avoiding the .NET 10 macOS child-wait path for a stopped child.
+    /// Arguments and paths are passed as positional arguments; the script never evaluates caller-provided text.
+    /// </summary>
+    private const string PosixSupervisorScript = """
+        pid_file=$1
+        shift
+        workbench_pid=
+        terminate() {
+          trap - HUP INT TERM
+          if [ -n "$workbench_pid" ]; then
+            kill -KILL "$workbench_pid" 2>/dev/null
+            wait "$workbench_pid" 2>/dev/null
+          fi
+          exit 143
+        }
+        trap terminate HUP INT TERM
+        "$@" &
+        workbench_pid=$!
+        if ! printf '%s\n' "$workbench_pid" > "$pid_file"; then
+          kill -KILL "$workbench_pid" 2>/dev/null
+          wait "$workbench_pid" 2>/dev/null
+          exit 125
+        fi
+        wait "$workbench_pid"
+        status=$?
+        trap - HUP INT TERM
+        exit "$status"
+        """;
+
+    /// <summary>
     /// A ceiling for pathological hangs, not an expected duration: the host is ready in about ten seconds on a CI
     /// runner. Activation failures and early exits end the wait within seconds.
     /// </summary>
     private static readonly TimeSpan ReadyTimeout = TimeSpan.FromMinutes(10);
 
     private readonly Process _process;
+    private readonly ProcessStartInfo _workbenchStartInfo;
     private readonly string _directory;
     private readonly string _managementKey;
+    private readonly string _processIdPath;
     private bool _ownsDirectory = true;
+    private bool _processStarted;
+    private int? _workbenchProcessId;
+    private bool _suspended;
     private readonly StringBuilder _output = new();
     private readonly TaskCompletionSource<Uri> _listeningAddress = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    private WorkbenchProcess(Process process, string directory, string managementKey)
+    private WorkbenchProcess(Process process, ProcessStartInfo workbenchStartInfo, string directory, string managementKey)
     {
         _process = process;
+        _workbenchStartInfo = workbenchStartInfo;
         _directory = directory;
         _managementKey = managementKey;
+        _processIdPath = Path.Combine(directory, $".workbench-{Guid.NewGuid():N}.pid");
         Client = new HttpClient();
         ManagementClient = new HttpClient();
         ManagementClient.DefaultRequestHeaders.Add(ManagementKeyHeader, managementKey);
@@ -47,6 +86,16 @@ public sealed class WorkbenchProcess : IAsyncDisposable
 
     /// <summary>The isolated authored configuration directory used by this process.</summary>
     public string ContentRoot => _directory;
+
+    /// <summary>The operating-system process id owned by this fixture.</summary>
+    public int ProcessId => _workbenchProcessId
+        ?? throw new InvalidOperationException("The Workbench process id is not available before the host starts.");
+
+    /// <summary>Whether the owned Workbench process has exited.</summary>
+    public bool HasExited => !_processStarted || _process.HasExited;
+
+    /// <summary>The POSIX shell supervisor id, exposed internally for the process-control smoke test.</summary>
+    internal int SupervisorProcessId => _process.Id;
 
     public static async Task<WorkbenchProcess> StartAsync(
         WorkbenchShell shell,
@@ -90,15 +139,15 @@ public sealed class WorkbenchProcess : IAsyncDisposable
         if (additionalArguments is not null)
             arguments.AddRange(additionalArguments);
 
-        var startInfo = new ProcessStartInfo(
-            Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet",
-            arguments)
+        var startInfo = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
         {
             WorkingDirectory = directory,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false
         };
+        foreach (var argument in arguments)
+            startInfo.ArgumentList.Add(argument);
         startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = shell.Environment;
         foreach (var (key, value) in settings)
             startInfo.Environment[key.Replace(":", "__", StringComparison.Ordinal)] = value;
@@ -106,7 +155,7 @@ public sealed class WorkbenchProcess : IAsyncDisposable
         // suppress other informational logs.
         startInfo.Environment["Logging__LogLevel__Microsoft.Hosting.Lifetime"] = "Information";
 
-        var workbench = new WorkbenchProcess(new Process { StartInfo = startInfo }, directory, managementKey);
+        var workbench = new WorkbenchProcess(new Process(), startInfo, directory, managementKey);
         try
         {
             await workbench.StartAndWaitUntilReadyAsync(waitForReady);
@@ -137,8 +186,17 @@ public sealed class WorkbenchProcess : IAsyncDisposable
     public async Task<TimeSpan?> StopAsync(TimeSpan limit)
     {
         var stopping = Stopwatch.StartNew();
-        using (var terminate = Process.Start("kill", ["-TERM", _process.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)]))
-            await terminate.WaitForExitAsync();
+        if (HasExited)
+        {
+            _suspended = false;
+            return TimeSpan.Zero;
+        }
+
+        if (_suspended)
+            await ResumeAsync();
+
+        if (!await SendPosixSignalAsync("-TERM"))
+            return stopping.Elapsed;
 
         try
         {
@@ -154,13 +212,87 @@ public sealed class WorkbenchProcess : IAsyncDisposable
 
     public int ExitCode => _process.ExitCode;
 
+    /// <summary>Sends SIGSTOP and waits until the owned process is observed stopped. Supported on POSIX hosts only.</summary>
+    public async Task SuspendAsync()
+    {
+        if (!await SendPosixSignalAsync("-STOP"))
+            throw Failure($"exited with code {_process.ExitCode} before it could be suspended");
+
+        _suspended = true;
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(10);
+        string state;
+        do
+        {
+            using var query = Process.Start(new ProcessStartInfo("ps",
+                ["-o", "state=", "-p", ProcessId.ToString(CultureInfo.InvariantCulture)])
+            {
+                RedirectStandardOutput = true,
+                UseShellExecute = false
+            }) ?? throw Failure("could not start its process-state observation");
+            state = (await query.StandardOutput.ReadToEndAsync()).Trim();
+            await query.WaitForExitAsync();
+            if (query.ExitCode != 0)
+                throw Failure($"could not observe process {ProcessId} after SIGSTOP (ps exit {query.ExitCode})");
+            if (state.StartsWith('T')) return;
+            await Task.Delay(25);
+        } while (DateTimeOffset.UtcNow < deadline);
+
+        throw Failure($"process {ProcessId} did not stop after SIGSTOP; last state '{state}'");
+    }
+
+    /// <summary>Resumes the owned Workbench process with SIGCONT. Supported on POSIX hosts only.</summary>
+    public async Task ResumeAsync()
+    {
+        await SendPosixSignalAsync("-CONT");
+        _suspended = false;
+    }
+
+    /// <summary>Hard-kills the owned Workbench process and waits for it to exit; safe after an earlier exit.</summary>
+    public async Task CrashAsync()
+    {
+        if (!_processStarted || HasExited)
+        {
+            if (_processStarted)
+                await _process.WaitForExitAsync();
+            _suspended = false;
+            return;
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                _process.Kill(entireProcessTree: true);
+            }
+            catch (InvalidOperationException) when (_process.HasExited)
+            {
+                // The child exited between the check and Kill.
+            }
+            catch (System.ComponentModel.Win32Exception) when (_process.HasExited)
+            {
+                // The child exited between the check and Kill.
+            }
+        }
+        else if (_workbenchProcessId is int processId)
+        {
+            await SendPosixSignalAsync("-KILL", processId);
+        }
+        else
+        {
+            // Before its pid file is available, the supervisor's TERM trap kills and reaps only its owned child.
+            await SendPosixSignalAsync("-TERM", _process.Id);
+        }
+
+        await _process.WaitForExitAsync();
+        _suspended = false;
+    }
+
     /// <summary>Kills this owned host without graceful cleanup, then boots a fresh process over its existing databases.</summary>
     public async Task<WorkbenchProcess> CrashAndRestartAsync(Action<string>? prepareRestart = null)
     {
-        _process.Kill(entireProcessTree: true);
-        await _process.WaitForExitAsync();
+        await CrashAsync();
         prepareRestart?.Invoke(_directory);
-        var replacement = new WorkbenchProcess(new Process { StartInfo = _process.StartInfo }, _directory, _managementKey);
+        var replacement = new WorkbenchProcess(new Process(), _workbenchStartInfo, _directory, _managementKey);
         _ownsDirectory = false;
         try
         {
@@ -188,12 +320,7 @@ public sealed class WorkbenchProcess : IAsyncDisposable
     {
         Client.Dispose();
         ManagementClient.Dispose();
-        if (!_process.HasExited)
-        {
-            _process.Kill(entireProcessTree: true);
-            await _process.WaitForExitAsync();
-        }
-
+        await CrashAsync();
         _process.Dispose();
         try
         {
@@ -206,13 +333,59 @@ public sealed class WorkbenchProcess : IAsyncDisposable
         }
     }
 
+    private async Task<bool> SendPosixSignalAsync(string signal)
+        => await SendPosixSignalAsync(signal, ProcessId);
+
+    private async Task<bool> SendPosixSignalAsync(string signal, int processId)
+    {
+        if (OperatingSystem.IsWindows() || OperatingSystem.IsBrowser())
+            throw new PlatformNotSupportedException("Workbench process signals are supported only on POSIX hosts.");
+
+        if (!_processStarted || _process.HasExited)
+        {
+            _suspended = false;
+            return false;
+        }
+
+        using var signalProcess = Process.Start("kill", [signal, processId.ToString(CultureInfo.InvariantCulture)])
+                                  ?? throw new InvalidOperationException("Could not start the POSIX kill command.");
+        await signalProcess.WaitForExitAsync();
+        if (signalProcess.ExitCode == 0)
+            return true;
+
+        if (_process.HasExited)
+            return false;
+
+        try
+        {
+            await _process.WaitForExitAsync().WaitAsync(TimeSpan.FromMilliseconds(500));
+            return false;
+        }
+        catch (TimeoutException)
+        {
+            // The owned Workbench and its supervisor are still active; report the failed signal below.
+        }
+
+        throw new InvalidOperationException(
+            $"Could not send {signal} to owned process {processId}: kill exited with code {signalProcess.ExitCode}.");
+    }
+
     private async Task StartAndWaitUntilReadyAsync(bool waitForReady)
     {
+        _process.StartInfo = OperatingSystem.IsWindows()
+            ? _workbenchStartInfo
+            : CreatePosixSupervisorStartInfo(_workbenchStartInfo, _processIdPath);
         _process.OutputDataReceived += (_, line) => Append(line.Data);
         _process.ErrorDataReceived += (_, line) => Append(line.Data);
         _process.Start();
+        _processStarted = true;
         _process.BeginOutputReadLine();
         _process.BeginErrorReadLine();
+
+        if (OperatingSystem.IsWindows())
+            _workbenchProcessId = _process.Id;
+        else
+            await WaitForWorkbenchProcessIdAsync();
 
         var deadline = DateTimeOffset.UtcNow + ReadyTimeout;
         while (true)
@@ -242,6 +415,51 @@ public sealed class WorkbenchProcess : IAsyncDisposable
 
             await Task.Delay(250);
         }
+    }
+
+    private static ProcessStartInfo CreatePosixSupervisorStartInfo(ProcessStartInfo workbenchStartInfo, string processIdPath)
+    {
+        var supervisor = new ProcessStartInfo("/bin/sh")
+        {
+            WorkingDirectory = workbenchStartInfo.WorkingDirectory,
+            RedirectStandardOutput = workbenchStartInfo.RedirectStandardOutput,
+            RedirectStandardError = workbenchStartInfo.RedirectStandardError,
+            UseShellExecute = false
+        };
+        supervisor.ArgumentList.Add("-c");
+        supervisor.ArgumentList.Add(PosixSupervisorScript);
+        supervisor.ArgumentList.Add("elsa-workbench-supervisor");
+        supervisor.ArgumentList.Add(processIdPath);
+        supervisor.ArgumentList.Add(workbenchStartInfo.FileName);
+        foreach (var argument in workbenchStartInfo.ArgumentList)
+            supervisor.ArgumentList.Add(argument);
+        foreach (var (key, value) in workbenchStartInfo.Environment)
+            supervisor.Environment[key] = value;
+
+        return supervisor;
+    }
+
+    private async Task WaitForWorkbenchProcessIdAsync()
+    {
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(10);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            if (File.Exists(_processIdPath))
+            {
+                var value = (await File.ReadAllTextAsync(_processIdPath)).Trim();
+                if (int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var processId) && processId > 0)
+                {
+                    _workbenchProcessId = processId;
+                    return;
+                }
+            }
+
+            if (_process.HasExited)
+                throw Failure($"supervisor exited with code {_process.ExitCode} before reporting its Workbench process id");
+            await Task.Delay(10);
+        }
+
+        throw Failure("supervisor did not report its Workbench process id within 10 seconds");
     }
 
     private async Task<Readiness?> TryReadReadinessAsync()

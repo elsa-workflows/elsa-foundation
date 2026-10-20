@@ -442,6 +442,33 @@ describe("connection credential creation", () => {
     await waitFor(() => onCreated.mock.calls.length === 1);
   });
 
+  it("keeps Create actions outside the scroll body and focuses a failed-save message without clearing fields", async () => {
+    const postJson = vi.fn(async (url: string) => {
+      if (url === "/secrets/picker") return pickerResponse();
+      throw new Error("Fixture connection create failed.");
+    });
+    const { container } = renderDialog({ context: endpointContext(postJson) });
+    await waitFor(() => container.textContent?.includes("Payments API") === true);
+
+    const dialog = container.querySelector<HTMLElement>("[role='dialog']")!;
+    const content = dialog.querySelector<HTMLElement>(".connections-create-content")!;
+    const actions = dialog.querySelector<HTMLElement>(".connections-create-actions")!;
+    expect(content.contains(actions)).toBe(false);
+    expect(actions.parentElement).toBe(dialog.querySelector("form"));
+
+    changeText(container, "Name", "preserved.connection");
+    chooseSecret(container, "Access token", "payments.api");
+    chooseSecret(container, "Signing key", "signing.key");
+    clickButton(container, "Create");
+
+    await waitFor(() => container.querySelector("[role='alert']") !== null);
+    const alert = container.querySelector<HTMLElement>("[role='alert']")!;
+    await waitFor(() => document.activeElement === alert);
+    expect(alert.textContent).toBe("Fixture connection create failed.");
+    expect(control<HTMLInputElement>(container, "Name").value).toBe("preserved.connection");
+    expect(content.contains(actions)).toBe(false);
+  });
+
   it("ignores old endpoint results and clears old form state on endpoint changes", async () => {
     const oldPicker = deferred<unknown>();
     const oldContext = endpointContext(vi.fn(() => oldPicker.promise));
