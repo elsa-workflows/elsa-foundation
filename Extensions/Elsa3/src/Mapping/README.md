@@ -116,7 +116,7 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
     target's own conversion declares (its published contract).
   - A reusable body's natural completion maps from its root's own `Done` key to the boundary's `done`.
   - Refused until Elsa 4 graph activities support them: a reusable whose body starts from a trigger
-    (`ELS3-REUSABLE-UNSUPPORTED-START-TRIGGER`), uses an engine intrinsic such as SetVariable or SetOutput
+    (`ELS3-REUSABLE-UNSUPPORTED-START-TRIGGER`; 'Can start workflow' on a non-trigger only picks the start node and is fine), uses an engine intrinsic such as SetVariable or SetOutput
     (`ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED`, #3023), or reads one of its inputs, a variable or another
     activity's result (`ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED`, #3027).
   - What to change in Elsa 3 before exporting: [Elsa 3 migration readiness](../../../../docs/reference/elsa3-migration-readiness.md).

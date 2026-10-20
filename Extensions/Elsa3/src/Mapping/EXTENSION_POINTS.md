@@ -74,3 +74,8 @@ Replace both: implement both contracts on one class, or register a node converte
 
 - **Implementation:** `Elsa3ReusableActivityImportMaterializer`.
 - **Purpose:** maps exact planned reusable references to deterministic activity-version ids, creates graph-provider catalog material, and preserves each original workflow definition/version identity as a direct-start wrapper.
+
+### `IReusableActivityTriggerClassifier` contribution
+
+- **Implementation:** `Elsa3ReusableActivityTriggerClassifier`, registered with `TryAdd` by `Elsa3MappingFeature`.
+- **Purpose:** classifies an Elsa 3 activity type by its built-in map entry with the rule conversion uses for the start node (`Elsa3ActivityNormalizer.IsNonTrigger`): a mapped type without a `canStartWorkflow` rule is a non-trigger, an unmapped type is not known.
