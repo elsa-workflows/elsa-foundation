@@ -19,7 +19,8 @@ export function CompensationTargetEditor({ descriptor, value, disabled, context,
   const scopes = enclosingCompensationScopes(workflowState?.rootActivity, nodeId);
   const target = typeof value === "string" ? value.trim() : "";
   const problem = scopes ? compensationTargetProblem(activityName, nodeId, scopes, target) : null;
-  const known = !target || (scopes ?? []).some(scope => scope.nodeId === target);
+  // A null scope list means the graph is not known (yet), so a stored target is shown as is, not as refused.
+  const known = !target || !scopes || scopes.some(scope => scope.nodeId === target);
 
   // The validator's errors block publishing, not saving, so the editor reports none of its own.
   useEffect(() => onValidationChange?.(false), [onValidationChange]);
@@ -40,6 +41,7 @@ export function CompensationTargetEditor({ descriptor, value, disabled, context,
             {scope.label === scope.nodeId ? scope.nodeId : `${scope.label} (${scope.nodeId})`}
           </option>
         ))}
+        {!scopes && target ? <option value={target}>{target}</option> : null}
         {!known ? <option value={target}>{target} (not an enclosing scope)</option> : null}
       </select>
       {problem ? (

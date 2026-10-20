@@ -84,6 +84,19 @@ describe("Confirm and Compensate targets (spec 258 T321)", () => {
       .toContain("Compensate 'confirm-inner' names scope 'elsewhere', which does not enclose it.");
   });
 
+  it("shows a stored target as is, not as refused, while the graph is unknown", () => {
+    render("confirm-inner", "outer", vi.fn(), confirmTargetUiHint, null);
+
+    const picker = container.querySelector("select")!;
+    expect(picker.value).toBe("outer");
+    expect([...picker.options].map(option => [option.value, option.textContent])).toEqual([
+      ["", "Nearest enclosing scope"],
+      ["outer", "outer"]
+    ]);
+    expect(picker.hasAttribute("aria-invalid")).toBe(false);
+    expect(picker.hasAttribute("aria-describedby")).toBe(false);
+  });
+
   it("claims only the Confirm and Compensate target inputs", () => {
     const context = { activity: {}, expressionDescriptors: [] };
     expect(compensationTargetPropertyEditor.supports(descriptor(confirmTargetUiHint), context)).toBe(true);
@@ -93,9 +106,15 @@ describe("Confirm and Compensate targets (spec 258 T321)", () => {
   });
 });
 
-function render(activityId: string, value: string, onChange: (value: unknown) => void, uiHint = confirmTargetUiHint) {
+function render(
+  activityId: string,
+  value: string,
+  onChange: (value: unknown) => void,
+  uiHint = confirmTargetUiHint,
+  rootActivity: ActivityNode | null = workflow()
+) {
   flushSync(() => root.render(
-    <WorkflowReferenceAuthoringProvider workflowState={{ rootActivity: workflow() }} workflowInputs={[]} visibleVariables={[]} status="ready">
+    <WorkflowReferenceAuthoringProvider workflowState={{ rootActivity }} workflowInputs={[]} visibleVariables={[]} status="ready">
       <CompensationTargetEditor
         descriptor={descriptor(uiHint)}
         value={value}
