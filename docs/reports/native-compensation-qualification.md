@@ -38,7 +38,7 @@ Rows are the [qualification matrix](../../specs/261-compensation-qualification/c
 | Q12 | Studio authoring, publish, run, inspect (live) | `d7c0ab201` | Local pair: `ELSA_STUDIO_URL=http://localhost:5089 npx playwright test --config tests/live/playwright.live.config.ts compensation-journey.spec.ts` | 1/1 | Repaired (#3142). Lists the four replay-safe warnings and publishes. Axe clean at 1200 and 390 px on the designer and the Warnings section. |
 | Q13 | Studio nesting and Confirm view (live) | `d7c0ab201` | Local pair: `nesting-journey.spec.ts` | 1/1 | New. Axe clean at both widths. |
 | Q14 | Studio operator recovery (live) | `d7c0ab201` | Local pair: `operator-actions-journey.spec.ts` | 2/2, reader step not run | The reader step needs a read-only account (`ELSA_STUDIO_READONLY_USER`); the Workbench has no API to create one, so it was skipped. The backoff step is new. |
-| Q15 | Studio states, dialogs and axe (mocked) | `d7c0ab201` | Local: `pnpm --recursive --workspace-concurrency=1 test`; Studio CI on the PR head pending | See section 8 | No Studio source changed in PR 2. |
+| Q15 | Studio states, dialogs and axe (mocked) | `d7c0ab201` | Local: `pnpm --recursive --workspace-concurrency=1 test`; `playwright test compensation-scope.spec.ts workflow-publication-review.spec.ts` | Vitest 3,261/3,261 (Workflows 2,284); browser 89/89 | No Studio source changed in PR 2. Studio CI on the PR head: pending. |
 | Q16 | Negative controls | `d7c0ab201` | By hand, each reverted | See section 8 | |
 | Q17 | Architecture, maps, current head | `d7c0ab201` | Local: architecture tests, `Elsa.Maps.Generator -- check`, full solution build | 584/584; check passed; 0 errors | CI on the PR head and the post-merge runs: pending (#3048 comment). |
 | Q18 | Oracle | — | — | **Not qualified** | |
@@ -105,5 +105,7 @@ The M5 review of the M1–M4 runtime and Studio code (T527, FR-521), and what th
 | N512 | The in-memory store's one-generation guard | 1: the refused-second-generation test |
 
 **Live journeys.** Section 2, Q12–Q14: four journeys passed and one (the reader step) was skipped, in 3.0 minutes on `d7c0ab201`.
+
+**Studio.** On `d7c0ab201`: `pnpm -r typecheck` and `pnpm lint` pass; Vitest 3,261 tests in 268 files pass; the mocked browser specs for the compensation scope and the publication review pass 89/89 on Chromium 1194. The live journeys are not in a typechecked project; checked on their own (`tsc` with the Studio base config), they have no error but the unresolved `process` global every live journey shares, and ESLint passes on them.
 
 **CI.** The PR 2 head's `Build & test`, `Studio CI`, `Architecture guards` and `Generated maps fresh`, the dispatched `EF container suites` run (for Q4–Q6), and the post-merge `main` CI and nightly EF run on the merge commit are recorded as a comment on #3048 once they exist. This record links that comment rather than being edited for status.
