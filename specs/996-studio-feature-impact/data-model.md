@@ -68,6 +68,8 @@ The existing configuration revision does not atomically represent package/manife
 
 ## State Transitions
 
+An Apply completion is presentation state for the current Features visit: the completed host and safe result message/counts only. It may survive same-version, same-route registry remounts, including repeated rebuilds, and must retain visible target context and focus. It is not a saved draft or a reusable review snapshot. Clear it on deliberate host/draft/reset/manual-refresh/new-Apply actions or route departure; do not recreate it on a rejected request or carry payload/settings/authorization data. No persistence across browser reload or module-version replacement is promised.
+
 ```text
 Loaded host state
     └── stage direct edit / cascade ──> Host draft + effective state roots + pending setting edits

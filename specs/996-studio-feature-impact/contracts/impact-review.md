@@ -23,6 +23,7 @@ This is the user-visible behavior contract for Feature Management's pre-Apply re
 - Cancel closes the review, returns to the same local draft, and performs no host configuration change. Keyboard focus enters and stays within the review while open; Escape cancels and restores focus to the invoking control. Reuse the public SDK dialog-focus helper rather than adding a separate focus implementation.
 - Reset returns only the selected host's draft to its loaded state and clears a review of the previous draft.
 - Apply uses the same target, complete state, and configuration revision shown by the current review. A failed request leaves a visible failure and never a success message. Some post-save refresh/reload failures can follow persisted configuration; an error alone is not proof that the host configuration stayed unchanged, so read the host again before describing its persisted state.
+- After successful Apply, keep the completed host selected and focus a visible result. Studio's same-version registry remounts must not erase that result or reset the view to Server. Only a volatile current-visit completion record is allowed: host identity and safe result message/counts, without draft/payload/configuration/authorization data. Repeated same-route rebuilds retain it; deliberate context/draft/reset/manual-refresh/new-Apply actions or leaving Features clear it. Failed requests create no success record, and full browser reload or module-version replacement need not restore it.
 
 ## Errors, reload information, and permissions
 

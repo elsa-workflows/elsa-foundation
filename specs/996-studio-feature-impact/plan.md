@@ -16,7 +16,7 @@ Implementation source is the controlled `7fb745f8604b6ed67a2eae60266976c98bce949
 
 **Primary Dependencies**: Existing `@elsa-workflows/studio-ui` and `@elsa-workflows/studio-sdk` workspace packages, React, and `lucide-react`; no new dependency.
 
-**Storage**: No new storage. Drafts and impact review remain client-side. Apply continues to persist through the existing selected-host feature management behavior.
+**Storage**: No new persisted storage. Drafts and impact review remain client-side. A volatile module-owned completion record may retain only the successful target and safe result counts/message during the current Features visit, so same-version registry remounts do not erase the outcome. It carries no draft, payload, settings values or authorization data and clears on deliberate context/draft actions or route departure. Apply continues to persist through the existing selected-host feature management behavior.
 
 **Testing**: Existing Vitest and jsdom module suite; existing Modularity service/configuration-store tests as backend preservation checks; actual private Studio.Web plus Workbench browser proof.
 
@@ -83,6 +83,10 @@ The current Studio SDK already publicly re-exports `useAuthSession`, `usePermiss
 ## Complexity Tracking
 
 No constitution violations or added projects/dependencies.
+
+## Root refinement from actual host proof
+
+The integrated940 host run proved both reviewed requests changed only their selected private shell file, but Studio's modules-changed event rebuilt the registry and discarded the selected target and completion notice. FR-019 closes that observed presentation gap without persisting a draft or changing the SDK. Do not destructively consume a one-shot record in a React initializer: StrictMode and repeated same-route registry rebuilds must remain safe. The host can rebuild once for its explicit revision and again when its manifest refetch completes. Retain a completion only for the current Features visit and verify the actual same-version remount behavior. Observe actual route departure while the page is temporarily absent in the host loading shell; a component-unmount cleanup alone cannot cover that gap. Use only a bounded module-owned navigation observer while a completion exists, with cleanup when it is cleared; do not add host/SDK state services. Existing shared success feedback is reused and focused; the disabled review opener is not the post-success focus target. New rendered regressions precede this bounded correction, and the actual two-host proof is repeated afterward.
 
 ## Root Plan Review
 

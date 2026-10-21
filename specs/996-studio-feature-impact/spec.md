@@ -58,6 +58,8 @@ As a feature administrator, I can apply the exact draft I reviewed to the select
 2. **Given** a review followed by a draft edit, host change, catalog refresh, or catalog replacement, **When** the operator attempts to continue, **Then** the old review is invalidated and the changed state must be reviewed before Apply.
 3. **Given** Apply is rejected because the configuration revision is stale or the backend refuses activation, **When** the error is shown, **Then** the backend's reason remains visible, the UI does not report success, and a guard refusal is not mislabeled as proof of a stale revision.
 4. **Given** a dirty draft and an operator chooses Reset, **When** the draft returns to the loaded state, **Then** only the selected host's draft is reset and any review of the previous draft is invalidated.
+5. **Given** Studio Apply succeeds and refreshes the module registry, **When** the feature page remounts, including repeated same-route registry rebuilds, **Then** it still names the completed Studio target, shows the actual success result, and focuses that result. A normal Server Apply also focuses its result when the review opener becomes disabled.
+6. **Given** a completed result, **When** the operator deliberately changes host, starts another draft/Apply, resets or manually refreshes, or leaves Features and returns, **Then** the old completion is not replayed. No draft, configuration values or authorization data are carried across a registry remount.
 
 ### User Story 4 - Inspect with read-only access (Priority: P2)
 
@@ -107,6 +109,7 @@ As an authenticated user who can inspect feature management but cannot manage it
 - **FR-016**: The review's revision guarantee MUST remain bounded to the loaded catalog snapshot and the existing feature-configuration revision. It MUST NOT claim that a later out-of-band package or dependency-catalog change is atomically detected by that revision.
 - **FR-017**: This feature MUST reuse the existing feature-management and cascade behavior; it MUST NOT add automatic enablement beyond the existing required-dependency cascade, broaden the managed host scope, or add shared configuration or deployment behavior.
 - **FR-018**: Opening the review dialog MUST move focus inside it, contain keyboard navigation, and support Escape cancellation with focus returned to the invoking control; cancellation MUST NOT apply changes.
+- **FR-019**: A successful Apply MUST retain its selected target and visible, focused completion result through the same-version module registry refreshes it causes. A volatile module-owned result may carry only the host identity and safe result message/counts for the current Features visit; it MUST NOT persist a draft, payload, credentials or authorization state. Deliberate host/draft/reset/manual-refresh/new-Apply actions and leaving Features clear the result. Failed Apply MUST NOT create a success handoff. This does not promise restoration after a full browser reload or module-version replacement.
 
 ### Key Entities *(include if feature involves data)*
 
