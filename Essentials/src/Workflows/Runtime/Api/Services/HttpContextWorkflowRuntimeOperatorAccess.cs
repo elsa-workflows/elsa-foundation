@@ -11,7 +11,8 @@ namespace Elsa.Workflows.Runtime.Api.Services;
 /// <summary>
 /// Evaluates <c>workflows/runtime:manage</c> for the request's caller with Foundation Identity's permission evaluator,
 /// the caller's tenant and the run as the resource, as run deletion does. An anonymous or untrusted principal, or a run
-/// of another tenant, gets <see langword="false"/>.
+/// of another tenant, gets <see langword="false"/>. The runtime-wide question (the diagnostics settings) is the same
+/// evaluation with no resource.
 /// </summary>
 public sealed class HttpContextWorkflowRuntimeOperatorAccess : IWorkflowRuntimeOperatorAccess
 {
@@ -40,11 +41,22 @@ public sealed class HttpContextWorkflowRuntimeOperatorAccess : IWorkflowRuntimeO
     public async ValueTask<bool> CanManageAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(workflowExecution);
-        if (!_trusted || (workflowExecution.TenantId is not null && !StringComparer.Ordinal.Equals(workflowExecution.TenantId, _tenantId)))
+        if (workflowExecution.TenantId is not null && !StringComparer.Ordinal.Equals(workflowExecution.TenantId, _tenantId))
+            return false;
+
+        return await AuthorizeManageAsync(workflowExecution, cancellationToken).ConfigureAwait(false);
+    }
+
+    public ValueTask<bool> CanManageRuntimeAsync(CancellationToken cancellationToken = default) =>
+        AuthorizeManageAsync(resource: null, cancellationToken);
+
+    private async ValueTask<bool> AuthorizeManageAsync(object? resource, CancellationToken cancellationToken)
+    {
+        if (!_trusted)
             return false;
 
         var result = await _authorization.AuthorizeAsync(
-            new PermissionEvaluationContext(_principal, WorkflowRuntimePermissions.WorkflowRuntimeManage, _tenantId, workflowExecution),
+            new PermissionEvaluationContext(_principal, WorkflowRuntimePermissions.WorkflowRuntimeManage, _tenantId, resource),
             cancellationToken).ConfigureAwait(false);
         return result.Succeeded;
     }

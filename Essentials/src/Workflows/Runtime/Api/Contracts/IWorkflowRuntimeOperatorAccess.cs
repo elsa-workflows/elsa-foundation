@@ -11,4 +11,11 @@ public interface IWorkflowRuntimeOperatorAccess
 {
     /// <summary>Whether the caller holds <c>workflows/runtime:manage</c> for <paramref name="workflowExecution"/>.</summary>
     ValueTask<bool> CanManageAsync(WorkflowExecutionState workflowExecution, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Whether the caller holds <c>workflows/runtime:manage</c> for the runtime itself, with no run as resource: the
+    /// diagnostics settings' <c>permissions.canManage</c> signal (#3130). An implementation that does not answer it
+    /// fails closed.
+    /// </summary>
+    ValueTask<bool> CanManageRuntimeAsync(CancellationToken cancellationToken = default) => ValueTask.FromResult(false);
 }
