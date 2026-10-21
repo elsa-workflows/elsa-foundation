@@ -65,8 +65,9 @@ the marker proves, each provider supplies SQL per member
 
 A future Oracle engine inherits both as prerequisites rather than starting cold. What neither supplies
 is Oracle's own error codes: `EfRelationalExceptionClassifier` carries per-provider arms for
-unique-key violations (`:30-50`) and for transient conflicts, deadlocks and lock timeouts included
-(`:97-111`), and Elsa 3 maps exactly one Oracle code, `ORA-00001`
+unique-key violations (`IsUniqueConstraintViolation`), for transient conflicts, deadlocks and lock
+timeouts included (`IsTransientWriteConflict`), and for a key too long to write (`IsKeyTooLong`, a
+SQL Server arm only), and Elsa 3 maps exactly one Oracle code, `ORA-00001`
 (`Elsa.Persistence.EFCore.Common/DbExceptionClassifier.cs:60`), with no Oracle arm in its transient
 set at all. There is nothing to port.
 

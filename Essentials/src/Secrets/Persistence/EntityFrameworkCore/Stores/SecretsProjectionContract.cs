@@ -162,31 +162,10 @@ public static class SecretsProjectionContract
         {
             await context.SaveProjectionChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException exception) when (IsKeyTooLong(exception))
+        catch (DbUpdateException exception) when (EfRelationalExceptionClassifier.IsKeyTooLong(exception))
         {
             throw SecretsProjectionException.ForRefusedMove(record, current.Tombstone, exception);
         }
-    }
-
-    /// <summary>
-    /// Whether the database refused a row because its key is longer than the key allows, read by the provider
-    /// exception's type name so no provider assembly is referenced. Only SQL Server can: its clustered key is 900 bytes,
-    /// less than the columns can hold together, and it refuses an entry past that with error 1946. SQLite has no key
-    /// limit. PostgreSQL's B-tree entry limit and MySQL's key prefix limit both exceed the most bytes the bounded
-    /// columns can hold, and MySQL checks its limit when the key is created, not when a row is written.
-    /// </summary>
-    private static bool IsKeyTooLong(DbUpdateException exception)
-    {
-        for (Exception? current = exception.InnerException; current is not null; current = current.InnerException)
-        {
-            var type = current.GetType();
-            if (type.Name.Equals("SqlException", StringComparison.Ordinal) &&
-                (type.GetProperty("Number")?.GetValue(current) is 1946 ||
-                 current.Message.Contains("maximum length of 900 bytes", StringComparison.Ordinal)))
-                return true;
-        }
-
-        return false;
     }
 
     private readonly record struct SeekCursor(string TenantId, string NormalizedName, string Tombstone);
