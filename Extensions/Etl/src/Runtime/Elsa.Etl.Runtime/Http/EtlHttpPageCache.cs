@@ -55,11 +55,13 @@ internal sealed class EtlHttpPageCache
     private readonly EtlHttpJsonSource _source;
     private readonly EtlConnectorLimits _limits;
     private readonly EtlHttpPolicy _policy;
+    private readonly EtlHttpRequestBuilder? _requestBuilder;
     private readonly FileChunkStore _bodyStore = new(".json");
     private readonly FileChunkStore _manifestStore = new(".page");
 
     /// <summary>Creates a page cache from one admitted connector snapshot and the host-approved absolute root.</summary>
-    public EtlHttpPageCache(string approvedRoot, EtlConnectorRunAdmission admission, int partitionOrdinal)
+    public EtlHttpPageCache(string approvedRoot, EtlConnectorRunAdmission admission, int partitionOrdinal,
+        EtlHttpRequestBuilder? requestBuilder = null)
     {
         ArgumentNullException.ThrowIfNull(admission);
         ArgumentNullException.ThrowIfNull(admission.Invocation);
@@ -93,6 +95,9 @@ internal sealed class EtlHttpPageCache
         if (shardIds.Length == 0 || shardIds.Any(string.IsNullOrWhiteSpace) ||
             shardIds.Distinct(StringComparer.Ordinal).Count() != shardIds.Length || partitionOrdinal >= shardIds.Length)
             throw Refused("etl.http.page-admission-invalid");
+        if (http.Pagination is EtlNextLinkPagination && requestBuilder is null ||
+            requestBuilder is not null && !requestBuilder.Matches(http, pipeline.Http, sourceBinding, shardIds))
+            throw Refused("etl.http.page-admission-invalid");
 
         var policy = pipeline.Http;
         if (policy.MaxPageBytes <= 0 || policy.MaxPageBytes > int.MaxValue ||
@@ -116,6 +121,7 @@ internal sealed class EtlHttpPageCache
         _source = http;
         _limits = pipeline.Limits;
         _policy = policy;
+        _requestBuilder = requestBuilder;
         // Do not retain the caller-owned shard list. It is part of the admission pin used by callers
         // that may share mutable collection implementations across physical attempts.
         _admission = admission with
@@ -165,6 +171,8 @@ internal sealed class EtlHttpPageCache
             throw Corrupt();
         }
 
+        decoded = NormalizeContinuation(request, decoded, reading: true);
+
         var descriptor = new EtlRetainedHttpPage(pageSequence, requestHash,
             new EtlObjectReference(metadata.BodyKey, metadata.BodyHash, metadata.BodyByteLength),
             decoded.Records.Count, decoded.Continuation);
@@ -186,6 +194,7 @@ internal sealed class EtlHttpPageCache
         // Own the bytes before decoding, hashing, or awaiting storage so a caller cannot change the
         // response between validation and publication.
         var ownedBody = rawBody.ToArray();
+        var (identity, requestHash) = RequestIdentity(pageSequence, request);
         EtlJsonPage decoded;
         try
         {
@@ -195,8 +204,8 @@ internal sealed class EtlHttpPageCache
         {
             throw new EtlHttpPageCacheException(exception.Code);
         }
+        decoded = NormalizeContinuation(request, decoded, reading: false);
 
-        var (identity, requestHash) = RequestIdentity(pageSequence, request);
         if (Directory.Exists(_approvedRoot))
         {
             var existing = await ReadAsync(pageSequence, request, cancellationToken);
@@ -280,12 +289,30 @@ internal sealed class EtlHttpPageCache
 
         try
         {
+            _requestBuilder?.RequestUri(request);
             return (EtlRuntimeIdentity.ConnectorHttpPageId(_admission, _partitionOrdinal, pageSequence, request),
                 EtlRuntimeIdentity.HttpRequestHash(request));
         }
         catch (ArgumentException)
         {
             throw Refused("etl.http.page-request-invalid");
+        }
+    }
+
+    private EtlJsonPage NormalizeContinuation(EtlHttpRequest request, EtlJsonPage decoded, bool reading)
+    {
+        if (_requestBuilder is null)
+            return decoded;
+
+        try
+        {
+            return decoded with { Continuation = _requestBuilder.NextContinuation(request, decoded.Continuation) };
+        }
+        catch (EtlHttpRequestBuilderException exception)
+        {
+            if (reading)
+                throw Corrupt();
+            throw Refused(exception.Code);
         }
     }
 

@@ -1662,13 +1662,16 @@ Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.ResponseReceivedAtUtc.get -> Sys
 Elsa.Etl.Core.Runtime.EtlHttpSourceFetchCapture.ResponseReceivedAtUtc.init -> void
 Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome
 Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome!
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.Deconstruct(out int? StatusCode, out System.DateTimeOffset? RetryAfter, out bool InvalidPage, out System.DateTimeOffset? ResponseReceivedAtUtc) -> void
 Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.Deconstruct(out int? StatusCode, out System.DateTimeOffset? RetryAfter, out bool InvalidPage) -> void
 Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.Equals(Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome? other) -> bool
-Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.EtlHttpSourceFetchOutcome(int? StatusCode, System.DateTimeOffset? RetryAfter, bool InvalidPage) -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.EtlHttpSourceFetchOutcome(int? StatusCode, System.DateTimeOffset? RetryAfter, bool InvalidPage, System.DateTimeOffset? ResponseReceivedAtUtc = null) -> void
 Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.InvalidPage.get -> bool
 Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.InvalidPage.init -> void
 Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.RetryAfter.get -> System.DateTimeOffset?
 Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.RetryAfter.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.ResponseReceivedAtUtc.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.ResponseReceivedAtUtc.init -> void
 Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.StatusCode.get -> int?
 Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome.StatusCode.init -> void
 override Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.Equals(object? obj) -> bool

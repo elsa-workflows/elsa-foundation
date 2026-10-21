@@ -9,8 +9,21 @@ public sealed record EtlHttpSourceFetchAttempt(string RequestId, int Number, lon
     DateTimeOffset StartedAt, DateTimeOffset ExpiresAt);
 
 /// <summary>Safe response metadata without the response body, URL, headers or exception text.</summary>
-/// <remarks>A null status represents an uncertain transport outcome. InvalidPage is only meaningful for HTTP 200.</remarks>
-public sealed record EtlHttpSourceFetchOutcome(int? StatusCode, DateTimeOffset? RetryAfter, bool InvalidPage);
+/// <remarks>
+/// A null status represents an uncertain transport outcome. InvalidPage is only meaningful for HTTP 200.
+/// ResponseReceivedAtUtc is the complete-response receipt time and is only used for a known-invalid HTTP 200 page.
+/// </remarks>
+public sealed record EtlHttpSourceFetchOutcome(int? StatusCode, DateTimeOffset? RetryAfter, bool InvalidPage,
+    DateTimeOffset? ResponseReceivedAtUtc = null)
+{
+    // Preserve source compatibility for callers that deconstruct the original three-field outcome.
+    public void Deconstruct(out int? StatusCode, out DateTimeOffset? RetryAfter, out bool InvalidPage)
+    {
+        StatusCode = this.StatusCode;
+        RetryAfter = this.RetryAfter;
+        InvalidPage = this.InvalidPage;
+    }
+}
 
 /// <summary>One issued attempt with optional reconciliation metadata; a null outcome means its response is unknown.</summary>
 /// <remarks>CompletedAt closes the journal entry; it does not prove that the physical request has terminated.</remarks>

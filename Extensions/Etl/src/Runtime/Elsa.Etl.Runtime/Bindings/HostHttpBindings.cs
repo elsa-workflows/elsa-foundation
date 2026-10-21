@@ -300,7 +300,7 @@ internal sealed class HostHttpBindings
                 options.AllowedPaths is null || options.AllowedPaths.Count > MaximumAllowedPathCount ||
                 options.Shards is null || options.Shards.Count > MaximumShards ||
                 options.ConnectionName is not null && !ValidName(options.ConnectionName) ||
-                !ValidHeaderName(options.IdempotencyHeader) || IsReservedHeader(options.IdempotencyHeader))
+                !EtlHttpHeaderPolicy.ValidHeaderName(options.IdempotencyHeader) || EtlHttpHeaderPolicy.IsReservedHeader(options.IdempotencyHeader))
                 throw InvalidOptions();
 
             EtlScope scope;
@@ -395,26 +395,6 @@ internal sealed class HostHttpBindings
     private static bool ValidRole(string? role) => role is "Source" or "MainOutput" or "ErrorOutput";
 
     private static bool ValidHash(string? value) => value is { Length: 64 } && value.All(char.IsAsciiHexDigit);
-
-    private static bool ValidHeaderName(string? value) => value is { Length: > 0 and <= MaximumNameLength } &&
-        value.All(character => char.IsAsciiLetterOrDigit(character) || character is '!' or '#' or '$' or '%' or '&' or '\'' or '*' or '+' or '-' or '.' or '^' or '_' or '`' or '|' or '~');
-
-    private static bool IsReservedHeader(string header) => header.Equals("Accept", StringComparison.OrdinalIgnoreCase) ||
-        header.Equals("Authorization", StringComparison.OrdinalIgnoreCase) ||
-        header.Equals("Connection", StringComparison.OrdinalIgnoreCase) ||
-        header.Equals("Content-Length", StringComparison.OrdinalIgnoreCase) ||
-        header.Equals("Content-Type", StringComparison.OrdinalIgnoreCase) ||
-        header.Equals("Cookie", StringComparison.OrdinalIgnoreCase) ||
-        header.Equals("Expect", StringComparison.OrdinalIgnoreCase) ||
-        header.Equals("Host", StringComparison.OrdinalIgnoreCase) ||
-        header.Equals("Keep-Alive", StringComparison.OrdinalIgnoreCase) ||
-        header.Equals("TE", StringComparison.OrdinalIgnoreCase) ||
-        header.Equals("Trailer", StringComparison.OrdinalIgnoreCase) ||
-        header.Equals("Upgrade", StringComparison.OrdinalIgnoreCase) ||
-        header.Equals("Proxy-Authorization", StringComparison.OrdinalIgnoreCase) ||
-        header.Equals("Proxy-Connection", StringComparison.OrdinalIgnoreCase) ||
-        header.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase) ||
-        header.Equals("User-Agent", StringComparison.OrdinalIgnoreCase);
 
     private static EtlBindingException InvalidOptions() =>
         new("etl.binding-invalid", "An ETL host HTTP binding is invalid.");

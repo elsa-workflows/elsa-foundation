@@ -73,9 +73,10 @@ public sealed partial class EtlRuntimeStoreTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Source_dispatch_budget_is_checked_before_returning_a_permit(bool exactFit)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Source_dispatch_budget_is_checked_before_returning_a_permit(bool exactFit, bool invalidReceipt)
     {
         const string requestId = "00000000000000000000000000000001";
         var baseline = EtlV2TestPipelines.Create();
@@ -112,9 +113,23 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(EtlStoreStatus.Applied, begin.Status);
         Assert.NotNull(begin.Permit);
         Assert.Equal(limit, (await context.ConnectorRuns.AsNoTracking().SingleAsync()).RetainedMetadataBytes);
-        var outcome = await store.CompleteConnectorHttpSourceAsync(lease, begin.Permit, new(429, clock.GetUtcNow().AddSeconds(20), false));
-        Assert.Equal(EtlStoreStatus.Applied, outcome.Status);
-        Assert.Equal(EtlConnectorHttpSourceFetchPhase.Waiting, outcome.Fetch!.Phase);
+        if (invalidReceipt)
+        {
+            var receivedAt = begin.Permit.StartedAt.AddSeconds(1);
+            clock.Advance(TimeSpan.FromSeconds(2));
+            var outcome = await store.CompleteConnectorHttpSourceAsync(lease, begin.Permit,
+                new(200, null, true, receivedAt));
+            Assert.Equal(EtlStoreStatus.Applied, outcome.Status);
+            Assert.Equal(EtlConnectorHttpSourceFetchPhase.Failed, outcome.Fetch!.Phase);
+            Assert.Equal(receivedAt, outcome.Fetch.Attempts[0].Outcome!.ResponseReceivedAtUtc);
+        }
+        else
+        {
+            var outcome = await store.CompleteConnectorHttpSourceAsync(lease, begin.Permit,
+                new(429, clock.GetUtcNow().AddSeconds(20), false));
+            Assert.Equal(EtlStoreStatus.Applied, outcome.Status);
+            Assert.Equal(EtlConnectorHttpSourceFetchPhase.Waiting, outcome.Fetch!.Phase);
+        }
         Assert.True((await context.ConnectorRuns.AsNoTracking().SingleAsync()).RetainedMetadataBytes <= limit);
     }
 
@@ -145,6 +160,37 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(0, retained.SourceInputReservedBytes);
         var complete = await store.AdvanceEmptyHttpPageAsync(attached.Lease!);
         Assert.Equal(EtlStoreStatus.Applied, complete.Status);
+    }
+
+    [Fact]
+    public async Task Timely_invalid_200_receipt_survives_late_store_reconciliation_and_journal_round_trip()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.CreateContext();
+        var clock = new MutableTimeProvider();
+        var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock);
+        var defaults = EtlV2TestPipelines.Create();
+        var pipeline = defaults with { Http = defaults.Http with { RequestTimeoutSeconds = 1, DeadlineSeconds = 10, InitialDelaySeconds = 1, MaxDelaySeconds = 5 } };
+        var admission = ConnectorAdmission("source-invalid-receipt", new("tenant", "source-invalid-receipt"), pipeline, ["shard"]);
+        var lease = Assert.Single(await StartHttpRunAsync(store, admission, "worker"));
+        var begin = await store.BeginConnectorHttpSourceAsync(lease, Guid.NewGuid().ToString("N"));
+        Assert.Equal(EtlStoreStatus.Applied, begin.Status);
+        var receivedAt = begin.Permit!.StartedAt.AddMilliseconds(500);
+
+        clock.Advance(TimeSpan.FromSeconds(2));
+        var completed = await store.CompleteConnectorHttpSourceAsync(lease, begin.Permit,
+            new(200, null, true, receivedAt));
+
+        Assert.Equal(EtlStoreStatus.Applied, completed.Status);
+        Assert.Equal(EtlConnectorHttpSourceFetchFailure.InvalidPage, completed.Fetch!.Failure);
+        Assert.Equal(receivedAt, completed.Fetch.Attempts[0].Outcome!.ResponseReceivedAtUtc);
+        Assert.Equal(clock.GetUtcNow(), completed.Fetch.Attempts[0].CompletedAt);
+
+        var replay = await store.BeginConnectorHttpSourceAsync(lease, Guid.NewGuid().ToString("N"));
+        Assert.Equal(EtlStoreStatus.Replay, replay.Status);
+        Assert.Null(replay.Permit);
+        Assert.Equal(receivedAt, replay.Fetch!.Attempts[0].Outcome!.ResponseReceivedAtUtc);
+        EtlHttpSourceFetchTransitions.Validate(replay.Fetch, pipeline.Http);
     }
 
     [Fact]

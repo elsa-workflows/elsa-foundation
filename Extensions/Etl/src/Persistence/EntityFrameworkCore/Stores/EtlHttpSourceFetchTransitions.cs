@@ -123,7 +123,11 @@ internal static class EtlHttpSourceFetchTransitions
         if (now < attempt.StartedAt)
             return new(EtlStoreStatus.Invalid, fetch, null);
 
-        if (outcome.StatusCode is not null && now >= attempt.ExpiresAt)
+        var hasTimelyInvalidReceipt = IsTimelyInvalidReceipt(outcome, attempt, fetch.Deadline, now);
+        if (outcome.ResponseReceivedAtUtc is not null && !hasTimelyInvalidReceipt)
+            return new(EtlStoreStatus.Invalid, fetch, null);
+
+        if (outcome.StatusCode is not null && now >= attempt.ExpiresAt && !hasTimelyInvalidReceipt)
             return new(EtlStoreStatus.Invalid, fetch, null);
 
         // A valid 200 is captured through Capture so its durable receipt is tied to the exact page.
@@ -136,6 +140,11 @@ internal static class EtlHttpSourceFetchTransitions
             Attempts = ReplaceLast(fetch.Attempts, latest with { Outcome = storedOutcome, CompletedAt = now }),
             UpdatedAt = now
         };
+
+        // A known-invalid page with a timely complete-response receipt remains terminal even when
+        // parsing or persistence reconciliation crosses the source deadline.
+        if (outcome.InvalidPage && hasTimelyInvalidReceipt)
+            return new(EtlStoreStatus.Applied, Fail(completed, now, EtlConnectorHttpSourceFetchFailure.InvalidPage), null);
 
         if (now >= fetch.Deadline)
             return new(EtlStoreStatus.Applied, Fail(completed, now, EtlConnectorHttpSourceFetchFailure.DeadlineExceeded), null);
@@ -251,7 +260,10 @@ internal static class EtlHttpSourceFetchTransitions
                 if (!EtlHttpRetryPolicy.IsUtc(item.CompletedAt.Value) || item.CompletedAt.Value < current.StartedAt ||
                     item.Outcome is not null && (!ValidOutcomeArgument(item.Outcome) || item.Outcome.StatusCode is null ||
                                                  item.Outcome.StatusCode == 200 && !item.Outcome.InvalidPage ||
-                                                 item.CompletedAt.Value >= current.ExpiresAt))
+                                                 item.Outcome.ResponseReceivedAtUtc is not null &&
+                                                 !IsTimelyInvalidReceipt(item.Outcome, current, fetch.Deadline, item.CompletedAt.Value) ||
+                                                 item.CompletedAt.Value >= current.ExpiresAt &&
+                                                 !IsTimelyInvalidReceipt(item.Outcome, current, fetch.Deadline, item.CompletedAt.Value)))
                     throw Corrupt();
                 if (fetch.UpdatedAt < item.CompletedAt.Value)
                     throw Corrupt();
@@ -357,7 +369,9 @@ internal static class EtlHttpSourceFetchTransitions
                         break;
                     case EtlConnectorHttpSourceFetchFailure.InvalidPage:
                         if (last.Outcome is not { StatusCode: 200, InvalidPage: true } ||
-                            last.CompletedAt.Value >= fetch.Deadline || fetch.UpdatedAt != last.CompletedAt.Value)
+                            last.CompletedAt.Value >= fetch.Deadline &&
+                            !IsTimelyInvalidReceipt(last.Outcome, attempt, fetch.Deadline, last.CompletedAt.Value) ||
+                            fetch.UpdatedAt != last.CompletedAt.Value)
                             throw Corrupt();
                         break;
                     default:
@@ -442,7 +456,15 @@ internal static class EtlHttpSourceFetchTransitions
         (outcome.StatusCode is null || outcome.StatusCode is >= 100 and <= 599) &&
         (outcome.RetryAfter is null || EtlHttpRetryPolicy.IsUtc(outcome.RetryAfter.Value)) &&
         (outcome.StatusCode is not null || outcome.RetryAfter is null && !outcome.InvalidPage) &&
-        (!outcome.InvalidPage || outcome.StatusCode == 200);
+        (!outcome.InvalidPage || outcome.StatusCode == 200) &&
+        (outcome.ResponseReceivedAtUtc is null ||
+         outcome.StatusCode == 200 && outcome.InvalidPage && EtlHttpRetryPolicy.IsUtc(outcome.ResponseReceivedAtUtc.Value));
+
+    private static bool IsTimelyInvalidReceipt(EtlHttpSourceFetchOutcome outcome, EtlHttpSourceFetchAttempt attempt,
+        DateTimeOffset deadline, DateTimeOffset reconciledAt) =>
+        outcome.StatusCode == 200 && outcome.InvalidPage && outcome.ResponseReceivedAtUtc is { } receivedAt &&
+        EtlHttpRetryPolicy.IsUtc(receivedAt) && receivedAt >= attempt.StartedAt && receivedAt < attempt.ExpiresAt &&
+        receivedAt < deadline && receivedAt <= reconciledAt;
 
     private static bool ValidRequestHash(string? value) => EtlRuntimeRecordCodec.IsSha256(value) &&
         StringComparer.Ordinal.Equals(value, value!.ToLowerInvariant());

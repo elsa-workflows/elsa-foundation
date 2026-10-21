@@ -5,9 +5,10 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
 
 internal sealed partial class EfEtlRuntimeStore
 {
-    // A response adds only a status, outcome flags and UTC instants. Replacing InFlight with
-    // Waiting releases 256 bytes; completing Waiting releases another 256. Each new attempt
-    // purchases its own history bytes before it can authorize a physical GET.
+    // A response adds only a status, outcome flags, Retry-After, reconciliation time and (for an
+    // invalid 200) ResponseReceivedAtUtc. The 512-byte pre-GET reserve covers both UTC instants;
+    // replacing InFlight with Waiting releases 256 bytes, and completing Waiting releases the rest.
+    // Each new attempt purchases its own history bytes before it can authorize a physical GET.
     private static long HttpSourceOutcomeMetadataReserve(EtlConnectorHttpSourceFetch fetch, EtlHttpPolicy policy) => fetch.Phase switch
     {
         EtlConnectorHttpSourceFetchPhase.InFlight => 512,

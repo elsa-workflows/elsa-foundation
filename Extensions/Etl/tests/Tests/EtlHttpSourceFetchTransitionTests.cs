@@ -54,6 +54,63 @@ public sealed class EtlHttpSourceFetchTransitionTests
     }
 
     [Fact]
+    public void Timely_invalid_200_receipt_can_be_reconciled_after_attempt_and_source_deadlines()
+    {
+        var policy = Policy(deadlineSeconds: 10, requestTimeoutSeconds: 10);
+        var (fetch, attempt) = Begin(policy: policy);
+        var receivedAt = Start.AddSeconds(9);
+        var reconciledAt = Start.AddSeconds(11);
+
+        var result = Complete(fetch, attempt, new(200, null, true, receivedAt), reconciledAt, policy);
+
+        Assert.Equal(EtlStoreStatus.Applied, result.Status);
+        Assert.Equal(EtlConnectorHttpSourceFetchPhase.Failed, result.Fetch!.Phase);
+        Assert.Equal(EtlConnectorHttpSourceFetchFailure.InvalidPage, result.Fetch.Failure);
+        Assert.Equal(reconciledAt, result.Fetch.Attempts[0].CompletedAt);
+        Assert.Equal(receivedAt, result.Fetch.Attempts[0].Outcome!.ResponseReceivedAtUtc);
+        EtlHttpSourceFetchTransitions.Validate(result.Fetch, policy);
+    }
+
+    [Theory]
+    [InlineData("future")]
+    [InlineData("before-attempt")]
+    [InlineData("attempt-expiry")]
+    [InlineData("source-deadline")]
+    [InlineData("non-utc")]
+    public void Invalid_200_receipts_outside_the_complete_response_window_are_refused(string kind)
+    {
+        var policy = kind == "source-deadline"
+            ? Policy(deadlineSeconds: 7, requestTimeoutSeconds: 7, maxDelaySeconds: 7)
+            : Policy();
+        var (fetch, attempt) = Begin(policy: policy);
+        var (receivedAt, now) = kind switch
+        {
+            "future" => (Start.AddSeconds(2), Start.AddSeconds(1)),
+            "before-attempt" => (Start.AddTicks(-1), Start.AddSeconds(1)),
+            "attempt-expiry" => (attempt.ExpiresAt, attempt.ExpiresAt.AddSeconds(1)),
+            "source-deadline" => (fetch.Deadline, fetch.Deadline.AddSeconds(1)),
+            "non-utc" => (Start.ToOffset(TimeSpan.FromHours(1)), Start.AddSeconds(1)),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind))
+        };
+
+        var result = Complete(fetch, attempt, new(200, null, true, receivedAt), now, policy);
+
+        Assert.Equal(EtlStoreStatus.Invalid, result.Status);
+        Assert.Same(fetch, result.Fetch);
+    }
+
+    [Fact]
+    public void Legacy_invalid_200_without_receipt_time_still_expires_at_the_attempt_deadline()
+    {
+        var (fetch, attempt) = Begin();
+
+        var result = Complete(fetch, attempt, new(200, null, true), attempt.ExpiresAt, Policy());
+
+        Assert.Equal(EtlStoreStatus.Invalid, result.Status);
+        Assert.Same(fetch, result.Fetch);
+    }
+
+    [Fact]
     public void Replaced_uncertain_attempt_can_capture_after_later_failure_without_rewriting_history()
     {
         var (initial, firstAttempt) = Begin();
