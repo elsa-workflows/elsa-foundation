@@ -152,6 +152,12 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
             table.HasCheckConstraint(
                 "CK_elsa_etl_connector_batches_AcceptanceMetadataBytes",
                 "AcceptanceMetadataBytes >= 0");
+            table.HasCheckConstraint(
+                "CK_elsa_etl_connector_batches_MainEffectKind",
+                "MainEffectKind IS NULL OR MainEffectKind IN (1, 2)");
+            table.HasCheckConstraint(
+                "CK_elsa_etl_connector_batches_ErrorEffectKind",
+                "ErrorEffectKind IS NULL OR ErrorEffectKind IN (1, 2)");
         });
         connectorBatches.HasKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.BatchId });
         connectorBatches.Property(row => row.ScopeKey).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
@@ -162,6 +168,8 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
         connectorBatches.Property(row => row.DescriptorDigest).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
         connectorBatches.Property(row => row.OutputDigest).HasMaxLength(EtlRuntimeEfModule.HashLength);
         connectorBatches.Property(row => row.HttpDeliveryDigest).HasMaxLength(EtlRuntimeEfModule.HashLength);
+        connectorBatches.Property(row => row.MainEffectKind).HasColumnType("INTEGER");
+        connectorBatches.Property(row => row.ErrorEffectKind).HasColumnType("INTEGER");
         connectorBatches.Property(row => row.BatchOrdinal).HasDefaultValue(0L);
         connectorBatches.Property(row => row.AcceptanceMetadataBytes).HasDefaultValue(0L);
         connectorBatches.Property(row => row.MainFilePublished).HasDefaultValue(false);
@@ -171,6 +179,10 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
         connectorBatches.HasIndex(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.StartKey }).IsUnique();
         connectorBatches.HasIndex(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.BatchOrdinal }).IsUnique();
         connectorBatches.HasIndex(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.HttpPageSequence });
+        connectorBatches.HasIndex(row => new
+        {
+            row.ScopeKey, row.RunKey, row.Settled, row.PartitionOrdinal, row.MainEffectKind, row.ErrorEffectKind
+        });
         connectorBatches.HasOne<EtlConnectorPartitionRecord>()
             .WithMany()
             .HasForeignKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal })

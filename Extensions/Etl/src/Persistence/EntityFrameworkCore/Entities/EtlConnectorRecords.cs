@@ -55,6 +55,8 @@ internal sealed class EtlConnectorBatchRecord
     public string? OutputDigest { get; set; }
     public string? HttpDeliveryJson { get; set; }
     public string? HttpDeliveryDigest { get; set; }
+    public int? MainEffectKind { get; set; }
+    public int? ErrorEffectKind { get; set; }
     public long BatchOrdinal { get; set; }
     public long? HttpPageSequence { get; set; }
     public long AcceptanceMetadataBytes { get; set; }

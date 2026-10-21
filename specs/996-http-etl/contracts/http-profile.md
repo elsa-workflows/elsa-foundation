@@ -75,3 +75,19 @@ RunEtl's result boundary remains unchanged. HTTP progress is page/item/exhaustio
 Each request has a finite per-attempt timeout bounded by its retained retry deadline. Timeout/late completion preserves uncertain-effect accounting; physical allowances remain held until the actual attempt unwinds. Revocation/configuration checks happen before each attempt and do not recall already-started I/O.
 
 ETL-owned logs, errors and spans expose stable codes and opaque identity, never raw exceptions, URI, header, body or token. The current connector emits no custom ETL spans; tests assert that absence, and future ETL spans require positive assertions of the same value-free contract. Disable URI-bearing request logging for its client. Recording tests distinguish these surfaces from built-in `System.Net.Http` activities: the latter retain origin/path under default .NET query redaction and are host-controlled. Hosts with sensitive endpoint paths must filter/drop those activities before export and must preserve query redaction; the connector does not claim to sanitize arbitrary host listeners. The workflow `IRuntimeSecretMask` remains the native activity fault boundary, not the background transport mechanism.
+
+
+## Runtime inspection contract
+
+The optional `IEtlConnectorRuntimeInspector` reads retained run state independently of design services and
+workers. `etl-run-connector-partitions` advertises `/etl/runs/{id}/connector-partitions`; existing file-only
+partition views retain their shape. Run detail `formatVersion` distinguishes a v2 admission rejection from
+a file run even when no connector pins were admitted. Inspector absence is explicit, never a fabricated
+empty HTTP progress view. Cursor scope includes endpoint kind, run, tenant/partition and page size.
+
+HTTP progress uses zero-based page/item coordinates and an explicit exhaustion flag. Fetch/delivery summaries
+include phase, attempt count, deadline, next eligible time and last recorded status. No raw URI, credentials,
+continuation, request identity, body, effect identity or binding handle is included. Recorded claim expiry does
+not prove physical execution stopped. Owed HTTP acknowledgements and JSONL publications are distinct from
+accepted progress; accepted effect counts count settled route bodies, not attempts or physical executions.
+See the [inspection checkpoint](../evidence/connector-inspection-checkpoint.md) for provider and validation limits.

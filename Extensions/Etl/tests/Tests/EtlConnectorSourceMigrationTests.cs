@@ -43,13 +43,17 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(fixture.PageJson, retainedPage.PageJson);
         Assert.Equal(1, retainedPage.AcceptedItemCount);
         Assert.Equal(17, retainedPage.ByteLength);
-        var batch = await context.ConnectorBatches.AsNoTracking().SingleAsync();
+        // Inspect only fields available at this historical migration target.
+        var batch = await context.ConnectorBatches.AsNoTracking()
+            .Select(row => new { row.Settled, row.BatchId, row.OutputJson }).SingleAsync();
         Assert.True(batch.Settled);
         Assert.Equal(fixture.BatchId, batch.BatchId);
         Assert.Equal(fixture.OutputJson, batch.OutputJson);
         Assert.Equal(0, (await context.ConnectorRuns.AsNoTracking().SingleAsync()).SourceInputReservedBytes);
         Assert.Equal(0, (await context.ConnectorPartitions.AsNoTracking().SingleAsync()).SourceInputReservedBytes);
 
+        // Current runtime continuation uses the full current schema after verifying the historical step.
+        await migrator.MigrateAsync();
         var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock);
         var lease = Assert.IsType<EtlConnectorPartitionLease>(await store.ClaimConnectorPartitionAsync(
             fixture.Admission.Invocation.Scope, fixture.Admission.Invocation.RunId, "migration-recovery"));

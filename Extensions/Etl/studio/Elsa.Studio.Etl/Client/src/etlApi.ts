@@ -20,6 +20,7 @@ import type {
   EtlPublishDefinitionRequest,
   EtlRunCancellationView,
   EtlRunDetailView,
+  EtlRunConnectorPartitionView,
   EtlRunPageRequest,
   EtlRunPartitionView,
   EtlRunSummaryView,
@@ -250,6 +251,17 @@ export async function listEtlRunPartitions(
 ) {
   const url = await pageUrl(context, "runtime", "etl-run-partitions", request, { id: runId });
   return getJson<EtlPage<EtlRunPartitionView>>(context, url, signal);
+}
+
+/** Connector progress has a separate advertised relation so older runtime hosts keep file-run compatibility. */
+export async function listEtlRunConnectorPartitions(
+  context: StudioEndpointContext,
+  runId: string,
+  request: EtlRunPageRequest = {},
+  signal?: AbortSignal
+) {
+  const url = await pageUrl(context, "runtime", "etl-run-connector-partitions", request, { id: runId });
+  return getJson<EtlPage<EtlRunConnectorPartitionView>>(context, url, signal);
 }
 
 /** Cancellation is intentionally bodyless; the API resolves the trusted persisted invocation itself. */

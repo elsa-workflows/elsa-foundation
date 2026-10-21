@@ -50,6 +50,8 @@ internal static class EtlRuntimeEntityFrameworkCoreRegistration
         // preventing the v1 execution path from being constructed.
         services.AddScoped<IEtlConnectorRuntimeStore>(provider =>
             (provider.GetRequiredService<IEtlRuntimeStore>() as IEtlConnectorRuntimeStore)!);
+        services.AddScoped<IEtlConnectorRuntimeInspector>(provider =>
+            (provider.GetRequiredService<IEtlRuntimeStore>() as IEtlConnectorRuntimeInspector)!);
         return services;
     }
 

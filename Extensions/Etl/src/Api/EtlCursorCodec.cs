@@ -97,7 +97,7 @@ internal sealed class EtlCursorCodec
     private static bool IsValidState([NotNullWhen(true)] EtlCursorState? state) =>
         state is not null &&
         state.Format == FormatVersion &&
-        (state.Kind is "definitions" or "versions" or "bindings" or "connector-definitions" or "connector-versions" or "connector-bindings" or "runs" or "partitions") &&
+        (state.Kind is "definitions" or "versions" or "bindings" or "connector-definitions" or "connector-versions" or "connector-bindings" or "runs" or "partitions" or "connector-partitions") &&
         IsLowercaseSha256(state.ScopeKey) &&
         IsBoundedOptional(state.ResourceId, MaximumDefinitionIdLength) &&
         state.Limit is >= 1 and <= MaximumPageSize &&

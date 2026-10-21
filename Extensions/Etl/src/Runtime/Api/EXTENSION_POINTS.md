@@ -3,7 +3,7 @@
 Owner project: `Elsa.Etl.Runtime.Api`
 Domain: `Elsa.Etl`
 
-`IEtlRuntimeOperations` is the scoped operation seam dispatched by the four NativeEndpoints endpoints. The default
+`IEtlRuntimeOperations` is the scoped operation seam dispatched by the five NativeEndpoints endpoints. The default
 implementation derives scope from a validated normalized principal and the host's ordinary persistence scope. Route
 and query values cannot set tenant or partition authority. The API requires `etl/runs:read` for inspection and
 `etl/runs:cancel` for cancellation; it returns bounded summaries and never exposes host file paths, binding handles,
@@ -20,3 +20,16 @@ Run and partition pages are limited to 1–200 entries and use signed cursors bo
 resource and page size. Configure `CursorSigningKey` consistently across replicas for stable pagination; its
 process-local default deliberately does not promise continuity across restarts. The key is a secret host setting,
 not an authored value or response field.
+
+
+Connector run details also require the optional `IEtlConnectorRuntimeInspector`. Its explicit
+`etl-run-connector-partitions` capability exposes typed file ranges or HTTP page/item/exhaustion metadata,
+retry summaries and owed route receipts. `FormatVersion` remains present even for a terminal rejection before
+connector admission. The legacy file partition endpoint keeps its shape; v2 runs use the connector endpoint.
+A missing inspector returns an unavailable response. A malformed inspector projection returns a fixed
+`etl.provider-invalid` error instead of contradictory progress or arbitrary provider state text.
+
+Accepted-effect totals count settled route bodies. A receiver acknowledgement or JSONL publication can still
+await batch acceptance, and cancelled runs can retain owed effects. Raw URLs, continuation tokens, bodies,
+authentication details and request/effect identities are excluded. See the
+[inspection checkpoint](../../../../../specs/996-http-etl/evidence/connector-inspection-checkpoint.md).

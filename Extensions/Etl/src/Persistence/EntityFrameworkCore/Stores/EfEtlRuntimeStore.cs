@@ -15,7 +15,7 @@ internal sealed partial class EfEtlRuntimeStore(
     EtlRuntimeDbContext db,
     TimeProvider clock,
     EtlRuntimeStoreOptions options,
-    ILogger<EfEtlRuntimeStore>? logger = null) : IEtlRuntimeStore, IEtlConnectorRuntimeStore
+    ILogger<EfEtlRuntimeStore>? logger = null) : IEtlRuntimeStore, IEtlConnectorRuntimeStore, IEtlConnectorRuntimeInspector
 {
     public int MaximumPageSize => options.MaximumPageSize;
 

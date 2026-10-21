@@ -73,7 +73,10 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Single(await context.ConnectorHttpPages.AsNoTracking()
             .Select(row => new { row.RequestHash, row.AcceptedItemCount }).ToListAsync());
 
-        var httpBatch = await context.ConnectorBatches.AsNoTracking().SingleAsync(row => row.BatchId == batchId);
+        var httpBatch = await context.ConnectorBatches.AsNoTracking().Where(row => row.BatchId == batchId)
+            .Select(row => new { row.BatchOrdinal, row.HttpPageSequence, row.OutputJson, row.HttpDeliveryJson,
+                row.HttpDeliveryDigest, row.MainFilePublished, row.ErrorFilePublished, row.AcceptanceMetadataBytes })
+            .SingleAsync();
         Assert.Equal(0L, httpBatch.BatchOrdinal);
         Assert.Equal((long?)0, httpBatch.HttpPageSequence);
         Assert.Equal(outputJson, httpBatch.OutputJson);
@@ -83,7 +86,9 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.False(httpBatch.ErrorFilePublished);
         Assert.Equal(0L, httpBatch.AcceptanceMetadataBytes);
 
-        var fileBatch = await context.ConnectorBatches.AsNoTracking().SingleAsync(row => row.BatchId == fileBatchId);
+        var fileBatch = await context.ConnectorBatches.AsNoTracking().Where(row => row.BatchId == fileBatchId)
+            .Select(row => new { row.BatchOrdinal, row.HttpPageSequence, row.MainFilePublished,
+                row.ErrorFilePublished, row.AcceptanceMetadataBytes }).SingleAsync();
         Assert.Equal(0L, fileBatch.BatchOrdinal);
         Assert.Null(fileBatch.HttpPageSequence);
         Assert.False(fileBatch.MainFilePublished);

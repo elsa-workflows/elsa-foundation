@@ -34,6 +34,7 @@ public class EtlRuntimeApiFeature : IWebShellFeature
             new("etl-runs", "etl/runs"),
             new("etl-run", "etl/runs/{id}", true),
             new("etl-run-partitions", "etl/runs/{id}/partitions", true),
+            new("etl-run-connector-partitions", "etl/runs/{id}/connector-partitions", true),
             new("etl-run-cancel", "etl/runs/{id}/cancel", true)
         ], "EtlRuntimeApi"));
     }

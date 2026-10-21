@@ -89,6 +89,8 @@ internal sealed partial class EfEtlRuntimeStore
         batch.OutputJson = json;
         batch.OutputDigest = MetadataDigest(json);
         batch.OutputBytes = bytes;
+        batch.MainEffectKind = output.Main is { } main ? (int)main.Kind : null;
+        batch.ErrorEffectKind = output.Errors is { } errors ? (int)errors.Kind : null;
         batch.MetadataBytes = checked(batch.MetadataBytes + metadata);
         partition.BatchMetadataBytes = checked(partition.BatchMetadataBytes + metadata);
         partition.MetadataBytes = checked(partition.MetadataBytes + metadata);
@@ -109,7 +111,7 @@ internal sealed partial class EfEtlRuntimeStore
     {
         if (batch.OutputJson is null)
         {
-            if (batch.OutputDigest is not null || batch.OutputBytes != 0)
+            if (batch.OutputDigest is not null || batch.OutputBytes != 0 || batch.MainEffectKind is not null || batch.ErrorEffectKind is not null)
                 throw new InvalidDataException("The connector batch has output accounting without a plan.");
             return null;
         }
@@ -117,7 +119,9 @@ internal sealed partial class EfEtlRuntimeStore
         {
             var output = EtlConnectorRecordCodec.Read<EtlConnectorBatchOutput>(batch.OutputJson);
             if (batch.OutputDigest != MetadataDigest(batch.OutputJson) ||
-                batch.OutputBytes != ValidateConnectorOutputShape(output, batch.RecordCount))
+                batch.OutputBytes != ValidateConnectorOutputShape(output, batch.RecordCount) ||
+                batch.MainEffectKind != (output.Main is { } main ? (int)main.Kind : null) ||
+                batch.ErrorEffectKind != (output.Errors is { } errors ? (int)errors.Kind : null))
                 throw new InvalidDataException("The retained connector output is inconsistent.");
             return output;
         }

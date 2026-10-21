@@ -159,6 +159,12 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("MainEffectKind")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("ErrorEffectKind")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("BatchOrdinal")
                         .HasDefaultValue(0L)
                         .HasColumnType("INTEGER");
@@ -226,6 +232,8 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
 
                     b.HasIndex("ScopeKey", "RunKey", "PartitionOrdinal", "HttpPageSequence");
 
+                    b.HasIndex("ScopeKey", "RunKey", "Settled", "PartitionOrdinal", "MainEffectKind", "ErrorEffectKind");
+
                     b.ToTable("elsa_etl_connector_batches", t =>
                         {
                             t.HasCheckConstraint("CK_elsa_etl_connector_batches_OutputBytes", "OutputBytes >= 0 AND (OutputJson IS NOT NULL OR OutputBytes = 0)");
@@ -236,6 +244,8 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                             t.HasCheckConstraint("CK_elsa_etl_connector_batches_AcceptanceMetadataBytes", "AcceptanceMetadataBytes >= 0");
                             t.HasCheckConstraint("CK_elsa_etl_connector_batches_MainFilePublishedRequiresOutput", "MainFilePublished = 0 OR OutputJson IS NOT NULL");
                             t.HasCheckConstraint("CK_elsa_etl_connector_batches_ErrorFilePublishedRequiresOutput", "ErrorFilePublished = 0 OR OutputJson IS NOT NULL");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_batches_MainEffectKind", "MainEffectKind IS NULL OR MainEffectKind IN (1, 2)");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_batches_ErrorEffectKind", "ErrorEffectKind IS NULL OR ErrorEffectKind IN (1, 2)");
                         });
                 });
 

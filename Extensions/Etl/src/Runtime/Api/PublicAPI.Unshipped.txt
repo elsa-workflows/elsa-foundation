@@ -17,12 +17,9 @@ virtual Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature.MapEndpoints(Microsoft.AspNetC
 Elsa.Etl.Runtime.Api.EtlRuntimePermissions
 Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView
 Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView!
-Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Deconstruct(out string! Source, out string! Lookup, out string! Output, out string! Errors) -> void
 Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView? other) -> bool
 Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Errors.get -> string!
 Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Errors.init -> void
-Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.EtlRunBindingAliasesView(string! Source, string! Lookup, string! Output, string! Errors) -> void
-Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Lookup.get -> string!
 Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Lookup.init -> void
 Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Output.get -> string!
 Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Output.init -> void
@@ -287,3 +284,159 @@ static Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.operator ==(Elsa.Etl.Runtim
 static Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView? left, Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView? right) -> bool
 static Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView? left, Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView? right) -> bool
 static NativeEndpoints.Generated.ElsaEtlRuntimeApiEndpoints.Map(this NativeEndpoints.EndpointGroup! group, string? routePrefix = null) -> NativeEndpoints.EndpointGroup!
+Elsa.Etl.Runtime.Api.Endpoints.ListConnectorPartitions.Endpoint
+Elsa.Etl.Runtime.Api.Endpoints.ListConnectorPartitions.Endpoint.Endpoint(Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations! operations) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Deconstruct(out string! Source, out string? Lookup, out string! Output, out string! Errors) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.EtlRunBindingAliasesView(string! Source, string? Lookup, string! Output, string! Errors) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Lookup.get -> string?
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView!
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.Deconstruct(out long RecordCount, out long InputBytes, out bool OutputRetained, out Elsa.Etl.Runtime.Api.Models.EtlRunEffectView? Main, out Elsa.Etl.Runtime.Api.Models.EtlRunEffectView? Errors) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView? other) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.Errors.get -> Elsa.Etl.Runtime.Api.Models.EtlRunEffectView?
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.Errors.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.EtlRunConnectorOwedView(long RecordCount, long InputBytes, bool OutputRetained, Elsa.Etl.Runtime.Api.Models.EtlRunEffectView? Main, Elsa.Etl.Runtime.Api.Models.EtlRunEffectView? Errors) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.InputBytes.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.InputBytes.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.Main.get -> Elsa.Etl.Runtime.Api.Models.EtlRunEffectView?
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.Main.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.OutputRetained.get -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.OutputRetained.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.RecordCount.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.RecordCount.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView!
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.AcceptedErrorEffects.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.AcceptedErrorEffects.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.AcceptedMainEffects.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.AcceptedMainEffects.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.ClaimExpiresAt.get -> System.DateTimeOffset?
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.ClaimExpiresAt.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.ClaimFence.get -> long?
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.ClaimFence.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.Deconstruct(out int PartitionOrdinal, out Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView? File, out Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView? Http, out bool IsClaimed, out long? ClaimFence, out System.DateTimeOffset? ClaimExpiresAt, out System.DateTimeOffset? NotBefore, out Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView? OwedBatch, out long AcceptedMainEffects, out long AcceptedErrorEffects) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView? other) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.EtlRunConnectorPartitionView(int PartitionOrdinal, Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView? File, Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView? Http, bool IsClaimed, long? ClaimFence, System.DateTimeOffset? ClaimExpiresAt, System.DateTimeOffset? NotBefore, Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView? OwedBatch, long AcceptedMainEffects, long AcceptedErrorEffects) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.File.get -> Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView?
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.File.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.Http.get -> Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView?
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.Http.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.IsClaimed.get -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.IsClaimed.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.NotBefore.get -> System.DateTimeOffset?
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.NotBefore.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.OwedBatch.get -> Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView?
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.OwedBatch.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.PartitionOrdinal.get -> int
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.PartitionOrdinal.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView!
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.AcceptedErrorEffects.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.AcceptedErrorEffects.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.AcceptedMainEffects.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.AcceptedMainEffects.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.Deconstruct(out string! SourceKind, out string! MainKind, out string! ErrorKind, out long AcceptedMainEffects, out long AcceptedErrorEffects) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView? other) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.ErrorKind.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.ErrorKind.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.EtlRunConnectorView(string! SourceKind, string! MainKind, string! ErrorKind, long AcceptedMainEffects, long AcceptedErrorEffects) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.MainKind.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.MainKind.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.SourceKind.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.SourceKind.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.Connector.get -> Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView?
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.Connector.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunEffectView
+Elsa.Etl.Runtime.Api.Models.EtlRunEffectView.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunEffectView!
+Elsa.Etl.Runtime.Api.Models.EtlRunEffectView.Deconstruct(out string! Kind, out long RecordCount, out string! State, out Elsa.Etl.Runtime.Api.Models.EtlRunRetryView? Retry) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunEffectView.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunEffectView? other) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunEffectView.EtlRunEffectView(string! Kind, long RecordCount, string! State, Elsa.Etl.Runtime.Api.Models.EtlRunRetryView? Retry) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunEffectView.Kind.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunEffectView.Kind.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunEffectView.RecordCount.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunEffectView.RecordCount.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunEffectView.Retry.get -> Elsa.Etl.Runtime.Api.Models.EtlRunRetryView?
+Elsa.Etl.Runtime.Api.Models.EtlRunEffectView.Retry.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunEffectView.State.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunEffectView.State.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView
+Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView!
+Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView.Deconstruct(out long StartOrdinal, out long EndOrdinalExclusive, out long NextOrdinal) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView.EndOrdinalExclusive.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView.EndOrdinalExclusive.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView? other) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView.EtlRunFileProgressView(long StartOrdinal, long EndOrdinalExclusive, long NextOrdinal) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView.NextOrdinal.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView.NextOrdinal.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView.StartOrdinal.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView.StartOrdinal.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView
+Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView!
+Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView.Deconstruct(out long PageSequence, out int NextItem, out int? PageRecordCount, out bool Exhausted, out Elsa.Etl.Runtime.Api.Models.EtlRunRetryView? Fetch) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView? other) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView.EtlRunHttpProgressView(long PageSequence, int NextItem, int? PageRecordCount, bool Exhausted, Elsa.Etl.Runtime.Api.Models.EtlRunRetryView? Fetch) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView.Exhausted.get -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView.Exhausted.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView.Fetch.get -> Elsa.Etl.Runtime.Api.Models.EtlRunRetryView?
+Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView.Fetch.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView.NextItem.get -> int
+Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView.NextItem.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView.PageRecordCount.get -> int?
+Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView.PageRecordCount.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView.PageSequence.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView.PageSequence.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunRetryView
+Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunRetryView!
+Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.AttemptCount.get -> int
+Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.AttemptCount.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.Deadline.get -> System.DateTimeOffset
+Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.Deadline.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.Deconstruct(out string! Phase, out int AttemptCount, out System.DateTimeOffset Deadline, out System.DateTimeOffset? NotBefore, out int? LastStatusCode) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunRetryView? other) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.EtlRunRetryView(string! Phase, int AttemptCount, System.DateTimeOffset Deadline, System.DateTimeOffset? NotBefore, int? LastStatusCode) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.LastStatusCode.get -> int?
+Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.LastStatusCode.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.NotBefore.get -> System.DateTimeOffset?
+Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.NotBefore.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.Phase.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.Phase.init -> void
+Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations.ListConnectorPartitionsAsync(Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunPage<Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView!>!>!
+override Elsa.Etl.Runtime.Api.Endpoints.ListConnectorPartitions.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Runtime.Api.Endpoints.ListConnectorPartitions.Endpoint.HandleAsync(Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunPage<Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView!>!>!
+override Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.GetHashCode() -> int
+override Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.ToString() -> string!
+override Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.GetHashCode() -> int
+override Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.ToString() -> string!
+override Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.GetHashCode() -> int
+override Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.ToString() -> string!
+override Elsa.Etl.Runtime.Api.Models.EtlRunEffectView.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.Api.Models.EtlRunEffectView.GetHashCode() -> int
+override Elsa.Etl.Runtime.Api.Models.EtlRunEffectView.ToString() -> string!
+override Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView.GetHashCode() -> int
+override Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView.ToString() -> string!
+override Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView.GetHashCode() -> int
+override Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView.ToString() -> string!
+override Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.GetHashCode() -> int
+override Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.ToString() -> string!
+static Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView? left, Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView? left, Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView? left, Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView? left, Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView? left, Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView? left, Elsa.Etl.Runtime.Api.Models.EtlRunConnectorView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunEffectView.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunEffectView? left, Elsa.Etl.Runtime.Api.Models.EtlRunEffectView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunEffectView.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunEffectView? left, Elsa.Etl.Runtime.Api.Models.EtlRunEffectView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView? left, Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView? left, Elsa.Etl.Runtime.Api.Models.EtlRunFileProgressView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView? left, Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView? left, Elsa.Etl.Runtime.Api.Models.EtlRunHttpProgressView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunRetryView? left, Elsa.Etl.Runtime.Api.Models.EtlRunRetryView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunRetryView? left, Elsa.Etl.Runtime.Api.Models.EtlRunRetryView? right) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.FormatVersion.get -> int
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.FormatVersion.init -> void

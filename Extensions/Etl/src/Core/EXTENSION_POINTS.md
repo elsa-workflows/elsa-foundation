@@ -43,6 +43,14 @@ increase the provider's cap or interpret an expired claim as worker termination.
 capability for at most 201 retained rows including lookahead. Manifest materialization streams pages under the
 same limit. See the [finite ETL contract](../../../../specs/255-finite-file-etl/contracts/journey.md).
 
+`IEtlConnectorRuntimeInspector` is a separate optional read-only capability for consistent retained connector
+snapshots and bounded partition pages. It has the same positive cap and short-page/exhaustion contract.
+Run snapshots contain internal invocation data; public consumers must project approved fields. Partition
+projections carry typed source progress and safe receipt/retry metadata. Counts represent settled route
+bodies, and neither expiry nor acknowledgement proves physical termination or accepted progress. The SQLite
+provider reads a consistent transaction and aggregates indexed scalar route kinds without materializing the
+historical output documents. See the [inspection checkpoint](../../../../specs/996-http-etl/evidence/connector-inspection-checkpoint.md).
+
 ## Connector artifact format
 
 `EtlPipelineV2` is a versioned data contract, not a connector-provider registration surface. The supported

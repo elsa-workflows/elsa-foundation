@@ -67,7 +67,7 @@ Use a trusted clock and deterministic capped backoff; persist attempt allocation
 
 ### Native/API/Studio
 
-Reuse RunEtl's existing bookmark/admission/terminal boundary. Extend immutable pin validation for v2; no generic edges/joins enter native composites. Safe API views distinguish file ordinals from HTTP page/item progress and show retry time/attempt and accepted remote effect count. Do not expose raw cursor, endpoint, request/response body, auth configuration or credential. Studio edits connector-specific forms, not serialized internals; existing file forms and run inspection remain available.
+Reuse RunEtl's existing bookmark/admission/terminal boundary. Extend immutable pin validation for v2; no generic edges/joins enter native composites. Safe API views distinguish file ordinals from HTTP page/item progress and show retry time/attempt and accepted route-body counts. The optional read-only inspector supplies consistent snapshots; the SQLite provider aggregates indexed settled route-kind metadata, backfilled additively without rewriting retained JSON. An acknowledgement/publication remains owed until batch acceptance. Do not expose raw cursor, endpoint, request/response body, auth configuration or credential. Studio edits connector-specific forms, not serialized internals; existing file forms and run inspection remain available.
 
 ## Project structure
 

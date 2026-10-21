@@ -17,6 +17,7 @@ import {
   listEtlBindings,
   listEtlDefinitions,
   listEtlRuns,
+  listEtlRunConnectorPartitions,
   publishEtlConnectorDefinition,
   updateEtlConnectorDraft,
   validateEtlConnectorDraft,
@@ -41,6 +42,8 @@ const runtimeRelations = [
   ["etl-run-partitions", "etl/runs/{id}/partitions"],
   ["etl-run-cancel", "etl/runs/{id}/cancel"]
 ] as const;
+
+const runtimeConnectorPartitionRelation = ["etl-run-connector-partitions", "etl/runs/{id}/connector-partitions"] as const;
 
 const connectorDesignRelations = [
   ["etl-v2-bindings", "etl/v2/bindings"],
@@ -115,6 +118,33 @@ describe("ETL Studio API client", () => {
       status: 400,
       code: "etl.page-limit-invalid"
     });
+  });
+
+  it("pages connector partitions through the separately advertised relation", async () => {
+    const context = endpointContext({
+      getJson: async (url: string) => url.endsWith("/capabilities") ? capabilities() : { items: [], nextCursor: null }
+    });
+    const cursor = "opaque+/connector-partitions==";
+    const controller = new AbortController();
+
+    await listEtlRunConnectorPartitions(context, "run/a ?b", { limit: 17, cursor }, controller.signal);
+    expect(context.getJsonSpy).toHaveBeenLastCalledWith(
+      `/studio/v2/etl/runs/run%2Fa%20%3Fb/connector-partitions?limit=17&cursor=${encodeURIComponent(cursor)}`,
+      { signal: controller.signal }
+    );
+  });
+
+  it("reports unsupported connector partition progress instead of falling back to file partitions", async () => {
+    const context = endpointContext({
+      getJson: async (url: string) => url.endsWith("/capabilities")
+        ? capabilities({ connectorPartitions: false })
+        : { items: [], nextCursor: null }
+    });
+
+    await expect(listEtlRunConnectorPartitions(context, "connector-run")).rejects.toMatchObject({
+      code: "etl.capability-unavailable"
+    });
+    expect(context.getJsonSpy).toHaveBeenCalledTimes(1);
   });
 
   it("uses the advertised v2 capability and pages safe connector bindings and definitions", async () => {
@@ -372,7 +402,11 @@ function endpointContext(overrides: HttpOverrides = {}) {
   }, { getJsonSpy, requestJsonSpy });
 }
 
-function capabilities(options: { designVersion?: string; connectorDesignVersion?: string } = {}): EtlApiCapabilityDocument {
+function capabilities(options: {
+  designVersion?: string;
+  connectorDesignVersion?: string;
+  connectorPartitions?: boolean;
+} = {}): EtlApiCapabilityDocument {
   return {
     capabilities: [
       {
@@ -388,7 +422,10 @@ function capabilities(options: { designVersion?: string; connectorDesignVersion?
       {
         id: "elsa.api.etl-runtime",
         contractVersion: "1",
-        links: runtimeRelations.map(([rel, href]) => ({ rel, href }))
+        links: [
+          ...runtimeRelations,
+          ...(options.connectorPartitions === false ? [] : [runtimeConnectorPartitionRelation])
+        ].map(([rel, href]) => ({ rel, href }))
       }
     ]
   };

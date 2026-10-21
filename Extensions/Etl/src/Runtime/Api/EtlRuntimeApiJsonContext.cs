@@ -11,6 +11,7 @@ namespace Elsa.Etl.Runtime.Api;
 [JsonSerializable(typeof(EtlRunRequest))]
 [JsonSerializable(typeof(EtlRunPage<EtlRunSummaryView>))]
 [JsonSerializable(typeof(EtlRunPage<EtlRunPartitionView>))]
+[JsonSerializable(typeof(EtlRunPage<EtlRunConnectorPartitionView>))]
 [JsonSerializable(typeof(EtlRunSummaryView))]
 [JsonSerializable(typeof(EtlRunDetailView))]
 [JsonSerializable(typeof(EtlRunCancellationView))]

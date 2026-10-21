@@ -327,9 +327,17 @@ export interface EtlRunInputIdentityView {
 
 export interface EtlRunBindingAliasesView {
   source: string;
-  lookup: string;
+  lookup: string | null;
   output: string;
   errors: string;
+}
+
+export interface EtlRunConnectorView {
+  sourceKind: string;
+  mainKind: string;
+  errorKind: string;
+  acceptedMainEffects: number;
+  acceptedErrorEffects: number;
 }
 
 export interface EtlRunDetailView extends EtlRunSummaryView {
@@ -337,6 +345,8 @@ export interface EtlRunDetailView extends EtlRunSummaryView {
   terminalResult: EtlRunTerminalResultView | null;
   sourceInput?: EtlRunInputIdentityView | null;
   lookupInput?: EtlRunInputIdentityView | null;
+  connector?: EtlRunConnectorView | null;
+  formatVersion?: number;
 }
 
 export interface EtlRunOwedBatchView {
@@ -354,6 +364,56 @@ export interface EtlRunPartitionView {
   claimFence: number | null;
   claimExpiresAt: string | null;
   owedBatch: EtlRunOwedBatchView | null;
+}
+
+export interface EtlRunConnectorPartitionView {
+  partitionOrdinal: number;
+  file: EtlRunFileProgressView | null;
+  http: EtlRunHttpProgressView | null;
+  isClaimed: boolean;
+  claimFence: number | null;
+  claimExpiresAt: string | null;
+  notBefore: string | null;
+  owedBatch: EtlRunConnectorOwedView | null;
+  acceptedMainEffects: number;
+  acceptedErrorEffects: number;
+}
+
+export interface EtlRunFileProgressView {
+  startOrdinal: number;
+  endOrdinalExclusive: number;
+  nextOrdinal: number;
+}
+
+export interface EtlRunHttpProgressView {
+  pageSequence: number;
+  nextItem: number;
+  pageRecordCount: number | null;
+  exhausted: boolean;
+  fetch: EtlRunRetryView | null;
+}
+
+export interface EtlRunRetryView {
+  phase: string;
+  attemptCount: number;
+  deadline: string;
+  notBefore: string | null;
+  lastStatusCode: number | null;
+}
+
+export interface EtlRunConnectorOwedView {
+  recordCount: number;
+  inputBytes: number;
+  outputRetained: boolean;
+  main: EtlRunEffectView | null;
+  errors: EtlRunEffectView | null;
+}
+
+export interface EtlRunEffectView {
+  kind: string;
+  recordCount: number;
+  state: string;
+  retry: EtlRunRetryView | null;
 }
 
 export interface EtlRunCancellationView {
