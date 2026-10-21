@@ -1,6 +1,6 @@
-import { useId, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject } from "react";
+import { useId, useRef, type KeyboardEvent, type MouseEvent, type ReactNode, type RefObject } from "react";
 import type { Node } from "@xyflow/react";
-import { AlertTriangle, ArrowDown, ArrowUp, BadgeCheck, Ban, Check, ChevronRight, CircleDashed, CircleDot, CornerUpLeft, Hand, Hourglass, Minus, Plus, Trash2, Undo2, X } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, BadgeCheck, Ban, Check, ChevronRight, CircleDashed, CircleDot, CircleSlash, CornerUpLeft, Hand, Hourglass, Loader, Minus, OctagonX, Plus, RotateCw, Trash2, Undo2, UserCheck, X } from "lucide-react";
 import { renderActivityIcon } from "../activityIconView";
 import {
   compensationStepProblems,
@@ -11,17 +11,29 @@ import {
   type CompensationStep
 } from "../compensationScope";
 import {
+  compensationDecisions,
   forwardStateLabel,
+  operatorHistoryLabel,
   ordinalLabel,
   recoveryLabel,
   scopePhaseLabel,
   type CompensationForwardState,
+  type CompensationOperatorHistoryEntry,
   type CompensationRecoveryState,
   type CompensationRowRuntime,
   type CompensationScopeReference,
   type CompensationScopeRuntime
 } from "../compensationRuntime";
 import { resolveNodeActivityVisual } from "../workflow-editor/workflowNodeVisual";
+import {
+  abandonActionModel,
+  abandonableRow,
+  resolveActionModel,
+  retryActionModel,
+  type OperatorActionModel,
+  type OperatorActionScopeContext
+} from "../operatorActions";
+import { formatDate } from "../workflowFormatting";
 import type { ChildSlot, WorkflowNodeData } from "../workflowAdapter";
 import type { ActivityNode } from "../workflowTypes";
 import "./compensationScopeDesigner.css";
@@ -31,6 +43,20 @@ export type CompensationActivityTarget =
   | { kind: "new-step"; index: number }
   | { kind: "step-activity"; index: number }
   | { kind: "compensation"; index: number };
+
+/** Run inspection only (spec 260): what the run view lets an operator do about a waiting recovery. */
+export interface CompensationOperatorControls {
+  /** The run says the caller may manage it, and the host advertises the alteration routes. */
+  canAct: boolean;
+  workflowExecutionId: string;
+  /** A submitted action Studio is still following, shown on the row it is about ("Retry submitted", "Applying…"). */
+  pending?: { incidentId: string; label: string } | null;
+  /**
+   * Opens the confirmation dialog. `focusFallback` moves focus to the row's state chip when the button that opened the
+   * dialog is gone after the action.
+   */
+  onAction(model: OperatorActionModel, focusFallback: () => void): void;
+}
 
 export interface CompensationScopeDesignerProps {
   owner: ActivityNode;
@@ -53,6 +79,8 @@ export interface CompensationScopeDesignerProps {
   onSelectExecution?(activityExecutionId: string): void;
   /** Run inspection only: opens the blocking incident a row waits on (spec 251 FR-217). */
   onOpenIncident?(incidentId: string): void;
+  /** Run inspection only: retry, resolve and abandon (spec 260). Without it the view offers no action. */
+  operator?: CompensationOperatorControls;
   children?: ReactNode;
 }
 
@@ -73,12 +101,69 @@ export function CompensationScopeDesigner({
   runtime,
   onSelectExecution,
   onOpenIncident,
+  operator,
   children
 }: CompensationScopeDesignerProps) {
   const steps = readCompensationSteps(owner);
   const problems = readOnly ? new Map<number, string>() : compensationStepProblems(steps);
   const nodesById = new Map(nodes.map(node => [node.id, node]));
   const headingId = useId();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const setRoot = (element: HTMLDivElement | null) => {
+    rootRef.current = element;
+    if (canvasRef) (canvasRef as { current: HTMLDivElement | null }).current = element;
+  };
+
+  // Spec 260: actions show only when the caller may manage the run, the routes exist, the scope is not cancelled and no
+  // other action on this run is still being followed.
+  const canAct = !!runtime && !!operator?.canAct && runtime.phase !== "Cancelled" && !operator.pending;
+  const actionContext: OperatorActionScopeContext | undefined = runtime && operator ? {
+    workflowExecutionId: operator.workflowExecutionId,
+    runtime,
+    labelOf: nodeId => (nodeId ? nodesById.get(nodeId)?.data.label : undefined)
+  } : undefined;
+  const focusChip = (selector: string) => () => rootRef.current?.querySelector<HTMLElement>(selector)?.focus();
+  const rowActions = (row: CompensationRowRuntime, name: string, chipSelector: string): ReactNode => {
+    const actions = row.actions;
+    if (!canAct || !actions || !actionContext) return null;
+    const fallback = focusChip(chipSelector);
+    const canResolve = actions.decisions.includes(compensationDecisions.resolveEffectAbsent) || actions.decisions.includes(compensationDecisions.resolveEffectAccepted);
+    return (
+      <span className="wf-compensation-operator-actions">
+        {actions.sourceActivityExecutionId ? (
+          <button
+            type="button"
+            className="wf-compensation-operator-action"
+            aria-label={actions.target === "handler" ? `Retry the compensation of ${name}` : `Retry ${name}`}
+            onClick={() => operator!.onAction(retryActionModel(row, actionContext), fallback)}
+          >
+            <RotateCw size={12} aria-hidden="true" /> Retry
+          </button>
+        ) : null}
+        {canResolve ? (
+          <button
+            type="button"
+            className="wf-compensation-operator-action"
+            aria-label={`Resolve ${name}`}
+            onClick={() => operator!.onAction(resolveActionModel(row, actionContext), fallback)}
+          >
+            <UserCheck size={12} aria-hidden="true" /> Resolve…
+          </button>
+        ) : null}
+      </span>
+    );
+  };
+  const pendingChip = (row: CompensationRowRuntime) => {
+    const pending = operator?.pending;
+    if (!pending || !row.actions || row.actions.incidentId !== pending.incidentId) return null;
+    return (
+      <span className="wf-compensation-state" data-kind="recovery" data-state="Submitted" aria-label={`Recovery: ${pending.label}`} tabIndex={-1}>
+        <Loader size={12} aria-hidden="true" /> <span>{pending.label}</span>
+      </span>
+    );
+  };
+  const abandonRow = runtime ? abandonableRow(runtime) : undefined;
+  const scopeName = runtime?.scopeLabel || "this scope";
 
   const change = (edit: (current: CompensationStep[]) => CompensationStep[], status: string) => onChangeSteps?.(edit, status);
   const request = (target: CompensationActivityTarget, event: MouseEvent<HTMLButtonElement>) => {
@@ -90,14 +175,25 @@ export function CompensationScopeDesigner({
   };
 
   return (
-    <div ref={canvasRef} className="wf-compensation-designer" tabIndex={-1} aria-labelledby={headingId}>
+    <div ref={setRoot} className="wf-compensation-designer" tabIndex={-1} aria-labelledby={headingId}>
       <header className="wf-compensation-heading">
         <h3 id={headingId}>Compensation scope</h3>
         <p>Steps run top to bottom. If a step fails, the steps that completed are undone bottom to top.</p>
         {runtime ? (
-          <span className="wf-compensation-phase" data-phase={runtime.phase}>
+          <span className="wf-compensation-phase" data-phase={runtime.phase} tabIndex={-1}>
             <PhaseIcon phase={runtime.phase} /> {phaseLabel(runtime)}
           </span>
+        ) : null}
+        {runtime && canAct && abandonRow && actionContext ? (
+          <button
+            type="button"
+            className="wf-compensation-operator-action"
+            data-tone="danger"
+            aria-label={`Abandon recovery of ${scopeName}`}
+            onClick={() => operator!.onAction(abandonActionModel(actionContext), focusChip(".wf-compensation-phase"))}
+          >
+            <OctagonX size={12} aria-hidden="true" /> Abandon recovery…
+          </button>
         ) : null}
         {runtime?.occurrences && onSelectExecution ? (
           <div className="wf-compensation-occurrence">
@@ -121,6 +217,8 @@ export function CompensationScopeDesigner({
         ) : null}
       </header>
 
+      {runtime ? <SourceNote runtime={runtime} /> : null}
+
       {runtime?.incomplete ? (
         <p className="wf-instance-note" role="note">
           This run has more activity data than Studio loaded. A state shown as Not loaded may be on a later page.
@@ -139,7 +237,7 @@ export function CompensationScopeDesigner({
             <span>
               Recovery started because <strong>{runtime.cause.step}</strong> {runtime.cause.kind === "uncertain" ? "could not confirm its outcome" : "failed"}
               {runtime.cause.failureType ? <>: <code>{runtime.cause.failureType}</code></> : null}
-              {runtime.cause.message ? <> — {runtime.cause.message.replace(/[.\s]+$/, "")}</> : null}.
+              {runtime.cause.message ? <> — {runtime.cause.message.replace(/[.\s]+$/, "")}</> : runtime.cause.messageWithheld ? <> (message withheld)</> : null}.
             </span>
           )}
           {onSelectExecution ? (
@@ -147,6 +245,18 @@ export function CompensationScopeDesigner({
               {runtime.cause.kind === "explicit" ? "Show request" : "Show failed step"}
             </button>
           ) : null}
+          {runtime.cause.incidentId && onOpenIncident && runtime.cause.kind !== "explicit" ? (
+            <button type="button" className="wf-compensation-link" aria-label="Show the incident that started recovery" onClick={() => onOpenIncident(runtime.cause!.incidentId!)}>
+              Show incident
+            </button>
+          ) : null}
+        </p>
+      ) : null}
+
+      {runtime?.remaining?.length && (runtime.phase === "Compensating" || runtime.phase === "AwaitingIntervention") ? (
+        <p className="wf-compensation-remaining" role="note">
+          <Hourglass size={14} aria-hidden="true" />
+          <span>Still to undo, in this order: {runtime.remaining.map(item => item.step).join(", ")}.</span>
         </p>
       ) : null}
 
@@ -219,6 +329,9 @@ export function CompensationScopeDesigner({
                       onSelect={row.forward.activityExecutionId && onSelectExecution ? () => onSelectExecution(row.forward.activityExecutionId!) : undefined}
                     />
                   ) : null}
+                  {row?.actions?.target === "step"
+                    ? rowActions(row, name, `[data-step-index="${index}"] .wf-compensation-state[data-kind="recovery"]`)
+                    : null}
                 </div>
 
                 <div className="wf-compensation-handler">
@@ -255,6 +368,10 @@ export function CompensationScopeDesigner({
                     </button>
                   )}
                   {row ? <RecoveryState row={row} name={name} onSelectExecution={onSelectExecution} onOpenIncident={onOpenIncident} /> : null}
+                  {row ? pendingChip(row) : null}
+                  {row?.actions?.target === "handler"
+                    ? rowActions(row, name, `[data-step-index="${index}"] .wf-compensation-state[data-kind="recovery"]`)
+                    : null}
                 </div>
 
                 {!readOnly ? (
@@ -290,6 +407,7 @@ export function CompensationScopeDesigner({
                     className="wf-compensation-row wf-compensation-received-row"
                     role="listitem"
                     aria-label={`${row.step}, from ${originLabel(row.origin)}`}
+                    data-received-index={index}
                   >
                     <span className="wf-compensation-ordinal" aria-hidden="true"><CornerUpLeft size={12} /></span>
                     <div className="wf-compensation-step">
@@ -315,11 +433,16 @@ export function CompensationScopeDesigner({
                     </div>
                     <div className="wf-compensation-handler">
                       <RecoveryState row={row} name={row.step} onSelectExecution={onSelectExecution} onOpenIncident={onOpenIncident} />
+                      {pendingChip(row)}
+                      {rowActions(row, row.step, `[data-received-index="${index}"] .wf-compensation-state[data-kind="recovery"]`)}
                     </div>
                   </article>
                 ))}
               </div>
             </section>
+          ) : null}
+          {runtime?.history?.length ? (
+            <OperatorHistory headingId={`${headingId}-history`} history={runtime.history} onOpenIncident={onOpenIncident} />
           ) : null}
           {!readOnly ? (
             <div className="wf-compensation-footer">
@@ -464,7 +587,7 @@ function StateChip({
       {content}
     </button>
   ) : (
-    <span className="wf-compensation-state" data-kind={kind} data-state={state} aria-label={`${prefix}: ${label}`}>{content}</span>
+    <span className="wf-compensation-state" data-kind={kind} data-state={state} aria-label={`${prefix}: ${label}`} tabIndex={-1}>{content}</span>
   );
 }
 
@@ -483,6 +606,10 @@ function StateIcon({ state }: { state: CompensationForwardState | CompensationRe
     case "Cancelled": return <Ban size={12} aria-hidden="true" />;
     case "NotRun":
     case "Registered": return <CircleDashed size={12} aria-hidden="true" />;
+    case "Retrying": return <RotateCw size={12} aria-hidden="true" />;
+    case "ResolvedAbsent":
+    case "ResolvedKept": return <UserCheck size={12} aria-hidden="true" />;
+    case "NotUndone": return <CircleSlash size={12} aria-hidden="true" />;
     default: return <Minus size={12} aria-hidden="true" />;
   }
 }
@@ -495,7 +622,66 @@ function PhaseIcon({ phase }: { phase: CompensationScopeRuntime["phase"] }) {
     case "Faulted": return <X size={14} aria-hidden="true" />;
     case "AwaitingIntervention": return <Hand size={14} aria-hidden="true" />;
     case "Cancelled": return <Ban size={14} aria-hidden="true" />;
+    case "Abandoned": return <OctagonX size={14} aria-hidden="true" />;
     default: return <CircleDot size={14} aria-hidden="true" />;
+  }
+}
+
+// Spec 260: where the rows come from. A live scope's rows come from its journal; a completed scope's journal is no longer
+// kept, so its rows, like those of a host without the journal, are derived from run data.
+function SourceNote({ runtime }: { runtime: CompensationScopeRuntime }) {
+  if (runtime.source === "journal") return <p className="wf-compensation-source" role="note">From the scope's journal.</p>;
+  if (runtime.source !== "derived" || !runtime.journalUnavailable) return null;
+  return (
+    <p className="wf-compensation-source" role="note">
+      {runtime.journalUnavailable === "StateCleared"
+        ? "Derived from run data: a scope keeps its journal only until it completes."
+        : "Derived from run data: the scope's journal is not available."}
+    </p>
+  );
+}
+
+function OperatorHistory({
+  headingId,
+  history,
+  onOpenIncident
+}: {
+  headingId: string;
+  history: CompensationOperatorHistoryEntry[];
+  onOpenIncident?(incidentId: string): void;
+}) {
+  return (
+    <section className="wf-compensation-history" aria-labelledby={headingId}>
+      <h4 id={headingId}>Operator actions</h4>
+      <ul>
+        {history.map(entry => (
+          <li key={entry.incidentId} data-kind={entry.kind}>
+            <span className="wf-compensation-history-kind">
+              <HistoryIcon kind={entry.kind} /> {operatorHistoryLabel(entry)}{entry.step ? ` (${entry.step})` : ""}
+            </span>
+            <span>{entry.actor ?? "Unknown operator"}</span>
+            {entry.appliedAt ? <span>{formatDate(entry.appliedAt)}</span> : null}
+            <span className={entry.reason ? "wf-compensation-history-reason" : "wf-compensation-history-none"}>
+              {entry.reason ? `"${entry.reason}"` : "No reason given"}
+            </span>
+            {entry.notApplied ? <span className="wf-compensation-history-note">Decision not applied: the scope was cancelled first</span> : null}
+            {onOpenIncident ? (
+              <button type="button" className="wf-compensation-link" aria-label={`Show the incident for ${operatorHistoryLabel(entry)}${entry.step ? ` on ${entry.step}` : ""}`} onClick={() => onOpenIncident(entry.incidentId)}>
+                Show incident
+              </button>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function HistoryIcon({ kind }: { kind: CompensationOperatorHistoryEntry["kind"] }) {
+  switch (kind) {
+    case "Retry": return <RotateCw size={12} aria-hidden="true" />;
+    case "Abandoned": return <OctagonX size={12} aria-hidden="true" />;
+    default: return <UserCheck size={12} aria-hidden="true" />;
   }
 }
 

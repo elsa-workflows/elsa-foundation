@@ -1019,7 +1019,7 @@ Built-in kind `DecideIntervention/1` (`DecideInterventionAlterationHandler.Kind`
 
 The incident write-once rule admits exactly these two changes, each on the same activity execution: a blocking `WaitForIntervention` outcome may be replaced once by a resolved `OperatorRetry` outcome from `OperatorRetryAlteration`, or by a resolved `OperatorDecision` outcome from `OperatorDecisionAlteration`.
 
-Explicit targets (spec 260 FR-406, owner decision OD16): `WorkflowAlterationTargetCaptureTask` captures a run named by id when it belongs to the plan's tenant, whatever execution authority started it, and still captures its authority for the concurrency check. Query targets keep the authority filter.
+Explicit targets (spec 260 FR-406, owner decision OD16): `WorkflowAlterationTargetCaptureTask` captures a run named by id when it belongs to the plan's tenant, whatever execution authority started it, and still captures its authority for the concurrency check. When the plan carries `AuthorizedExecutionIds` (the runtime API always sets it for explicit targets, after authorizing each run as run deletion does), capture records every other named run as `TargetNotFound` without reading it, so a refused run looks like a missing one. Query targets keep the authority filter.
 
 Custom handlers are trusted code. They must use only stable envelope identity, must not serialize or log payloads,
 must return bounded safe failures, and must make their changes replay-safe under the deterministic job checkpoint.

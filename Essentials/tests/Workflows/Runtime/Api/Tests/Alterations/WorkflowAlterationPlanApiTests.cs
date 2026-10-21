@@ -11,6 +11,7 @@ using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Extensions;
 using Elsa.Workflows.Runtime.Services.Alterations;
 using Elsa.Workflows.Runtime.Services.Alterations.Handlers;
+using Elsa.Workflows.Runtime.Services.Executions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Xunit;
@@ -143,16 +144,17 @@ public sealed class WorkflowAlterationPlanApiTests
             Context = context;
             _planService = planService;
             _gate = gate;
-            Service = new WorkflowAlterationPlanApiService(planService, store, gate, context);
+            Service = new WorkflowAlterationPlanApiService(planService, store, gate, context, Executions);
         }
 
         public InMemoryWorkflowAlterationStore Store { get; }
         public IWorkflowAlterationPayloadProtector Protector { get; }
         public IWorkflowAlterationRequestContext Context { get; }
         public WorkflowAlterationPlanApiService Service { get; }
+        public InMemoryWorkflowExecutionStateStore Executions { get; } = new();
 
         public WorkflowAlterationPlanApiService ServiceFor(IWorkflowAlterationRequestContext context) =>
-            new(_planService, Store, _gate, context);
+            new(_planService, Store, _gate, context, Executions);
 
         public static Fixture Create(IWorkflowAlterationAdmissionGate? gate = null)
         {
@@ -181,6 +183,7 @@ public sealed class WorkflowAlterationPlanApiTests
         public WorkflowAlterationAuthorityScope AuthorityScope { get; } = new(tenant, "runtime-api", "operator-1");
         public WorkflowAlterationOperatorProvenance Operator { get; } = new("operator-1", "test-request");
         public bool CanAccess(WorkflowAlterationPlanState plan) => plan.AuthorityScope.TenantPartition == tenant;
+        public ValueTask<bool> CanManageAsync(WorkflowExecutionState execution, CancellationToken cancellationToken = default) => ValueTask.FromResult(true);
     }
 
     private sealed class AllowGate : IWorkflowAlterationAdmissionGate

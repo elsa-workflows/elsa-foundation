@@ -123,7 +123,11 @@ void RequestChildFaultIntervention(
 
 ## Explicit targets and execution authority (FR-406)
 
-An explicit execution id is captured when the run exists and belongs to the caller's tenant partition, whatever execution authority started it. The run's authority is still captured for the concurrency check. Query targets keep the authority filter. Another tenant's run, or a missing one, fails `TargetNotFound` and nothing is applied.
+An explicit execution id is captured when the run exists, belongs to the caller's tenant partition and the caller may manage it, whatever execution authority started it. The run's authority is still captured for the concurrency check. Query targets keep the authority filter.
+
+Per-run authorization applies as for run deletion: at submission, each named run of the caller's tenant is authorized with `workflows/runtime:manage` and the run's `WorkflowExecutionState` as the permission resource, so a host's `IPermissionResourceHandler` can refuse one run while allowing another. Without a resource handler the decision is the endpoint's permission check, so nothing changes.
+
+Another tenant's run, a missing one, or one the caller is refused fails `TargetNotFound` and nothing is applied to it. The three are indistinguishable, as deletion's 404 is: the submission is still `202 Accepted`, the refused run's job fails with the same code and message as a missing run's, and the other runs in the plan proceed. A refused run is never read by capture. A run that is missing at submission stays `TargetNotFound` even if it appears before capture.
 
 ## Idempotency and races
 

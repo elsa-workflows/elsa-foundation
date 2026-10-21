@@ -33,7 +33,8 @@ describe("nested compensation run state", () => {
       step: "Reserve hotel",
       forward: { state: "Completed", activityExecutionId: "ae-hotel" },
       recovery: { state: "Running", activityExecutionId: "ae-cancel-hotel", order: 2 },
-      origin: { scopeNodeId: "inner", label: "Book hotel", activityExecutionId: "ae-inner", iterationId: "it-1" }
+      origin: { scopeNodeId: "inner", label: "Book hotel", activityExecutionId: "ae-inner", iterationId: "it-1" },
+      handlerNodeId: "cancel-hotel"
     }]);
   });
 
