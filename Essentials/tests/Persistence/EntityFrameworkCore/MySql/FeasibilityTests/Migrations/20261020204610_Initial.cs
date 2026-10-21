@@ -56,6 +56,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.Migrations
                 {
                     TenantId = table.Column<string>(type: "varchar(256)", maxLength: 256, nullable: false),
                     NormalizedName = table.Column<string>(type: "varchar(256)", maxLength: 256, nullable: false),
+                    Tombstone = table.Column<string>(type: "varchar(64)", maxLength: 64, nullable: false),
                     NameSearchKey = table.Column<string>(type: "longtext", nullable: false),
                     DisplayNameSearchKey = table.Column<string>(type: "longtext", nullable: false),
                     TypeNameLookupKey = table.Column<string>(type: "longtext", nullable: false),
@@ -70,7 +71,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_elsa_secrets", x => new { x.TenantId, x.NormalizedName });
+                    table.PrimaryKey("PK_elsa_secrets", x => new { x.TenantId, x.NormalizedName, x.Tombstone });
                 })
                 .Annotation("MySQL:Charset", "utf8mb4")
                 .Annotation("Relational:Collation", "utf8mb4_0900_bin");

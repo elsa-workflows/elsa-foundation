@@ -2,16 +2,45 @@ using Elsa.Secrets.Core.Models;
 
 namespace Elsa.Secrets.Core.Contracts;
 
+/// <summary>
+/// Stores secrets by tenant and normalized name. A name is unique only among secrets that are not deleted: deleting a
+/// secret (saving it with <see cref="SecretStatus.Deleted"/>) frees its name, and the deleted secret stays stored, with its
+/// versions, beside whatever secret takes the name next. A secret that takes a freed name is a new secret with its own id
+/// and versions; nothing of the deleted one becomes visible through it.
+/// </summary>
 public interface ISecretRepository : IPagedSecretRepository
 {
+    /// <summary>
+    /// The secret that holds the name, or when none does, a secret deleted under it, so a caller can tell a deleted
+    /// secret from one that never existed. A deleted secret is never returned while another secret holds the name.
+    /// </summary>
     ValueTask<Secret?> FindAsync(string tenantId, string normalizedName, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Adds <paramref name="secret"/>, or returns <c>false</c> when a secret that is not deleted already holds its name.
+    /// Secrets deleted under the name do not block it.
+    /// </summary>
     ValueTask<bool> TryAddAsync(Secret secret, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Writes <paramref name="secret"/> unconditionally. A secret that is not deleted replaces the one holding its name.
+    /// A deleted one is stored by its id and frees the name when it held it; it never removes another secret that
+    /// holds the name by now.
+    /// </summary>
     ValueTask SaveAsync(Secret secret, CancellationToken cancellationToken = default);
 }
 
 public interface IRevisionAwareSecretRepository
 {
+    /// <summary>The same secret <see cref="ISecretRepository.FindAsync"/> returns, with its revision.</summary>
     ValueTask<SecretRevisionedRecord?> FindWithRevisionAsync(string tenantId, string normalizedName, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Saves <paramref name="secret"/> when <paramref name="expectedRevision"/> is the revision of the secret holding its
+    /// name, or creates it when that is <c>null</c> and nothing holds its row yet. A deleted secret's revision saves
+    /// nothing: deleted secrets are history, and a save against one reports <see cref="SecretRevisionSaveStatus.NotFound"/>
+    /// or <see cref="SecretRevisionSaveStatus.Conflict"/>.
+    /// </summary>
     ValueTask<SecretRevisionSaveResult> SaveWithRevisionAsync(Secret secret, string? expectedRevision, CancellationToken cancellationToken = default);
 }
 
