@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "last_publish_commit": "4d4f6d2b2ccff1e56c07c9022079d852e896a812",
+  "last_publish_commit": "9462cb743c08a515e9b8973c57110e3f44df0f7f",
   "packages": [
     {
       "package_id": "Elsa.Activities.Bpmn",
@@ -259,48 +259,48 @@
     },
     {
       "package_id": "Elsa.Etl.Api",
-      "version": "4.0.1-preview",
-      "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+      "version": "4.0.2-preview",
+      "commit": "9462cb743c08a515e9b8973c57110e3f44df0f7f"
     },
     {
       "package_id": "Elsa.Etl.Core",
-      "version": "4.0.1-preview",
-      "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+      "version": "4.0.2-preview",
+      "commit": "9462cb743c08a515e9b8973c57110e3f44df0f7f"
     },
     {
       "package_id": "Elsa.Etl.Design",
-      "version": "4.0.1-preview",
-      "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+      "version": "4.0.2-preview",
+      "commit": "9462cb743c08a515e9b8973c57110e3f44df0f7f"
     },
     {
       "package_id": "Elsa.Etl.Design.Api",
-      "version": "4.0.1-preview",
-      "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+      "version": "4.0.2-preview",
+      "commit": "9462cb743c08a515e9b8973c57110e3f44df0f7f"
     },
     {
       "package_id": "Elsa.Etl.Persistence.EntityFrameworkCore",
-      "version": "4.0.1-preview",
-      "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+      "version": "4.0.2-preview",
+      "commit": "9462cb743c08a515e9b8973c57110e3f44df0f7f"
     },
     {
       "package_id": "Elsa.Etl.Runtime",
-      "version": "4.0.1-preview",
-      "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+      "version": "4.0.2-preview",
+      "commit": "9462cb743c08a515e9b8973c57110e3f44df0f7f"
     },
     {
       "package_id": "Elsa.Etl.Runtime.Api",
-      "version": "4.0.1-preview",
-      "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+      "version": "4.0.2-preview",
+      "commit": "9462cb743c08a515e9b8973c57110e3f44df0f7f"
     },
     {
       "package_id": "Elsa.Etl.Workflows.Design",
-      "version": "4.0.1-preview",
-      "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+      "version": "4.0.2-preview",
+      "commit": "9462cb743c08a515e9b8973c57110e3f44df0f7f"
     },
     {
       "package_id": "Elsa.Etl.Workflows.Runtime",
-      "version": "4.0.1-preview",
-      "commit": "0b40e42d5a7376998905817b2fb15dd4277fe418"
+      "version": "4.0.2-preview",
+      "commit": "9462cb743c08a515e9b8973c57110e3f44df0f7f"
     },
     {
       "package_id": "Elsa.Events",
