@@ -20,7 +20,7 @@ PR 3 writes `docs/reports/native-compensation-qualification.md` from this outlin
 | SQLite, Durable / Balanced / Ephemeral | Q1–Q3, Q8–Q11 |
 | PostgreSQL, SQL Server, MySQL, Durable / Balanced / Ephemeral (OD18 A) | Q4–Q6 (provider subset), plus Q1 semantics |
 | Studio authoring, publish, run, inspect, nested view, operator recovery | Q12–Q15 |
-| Single-node hosting (one Workbench process, or several processes over one store with the existing claims and fences) | Q3 |
+| Single-node hosting (one Workbench process; several processes over one store are not qualified, see Q19) | Q3 |
 
 ## Not qualified
 
