@@ -75,3 +75,7 @@ Existing component tests cover authenticated read-only state; the standard devel
 ## Integration boundary
 
 The implementation is based on `7fb745f8604b6ed67a2eae60266976c98bce949e`. Main subsequently advanced to `73a4f8bf` in a separate Connections-only change; the feature module, auth SDK, bootstrap, and package pins were not changed there. Root owns reconciliation against the then-current main in one serial integration lane. There is no dependency on #3131 or #3132, and this worker does not integrate or qualify other work.
+
+## Root QA refinement: reuse source-proven baseline composition
+
+The baseline observation may reuse root-owned normal hosts when Feature Management module/styles and relevant host/API sources are proven byte-identical to the approved baseline. Record the actual whole-host build and unrelated source differences; do not call it an exact whole-application baseline build. Use a fresh dedicated browser context, stage and Reset both targets, verify both private files remain unchanged and record that Apply exists without review. Baseline Apply remains optional. The implementation still requires a fresh guarded runtime and the actual Studio and Server review/Cancel/correct-file Apply proof. This reduces duplicate host builds without weakening the new behavior's proof.

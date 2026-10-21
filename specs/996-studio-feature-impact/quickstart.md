@@ -106,3 +106,7 @@ Keep the architecture restore and test in the prescribed order, and do not bypas
 Hosted CI retains full workspace test coverage; the local cost-ordered sequence runs the affected module suite and backend preservation suite rather than starting a recursive workspace test run.
 
 Before delivery, root owns exact-head diff review and the independent source/review/CI axes. Merge only after green current-head gates. Because main moved beyond this unit's base, root then runs the actual resulting-main qualification and gates before reporting completion. No such check is run in this planning phase.
+
+## Root-approved baseline reuse
+
+For baseline observation only, root may reuse an owned normal composition after proving unchanged Feature Management module/styles and relevant host/API source against the approved baseline. Preserve the actual host build revision and unrelated differences rather than claiming an exact whole-application baseline. Use a fresh browser context and the staging/Reset/no-file-change observation above. Baseline Apply is optional; the new implementation's separate fresh-root Studio and Server reviewed Apply/correct-file proof remains required. See the bounded [research refinement](research.md#root-qa-refinement-reuse-source-proven-baseline-composition).
