@@ -337,6 +337,29 @@
   white-space: nowrap;
 }
 
+@container feature-management (width < 480px) {
+  .feature-management-bulk-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    column-gap: 8px;
+    row-gap: 6px;
+  }
+
+  .feature-management-bulk-actions label {
+    grid-column: 1 / 3;
+  }
+
+  .feature-management-bulk-actions > div {
+    display: contents;
+  }
+
+  .feature-management-bulk-actions > div > span {
+    grid-column: 3;
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+
 .feature-management-list {
   display: flex;
   flex-direction: column;
