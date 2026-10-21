@@ -17,6 +17,24 @@ publication does not depend on today's catalog. This check does not reserve a re
 This port does not resolve file paths, admit runs, select input revisions or provide arbitrary storage access.
 The finite runtime owns those operations and preserves the existing pinned revision/publication rules.
 
+## Connector binding approval
+
+`IEtlConnectorBindingCatalog` is an additive v2 catalog exposing alias, role and connector kind. It does not
+replace the file-only v1 catalog. A current alias/role pair is unique across file and HTTP kinds within one
+scope. `IEtlConnectorBindingResolver` resolves a complete binding set for a validated `EtlPipelineV2`, or a
+stable value-free failure code; it performs no source GET or destination POST. Connections metadata resolution
+can involve storage I/O. New publication checks approval again; immutable replay uses the retained publication.
+
+The default runtime adapter snapshots `EtlRuntimeFeature.HttpBindings`. Its opaque revision handles commit
+the exact scope, endpoint/path policy, shard seeds, and resolved connection identity and non-secret settings.
+Exact retained revision resolution never substitutes the current alias revision. Authenticated resolution
+requires the retained tenant and public Connections Core providers; anonymous bindings compose without them.
+No credential is read during validation or pinning. The short-lived connection is disposed after each resolution;
+request execution must obtain a new exact-pin resolution and authenticate each request separately. Credential
+source references are not exposed by this public port, so changes to those references remain part of permitted
+credential rotation. The [HTTP profile](../../../../specs/996-http-etl/contracts/http-profile.md) defines the
+remaining transport and publication boundaries. These binding ports do not enable connector worker execution.
+
 ## Runtime inspection bounds
 
 `IEtlRuntimeStore.MaximumPageSize` advertises the positive maximum accepted `take` of each list call. A consumer

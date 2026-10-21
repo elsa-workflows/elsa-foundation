@@ -6,6 +6,21 @@ Hosts configure scoped revisioned aliases, endpoint origins/paths, bounded shard
 
 Credentials are resolved per attempt. Pin the selected connection type/auth scheme and canonical non-secret settings digest at admission. Rotation of a secret value is permitted; revocation, missing connection and changed non-secret settings prevent dispatch. Publication checks the caller's existing `etl/definitions:publish` authority plus the scoped host-approved alias. Connections has no separate use permission; connection creation/test/secret-binding rights are unchanged. Authenticated bindings require a non-null retained tenant, checked at publication/admission; no fallback tenant is permitted. Anonymous aliases remain available in null-tenant scope when ETL endpoint policy permits. The worker uses the retained tenant rather than ambient HTTP request context.
 
+The authoring API preserves the file-only v1 `/etl/...` surface and adds `/etl/v2/...` for connector pipelines.
+The versions share definition identities and immutable history, with format-specific listings and reads.
+A filtered page can be empty while its signed next cursor advances over records of the other format.
+
+Host HTTP bindings use `Source`, `MainOutput` or `ErrorOutput` roles; CSV lookup remains a file binding.
+Current alias/role collisions across HTTP and file kinds are invalid host configuration. For a source, `Endpoint`
+must name an approved initial path, and empty `AllowedPaths` defaults to the shard seed paths. An explicit list is
+not widened; every seed and the endpoint must satisfy it. Output defaults to its endpoint path. Endpoint policy
+compares canonical scheme, host and port and exact canonical paths, rejects user information and fragments, and
+refuses encoded path separators, controls and nested percent escapes. A literal percent without a nested escape
+remains valid. Credentials are not read during binding validation. The Connections public contract exposes
+non-secret settings but not credential-source reference identity; changing the latter is treated as credential
+rotation, while changing any public setting invalidates the retained handle. A fresh connection check precedes
+each physical attempt; it cannot recall an already-started request if revocation occurs afterward.
+
 ## Pagination
 
 A page is a JSON document. A JSON Pointer identifies its record array, and per-column pointers identify scalar fields relative to a record. Strict pointer escapes and bounded indices are validated. Duplicate properties are refused rather than interpreted differently by parsers. Types preserve null/missing distinctions, reject non-finite or out-of-range numbers, and do not coerce arbitrary objects into strings.

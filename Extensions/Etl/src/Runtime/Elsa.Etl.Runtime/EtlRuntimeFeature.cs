@@ -1,4 +1,5 @@
 using CShells.Features;
+using Elsa.Connections.Core.Contracts;
 using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Runtime.Bindings;
 using Elsa.Etl.Runtime.Execution;
@@ -23,6 +24,9 @@ public class EtlRuntimeFeature : IShellFeature
 
     [ManifestSetting(DisplayName = "File bindings", Description = "Trusted, revision-pinned host files available to ETL definitions.", Category = "Bindings")]
     public List<EtlHostFileBindingOptions> FileBindings { get; set; } = [];
+
+    [ManifestSetting(DisplayName = "HTTP bindings", Description = "Trusted scoped HTTP endpoints, revision policies and optional connection aliases.", Category = "Bindings")]
+    public List<EtlHostHttpBindingOptions> HttpBindings { get; set; } = [];
 
     [ManifestSetting(DisplayName = "Maximum concurrent attempts", Description = "Maximum actual ETL attempt tasks that may hold process-local capacity.", Category = "Capacity")]
     public int MaxConcurrentAttempts { get; set; } = 2;
@@ -68,6 +72,15 @@ public class EtlRuntimeFeature : IShellFeature
         services.TryAddSingleton<EtlAttemptBudget>(_ => new EtlAttemptBudget(options.MaxConcurrentAttempts, options.Capacity));
         services.AddScoped(_ => new HostFileBindings(options.FileBindings));
         services.TryAddScoped<IEtlBindingCatalog>(provider => provider.GetRequiredService<HostFileBindings>());
+        services.AddScoped(provider => options.HttpBindings.WithConnections(
+            provider.GetService<IConnectionResolver>(),
+            provider.GetService<IConnectionTypeRegistry>(),
+            provider.GetService<IAuthenticationSchemeRegistry>(),
+            provider.GetServices<IHttpRequestAuthenticator>()));
+        services.AddScoped(provider => new HostConnectorBindings(
+            provider.GetRequiredService<HostFileBindings>(), provider.GetRequiredService<HostHttpBindings>(), options.MaxPartitions));
+        services.TryAddScoped<IEtlConnectorBindingCatalog>(provider => provider.GetRequiredService<HostConnectorBindings>());
+        services.TryAddScoped<IEtlConnectorBindingResolver>(provider => provider.GetRequiredService<HostConnectorBindings>());
         services.AddScoped<EtlExecutableReader>();
         services.AddScoped<EtlConnectorExecutableReader>();
         services.AddScoped<EtlBatchProcessor>();

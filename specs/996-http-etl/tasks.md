@@ -31,13 +31,15 @@ Issue [#3151](https://github.com/elsa-workflows/elsa-foundation/issues/3151). On
 
 Independent proof: real publication/selection plus HTTP->HTTP, HTTP->JSONL and CSV->HTTP, two independently progressing HTTP shards, and native Sequence/Flowchart continuation.
 
-- [ ] T006 [US1] Implement scoped revisioned HTTP binding pins and existing publication-permission and approved-alias validation in `Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/` and `src/Design/Api/`; compose existing Connections Core ports and test anonymous/authenticated scope, null-tenant authentication refusal without fallback, current-revision changes and unsupported composition.
+- [x] T006 [US1] Implement scoped revisioned HTTP binding pins and existing publication-permission and approved-alias validation in `Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Bindings/` and `src/Design/Api/`; compose existing Connections Core ports and test anonymous/authenticated scope, null-tenant authentication refusal without fallback, current-revision changes and unsupported composition.
+  - Completed scoped binding/approval and v2 API checkpoint: [evidence](evidence/http-bindings-authoring-checkpoint.md). Exact pins, current approval, anonymous/authenticated scope and additive format-aware authoring are covered; **5/22 tasks complete**. Actual transport/runtime remains T009/T017.
 - [ ] T007 [US1] Implement bounded JSON Pointer/record decoding and token/next-link pagination in `Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Http/`; add strict pointer, numeric/null/missing, duplicate-property, depth, byte, record, empty-page and loop tests in ETL tests.
   - Partial one-page decoding and local transform composition: [checkpoint](evidence/json-page-decoder-checkpoint.md). Durable request progression and loop detection remain owed.
 - [ ] T008 [US1] Extend typed transform evaluation in `Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Transformation/` for JSON records and optional CSV lookup without CSV round-tripping; retain v1 behavior and prove fully filtered zero-effect acceptance.
 - [ ] T009 [US1] Compose durable page acquisition, reservation and retained route bodies with HTTP/file delivery in `Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Execution/` and `Output/`; test all three connector combinations through real local HTTP fixtures.
 - [ ] T010 [US1] Extend immutable v2 native publication pinning and actual persisted Sequence/Flowchart continuation in `Extensions/Etl/src/Workflows/` and `Extensions/Etl/tests/Tests/`; test runtime-only execution with design storage unavailable and retained revision/configuration behavior.
 - [ ] T011 [US1] Extend scoped binding/definition APIs and connector-aware Studio authoring in `Extensions/Etl/src/Design/Api/` and `Extensions/Etl/studio/Elsa.Studio.Etl/Client/`; run actual create/validate/publish/select tests.
+  - API portion brought forward with T006: [checkpoint](evidence/http-bindings-authoring-checkpoint.md). Studio authoring and actual product selection remain owed; T011 stays open.
 
 ## Phase 4 — US2: Retain responsibility across interruption
 

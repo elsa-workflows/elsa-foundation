@@ -310,3 +310,113 @@ static Elsa.Etl.Design.Api.Models.EtlVersionRequest.operator ==(Elsa.Etl.Design.
 static Elsa.Etl.Design.Api.Models.EtlVersionsRequest.operator !=(Elsa.Etl.Design.Api.Models.EtlVersionsRequest? left, Elsa.Etl.Design.Api.Models.EtlVersionsRequest? right) -> bool
 static Elsa.Etl.Design.Api.Models.EtlVersionsRequest.operator ==(Elsa.Etl.Design.Api.Models.EtlVersionsRequest? left, Elsa.Etl.Design.Api.Models.EtlVersionsRequest? right) -> bool
 static NativeEndpoints.Generated.ElsaEtlDesignApiEndpoints.Map(this NativeEndpoints.EndpointGroup! group, string? routePrefix = null) -> NativeEndpoints.EndpointGroup!
+Elsa.Etl.Design.Api.Endpoints.ConnectorV2.CreateDefinition.Endpoint
+Elsa.Etl.Design.Api.Endpoints.ConnectorV2.CreateDefinition.Endpoint.Endpoint(Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations! operations) -> void
+Elsa.Etl.Design.Api.Endpoints.ConnectorV2.GetDefinition.Endpoint
+Elsa.Etl.Design.Api.Endpoints.ConnectorV2.GetDefinition.Endpoint.Endpoint(Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations! operations) -> void
+Elsa.Etl.Design.Api.Endpoints.ConnectorV2.GetVersion.Endpoint
+Elsa.Etl.Design.Api.Endpoints.ConnectorV2.GetVersion.Endpoint.Endpoint(Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations! operations) -> void
+Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListBindings.Endpoint
+Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListBindings.Endpoint.Endpoint(Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations! operations) -> void
+Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListDefinitions.Endpoint
+Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListDefinitions.Endpoint.Endpoint(Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations! operations) -> void
+Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListVersions.Endpoint
+Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListVersions.Endpoint.Endpoint(Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations! operations) -> void
+Elsa.Etl.Design.Api.Endpoints.ConnectorV2.PublishVersion.Endpoint
+Elsa.Etl.Design.Api.Endpoints.ConnectorV2.PublishVersion.Endpoint.Endpoint(Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations! operations) -> void
+Elsa.Etl.Design.Api.Endpoints.ConnectorV2.UpdateDraft.Endpoint
+Elsa.Etl.Design.Api.Endpoints.ConnectorV2.UpdateDraft.Endpoint.Endpoint(Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations! operations) -> void
+Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ValidateDraft.Endpoint
+Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ValidateDraft.Endpoint.Endpoint(Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations! operations) -> void
+Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest
+Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest.<Clone>$() -> Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest!
+Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest.Deconstruct(out string! Id, out Elsa.Etl.Core.EtlPipelineV2! Pipeline) -> void
+Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest.Equals(Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest? other) -> bool
+Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest.EtlConnectorCreateDefinitionRequest(string! Id, Elsa.Etl.Core.EtlPipelineV2! Pipeline) -> void
+Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest.Id.get -> string!
+Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest.Id.init -> void
+Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest.Pipeline.get -> Elsa.Etl.Core.EtlPipelineV2!
+Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest.Pipeline.init -> void
+Elsa.Etl.Design.Api.Models.EtlConnectorDraftView
+Elsa.Etl.Design.Api.Models.EtlConnectorDraftView.<Clone>$() -> Elsa.Etl.Design.Api.Models.EtlConnectorDraftView!
+Elsa.Etl.Design.Api.Models.EtlConnectorDraftView.Deconstruct(out string! DefinitionId, out long Revision, out int LastPublishedVersion, out Elsa.Etl.Core.EtlPipelineV2! Pipeline, out System.DateTimeOffset UpdatedAt) -> void
+Elsa.Etl.Design.Api.Models.EtlConnectorDraftView.DefinitionId.get -> string!
+Elsa.Etl.Design.Api.Models.EtlConnectorDraftView.DefinitionId.init -> void
+Elsa.Etl.Design.Api.Models.EtlConnectorDraftView.Equals(Elsa.Etl.Design.Api.Models.EtlConnectorDraftView? other) -> bool
+Elsa.Etl.Design.Api.Models.EtlConnectorDraftView.EtlConnectorDraftView(string! DefinitionId, long Revision, int LastPublishedVersion, Elsa.Etl.Core.EtlPipelineV2! Pipeline, System.DateTimeOffset UpdatedAt) -> void
+Elsa.Etl.Design.Api.Models.EtlConnectorDraftView.LastPublishedVersion.get -> int
+Elsa.Etl.Design.Api.Models.EtlConnectorDraftView.LastPublishedVersion.init -> void
+Elsa.Etl.Design.Api.Models.EtlConnectorDraftView.Pipeline.get -> Elsa.Etl.Core.EtlPipelineV2!
+Elsa.Etl.Design.Api.Models.EtlConnectorDraftView.Pipeline.init -> void
+Elsa.Etl.Design.Api.Models.EtlConnectorDraftView.Revision.get -> long
+Elsa.Etl.Design.Api.Models.EtlConnectorDraftView.Revision.init -> void
+Elsa.Etl.Design.Api.Models.EtlConnectorDraftView.UpdatedAt.get -> System.DateTimeOffset
+Elsa.Etl.Design.Api.Models.EtlConnectorDraftView.UpdatedAt.init -> void
+Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView
+Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView.<Clone>$() -> Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView!
+Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView.Deconstruct(out Elsa.Etl.Design.Api.Models.EtlPublishedVersionView! Version, out Elsa.Etl.Core.EtlPipelineV2! Pipeline) -> void
+Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView.Equals(Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView? other) -> bool
+Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView.EtlConnectorPublishedArtifactView(Elsa.Etl.Design.Api.Models.EtlPublishedVersionView! Version, Elsa.Etl.Core.EtlPipelineV2! Pipeline) -> void
+Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView.Pipeline.get -> Elsa.Etl.Core.EtlPipelineV2!
+Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView.Pipeline.init -> void
+Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView.Version.get -> Elsa.Etl.Design.Api.Models.EtlPublishedVersionView!
+Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView.Version.init -> void
+Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest
+Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest.<Clone>$() -> Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest!
+Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest.Deconstruct(out string! Id, out long ExpectedRevision, out Elsa.Etl.Core.EtlPipelineV2! Pipeline) -> void
+Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest.Equals(Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest? other) -> bool
+Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest.EtlConnectorUpdateDraftRequest(string! Id, long ExpectedRevision, Elsa.Etl.Core.EtlPipelineV2! Pipeline) -> void
+Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest.ExpectedRevision.get -> long
+Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest.ExpectedRevision.init -> void
+Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest.Id.get -> string!
+Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest.Id.init -> void
+Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest.Pipeline.get -> Elsa.Etl.Core.EtlPipelineV2!
+Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest.Pipeline.init -> void
+Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations
+Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations.CreateAsync(Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlConnectorDraftView!>!
+Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations.GetAsync(Elsa.Etl.Design.Api.Models.EtlDefinitionRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlConnectorDraftView!>!
+Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations.GetVersionAsync(Elsa.Etl.Design.Api.Models.EtlVersionRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView!>!
+Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations.ListBindingsAsync(Elsa.Etl.Design.Api.Models.EtlPageRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlPage<Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary!>!>!
+Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations.ListDefinitionsAsync(Elsa.Etl.Design.Api.Models.EtlPageRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlPage<Elsa.Etl.Design.Api.Models.EtlDefinitionSummaryView!>!>!
+Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations.ListVersionsAsync(Elsa.Etl.Design.Api.Models.EtlVersionsRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlPage<Elsa.Etl.Design.Api.Models.EtlPublishedVersionView!>!>!
+Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations.PublishAsync(Elsa.Etl.Design.Api.Models.EtlPublishRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlPublicationView!>!
+Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations.UpdateAsync(Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlConnectorDraftView!>!
+Elsa.Etl.Design.Api.Models.IEtlConnectorDesignOperations.ValidateAsync(Elsa.Etl.Design.Api.Models.EtlValidateRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlValidationView!>!
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.CreateDefinition.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.CreateDefinition.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlConnectorDraftView!>!
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.GetDefinition.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.GetDefinition.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlDefinitionRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlConnectorDraftView!>!
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.GetVersion.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.GetVersion.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlVersionRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView!>!
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListBindings.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListBindings.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlPageRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlPage<Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary!>!>!
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListDefinitions.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListDefinitions.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlPageRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlPage<Elsa.Etl.Design.Api.Models.EtlDefinitionSummaryView!>!>!
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListVersions.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ListVersions.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlVersionsRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlPage<Elsa.Etl.Design.Api.Models.EtlPublishedVersionView!>!>!
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.PublishVersion.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.PublishVersion.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlPublishRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlPublicationView!>!
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.UpdateDraft.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.UpdateDraft.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlConnectorDraftView!>!
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ValidateDraft.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Design.Api.Endpoints.ConnectorV2.ValidateDraft.Endpoint.HandleAsync(Elsa.Etl.Design.Api.Models.EtlValidateRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Design.Api.Models.EtlValidationView!>!
+override Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest.Equals(object? obj) -> bool
+override Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest.GetHashCode() -> int
+override Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest.ToString() -> string!
+override Elsa.Etl.Design.Api.Models.EtlConnectorDraftView.Equals(object? obj) -> bool
+override Elsa.Etl.Design.Api.Models.EtlConnectorDraftView.GetHashCode() -> int
+override Elsa.Etl.Design.Api.Models.EtlConnectorDraftView.ToString() -> string!
+override Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView.Equals(object? obj) -> bool
+override Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView.GetHashCode() -> int
+override Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView.ToString() -> string!
+override Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest.Equals(object? obj) -> bool
+override Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest.GetHashCode() -> int
+override Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest.ToString() -> string!
+static Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest.operator !=(Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest? left, Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest? right) -> bool
+static Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest.operator ==(Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest? left, Elsa.Etl.Design.Api.Models.EtlConnectorCreateDefinitionRequest? right) -> bool
+static Elsa.Etl.Design.Api.Models.EtlConnectorDraftView.operator !=(Elsa.Etl.Design.Api.Models.EtlConnectorDraftView? left, Elsa.Etl.Design.Api.Models.EtlConnectorDraftView? right) -> bool
+static Elsa.Etl.Design.Api.Models.EtlConnectorDraftView.operator ==(Elsa.Etl.Design.Api.Models.EtlConnectorDraftView? left, Elsa.Etl.Design.Api.Models.EtlConnectorDraftView? right) -> bool
+static Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView.operator !=(Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView? left, Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView? right) -> bool
+static Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView.operator ==(Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView? left, Elsa.Etl.Design.Api.Models.EtlConnectorPublishedArtifactView? right) -> bool
+static Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest.operator !=(Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest? left, Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest? right) -> bool
+static Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest.operator ==(Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest? left, Elsa.Etl.Design.Api.Models.EtlConnectorUpdateDraftRequest? right) -> bool

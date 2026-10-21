@@ -1708,3 +1708,37 @@ Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetch.EtlConnectorHttpSourceFetch(st
 Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.BeginConnectorHttpSourceAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, string! requestId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult!>
 Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.CompleteConnectorHttpSourceAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt! attempt, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchOutcome! outcome, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult!>
 Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.CaptureConnectorHttpSourceAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, Elsa.Etl.Core.Runtime.EtlHttpSourceFetchAttempt! attempt, Elsa.Etl.Core.Runtime.EtlRetainedHttpPage! page, System.DateTimeOffset responseReceivedAtUtc, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorHttpSourceFetchResult!>
+Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution
+Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution!
+Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.Bindings.get -> Elsa.Etl.Core.Runtime.EtlConnectorRunBindings?
+Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.Bindings.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.Deconstruct(out Elsa.Etl.Core.Runtime.EtlConnectorRunBindings? Bindings, out string? FailureCode) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.Equals(Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.EtlConnectorBindingResolution(Elsa.Etl.Core.Runtime.EtlConnectorRunBindings? Bindings, string? FailureCode) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.FailureCode.get -> string?
+Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.FailureCode.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary!
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.Alias.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.Alias.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.Deconstruct(out string! Alias, out string! Role, out Elsa.Etl.Core.Runtime.EtlConnectorKind Kind) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.Equals(Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.EtlConnectorBindingSummary(string! Alias, string! Role, Elsa.Etl.Core.Runtime.EtlConnectorKind Kind) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.Kind.get -> Elsa.Etl.Core.Runtime.EtlConnectorKind
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.Kind.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.Role.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.Role.init -> void
+Elsa.Etl.Core.Runtime.IEtlConnectorBindingCatalog
+Elsa.Etl.Core.Runtime.IEtlConnectorBindingCatalog.ListBindings(Elsa.Etl.Core.EtlScope! scope, string? afterAlias, string? afterRole, int take) -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary!>!
+Elsa.Etl.Core.Runtime.IEtlConnectorBindingResolver
+Elsa.Etl.Core.Runtime.IEtlConnectorBindingResolver.ResolveAsync(Elsa.Etl.Core.EtlScope! scope, Elsa.Etl.Core.EtlPipelineV2! pipeline, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution!>
+override Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.ToString() -> string!
+static Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution? left, Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution? left, Elsa.Etl.Core.Runtime.EtlConnectorBindingResolution? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary? left, Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary? left, Elsa.Etl.Core.Runtime.EtlConnectorBindingSummary? right) -> bool

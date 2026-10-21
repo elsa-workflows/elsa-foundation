@@ -81,3 +81,37 @@ Elsa.Etl.Runtime.EtlRuntimeFeature.HttpLimits.get -> Elsa.Etl.Runtime.EtlHttpHos
 Elsa.Etl.Runtime.EtlRuntimeFeature.HttpLimits.set -> void
 Elsa.Etl.Runtime.EtlRuntimeFeature.MaxRetainedOutputBytes.get -> long
 Elsa.Etl.Runtime.EtlRuntimeFeature.MaxRetainedOutputBytes.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.Alias.get -> string!
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.Alias.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.AllowHttp.get -> bool
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.AllowHttp.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.AllowedPaths.get -> System.Collections.Generic.IList<string!>!
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.AllowedPaths.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.ConnectionName.get -> string?
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.ConnectionName.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.Endpoint.get -> string!
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.Endpoint.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.EtlHostHttpBindingOptions() -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.IdempotencyHeader.get -> string!
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.IdempotencyHeader.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.IsCurrent.get -> bool
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.IsCurrent.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.PersistencePartition.get -> string!
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.PersistencePartition.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.Revision.get -> string!
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.Revision.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.Role.get -> string!
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.Role.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.Shards.get -> System.Collections.Generic.IList<Elsa.Etl.Runtime.EtlHostHttpShardOptions!>!
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.Shards.set -> void
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.TenantId.get -> string?
+Elsa.Etl.Runtime.EtlHostHttpBindingOptions.TenantId.set -> void
+Elsa.Etl.Runtime.EtlHostHttpShardOptions
+Elsa.Etl.Runtime.EtlHostHttpShardOptions.EtlHostHttpShardOptions() -> void
+Elsa.Etl.Runtime.EtlHostHttpShardOptions.Id.get -> string!
+Elsa.Etl.Runtime.EtlHostHttpShardOptions.Id.set -> void
+Elsa.Etl.Runtime.EtlHostHttpShardOptions.SeedUri.get -> string!
+Elsa.Etl.Runtime.EtlHostHttpShardOptions.SeedUri.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.HttpBindings.get -> System.Collections.Generic.List<Elsa.Etl.Runtime.EtlHostHttpBindingOptions!>!
+Elsa.Etl.Runtime.EtlRuntimeFeature.HttpBindings.set -> void
