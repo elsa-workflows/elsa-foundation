@@ -4,7 +4,9 @@
 
 **Created**: 2026-10-20
 
-**Status**: In progress
+**Status**: Implemented
+
+**Follow-ups**: [#3170](https://github.com/elsa-workflows/elsa-foundation/issues/3170) (nested `undefined` keys), [#3171](https://github.com/elsa-workflows/elsa-foundation/issues/3171) (script wrapper), [#3172](https://github.com/elsa-workflows/elsa-foundation/issues/3172) (`null` into non-nullable inputs)
 
 **Issue**: [#3012](https://github.com/elsa-workflows/elsa-foundation/issues/3012). The scope is the
 [triage comment](https://github.com/elsa-workflows/elsa-foundation/issues/3012#issuecomment-6291828214): its decision,

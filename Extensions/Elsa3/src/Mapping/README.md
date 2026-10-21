@@ -139,7 +139,7 @@ refusal says what to change in the Elsa 3 workflow so that it converts. Specs 23
 | `isNullOrEmpty(x)`, `isNullOrWhiteSpace(x)` | An inline function with .NET's semantics, including .NET's whitespace characters |
 | A top-level `return` | The body runs as a function. A trailing expression gets a `return`; a bare `return;` returns `null` |
 | A statement-form expression | A function that returns its last expression |
-| A RunJavaScript body | Reads go through the `arguments` input, and the completion value becomes a `return`. A body whose last line is a `//` comment ends with a newline, so the comment cannot break Elsa 4's script wrapper |
+| A RunJavaScript body | Reads go through the `arguments` input, and the completion value becomes a `return`. A body whose last line is a `//` comment ends with a newline, so the comment cannot break Elsa 4's script wrapper (#3171) |
 | An expression whose value is `undefined` (a missing property, a function that returns nothing) | `null`, as in Elsa 3: every value that leaves a bound expression ends in `?? null`, which leaves `0`, `""` and `false` alone. A RunJavaScript body needs nothing, because Elsa 4 already turns its `undefined` into `null` |
 
 ### What is refused, and what to change in Elsa 3
@@ -170,9 +170,9 @@ capability for them (#3026). Elsa 4 deliberately strips them from expressions to
 Known differences that convert without a diagnostic, because they depend on how the script is called or on the data:
 - `this` in a function called without a receiver was Elsa 3's global object; in Elsa 4 it is `undefined`.
 - An `undefined` value inside an object result (`{ discount: undefined }`) kept its key as `null` in Elsa 3; Elsa 4
-  drops the key, which shows in serialized bodies and in `in` or `Object.keys`.
+  drops the key, which shows in serialized bodies and in `in` or `Object.keys` (#3170).
 - A `null` result bound to a non-nullable input (`Int32`, `Boolean`, an enum) became the type's default in Elsa 3
-  (`0`, `false`); Elsa 4 refuses it at run time with `VF-ACT-004`.
+  (`0`, `false`); Elsa 4 refuses it at run time with `VF-ACT-004` (#3172).
 - Elsa 3 handed scripts mutable .NET values; Elsa 4 hands them frozen JSON values.
 
 ## Nesting budget
