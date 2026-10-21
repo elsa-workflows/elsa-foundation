@@ -277,6 +277,12 @@ public sealed class WorkbenchCompensationRecoveryTests
             warning["nodeId"]!.GetValue<string>(), warning["member"]!.GetValue<string>()));
         Assert.StartsWith("\"Log the order\" is marked safe to repeat", warning["message"]!.GetValue<string>());
 
+        // Studio's publication review asks the promotion preflight first; a warning must not make it unready (found by
+        // the spec 261 live journeys: the preflight listed the warning as a blocking draft-validation issue).
+        var preflight = await PostAsync(host, $"/design/workflows/drafts/{draftId}/promotion-preflight", new { });
+        Assert.True(preflight["isReady"]!.GetValue<bool>(), preflight.ToJsonString());
+        Assert.DoesNotContain(preflight["issues"]!.AsArray(), issue => issue!["code"]!.GetValue<string>() == "draft-validation");
+
         var version = await PostAsync(host, $"/design/workflows/drafts/{draftId}/promote", new { });
         var published = await PostAsync(host, $"/publishing/workflows/{version["id"]!.GetValue<string>()}/publish", new { });
         Assert.False(string.IsNullOrEmpty(published["artifactId"]?.GetValue<string>()), published.ToJsonString());
