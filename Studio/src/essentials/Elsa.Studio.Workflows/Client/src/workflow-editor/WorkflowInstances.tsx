@@ -511,13 +511,15 @@ export function WorkflowInstances({ context, navigate }: {
             <span role="columnheader">Duration</span>
             {canDeleteRuns ? <span role="columnheader">Actions</span> : null}
           </div>
-          {instances.map(instance => (
+          {instances.map(instance => {
+            const workflowName = definitionNames.get(instance.definitionId) ?? instance.definitionId;
+            return (
             <div
               className="wf-grid-row"
               role="row"
               tabIndex={0}
               aria-selected={selectedRunIds.has(instance.workflowExecutionId)}
-              aria-label={`Inspect workflow run ${instance.workflowExecutionId} · ${instance.status}${instance.subStatus ? ` · ${instance.subStatus}` : ""} · ${formatCurrentIncidentHealth(instance)}`}
+              aria-label={`Inspect workflow run ${instance.workflowExecutionId} · ${workflowName} · ${instance.status}${instance.subStatus ? ` · ${instance.subStatus}` : ""} · ${formatCurrentIncidentHealth(instance)}`}
               key={instance.workflowExecutionId}
               onClick={event => {
                 if ((event.target as HTMLElement).closest("button, input, label")) return;
@@ -543,10 +545,10 @@ export function WorkflowInstances({ context, navigate }: {
                   <button
                     type="button"
                     className="wf-run-inspect"
-                    aria-label={`Inspect workflow run ${instance.workflowExecutionId}`}
+                    aria-label={`Inspect workflow run ${instance.workflowExecutionId} · ${workflowName}`}
                     onClick={() => openInstance(instance.workflowExecutionId)}
                   >
-                    <strong>{definitionNames.get(instance.definitionId) ?? instance.definitionId}</strong>
+                    <strong>{workflowName}</strong>
                   </button>
                   <div className="wf-run-identifiers" aria-label={`Workflow run identifiers for ${instance.workflowExecutionId}`}>
                     <CopyableIdentifier label="Execution ID" value={instance.workflowExecutionId} />
@@ -574,7 +576,8 @@ export function WorkflowInstances({ context, navigate }: {
                 >Delete</button>
               </span> : null}
             </div>
-          ))}
+            );
+          })}
         </div>
       ) : null}
       {state === "ready" ? (

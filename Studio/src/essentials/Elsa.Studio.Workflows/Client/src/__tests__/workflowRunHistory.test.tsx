@@ -199,7 +199,7 @@ describe("workflow run history", () => {
     const container = render(context(getJson), navigate);
 
     await waitFor(() => expect(container.textContent).toContain("execution-2"));
-    click(button(container, "Inspect workflow run execution-2"));
+    click(button(container, "Inspect workflow run execution-2 · definition-1"));
 
     const detail = new URL(navigate.mock.lastCall?.[0] ?? "", "https://studio.example");
     expect(detail.pathname).toBe("/workflows/instances/execution-2");
@@ -220,7 +220,7 @@ describe("workflow run history", () => {
     const navigate = vi.fn();
     const container = render(context(getJson), navigate);
 
-    await waitFor(() => expect(button(container, "Inspect workflow run execution-1").textContent).toContain("Order fulfillment"));
+    await waitFor(() => expect(container.querySelector(".wf-run-inspect")?.textContent).toContain("Order fulfillment"));
     const expectedValues = [
       ["Copy Execution ID", "execution-1"],
       ["Copy Artifact ID", "artifact-1"],
@@ -234,6 +234,7 @@ describe("workflow run history", () => {
 
     expect(navigate).not.toHaveBeenCalled();
     expect(container.querySelector(".wf-run-inspect strong")?.textContent).toBe("Order fulfillment");
+    expect(container.querySelector(".wf-run-inspect")?.getAttribute("aria-label")).toBe("Inspect workflow run execution-1 · Order fulfillment");
   });
 
   it("lets browser history restore the same applied Runs query after inspecting a row", async () => {
@@ -244,7 +245,7 @@ describe("workflow run history", () => {
     const container = render(context(getJson), navigate);
 
     await waitFor(() => expect(container.textContent).toContain("execution-1"));
-    click(button(container, "Inspect workflow run execution-1"));
+    click(button(container, "Inspect workflow run execution-1 · definition-1"));
     expect(navigate).toHaveBeenLastCalledWith("/workflows/instances/execution-1?returnTo=%2Fworkflows%2Finstances%3Fstatus%3DRunning%26pageSize%3D10");
 
     window.history.replaceState({}, "", returnPath);

@@ -7,28 +7,28 @@ test("primary triage filters active health across pages and composes with Runnin
 
   await page.getByRole("button", { name: "Needs attention", exact: true }).click();
   await expect(page.getByRole("button", { name: "Needs attention", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByRole("button", { name: "Inspect workflow run run-01", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Inspect workflow run run-10", exact: true })).toBeVisible();
+  await expect(inspectRun(page, "run-01")).toBeVisible();
+  await expect(inspectRun(page, "run-10")).toBeVisible();
   await expect(page.getByText("Showing 10 of 11 matching runs")).toBeVisible();
   await expect(page.getByText("1 active · 1 blocking · Needs intervention")).toBeVisible();
   await expect(page.getByText("1 active · Non-blocking").first()).toBeVisible();
 
   await page.getByRole("button", { name: "Next workflow run page" }).click();
-  await expect(page.getByRole("button", { name: "Inspect workflow run run-12", exact: true })).toBeVisible();
+  await expect(inspectRun(page, "run-12")).toBeVisible();
   await expect(page.getByText("Showing 1 of 11 matching runs")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Inspect workflow run run-13", exact: true })).toHaveCount(0);
+  await expect(inspectRun(page, "run-13")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Clear filters" }).click();
   await page.getByRole("button", { name: "Running" }).click();
   await expect(page.getByText("Showing 10 of 11 matching runs")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Inspect workflow run run-11", exact: true })).toHaveCount(0);
+  await expect(inspectRun(page, "run-11")).toHaveCount(0);
   await page.getByRole("button", { name: "Next workflow run page" }).click();
-  await expect(page.getByRole("button", { name: "Inspect workflow run run-11", exact: true })).toBeVisible();
+  await expect(inspectRun(page, "run-11")).toBeVisible();
   await expect(runRow(page, "run-11").getByText("No active incidents", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Needs attention", exact: true }).click();
   await expect(page.getByText("Showing 10 of 10 matching runs")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Inspect workflow run run-10", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Inspect workflow run run-12", exact: true })).toHaveCount(0);
+  await expect(inspectRun(page, "run-10")).toBeVisible();
+  await expect(inspectRun(page, "run-12")).toHaveCount(0);
 });
 
 test("workflow choice, advanced drafts, applied chips, selection and exact copy stay separate", async ({ page }) => {
@@ -37,6 +37,7 @@ test("workflow choice, advanced drafts, applied chips, selection and exact copy 
   const executionId = "run-14-quarterly-reconciliation-2026-10-20-long-execution-reference";
   const row = runRow(page, executionId);
   await expect(row).toBeVisible();
+  await expect(inspectRun(page, executionId)).toHaveAccessibleName(`Inspect workflow run ${executionId} · Quarterly regional reconciliation and partner settlement`);
   await expect(row.getByLabel(`Execution ID: ${executionId}`)).toBeVisible();
   await expect(page.locator(".wf-run-deletion-toolbar")).toHaveCount(0);
 
@@ -48,7 +49,7 @@ test("workflow choice, advanced drafts, applied chips, selection and exact copy 
   await page.getByRole("button", { name: /More filters/ }).click();
   await expect(page.getByLabel("Workflow run execution id")).toHaveValue(executionId);
   await page.getByRole("button", { name: "Apply filters" }).click();
-  await expect(page.getByRole("button", { name: `Inspect workflow run ${executionId}`, exact: true })).toBeVisible();
+  await expect(inspectRun(page, executionId)).toBeVisible();
   await expect(page.getByText(`Execution ID: ${executionId}`)).toBeVisible();
 
   await page.getByRole("button", { name: "Remove Execution ID filter" }).click();
@@ -59,7 +60,7 @@ test("workflow choice, advanced drafts, applied chips, selection and exact copy 
   await page.getByLabel("To").fill("2026-10-20T23:59");
   await page.getByRole("button", { name: "Apply filters" }).click();
   await expect(page.getByText("Showing 1 of 1 matching runs")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Inspect workflow run run-08", exact: true })).toBeVisible();
+  await expect(inspectRun(page, "run-08")).toBeVisible();
   const dateRequest = (await readRunRequests(page))
     .map(path => new URL(path, "http://golden-runs.fixture"))
     .find(url => url.searchParams.get("correlationId") === "corr-08");
@@ -103,8 +104,8 @@ test("detail restores the filtered second page through Runs and browser Back", a
   await page.getByRole("button", { name: "Needs attention" }).click();
   await expect(page.getByText("Showing 10 of 11 matching runs")).toBeVisible();
   await page.getByRole("button", { name: "Next workflow run page" }).click();
-  await expect(page.getByRole("button", { name: "Inspect workflow run run-12", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Inspect workflow run run-12", exact: true }).click();
+  await expect(inspectRun(page, "run-12")).toBeVisible();
+  await inspectRun(page, "run-12").click();
   await expect(page.locator(".wf-instance-canvas-shell h3")).toBeVisible();
   await page.getByRole("tab", { name: "Details" }).click();
   await expect(page.locator(".wf-instance-meta")).toContainText("corr-12");
@@ -115,9 +116,9 @@ test("detail restores the filtered second page through Runs and browser Back", a
   await page.goBack();
   await expect(page).toHaveURL(/incidentHealth=active/);
   await expect(page).toHaveURL(/cursor=golden-runs-page-2/);
-  await expect(page.getByRole("button", { name: "Inspect workflow run run-12", exact: true })).toBeVisible();
+  await expect(inspectRun(page, "run-12")).toBeVisible();
 
-  await page.getByRole("button", { name: "Inspect workflow run run-12", exact: true }).click();
+  await inspectRun(page, "run-12").click();
   await expect(page.locator(".wf-instance-canvas-shell h3")).toBeVisible();
   const returnTo = new URL(page.url()).searchParams.get("returnTo");
   expect(returnTo).toBeTruthy();
@@ -130,9 +131,9 @@ test("detail restores the filtered second page through Runs and browser Back", a
   await page.getByRole("button", { name: "Runs", exact: true }).click();
   await expect(page).toHaveURL(/incidentHealth=active/);
   await expect(page).toHaveURL(/cursor=golden-runs-page-2/);
-  await expect(page.getByRole("button", { name: "Inspect workflow run run-12", exact: true })).toBeVisible();
+  await expect(inspectRun(page, "run-12")).toBeVisible();
   await page.getByRole("button", { name: "Clear filters" }).click();
-  await page.getByRole("button", { name: "Inspect workflow run run-01", exact: true }).click();
+  await inspectRun(page, "run-01").click();
   await expect(page.locator(".wf-instance-canvas-shell h3")).toBeVisible();
   await page.getByRole("tab", { name: /^Issues/ }).click();
   await expect(page.locator(".wf-instance-incident")).toContainText("Fixture incident for run-01");
@@ -193,7 +194,7 @@ test("loading, empty, unsupported and failed states stay distinct and failure ca
   await expect(page.getByRole("status", { name: "Loading workflow runs" })).toBeVisible();
   await expect(page.getByRole("alert")).toContainText("Fixture runtime request failed");
   await page.getByRole("button", { name: "Retry" }).click();
-  await expect(page.getByRole("button", { name: "Inspect workflow run run-01", exact: true })).toBeVisible();
+  await expect(inspectRun(page, "run-01")).toBeVisible();
 
   await page.goto("/golden-runs.html?workflowExecutionId=missing-run");
   await expect(page.getByText("No workflow runs match these filters")).toBeVisible();
@@ -227,9 +228,14 @@ async function openMoreFilters(page: Page) {
   if (await disclosure.getAttribute("aria-expanded") !== "true") await disclosure.click();
 }
 
+function inspectRun(page: Page, executionId: string) {
+  const escapedId = executionId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return page.getByRole("button", { name: new RegExp(`^Inspect workflow run ${escapedId} · `) });
+}
+
 function runRow(page: Page, executionId: string) {
   return page.locator(".wf-grid-row").filter({
-    has: page.getByRole("button", { name: `Inspect workflow run ${executionId}`, exact: true })
+    has: inspectRun(page, executionId)
   });
 }
 

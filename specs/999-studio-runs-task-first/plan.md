@@ -34,7 +34,7 @@ Reshape the existing Runs list into a task-first triage surface while keeping it
 
 ## Constitution Check
 
-*Checked against framework constitution v6.1.0, Elsa constitution v6.0.2, their Gate indexes, and `docs/contributing/review-checklist.md`. Rechecked after the design below; no exception required.*
+*Checked against framework constitution v6.1.0, Elsa constitution v6.1.0, their Gate indexes, and `docs/contributing/review-checklist.md`. Rechecked after the design below; no exception required.*
 
 - **§2.6 / §2.23.4 — module boundaries and hidden coupling**: Keep the chooser in the Workflows client. Consume the shared disclosure through its supported public Studio UI entry; do not deep-import app-private UI files or reproduce their coupling.
 - **§2.23.1 / §2.23.2 — meaningful tests**: Add behavior tests for filter composition, draft/apply state, identity selection, return validation, keyboard behavior, and disclosure forcing. Assert observable state and request effects, not prose alone. Preserve existing valid-behavior assertions.

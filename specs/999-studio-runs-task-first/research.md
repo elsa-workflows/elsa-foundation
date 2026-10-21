@@ -51,7 +51,7 @@ The repository Feature Map documents C# shell features. It does not enumerate Ty
 
 ## Constitution and review-checklist notes
 
-Reviewed the Gate indexes in framework constitution v6.1.0 and Elsa constitution v6.0.2, plus `docs/contributing/review-checklist.md`.
+Reviewed the Gate indexes in framework constitution v6.1.0 and Elsa constitution v6.1.0, plus `docs/contributing/review-checklist.md`.
 
 - Framework §2.6 / §2.23.4: keep module coupling visible and consume shared UI through its public entry; no private cross-module import.
 - Framework §2.23.1 / §2.23.2: exercise risky user behavior and preserve valid behavior; tests should prove state/query/navigation effects rather than asserting prose alone.

@@ -3140,7 +3140,7 @@ describe("workflows module", () => {
     expect(container.textContent).toContain("Test Run");
     expect(container.textContent).toContain("2 activities");
     expect(container.textContent).toContain("1 incidents");
-    await click(rowByLabel(container, "Inspect workflow run wfexec-test · Completed · Current health unavailable"));
+    await click(rowByLabel(container, "Inspect workflow run wfexec-test · definition-1 · Completed · Current health unavailable"));
 
     expect(window.location.pathname).toBe("/workflows/instances/wfexec-test");
     expect(fetchMock).toHaveBeenCalledWith(
@@ -3174,7 +3174,9 @@ describe("workflows module", () => {
     await waitForText(container, "wfexec-1");
     const expectRunIdentity = (name: string) => {
       const row = container.querySelector(".wf-grid-row");
-      expect(row?.querySelector('[aria-label="Inspect workflow run wfexec-1"] strong')?.textContent).toBe(name);
+      expect(row?.querySelector(".wf-run-inspect strong")?.textContent).toBe(name);
+      expect(row?.querySelector(".wf-run-inspect")?.getAttribute("aria-label")).toBe(`Inspect workflow run wfexec-1 · ${name}`);
+      expect(row?.getAttribute("aria-label")).toContain(`wfexec-1 · ${name} ·`);
       for (const [label, value] of [["Execution ID", "wfexec-1"], ["Definition ID", "definition-1"], ["Definition version ID", "version-1"]]) {
         expect(row?.querySelector(`.studio-copyable-identifier__value[aria-label="${label}: ${value}"]`)?.getAttribute("title")).toBe(value);
         expect([...row?.querySelectorAll("button") ?? []].some(button => button.getAttribute("aria-label") === `Copy ${label}`)).toBe(true);
