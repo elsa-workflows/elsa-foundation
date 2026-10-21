@@ -34,7 +34,7 @@ html[data-theme-mode="dark"] .otel-panel {
 
 .otel-page {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
 }
 
 .otel-panel {
@@ -230,8 +230,13 @@ html[data-theme-mode="dark"] .otel-panel {
   border-right: 0;
 }
 
+.otel-trace-list {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
 .otel-trace-table {
-  height: calc(100% - 47px);
+  min-height: 0;
   overflow: auto;
 }
 
@@ -274,12 +279,20 @@ html[data-theme-mode="dark"] .otel-panel {
 }
 
 .otel-trace-row span,
+.otel-trace-row small,
 .otel-trace-row strong,
 .otel-waterfall-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.otel-trace-row small {
+  display: block;
+  color: var(--otel-text-muted);
+  font-size: 11px;
+  font-weight: 400;
 }
 
 .otel-status-chip[data-status="ok"] {
@@ -296,7 +309,7 @@ html[data-theme-mode="dark"] .otel-panel {
 
 .otel-trace-detail {
   display: grid;
-  grid-template-rows: auto minmax(220px, 1fr) minmax(210px, 0.8fr);
+  grid-template-rows: auto minmax(0, 1fr) minmax(0, 0.8fr);
 }
 
 .otel-trace-detail-header {
@@ -431,9 +444,13 @@ html[data-theme-mode="dark"] .otel-panel {
   padding: 12px;
 }
 
+.otel-overview > section {
+  overflow: auto;
+}
+
 .otel-signal-cards {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-top: 10px;
 }
@@ -479,6 +496,7 @@ html[data-theme-mode="dark"] .otel-panel {
 .otel-source-row strong,
 .otel-source-row span {
   display: block;
+  overflow-wrap: anywhere;
 }
 
 .otel-source-row span {

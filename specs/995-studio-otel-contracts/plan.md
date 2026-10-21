@@ -66,6 +66,7 @@ specs/995-studio-otel-contracts/
 ```text
 Extensions/Diagnostics.OpenTelemetry/studio/Elsa.Studio.Diagnostics.OpenTelemetry/Client/
 ├── src/module.tsx
+├── src/styles.css
 └── src/__tests__/module.test.ts
 
 Essentials/tests/Diagnostics/OpenTelemetry/Tests/
@@ -81,3 +82,8 @@ No constitution gate is violated; no complexity exception is required.
 ## Root Planning Review
 
 Root read all five planning artifacts and checked their supported enums, nested response fields, test-project names, package scripts, source paths, and private-host guard assumptions against the controlled checkout. The plan preserves all three issue acceptance criteria, existing trace/span export, and the unsupported Logs boundary. Source references and serial-build commands were corrected, and the canonical private-root prefix/purpose remains compatible with its cleanup guard. Approved for task generation only; product/test edits require a separately reviewed task checkpoint. No execution or runtime acceptance is claimed here.
+
+
+## Root implementation refinement
+
+Source review retains the approved mapping/state boundary and includes the existing module stylesheet for narrowly related presentation repairs: four page sections receive four grid rows, the two stored-count cards fill two columns, trace name/ID use separate lines, wrapping filters no longer rely on a fixed toolbar height, and detail/source regions can scroll within available height. Long source identifiers wrap. This is the existing page's layout, without a new component pattern, module reference or dependency. Root will inspect actual normal-host 1440px light and 1280px dark screenshots and the supported trace/filter journey before accepting presentation. The same review preserves known resource IDs when service metadata is blank, and the approved all-unknown service fallback includes its supplied resource-ID count.

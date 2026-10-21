@@ -26,7 +26,7 @@ const trace = {
 const tracesResponse = {
   items: [
     trace,
-    { ...trace, traceId: "trace-unset-3131", name: "Unset operation", startTime: "2026-10-21T08:00:00.000Z", endTime: "2026-10-21T08:00:00.010Z", duration: "00:00:00.0100000", status: "Unset", resourceIds: ["resource-workbench-3131"], workflowInstanceIds: [], spanCount: 1 },
+    { ...trace, traceId: "trace-unset-3131", name: "Unset operation", startTime: "2026-10-21T08:00:00.000Z", endTime: "2026-10-21T08:00:00.010Z", duration: "00:00:00.0100000", status: "Unset", resourceIds: ["resource-unknown-3131"], workflowInstanceIds: [], spanCount: 1 },
     { ...trace, traceId: "trace-error-3131", name: "Error operation", startTime: "2026-10-21T07:00:00.000Z", endTime: "2026-10-21T07:00:00.025Z", duration: "00:00:00.0250000", status: "Error", resourceIds: ["resource-activities-3131"], workflowInstanceIds: [], spanCount: 1 }
   ],
   droppedCount: 2
@@ -35,7 +35,7 @@ const tracesResponse = {
 const resources = [
   { id: "resource-workbench-3131", serviceName: "elsa-workbench", serviceInstanceId: "workbench-instance", telemetrySdkLanguage: "dotnet", attributes: { environment: "test" }, lastSeen: "2026-10-21T09:00:01.250Z", status: "Active" },
   { id: "resource-activities-3131", serviceName: "elsa-activities", serviceInstanceId: "activities-instance", telemetrySdkLanguage: "dotnet", attributes: {}, lastSeen: "2026-10-21T09:00:01.250Z", status: "Stale" },
-  { id: "resource-unknown-3131", serviceName: "", serviceInstanceId: null, telemetrySdkLanguage: null, attributes: {}, lastSeen: "2026-10-21T09:00:01.250Z", status: "Unknown" }
+  { id: "resource-unknown-3131", serviceName: "   ", serviceInstanceId: null, telemetrySdkLanguage: null, attributes: {}, lastSeen: "2026-10-21T09:00:01.250Z", status: "Unknown" }
 ];
 
 const resourcesResponse = { items: resources, droppedCount: 0 };
@@ -103,9 +103,9 @@ describe("open telemetry module", () => {
 
   it("orders waterfall rows by parent-child span hierarchy", () => {
     const spans = [
-      normalizeSpan({ spanId: "grandchild", parentSpanId: "child", name: "Grandchild", startTime: "2026-06-22T00:00:00.030Z", durationMs: 5 }),
-      normalizeSpan({ spanId: "root", name: "Root", startTime: "2026-06-22T00:00:00.000Z", durationMs: 50 }),
-      normalizeSpan({ spanId: "child", parentSpanId: "root", name: "Child", startTime: "2026-06-22T00:00:00.010Z", durationMs: 20 })
+      normalizeSpan({ spanId: "grandchild", parentSpanId: "child", name: "Grandchild", startTime: "2026-06-22T00:00:00.030Z", endTime: "2026-06-22T00:00:00.035Z" }),
+      normalizeSpan({ spanId: "root", name: "Root", startTime: "2026-06-22T00:00:00.000Z", endTime: "2026-06-22T00:00:00.050Z" }),
+      normalizeSpan({ spanId: "child", parentSpanId: "root", name: "Child", startTime: "2026-06-22T00:00:00.010Z", endTime: "2026-06-22T00:00:00.030Z" })
     ];
 
     expect(buildWaterfallRows(spans).map(row => [row.span.spanId, row.depth])).toEqual([
@@ -146,6 +146,8 @@ describe("US1 — find and inspect a workflow trace", () => {
     expect(container.textContent).toContain("Error");
     expect(traceRow.textContent).toContain("1.25s");
     expect(traceRow.textContent).not.toMatch(/\b\d+ errors?\b/i);
+    const unknownServiceRow = Array.from(container.querySelectorAll<HTMLElement>('[role="row"]')).find(row => row.textContent?.includes("trace-unset-3131"));
+    expect(unknownServiceRow?.textContent).toContain("Unknown (1 resource)");
 
     const waterfall = container.querySelector('[aria-label="Trace waterfall"]');
     const activity = Array.from(waterfall?.querySelectorAll("button") ?? []).find(button => button.textContent?.includes("WriteLine"));
@@ -174,10 +176,8 @@ describe("US1 — find and inspect a workflow trace", () => {
 
     const traceIdInput = container.querySelector<HTMLInputElement>('input[aria-label="Filter by trace ID"]');
     const serviceInput = container.querySelector<HTMLInputElement>('input[aria-label="Filter by service"]');
-    const nameSearchInput = container.querySelector<HTMLInputElement>('input[aria-label="Filter by trace name or ID"]')
-      ?? container.querySelector<HTMLInputElement>('input[aria-label="Filter by operation"]');
-    const statusFilter = container.querySelector<HTMLSelectElement>('select[aria-label="Filter by trace status"]')
-      ?? container.querySelector<HTMLSelectElement>('select[aria-label="Filter by span status"]');
+    const nameSearchInput = container.querySelector<HTMLInputElement>('input[aria-label="Filter by trace name or ID"]');
+    const statusFilter = container.querySelector<HTMLSelectElement>('select[aria-label="Filter by trace status"]');
     const takeFilter = container.querySelector<HTMLSelectElement>('select[aria-label="Trace result limit"]');
 
     expect(traceIdInput).not.toBeNull();
@@ -207,15 +207,47 @@ describe("US1 — find and inspect a workflow trace", () => {
     expect(container.querySelector('input[aria-label="Filter by trace name or ID"]')).not.toBeNull();
   });
 
+  it.each([
+    { label: "result limit", ariaLabel: "Trace result limit", value: "250" },
+    { label: "trace name search", ariaLabel: "Filter by trace name or ID", value: "WriteLine" }
+  ])("keeps selected detail and export usable when search returns the same trace after a $label change", async ({ ariaLabel, value }) => {
+    const captured = captureTraceExport();
+
+    const { container, requests } = renderPage(backendResponder);
+    await flushPromises();
+    const filter = container.querySelector<HTMLInputElement | HTMLSelectElement>(`[aria-label="${ariaLabel}"]`);
+    expect(filter).not.toBeNull();
+    if (!filter) return;
+
+    setValue(filter, value);
+    await flushPromises();
+
+    const traceSearch = requests.filter(request => request.method === "POST" && request.url.endsWith("/diagnostics/opentelemetry/traces/search"));
+    expect(traceSearch.at(-1)?.body).toMatchObject(ariaLabel === "Trace result limit" ? { take: 250 } : { search: "WriteLine" });
+    const selectedRow = container.querySelector<HTMLButtonElement>(".otel-trace-row.selected");
+    expect(selectedRow?.textContent).toContain(traceId);
+    selectedRow?.click();
+    await flushPromises();
+
+    expect.soft(container.querySelector(".otel-trace-detail-header h3")?.textContent).toBe("Workflow WriteLine");
+    expect.soft(container.querySelector('[aria-label="Trace waterfall"]')).not.toBeNull();
+    const copy = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Copy JSON");
+    const download = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Download");
+    expect.soft(copy).toBeDefined();
+    expect.soft(download).toBeDefined();
+
+    if (copy && download) {
+      copy.click();
+      download.click();
+      await flushPromises();
+      expectSupportedTraceExport(captured.copiedJson);
+      expect(captured.downloadedBlob).not.toBeNull();
+      if (captured.downloadedBlob) expectSupportedTraceExport(await readBlob(captured.downloadedBlob));
+    }
+  });
+
   it("projects nested trace detail for display and trace/span export without the unsupported logs", async () => {
-    let copiedJson = "";
-    let downloadedBlob: Blob | null = null;
-    replaceGlobal(navigator, "clipboard", { writeText: async (value: string) => { copiedJson = value; } });
-    replaceGlobal(URL, "createObjectURL", (blob: Blob) => { downloadedBlob = blob; return "blob:trace-3131"; });
-    replaceGlobal(URL, "revokeObjectURL", () => {});
-    replaceGlobal(HTMLAnchorElement.prototype, "click", function(this: HTMLAnchorElement) {
-      if (this.download.endsWith(".json")) this.dataset.downloadCaptured = "true";
-    });
+    const captured = captureTraceExport();
 
     const { container } = renderPage(backendResponder);
     await flushPromises();
@@ -232,9 +264,9 @@ describe("US1 — find and inspect a workflow trace", () => {
     download.click();
     await flushPromises();
 
-    expectSupportedTraceExport(copiedJson);
-    expect(downloadedBlob).not.toBeNull();
-    if (downloadedBlob) expectSupportedTraceExport(await downloadedBlob.text());
+    expectSupportedTraceExport(captured.copiedJson);
+    expect(captured.downloadedBlob).not.toBeNull();
+    if (captured.downloadedBlob) expectSupportedTraceExport(await readBlob(captured.downloadedBlob));
     expect(container.textContent).not.toContain("log-sentinel-3131");
   });
 });
@@ -254,6 +286,9 @@ describe("US2 — understand stored diagnostic data", () => {
     expect(text).not.toMatch(/trace total|total traces|signal health|\bhealthy\b/i);
     expect(text).toContain("elsa-workbench");
     expect(text).toContain("elsa-activities");
+    expectResourceStatus(container, "resource-workbench-3131", "elsa-workbench", "Active");
+    expectResourceStatus(container, "resource-activities-3131", "elsa-activities", "Stale");
+    expectResourceStatus(container, "resource-unknown-3131", "Unknown", "Unknown");
     expect(requests.some(request => request.method === "GET" && request.url.endsWith("/diagnostics/opentelemetry/storage"))).toBe(true);
     expect(requests.some(request => request.method === "POST" && request.url.endsWith("/diagnostics/opentelemetry/resources/search"))).toBe(true);
   });
@@ -312,6 +347,17 @@ describe("US2 — understand stored diagnostic data", () => {
     expectStoredCount(container, /spans?/, "6");
     expect(container.textContent).not.toMatch(/permission denied|\bunavailable\b|\bloading\b/i);
   });
+
+  it("does not turn absent or malformed stored counts into zero", async () => {
+    const malformedStorageResponse = { ...storageResponse, resourceCount: undefined, spanCount: "invalid" as unknown as number };
+    const { container } = renderPage(overviewResponder("success", "success", malformedStorageResponse));
+    await flushPromises();
+    findTab(container, "Overview")?.click();
+    await flushPromises();
+
+    expectStoredCount(container, /resources?/, "Unavailable");
+    expectStoredCount(container, /spans?/, "Unavailable");
+  });
 });
 
 describe("US3 — distinguish empty, denied, and unavailable states", () => {
@@ -357,7 +403,26 @@ describe("US3 — distinguish empty, denied, and unavailable states", () => {
 
     expect(requests.some(request => request.method === "GET" && request.url.endsWith(`/diagnostics/opentelemetry/traces/${traceId}`))).toBe(true);
     expect(container.textContent).toMatch(/trace.*(missing|no longer available|not found)|(missing|no longer available|not found).*trace/i);
+    expect(container.textContent).toContain("Workflow WriteLine");
     expect(container.textContent).not.toMatch(/OpenTelemetry diagnostics are unavailable/i);
+  });
+
+  it.each([
+    ["permission denied", "Status code '403'", /Permission denied while loading this trace/i],
+    ["failure", "Status code '500'", /Trace details failed to load/i]
+  ])("keeps selected trace detail %s scoped to the detail pane", async (_state, message, expected) => {
+    const { container } = renderPage(async request => {
+      if (request.method === "POST" && request.url.endsWith("/diagnostics/opentelemetry/traces/search")) return { items: [trace], droppedCount: 0 };
+      if (request.method === "POST" && request.url.endsWith("/diagnostics/opentelemetry/resources/search")) return resourcesResponse;
+      if (request.method === "GET" && request.url.endsWith("/diagnostics/opentelemetry/storage")) return storageResponse;
+      if (request.method === "GET" && request.url.endsWith(`/diagnostics/opentelemetry/traces/${traceId}`)) throw new Error(message);
+      throw new Error("Status code '404'");
+    });
+    await flushPromises();
+
+    expect(container.textContent).toMatch(expected);
+    expect(container.textContent).toContain("Workflow WriteLine");
+    expect(container.textContent).not.toMatch(/OpenTelemetry diagnostics (are unavailable|failed)/i);
   });
 
   it("keeps Metrics and OpenTelemetry Logs explicitly unsupported and preserves the Diagnostics handoff", async () => {
@@ -453,16 +518,24 @@ function findTab(container: HTMLElement, label: string) {
 
 function expectStoredCount(container: HTMLElement, label: RegExp, value: string) {
   const card = Array.from(container.querySelectorAll<HTMLElement>(".otel-signal-card"))
-    .find(candidate => label.test(candidate.querySelector("h4")?.textContent ?? ""));
+    .find(candidate => label.test((candidate.querySelector("h4")?.textContent ?? "").toLowerCase()));
   expect(card).toBeDefined();
   expect(card?.textContent).toMatch(/stored/i);
   expect(card?.querySelector("strong")?.textContent).toBe(value);
 }
 
+function expectResourceStatus(container: HTMLElement, id: string, service: string, status: string) {
+  const row = container.querySelector<HTMLElement>(`[data-resource-id="${id}"]`);
+  expect(row).toBeDefined();
+  expect(row?.textContent).toContain(service);
+  expect(row?.textContent).toContain(`Resource status: ${status}`);
+  expect(row?.textContent).toContain(`Resource ID: ${id}`);
+}
+
 function expectOverviewReadState(container: HTMLElement, read: "resource" | "storage", state: RegExp) {
-  const headingPattern = read === "resource" ? /sources?|resources?/i : /storage|stored data/i;
-  const heading = Array.from(container.querySelectorAll<HTMLElement>("section h2, section h3, section h4"))
-    .find(candidate => headingPattern.test(candidate.textContent ?? ""));
+  const headingPattern = read === "resource" ? /^sources?$/i : /^(?:storage|stored data)$/i;
+  const heading = Array.from(container.querySelectorAll<HTMLElement>("section > h2, section > h3"))
+    .find(candidate => headingPattern.test(candidate.textContent?.trim() ?? ""));
   expect(heading).toBeDefined();
   expect(heading?.closest("section")?.textContent).toMatch(state);
 }
@@ -489,6 +562,21 @@ function replaceGlobal(target: object, key: string, value: unknown) {
   });
 }
 
+function captureTraceExport() {
+  let copiedJson = "";
+  let downloadedBlob: Blob | null = null;
+  replaceGlobal(navigator, "clipboard", { writeText: async (text: string) => { copiedJson = text; } });
+  replaceGlobal(URL, "createObjectURL", (blob: Blob) => { downloadedBlob = blob; return "blob:trace-3131"; });
+  replaceGlobal(URL, "revokeObjectURL", () => {});
+  replaceGlobal(HTMLAnchorElement.prototype, "click", function(this: HTMLAnchorElement) {
+    if (this.download.endsWith(".json")) this.dataset.downloadCaptured = "true";
+  });
+  return {
+    get copiedJson() { return copiedJson; },
+    get downloadedBlob() { return downloadedBlob; }
+  };
+}
+
 function expectSupportedTraceExport(json: string) {
   expect(json).toContain(traceId);
   expect(json).toContain("span-root-3131");
@@ -499,6 +587,15 @@ function expectSupportedTraceExport(json: string) {
 
 async function flushPromises() {
   for (let attempt = 0; attempt < 5; attempt++) await new Promise(resolve => setTimeout(resolve, 0));
+}
+
+function readBlob(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error ?? new Error("Unable to read exported trace."));
+    reader.readAsText(blob);
+  });
 }
 
 function registry() {
