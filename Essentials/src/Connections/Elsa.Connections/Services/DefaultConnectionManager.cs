@@ -14,13 +14,14 @@ namespace Elsa.Connections.Services;
 /// <list type="bullet">
 /// <item>
 /// <description>
-/// Create and Update check the request's shape, then ask the permission gate, then run the checks that read secrets
-/// and write (Create adds its row before the last of those checks). Before the gate, Create checks the name, owner, type, scheme, settings and credential sources. Update
-/// first reads the stored connection (a missing one returns null) and checks its type and scheme, then the request's
-/// settings, against that type, and its credential sources. After the gate come the bind-secret gate and whether each
-/// referenced secret is available. Update then checks whether an existing secret holds a managed credential name before
-/// it writes. Create first adds the connection row, so a taken name is a 409, then makes that managed-name check (a 400
-/// rolls the row back), writes the owned secrets and saves the row.
+/// Create and Update check the request's shape, then ask the permission gate, then run the checks that read secrets and
+/// write (Create adds its row before the last of those checks). Before the gate, Create checks the name, owner, type,
+/// scheme, settings and credential sources. Update first reads the stored connection (a missing one returns null) and
+/// checks its type and scheme, then the request's settings, against that type, and its credential sources. After the
+/// gate come the bind-secret gate and whether each referenced secret is available. Update then checks whether an
+/// existing secret holds a managed credential name before it writes. Create first adds the connection row, so a taken
+/// name is a 409, then makes that managed-name check (a 400 rolls the row back), writes the owned secrets and saves the
+/// row.
 /// </description>
 /// </item>
 /// <item>
