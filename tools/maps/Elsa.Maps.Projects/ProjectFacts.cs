@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using System.Xml.Linq;
 
-namespace Elsa.Maps.Generator;
+namespace Elsa.Maps.Projects;
 
 /// <summary>
 /// One project in the repository: a node of the canonical dependency map (spec 149), with the grouping
@@ -97,13 +97,13 @@ public static class ProjectGraph
     private static readonly string[] AllAssets = ["runtime", "compile", "build", "contentFiles", "native", "analyzers", "buildTransitive"];
 
     /// <summary>Reads every source and test project, in ordinal path order.</summary>
-    public static IReadOnlyList<ProjectFacts> Read(RepoContext repo)
+    public static IReadOnlyList<ProjectFacts> Read(IRepositoryTree tree)
     {
-        var packages = PackageVersions.Load(repo);
-        var lineAMembers = ProjectFile.ReadLineAMembers(repo);
+        var packages = PackageVersions.Load(tree);
+        var lineAMembers = ProjectFile.ReadLineAMembers(tree);
         var inheritedProperties = new Dictionary<string, XDocument?>(StringComparer.Ordinal);
 
-        var files = repo.ListFiles(RepoLayout.ProjectPathspecs).Select(path => ProjectFile.Load(repo, path)).ToArray();
+        var files = tree.ProjectFiles().Select(path => ProjectFile.Load(tree, path)).ToArray();
 
         // Case-insensitive so an Include whose casing differs from the tracked path still resolves to the node, and
         // the edge records the node's own path rather than the Include's spelling of it.
@@ -113,8 +113,8 @@ public static class ProjectGraph
         {
             var kind = RepoLayout.Kind(file.RelativePath);
             var domain = DomainGroup(file.Name);
-            var packable = ProjectFile.IsPackable(repo, file, inheritedProperties);
-            var internalEdges = InternalEdges(repo, file, byPath).ToArray();
+            var packable = ProjectFile.IsPackable(tree, file, inheritedProperties);
+            var internalEdges = InternalEdges(tree, file, byPath).ToArray();
 
             return new ProjectFacts(
                 file.RelativePath,
@@ -129,7 +129,7 @@ public static class ProjectGraph
                 packable ? ProjectFile.LineOf(file.Name, lineAMembers) : null,
                 [.. internalEdges, .. ExternalEdges(file, packages)])
             {
-                PrivateReferences = PrivateReferences(repo, file, internalEdges)
+                PrivateReferences = PrivateReferences(file, internalEdges)
             };
         }).ToArray();
     }
@@ -172,36 +172,33 @@ public static class ProjectGraph
     /// publishing reads these edges, so a dangling one would be wrong versions rather than a stale document.
     /// A target outside the backend Essentials and Extensions roots (a tool or a sample) is still internal, but has no node.
     /// </remarks>
-    private static IEnumerable<InternalEdge> InternalEdges(RepoContext repo, ProjectFile file, IReadOnlyDictionary<string, ProjectFile> byPath) =>
+    private static IEnumerable<InternalEdge> InternalEdges(IRepositoryTree tree, ProjectFile file, IReadOnlyDictionary<string, ProjectFile> byPath) =>
         file.Items("ProjectReference")
             .Select(item => item.Attribute("Include")?.Value)
             .OfType<string>()
             .Select(include =>
             {
-                var target = ReferencedPath(repo, file, include);
+                var target = ReferencedPath(file, include);
                 if (byPath.TryGetValue(target, out var node))
                     return new InternalEdge(node.PackageIdentity, node.RelativePath);
 
-                if (!File.Exists(repo.Absolute(target)))
+                if (!tree.Exists(target))
                     throw new InvalidOperationException($"{file.RelativePath}: ProjectReference '{include}' names a project that does not exist ({target}).");
 
-                return new InternalEdge(ProjectFile.Load(repo, target).PackageIdentity, target);
+                return new InternalEdge(ProjectFile.Load(tree, target).PackageIdentity, target);
             })
             .DistinctBy(edge => edge.RelativePath, StringComparer.Ordinal)
             .OrderBy(edge => edge.RelativePath, StringComparer.Ordinal);
 
     /// <summary>A <c>ProjectReference</c>'s repo-relative target, resolved against the referencing project's directory.</summary>
-    private static string ReferencedPath(RepoContext repo, ProjectFile file, string include)
+    private static string ReferencedPath(ProjectFile file, string include)
     {
         if (include.Contains("$(", StringComparison.Ordinal))
             throw new InvalidOperationException($"{file.RelativePath}: ProjectReference '{include}' uses an MSBuild property, which the maps generator cannot resolve.");
 
-        var directory = Path.GetDirectoryName(repo.Absolute(file.RelativePath))!;
-        var target = Path.GetRelativePath(repo.Root, Path.GetFullPath(include.Replace('\\', Path.DirectorySeparatorChar), directory)).Replace('\\', '/');
-        if (target.StartsWith("../", StringComparison.Ordinal) || Path.IsPathRooted(target))
-            throw new InvalidOperationException($"{file.RelativePath}: ProjectReference '{include}' resolves outside the repository.");
-
-        return target;
+        var separator = file.RelativePath.LastIndexOf('/');
+        return RepositoryTreeReading.Resolve(separator < 0 ? string.Empty : file.RelativePath[..separator], include)
+               ?? throw new InvalidOperationException($"{file.RelativePath}: ProjectReference '{include}' resolves outside the repository.");
     }
 
     /// <summary>
@@ -209,11 +206,11 @@ public static class ProjectGraph
     /// that declare <c>PrivateAssets</c> suppressing every asset, as an attribute or as metadata: NuGet leaves out of the
     /// nuspec a pinned package the project reaches only through such references.
     /// </summary>
-    private static HashSet<string> PrivateReferences(RepoContext repo, ProjectFile file, IReadOnlyList<InternalEdge> internalEdges)
+    private static HashSet<string> PrivateReferences(ProjectFile file, IReadOnlyList<InternalEdge> internalEdges)
     {
         var privateProjects = file.Items("ProjectReference").Where(SuppressesAllAssets)
             .Select(item => item.Attribute("Include")?.Value).OfType<string>()
-            .Select(include => ReferencedPath(repo, file, include))
+            .Select(include => ReferencedPath(file, include))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         return file.Items("PackageReference").Where(SuppressesAllAssets)

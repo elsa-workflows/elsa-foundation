@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 
-namespace Elsa.Maps.Generator;
+namespace Elsa.Maps.Projects;
 
 /// <summary>
 /// Repository-wide facts every map generator needs: where the root is, which files git considers part
@@ -11,8 +11,9 @@ namespace Elsa.Maps.Generator;
 /// File enumeration goes through <c>git ls-files</c> rather than a filesystem walk, matching the shell
 /// generators this replaces: git respects <c>.gitignore</c> and reports the tracked casing, whereas a raw
 /// walk picks up machine-local scratch files and on-disk casing, which churns the committed maps.
+/// As an <see cref="IRepositoryTree"/> it is the working-tree view of the project-graph scan, untracked files included.
 /// </remarks>
-public sealed class RepoContext
+public sealed class RepoContext : IRepositoryTree
 {
     private RepoContext(string root) => Root = root;
 
@@ -56,6 +57,15 @@ public sealed class RepoContext
             .Order(StringComparer.Ordinal)
             .ToArray();
     }
+
+    /// <inheritdoc />
+    public IReadOnlyList<string> ProjectFiles() => ListFiles(RepoLayout.ProjectPathspecs).Where(RepoLayout.IsProjectPath).ToArray();
+
+    /// <inheritdoc />
+    public bool Exists(string path) => File.Exists(Absolute(path));
+
+    /// <inheritdoc />
+    public byte[] Read(string path) => File.ReadAllBytes(Absolute(path));
 
     /// <summary>The absolute path for a repo-relative path.</summary>
     public string Absolute(string relativePath) => Path.Combine(Root, relativePath.Replace('/', Path.DirectorySeparatorChar));
