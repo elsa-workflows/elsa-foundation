@@ -5,6 +5,7 @@ using Elsa.Secrets.Persistence.EntityFrameworkCore;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.Support;
+using Elsa.Secrets.Tests.Support;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -140,9 +141,9 @@ public sealed class SqlServerEfSecretRepositoryTests(SqlServerContainerFixture f
         await EfDatabaseMigrator.ApplyAsync(context, SecretsSqlServerDbContext.ExpectedProviderName);
         var repository = new EfSecretRepository(context);
         var revisions = (IRevisionAwareSecretRepository)repository;
-        var tenantId = new string('t', 200);
-        var atLimit = Secret(tenantId, new string('a', SecretNameConstraints.MaximumKeyLength - tenantId.Length - 11), "value");
-        Assert.Equal(SecretNameConstraints.MaximumKeyLength, tenantId.Length + atLimit.Name.Length + atLimit.Id.Length);
+        var tenantId = SecretKeyLimit.TenantId;
+        var atLimit = Secret(tenantId, new string('a', SecretKeyLimit.NameLength), "value");
+        SecretKeyLimit.AssertFillsKey(atLimit.Name, atLimit.Id);
 
         Assert.True(await repository.TryAddAsync(atLimit));
         var loaded = (await revisions.FindWithRevisionAsync(tenantId, atLimit.Name))!;
@@ -156,6 +157,39 @@ public sealed class SqlServerEfSecretRepositoryTests(SqlServerContainerFixture f
         bypass.Secrets.Add(SecretDocument.FromSecret(pastLimit).ToRecord());
         var refused = await Assert.ThrowsAsync<DbUpdateException>(() => bypass.SaveChangesAsync());
         Assert.Contains("maximum length of 900 bytes", refused.InnerException!.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A secret created before <see cref="SecretNameConstraints.MaximumKeyLength"/> could have a tenant id and name of up
+    /// to 450 characters. Once a host from before <c>FreeNameOnDelete</c> deletes such a secret in place, SQL Server
+    /// refuses the row the reindex would move it to, so the reindex names the row for the operator to shorten or remove,
+    /// and leaves it where it was.
+    /// </summary>
+    [SkippableFact]
+    public async Task The_reindex_names_a_deleted_in_place_row_sql_server_cannot_move_under_its_id()
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
+        var connectionString = await fixture.CreateIsolatedDatabaseAsync();
+        await using var context = CreateContext(connectionString);
+        await EfDatabaseMigrator.ApplyAsync(context, SecretsSqlServerDbContext.ExpectedProviderName);
+        var tenantId = SecretKeyLimit.TenantId;
+        var preBound = Secret(tenantId, new string('a', SecretKeyLimit.NameLength + 6), "value");
+        preBound.Status = SecretStatus.Deleted;
+        await using (var olderHost = CreateContext(connectionString))
+        {
+            var deletedInPlace = SecretDocument.FromSecret(preBound).ToRecord();
+            deletedInPlace.Tombstone = "";
+            olderHost.Secrets.Add(deletedInPlace);
+            await olderHost.SaveChangesAsync();
+        }
+
+        var refused = await Assert.ThrowsAsync<SecretsProjectionException>(() => SecretsProjectionContract.ReindexAsync(context));
+
+        Assert.Equal((tenantId, preBound.Name), (refused.TenantId, refused.NormalizedName));
+        Assert.Contains("Shorten this row's tenant id or name, or remove the row, by hand", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("maximum length of 900 bytes", refused.InnerException!.InnerException!.Message, StringComparison.Ordinal);
+        var row = await context.Secrets.AsNoTracking().SingleAsync();
+        Assert.Equal(("", "deleted"), (row.Tombstone, row.Status));
     }
 
     private static SecretsSqlServerDbContext CreateContext(string connectionString) => new(Options(connectionString).Options);

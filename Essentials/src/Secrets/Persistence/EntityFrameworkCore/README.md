@@ -111,8 +111,21 @@ A secret's tenant id, name and id together are limited to 450 characters
 (`SecretNameConstraints.MaximumKeyLength`) on every provider, because the row a delete writes is keyed
 by all three, and 450 UTF-16 characters are the 900 bytes SQL Server allows a clustered key. Generated
 ids have 11 characters, so a tenant id and a name have 439 between them. A create past the limit is
-refused with a validation error that names the longest name the tenant can have, so a secret that
-could be created can always be deleted.
+refused with a validation error that names the longest name the tenant can have, so a secret created
+since this limit was introduced can always be deleted.
+
+Known limits, all on SQL Server only, where the key is bounded at 900 bytes; PostgreSQL, MySQL and
+SQLite have no such bound here, so the audit does not check key length:
+
+- A live secret created before this limit, whose tenant id and name together have 440 to 450
+  characters, cannot be deleted: the row its delete writes is refused. Shorten or recreate it.
+- `FreeNameOnDelete` fails loudly for an already-deleted row whose tenant id and name together exceed
+  429 characters, because its 21-character `-deleted-before-reuse` tombstone takes the key past 450.
+  Shorten or remove that row by hand, then apply the migration again.
+- `post-migrate` cannot repair a 440-to-450-character row of that kind that an older host deleted in
+  place, because the row it would move the secret to is refused. `SecretsProjectionReindex` then
+  fails with a `SecretsProjectionException` that names the tenant and secret name and rolls back its
+  batch. Shorten or remove that row by hand and rerun `post-migrate`.
 
 Derived contexts: `SecretsSqliteDbContext`, `SecretsSqlServerDbContext`,
 `SecretsPostgreSqlDbContext`, and `SecretsMySqlDbContext`. Each has its own

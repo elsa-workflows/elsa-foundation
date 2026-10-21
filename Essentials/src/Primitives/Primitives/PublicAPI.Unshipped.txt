@@ -15,6 +15,7 @@ const Elsa.Primitives.Diagnostics.ActivityErrorCodes.RequestInvalid = "activity.
 const Elsa.Primitives.Diagnostics.ActivityErrorCodes.VersionConflict = "activity.version.conflict" -> string!
 const Elsa.Primitives.Diagnostics.ActivityErrorCodes.VersionInvalid = "activity.version.invalid" -> string!
 const Elsa.Primitives.Exceptions.SchemaWriteRefusedException.RefusalCode = "schema-write-refused" -> string!
+const Elsa.Primitives.Identity.ShortIdentityGenerator.Length = 11 -> int
 Elsa.Primitives.Contracts.IIdentityGenerator
 Elsa.Primitives.Contracts.IIdentityGenerator.Generate() -> string!
 Elsa.Primitives.Contracts.ISystemClock

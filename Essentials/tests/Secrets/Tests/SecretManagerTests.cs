@@ -1,6 +1,7 @@
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Extensions;
+using Elsa.Secrets.Tests.Support;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
@@ -172,10 +173,10 @@ public sealed class SecretManagerTests : IDisposable
     [Fact]
     public async Task Create_Refuses_A_Name_Whose_Deleted_Secret_Would_Not_Fit_The_Key()
     {
-        var tenantId = new string('t', 200);
-        var limit = SecretNameConstraints.MaximumKeyLength - tenantId.Length - 11;
+        var tenantId = SecretKeyLimit.TenantId;
+        var limit = SecretKeyLimit.NameLength;
         var atLimit = await CreateEncryptedAsync(new string('a', limit), tenantId: tenantId);
-        Assert.Equal(SecretNameConstraints.MaximumKeyLength, tenantId.Length + atLimit.Name.Length + atLimit.Id.Length);
+        SecretKeyLimit.AssertFillsKey(atLimit.Name, atLimit.Id);
         Assert.True(await _manager.DeleteAsync(tenantId, atLimit.Name));
 
         var refused = await Assert.ThrowsAsync<ArgumentException>(async () =>

@@ -22,6 +22,9 @@ public sealed class ShortIdentityGenerator(ISystemClock systemClock) : IIdentity
     private const int TimestampBits = 64 - RandomBits; // 42
     private const long MaxMilliseconds = (1L << TimestampBits) - 1;
 
+    /// <summary>The number of characters in every identifier this generator produces.</summary>
+    public const int Length = Base62.Width;
+
     public string Generate() => Generate(systemClock.UtcNow);
 
     public static string Generate(DateTimeOffset utcNow)

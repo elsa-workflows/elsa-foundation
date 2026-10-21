@@ -81,7 +81,7 @@ public static class SecretsProjectionContract
     /// Rewrites legacy projection columns and payload copies from the authoritative stored secret, and moves a secret
     /// deleted in place out of the row that holds its name into a row of its own under its id, which frees the name.
     /// </summary>
-    /// <exception cref="SecretsProjectionException">A row payload cannot be parsed or does not match its key; the current batch is rolled back.</exception>
+    /// <exception cref="SecretsProjectionException">A row payload cannot be parsed or does not match its key, or the database refuses the row a secret deleted in place moves to; the current batch is rolled back.</exception>
     public static async Task<int> ReindexAsync(
         SecretsDbContext context,
         CancellationToken cancellationToken = default)
@@ -96,18 +96,14 @@ public static class SecretsProjectionContract
             {
                 var records = await TakePageAsync(context.Secrets, after, cancellationToken);
                 var updatedBatch = 0;
+                var moves = new List<(SecretRecord Record, SecretDocument Current)>();
 
                 foreach (var record in records)
                 {
                     var (stored, current) = ReadDocuments(record);
                     if (DeletedInPlace(record, stored))
                     {
-                        // The same move a delete makes, in this batch's save: the row holding the name goes, its
-                        // revision still guarding the delete against a concurrent writer, and the secret's own row
-                        // takes its id as the tombstone. The revision carries over, as for every row this repairs.
-                        context.Secrets.Remove(record);
-                        context.Secrets.Add(current.ToRecord(record.ConcurrencyToken));
-                        updatedBatch++;
+                        moves.Add((record, current));
                         continue;
                     }
 
@@ -120,6 +116,12 @@ public static class SecretsProjectionContract
 
                 if (updatedBatch > 0)
                     await context.SaveProjectionChangesAsync(cancellationToken);
+
+                foreach (var (record, current) in moves)
+                {
+                    await MoveDeletedInPlaceAsync(context, record, current, cancellationToken);
+                    updatedBatch++;
+                }
 
                 await transaction.CommitAsync(cancellationToken);
                 updatedTotal += updatedBatch;
@@ -136,6 +138,31 @@ public static class SecretsProjectionContract
                 context.ChangeTracker.Clear();
                 throw;
             }
+        }
+    }
+
+    /// <summary>
+    /// The same move a delete makes, within the batch's transaction: the row holding the name goes, its revision still
+    /// guarding the delete against a concurrent writer, and the secret's own row takes its id as the tombstone. The
+    /// revision carries over, as for every row this repairs. Each move is its own save, so a row the provider refuses
+    /// is the one the failure names: on SQL Server, a secret created before the key length bound whose tenant id and
+    /// name leave its id no room within 900 bytes cannot be moved, and only the operator can shorten or remove it.
+    /// </summary>
+    private static async Task MoveDeletedInPlaceAsync(
+        SecretsDbContext context,
+        SecretRecord record,
+        SecretDocument current,
+        CancellationToken cancellationToken)
+    {
+        context.Secrets.Remove(record);
+        context.Secrets.Add(current.ToRecord(record.ConcurrencyToken));
+        try
+        {
+            await context.SaveProjectionChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (exception is not DbUpdateConcurrencyException)
+        {
+            throw SecretsProjectionException.ForRefusedMove(record, current.Tombstone, exception);
         }
     }
 

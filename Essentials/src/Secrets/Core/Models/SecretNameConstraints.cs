@@ -8,8 +8,8 @@ public static class SecretNameConstraints
     /// <summary>
     /// The most characters a secret's tenant id, normalized name and id may have together. A store keys a deleted
     /// secret by all three, its id being the tombstone that frees the name, and 450 UTF-16 characters are the 900
-    /// bytes SQL Server allows a clustered key. A generated id has 11 characters, so a tenant id and a name may have
-    /// 439 between them.
+    /// bytes SQL Server allows a clustered key. A generated id has <see cref="Elsa.Primitives.Identity.ShortIdentityGenerator.Length"/>
+    /// characters (11), so a tenant id and a name may have 439 between them.
     /// </summary>
     public const int MaximumKeyLength = 450;
 
@@ -36,7 +36,7 @@ public static class SecretNameConstraints
 
     /// <summary>
     /// Refuses a new secret whose tenant id, name and id together exceed <see cref="MaximumKeyLength"/>. Checked when a
-    /// secret is created, on every provider, so a secret that could be created can always be deleted: on SQL Server the
+    /// secret is created, on every provider, so a secret created since this bound can always be deleted: on SQL Server the
     /// row its delete writes would otherwise be refused.
     /// </summary>
     public static void ValidateKeyLength(string tenantId, string name, string id)
