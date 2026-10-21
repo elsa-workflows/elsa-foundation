@@ -274,6 +274,26 @@ public sealed class RescheduleActivityAlterationHandlerTests
     }
 
     [Fact]
+    public async Task PreflightAsync_AcceptsAFaultedSourceWhenItsParentAndEveryAncestorAreRunning()
+    {
+        var source = Source(ActivityExecutionStatus.Faulted) with
+        {
+            ParentActivityExecutionId = "parent",
+            Metadata = new Dictionary<string, string> { [RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId] = "work-1" }
+        };
+        var parent = Parent(ActivityExecutionStatus.Running) with { ParentActivityExecutionId = "grandparent" };
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        await executableStore.SaveAsync(ExecutableWithParent(acceptsRescheduledFaultedChild: true));
+        var staging = new Staging();
+
+        var result = await Handler(executableStore).PreflightAsync(
+            Context(source, staging, parent, Source(ActivityExecutionStatus.Running, "grandparent")));
+
+        Assert.True(result.IsAccepted);
+        Assert.Single(staging.StagedChanges);
+    }
+
+    [Fact]
     public async Task PreflightAsync_KeepsIntrinsicSuccessorScheduledEvenWhenInputsArePinned()
     {
         var source = Source(ActivityExecutionStatus.Faulted) with
