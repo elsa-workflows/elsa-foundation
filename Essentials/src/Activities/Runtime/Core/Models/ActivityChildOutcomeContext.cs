@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using Elsa.Activities.Runtime.Core.Contracts;
 
 namespace Elsa.Activities.Runtime.Core.Models;
@@ -16,6 +17,20 @@ public sealed class ActivityChildOutcomeContext
         ActivityFault fault,
         string incidentId,
         IReadOnlyList<ActivityChildNotifiedContext> notifications)
+        : this(parentContext, faultedChildActivityExecutionId, faultedChildExecutableNodeId, faultedChildIterationId,
+            fault, incidentId, notifications, FrozenDictionary<string, string>.Empty)
+    {
+    }
+
+    public ActivityChildOutcomeContext(
+        IActivityExecutionContext parentContext,
+        string faultedChildActivityExecutionId,
+        string faultedChildExecutableNodeId,
+        string? faultedChildIterationId,
+        ActivityFault fault,
+        string incidentId,
+        IReadOnlyList<ActivityChildNotifiedContext> notifications,
+        IReadOnlyDictionary<string, string> childSchedulingMetadata)
     {
         ArgumentNullException.ThrowIfNull(parentContext);
         ArgumentException.ThrowIfNullOrWhiteSpace(faultedChildActivityExecutionId);
@@ -23,6 +38,7 @@ public sealed class ActivityChildOutcomeContext
         ArgumentNullException.ThrowIfNull(fault);
         ArgumentException.ThrowIfNullOrWhiteSpace(incidentId);
         ArgumentNullException.ThrowIfNull(notifications);
+        ArgumentNullException.ThrowIfNull(childSchedulingMetadata);
 
         if (faultedChildIterationId is not null && string.IsNullOrWhiteSpace(faultedChildIterationId))
             throw new ArgumentException("Faulted child iteration id cannot be blank when provided.", nameof(faultedChildIterationId));
@@ -46,6 +62,7 @@ public sealed class ActivityChildOutcomeContext
         Fault = fault;
         IncidentId = incidentId;
         Notifications = Array.AsReadOnly(notifications.ToArray());
+        ChildSchedulingMetadata = childSchedulingMetadata.ToFrozenDictionary(StringComparer.Ordinal);
     }
 
     public IActivityExecutionContext ParentContext { get; }
@@ -55,4 +72,7 @@ public sealed class ActivityChildOutcomeContext
     public ActivityFault Fault { get; }
     public string IncidentId { get; }
     public IReadOnlyList<ActivityChildNotifiedContext> Notifications { get; }
+
+    /// <summary>Immutable metadata from the faulted child's committed scheduling provenance, independent of the delivery command.</summary>
+    public IReadOnlyDictionary<string, string> ChildSchedulingMetadata { get; }
 }

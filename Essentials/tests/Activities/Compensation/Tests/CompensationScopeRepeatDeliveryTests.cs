@@ -59,6 +59,25 @@ public sealed class CompensationScopeRepeatDeliveryTests
         Assert.Empty(repeated.Requests);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Child_callback_metadata_is_an_immutable_snapshot_independent_of_the_delivery_command(bool faulted)
+    {
+        var started = await ExecuteAsync();
+        var child = Assert.Single(started.Requests);
+        var metadata = child.Metadata.ToDictionary(pair => pair.Key, pair => pair.Value);
+        var context = NewContext(started.State, new Dictionary<string, string>());
+        IReadOnlyDictionary<string, string> snapshot = faulted
+            ? new ActivityChildFaultedContext(context, "child", child.ExecutableNodeId, "incident", null, null, null, metadata).ChildSchedulingMetadata
+            : new ActivityChildCompletedContext(context, "child", child.ExecutableNodeId, [ActivityOutcomes.Done], null, metadata).ChildSchedulingMetadata;
+
+        metadata[CompensationScope.MetadataKeys.Scope] = "different-scope";
+
+        Assert.Equal(ScopeExecutionId, snapshot[CompensationScope.MetadataKeys.Scope]);
+        Assert.Empty(context.SchedulerWorkItem.CommandMetadata);
+    }
+
     private static async Task<Evaluation> ExecuteAsync()
     {
         var context = NewContext(state: null, commandMetadata: new Dictionary<string, string>());
@@ -68,17 +87,17 @@ public sealed class CompensationScopeRepeatDeliveryTests
 
     private static async Task<Evaluation> CompletedAsync(RuntimeStructuralStateUpdate? state, RuntimeChildActivityScheduleRequest child, string childExecutionId)
     {
-        var context = NewContext(state, child.Metadata);
+        var context = NewContext(state, new Dictionary<string, string>());
         var continuation = await new CompensationScope().OnChildCompletedAsync(
-            new ActivityChildCompletedContext(context, childExecutionId, child.ExecutableNodeId, [ActivityOutcomes.Done]));
+            new ActivityChildCompletedContext(context, childExecutionId, child.ExecutableNodeId, [ActivityOutcomes.Done], null, child.Metadata));
         return new(continuation, context.GetChildActivityScheduleRequests().ToArray(), state);
     }
 
     private static async Task<Evaluation> FaultedAsync(RuntimeStructuralStateUpdate? state, RuntimeChildActivityScheduleRequest child, string childExecutionId, string incidentId)
     {
-        var context = NewContext(state, child.Metadata);
+        var context = NewContext(state, new Dictionary<string, string>());
         var continuation = await new CompensationScope().OnChildFaultedAsync(
-            new ActivityChildFaultedContext(context, childExecutionId, child.ExecutableNodeId, incidentId));
+            new ActivityChildFaultedContext(context, childExecutionId, child.ExecutableNodeId, incidentId, null, null, null, child.Metadata));
         return new(continuation, context.GetChildActivityScheduleRequests().ToArray(), state);
     }
 
