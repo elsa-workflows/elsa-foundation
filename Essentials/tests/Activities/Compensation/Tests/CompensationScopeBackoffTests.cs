@@ -260,8 +260,8 @@ public sealed class CompensationScopeBackoffTests
         string childExecutionId,
         string childNodeId)
     {
-        var context = NewContext(state, metadata);
-        var continuation = await scope.OnChildCompletedAsync(new ActivityChildCompletedContext(context, childExecutionId, childNodeId, [ActivityOutcomes.Done]));
+        var context = NewContext(state, new Dictionary<string, string>());
+        var continuation = await scope.OnChildCompletedAsync(new ActivityChildCompletedContext(context, childExecutionId, childNodeId, [ActivityOutcomes.Done], null, metadata));
         return new(continuation, context, context.GetChildActivityScheduleRequests().ToArray(), state);
     }
 
@@ -272,9 +272,9 @@ public sealed class CompensationScopeBackoffTests
         string childExecutionId,
         string incidentId)
     {
-        var context = NewContext(state, child.Metadata);
+        var context = NewContext(state, new Dictionary<string, string>());
         var continuation = await scope.OnChildFaultedAsync(
-            new ActivityChildFaultedContext(context, childExecutionId, child.ExecutableNodeId, incidentId, faultCode: "participant.fault", faultCategory: null));
+            new ActivityChildFaultedContext(context, childExecutionId, child.ExecutableNodeId, incidentId, null, "participant.fault", null, child.Metadata));
         return new(continuation, context, context.GetChildActivityScheduleRequests().ToArray(), state);
     }
 
