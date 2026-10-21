@@ -1,4 +1,4 @@
-# Quickstart: verify spec 261
+# Quickstart: verify spec 262
 
 ```bash
 dotnet test Extensions/Elsa3/tests/Mapping/Tests/Elsa3.Mapping.Tests.csproj --filter "FullyQualifiedName~Elsa3UndefinedResultTests|FullyQualifiedName~Elsa3StrictModeTests"

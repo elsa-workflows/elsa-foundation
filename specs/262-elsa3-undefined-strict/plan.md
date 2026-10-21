@@ -2,7 +2,7 @@
 
 **Branch**: `agent/claude/3012-elsa3-undefined-strict` | **Date**: 2026-10-20 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `specs/261-elsa3-undefined-strict/spec.md`
+**Input**: Feature specification from `specs/262-elsa3-undefined-strict/spec.md`
 
 ## Summary
 
@@ -80,7 +80,7 @@ existing JavaScript tests.
 ### Documentation (this feature)
 
 ```text
-specs/261-elsa3-undefined-strict/
+specs/262-elsa3-undefined-strict/
 ├── spec.md
 ├── plan.md
 ├── research.md

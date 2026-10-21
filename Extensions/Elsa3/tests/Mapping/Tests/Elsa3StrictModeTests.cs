@@ -7,7 +7,7 @@ using static Elsa3.Mapping.Tests.Elsa3BuiltInConversionTests;
 namespace Elsa3.Mapping.Tests;
 
 /// <summary>
-/// Spec 261 User Stories 2–4 (research R-3 to R-6): Elsa 3 ran JavaScript in sloppy mode, Elsa 4 runs it in strict mode.
+/// Spec 262 User Stories 2–4 (research R-3 to R-6): Elsa 3 ran JavaScript in sloppy mode, Elsa 4 runs it in strict mode.
 /// What only works in sloppy mode is refused with <c>VF-IMP-007</c>; the same shapes written for strict mode convert.
 /// Each refusal is checked as a bound expression and as a RunJavaScript body.
 /// </summary>

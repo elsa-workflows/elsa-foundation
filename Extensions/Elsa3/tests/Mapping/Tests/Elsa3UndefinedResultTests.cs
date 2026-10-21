@@ -9,7 +9,7 @@ using static Elsa3.Mapping.Tests.Elsa3BuiltInConversionTests;
 namespace Elsa3.Mapping.Tests;
 
 /// <summary>
-/// Spec 261 User Story 1 (research R-1, R-2): Elsa 3 turned an <c>undefined</c> result into <c>null</c>, while the Elsa 4
+/// Spec 262 User Story 1 (research R-1, R-2): Elsa 3 turned an <c>undefined</c> result into <c>null</c>, while the Elsa 4
 /// binding evaluator refuses it. Converted expressions end every value that leaves them with <c>?? null</c>; they are run
 /// in the Elsa 4 evaluator and compared with the value Elsa 3 returned.
 /// </summary>

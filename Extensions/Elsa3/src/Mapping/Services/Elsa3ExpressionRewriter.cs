@@ -34,7 +34,7 @@ public sealed class Elsa3ExpressionRewriter
     /// <param name="mode">
     /// <see cref="Elsa3JavaScriptMode.Expression"/>: the result is one expression, as Elsa 4 evaluates it; a statement
     /// form is wrapped in a function returning its completion value (plan D-15). Every value that leaves it ends in
-    /// <c>?? null</c>, because Elsa 3 returned null where Elsa 4 refuses undefined (spec 261).
+    /// <c>?? null</c>, because Elsa 3 returned null where Elsa 4 refuses undefined (spec 262).
     /// <see cref="Elsa3JavaScriptMode.Script"/>: a RunJavaScript body, whose completion value becomes a <c>return</c>
     /// (plan D-16).
     /// </param>
@@ -101,7 +101,7 @@ public sealed class Elsa3ExpressionRewriter
             foreach (var bare in topLevelReturns.Where(statement => statement.Argument is null))
                 edits.Add(new SourceEdit(bare.Start + "return".Length, bare.Start + "return".Length, " null"));
 
-            // An expression's returned value becomes null when it is undefined (spec 261 R-1).
+            // An expression's returned value becomes null when it is undefined (spec 262 R-1).
             if (mode == Elsa3JavaScriptMode.Expression)
             {
                 foreach (var returned in topLevelReturns.Where(statement => statement.Argument is not null))
@@ -184,7 +184,7 @@ public sealed class Elsa3ExpressionRewriter
 
     /// <summary>
     /// Parses a converted source the way Elsa 4 will evaluate it: strict mode, as one expression in Expression mode and
-    /// inside the RunJavaScript arrow wrapper in Script mode (spec 261 R-3). Elsa 3 ran sloppy mode, so what fails here
+    /// inside the RunJavaScript arrow wrapper in Script mode (spec 262 R-3). Elsa 3 ran sloppy mode, so what fails here
     /// cannot run in Elsa 4 and is refused. An Expression-mode source that is no longer an expression is refused too,
     /// because Elsa 4 would then run it as statements.
     /// </summary>
@@ -325,7 +325,7 @@ public sealed class Elsa3ExpressionRewriter
     }
 
     /// <summary>
-    /// Makes the value of <c>source[start..end]</c> null when it is undefined, as Elsa 3 did (spec 261 R-1). The parentheses
+    /// Makes the value of <c>source[start..end]</c> null when it is undefined, as Elsa 3 did (spec 262 R-1). The parentheses
     /// keep the expression one unit, so <c>a || b</c> and <c>a, b</c> stay valid. Edits are applied in descending start
     /// order and, at one offset, in the order added: a replacement added earlier (an analyzer edit) keeps the opening
     /// parenthesis in front of it, and an insertion added later at the same offset (<c>return </c>) lands before it.
@@ -345,7 +345,7 @@ public sealed class Elsa3ExpressionRewriter
 
     /// <summary>
     /// Ends a RunJavaScript body with a newline when its last line holds a <c>//</c>. Elsa 4 wraps the body on one line, so
-    /// a trailing line comment would swallow the end of the wrapper; Elsa 3 ran the body as is (spec 261 R-5). A
+    /// a trailing line comment would swallow the end of the wrapper; Elsa 3 ran the body as is (spec 262 R-5). A
     /// <c>//</c> inside a string on that line also gets the newline, which is harmless.
     /// </summary>
     private static string EndScript(string script) =>
@@ -568,7 +568,7 @@ public sealed class Elsa3ExpressionRewriter
 
         /// <summary>
         /// The non-arrow functions (and class bodies) enclosing the node being visited, innermost last. Each owns its
-        /// own <c>this</c> and <c>arguments</c>; arrow functions share their enclosing one's (spec 261 R-6).
+        /// own <c>this</c> and <c>arguments</c>; arrow functions share their enclosing one's (spec 262 R-6).
         /// </summary>
         private readonly List<FunctionContext> _functions = [];
 
@@ -623,7 +623,7 @@ public sealed class Elsa3ExpressionRewriter
 
         /// <summary>
         /// Records what Elsa 3's sloppy mode treated differently from Elsa 4's strict mode around <c>this</c> and
-        /// <c>arguments</c> (spec 261 R-6): either refused here (outside every function) or noted on the enclosing
+        /// <c>arguments</c> (spec 262 R-6): either refused here (outside every function) or noted on the enclosing
         /// function, which refuses its writes when it pops if it also read <c>arguments</c>.
         /// </summary>
         private void CheckThisAndArguments(Node node)
@@ -799,7 +799,7 @@ public sealed class Elsa3ExpressionRewriter
             }
 
             // Elsa 3's sloppy mode turned a write to an undeclared name into a global; Elsa 4's strict mode throws
-            // (spec 261 R-4). The parse cannot see it, so the scopes decide.
+            // (spec 262 R-4). The parse cannot see it, so the scopes decide.
             foreach (var written in WrittenNames(node).Where(name => !IsDeclared(name)))
                 Issues.Add(UndeclaredWrite(written));
             CheckThisAndArguments(node);

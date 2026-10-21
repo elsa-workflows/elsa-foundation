@@ -32,7 +32,7 @@ internal static class PortableJavaScript
             CancellationToken.None));
     }
 
-    /// <summary>Runs a converted RunJavaScript body with the Elsa 4 script evaluator, with no arguments (spec 261 R-5).</summary>
+    /// <summary>Runs a converted RunJavaScript body with the Elsa 4 script evaluator, with no arguments (spec 262 R-5).</summary>
     public static async Task<JsonElement?> RunScriptAsync(string source)
     {
         var services = new ServiceCollection();
