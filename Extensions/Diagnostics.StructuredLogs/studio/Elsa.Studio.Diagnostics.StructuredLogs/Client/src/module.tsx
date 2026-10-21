@@ -267,7 +267,7 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
     }
 
     function connect() {
-      eventSource = new EventSource(createStreamUrl(moduleApi.backend, filters));
+      eventSource = new EventSource(createStreamUrl(moduleApi.backend, filters), { withCredentials: true });
 
       eventSource.onopen = () => {
         if (cancelled)
