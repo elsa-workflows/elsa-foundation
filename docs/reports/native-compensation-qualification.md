@@ -16,7 +16,7 @@ This record qualifies the integrated candidate. No package was released, no imag
 | M4 Operator actions in Studio | [260](../../specs/260-compensation-operator-actions/spec.md) | [#3136](https://github.com/elsa-workflows/elsa-foundation/pull/3136), [#3140](https://github.com/elsa-workflows/elsa-foundation/pull/3140) |
 | M5 Backoff, the replay-safe warning, qualification | [261](../../specs/261-compensation-qualification/spec.md) | PR 1 [#3152](https://github.com/elsa-workflows/elsa-foundation/pull/3152), PR 2 [#3157](https://github.com/elsa-workflows/elsa-foundation/pull/3157) and PR 3 (samples, guide and records), open when this was written |
 
-**Candidate revision.** Spec 261 PR 2 at commit `d7c0ab201`, which is PR 1 (`c69192425`, on `main` at `b555bd846`) plus PR 2's code. Studio is in the same repository, so one revision names both. The later PR 2 commits change documentation only. Every result below ran on that revision unless its row says otherwise. Results that only CI can produce (the server-provider rows, CI on the PR head, and the post-merge runs) are marked **pending** and are recorded on #3048 when they exist; a row is not claimed until its result is in.
+**Candidate revision.** Spec 261 PR 2 at commit `d7c0ab201`, which is PR 1 (`c69192425`, on `main` at `b555bd846`) plus PR 2's code. Studio is in the same repository, so one revision names both. The later PR 2 commits change documentation only. Every result below ran on that revision unless its row says otherwise. PR 3 (`0625bbfb9`; its test suites ran on `949e01563`, whose code is the same) adds the sample package, its tests and documentation, and changes no runtime or Studio code; its results are in Q3 and section 8. Results that only CI can produce (the server-provider rows, CI on the PR head, and the post-merge runs) are marked **pending** and are recorded on #3048 when they exist; a row is not claimed until its result is in.
 
 ## 2. Qualification matrix
 
@@ -26,7 +26,7 @@ Rows are the [qualification matrix](../../specs/261-compensation-qualification/c
 |---|---|---|---|---|---|
 | Q1 | Every M1–M5 journey in each mode on SQLite | `d7c0ab201` | Local: `dotnet test Essentials/tests/Activities/Compensation/Tests -c Release` | 427/427 | Includes BK0–BK6, the provider subset on SQLite (21) and every journey below that runs in this project. B&T on the PR head: pending. |
 | Q2 | Restart injection, every documented point | `d7c0ab201` | As Q1 | Included in Q1 | Spec 250 P1–P4, spec 251 points 1–4, spec 258 points 1–4, spec 260 O8 1–3, spec 261 backoff points 1–3. |
-| Q3 | Real process kill through REST | `d7c0ab201` | Local: `dotnet test Essentials/tests/Workbench/Tests -c Release --filter FullyQualifiedName~WorkbenchCompensation` | 6/6 | Includes the backoff kill while a retry waits, and W6, which now also asserts that the promotion preflight is ready with only warnings (see section 7). |
+| Q3 | Real process kill through REST | `d7c0ab201` | Local: `dotnet test Essentials/tests/Workbench/Tests -c Release --filter FullyQualifiedName~WorkbenchCompensation` | 6/6 | Includes the backoff kill while a retry waits, and W6, which now also asserts that the promotion preflight is ready with only warnings (see section 7). PR 3 adds the sample test (`WorkbenchCompensationSampleTests`, OD19 A): S1 and S2 to the end and S3 to an operator and resolved, in one process, about 40 seconds. With the six above, 7/7 on `949e01563`, plus the sample's unit tests 21/21. |
 | Q4 | PostgreSQL in each mode | `d7c0ab201` | Local: provider subset with `ELSA_COMPENSATION_EF_REQUIRE_NATIVE_PROVIDERS=1` against a PostgreSQL 16.15 server (`ELSA_COMPENSATION_EF_POSTGRESQL_TEST_CONNECTION_STRING`) | 21/21 | Docker was unavailable, so this ran against an installed PostgreSQL 16 server rather than the suite's `postgres:16-alpine` container. CI: `EF container suites (compensation)` on `3214f9242` ([run 39546015477](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39546015477/job/119044528563)), with the required-provider switch: 63/63 across the three providers, 0 skipped. |
 | Q5 | SQL Server in each mode | `3214f9242` | CI: `EF container suites (compensation)`, [run 39546015477](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39546015477/job/119044528563), `ELSA_COMPENSATION_EF_REQUIRE_NATIVE_PROVIDERS=1` | Passed (63/63 for the three providers, 0 skipped) | |
 | Q6 | MySQL in each mode | `3214f9242` | CI: `EF container suites (compensation)`, [run 39546015477](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39546015477/job/119044528563), `ELSA_COMPENSATION_EF_REQUIRE_NATIVE_PROVIDERS=1` | Passed (with Q4 and Q5) | |
@@ -139,7 +139,7 @@ The M5 review of the M1–M4 runtime and Studio code (T527, FR-521), and what th
 
 ## 8. Evidence
 
-**Negative controls.** PR 1's controls N501–N506 are recorded in the [quickstart](../../specs/261-compensation-qualification/quickstart.md#results-pr-1-run-once-by-hand-each-reverted). PR 2's controls are recorded there too; each was run once by hand and reverted:
+**Negative controls.** PR 1's controls N501–N506 are recorded in the [quickstart](../../specs/261-compensation-qualification/quickstart.md#results-pr-1-run-once-by-hand-each-reverted). PR 2's and PR 3's controls are recorded there too; each was run once by hand and reverted:
 
 | Control | Removed | Failing tests |
 |---|---|---|
@@ -149,6 +149,9 @@ The M5 review of the M1–M4 runtime and Studio code (T527, FR-521), and what th
 | N510 | Retained runs as executable retention roots | R3 in each mode (3) |
 | N511 | The outbox's `NotBefore` availability (N501), against the provider subset | S7 in each mode (3), and R3 in each mode (3) |
 | N512 | The in-memory store's one-generation guard | 1: the refused-second-generation test |
+| N513 | The sample participant's repeat rule (PR 3) | Sample 1 (the repeat test); the Workbench sample test does not repeat a step |
+| N514 | The sample participant's tombstone refusal (PR 3) | Sample 1 (the late-request test) |
+| N515 | The sample release's effect (PR 3) | Sample 4; the Workbench sample test |
 
 **Live journeys.** Section 2, Q12–Q14: four journeys passed and one (the reader step) was skipped, in 3.0 minutes on `d7c0ab201`.
 
