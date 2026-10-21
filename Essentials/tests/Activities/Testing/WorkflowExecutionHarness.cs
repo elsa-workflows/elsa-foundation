@@ -404,10 +404,12 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
     /// <remarks>
     /// Activates the agent on <see cref="Partition"/>, so this pairs with executions started by
     /// <see cref="StartPublishedAsync"/> (or dispatched beneath one). A run started by
-    /// <see cref="RunAsync(WorkflowExecutable)"/> carries no partition at all and is not what this targets.
+    /// <see cref="RunAsync(WorkflowExecutable)"/> carries no partition at all and is not what this targets. Pass the
+    /// <paramref name="partition"/> a run was started on when it is not <see cref="Partition"/>.
     /// </remarks>
-    public async Task CancelAsync(string workflowExecutionId)
+    public async Task CancelAsync(string workflowExecutionId, WorkflowExecutionPartition? partition = null)
     {
+        partition ??= Partition;
         var agent = await _provider.GetRequiredService<IWorkflowExecutionActorProvider>().GetAgentAsync(
             new WorkflowExecutionActorActivationRequest(
                 workflowExecutionId: workflowExecutionId,
@@ -415,7 +417,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
                 requestedAt: Now,
                 requestedBy: "activity-behavioural-drive",
                 requiredCapabilities: WorkflowExecutionActorCapabilities.None,
-                partition: Partition));
+                partition: partition));
 
         var command = new WorkflowExecutionCommand(
             CommandId: $"command-cancel-{workflowExecutionId}",
@@ -433,7 +435,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             deliveryMode: WorkflowExecutionCommandDeliveryMode.AtLeastOnce,
             enqueuedAt: Now,
             metadata: new Dictionary<string, string>(),
-            partition: Partition));
+            partition: partition));
         if (dispatch.Status != WorkflowExecutionCommandDispatchStatus.Accepted)
             throw new InvalidOperationException($"Cancel command was not accepted (status: {dispatch.Status}). Reason: {dispatch.Reason}");
     }
@@ -618,7 +620,22 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         var outcomes = ResolveOutcomes(node, activityType);
         var contract = NewActivityContract(activityType, descriptor, inputs, outcomes);
 
-        return CopyNode(node, childSlots, descriptor.Payload, bindings, contract);
+        return CopyNode(node, childSlots, descriptor.Payload, bindings, contract, WithStructuralFaultHandling(node.Metadata, activityType));
+    }
+
+    // Mirrors ExecutableNodeCompiler: the node carries how it handles faults below it (spec 258 R-3).
+    private static IReadOnlyDictionary<string, string> WithStructuralFaultHandling(IReadOnlyDictionary<string, string> metadata, Type activityType)
+    {
+        var faultHandling = typeof(IRuntimeActivityDescendantFaultHandler).IsAssignableFrom(activityType)
+            ? RuntimeMetadataKeys.StructuralFaultHandlingDescendant
+            : typeof(IRuntimeActivityChildFaultHandler).IsAssignableFrom(activityType) ||
+              typeof(IRuntimeActivityChildOutcomeHandler).IsAssignableFrom(activityType)
+                ? RuntimeMetadataKeys.StructuralFaultHandlingChild
+                : null;
+        if (faultHandling is null || metadata.ContainsKey(RuntimeMetadataKeys.StructuralFaultHandling))
+            return metadata;
+
+        return new Dictionary<string, string>(metadata, StringComparer.Ordinal) { [RuntimeMetadataKeys.StructuralFaultHandling] = faultHandling };
     }
 
     private static bool IsNullable(PropertyInfo property)
@@ -635,7 +652,8 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
         IReadOnlyCollection<ExecutableChildSlot> childSlots,
         JsonElement descriptorPayload,
         IReadOnlyDictionary<string, RuntimeInputBinding> inputBindings,
-        ActivityContract? contract)
+        ActivityContract? contract,
+        IReadOnlyDictionary<string, string>? metadata = null)
     {
         var consumerKey = StringComparer.Ordinal.Equals(
             contract?.DescriptorKind,
@@ -650,7 +668,7 @@ public sealed class WorkflowExecutionHarness : IAsyncDisposable
             new RuntimeActivityDescriptor(consumerKey, node.DescriptorSchemaVersion, descriptorPayload),
             inputBindings,
             node.OutputCaptures,
-            node.Metadata,
+            metadata ?? node.Metadata,
             node.ExecutionPlacement,
             childSlots,
             node.Structure,

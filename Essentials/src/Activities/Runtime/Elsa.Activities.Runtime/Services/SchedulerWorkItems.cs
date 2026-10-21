@@ -47,9 +47,25 @@ internal static class SchedulerWorkItems
         exception is ArgumentException { ParamName: { } paramName } && validationParamNames.Contains(paramName);
 
     /// <summary>
+    /// The command metadata an activity reports upward with: <paramref name="commandMetadata"/> overlaid with the
+    /// scheduling metadata its parent gave it. A structural activity that finishes from a child or notification
+    /// evaluation would otherwise report with the metadata of the child that triggered the evaluation, which carries
+    /// what this activity stamped on its own children, not what its parent stamped on it (spec 258: a nested scope
+    /// stamps the same routing keys as the scope around it).
+    /// </summary>
+    public static Dictionary<string, string> WithSchedulingMetadata(IReadOnlyDictionary<string, string> commandMetadata, ActivityExecutionState reportingState)
+    {
+        var metadata = commandMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        foreach (var (key, value) in reportingState.Provenance.Metadata)
+            metadata[key] = value;
+        return metadata;
+    }
+
+    /// <summary>
     /// Builds the <see cref="WorkflowExecutionCommandKind.CompleteActivity"/> work item that reports the completed
     /// activity invocation upward. <paramref name="commandMetadata"/> defaults to the source work item's own; the
-    /// parent-completion handler passes a copy stripped of fault-evaluation keys instead.
+    /// parent-completion handler passes a copy stripped of fault-evaluation keys instead. Either way the completed
+    /// activity's own scheduling metadata rides on top (<see cref="WithSchedulingMetadata"/>).
     /// </summary>
     public static RuntimeSchedulerWorkItem NewCompletionWorkItem(
         TimeProvider timeProvider,
@@ -82,7 +98,7 @@ internal static class SchedulerWorkItems
             recordedAt: now,
             sequence: sourceWorkItem.Sequence is { } sequence ? sequence + 1 : null,
             payload: JsonSerializer.SerializeToElement(payload),
-            commandMetadata: commandMetadata ?? sourceWorkItem.CommandMetadata,
+            commandMetadata: WithSchedulingMetadata(commandMetadata ?? sourceWorkItem.CommandMetadata, completedState),
             envelopeMetadata: sourceWorkItem.EnvelopeMetadata);
     }
 
@@ -142,11 +158,20 @@ internal static class SchedulerWorkItems
             // their own keys (or their own defaults), never the composite's inherited through command metadata.
             foreach (var key in AssignedOperationKeyNames)
                 childCommandMetadata.Remove(key);
+            // So does a due time: only the delayed schedule itself waits (R-7).
+            childCommandMetadata.Remove(RuntimeMetadataKeys.ScheduleNotBefore);
             foreach (var item in request.Metadata)
                 childCommandMetadata[item.Key] = item.Value;
 
             childCommandMetadata[RuntimeMetadataKeys.ParentActivityExecutionId] = parentActivityExecutionId;
             childCommandMetadata[RuntimeMetadataKeys.ChildExecutableNodeId] = request.ExecutableNodeId;
+            // R-7 (spec 261): a due time after now makes this a delayed schedule. Its post-commit intent becomes available
+            // then (SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent), and the schedule handler checks the run
+            // and the parent again when it is delivered. A due time at or before now schedules as usual.
+            if (request.NotBefore is { } notBefore && notBefore > now)
+                childCommandMetadata[RuntimeMetadataKeys.ScheduleNotBefore] = RuntimeDelayedSchedules.Format(notBefore);
+            else
+                childCommandMetadata.Remove(RuntimeMetadataKeys.ScheduleNotBefore);
 
             yield return new RuntimeSchedulerWorkItem(
                 workItemId: RuntimeChainId.Derive(sourceWorkItem.WorkItemId, $"schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}"),

@@ -154,15 +154,41 @@ public sealed class ExecutableNodeCompiler(
             descriptor: descriptor,
             inputBindings: inputBindings,
             outputCaptures: outputCaptures,
-            metadata: new Dictionary<string, string>
-            {
-                ["authoredNodeId"] = activity.NodeId,
-                [TriggerNodeMetadata.ExecutionTypeKey] = executionType
-            },
+            metadata: CompileNodeMetadata(activity.NodeId, executionType, clrActivityType),
             childSlots: childSlots,
             structure: structure,
             activityContract: activityContract,
             executionPlacement: activity.ExecutionPlacement);
+    }
+
+    private static Dictionary<string, string> CompileNodeMetadata(string nodeId, string executionType, Type? clrActivityType)
+    {
+        var metadata = new Dictionary<string, string>
+        {
+            ["authoredNodeId"] = nodeId,
+            [TriggerNodeMetadata.ExecutionTypeKey] = executionType
+        };
+
+        // Spec 258 R-3: how the node handles faults below it, read by the runtime without constructing the activity.
+        if (StructuralFaultHandling(clrActivityType) is { } faultHandling)
+            metadata[RuntimeMetadataKeys.StructuralFaultHandling] = faultHandling;
+        // #3135: whether rescheduling a faulted child the node already evaluated may reach it, read at preflight.
+        if (clrActivityType is not null && typeof(IRuntimeAcceptsRescheduledFaultedChild).IsAssignableFrom(clrActivityType))
+            metadata[RuntimeMetadataKeys.AcceptsRescheduledFaultedChild] = "true";
+
+        return metadata;
+    }
+
+    private static string? StructuralFaultHandling(Type? clrActivityType)
+    {
+        if (clrActivityType is null)
+            return null;
+        if (typeof(IRuntimeActivityDescendantFaultHandler).IsAssignableFrom(clrActivityType))
+            return RuntimeMetadataKeys.StructuralFaultHandlingDescendant;
+        if (typeof(IRuntimeActivityChildFaultHandler).IsAssignableFrom(clrActivityType) ||
+            typeof(IRuntimeActivityChildOutcomeHandler).IsAssignableFrom(clrActivityType))
+            return RuntimeMetadataKeys.StructuralFaultHandlingChild;
+        return null;
     }
 
     private static void ValidateBackgroundExecution(
@@ -437,11 +463,8 @@ public sealed class ExecutableNodeCompiler(
             supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true));
     }
 
-    // An unmarked activity is External (fail-safe); only an explicit
-    // [ActivitySideEffectProfile(ReplaySafe)] opts a pure/deterministic activity into a deferrable claim boundary.
-    private static SideEffectProfile ResolveSideEffectProfile(Type activityType) =>
-        activityType.GetCustomAttribute<ActivitySideEffectProfileAttribute>(inherit: true)?.Profile
-        ?? SideEffectProfile.External;
+    // The rule is shared with the design-time ActivitySideEffectProfileReader (spec 261 FR-513).
+    private static SideEffectProfile ResolveSideEffectProfile(Type activityType) => ActivitySideEffectProfiles.Of(activityType);
 
     private static ValueRepresentation ResolveSourceRepresentation(
         OutputAttribute attribute,

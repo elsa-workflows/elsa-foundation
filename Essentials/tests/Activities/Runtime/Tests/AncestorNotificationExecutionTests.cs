@@ -7,7 +7,10 @@ using Elsa.Primitives.Models;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Activities.Runtime.Services;
+using Elsa.Workflows.Runtime.Services.Recovery;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace Elsa.Activities.Runtime.Tests;
@@ -148,6 +151,142 @@ public sealed class AncestorNotificationExecutionTests
         var notifier = run.State("node-notifier");
         Assert.Equal(ActivityExecutionStatus.Faulted, notifier.Status);
         Assert.Empty(log.Entries);
+    }
+
+    [Fact]
+    public async Task AChildCompletionEvaluationThatCompletesMayNotifyAnAncestor_AheadOfItsOwnCompletion()
+    {
+        var log = new AncestorNotificationLog();
+        await using var harness = NewHarness(log, new AncestorDirective(), "actexec-ancestor", "actexec-relay", "actexec-notifier", "actexec-leaf");
+
+        var run = await harness.RunAsync(CompletionNotifierGraph(typeof(CompletingAncestorNotifierActivity)), allowPendingWorkOnTerminalCompletion: true);
+
+        run.AssertWorkflowCompleted();
+        run.AssertCompleted("node-notifier");
+        // Spec 258 R-2: the ancestor evaluates the notification before the relay sees the notifier complete.
+        Assert.Equal(
+            ["ancestor:node-ancestor:notified:exit:node-notifier", "relay:node-relay:child-completed:node-notifier"],
+            log.Entries.Take(2));
+    }
+
+    [Fact]
+    public async Task AChildCompletionEvaluationThatDefersMayNotNotifyAnAncestor()
+    {
+        var log = new AncestorNotificationLog();
+        await using var harness = NewHarness(log, new AncestorDirective(), "actexec-ancestor", "actexec-relay", "actexec-notifier", "actexec-leaf");
+
+        var run = await harness.RunAsync(CompletionNotifierGraph(typeof(DeferringCompletionNotifierActivity)), allowPendingWorkOnTerminalCompletion: true);
+
+        Assert.Equal(ActivityExecutionStatus.Faulted, run.State("node-notifier").Status);
+        Assert.DoesNotContain(log.Entries, entry => entry.Contains(":notified:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AChildFaultEvaluationMayNotNotifyAnAncestor()
+    {
+        var log = new AncestorNotificationLog();
+        await using var harness = NewHarness(log, new AncestorDirective(), "actexec-ancestor", "actexec-relay", "actexec-notifier", "actexec-leaf");
+
+        var run = await harness.RunAsync(
+            StructuralExecutionTestSupport.NewExecutable(
+                AncestorNode("node-ancestor",
+                    StructuralExecutionTestSupport.NewStructuralNode("node-relay", typeof(RelayActivity),
+                        StructuralExecutionTestSupport.NewStructuralNode("node-notifier", typeof(FaultEvaluationNotifierActivity),
+                            WorkflowExecutionHarness.NewFaultingNode("node-leaf"))))),
+            allowPendingWorkOnTerminalCompletion: true,
+            allowAcceptedButFaulted: true);
+
+        Assert.Equal(ActivityExecutionStatus.Faulted, run.State("node-notifier").Status);
+        Assert.DoesNotContain(log.Entries, entry => entry.Contains(":notified:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AChildCompletionEvaluationWithNoMatchingAncestorFaultsTheRequesterWithTheStableCode()
+    {
+        var log = new AncestorNotificationLog();
+        await using var harness = NewHarness(log, new AncestorDirective(), "actexec-relay", "actexec-notifier", "actexec-leaf");
+
+        var run = await harness.RunAsync(
+            StructuralExecutionTestSupport.NewExecutable(
+                StructuralExecutionTestSupport.NewStructuralNode("node-relay", typeof(RelayActivity),
+                    StructuralExecutionTestSupport.NewStructuralNode("node-notifier", typeof(CompletingAncestorNotifierActivity),
+                        WorkflowExecutionHarness.NewProbeNode("node-leaf")))),
+            allowPendingWorkOnTerminalCompletion: true,
+            allowAcceptedButFaulted: true);
+
+        var notifier = run.State("node-notifier");
+        Assert.Equal(ActivityExecutionStatus.Faulted, notifier.Status);
+        Assert.Equal("runtime.ancestor-notification.target-not-found", notifier.Fault!.Code);
+    }
+
+    [Fact]
+    public async Task AHostStopBetweenTheNotificationAndTheCompletionDeliversEachOnceAfterRestart()
+    {
+        var log = new AncestorNotificationLog();
+        await using var harness = WorkflowExecutionHarness.Create()
+            .ConfigureServices(services =>
+            {
+                services.AddSingleton(log);
+                services.AddSingleton(new AncestorDirective());
+                services.AddScoped<IActivityActivationStrategy, AncestorActivationStrategy>();
+                services.TryAddScoped<IRuntimeResumptionService, RuntimeResumptionService>();
+                StopHostOnFirstNotification(services);
+            })
+            .Build("actexec-ancestor", "actexec-relay", "actexec-notifier", "actexec-leaf");
+
+        var executable = CompletionNotifierGraph(typeof(CompletingAncestorNotifierActivity));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => harness.RunAsync(executable, allowPendingWorkOnTerminalCompletion: true));
+        Assert.DoesNotContain(log.Entries, entry => entry.Contains(":notified:", StringComparison.Ordinal));
+        // The notifier's completion, the notification and the relay's completion form one commit unit, so the stop
+        // discards all three: the notifier is still running and the leaf's completion is still queued, unclaimed. No
+        // claim was taken on the durable queue, so the restart has no visibility timeout to wait out; it replays the
+        // leaf's completion and delivers the notification and the completion afresh.
+        var stopped = await harness.ReadRunAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+        Assert.Equal(ActivityExecutionStatus.Running, stopped.State("node-notifier").Status);
+        Assert.Equal(ActivityExecutionStatus.Completed, stopped.State("node-leaf").Status);
+
+        await harness.SweepUntilQuietAsync();
+
+        var run = await harness.ReadRunAsync(WorkflowExecutionHarness.WorkflowExecutionId);
+        run.AssertWorkflowCompleted();
+        // The ancestor completes on the notification, so the relay's later completion reaches a finished ancestor.
+        Assert.Equal(
+            ["ancestor:node-ancestor:notified:exit:node-notifier", "relay:node-relay:child-completed:node-notifier"],
+            log.Entries);
+    }
+
+    private static WorkflowExecutable CompletionNotifierGraph(Type notifierType) =>
+        StructuralExecutionTestSupport.NewExecutable(
+            AncestorNode("node-ancestor",
+                StructuralExecutionTestSupport.NewStructuralNode("node-relay", typeof(RelayActivity),
+                    StructuralExecutionTestSupport.NewStructuralNode("node-notifier", notifierType,
+                        WorkflowExecutionHarness.NewProbeNode("node-leaf")))));
+
+    private static void StopHostOnFirstNotification(IServiceCollection services)
+    {
+        var descriptor = services.Single(candidate =>
+            candidate.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
+            candidate.ImplementationType == typeof(WorkflowNotifyParentActivitySchedulerWorkHandler));
+        services.Remove(descriptor);
+        var stopped = 0;
+        services.Add(ServiceDescriptor.Describe(
+            typeof(IWorkflowSchedulerWorkHandler),
+            serviceProvider => new HostStoppingNotificationHandler(
+                ActivatorUtilities.CreateInstance<WorkflowNotifyParentActivitySchedulerWorkHandler>(serviceProvider),
+                () => Interlocked.Exchange(ref stopped, 1) == 0),
+            descriptor.Lifetime));
+    }
+
+    private sealed class HostStoppingNotificationHandler(IWorkflowSchedulerWorkHandler inner, Func<bool> stopNow) : IWorkflowSchedulerWorkHandler
+    {
+        public string Name => inner.Name;
+
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => inner.CanHandle(workItem);
+
+        public ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default) =>
+            stopNow()
+                ? throw new OperationCanceledException("The host stopped during the pass.")
+                : inner.HandleAsync(workItem, cancellationToken);
     }
 
     private static WorkflowExecutionHarness NewHarness(AncestorNotificationLog log, AncestorDirective directive, params string[] activityExecutionIds) =>
@@ -307,6 +446,60 @@ public sealed class AncestorNotificationExecutionTests
         public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
         {
             context.RequestAncestorNotification(AncestorConsumerKey, "exit");
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+        }
+    }
+
+    /// <summary>Schedules its child; when the child completes, stages an ancestor notification and completes (R-2).</summary>
+    public sealed class CompletingAncestorNotifierActivity : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
+    {
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+        {
+            var child = Assert.Single(Assert.Single(context.ExecutableNode.ChildSlots).Activities);
+            context.ScheduleChildActivity(child.ExecutableNodeId, context.ActivityExecutionState.InvocationId);
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+        }
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
+        {
+            ((IRuntimeActivityExecutionContext)context.ParentContext).RequestAncestorNotification(AncestorConsumerKey, "exit");
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+        }
+    }
+
+    /// <summary>Stages an ancestor notification from a child-completion evaluation that defers: not allowed.</summary>
+    public sealed class DeferringCompletionNotifierActivity : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
+    {
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+        {
+            var child = Assert.Single(Assert.Single(context.ExecutableNode.ChildSlots).Activities);
+            context.ScheduleChildActivity(child.ExecutableNodeId, context.ActivityExecutionState.InvocationId);
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+        }
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context)
+        {
+            ((IRuntimeActivityExecutionContext)context.ParentContext).RequestAncestorNotification(AncestorConsumerKey, "exit");
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+        }
+    }
+
+    /// <summary>Stages an ancestor notification from a child-fault evaluation that completes: not allowed.</summary>
+    public sealed class FaultEvaluationNotifierActivity : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeActivityChildFaultHandler
+    {
+        public ValueTask<RuntimeStructuralContinuation> ExecuteStructureAsync(IRuntimeActivityExecutionContext context)
+        {
+            var child = Assert.Single(Assert.Single(context.ExecutableNode.ChildSlots).Activities);
+            context.ScheduleChildActivity(child.ExecutableNodeId, context.ActivityExecutionState.InvocationId);
+            return ValueTask.FromResult(RuntimeStructuralContinuation.Defer);
+        }
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildCompletedAsync(ActivityChildCompletedContext context) =>
+            ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
+
+        public ValueTask<RuntimeStructuralContinuation> OnChildFaultedAsync(ActivityChildFaultedContext context)
+        {
+            ((IRuntimeActivityExecutionContext)context.ParentContext).RequestAncestorNotification(AncestorConsumerKey, "exit");
             return ValueTask.FromResult(RuntimeStructuralContinuation.Complete());
         }
     }

@@ -31,6 +31,7 @@
     <ProjectReference Include="..\..\..\src\Api\AspNetCore\Elsa.Api.AspNetCore.csproj" />
     <ProjectReference Include="..\..\..\src\Foundation\Identity\Core\Elsa.Foundation.Identity.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Foundation\Identity\Elsa.Foundation.Identity\Elsa.Foundation.Identity.csproj" />
+    <ProjectReference Include="..\..\Testing\Elsa.Testing.csproj" />
   </ItemGroup>
 
 </Project>

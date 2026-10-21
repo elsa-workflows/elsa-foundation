@@ -5,10 +5,13 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using Elsa.Connections.Api.Features;
 using Elsa.Connections.Core.Contracts;
+using Elsa.Connections.Core.Exceptions;
 using Elsa.Connections.Core.Models;
 using Elsa.Connections.Extensions;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Foundation.Identity.Extensions;
+using Elsa.Secrets.Core.Contracts;
+using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Extensions;
 using Elsa.Secrets.Options;
 using Microsoft.AspNetCore.Authentication;
@@ -18,6 +21,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -62,6 +66,46 @@ public sealed class ConnectionsApiTests
 
         using var duplicate = await client.SendAsync(Authed(HttpMethod.Post, "/connections", BearerBody("dup")));
         Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+    }
+
+    [Fact]
+    public async Task Update_MapsACredentialWriteFailureTo500WithoutLeakingTheStoreFailure()
+    {
+        var body = await UpdateFailingWithAsync(name => new ConnectionCredentialWriteException(
+            name,
+            ["token"],
+            $"Connection '{name}' credential(s) 'token' were not written. Its other changes were saved.",
+            new IOException("Connection refused by db-host-1")));
+
+        Assert.Contains("token", body);
+        Assert.DoesNotContain("db-host-1", body);
+    }
+
+    [Fact]
+    public async Task Update_MapsAStoreFailureBeforeTheSaveTo500WithoutLeakingTheStoreFailure()
+    {
+        var body = await UpdateFailingWithAsync(name => new ConnectionStoreException(
+            name,
+            $"Connection '{name}' may not have been updated: the connection or secret store failed before the change was confirmed saved. Retry; if the retry reports a credential secret name as taken, use a different connection name or bind an existing secret.",
+            new IOException("Connection refused by db-host-1")));
+
+        Assert.Contains("may not have been updated", body);
+        Assert.DoesNotContain("db-host-1", body);
+    }
+
+    private async Task<string> UpdateFailingWithAsync(Func<string, Exception> failure)
+    {
+        await using var host = await StartHostAsync(configure: services =>
+        {
+            services.RemoveAll<IConnectionManager>();
+            services.AddScoped<IConnectionManager>(_ => new FailingConnectionManager(failure));
+        });
+        using var client = host.GetTestClient();
+
+        using var response = await client.SendAsync(Authed(HttpMethod.Put, "/connections/any", new { displayName = "Renamed" }));
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        return await response.Content.ReadAsStringAsync();
     }
 
     [Fact]
@@ -150,7 +194,7 @@ public sealed class ConnectionsApiTests
     }
 
     [Fact]
-    public async Task Test_WithTestPermissionOnly_DoesNotRequireUse()
+    public async Task Test_WithTestPermissionOnly_Succeeds()
     {
         await using var host = await StartHostAsync();
         using var client = host.GetTestClient();
@@ -167,13 +211,115 @@ public sealed class ConnectionsApiTests
         Assert.True(result!.Succeeded);
     }
 
-    private static object BearerBody(string name) => new
+    public static TheoryData<string, string> ListingRoutes => new()
+    {
+        { "GET", "/connections" },
+        { "GET", "/connections/descriptors" },
+        { "GET", "/connections/listed" },
+        { "POST", "/connections/picker" }
+    };
+
+    /// <summary>
+    /// Listing connection metadata is implied by <c>workflows/design:read</c> (and so by <c>workflows/design:manage</c>)
+    /// or by <c>connections:manage</c>, whose holder must see what they manage. The other connections rights and an
+    /// unrelated grant do not imply it, and no listing carries a secret value.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ListingRoutes))]
+    public async Task Listing_requires_workflow_design_read_or_connections_manage(string method, string route)
+    {
+        const string secretValue = "listed-canary-secret-value";
+        await using var host = await StartHostAsync();
+        using var client = host.GetTestClient();
+        using var created = await client.SendAsync(Authed(HttpMethod.Post, "/connections", BearerBody("listed", secretValue)));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        foreach (var (grant, expected) in new[]
+        {
+            ("workflows/design:read", HttpStatusCode.OK),
+            ("workflows/design:manage", HttpStatusCode.OK),
+            ("connections:manage", HttpStatusCode.OK),
+            ("connections:bind-secret,connections:test", HttpStatusCode.Forbidden),
+            ("workflows/runtime:read", HttpStatusCode.Forbidden)
+        })
+        {
+            using var response = await client.SendAsync(Authed(new HttpMethod(method), route, method == "POST" ? new { } : null, grant));
+            Assert.True(expected == response.StatusCode, $"'{grant}' on {method} {route} returned {(int)response.StatusCode}, not {(int)expected}.");
+            Assert.DoesNotContain(secretValue, await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        }
+    }
+
+    public static TheoryData<string, string, string> AdministrationRoutes => new()
+    {
+        { "POST", "/connections", "connections:manage" },
+        { "PUT", "/connections/administered", "connections:manage" },
+        { "POST", "/connections/administered/revoke", "connections:manage" },
+        { "GET", "/connections/administered/oauth-redirect-uri", "connections:manage" },
+        { "POST", "/connections/administered/test", "connections:test" },
+        { "DELETE", "/connections/administered", "connections:manage" }
+    };
+
+    /// <summary>The connections admin rights are unchanged: each administration route still needs its own right, which no workflow design grant implies.</summary>
+    [Theory]
+    [MemberData(nameof(AdministrationRoutes))]
+    public async Task Administration_still_requires_its_own_connections_right(string method, string route, string right)
+    {
+        await using var host = await StartHostAsync();
+        using var client = host.GetTestClient();
+        using var created = await client.SendAsync(Authed(HttpMethod.Post, "/connections", BearerBody("administered")));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        object? body = (method, route) switch
+        {
+            ("POST", "/connections") => BearerBody("created-by-an-administrator"),
+            ("PUT", _) => new { displayName = "Renamed" },
+            _ => null
+        };
+
+        using var designer = await client.SendAsync(Authed(new HttpMethod(method), route, body, "workflows/design:manage"));
+        Assert.Equal(HttpStatusCode.Forbidden, designer.StatusCode);
+
+        using var administrator = await client.SendAsync(Authed(new HttpMethod(method), route, body, right));
+        Assert.True(administrator.IsSuccessStatusCode, $"'{right}' on {method} {route} returned {(int)administrator.StatusCode}.");
+    }
+
+    [Fact]
+    public async Task Binding_an_existing_secret_still_requires_bind_secret()
+    {
+        await using var host = await StartHostAsync();
+        await using (var scope = host.Services.CreateAsyncScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<ISecretManager>().CreateAsync("tenant-a", new CreateSecretRequest
+            {
+                Name = "existing-token",
+                Value = "tok",
+                TypeName = SecretTypeNames.Text
+            });
+        }
+
+        using var client = host.GetTestClient();
+        var body = new
+        {
+            name = "bound",
+            typeName = "http",
+            authScheme = "bearer",
+            settings = new { allowedHosts = "api.example" },
+            secretFields = new { token = new { sourceKind = "secret", existingSecretName = "existing-token" } }
+        };
+
+        using var refused = await client.SendAsync(Authed(HttpMethod.Post, "/connections", body, "connections:manage,workflows/design:manage"));
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+
+        using var bound = await client.SendAsync(Authed(HttpMethod.Post, "/connections", body, "connections:manage,connections:bind-secret"));
+        Assert.Equal(HttpStatusCode.Created, bound.StatusCode);
+    }
+
+    private static object BearerBody(string name, string token = "tok") => new
     {
         name,
         typeName = "http",
         authScheme = "bearer",
         settings = new { allowedHosts = "api.example" },
-        secretFields = new { token = new { value = "tok" } }
+        secretFields = new { token = new { value = token } }
     };
 
     private static HttpRequestMessage Authed(HttpMethod method, string path, object? body = null, string? permissions = null)
@@ -187,7 +333,7 @@ public sealed class ConnectionsApiTests
         return request;
     }
 
-    private static async Task<WebApplication> StartHostAsync(string? publicBaseUrl = "https://studio.example")
+    private static async Task<WebApplication> StartHostAsync(string? publicBaseUrl = "https://studio.example", Action<IServiceCollection>? configure = null)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -213,6 +359,7 @@ public sealed class ConnectionsApiTests
         builder.Services.AddConnections(configuration);
         builder.Services.Configure<Elsa.Connections.Options.ConnectionsOptions>(options => options.PublicBaseUrl = publicBaseUrl);
         new ConnectionsApiFeature().ConfigureServices(builder.Services);
+        configure?.Invoke(builder.Services);
 
         var app = builder.Build();
         Assert.NotNull(app.Services.GetService<IConnectionManager>());
@@ -221,6 +368,25 @@ public sealed class ConnectionsApiTests
         new ConnectionsApiFeature().MapEndpoints(app, app.Environment);
         await app.StartAsync();
         return app;
+    }
+
+    /// <summary>Fails every update with the exception the default manager throws for a store outage.</summary>
+    private sealed class FailingConnectionManager(Func<string, Exception> failure) : IConnectionManager
+    {
+        public ValueTask<ConnectionMetadata?> UpdateAsync(string tenantId, string name, UpdateConnectionRequest request, CancellationToken cancellationToken = default) =>
+            throw failure(name);
+
+        public ValueTask<ConnectionMetadata> CreateAsync(string tenantId, CreateConnectionRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public ValueTask<ConnectionMetadata?> FindAsync(string tenantId, string name, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public ValueTask<IReadOnlyList<ConnectionMetadata>> ListAsync(string tenantId, ConnectionQuery? query = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public ValueTask<ConnectionTestResult> TestAsync(string tenantId, string name, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public ValueTask<ConnectionMetadata?> RevokeAsync(string tenantId, string name, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public ValueTask<bool> DeleteAsync(string tenantId, string name, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class HeaderAuthenticationHandler(

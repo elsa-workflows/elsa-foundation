@@ -7,6 +7,8 @@ using Elsa.Workflows.Design.Persistence.EntityFrameworkCore;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -33,6 +35,26 @@ public sealed class ModuleMigrationTests : IDisposable
             Assert.True(context.Database.GetMigrations().Any(), $"{type.Name} has no migrations. Run tools/ef/generate-module-migrations.sh.");
             Assert.False(context.Database.HasPendingModelChanges(), $"{type.Name} has model changes without a migration. Run tools/ef/generate-module-migrations.sh.");
         }
+    }
+
+    /// <summary>
+    /// The Secrets migration that frees a deleted secret's name has to move the key onto the tombstone on every provider.
+    /// MySql.EntityFrameworkCore generates no SQL for DropPrimaryKey or AddPrimaryKey, so a migration relying on them
+    /// there applies, is recorded, and leaves the old key refusing every reused name. The script shows that without a
+    /// database.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public void Secrets_name_reuse_migration_moves_the_key_onto_the_tombstone(string provider)
+    {
+        var type = ModuleContextCatalog.Contexts(provider).Single(context => context.Name.StartsWith("Secrets", StringComparison.Ordinal));
+        using var context = ModuleContextCatalog.Create(type, ModuleContextCatalog.PlaceholderConnection(provider));
+        var migrations = context.Database.GetMigrations().ToArray();
+        var reuse = Assert.Single(migrations, migration => migration.EndsWith("_FreeNameOnDelete", StringComparison.Ordinal));
+
+        var script = context.GetService<IMigrator>().GenerateScript(migrations[Array.IndexOf(migrations, reuse) - 1], reuse);
+
+        Assert.Matches(@"PRIMARY KEY \(\W?TenantId\W?, \W?NormalizedName\W?, \W?Tombstone\W?\)", script);
     }
 
     /// <summary>

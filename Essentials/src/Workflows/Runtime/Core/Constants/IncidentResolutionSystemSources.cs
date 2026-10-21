@@ -8,6 +8,8 @@ public static class IncidentResolutionSystemSources
     public const string StructuralIntervention = "StructuralIntervention";
     /// <summary>An operator resolved the incident by retrying its faulted activity through an alteration.</summary>
     public const string OperatorRetryAlteration = "OperatorRetryAlteration";
+    /// <summary>An operator resolved the incident with an offered intervention decision through an alteration.</summary>
+    public const string OperatorDecisionAlteration = "OperatorDecisionAlteration";
     public const string SubtreeCancellation = "SubtreeCancellation";
     public const string ActivityActivationFailure = "ActivityActivationFailure";
     public const string PoisonedSchedulerWork = "PoisonedSchedulerWork";

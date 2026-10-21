@@ -3,12 +3,17 @@ using Elsa.Activities.Compensation.Internal;
 using Elsa.Specifications.PackageManifest.Generator.Hints;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Contracts;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Elsa.Activities.Compensation;
 
 /// <summary>
-/// Adds the native <c>CompensationScope</c> activity: its design-side structure handler and its Draft validator.
+/// Adds the native <c>CompensationScope</c> activity with <c>Confirm</c> and <c>Compensate</c>: the scope's design-side
+/// structure handler, the Draft validators for scopes, for Confirm and Compensate targets, for the variables a
+/// handed-over compensation handler uses and for replay-safe steps and handlers (a warning), and the journal projector
+/// the runtime's activity state view serves.
 /// Native compensation is separate from BPMN compensation (ADR 0086).
 /// </summary>
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
@@ -25,5 +30,11 @@ public class ActivitiesCompensationFeature : IShellFeature
     {
         services.AddSingleton<IActivityStructureHandler, CompensationScopeStructureHandler>();
         services.AddScoped<IDraftValidator, CompensationScopeValidator>();
+        services.AddScoped<IDraftValidator, CompensationTargetValidator>();
+        services.AddScoped<IDraftValidator, CompensationHandlerVariableValidator>();
+        // Spec 261 FR-014 (OD20 A): a non-blocking warning on a replay-safe step or handler; needs Publishing's profile reader.
+        services.AddScoped<IDraftValidator, CompensationReplaySafeValidator>();
+        // The read-only journal operators read through the runtime's activity state view (spec 260 R-6).
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IActivityStateViewProjector, CompensationJournalProjector>());
     }
 }

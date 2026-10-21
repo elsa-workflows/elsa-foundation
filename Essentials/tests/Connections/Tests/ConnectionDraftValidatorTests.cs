@@ -1,21 +1,32 @@
+using System.Security.Claims;
 using Elsa.Activities.Design.Core.Contracts;
 using Elsa.Activities.Design.Core.Models;
+using Elsa.Connections.Api.Features;
 using Elsa.Connections.Core.Contracts;
-using Elsa.Connections.Core.Exceptions;
 using Elsa.Expressions.Core.Models;
 using Elsa.Connections.Core.Models;
+using Elsa.Connections.Design.Features;
 using Elsa.Connections.Design.Validators;
 using Elsa.Connections.Services;
+using Elsa.Foundation.Identity.Core.Authorization;
+using Elsa.Foundation.Identity.Extensions;
 using Elsa.Primitives.Models;
 using Elsa.Workflows.Design.Core.Contracts;
 using Elsa.Workflows.Design.Core.Models;
+using Elsa.Workflows.Design.Validations.Core.Contracts;
 using Elsa.Workflows.Design.Validations.Core.Models;
+using Elsa.Workflows.Runtime.Core.Extensions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Elsa.Connections.Tests;
 
 public sealed class ConnectionDraftValidatorTests
 {
+    private const string Tenant = "tenant-a";
+    private const string AuthenticationType = "test";
+
     [Fact]
     public async Task MissingAndWrongType_Block_NeedsAuthorization_DoesNot()
     {
@@ -30,8 +41,7 @@ public sealed class ConnectionDraftValidatorTests
             new EmptyStructureService(),
             new Catalog(httpConnectionType: ConnectionTypeNames.Http),
             manager,
-            new FixedConnectionPublishTenantAccessor(tenant),
-            new NullConnectionPermissionGate());
+            new FixedConnectionPublishTenantAccessor(tenant));
 
         var missing = (await validator.Validate(new FakeDraft(Node("missing-one")), CancellationToken.None)).ToArray();
         Assert.Contains(missing, error => error.Type == ConnectionDraftValidator.MissingType);
@@ -56,8 +66,7 @@ public sealed class ConnectionDraftValidatorTests
             new EmptyStructureService(),
             catalog,
             manager,
-            new FixedConnectionPublishTenantAccessor(tenant),
-            new NullConnectionPermissionGate());
+            new FixedConnectionPublishTenantAccessor(tenant));
         var literalNode = new ActivityNode(
             "n1",
             "ver-1",
@@ -79,29 +88,80 @@ public sealed class ConnectionDraftValidatorTests
             new EmptyStructureService(),
             catalog,
             manager,
-            new NullConnectionPublishTenantAccessor(),
-            new NullConnectionPermissionGate());
+            new NullConnectionPublishTenantAccessor());
         var blank = (await blankTenant.Validate(new FakeDraft(Node("ready-http")), CancellationToken.None)).ToArray();
         Assert.Contains(blank, error => error.Type == ConnectionDraftValidator.MissingType);
         Assert.Contains(blank, error => error.Message.Contains("tenant", StringComparison.OrdinalIgnoreCase));
     }
 
-    [Fact]
-    public async Task UsePermission_BlocksWhenTheGateRefuses()
+    /// <summary>
+    /// The validations panel, the dashboard's invalid-draft count and the promotion gate all run this validator as
+    /// whoever is asking, or as no one. Its findings must depend on the draft and the tenant's connections only, so a
+    /// viewer, a designer, a dashboard reader and a background pass see exactly what an operator sees: nothing for a
+    /// valid binding, and the same blocking finding for a missing one.
+    /// </summary>
+    [Theory]
+    [InlineData("workflows/design:read")]
+    [InlineData("workflows/design:manage")]
+    [InlineData("workflows/dashboard:read")]
+    [InlineData(null)]
+    public async Task Every_caller_sees_the_findings_an_operator_sees(string? grant)
     {
-        var tenant = "t1";
-        var repository = new InMemoryConnectionRepository();
-        await repository.TryAddAsync(Document(tenant, "ready-http", ConnectionTypeNames.Http, ConnectionStatuses.Ready));
-        var validator = new ConnectionDraftValidator(
-            new EmptyStructureService(),
-            new Catalog(httpConnectionType: ConnectionTypeNames.Http),
-            new RecordingManager(repository),
-            new FixedConnectionPublishTenantAccessor(tenant),
-            new DenyingUseGate());
+        await using var provider = CreateValidationProvider();
+        await provider.GetRequiredService<IConnectionRepository>()
+            .TryAddAsync(Document(Tenant, "ready-http", ConnectionTypeNames.Http, ConnectionStatuses.Ready));
 
-        var errors = (await validator.Validate(new FakeDraft(Node("ready-http")), CancellationToken.None)).ToArray();
-        Assert.Contains(errors, error => error.Type == ConnectionDraftValidator.ForbiddenType);
+        foreach (var connectionName in new[] { "ready-http", "missing-one" })
+        {
+            var operatorFindings = await ValidateAsAsync(provider, PermissionKey.Wildcard, connectionName);
+            var callerFindings = await ValidateAsAsync(provider, grant, connectionName);
+
+            Assert.Equal(operatorFindings, callerFindings);
+        }
+
+        Assert.Empty(await ValidateAsAsync(provider, grant, "ready-http"));
+        var missing = Assert.Single(await ValidateAsAsync(provider, grant, "missing-one"));
+        Assert.Equal(ConnectionDraftValidator.MissingType, missing.Type);
+        Assert.Equal(ValidationSeverities.Error, missing.Severity);
     }
+
+    private static ServiceProvider CreateValidationProvider() =>
+        ConnectionsTestComposition.CreateProvider(configure: services =>
+        {
+            services.AddFoundationIdentityAbstractions(options =>
+                options.NormalizedAuthenticationTypes = new HashSet<string>(StringComparer.Ordinal) { AuthenticationType });
+            services.AddPersistenceCore(Tenant);
+            new ConnectionsDesignFeature().ConfigureServices(services);
+            new ConnectionsApiFeature().ConfigureServices(services);
+            services.AddSingleton<IActivityStructureService>(new EmptyStructureService());
+            services.AddSingleton<IActivityDefinitionLookup>(new Catalog(ConnectionTypeNames.Http));
+        });
+
+    /// <summary>Validates a draft binding <paramref name="connectionName"/> as a caller holding <paramref name="grant"/>, or as no caller.</summary>
+    private static async Task<ValidationError[]> ValidateAsAsync(IServiceProvider provider, string? grant, string connectionName)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var accessor = scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>();
+        accessor.HttpContext = grant is null ? null : new DefaultHttpContext { User = Principal(grant) };
+        try
+        {
+            var validator = scope.ServiceProvider.GetServices<IDraftValidator>().OfType<ConnectionDraftValidator>().Single();
+            return (await validator.Validate(new FakeDraft(Node(connectionName)), CancellationToken.None)).ToArray();
+        }
+        finally
+        {
+            accessor.HttpContext = null;
+        }
+    }
+
+    private static ClaimsPrincipal Principal(string grant) =>
+        new(new ClaimsIdentity(
+        [
+            new Claim(IdentityClaimTypes.Permission, grant),
+            new Claim(IdentityClaimTypes.Normalized, "v1"),
+            new Claim(IdentityClaimTypes.Provider, "test"),
+            new Claim(IdentityClaimTypes.TenantId, Tenant)
+        ], AuthenticationType));
 
     private static ActivityNode Node(string connectionName) =>
         new("n1", "ver-1", [Bound("Connection", connectionName)], []);
@@ -237,20 +297,5 @@ public sealed class ConnectionDraftValidatorTests
 
         public ValueTask<bool> DeleteAsync(string tenantId, string name, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
-    }
-
-    private sealed class DenyingUseGate : IConnectionPermissionGate
-    {
-        public ValueTask EnsureManageAsync(string tenantId, CancellationToken cancellationToken = default) =>
-            ValueTask.CompletedTask;
-
-        public ValueTask EnsureUseAsync(string tenantId, CancellationToken cancellationToken = default) =>
-            throw new ConnectionUnavailableException("connection", ConnectionFaultCodes.Forbidden, "Permission connections:use is required.");
-
-        public ValueTask EnsureTestAsync(string tenantId, CancellationToken cancellationToken = default) =>
-            ValueTask.CompletedTask;
-
-        public ValueTask EnsureBindSecretAsync(string tenantId, CancellationToken cancellationToken = default) =>
-            ValueTask.CompletedTask;
     }
 }

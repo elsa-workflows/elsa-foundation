@@ -12,7 +12,13 @@ internal enum CompensationScopePhase
     /// <summary>A step or handler waits on an operator: its incident stays blocking with Wait for intervention.</summary>
     AwaitingIntervention,
     Completed,
-    Compensated
+    Compensated,
+
+    /// <summary>
+    /// An operator abandoned the recovery (spec 260): no further handler runs, every entry keeps its status, and the
+    /// scope faults with <c>compensation.scope.abandoned</c>. The journal stays as evidence.
+    /// </summary>
+    Abandoned
 }
 
 /// <summary>The recovery status of one journal entry. Persisted by name.</summary>
@@ -35,7 +41,27 @@ internal enum CompensationEntryStatus
     Uncertain,
 
     /// <summary>The handler failed on every attempt; the scope waits for an operator.</summary>
-    Failed
+    Failed,
+
+    /// <summary>A Confirm (or <c>confirmOnComplete</c>) ended the entry's eligibility; it is kept as evidence (spec 258).</summary>
+    Confirmed,
+
+    /// <summary>
+    /// An operator settled the entry without running it (spec 260), with the <see cref="CompensationEntryResolution"/>
+    /// outcome. Never eligible, confirmed or handed over; the resolution never changes.
+    /// </summary>
+    ResolvedManually
+}
+
+/// <summary>What an operator declared about a manually resolved entry's effect. Persisted by name.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<CompensationResolutionOutcome>))]
+internal enum CompensationResolutionOutcome
+{
+    /// <summary>The effect does not exist: it never happened, or it was undone outside Elsa.</summary>
+    EffectAbsent,
+
+    /// <summary>The effect exists and the business keeps it.</summary>
+    EffectAccepted
 }
 
 /// <summary>What the forward occurrence reported. Kept when the entry's status changes. Persisted by name.</summary>
@@ -67,13 +93,21 @@ internal sealed record CompensationScopeState
         int nextStepIndex,
         int nextOrdinal,
         CompensationRecoveryCause? cause = null,
-        IReadOnlyList<CompensationEntry>? entries = null)
+        IReadOnlyList<CompensationEntry>? entries = null,
+        IReadOnlyList<CompensationConfirmation>? confirmations = null,
+        IReadOnlyList<string>? receivedHandOvers = null,
+        IReadOnlyList<CompensationHandOverProgress>? handOversInProgress = null,
+        CompensationAbandonment? abandonment = null)
     {
         Phase = phase;
         NextStepIndex = nextStepIndex;
         NextOrdinal = nextOrdinal;
         Cause = cause;
         Entries = entries ?? [];
+        Confirmations = confirmations ?? [];
+        ReceivedHandOvers = receivedHandOvers ?? [];
+        HandOversInProgress = handOversInProgress ?? [];
+        Abandonment = abandonment;
     }
 
     public static CompensationScopeState Initial { get; } = new(CompensationScopePhase.Running, 0, 1);
@@ -89,6 +123,66 @@ internal sealed record CompensationScopeState
     public CompensationRecoveryCause? Cause { get; init; }
 
     public IReadOnlyList<CompensationEntry> Entries { get; init; }
+
+    /// <summary>Every Confirm (and <c>confirmOnComplete</c>), with the entries it confirmed. Never removed.</summary>
+    public IReadOnlyList<CompensationConfirmation> Confirmations { get; init; }
+
+    /// <summary>Inner scope occurrences whose hand-over was fully journaled; a repeat delivery changes nothing.</summary>
+    public IReadOnlyList<string> ReceivedHandOvers { get; init; }
+
+    /// <summary>Inner scope occurrences with some, not all, of their hand-over batches journaled.</summary>
+    public IReadOnlyList<CompensationHandOverProgress> HandOversInProgress { get; init; }
+
+    /// <summary>Which operator decision abandoned the recovery, set once with <see cref="CompensationScopePhase.Abandoned"/>.</summary>
+    public CompensationAbandonment? Abandonment { get; init; }
+}
+
+/// <summary>
+/// The abandonment of a scope's recovery: the incident the operator decided on, the entry that waited on it, and the
+/// phase the scope waited from (<see cref="CompensationScopePhase.Running"/> for a waiting step,
+/// <see cref="CompensationScopePhase.Compensating"/> for a waiting handler).
+/// </summary>
+internal sealed record CompensationAbandonment
+{
+    [JsonConstructor]
+    public CompensationAbandonment(string incidentId, string entryId, CompensationScopePhase fromPhase)
+    {
+        IncidentId = incidentId;
+        EntryId = entryId;
+        FromPhase = fromPhase;
+    }
+
+    public string IncidentId { get; init; }
+    public string EntryId { get; init; }
+    public CompensationScopePhase FromPhase { get; init; }
+}
+
+/// <summary>An operator's resolution of an entry: what the operator declared, and on which incident.</summary>
+internal sealed record CompensationEntryResolution
+{
+    [JsonConstructor]
+    public CompensationEntryResolution(CompensationResolutionOutcome outcome, string incidentId)
+    {
+        Outcome = outcome;
+        IncidentId = incidentId;
+    }
+
+    public CompensationResolutionOutcome Outcome { get; init; }
+    public string IncidentId { get; init; }
+}
+
+/// <summary>The hand-over batches journaled so far for one inner scope occurrence.</summary>
+internal sealed record CompensationHandOverProgress
+{
+    [JsonConstructor]
+    public CompensationHandOverProgress(string originScope, IReadOnlyList<int>? batches = null)
+    {
+        OriginScope = originScope;
+        Batches = batches ?? [];
+    }
+
+    public string OriginScope { get; init; }
+    public IReadOnlyList<int> Batches { get; init; }
 }
 
 /// <summary>One journal entry: a forward occurrence that completed or whose outcome is unknown, and its recovery progress.</summary>
@@ -105,7 +199,10 @@ internal sealed record CompensationEntry
         CompensationForwardOutcome forwardOutcome = CompensationForwardOutcome.Completed,
         string? forwardIterationId = null,
         IReadOnlyList<CompensationHandlerAttempt>? handlerAttempts = null,
-        string? interventionIncidentId = null)
+        string? interventionIncidentId = null,
+        string? handlerExecutableNodeId = null,
+        CompensationEntryOrigin? origin = null,
+        CompensationEntryResolution? resolution = null)
     {
         Id = id;
         Step = step;
@@ -117,6 +214,9 @@ internal sealed record CompensationEntry
         ForwardIterationId = forwardIterationId;
         HandlerAttempts = handlerAttempts ?? [];
         InterventionIncidentId = interventionIncidentId;
+        HandlerExecutableNodeId = handlerExecutableNodeId;
+        Origin = origin;
+        Resolution = resolution;
     }
 
     public string Id { get; init; }
@@ -136,41 +236,119 @@ internal sealed record CompensationEntry
 
     /// <summary>The blocking incident this entry waits on, while the scope waits for intervention.</summary>
     public string? InterventionIncidentId { get; init; }
+
+    /// <summary>
+    /// The handler node of an entry handed over from an inner scope, whose step is not in this scope's structure. An
+    /// own entry resolves its handler from its step.
+    /// </summary>
+    public string? HandlerExecutableNodeId { get; init; }
+
+    /// <summary>Where a handed-over entry came from. The first origin is kept through every later hand-over.</summary>
+    public CompensationEntryOrigin? Origin { get; init; }
+
+    /// <summary>An operator's resolution, set with <see cref="CompensationEntryStatus.ResolvedManually"/> and never changed.</summary>
+    public CompensationEntryResolution? Resolution { get; init; }
 }
 
-/// <summary>One run of an entry's handler. Its execution id is recorded when it completes or faults.</summary>
+/// <summary>The inner scope occurrence and entry a handed-over entry came from.</summary>
+internal sealed record CompensationEntryOrigin
+{
+    [JsonConstructor]
+    public CompensationEntryOrigin(string scopeActivityExecutionId, string entryId)
+    {
+        ScopeActivityExecutionId = scopeActivityExecutionId;
+        EntryId = entryId;
+    }
+
+    public string ScopeActivityExecutionId { get; init; }
+    public string EntryId { get; init; }
+}
+
+/// <summary>One confirmation: the occurrence that confirmed (a Confirm, or the scope itself) and the entries it confirmed.</summary>
+internal sealed record CompensationConfirmation
+{
+    [JsonConstructor]
+    public CompensationConfirmation(string activityExecutionId, IReadOnlyList<string>? entryIds = null)
+    {
+        ActivityExecutionId = activityExecutionId;
+        EntryIds = entryIds ?? [];
+    }
+
+    public string ActivityExecutionId { get; init; }
+    public IReadOnlyList<string> EntryIds { get; init; }
+}
+
+/// <summary>
+/// One run of an entry's handler. Its execution id is recorded when it completes or faults. An automatic retry the scope
+/// scheduled after a wait (spec 261) records the time it waits for; it stays <see cref="CompensationAttemptResult.Running"/>
+/// while it waits and becomes an ordinary running attempt when its handler starts.
+/// </summary>
 internal sealed record CompensationHandlerAttempt
 {
     [JsonConstructor]
-    public CompensationHandlerAttempt(CompensationAttemptResult result, string? activityExecutionId = null, string? incidentId = null)
+    public CompensationHandlerAttempt(
+        CompensationAttemptResult result,
+        string? activityExecutionId = null,
+        string? incidentId = null,
+        DateTimeOffset? notBefore = null,
+        bool? delayClamped = null)
     {
         Result = result;
         ActivityExecutionId = activityExecutionId;
         IncidentId = incidentId;
+        NotBefore = notBefore;
+        DelayClamped = delayClamped;
     }
 
     public CompensationAttemptResult Result { get; init; }
     public string? ActivityExecutionId { get; init; }
     public string? IncidentId { get; init; }
+
+    /// <summary>When the handler runs, at the earliest, for a retry the scope scheduled after a wait (version 5).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DateTimeOffset? NotBefore { get; init; }
+
+    /// <summary>
+    /// <see langword="true"/> when the retry inputs came from an expression whose value was outside the allowed range and
+    /// was clamped into it (spec 261 FR-509); absent otherwise (version 5).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? DelayClamped { get; init; }
 }
 
-/// <summary>Why recovery started: a step fault, or a step whose outcome is unknown. Set once and never overwritten.</summary>
+/// <summary>
+/// Why recovery started: a step fault, a step whose outcome is unknown, a Compensate activity (explicit), or an inner
+/// scope that compensated itself on a Compensate aimed further out (requested). Set once and never overwritten.
+/// </summary>
 internal sealed record CompensationRecoveryCause
 {
     public const string FaultKind = "fault";
     public const string UncertainKind = "uncertain";
+    public const string ExplicitKind = "explicit";
+    public const string RequestedKind = "requested";
 
     [JsonConstructor]
-    public CompensationRecoveryCause(string kind, string step, string activityExecutionId, string? incidentId = null)
+    public CompensationRecoveryCause(string kind, string step, string activityExecutionId, string? incidentId = null, string? requestedBy = null, string? target = null)
     {
         Kind = kind;
         Step = step;
         ActivityExecutionId = activityExecutionId;
         IncidentId = incidentId;
+        RequestedBy = requestedBy;
+        Target = target;
     }
 
     public string Kind { get; init; }
     public string Step { get; init; }
     public string ActivityExecutionId { get; init; }
     public string? IncidentId { get; init; }
+
+    /// <summary>The Compensate occurrence that asked for recovery, for an explicit cause.</summary>
+    public string? RequestedBy { get; init; }
+
+    /// <summary>
+    /// The authored id of an outer scope a Compensate aimed at. This scope compensates itself, then faults with
+    /// <c>compensation.scope.compensate-requested</c> so the next scope out recovers too (spec 258 FR-314).
+    /// </summary>
+    public string? Target { get; init; }
 }

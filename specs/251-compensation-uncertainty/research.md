@@ -11,7 +11,7 @@ Citations are to `main` plus the M1 stack as of 20 October 2026.
 - **Rationale:**
   - The invocation id is already stable across crash re-attempts. `ActivityAttemptActivationClaimer` re-attempts with the same invocation id.
   - The invocation id is not stable across a reschedule, which mints a new execution (`RescheduleActivityAlterationHandler`), or across an activity-boundary retry.
-  - Scheduling metadata is copied by both of those paths: `NewMetadata` in the reschedule handler, and the provenance copy in `WorkflowRetryActivityBoundarySchedulerWorkHandler`. So a key the parent assigns survives every retry path.
+  - Scheduling metadata is copied by both of those paths: the reschedule handler's copy of the source's scheduling provenance metadata, and the provenance copy in `WorkflowRetryActivityBoundarySchedulerWorkHandler`. So a key the parent assigns survives every retry path.
   - First-attempt lineage gives activities without an assigned key a sensible default.
 - **Alternatives considered:**
   - A compensation-only key carried in `compensation.*` metadata. Rejected by OD6, because no other activity could use it.

@@ -42,8 +42,7 @@ internal sealed class HttpConnectionApplicator(
             TenantId = tenantId,
             Name = connection.Name,
             RequiredType = connection.Type ?? ConnectionTypeNames.Http,
-            Owner = ConnectionOwners.Tenant,
-            CheckUsePermission = false
+            Owner = ConnectionOwners.Tenant
         }, cancellationToken);
 
         var authenticator = _authenticators.FirstOrDefault(candidate =>

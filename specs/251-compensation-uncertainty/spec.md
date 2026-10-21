@@ -8,7 +8,7 @@
 
 - compensation tests 58/58, including J1–J6 and every FR-216 injection point in Durable, Balanced and Ephemeral;
 - the Workbench owned-process journeys (M1, and J1 + J5 with a kill after the retry) 2/2;
-- the SC-204 negative controls, run by hand and reverted: dropping the handler operation key fails 6 tests, dropping the uncertain branch fails 5, dropping the intervention request fails 5;
+- three of the four SC-204 negative controls, the scope controls, run by hand and reverted: dropping the handler operation key fails 6 tests, dropping the uncertain branch fails 5, dropping the intervention request fails 5. The fourth, the retry alteration's idempotency, is covered by `SameIdempotencyKeyTwice_SchedulesOneSuccessor` but was not run as a negative control;
 - Studio Vitest, typecheck and lint.
 
 The Studio retry button for #2747 is M4.
@@ -24,7 +24,7 @@ The Studio retry button for #2747 is M4.
 | OD2 (refined) | How does "waits for intervention" work? | A handler that exhausts its attempts leaves its incident **blocking with outcome Wait for intervention**. The run stays running; no automatic retry is scheduled. This replaces spec 250's "durable bookmark" wording, which a structural activity cannot hold. |
 | OD5 | How does an operator resume? | Through **#2747's retry**, built now as an M2 prerequisite (by owner exception to the Runtime Alterations park): a runtime alteration that resolves the blocking incident and reschedules the same activity occurrence's work. The Studio Retry button is M4. |
 | OD6 | Where do the new runtime contracts live? | As **generic** runtime seams any activity can use: a logical operation key on the activity context, the fault code and category on the child-fault callback, and a structural "keep this incident blocking for intervention" request. |
-| OD7 | Do handler retries back off? | **No, not in M2.** A failed handler is retried immediately, up to a scope setting (default 3 attempts in total). Backoff needs a structural delay seam and is M5 work. |
+| OD7 | Do handler retries back off? | **No, not in M2.** A failed handler is retried immediately, up to a scope setting (default 3 attempts in total). Backoff needs a structural delay seam and is M5 work. **Implemented by spec 261**: the scope inputs `handlerRetryDelay`, `handlerRetryBackoffMultiplier` and `handlerRetryMaxDelay` (default delay zero keeps immediate retries), on the runtime's delayed child schedule (R-7). |
 
 ## User Scenarios & Testing
 

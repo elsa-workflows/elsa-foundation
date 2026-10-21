@@ -170,7 +170,7 @@ export function ActivityDefinitionWorkbench({ context, definitionId, section, se
   const head = !effectiveVersionPrivacyFailure && !versionsQuery.error && !versionsQuery.isFetching
     ? versionsQuery.data?.items.find(item => item.version.versionId === detail.definition.headVersionId) : undefined;
   const canStartFromHead = canCreateDraft && activeDrafts?.length === 0 && head && isActionAllowed(head.actions, "clone-draft");
-  const editLabel = editableDraft || canStartFromHead ? "Edit activity" : activeDrafts?.length === 0 && canCreateDraft && !detail.definition.headVersionId ? "Create draft" : "Open drafts";
+  const editLabel = editableDraft ? "Continue editing draft" : canStartFromHead ? "Create draft from current version" : activeDrafts?.length === 0 && canCreateDraft && detail.definition.headVersionId === null ? "Create draft" : "Open drafts";
   const openEditor = (draftId: string) => onNavigate({ definitionId, section: "editor", draftId, versionId: null });
   const startEditing = async () => {
     if (detailQuery.error || startingDraft) return;

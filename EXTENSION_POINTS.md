@@ -166,6 +166,17 @@ not automatic constitution violations.
 | Workflows runtime — HTTP endpoint behaviour | [`Essentials/src/Workflows/Runtime/Http/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Http/EXTENSION_POINTS.md) |
 | Workflows runtime — durable resumption (sweep service, recurring pump, feature gating) | [`Essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md`](Essentials/src/Workflows/Runtime/Resumption/EXTENSION_POINTS.md) |
 
+### ETL
+
+| Domain | Catalog |
+|---|---|
+| Safe scoped binding discovery | [`Extensions/Etl/src/Core/EXTENSION_POINTS.md`](Extensions/Etl/src/Core/EXTENSION_POINTS.md) |
+| Draft and immutable publication metadata | [`Extensions/Etl/src/Design/Elsa.Etl.Design/EXTENSION_POINTS.md`](Extensions/Etl/src/Design/Elsa.Etl.Design/EXTENSION_POINTS.md) |
+| Shared ETL API transport | [`Extensions/Etl/src/Api/EXTENSION_POINTS.md`](Extensions/Etl/src/Api/EXTENSION_POINTS.md) |
+| Runtime inspection and cancellation API | [`Extensions/Etl/src/Runtime/Api/EXTENSION_POINTS.md`](Extensions/Etl/src/Runtime/Api/EXTENSION_POINTS.md) |
+| Authoring API operations and host composition | [`Extensions/Etl/src/Design/Api/EXTENSION_POINTS.md`](Extensions/Etl/src/Design/Api/EXTENSION_POINTS.md) |
+| Studio authoring, inspection and published selection | [`Extensions/Etl/studio/Elsa.Studio.Etl/EXTENSION_POINTS.md`](Extensions/Etl/studio/Elsa.Studio.Etl/EXTENSION_POINTS.md) |
+
 ### Legacy
 
 | Domain | Catalog |

@@ -95,14 +95,24 @@ public sealed class SimpleActivityExecutionContext(
         string? schedulingActivityExecutionId = null,
         IReadOnlyDictionary<string, string>? metadata = null,
         ActivitySchedulingProvenance? schedulingProvenance = null,
-        LoopIterationScopeRequest? iterationFrame = null)
+        LoopIterationScopeRequest? iterationFrame = null) =>
+        ScheduleChildActivity(executableNodeId, schedulingActivityExecutionId, metadata, schedulingProvenance, iterationFrame, notBefore: null);
+
+    public void ScheduleChildActivity(
+        string executableNodeId,
+        string? schedulingActivityExecutionId,
+        IReadOnlyDictionary<string, string>? metadata,
+        ActivitySchedulingProvenance? schedulingProvenance,
+        LoopIterationScopeRequest? iterationFrame,
+        DateTimeOffset? notBefore)
     {
         _childActivityScheduleRequests.Add(new RuntimeChildActivityScheduleRequest(
             executableNodeId,
             schedulingActivityExecutionId,
             metadata,
             schedulingProvenance,
-            iterationFrame));
+            iterationFrame,
+            notBefore));
     }
 
     public IReadOnlyCollection<RuntimeChildActivityScheduleRequest> GetChildActivityScheduleRequests() =>
@@ -161,6 +171,16 @@ public sealed class SimpleActivityExecutionContext(
         _childFaultInterventionRequests.Add(new RuntimeChildFaultInterventionRequest(incidentId, reason, metadata));
     }
 
+    public void RequestChildFaultIntervention(
+        string incidentId,
+        string reason,
+        IReadOnlyDictionary<string, string>? metadata,
+        IReadOnlyCollection<string> decisions)
+    {
+        ArgumentNullException.ThrowIfNull(decisions);
+        _childFaultInterventionRequests.Add(new RuntimeChildFaultInterventionRequest(incidentId, reason, metadata, decisions));
+    }
+
     public IReadOnlyCollection<RuntimeChildFaultInterventionRequest> GetChildFaultInterventionRequests() =>
         _childFaultInterventionRequests.ToArray();
 
@@ -175,6 +195,11 @@ public sealed class SimpleActivityExecutionContext(
     public void RequestAncestorNotification(string ancestorConsumerKey, string code, JsonElement? payload = null)
     {
         _ancestorNotificationRequests.Add(new RuntimeAncestorNotificationRequest(ancestorConsumerKey, code, payload));
+    }
+
+    public void RequestAncestorNotification(RuntimeAncestorSelector selector, string code, JsonElement? payload = null)
+    {
+        _ancestorNotificationRequests.Add(new RuntimeAncestorNotificationRequest(selector, code, payload));
     }
 
     public IReadOnlyCollection<RuntimeAncestorNotificationRequest> GetAncestorNotificationRequests() =>

@@ -48,6 +48,7 @@ public sealed class PublicationSlotOwnerEndpointTests : IAsyncLifetime
 
     private readonly TriggerConflictSupport.StubTriggerExtractor _triggers = new();
     private readonly ActivationChannelOptions _channels = new();
+    private RecordingCompiler _compiler = null!;
     private PublishingMinimalApiScenarioHost _host = null!;
     private IWorkflowActivationAuthority _authority = null!;
 
@@ -60,8 +61,10 @@ public sealed class PublicationSlotOwnerEndpointTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
+        _compiler = new RecordingCompiler();
         _host = await PublishingMinimalApiScenarioHost.StartAsync(
             requestSenderFactory: services => new PublishHandlerSender(services.GetRequiredService<IHttpContextAccessor>()),
+            compiler: _compiler,
             configureServices: services =>
             {
                 services.AddSingleton<IOptions<ActivationChannelOptions>>(Options.Create(_channels));
@@ -113,6 +116,22 @@ public sealed class PublicationSlotOwnerEndpointTests : IAsyncLifetime
         var preflight = await PreflightAsync(route);
 
         Assert.True(preflight.GetProperty("canActivate").GetBoolean());
+    }
+
+    [Theory]
+    [InlineData(VersionPreflightRoute, "tenant-a")]
+    [InlineData(VersionPreflightRoute, "tenant-b")]
+    [InlineData(SnapshotPreflightRoute, "tenant-a")]
+    [InlineData(SnapshotPreflightRoute, "tenant-b")]
+    public async Task Preflight_compiles_in_the_authenticated_tenant_scope_without_publication_writes(
+        string route,
+        string tenantId)
+    {
+        using var response = await PostAsync(route, PreflightBody(route), tenantId);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(tenantId, Assert.Single(_compiler.Requests).TenantId);
+        await AssertNoPublicationWritesAsync();
     }
 
     [Theory]
@@ -248,14 +267,30 @@ public sealed class PublicationSlotOwnerEndpointTests : IAsyncLifetime
         ? $$"""{"definitionId":"{{DefinitionId}}","state":{},"layout":[]}"""
         : "{}";
 
-    private async Task<HttpResponseMessage> PostAsync(string route, string body)
+    private async Task<HttpResponseMessage> PostAsync(string route, string body, string tenantId = "capture-tenant")
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, route)
         {
             Content = new StringContent(body, Encoding.UTF8, "application/json")
         };
         request.Headers.TryAddWithoutValidation(PublishingCompatibilityCases.IdentityHeader, "trusted-success");
+        request.Headers.TryAddWithoutValidation(PublishingCompatibilityCases.TenantHeader, tenantId);
         return await _host.Client.SendAsync(request);
+    }
+
+    private sealed class RecordingCompiler : IWorkflowExecutableCompiler
+    {
+        private readonly CaptureWorkflowExecutableCompiler _inner = new();
+
+        public List<WorkflowExecutableCompileRequest> Requests { get; } = [];
+
+        public ValueTask<WorkflowExecutable> CompileAsync(
+            WorkflowExecutableCompileRequest request,
+            CancellationToken cancellationToken = default)
+        {
+            Requests.Add(request);
+            return _inner.CompileAsync(request, cancellationToken);
+        }
     }
 
     /// <summary>Hands the publish request to the real handler, as the mediator would; the capture sender would answer it.</summary>

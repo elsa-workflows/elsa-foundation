@@ -143,6 +143,60 @@ public sealed class CompensationScopeUncertaintyTests
         Assert.Empty(repeated.Context.GetChildFaultInterventionRequests());
     }
 
+    // A handler that is a Sequence reports a fault inside it as its own, under its own id. An operator retry of that
+    // faulted activity runs under the same Sequence, so the Sequence's later outcome keeps the id its faulted attempt
+    // recorded; only the incident tells a new fault from a repeat delivery.
+    [Fact]
+    public async Task A_waiting_handler_tells_a_repeat_fault_from_its_occurrence_s_outcome_after_an_operator_retry()
+    {
+        var (faulted, cancel) = await RunToFirstHandlerAsync(maxAttempts: 1);
+        var waiting = await FaultedAsync(faulted.State, cancel, "actexec-cancel-1", "incident-cancel-1", category: null, maxAttempts: 1);
+        Assert.Equal(CompensationScopePhase.AwaitingIntervention, StateOf(waiting).Phase);
+
+        var repeated = await FaultedAsync(waiting.State, cancel, "actexec-cancel-1", "incident-cancel-1", category: null, maxAttempts: 1);
+        Assert.Null(repeated.Continuation.StateUpdate);
+        Assert.Empty(repeated.Context.GetChildFaultInterventionRequests());
+
+        var faultedAgain = await FaultedAsync(waiting.State, cancel, "actexec-cancel-1", "incident-cancel-retry", category: null, maxAttempts: 1);
+        var again = StateOf(faultedAgain).Entries.Single(candidate => candidate.Step == "Reserve delivery");
+        Assert.Equal(["incident-cancel-1", "incident-cancel-retry"], again.HandlerAttempts.Select(attempt => attempt.IncidentId));
+        Assert.Equal("incident-cancel-retry", again.InterventionIncidentId);
+
+        var resumed = await CompletedAsync(waiting.State, cancel, "actexec-cancel-1", maxAttempts: 1);
+        var entry = StateOf(resumed).Entries.Single(candidate => candidate.Step == "Reserve delivery");
+        Assert.Equal(CompensationEntryStatus.Compensated, entry.Status);
+        Assert.Equal("release-inventory", Assert.Single(resumed.Requests).ExecutableNodeId);
+
+        var completedTwice = await CompletedAsync(resumed.State, cancel, "actexec-cancel-1", maxAttempts: 1);
+        Assert.Null(completedTwice.Continuation.StateUpdate);
+        Assert.Empty(completedTwice.Requests);
+    }
+
+    // The same for an uncertain step without a handler that is a Sequence: the waiting entry recorded the Sequence.
+    [Fact]
+    public async Task A_waiting_step_tells_a_repeat_fault_from_its_occurrence_s_outcome_after_an_operator_retry()
+    {
+        var (afterInventory, deliverStep) = await RunToDeliveryAsync();
+        var afterDelivery = await CompletedAsync(afterInventory.State, deliverStep, "actexec-reserve-delivery");
+        var confirmStep = Assert.Single(afterDelivery.Requests);
+        var waiting = await FaultedAsync(afterDelivery.State, confirmStep, "actexec-confirm-order", "incident-confirm", UnknownCategory);
+        Assert.Equal(CompensationScopePhase.AwaitingIntervention, StateOf(waiting).Phase);
+
+        var repeated = await FaultedAsync(waiting.State, confirmStep, "actexec-confirm-order", "incident-confirm", UnknownCategory);
+        Assert.Null(repeated.Continuation.StateUpdate);
+        Assert.Empty(repeated.Context.GetChildFaultInterventionRequests());
+
+        var stillUnknown = await FaultedAsync(waiting.State, confirmStep, "actexec-confirm-order", "incident-confirm-retry", UnknownCategory);
+        Assert.Equal("incident-confirm-retry", Assert.Single(stillUnknown.Context.GetChildFaultInterventionRequests()).IncidentId);
+        Assert.Equal("incident-confirm-retry", StateOf(stillUnknown).Entries.Single(candidate => candidate.Step == "Confirm order").InterventionIncidentId);
+
+        var settled = await CompletedAsync(waiting.State, confirmStep, "actexec-confirm-order");
+        Assert.True(settled.Continuation.IsComplete);
+        var entry = StateOf(settled).Entries.Single(candidate => candidate.Step == "Confirm order");
+        Assert.Equal(CompensationEntryStatus.NoHandler, entry.Status);
+        Assert.Null(entry.InterventionIncidentId);
+    }
+
     [Fact]
     public void A_version_1_state_is_upgraded_with_its_identities_and_the_keys_M1_participants_saw()
     {
@@ -175,10 +229,10 @@ public sealed class CompensationScopeUncertaintyTests
         var attempt = Assert.Single(done.HandlerAttempts);
         Assert.Equal((CompensationAttemptResult.Completed, "ae-4"), (attempt.Result, attempt.ActivityExecutionId));
 
-        // It is written back as version 2, never as version 1.
+        // It is written back as current version, never as version 1.
         var staged = CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Defer, state);
         Assert.Equal(CompensationScopeStatePersister.StateSchemaVersion, staged.StateUpdate!.StateVersion);
-        Assert.Equal(2, CompensationScopeStatePersister.StateSchemaVersion);
+        Assert.Equal(5, CompensationScopeStatePersister.StateSchemaVersion);
     }
 
     [Fact]
@@ -209,10 +263,10 @@ public sealed class CompensationScopeUncertaintyTests
             [CompensationScope.MetadataKeys.Entry] = "e1",
             [CompensationScope.MetadataKeys.Forward] = "ae-1"
         };
-        var context = NewContext(privateState, m1HandlerMetadata);
+        var context = NewContext(privateState, new Dictionary<string, string>());
 
         var continuation = await new CompensationScope().OnChildCompletedAsync(
-            new ActivityChildCompletedContext(context, "ae-5", "release-inventory", [ActivityOutcomes.Done]));
+            new ActivityChildCompletedContext(context, "ae-5", "release-inventory", [ActivityOutcomes.Done], null, m1HandlerMetadata));
 
         // The completion is not dropped: the entry is compensated and, with nothing left, the scope finishes.
         Assert.False(continuation.IsDeferred);
@@ -265,9 +319,9 @@ public sealed class CompensationScopeUncertaintyTests
 
     private static async Task<Evaluation> CompletedAsync(RuntimeStructuralStateUpdate? state, RuntimeChildActivityScheduleRequest child, string childExecutionId, int maxAttempts = 3)
     {
-        var context = NewContext(state, child.Metadata);
+        var context = NewContext(state, new Dictionary<string, string>());
         var continuation = await new CompensationScope { HandlerMaxAttempts = maxAttempts }.OnChildCompletedAsync(
-            new ActivityChildCompletedContext(context, childExecutionId, child.ExecutableNodeId, [ActivityOutcomes.Done]));
+            new ActivityChildCompletedContext(context, childExecutionId, child.ExecutableNodeId, [ActivityOutcomes.Done], null, child.Metadata));
         return new(continuation, context, context.GetChildActivityScheduleRequests().ToArray(), state);
     }
 
@@ -279,9 +333,9 @@ public sealed class CompensationScopeUncertaintyTests
         string? category,
         int maxAttempts = 3)
     {
-        var context = NewContext(state, child.Metadata);
+        var context = NewContext(state, new Dictionary<string, string>());
         var continuation = await new CompensationScope { HandlerMaxAttempts = maxAttempts }.OnChildFaultedAsync(
-            new ActivityChildFaultedContext(context, childExecutionId, child.ExecutableNodeId, incidentId, faultCode: "participant.fault", faultCategory: category));
+            new ActivityChildFaultedContext(context, childExecutionId, child.ExecutableNodeId, incidentId, null, "participant.fault", category, child.Metadata));
         return new(continuation, context, context.GetChildActivityScheduleRequests().ToArray(), state);
     }
 

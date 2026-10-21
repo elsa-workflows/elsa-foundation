@@ -10,8 +10,37 @@ Use `services.AddConnections()` to register defaults, then replace these service
 - `IConnectionRepository` for durable persistence. Phase 1 ships `InMemoryConnectionRepository` only:
   restarting the host drops connection definitions. Owned secrets (`connection:<name>:<field>`) stay
   in the encrypted secret store, so a published workflow that still names the connection faults until
-  the definition is created again. A Groundwork repository on the Secrets provider matrix is deferred.
-- `IConnectionManager` for lifecycle.
+  the definition is created again. An EF Core repository is tracked in #2854. A replacement must keep
+  the compare-and-swap contract on `SaveAsync`: it saves only when the stored `State.Version` equals
+  the document's and then increments it; otherwise, including after a delete, it throws
+  `ConnectionConflictException` and writes nothing. Its expected-version `DeleteAsync` deletes only while
+  the stored version equals the expected one, atomically. Derive the replacement's tests from
+  `ConnectionRepositoryContractTests` in `Essentials/tests/Connections/Tests/`.
+- `IConnectionManager` for lifecycle. A replacement must keep the compare-and-swap contract on
+  `IConnectionRepository.SaveAsync`, and the exception contract in the `IConnectionManager` XML docs:
+  `ArgumentException` (HTTP 400), `ConnectionConflictException` (409), `ConnectionUnavailableException`,
+  `ConnectionStoreException` for a store failure before the save is confirmed (500), and
+  `ConnectionCredentialWriteException` for a failure after it (500). The default manager's write ordering and
+  error classification are documented on `DefaultConnectionManager`. Known limits:
+  - A replaced secret that cannot be deleted after a committed save is reported as a 500 although the update was
+    saved; after a conflicted rotation that cleanup failure is logged and not returned, and the replaced secret stays
+    Active and unreferenced (#2855 item 2.2).
+  - `DeleteAsync` deletes the owned secrets before the connection row, without a compare-and-swap (#2855 item 2.4).
+  - A create's rollback deletes its row only at the version it added it at, so a connection saved since is kept.
+    A row that another request deleted and a second create re-added, still unsaved, is at that same version and
+    can be deleted; that second create's save then fails with 409 and rolls itself back (#2855 item 2.1).
+  - A create's or update's rollback keeps an owned secret a stored connection still references, but that check only
+    protects a commit the next read can see. When a durable store fails with the commit's outcome unknown and the
+    commit is not yet visible, the rollback can delete a secret the committed row uses, so the connection fails to
+    resolve that credential. Retrying the create or update with the inline value writes the secret again. The
+    in-memory repository commits visibly or not at all; the durable repository is tracked in #2854.
+  - A custom `ISecretAuditSink` that throws after Secrets committed a write makes that write look failed: it is
+    reported as not written (500), or as a false 409 when the failure reads as a concurrent change (#3153).
+  - A secret with no active version (revoked or expired) is rotated without an expected version, and Secrets has
+    no guard there, so concurrent updaters are last-writer-wins (#3153).
+  - A credential version that expires between the update's read and its rotation is reported as a 409 although no
+    other request changed it; retrying the update succeeds (#3153).
+  - `Revoke`, `Delete`, `Test`, `Find` and `List` do not wrap store failures (#3139).
 - `IConnectionResolver` for point-of-use resolution.
 - `IConnectionGrantWriter` for compare-and-swap grant writes (expected secret version).
 - `IConnectionPublishTenantAccessor` — owned by `ConnectionsDesign` (principal tenant, then persistence scope).

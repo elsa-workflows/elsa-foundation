@@ -156,7 +156,11 @@ for (const chunkName of deferredHeavySurfaces) {
 
 const entryFiles = collectStaticFiles("src/module.tsx");
 const definitionsLandingFiles = new Set(entryFiles);
-collectStaticFiles("src/workflow-editor/pages.tsx", definitionsLandingFiles);
+// Shared browse helpers can make Vite emit the route facade under a hashed manifest key.
+// Follow the emitted route chunk and all its static imports, keeping the same landing budget.
+const workflowPages = findChunk("pages");
+if (!workflowPages.isDynamicEntry) throw new Error("The workflow pages are no longer emitted as a deferred entry.");
+collectStaticEntryFiles(workflowPages, definitionsLandingFiles);
 collectStaticEntryFiles(findChunk("WorkflowDefinitions"), definitionsLandingFiles);
 const upgradeLandingFiles = new Set(entryFiles);
 collectStaticFiles("src/ActivityUpgradeWorkbenchPage.tsx", upgradeLandingFiles);
