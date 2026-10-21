@@ -97,6 +97,26 @@
   }
 }
 
+@container feature-management (width < 480px) {
+  .feature-management-list-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .feature-management-list-toolbar .feature-management-category-select {
+    flex: 1 0 100%;
+  }
+
+  .feature-management-list-toolbar .feature-management-category-trigger {
+    max-width: 100%;
+  }
+
+  .feature-management-list-toolbar .feature-management-category-popover {
+    left: 0;
+    right: auto;
+    width: min(280px, 100%);
+  }
+}
+
 /* Search + category picker row that heads the feature list. */
 .feature-management-list-toolbar {
   display: flex;
