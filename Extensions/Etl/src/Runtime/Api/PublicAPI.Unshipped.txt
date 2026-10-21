@@ -400,7 +400,7 @@ Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.NotBefore.get -> System.DateTimeOffs
 Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.NotBefore.init -> void
 Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.Phase.get -> string!
 Elsa.Etl.Runtime.Api.Models.EtlRunRetryView.Phase.init -> void
-virtual Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations.ListConnectorPartitionsAsync(Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunPage<Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView!>!>!
+Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations.ListConnectorPartitionsAsync(Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunPage<Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView!>!>!
 override Elsa.Etl.Runtime.Api.Endpoints.ListConnectorPartitions.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
 override Elsa.Etl.Runtime.Api.Endpoints.ListConnectorPartitions.Endpoint.HandleAsync(Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunPage<Elsa.Etl.Runtime.Api.Models.EtlRunConnectorPartitionView!>!>!
 override Elsa.Etl.Runtime.Api.Models.EtlRunConnectorOwedView.Equals(object? obj) -> bool

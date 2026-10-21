@@ -1,15 +1,25 @@
-# Finite file ETL
+# Finite ETL
 
 Optional `Elsa.Etl` implements the execution domain admitted by [ADR 0087](../../docs/adr/0087-etl-owns-its-execution-domain.md). [Spec 255](../../specs/255-finite-file-etl/spec.md) and [issue #3109](https://github.com/elsa-workflows/elsa-foundation/issues/3109) own the complete delivery scope. Durable fixtures and the [rebuilt Workbench HTTP journey](../../specs/255-finite-file-etl/evidence/workbench-http.md) exercise native invocation and continuation. The [Studio browser journey](../../specs/255-finite-file-etl/evidence/studio-browser.md) records authoring, publication, exact selection, native execution and inspection; each receipt identifies its qualified source state.
 
-## Finite HTTP connector work in progress
+## Finite HTTP connectors
 
 [Spec 996](../../specs/996-http-etl/spec.md) and [#3151](https://github.com/elsa-workflows/elsa-foundation/issues/3151)
 extend the finite runtime with HTTP JSON sources and HTTP/JSONL routes. The
-[shared-worker checkpoint](../../specs/996-http-etl/evidence/http-worker-checkpoint.md) records actual HTTP-to-HTTP,
-HTTP-to-JSONL and CSV-to-HTTP execution with optional CSV lookup and durable retries. It uses the same worker
-capacity, terminal delivery and optional provider boundary as file ETL. Full HTTP native continuation, Studio,
-operator and process-recovery acceptance is still in progress; the file-only evidence below does not establish it.
+[shared-worker checkpoint](../../specs/996-http-etl/evidence/http-worker-checkpoint.md) records HTTP-to-HTTP,
+HTTP-to-JSONL and CSV-to-HTTP execution with optional CSV lookup and durable retries. These use the same worker
+capacity and terminal delivery as file ETL, with additive connector provider contracts.
+
+[Native continuation](../../specs/996-http-etl/evidence/http-native-checkpoint.md),
+[process recovery](../../specs/996-http-etl/evidence/http-process-checkpoint.md),
+[cancellation](../../specs/996-http-etl/evidence/http-cancellation-checkpoint.md),
+[operator inspection](../../specs/996-http-etl/evidence/connector-inspection-checkpoint.md) and
+[real Workbench/Studio journeys](../../specs/996-http-etl/evidence/http-live-acceptance-checkpoint.md)
+record executed acceptance at their stated source checkpoints. A
+[frozen predecessor/current successor proof](../../specs/996-http-etl/evidence/v1-native-upgrade-checkpoint.md)
+also resumes an existing file run and its surrounding native Sequence. Final integrated review, CI and
+resulting-main delivery remain tracked by [T020–T022](../../specs/996-http-etl/tasks.md); these receipts do not
+claim a released HTTP connector or completion of the wider program.
 
 ### HTTP credentials and diagnostics
 
@@ -50,7 +60,8 @@ Enable only the responsibilities a host needs:
 | Responsibility | Features / prerequisites |
 |---|---|
 | Author and publish ETL | `EtlDesign`, `EtlDesignEntityFrameworkCore`, `EtlDesignApi`; Foundation Identity, API capabilities, host persistence scope and a scoped `IEtlBindingCatalog` |
-| Execute accepted runs | `EtlRuntime`, `EtlRuntimeEntityFrameworkCore`; Tasks lifecycle, shared input/snapshot/output storage and explicit file-binding revisions |
+| Execute accepted runs | `EtlRuntime`, `EtlRuntimeEntityFrameworkCore`; Tasks lifecycle, shared input/snapshot/output storage and explicit binding revisions |
+| Author or execute v2 connectors | Add `IEtlConnectorBindingCatalog` and `IEtlConnectorBindingResolver`; configure `EtlRuntimeFeature.HttpBindings` and independent `HttpLimits`. Authenticated bindings require public Connections providers and the retained tenant; anonymous bindings do not |
 | Inspect or cancel runs | `EtlRuntimeApi`, `EtlRuntimeEntityFrameworkCore`; Foundation Identity, API capabilities and host persistence scope; no compute worker required |
 | Invoke from native workflows | `EtlWorkflowsDesign` on the native publication host, `EtlWorkflowsRuntime` on the native execution host, plus the applicable ETL/runtime stores |
 | Author and inspect in Studio | `EtlStudio` with the ordinary Studio authenticated backend configuration; backend authoring/runtime capabilities must be available |
@@ -61,8 +72,11 @@ bindings. They use SQLite, the qualified provider for this slice; they are not p
 Set API cursor signing keys consistently across replicas. Set tenant and persistence partition explicitly;
 `null` tenant is a distinct global scope, not an alias for `default`.
 
-Before accepting work, configure immutable source/lookup revisions and SHA-256 pins, output roots supporting
-the required atomic publication, snapshot capacity and bounded worker allowances. Replicas participating in the
+Before accepting file work, configure immutable source/lookup revisions and SHA-256 pins. HTTP revisions pin
+endpoint/path policy, shard seeds and non-secret connection identity/settings; credentials are resolved at each
+attempt. Configure output roots supporting the required atomic publication, snapshot capacity and bounded
+worker allowances. The [binding contracts](src/Core/EXTENSION_POINTS.md#connector-binding-approval) define
+these distinct identities. Replicas participating in the
 same run must see its retained revisions, database and storage. Changing a current alias affects later admission;
 retain older revisions until their admitted runs no longer need them. Inspect terminal diagnostics and partition
 cursors before taking recovery action. A successful HTTP cancellation reports the durable terminal outcome; it
@@ -70,13 +84,16 @@ does not establish that every physical operation has stopped.
 
 For rollback, stop new ETL authoring/publication and invocation admission first, while retaining compatible
 readers, workers, bindings and result delivery for accepted work. Do not delete ETL tables, snapshots, chunks or
-native waiting state as a rollback shortcut. The initial ETL schemas have no previous ETL release to demonstrate
-a downgrade or historical upgrade against; unknown saved formats must be refused rather than reinterpreted.
+native waiting state as a rollback shortcut. Upgrade all participating ETL workers and readers before admitting
+v2 runs: older binaries cannot safely consume connector state. SQLite connector migrations are additive and
+forward-only; the frozen predecessor proof qualifies the stated v1 upgrade path, not a downgrade. Keep the
+original storage paths and retained configuration for accepted work. Unknown saved formats must be refused
+rather than reinterpreted.
 There is no general pause/resume, automatic orphan collection or retry/reset administration surface in this slice.
 
 ## Remaining delivery
 
-Native invocation/result delivery and native cancellation now have real durable Sequence, Flowchart and CompensationScope evidence, including placed boundaries and delayed admission. The terminal outbox is acknowledged only after demonstrated consumption or terminal parent/activity state, never merely queueing. [Live-attempt replacement](../../specs/255-finite-file-etl/evidence/live-attempt-replacement.md) proves real SQLite takeover, cancellation, retained record/byte allowances through cleanup and successor replay under its own permit. The [owned two-process fixture](../../specs/255-finite-file-etl/evidence/two-process-recovery.md) proves survivor recovery after a predecessor exits with a published, unaccepted chunk. The [interruption matrix](../../specs/255-finite-file-etl/evidence/interruption-matrix.md) also proves real read/reservation, source/JSONL staging, committed-cursor and result-claim interruption, plus conflict refusal after takeover. Store/native tests separately establish stale cursor/disposition and consumed-receipt semantics. The [identity/format matrix](../../specs/255-finite-file-etl/evidence/recovery-identity-formats.md), [SQLite provider qualification](../../specs/255-finite-file-etl/evidence/provider-reopen.md) and Studio/HTTP receipts record executed acceptance and its limits. Current integrated validation, review, CI and resulting-main delivery checks are tracked in [tasks T034–T036](../../specs/255-finite-file-etl/tasks.md); older receipts do not substitute for those gates.
+Native invocation/result delivery and native cancellation now have real durable Sequence, Flowchart and CompensationScope evidence, including placed boundaries and delayed admission. The terminal outbox is acknowledged only after demonstrated consumption or terminal parent/activity state, never merely queueing. [Live-attempt replacement](../../specs/255-finite-file-etl/evidence/live-attempt-replacement.md) proves real SQLite takeover, cancellation, retained record/byte allowances through cleanup and successor replay under its own permit. The [owned two-process fixture](../../specs/255-finite-file-etl/evidence/two-process-recovery.md) proves survivor recovery after a predecessor exits with a published, unaccepted chunk. The [interruption matrix](../../specs/255-finite-file-etl/evidence/interruption-matrix.md) also proves real read/reservation, source/JSONL staging, committed-cursor and result-claim interruption, plus conflict refusal after takeover. Store/native tests separately establish stale cursor/disposition and consumed-receipt semantics. The [identity/format matrix](../../specs/255-finite-file-etl/evidence/recovery-identity-formats.md), [SQLite provider qualification](../../specs/255-finite-file-etl/evidence/provider-reopen.md) and Studio/HTTP receipts record executed acceptance and its limits. Those file receipts retain their historical scope. Current HTTP integration, review, CI and resulting-main delivery checks are tracked in [tasks T020–T022](../../specs/996-http-etl/tasks.md); older receipts do not substitute for those gates.
 
 Host bindings are trusted configuration, never authored paths. Admission retains exact source/lookup and output revisions before acknowledging work. Preparation accepts those pins and cannot re-resolve the current alias. Removed revisions refuse continuation; they do not redirect it. Runtime-only execution must not require the design database.
 

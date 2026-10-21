@@ -1,6 +1,6 @@
 # Tasks: Finite HTTP ETL
 
-Issue [#3151](https://github.com/elsa-workflows/elsa-foundation/issues/3151). One implementation branch/PR; phases are checkpoints, not separate worker claims. Paths below are relative to the repository. Root integrates and verifies bounded delegated work in isolated worktrees. Completed foundation and worker acceptance is checked below; remaining native, product and process acceptance stays explicit.
+Issue [#3151](https://github.com/elsa-workflows/elsa-foundation/issues/3151). One implementation branch/PR; phases are checkpoints, not separate worker claims. Paths below are relative to the repository. Root integrates and verifies bounded delegated work in isolated worktrees. Completed foundation, native, product and process acceptance is checked below; final integrated review and delivery remain explicit.
 
 ## Phase 1 — Setup and reviewed scope
 
