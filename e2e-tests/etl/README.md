@@ -38,6 +38,39 @@ ordering and acceptance are covered by the runtime store/native tests.
 This is a real e2e journey when executed after Workbench is built with ETL enabled. Adding the
 script alone, or passing only in-process tests, does not count as live e2e execution evidence.
 
+## HTTP connector Workbench journey
+
+`Test-FiniteHttpEtl.ps1` exercises the connector-capable v2 API and runtime against an owned local
+HTTP server. Run it after building Workbench with ETL enabled:
+
+```powershell
+pwsh ./e2e-tests/etl/Test-FiniteHttpEtl.ps1
+```
+
+The journey creates, validates, and publishes HTTP-to-HTTP, HTTP-to-JSONL, and CSV-to-HTTP
+definitions, then selects each immutable version from both a native Sequence and Flowchart. It
+checks each terminal result and connector partition view, verifies mapped HTTP receiver bodies or
+published JSONL records, and confirms both native workflows run the activity after `RunEtl`.
+The HTTP source has two host-approved shards with two one-record token pages apiece. The first
+request to shard B returns `429 Retry-After: 3`; the test observes its durable waiting state and
+progress on the sibling partition, then checks monotonic loopback request timestamps before
+accepting the later wire attempt. A separate `http-wait` source always returns `429 Retry-After: 30`,
+so the journey can observe the persisted retry view and cancel through the runtime API before a
+second physical request is eligible. Workbench remains running until two seconds after that
+recorded deadline; the fixture must still have observed exactly one request.
+
+`New-EtlHttpFixture` in `_EtlFixture.ps1` creates the ordinary private ETL content root and starts
+`EtlHttpFixture.mjs` on an ephemeral port bound only to `127.0.0.1`. It adds three anonymous,
+host-controlled HTTP revisions: `http-source` (`/source/shard-a/page` and
+`/source/shard-b/page`), `http-wait` (`/wait/page`), and `http-output` (`/output/records`). Every
+business path is explicitly allowlisted; the test pipeline contains aliases and never endpoint
+URLs. Source pages contain one `{id,name}` item at `/items`; `/next` supplies a shard-specific opaque
+token through the query parameter `pageToken`, and the next page returns `null`. The receiver
+accepts JSON arrays and captures a bounded set of mapped records and request observations; its
+`/__fixture/state` endpoint reports an explicit overflow flag which the REST journey rejects.
+`Stop-EtlHttpFixture -Fixture $fixture` stops only the Node process it started. Failures retain the
+private Workbench root and its HTTP fixture logs for diagnosis.
+
 ## Live Studio authoring journey
 
 `Test-FiniteFileEtlStudio.ps1` runs the opt-in browser journey in
@@ -48,17 +81,24 @@ script alone, or passing only in-process tests, does not count as live e2e execu
 pwsh ./e2e-tests/etl/Test-FiniteFileEtlStudio.ps1
 ```
 
+The optional `-Http` switch runs two real-browser journeys, covering completion and cancellation, with `http-source` and
+`http-output` aliases from the owned loopback fixture:
+
+```powershell
+pwsh ./e2e-tests/etl/Test-FiniteFileEtlStudio.ps1 -Http
+```
+
 The runner starts the already-built Workbench and Studio on separate free loopback ports, each
 with a private content root. It configures the exact Studio origin in the private Workbench CORS
 and identity return-origin settings, points `Studio:BackendBaseUrl` at that Workbench, and keeps
 Studio authentication enabled. The browser journey uses the seeded Development credentials by
 default; pass `-Username` and `-Password` to use another local fixture account.
 
-The private fixture contains only `source` (`id,name`: Ada and Grace) and `lookup`
+The default file fixture contains `source` (`id,name`: Ada and Grace) and `lookup`
 (`id,category`: One and Two), plus the isolated `output` and `errors` destinations. Its copied
 Studio shell omits `WeatherForecastSample` because the private Nuplane package feed is empty and
 that optional feature is supplied only by a package. No repository shell or host configuration is
-changed. The runner stops only the two processes it started and retains the private content root,
+changed. The runner stops only the processes it started and retains the private content root,
 host logs, journey log, SQLite state, output chunks, screenshots, and any failure trace for review.
 
 The browser test creates, edits, validates, and publishes an ETL definition through Studio, selects

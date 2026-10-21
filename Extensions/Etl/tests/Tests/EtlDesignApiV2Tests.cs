@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Elsa.Etl.Core;
 using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Design.Api;
@@ -19,6 +20,167 @@ public sealed partial class EtlDesignApiHttpTests
         EtlDesignPermissions.PublishDefinitions,
         EtlDesignPermissions.ReadBindings
     ];
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Connector_api_accepts_discriminator_orders_and_preserves_omitted_budget_defaults(bool kindLast)
+    {
+        var state = new ConnectorBindingState();
+        await using var host = await ConnectorHostAsync(state);
+        var pipeline = EtlV2TestPipelines.Create();
+        var createPipelineJson = PipelineJson(pipeline, kindLast);
+        AssertRetainedBudgetsOmitted(createPipelineJson);
+
+        using var create = await host.SendRawAsync(HttpMethod.Post, "/etl/v2/definitions",
+            RawConnectorCreateBody("orders", createPipelineJson),
+            permissions: [EtlDesignPermissions.ManageDefinitions]);
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        var (revision, createdPipeline) = await ReadConnectorDraftPipelineAsync(create);
+        Assert.Equal(1, revision);
+        AssertConnectorPipeline(createdPipeline, pipeline);
+
+        using var validate = await host.SendAsync(HttpMethod.Post, "/etl/v2/definitions/orders/validate",
+            new EtlValidateRequest("orders", revision), permissions: [EtlDesignPermissions.ManageDefinitions]);
+        Assert.Equal(HttpStatusCode.OK, validate.StatusCode);
+        var validation = await ReadAsync<EtlValidationView>(validate);
+        Assert.NotNull(validation.ContentHash);
+        Assert.Empty(validation.Diagnostics);
+
+        using var publish = await host.SendAsync(HttpMethod.Post, "/etl/v2/definitions/orders/publish",
+            new EtlPublishRequest("orders", revision, validation.DefinitionVersion, validation.ContentHash!),
+            permissions: [EtlDesignPermissions.PublishDefinitions]);
+        Assert.Equal(HttpStatusCode.OK, publish.StatusCode);
+
+        var updatedPipeline = pipeline with { Http = pipeline.Http with { MaxPageRecords = 9_999 } };
+        var updatePipelineJson = PipelineJson(updatedPipeline, kindLast);
+        AssertRetainedBudgetsOmitted(updatePipelineJson);
+        var updateBody = new JsonObject
+        {
+            ["expectedRevision"] = revision,
+            ["pipeline"] = updatePipelineJson
+        };
+        using var update = await host.SendRawAsync(HttpMethod.Put, "/etl/v2/definitions/orders/draft",
+            updateBody.ToJsonString(), permissions: [EtlDesignPermissions.ManageDefinitions]);
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        var (updatedRevision, persistedPipeline) = await ReadConnectorDraftPipelineAsync(update);
+        Assert.Equal(2, updatedRevision);
+        AssertConnectorPipeline(persistedPipeline, updatedPipeline);
+
+        using var validateUpdated = await host.SendAsync(HttpMethod.Post, "/etl/v2/definitions/orders/validate",
+            new EtlValidateRequest("orders", updatedRevision), permissions: [EtlDesignPermissions.ManageDefinitions]);
+        Assert.Equal(HttpStatusCode.OK, validateUpdated.StatusCode);
+        var updatedValidation = await ReadAsync<EtlValidationView>(validateUpdated);
+        Assert.NotNull(updatedValidation.ContentHash);
+        Assert.Empty(updatedValidation.Diagnostics);
+        using var publishUpdated = await host.SendAsync(HttpMethod.Post, "/etl/v2/definitions/orders/publish",
+            new EtlPublishRequest("orders", updatedRevision, updatedValidation.DefinitionVersion, updatedValidation.ContentHash!),
+            permissions: [EtlDesignPermissions.PublishDefinitions]);
+        Assert.Equal(HttpStatusCode.OK, publishUpdated.StatusCode);
+    }
+
+    [Fact]
+    public async Task Connector_api_preserves_explicit_zero_budgets_for_validation()
+    {
+        var state = new ConnectorBindingState();
+        await using var host = await ConnectorHostAsync(state);
+        var pipeline = EtlV2TestPipelines.Create();
+        var explicitZeroPipeline = pipeline with
+        {
+            Limits = pipeline.Limits with { MaxRetainedOutputBytes = 0 },
+            Http = pipeline.Http with { MaxRetainedMetadataBytes = 0 }
+        };
+        var zeroPipelineJson = PipelineJson(explicitZeroPipeline, kindLast: false);
+        Assert.Equal(0, zeroPipelineJson["limits"]!["maxRetainedOutputBytes"]!.GetValue<long>());
+        Assert.Equal(0, zeroPipelineJson["http"]!["maxRetainedMetadataBytes"]!.GetValue<long>());
+        using var createExplicitZero = await host.SendRawAsync(HttpMethod.Post, "/etl/v2/definitions",
+            RawConnectorCreateBody("explicit-zero", zeroPipelineJson),
+            permissions: [EtlDesignPermissions.ManageDefinitions]);
+        Assert.Equal(HttpStatusCode.Created, createExplicitZero.StatusCode);
+        var (zeroRevision, zeroPipeline) = await ReadConnectorDraftPipelineAsync(createExplicitZero);
+        Assert.Equal(0, zeroPipeline.Limits.MaxRetainedOutputBytes);
+        Assert.Equal(0, zeroPipeline.Http.MaxRetainedMetadataBytes);
+        using var validateExplicitZero = await host.SendAsync(HttpMethod.Post, "/etl/v2/definitions/explicit-zero/validate",
+            new EtlValidateRequest("explicit-zero", zeroRevision), permissions: [EtlDesignPermissions.ManageDefinitions]);
+        Assert.Equal(HttpStatusCode.OK, validateExplicitZero.StatusCode);
+        var zeroValidation = await ReadAsync<EtlValidationView>(validateExplicitZero);
+        Assert.Null(zeroValidation.ContentHash);
+        Assert.Contains(zeroValidation.Diagnostics, diagnostic => diagnostic.Code == "limits.invalid");
+        Assert.Contains(zeroValidation.Diagnostics, diagnostic => diagnostic.Code == "http.limits.invalid");
+    }
+
+    [Fact]
+    public async Task Connector_api_rejects_unknown_pipeline_members()
+    {
+        var state = new ConnectorBindingState();
+        await using var host = await ConnectorHostAsync(state);
+        var unknownPropertyPipeline = PipelineJson(EtlV2TestPipelines.Create(), kindLast: true);
+        unknownPropertyPipeline["futureOption"] = true;
+        using var unknownProperty = await host.SendRawAsync(HttpMethod.Post, "/etl/v2/definitions",
+            RawConnectorCreateBody("unknown-property", unknownPropertyPipeline),
+            permissions: [EtlDesignPermissions.ManageDefinitions]);
+        Assert.Equal(HttpStatusCode.BadRequest, unknownProperty.StatusCode);
+        Assert.Equal("etl.request-invalid", (await ReadAsync<EtlApiProblem>(unknownProperty)).Code);
+    }
+
+    private static JsonObject PipelineJson(EtlPipelineV2 pipeline, bool kindLast)
+    {
+        var json = JsonNode.Parse(EtlArtifactV2Json.Write(pipeline).GetRawText())!.AsObject();
+        var source = json["source"]!.AsObject();
+        var routes = json["routes"]!.AsObject();
+        if (!kindLast)
+        {
+            Assert.Equal("kind", source.First().Key);
+            Assert.Equal("kind", source["pagination"]!.AsObject().First().Key);
+            Assert.Equal("kind", routes["main"]!.AsObject().First().Key);
+            Assert.Equal("kind", routes["errors"]!.AsObject().First().Key);
+            return json;
+        }
+
+        MoveKindToEnd(source["pagination"]!.AsObject());
+        MoveKindToEnd(source);
+        MoveKindToEnd(routes["main"]!.AsObject());
+        MoveKindToEnd(routes["errors"]!.AsObject());
+        Assert.Equal("kind", source.Last().Key);
+        Assert.Equal("kind", source["pagination"]!.AsObject().Last().Key);
+        Assert.Equal("kind", routes["main"]!.AsObject().Last().Key);
+        Assert.Equal("kind", routes["errors"]!.AsObject().Last().Key);
+        return json;
+    }
+
+    private static void AssertRetainedBudgetsOmitted(JsonObject pipeline)
+    {
+        Assert.False(pipeline["limits"]!.AsObject().ContainsKey("maxRetainedOutputBytes"));
+        Assert.False(pipeline["http"]!.AsObject().ContainsKey("maxRetainedMetadataBytes"));
+    }
+
+    private static void MoveKindToEnd(JsonObject json)
+    {
+        var kind = json["kind"]?.DeepClone() ?? throw new InvalidOperationException("A polymorphic declaration must have a kind.");
+        json.Remove("kind");
+        json.Add("kind", kind);
+    }
+
+    private static string RawConnectorCreateBody(string id, JsonObject pipeline) =>
+        new JsonObject { ["id"] = id, ["pipeline"] = pipeline }.ToJsonString();
+
+    private static async Task<(long Revision, EtlPipelineV2 Pipeline)> ReadConnectorDraftPipelineAsync(HttpResponseMessage response)
+    {
+        using var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        var root = document.RootElement;
+        return (root.GetProperty("revision").GetInt64(), EtlArtifactV2Json.Read(root.GetProperty("pipeline")));
+    }
+
+    private static void AssertConnectorPipeline(EtlPipelineV2 actual, EtlPipelineV2 expected)
+    {
+        Assert.IsType<EtlHttpJsonSource>(actual.Source);
+        Assert.IsType<EtlTokenPagination>(Assert.IsType<EtlHttpJsonSource>(actual.Source).Pagination);
+        Assert.IsType<EtlHttpDestination>(actual.Routes.Main);
+        Assert.IsType<EtlHttpDestination>(actual.Routes.Errors);
+        Assert.Equal(EtlConnectorLimits.DefaultMaxRetainedOutputBytes, actual.Limits.MaxRetainedOutputBytes);
+        Assert.Equal(EtlHttpPolicy.DefaultMaxRetainedMetadataBytes, actual.Http.MaxRetainedMetadataBytes);
+        Assert.Equal(EtlArtifactV2Json.Write(expected).GetRawText(), EtlArtifactV2Json.Write(actual).GetRawText());
+    }
 
     [Fact]
     public async Task Connector_catalog_is_scoped_and_exposes_only_safe_alias_role_and_kind()
