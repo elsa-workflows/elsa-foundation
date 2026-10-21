@@ -114,7 +114,7 @@ tests to update), H2 (quickstart projects), H3 (retry is defined per FR-008/FR-0
   - fix the stale text in `Essentials/src/Activities/Primitives/Activities/Inline.cs:22`.
 - [x] T033 Update `PublicAPI.Unshipped.txt` for the Expressions projects as the build reports
 - [x] T034 Run the quickstart set and the architecture guard tests; check `docs/maps/dependency-map.json` (`git diff --stat` on Windows)
-- [ ] T035 After the owner accepts ADR 0088, set it to Accepted in the ADR and in `docs/adr/README.md`, and set spec status to Implemented, in the same PR (M8)
+- [x] T035 After the owner accepts ADR 0088, set it to Accepted in the ADR and in `docs/adr/README.md`, and set spec status to Implemented, in the same PR (M8)
 
 Removed after analysis (M5): the editor typings change (former T028/T029). The editor's standard library already
 declares `Date`, so FR-020 now keeps the typings as they are.

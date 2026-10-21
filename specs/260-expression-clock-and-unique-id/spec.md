@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-20
 
-**Status**: Draft
+**Status**: Implemented
 
 **Issue**: [#3026](https://github.com/elsa-workflows/elsa-foundation/issues/3026)
 
@@ -300,7 +300,7 @@ v2 succeeds; publish a new JavaScript and a new Liquid expression and check thei
 ## Out of Scope
 
 - The Elsa 3 converter (ADR 0088 D5): lowering `newGuid()`, `newGuidString()`, `new Date()` and `Date.now()`, refusing
-  `newShortGuid()` and calls inside loops, and the mapping README. A needs-triage follow-up issue covers it.
+  `newShortGuid()` and calls inside loops, and the mapping README. [#3166](https://github.com/elsa-workflows/elsa-foundation/issues/3166) covers it.
 - Liquid date filters.
 - An activity that produces the time or an ID.
 - A Studio control for choosing these parameter kinds; this spec covers the canonical definition, the runtime, the

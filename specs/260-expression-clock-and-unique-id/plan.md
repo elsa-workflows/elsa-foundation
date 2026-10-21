@@ -57,7 +57,7 @@ table drives the runtime messages, the authoring validator and the editor typing
 | §2.22 / §2.22.1 docs and extension points | ACTION | Expressions, JavaScript, Liquid and Runtime `EXTENSION_POINTS.md`; Design JavaScript README; spec 095 contract; ADR 0045 pointer (done) |
 | §2.23.1–§2.23.3 tests and visibility | PASS | A test per story, per removed form and per evaluation site; new helpers are internal |
 | §2.23.5 exception boundaries | PASS | A missing instant is a stable `InvalidOperationException`; JS removals are `TypeError`s surfaced through the existing `JavaScriptBindingEvaluationException` |
-| Decision record | GATE | ADR 0088 is proposed. Merge waits for the owner to accept it; T035 then sets ADR and spec status together |
+| Decision record | DONE | ADR 0088 accepted by the owner on 2026-10-21 |
 
 ## Design decisions
 
