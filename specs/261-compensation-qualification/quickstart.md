@@ -88,9 +88,9 @@ Run once by hand on the full suites, each reverted; record the failing counts in
 | ID | Remove | Expected failure |
 |---|---|---|
 | N501 | The `NotBefore` → `AvailableAt` mapping, so delayed items are available at once | D2, BK1, BK2: attempt runs before its due time |
-| N502 | The hop and immediate-dispatch skip | D2 and BK1 fail in Durable |
-| N503 | The parent-not-running check on delivery | D5 and BK4: the handler starts under a cancelled scope |
-| N504 | The mandatory checkpoint for a delayed item | D7 and BK2 in Ephemeral: the retry is lost after a kill |
+| N502 | The hop and immediate-dispatch skip | The skip's own unit test (D2 and BK1 still pass: the in-process hop only caches payloads) |
+| N503 | The parent-not-running check on delivery | D5: the handler starts under a finished parent (BK4 still passes: the terminal-run check refuses first) |
+| N504 | The mandatory checkpoint for a delayed item | Its own unit test (D7 and BK2 still pass: a coalesced item keeps its due time and a crash replays the same intent) |
 | N505 | The delay formula's exponent (use a fixed delay) | BK3's recorded waits |
 | N506 | The warning validator, and separately Studio's severity filter | W1/W2; W6 and the M1 live journey's publish step |
 

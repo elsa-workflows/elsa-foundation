@@ -238,9 +238,9 @@ public sealed class WorkbenchCompensationRecoveryTests
             Assert.Single(Calls(journal, "backoff-delivery-cancel"));
         var completed = await WaitForStateAsync(restarted, executionId, instance => instance["instance"]?["status"]?.GetValue<string>() == "Completed");
 
-        Assert.True(DateTimeOffset.UtcNow >= notBefore);
         var cancelCalls = Calls(journal, "backoff-delivery-cancel");
         Assert.Equal(2, cancelCalls.Length);
+        Assert.True(cancelCalls[1].StartedAt >= notBefore, $"The retry started at {cancelCalls[1].StartedAt:O}, before its due time {notBefore:O}.");
         Assert.Single(cancelCalls.Select(call => call.OperationKey).Distinct());
         Assert.Single(Calls(journal, "backoff-inventory-release"));
         Assert.Contains("Compensated", Activity(completed, "scope")["outcomeNames"]!.AsArray().Select(outcome => outcome!.GetValue<string>()));
@@ -550,7 +550,11 @@ public sealed class WorkbenchCompensationRecoveryTests
         var path = Path.Combine(journal, key + ".calls");
         return File.Exists(path)
             ? File.ReadAllLines(path).Select(line => line.Split('|')).Where(parts => parts.Length >= 3)
-                .Select(parts => new ParticipantCall(parts[0], parts[1], parts.Length > 3 ? parts[3] : "")).ToArray()
+                .Select(parts => new ParticipantCall(
+                    parts[0],
+                    parts[1],
+                    parts.Length > 3 ? parts[3] : "",
+                    parts.Length > 4 ? DateTimeOffset.Parse(parts[4], System.Globalization.CultureInfo.InvariantCulture) : DateTimeOffset.MinValue)).ToArray()
             : [];
     }
 
@@ -656,7 +660,7 @@ public sealed class WorkbenchCompensationRecoveryTests
         stream.Write(Encoding.UTF8.GetBytes(value));
     }
 
-    private sealed record ParticipantCall(string ProcessId, string InvocationId, string OperationKey);
+    private sealed record ParticipantCall(string ProcessId, string InvocationId, string OperationKey, DateTimeOffset StartedAt);
 
     private sealed record PublishedWorkflow(string ArtifactId, string SourceReferenceId);
 }

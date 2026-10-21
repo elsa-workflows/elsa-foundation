@@ -233,7 +233,7 @@ The program owner opens the qualification record and the Elsa 3 assessment. The 
 ## Success Criteria
 
 - **SC-501**: With the default inputs, every M1–M4 compensation test passes unchanged.
-- **SC-502**: In BK1–BK6, in every mode and provider of the subset, each handler retry runs once, not before its due time, with the same operation key; a kill while waiting changes nothing but the time.
+- **SC-502**: In BK1–BK6 on SQLite in every mode, and in BK2 (S7 of the provider subset) on PostgreSQL, SQL Server and MySQL in every mode, each handler retry runs once, not before its due time, with the same operation key; a kill while waiting changes nothing but the time.
 - **SC-503**: Each negative control fails when its safeguard is removed: the delayed intent's availability, the parent-running check on delivery, the mandatory checkpoint, the delay formula, the warning, and Studio's warning filter.
 - **SC-504**: The qualification matrix has no supported row without a recorded proof on the candidate revision, and every unsupported combination appears in the record and the guide.
 - **SC-505**: All live journeys pass against one recorded Studio and Workbench pair, with axe clean at 390 and 1200 px.
