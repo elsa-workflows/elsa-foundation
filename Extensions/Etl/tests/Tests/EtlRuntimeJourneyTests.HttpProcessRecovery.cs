@@ -122,6 +122,120 @@ public sealed partial class EtlRuntimeJourneyTests
         await AssertHttpProcessTerminalAsync(files, host, invocation, deadline.Token);
     }
 
+    [Fact]
+    public async Task Two_http_worker_processes_retry_error_route_after_main_ack_without_early_dispatch_or_double_accounting()
+    {
+        var errorRequests = 0;
+        var errorRequestTimes = new ConcurrentQueue<DateTimeOffset>();
+        await using var files = new RuntimeFiles("id,name\n");
+        await using var endpoint = await EtlHttpLoopbackServer.StartAsync((request, _) =>
+        {
+            if (request.Method == "GET")
+                return ValueTask.FromResult(new EtlHttpLoopbackResponse(200, ProcessHttpPage));
+            if (request.RawTarget == "/output")
+                return ValueTask.FromResult(new EtlHttpLoopbackResponse(204, ""));
+            if (request.RawTarget == "/errors")
+            {
+                errorRequestTimes.Enqueue(DateTimeOffset.UtcNow);
+                var status = Interlocked.Increment(ref errorRequests) == 1 ? 429 : 204;
+                var headers = status == 429
+                    ? new Dictionary<string, string> { ["Retry-After"] = "5" }
+                    : null;
+                return ValueTask.FromResult(new EtlHttpLoopbackResponse(status, "", headers));
+            }
+            throw new InvalidOperationException("Unexpected connector request.");
+        });
+
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        var (host, invocation, bindings) = await PrepareHttpProcessRunAsync(files, endpoint, deadline.Token);
+        var predecessor = await files.StartWorkerAsync("error-retry-predecessor", deadline.Token, httpBindings: bindings);
+
+        HttpProcessState waiting;
+        EtlConnectorHttpDeliveries deliveries;
+        while (true)
+        {
+            waiting = await ReadHttpProcessStateAsync(host.Services, deadline.Token);
+            if (waiting.Batch?.HttpDeliveryJson is { } deliveryJson && endpoint.Requests.Any(request => request.RawTarget == "/errors"))
+            {
+                deliveries = EtlConnectorRecordCodec.Read<EtlConnectorHttpDeliveries>(deliveryJson);
+                if (deliveries.Errors?.Phase == EtlHttpDeliveryPhase.Waiting)
+                    break;
+            }
+            await Task.Delay(TimeSpan.FromMilliseconds(25), deadline.Token);
+        }
+
+        var main = Assert.IsType<EtlConnectorHttpDelivery>(deliveries.Main);
+        var errors = Assert.IsType<EtlConnectorHttpDelivery>(deliveries.Errors);
+        var waitingBatch = Assert.IsType<EtlConnectorBatchRecord>(waiting.Batch);
+        Assert.Equal(EtlHttpDeliveryPhase.Acknowledged, main.Phase);
+        Assert.Equal(204, Assert.Single(main.Attempts).Response!.StatusCode);
+        Assert.Equal(EtlHttpDeliveryPhase.Waiting, errors.Phase);
+        Assert.Equal(429, Assert.Single(errors.Attempts).Response!.StatusCode);
+        Assert.Equal(2, waiting.Run.OutstandingRecords);
+        Assert.True(waiting.Run.OutstandingBytes > 0);
+        Assert.False(waitingBatch.Settled);
+        Assert.Equal(0, waiting.Run.AcceptedRecords);
+        Assert.Equal(0, waiting.Run.RejectedRecords);
+        Assert.Single(endpoint.Requests, request => request.Method == "GET");
+        Assert.Single(endpoint.Requests, request => request.RawTarget == "/output");
+        Assert.Single(endpoint.Requests, request => request.RawTarget == "/errors");
+
+        var notBefore = Assert.IsType<DateTimeOffset>(errors.NotBefore);
+        await predecessor.CrashAsync();
+        Assert.True(predecessor.HasExited);
+
+        var successor = await files.StartWorkerAsync("error-retry-successor", deadline.Token,
+            httpBindings: bindings, connectorGate: EtlConnectorWorkerGate.BeforeAcceptance);
+        var remaining = notBefore - DateTimeOffset.UtcNow - TimeSpan.FromSeconds(1);
+        Assert.True(remaining > TimeSpan.Zero,
+            "The successor must start while the persisted error-route retry is still delayed.");
+        await Task.Delay(remaining, deadline.Token);
+        Assert.True(DateTimeOffset.UtcNow < notBefore);
+        Assert.Single(endpoint.Requests, request => request.RawTarget == "/output");
+        Assert.Single(endpoint.Requests, request => request.RawTarget == "/errors");
+
+        var recovered = await successor.WaitForConnectorCheckpointAsync(deadline.Token);
+        Assert.Equal(EtlConnectorWorkerGate.BeforeAcceptance, recovered.Gate);
+        Assert.Equal(successor.ProcessId, recovered.ProcessId);
+        Assert.NotEqual(predecessor.ProcessId, recovered.ProcessId);
+        Assert.NotEqual(Environment.ProcessId, recovered.ProcessId);
+        Assert.True(recovered.Lease.Fence > waiting.Partition.Fence);
+        Assert.Equal(waiting.Partition.PartitionOrdinal, recovered.Lease.PartitionOrdinal);
+        Assert.Equal(waitingBatch.BatchId, recovered.BatchId);
+
+        var pending = await ReadHttpProcessStateAsync(host.Services, deadline.Token);
+        var pendingBatch = Assert.IsType<EtlConnectorBatchRecord>(pending.Batch);
+        var retried = EtlConnectorRecordCodec.Read<EtlConnectorHttpDeliveries>(pendingBatch.HttpDeliveryJson!);
+        var retriedMain = Assert.IsType<EtlConnectorHttpDelivery>(retried.Main);
+        var retriedErrors = Assert.IsType<EtlConnectorHttpDelivery>(retried.Errors);
+        Assert.Equal(EtlHttpDeliveryPhase.Acknowledged, retriedMain.Phase);
+        Assert.Single(retriedMain.Attempts);
+        Assert.Equal(204, retriedMain.Attempts[0].Response!.StatusCode);
+        Assert.Equal(EtlHttpDeliveryPhase.Acknowledged, retriedErrors.Phase);
+        Assert.Equal(2, retriedErrors.Attempts.Count);
+        Assert.Equal(429, retriedErrors.Attempts[0].Response!.StatusCode);
+        Assert.Equal(204, retriedErrors.Attempts[1].Response!.StatusCode);
+        Assert.Equal(retriedErrors.Attempts[0].Attempt.EffectId, retriedErrors.Attempts[1].Attempt.EffectId);
+        Assert.NotEqual(retriedErrors.Attempts[0].Attempt.RequestId, retriedErrors.Attempts[1].Attempt.RequestId);
+        Assert.True(errorRequestTimes.ToArray()[1] >= notBefore);
+        Assert.Equal(2, pending.Run.OutstandingRecords);
+        Assert.Equal(waiting.Run.OutstandingBytes, pending.Run.OutstandingBytes);
+        Assert.Equal(0, pending.Run.AcceptedRecords);
+        Assert.Equal(0, pending.Run.RejectedRecords);
+        Assert.False(pendingBatch.Settled);
+        Assert.Equal(waitingBatch.OutputJson, pendingBatch.OutputJson);
+        Assert.Equal(waitingBatch.OutputDigest, pendingBatch.OutputDigest);
+        Assert.Single(endpoint.Requests, request => request.Method == "GET");
+        Assert.Single(endpoint.Requests, request => request.RawTarget == "/output");
+        Assert.Equal(2, endpoint.Requests.Count(request => request.RawTarget == "/errors"));
+        AssertRecordedRequestsMatchRetainedOutput(endpoint, pendingBatch);
+
+        await successor.ReleaseAsync(deadline.Token);
+        await AssertHttpProcessTerminalAsync(files, host, invocation, deadline.Token);
+        Assert.Single(endpoint.Requests, request => request.RawTarget == "/output");
+        Assert.Equal(2, endpoint.Requests.Count(request => request.RawTarget == "/errors"));
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
