@@ -59,8 +59,7 @@ the marker proves, each provider supplies SQL per member
    (`EfOrdinalCollation.cs:27`, `:30`, `:33`, `:40`, `:73`), proved against generated migrations and
    against real SQL Server and PostgreSQL databases created with a linguistic default.
 2. Wrapped transients. #1801 and #1816 established that a store classifies from what `SaveChanges`
-   reported by walking the exception chain (`EfRelationalExceptionClassifier.IsSaveConflict` at
-   `:72`), because the non-retrying default strategies of SQL Server and PostgreSQL wrap a transient
+   reported by walking the exception chain (`EfRelationalExceptionClassifier.IsSaveConflict`), because the non-retrying default strategies of SQL Server and PostgreSQL wrap a transient
    error in an `InvalidOperationException`. ADR 0074 D3 makes that a standing rule for new stores.
 
 A future Oracle engine inherits both as prerequisites rather than starting cold. What neither supplies
@@ -214,7 +213,7 @@ Costs and risks:
 | 2026-09-19 | ADR 0075 accepted | Sipke Schoorstra accepted the recommendation. D1 stays at four engines, the status and the Elsa 3 route are documented, and the trigger is recorded as a three-part condition. |
 | 2026-09-30 | Amendment | The Context's "almost no provider-specific SQL" claim gains two named sites, `EfInsertIfAbsent` (#2162) and `EfSchemaFinalizationCheck`, guarded by `RawSqlArchitectureTests`; the decision is unchanged. |
 | 2026-10-10 | Amendment | `RawSqlArchitectureTests` is deleted by #2573 (ADR 0080 D1: tests do not assert on source text). The two named sites still hold, kept by review. |
-| 2026-10-21 | Amendment | A third named site: the MySQL `FreeNameOnDelete` migration in Secrets (#2855) moves the key with `migrationBuilder.Sql`. The decision is unchanged. |
+| 2026-10-21 | Amendment | A third named site: the MySQL `FreeNameOnDelete` migration in Secrets (#2855) moves the key with `migrationBuilder.Sql`. The Context now names the classifier's per-provider arms by method, not line, and adds `IsKeyTooLong`, a SQL Server arm for a key too long to write. The decision is unchanged. |
 
 ## Amendment — 2026-09-30, factual
 
