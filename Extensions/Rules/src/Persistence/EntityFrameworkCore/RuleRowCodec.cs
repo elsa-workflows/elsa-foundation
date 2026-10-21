@@ -84,6 +84,7 @@ internal static class RuleRowCodec
             && LeaseShape(row.DeliveryOwner, row.DeliveryFence, row.DeliveryExpiresAtUtcTicks), "rules.persisted-lease");
         if ((RuleRunStatus)row.Status == RuleRunStatus.Running)
         {
+            Require(row.CommittedRounds < invocation.MaxRounds, "rules.running-round-budget");
             Require(row.Admitted && row.TerminalId64 is null && row.TerminalJson is null && row.TerminalModelRevision is null
                 && row.DeliveryId64 is null && row.DeliveryPayloadJson is null && row.DeliveryPayloadSha25664 is null
                 && row.DeliveryOwner is null && row.DeliveryExpiresAtUtcTicks is null && row.DeliveryFence == 0
@@ -123,14 +124,24 @@ internal static class RuleRowCodec
     }
 
     /// <summary>Actual encoded projection bound. Callers persisting a pending receipt supply its complete record.</summary>
-    internal static void CheckProjectionSize(RuleRunRecord row, string? pendingReceiptJson = null)
+    internal static void CheckProjectionSize(RuleRunRecord row, RuleRoundReceiptRecord? pendingReceipt = null)
     {
         // First bound all raw text before serializing metadata or allocating UTF-8 copies from a provider read.
         var metadataStrings = new[] { row.RunKey, row.IdentityBase64, row.Fingerprint64, row.PinHash64, row.FactsSha25664,
             row.PendingReceiptId64, row.TerminalId64, row.WorkOwner, row.DeliveryId64, row.DeliveryPayloadSha25664,
-            row.DeliveryOwner, row.DeliveryAcknowledgementJson, row.SchemaVersion };
+            row.DeliveryOwner, row.DeliveryAcknowledgementJson, row.SchemaVersion,
+            pendingReceipt?.RunKey, pendingReceipt?.ReceiptId64, pendingReceipt?.InputFactsSha25664,
+            pendingReceipt?.AcceptedAttemptId, pendingReceipt?.AcceptedWorkerId, pendingReceipt?.ConsumptionTransitionId64,
+            pendingReceipt?.TerminalIdAtConsumption64, pendingReceipt?.NextRoundIdAtConsumption64, pendingReceipt?.SchemaVersion };
         var rawMetadata = metadataStrings.Sum(value => value is null ? 0L : Encoding.UTF8.GetByteCount(value));
         Require(rawMetadata <= RuleLimits.MaxStateMetadataBytes, "rules.metadata-too-large");
+        var receiptMetadata = pendingReceipt is null ? null : new
+        {
+            pendingReceipt.RunKey, pendingReceipt.Ordinal, pendingReceipt.ReceiptId64, pendingReceipt.InputFactsSha25664,
+            pendingReceipt.AcceptedAttemptId, pendingReceipt.AcceptedWorkerId, pendingReceipt.AcceptedFence,
+            pendingReceipt.AcceptedModelRevision, pendingReceipt.ConsumedModelRevision, pendingReceipt.ConsumptionTransitionId64,
+            pendingReceipt.TerminalIdAtConsumption64, pendingReceipt.NextRoundIdAtConsumption64, pendingReceipt.SchemaVersion
+        };
         // Account for the token that SaveChanges will stamp, including before the first save.
         var metadata = JsonSerializer.SerializeToUtf8Bytes(new
         {
@@ -139,11 +150,11 @@ internal static class RuleRowCodec
             row.Status, row.TerminalId64, row.TerminalModelRevision, row.WorkOwner, row.WorkFence,
             row.WorkExpiresAtUtcTicks, row.DeliveryId64, row.DeliveryPayloadSha25664, row.DeliveryOwner,
             row.DeliveryFence, row.DeliveryExpiresAtUtcTicks, row.DeliveryAcknowledged,
-            row.DeliveryAcknowledgementJson, row.SchemaVersion
+            row.DeliveryAcknowledgementJson, row.SchemaVersion, PendingReceipt = receiptMetadata
         });
         Require(metadata.Length <= RuleLimits.MaxStateMetadataBytes, "rules.metadata-too-large");
         long size = metadata.Length;
-        foreach (var value in new[] { row.InvocationJson, row.FactsJson, pendingReceiptJson, row.TerminalJson, row.DeliveryPayloadJson })
+        foreach (var value in new[] { row.InvocationJson, row.FactsJson, pendingReceipt?.ReceiptJson, row.TerminalJson, row.DeliveryPayloadJson })
         {
             if (value is null) continue;
             var count = Encoding.UTF8.GetByteCount(value);

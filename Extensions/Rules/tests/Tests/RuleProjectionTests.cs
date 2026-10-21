@@ -25,12 +25,22 @@ public sealed class RuleProjectionTests
         row.InvocationJson = new string('a', RuleLimits.MaxEnvelopeBytes);
         row.FactsJson = new string('a', RuleLimits.MaxEnvelopeBytes - 4096);
         RuleRowCodec.CheckProjectionSize(row);
-        Assert.Throws<InvalidDataException>(() => RuleRowCodec.CheckProjectionSize(row, new string('a', 8192)));
+        Assert.Throws<InvalidDataException>(() => RuleRowCodec.CheckProjectionSize(row, new RuleRoundReceiptRecord { ReceiptJson = new string('a', 8192) }));
         row.TerminalJson = new string('a', 8192);
         Assert.Throws<InvalidDataException>(() => RuleRowCodec.CheckProjectionSize(row));
         row.TerminalJson = null;
         row.DeliveryPayloadJson = new string('a', 8192);
         Assert.Throws<InvalidDataException>(() => RuleRowCodec.CheckProjectionSize(row));
+    }
+
+    [Fact]
+    public void Projection_limit_counts_pending_attempt_metadata_with_escaping()
+    {
+        var row = Row();
+        var pending = new RuleRoundReceiptRecord { ReceiptJson = "{}", AcceptedAttemptId = new string('a', 12000) };
+        RuleRowCodec.CheckProjectionSize(row, pending);
+        pending.AcceptedAttemptId = new string('\u0001', 12000);
+        Assert.Throws<InvalidDataException>(() => RuleRowCodec.CheckProjectionSize(row, pending));
     }
 
     private static RuleRunRecord Row()

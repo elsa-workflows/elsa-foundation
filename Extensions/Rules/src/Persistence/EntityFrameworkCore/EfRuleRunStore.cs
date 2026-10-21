@@ -10,7 +10,7 @@ namespace Elsa.Rules.Persistence.EntityFrameworkCore;
 
 /// <summary>Rules-owned admission and settlement transactions. Worker operations are implemented separately.</summary>
 internal sealed partial class EfRuleRunStore(IDbContextFactory<RulesDbContext> contexts, IRuleAdmissionValidator validator,
-    TimeSpan? workLeaseDuration = null)
+    TimeSpan? workLeaseDuration = null, IRuleRoundValidator? roundValidator = null)
 {
     private readonly TimeSpan _workLeaseDuration = ValidateLeaseDuration(workLeaseDuration ?? TimeSpan.FromMinutes(1));
     private const int MaximumWriteAttempts = 8;
@@ -176,11 +176,11 @@ internal sealed partial class EfRuleRunStore(IDbContextFactory<RulesDbContext> c
                      .Where(entry => entry.State is EntityState.Added or EntityState.Modified).ToArray())
         {
             var row = entry.Entity;
-            string? pending = null;
+            RuleRoundReceiptRecord? pending = null;
             if (row.PendingReceiptId64 is { } receiptId)
-                pending = db.Receipts.Local.SingleOrDefault(receipt => receipt.RunKey == row.RunKey && receipt.ReceiptId64 == receiptId)?.ReceiptJson
-                    ?? await db.Receipts.Where(receipt => receipt.RunKey == row.RunKey && receipt.ReceiptId64 == receiptId)
-                        .Select(receipt => receipt.ReceiptJson).SingleOrDefaultAsync(cancellationToken)
+                pending = db.Receipts.Local.SingleOrDefault(receipt => receipt.RunKey == row.RunKey && receipt.ReceiptId64 == receiptId)
+                    ?? await db.Receipts.AsNoTracking().Where(receipt => receipt.RunKey == row.RunKey && receipt.ReceiptId64 == receiptId)
+                        .SingleOrDefaultAsync(cancellationToken)
                     ?? throw new InvalidDataException("rules.missing-pending-receipt");
             RuleRowCodec.CheckProjectionSize(row, pending);
         }
