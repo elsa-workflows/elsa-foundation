@@ -122,3 +122,6 @@ dotnet build Elsa.Server.slnx
 dotnet test Essentials/tests/Architecture/Tests/Elsa.Architecture.Tests.csproj
 dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 ```
+
+`-- check` checks the same committed filters as `-- solution-filters-check`; the dependency map is derived per commit and
+not committed (spec 259).

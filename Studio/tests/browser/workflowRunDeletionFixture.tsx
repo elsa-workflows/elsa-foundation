@@ -14,7 +14,11 @@ setDialogs(dialogs);
 function Fixture() {
   const [opened, setOpened] = useState("");
   const context = useMemo(() => {
-    let runs = ["quote-completed", "quote-active", "quote-retry"];
+    const statuses = new URLSearchParams(window.location.search).get("statuses") === "all"
+      ? ["Pending", "Running", "Suspended", "Completed", "Faulted", "Cancelled", "Unknown"]
+      : undefined;
+    let runs = statuses?.map(status => `status-${status.toLowerCase()}`) ?? ["quote-completed", "quote-active", "quote-retry"];
+    const statusByRunId = new Map((statuses ?? []).map(status => [`status-${status.toLowerCase()}`, status] as const));
     let failedOnce = false;
     const deleteEnabled = new URLSearchParams(window.location.search).get("delete") !== "disabled";
     return {
@@ -28,10 +32,10 @@ function Fixture() {
           if (path.startsWith("/runtime/workflows/instances/page")) return {
             items: runs.map((id, index) => ({
               workflowExecutionId: id, artifactId: "customer-quote", definitionId: "quote-definition", definitionVersionId: "quote-v3",
-              status: id === "quote-active" ? "Running" : "Completed", subStatus: null, runKind: "PublishedRun",
+              status: statusByRunId.get(id) ?? (id === "quote-active" ? "Running" : "Completed"), subStatus: null, runKind: "PublishedRun",
               createdAt: "2026-10-18T10:00:00Z", startedAt: "2026-10-18T10:00:00Z",
-              completedAt: id === "quote-active" ? null : "2026-10-18T10:00:02Z", elapsedMilliseconds: 2000,
-              activityCount: 4, incidentCount: index === 2 ? 1 : 0, activeIncidentCount: 0, blockingIncidentCount: 0
+              completedAt: id === "quote-active" || statusByRunId.get(id) === "Running" ? null : "2026-10-18T10:00:02Z", elapsedMilliseconds: 2000,
+              activityCount: 4, incidentCount: !statuses && index === 2 ? 1 : 0, activeIncidentCount: 0, blockingIncidentCount: 0
             })), hasNext: false, nextCursor: null, count: runs.length, totalCount: runs.length
           };
           throw new Error(`Unexpected fixture read ${path}`);

@@ -5,6 +5,10 @@ README's migration story is generated from this contract.
 
 Every refusal is an Error, and a refused construct anywhere in a definition stops the whole definition from converting.
 
+Spec 262 extends this contract: every value that leaves a bound expression ends in `?? null`, a converted script whose
+last line is a `//` comment ends with a newline, and sloppy-mode-only JavaScript is refused. See
+[javascript-strict-and-undefined.md](../../262-elsa3-undefined-strict/contracts/javascript-strict-and-undefined.md).
+
 ## Converts
 
 | Elsa 3 | Elsa 4 | Notes |

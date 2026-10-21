@@ -39,7 +39,7 @@ Read these roughly in order:
 | Step-by-step task descriptions (tool-neutral, usable by people and AI assistants) | [Skill catalog](skills/catalog.md) |
 | Ideas for a first question to ask about the repo | [First-user prompt options](reference/first-user-prompts.md) |
 | Worked examples, case studies and walkthroughs | [Reference docs](reference/README.md) |
-| Repo maps and what the generated maps should contain | [Maps index](maps/README.md) |
+| Repo maps and what the generated maps should contain, and where to read or generate them | [Maps index](maps/README.md) |
 | Inventories, unfinished work and verification reports | [Reports index](reports/README.md) |
 
 ## How these docs are organised

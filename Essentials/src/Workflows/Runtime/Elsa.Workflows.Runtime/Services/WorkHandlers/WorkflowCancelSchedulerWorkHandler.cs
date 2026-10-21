@@ -110,7 +110,8 @@ public sealed class WorkflowCancelSchedulerWorkHandler : IWorkflowSchedulerWorkH
                 durableValues: [],
                 incidents: [],
                 operational: [],
-                activityExecutionInspections: plan.ActivityExecutionInspections),
+                activityExecutionInspections: plan.ActivityExecutionInspections,
+                activityScopeCleanups: plan.CleanupRequests),
             PostCommitIntents: [],
             Metadata: new Dictionary<string, string>
             {

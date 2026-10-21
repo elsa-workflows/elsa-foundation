@@ -2865,6 +2865,34 @@
   white-space: nowrap;
 }
 
+.wf-timeline-body .wf-timeline-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: inherit;
+}
+
+.wf-activity-compensates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 10px 0 0;
+  padding: 0 2px;
+  font-size: 12px;
+}
+
+.wf-activity-compensates-link {
+  padding: 0;
+  border: 0;
+  color: var(--studio-accent);
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .wf-timeline-meta {
   display: flex;
   flex: 0 0 auto;
@@ -3000,14 +3028,14 @@
 .wf-status-badge[data-status="completed"] {
   border-color: color-mix(in srgb, var(--wf-success) 35%, var(--wf-border));
   background: var(--wf-success-soft);
-  color: var(--wf-success);
+  color: var(--studio-success-fg);
 }
 
 .wf-status-badge[data-status="faulted"],
 .wf-status-badge[data-status="cancelled"] {
   border-color: color-mix(in srgb, var(--wf-danger) 35%, var(--wf-border));
   background: var(--wf-danger-soft);
-  color: var(--wf-danger);
+  color: var(--studio-danger-fg);
 }
 
 .wf-status-badge[data-status="suspended"] {
@@ -5799,12 +5827,14 @@ button.wf-reference-select {
 
 .wf-property-row {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 7px;
   container-type: inline-size;
 }
 
 .wf-property-row-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -8209,4 +8239,20 @@ html[data-theme-material] .availability-search .wf-search {
 .wf-instance-canvas .wf-sequence-heading {
   padding-bottom: .75rem;
   background: var(--studio-bg);
+}
+
+/* Spec 258: the Confirm and Compensate target picker, with the Draft validator's message under it. */
+.wf-compensation-target {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+}
+
+.wf-compensation-target-problem {
+  display: flex;
+  align-items: flex-start;
+  gap: .3rem;
+  margin: 0;
+  color: var(--studio-danger);
+  font-size: var(--studio-label-size, .8125rem);
 }

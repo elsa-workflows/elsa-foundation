@@ -1,12 +1,15 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { useDialogFocus, type StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import { AdvancedSection } from "@elsa-workflows/studio-ui";
 import { createConnection } from "./connectionsApi";
 import type {
   AuthSchemeDescriptor,
+  AuthSchemeField,
   ConnectionCredentialInput,
   ConnectionDescriptorsResponse,
   ConnectionMetadata,
+  ConnectionSettingField,
   ConnectionTypeDescriptor,
   CreateConnectionRequest
 } from "./connectionTypes";
@@ -41,6 +44,8 @@ export function ConnectionCreateDialog({
   const schemeId = useId();
   const serviceSettingsTitleId = useId();
   const authenticationTitleId = useId();
+  const addressGuidanceId = useId();
+  const placementErrorId = useId();
   currentContextRef.current = context;
 
   const contextIsCurrent = boundContext === context;
@@ -52,9 +57,47 @@ export function ConnectionCreateDialog({
   const selectedScheme: AuthSchemeDescriptor | undefined = availableSchemes.find(scheme => scheme.name === visibleAuthScheme);
   const visibleSettings = contextIsCurrent ? settings : {};
   const visibleCredentials = contextIsCurrent ? credentialInputs : {};
+  const typeSettings = selectedType?.settings ?? [];
   const sensitiveFields = selectedScheme?.fields.filter(field => field.sensitive) ?? [];
   const nonSensitiveSchemeFields = selectedScheme?.fields.filter(field => !field.sensitive) ?? [];
-  const validRequiredSettings = (selectedType?.settings ?? []).filter(field => field.required).every(field => isSettingPresent(field, visibleSettings[field.name]));
+  const httpAddressFields = getHttpAddressFields(selectedType);
+  const apiKeyFields = getBuiltInApiKeyFields(selectedType, selectedScheme);
+  const effectivePlacement = apiKeyFields ? resolveApiKeyPlacement(visibleSettings[apiKeyFields.placement.name]) : null;
+  const invalidPlacement = !!apiKeyFields && effectivePlacement === null;
+  const advancedTypeFields = httpAddressFields
+    ? typeSettings.filter(field =>
+      (!field.required && field.name === httpAddressFields.allowedHosts.name)
+      || (!field.required && isKnownHttpSetting(field, "allowInsecureHttp", "checkbox")))
+    : [];
+  const directTypeFields = typeSettings.filter(field => !advancedTypeFields.includes(field));
+  const directSchemeFields = nonSensitiveSchemeFields.filter(field => {
+    if (!apiKeyFields) return true;
+    if (field.required) return true;
+    return field.name !== apiKeyFields.headerName.name
+      && field.name !== apiKeyFields.placement.name
+      && field.name !== apiKeyFields.queryName.name;
+  });
+  const visibleAdvancedApiKeyNames = apiKeyFields
+    ? [
+      apiKeyFields.headerName.required ? null : effectivePlacement === "header" ? apiKeyFields.headerName : null,
+      apiKeyFields.queryName.required ? null : effectivePlacement === "query" ? apiKeyFields.queryName : null
+    ].filter((field): field is AuthSchemeDescriptor["fields"][number] => field !== null)
+    : [];
+  const advancedSettingNames = new Set([
+    ...advancedTypeFields.map(field => field.name),
+    ...(apiKeyFields && !apiKeyFields.placement.required ? [apiKeyFields.placement.name] : []),
+    ...(apiKeyFields && !apiKeyFields.headerName.required ? [apiKeyFields.headerName.name] : []),
+    ...(apiKeyFields && !apiKeyFields.queryName.required ? [apiKeyFields.queryName.name] : [])
+  ]);
+  const advancedSetCount = [...advancedSettingNames].filter(fieldName => !!visibleSettings[fieldName]?.trim()).length;
+  const hasHttpAddress = !httpAddressFields
+    || isSettingPresent(httpAddressFields.baseUrl, visibleSettings[httpAddressFields.baseUrl.name])
+    || isSettingPresent(httpAddressFields.allowedHosts, visibleSettings[httpAddressFields.allowedHosts.name]);
+  const showAddressGuidance = !!httpAddressFields
+    && !httpAddressFields.baseUrl.required
+    && !httpAddressFields.allowedHosts.required
+    && !hasHttpAddress;
+  const validRequiredSettings = typeSettings.filter(field => field.required).every(field => isSettingPresent(field, visibleSettings[field.name]));
   const validRequiredSchemeSettings = nonSensitiveSchemeFields.filter(field => field.required).every(field => isSettingPresent(field, visibleSettings[field.name]));
   const validCredentials = sensitiveFields.every(field => {
     const input = visibleCredentials[field.name] ?? defaultCredentialInput();
@@ -69,6 +112,8 @@ export function ConnectionCreateDialog({
     && name.trim().length > 0
     && validRequiredSettings
     && validRequiredSchemeSettings
+    && hasHttpAddress
+    && !invalidPlacement
     && validCredentials;
 
   useDialogFocus(dialogRef, contextIsCurrent && !submitting ? onCancel : null);
@@ -164,6 +209,142 @@ export function ConnectionCreateDialog({
     }
   }
 
+  function renderTypeSetting(field: ConnectionSettingField) {
+    const id = `${nameId}-type-${safeId(field.name)}`;
+    const isCheckbox = field.editorHint === "checkbox";
+    const checked = visibleSettings[field.name] === "true";
+    const isBaseUrl = httpAddressFields?.baseUrl.name === field.name;
+    const isInsecureHttp = !!httpAddressFields
+      && selectedType?.name === "http"
+      && !field.required
+      && isKnownHttpSetting(field, "allowInsecureHttp", "checkbox");
+    const isAllowedHosts = httpAddressFields?.allowedHosts.name === field.name;
+
+    return (
+      <label className="connection-setting-field" key={field.name} htmlFor={id}>
+        {field.displayName}{field.required ? " (required)" : ""}
+        <input
+          id={id}
+          type={isCheckbox ? "checkbox" : "text"}
+          required={field.required && !isCheckbox}
+          checked={isCheckbox ? checked : undefined}
+          value={isCheckbox ? undefined : visibleSettings[field.name] ?? ""}
+          placeholder={isAllowedHosts ? "api.example, *.googleapis.com" : undefined}
+          aria-describedby={isBaseUrl && showAddressGuidance ? addressGuidanceId : undefined}
+          disabled={!contextIsCurrent || submitting}
+          onChange={event => {
+            setSettings(current => {
+              if (isInsecureHttp && !event.target.checked) {
+                return Object.fromEntries(Object.entries(current).filter(([name]) => name !== field.name));
+              }
+              return {
+                ...current,
+                [field.name]: isCheckbox ? String(event.target.checked) : event.target.value
+              };
+            });
+            setError(null);
+          }}
+        />
+      </label>
+    );
+  }
+
+  function renderSchemeSetting(field: AuthSchemeField) {
+    if (apiKeyFields?.placement.name === field.name) return renderApiKeyPlacement(field);
+
+    const id = `${nameId}-scheme-${safeId(field.name)}`;
+    const placeholder = field.name === apiKeyFields?.headerName.name
+      ? "Authorization"
+      : field.name === apiKeyFields?.queryName.name ? "api_key" : undefined;
+    return (
+      <label className="connection-setting-field" key={field.name} htmlFor={id}>
+        {field.displayName}{field.required ? " (required)" : ""}
+        <input
+          id={id}
+          value={visibleSettings[field.name] ?? ""}
+          placeholder={placeholder}
+          required={field.required}
+          autoComplete="off"
+          disabled={!contextIsCurrent || submitting}
+          onChange={event => {
+            setSettings(current => ({ ...current, [field.name]: event.target.value }));
+            setError(null);
+          }}
+        />
+      </label>
+    );
+  }
+
+  function renderApiKeyPlacement(field: AuthSchemeField) {
+    const id = `${nameId}-scheme-${safeId(field.name)}`;
+    const rawPlacement = visibleSettings[field.name];
+    return (
+      <div className="connection-setting-field" key={field.name}>
+        <label htmlFor={id}>{field.displayName}{field.required ? " (required)" : ""}</label>
+        <select
+          id={id}
+          required={field.required}
+          value={effectivePlacement ?? rawPlacement ?? "header"}
+          aria-invalid={invalidPlacement || undefined}
+          aria-describedby={invalidPlacement ? placementErrorId : undefined}
+          disabled={!contextIsCurrent || submitting}
+          onChange={event => {
+            setSettings(current => ({ ...current, [field.name]: event.target.value }));
+            setError(null);
+          }}
+        >
+          {invalidPlacement ? <option value={rawPlacement}>Unsupported placement: {rawPlacement}</option> : null}
+          <option value="header">Header</option>
+          <option value="query">Query</option>
+        </select>
+        {invalidPlacement ? <span className="connections-create-field-error" id={placementErrorId}>Choose Header or Query for this connection.</span> : null}
+      </div>
+    );
+  }
+
+  const authenticationSection = (
+    <section className="connections-create-section" aria-labelledby={authenticationTitleId}>
+      <h3 id={authenticationTitleId}>Authentication</h3>
+      {directSchemeFields.map(renderSchemeSetting)}
+
+      {sensitiveFields.map(field => (
+        <ConnectionCredentialField
+          key={`${typeName}:${authScheme}:${field.name}`}
+          context={context}
+          field={field}
+          value={visibleCredentials[field.name] ?? defaultCredentialInput()}
+          disabled={!contextIsCurrent || submitting}
+          onChange={input => setCredentialInput(field.name, input)}
+        />
+      ))}
+      {directSchemeFields.length === 0 && sensitiveFields.length === 0
+        ? <p className="connections-create-section-empty">No additional authentication fields required.</p>
+        : null}
+    </section>
+  );
+
+  const serviceSettingsSection = (
+    <>
+      {directTypeFields.length > 0 ? (
+        <section className="connections-create-section" aria-labelledby={serviceSettingsTitleId}>
+          <h3 id={serviceSettingsTitleId}>Service settings</h3>
+          {directTypeFields.map(renderTypeSetting)}
+        </section>
+      ) : typeSettings.length === 0 ? (
+        <section className="connections-create-section" aria-labelledby={serviceSettingsTitleId}>
+          <h3 id={serviceSettingsTitleId}>Service settings</h3>
+          <p className="connections-create-section-empty">No additional service settings required.</p>
+        </section>
+      ) : null}
+
+      {showAddressGuidance ? (
+        <p className="connections-create-guidance" id={addressGuidanceId} role="note">
+          Enter the Base URL above or configure Allowed hosts in More options.
+        </p>
+      ) : null}
+    </>
+  );
+
   return (
     <div
       className="connections-modal-backdrop"
@@ -245,71 +426,22 @@ export function ConnectionCreateDialog({
               </div>
             </div>
 
-            <section className="connections-create-section" aria-labelledby={serviceSettingsTitleId}>
-              <h3 id={serviceSettingsTitleId}>Service settings</h3>
-              {(selectedType?.settings ?? []).length > 0 ? (selectedType?.settings ?? []).map(field => {
-                const id = `${nameId}-type-${safeId(field.name)}`;
-                const checked = visibleSettings[field.name] === "true";
-                return (
-                  <label className="connection-setting-field" key={field.name} htmlFor={id}>
-                    {field.displayName}{field.required ? " (required)" : ""}
-                    <input
-                      id={id}
-                      type={field.editorHint === "checkbox" ? "checkbox" : "text"}
-                      required={field.required && field.editorHint !== "checkbox"}
-                      checked={field.editorHint === "checkbox" ? checked : undefined}
-                      value={field.editorHint === "checkbox" ? undefined : visibleSettings[field.name] ?? ""}
-                      placeholder={field.name === "allowedHosts" ? "api.example, *.googleapis.com" : undefined}
-                      disabled={!contextIsCurrent || submitting}
-                      onChange={event => {
-                        setSettings(current => ({
-                          ...current,
-                          [field.name]: field.editorHint === "checkbox" ? String(event.target.checked) : event.target.value
-                        }));
-                        setError(null);
-                      }}
-                    />
-                  </label>
-                );
-              }) : <p className="connections-create-section-empty">No additional service settings required.</p>}
-            </section>
+            {apiKeyFields ? <>{authenticationSection}{serviceSettingsSection}</> : <>{serviceSettingsSection}{authenticationSection}</>}
 
-            <section className="connections-create-section" aria-labelledby={authenticationTitleId}>
-              <h3 id={authenticationTitleId}>Authentication</h3>
-              {nonSensitiveSchemeFields.map(field => {
-                const id = `${nameId}-scheme-${safeId(field.name)}`;
-                return (
-                  <label className="connection-setting-field" key={field.name} htmlFor={id}>
-                    {field.displayName}{field.required ? " (required)" : ""}
-                    <input
-                      id={id}
-                      value={visibleSettings[field.name] ?? ""}
-                      required={field.required}
-                      autoComplete="off"
-                      disabled={!contextIsCurrent || submitting}
-                      onChange={event => {
-                        setSettings(current => ({ ...current, [field.name]: event.target.value }));
-                        setError(null);
-                      }}
-                    />
-                  </label>
-                );
-              })}
-
-              {sensitiveFields.map(field => (
-                <ConnectionCredentialField
-                  key={`${typeName}:${authScheme}:${field.name}`}
-                  context={context}
-                  field={field}
-                  value={visibleCredentials[field.name] ?? defaultCredentialInput()}
-                  disabled={!contextIsCurrent || submitting}
-                  onChange={input => setCredentialInput(field.name, input)}
-                />
-              ))}
-              {nonSensitiveSchemeFields.length === 0 && sensitiveFields.length === 0
-                ? <p className="connections-create-section-empty">No additional authentication fields required.</p>
-                : null}
-            </section>
+            {(advancedTypeFields.length > 0 || apiKeyFields && advancedSettingNames.size > 0) ? (
+              <AdvancedSection
+                label="More options"
+                setCount={advancedSetCount}
+                hasError={!!error || invalidPlacement}
+                allowCollapseWhenSet
+              >
+                <div className="connections-create-advanced-fields">
+                  {advancedTypeFields.map(renderTypeSetting)}
+                  {apiKeyFields && !apiKeyFields.placement.required ? renderApiKeyPlacement(apiKeyFields.placement) : null}
+                  {visibleAdvancedApiKeyNames.map(renderSchemeSetting)}
+                </div>
+              </AdvancedSection>
+            ) : null}
           </div>
 
           <div className="connections-create-actions">
@@ -330,6 +462,49 @@ function initialSchemeName(descriptors: ConnectionDescriptorsResponse, typeName:
   const supported = descriptors.types.find(type => type.name === typeName)?.supportedSchemes ?? [];
   if (preferredName && supported.includes(preferredName)) return preferredName;
   return descriptors.schemes.find(scheme => supported.includes(scheme.name))?.name ?? "";
+}
+
+export function resolveApiKeyPlacement(value?: string): "header" | "query" | null {
+  if (!value || value.trim().length === 0) return "header";
+  const placement = value.toLowerCase();
+  return placement === "header" || placement === "query" ? placement : null;
+}
+
+function getHttpAddressFields(type?: ConnectionTypeDescriptor) {
+  if (type?.name !== "http") return undefined;
+  const baseUrl = findUniqueField(type.settings, "baseUrl");
+  const allowedHosts = findUniqueField(type.settings, "allowedHosts");
+  if (!isKnownHttpSetting(baseUrl, "baseUrl", "url") || !isKnownHttpSetting(allowedHosts, "allowedHosts", "text")) return undefined;
+  return { baseUrl, allowedHosts };
+}
+
+function getBuiltInApiKeyFields(type?: ConnectionTypeDescriptor, scheme?: AuthSchemeDescriptor) {
+  if (type?.name !== "http" || scheme?.name !== "api-key") return undefined;
+  const headerName = findUniqueField(scheme.fields, "headerName");
+  const placement = findUniqueField(scheme.fields, "placement");
+  const queryName = findUniqueField(scheme.fields, "queryName");
+  const apiKey = findUniqueField(scheme.fields, "apiKey");
+  if (!isKnownApiKeyTextField(headerName, "headerName")
+    || !isKnownApiKeyTextField(placement, "placement")
+    || !isKnownApiKeyTextField(queryName, "queryName")
+    || placement.required === true
+    || !apiKey?.sensitive
+    || apiKey.editorHint !== "password"
+    || apiKey.required !== true) return undefined;
+  return { headerName, placement, queryName };
+}
+
+function findUniqueField<T extends { name: string }>(fields: readonly T[], name: string) {
+  const matching = fields.filter(field => field.name === name);
+  return matching.length === 1 ? matching[0] : undefined;
+}
+
+function isKnownHttpSetting(field: ConnectionSettingField | undefined, name: string, editorHint: string): field is ConnectionSettingField {
+  return field?.name === name && field.editorHint === editorHint;
+}
+
+function isKnownApiKeyTextField(field: AuthSchemeField | undefined, name: string): field is AuthSchemeField {
+  return field?.name === name && field.sensitive === false && field.editorHint === "text";
 }
 
 function defaultCredentialInput(): ConnectionCredentialInput {

@@ -47,6 +47,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../../../Extensions/Etl/src/Core/Elsa.Etl.Core.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/Design/Elsa.Etl.Design/Elsa.Etl.Design.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/Design/Api/Elsa.Etl.Design.Api.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/Runtime/Api/Elsa.Etl.Runtime.Api.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/Runtime/Elsa.Etl.Runtime/Elsa.Etl.Runtime.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/Workflows/Runtime/Elsa.Etl.Workflows.Runtime.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/Workflows/Design/Elsa.Etl.Workflows.Design.csproj" />
+    <ProjectReference Include="../../../../Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Design\Api\Elsa.Activities.Design.Api.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Api\Elsa.Agent.Api.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Agent\src\Core\Elsa.Agent.Core.csproj" />
@@ -94,6 +102,7 @@
     <ProjectReference Include="..\..\..\src\Workflows\ExecutionEvidence\Elsa.Workflows.ExecutionEvidence.csproj" />
     <ProjectReference Include="..\..\..\src\Workflows\Dashboard\Elsa.Workflows.Dashboard\Elsa.Workflows.Dashboard.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Activities\Design\Import\Elsa3.Activities.Design.Import\Elsa3.Activities.Design.Import.csproj" />
+    <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Activities\Design\Import\Publishing\Elsa3.Activities.Design.Import.Publishing.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Mapping\Elsa3.Mapping.csproj" />
     <ProjectReference Include="..\..\..\..\Extensions\Elsa3\src\Models\Elsa3.Models.csproj" />
     <!-- PinnedTransitivePackTests runs the maps generator's own pinned-transitive reader over a real fixture,
@@ -105,6 +114,7 @@
        loadable here. These are the ones no reference above already reaches; the test fails, naming the project, for a
        packable library that is missing from this closure. -->
   <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Activities\Compensation\Elsa.Activities.Compensation.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\ControlFlow\Elsa.Activities.ControlFlow.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Design\Reconciliation\Elsa.Activities.Design.Reconciliation\Elsa.Activities.Design.Reconciliation.csproj" />
     <ProjectReference Include="..\..\..\src\Activities\Design\Reconciliation\Clr\Elsa.Activities.Design.Reconciliation.Clr.csproj" />

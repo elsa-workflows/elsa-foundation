@@ -10,6 +10,10 @@ namespace Elsa.Workflows.Publishing.Services;
 /// </summary>
 internal static class DescriptorPayloadSerializer
 {
-    /// <summary>The web-default options for descriptor and authored payload JSON.</summary>
-    internal static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
+    /// <summary>
+    /// The web-default options for descriptor and authored payload JSON. A canonicalized payload (the graph activity
+    /// provider sorts object keys) can put a polymorphic type discriminator after other properties, so it is read in any
+    /// position.
+    /// </summary>
+    internal static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web) { AllowOutOfOrderMetadataProperties = true };
 }

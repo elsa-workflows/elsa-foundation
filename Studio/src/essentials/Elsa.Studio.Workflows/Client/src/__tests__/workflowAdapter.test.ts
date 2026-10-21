@@ -572,6 +572,15 @@ describe("workflow adapter", () => {
     });
   });
 
+  it("marks a node whose latest execution completed through compensation", () => {
+    const canvas = buildCanvas(firstScope(sequenceRoot([node("write-line-1")])), [writeLine], []);
+    const compensated = applyRuntimeOverlays(canvas.nodes, [activityExecution({ status: "Completed", outcomeNames: ["Compensated"] })], []);
+    const done = applyRuntimeOverlays(canvas.nodes, [activityExecution({ status: "Completed", outcomeNames: ["Done"] })], []);
+
+    expect(compensated[0].data.runtime?.compensated).toBe(true);
+    expect(done[0].data.runtime?.compensated).toBeUndefined();
+  });
+
   it("groups repeated authored placements by the executable identity present on the canvas", () => {
     const canvas = buildCanvas(firstScope(sequenceRoot([node("shared-node")])), [writeLine], []);
     const templateNode = canvas.nodes[0]!;
@@ -1217,7 +1226,7 @@ function incident(overrides: Partial<IncidentStateSummary> = {}): IncidentStateS
     executableNodeId: "write-line-1",
     severity: "Error",
     status: "Open",
-    resolutionAction: "None",
+    resolutionOutcome: null,
     failureType: "ActivityFaulted",
     message: "Required service is not registered.",
     createdAt: "2026-06-18T01:00:02Z",

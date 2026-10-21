@@ -24,7 +24,7 @@ public sealed class Elsa3GeneratedAccessorTests
 
         Assert.True(accessor.Succeeded, Describe(accessor.Diagnostics));
         var converted = ReadExpression(accessor);
-        Assert.Equal("args.HttpRequestBody.text", converted.Source);
+        Assert.Equal("(args.HttpRequestBody.text) ?? null", converted.Source);
         Assert.Equal(ReadExpression(explicitRead).Parameters, converted.Parameters);
         Assert.IsType<VariableExpressionParameterBinding>(converted.Parameters["HttpRequestBody"]);
     }
@@ -108,8 +108,12 @@ public sealed class Elsa3GeneratedAccessorTests
 
         var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), definition, isReusable: true);
 
-        Assert.True(result.Succeeded, Describe(result.Diagnostics));
-        Assert.IsType<WorkflowRequestExpressionParameterBinding>(ReadExpression(result).Parameters["CustomInput"]);
+        // The accessor resolves to the input, but an Elsa 4 graph activity body cannot read its own inputs yet, so the
+        // reusable is refused rather than read the started workflow's input (spec 246 D-8, #3027).
+        Assert.False(result.Succeeded);
+        var error = Assert.Single(result.Diagnostics, diagnostic => diagnostic.IsError);
+        Assert.Equal(Elsa3ActivityDiagnosticCodes.ReusableValueReadUnsupported, error.Code);
+        Assert.Contains("'customInput'", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]

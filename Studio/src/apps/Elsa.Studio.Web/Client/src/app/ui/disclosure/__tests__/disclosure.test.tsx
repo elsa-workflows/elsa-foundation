@@ -55,6 +55,13 @@ function giveElementLayout(element: HTMLElement) {
   });
 }
 
+function seedCollapsedPreference(persistKey: string) {
+  const storageKey = disclosureStorageKey(persistKey);
+  window.localStorage.setItem(storageKey, JSON.stringify(false));
+  const setItem = vi.spyOn(Storage.prototype, "setItem");
+  return { storageKey, setItem };
+}
+
 describe("never-hide invariant", () => {
   it("treats a non-default, bound or invalid value as forced", () => {
     expect(shouldForceReveal({ isNonDefault: true })).toBe(true);
@@ -75,6 +82,31 @@ describe("never-hide invariant", () => {
     expect(isAdvancedSectionForced({ setCount: 2 })).toBe(true);
     expect(isAdvancedSectionForced({ hasError: true })).toBe(true);
     expect(isAdvancedSectionForced({ setCount: 0 })).toBe(false);
+  });
+
+  it("allows an opted-in configured section to collapse with its badge, but keeps errors forced visible", () => {
+    function Harness() {
+      const [hasError, setError] = useState(false);
+      return <>
+        <button onClick={() => setError(true)}>Introduce error</button>
+        <AdvancedSection setCount={2} defaultOpen allowCollapseWhenSet hasError={hasError}>
+          <input aria-label="Configured value" defaultValue="preserved" />
+        </AdvancedSection>
+      </>;
+    }
+    const host = mount(<Harness />);
+    const trigger = host.querySelector<HTMLButtonElement>(".studio-disclosure-fold-trigger")!;
+    const input = host.querySelector<HTMLInputElement>("input")!;
+    flushSync(() => trigger.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(trigger.textContent).toContain("2 set");
+    expect(host.querySelector("input")).toBe(input);
+    expect(input.value).toBe("preserved");
+    flushSync(() => host.querySelector<HTMLButtonElement>("button")!.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    flushSync(() => trigger.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector(".studio-status-pill")?.getAttribute("data-tone")).toBe("danger");
   });
 
   it("keeps ExpressionToggle visible in Expression or when the value is non-default", () => {
@@ -278,7 +310,66 @@ describe("AdvancedSection", () => {
     expect(host.textContent).toContain("Broken retry");
   });
 
-  it("allows an opted-in set section to collapse without unmounting its draft inputs", () => {
+  it("keeps an error reveal open through focused correction without persisting it", () => {
+    const persistKey = "connection.more-options";
+    const { storageKey, setItem } = seedCollapsedPreference(persistKey);
+
+    function Harness() {
+      const [hasError, setHasError] = useState(false);
+      const [value, setValue] = useState("before");
+      return <>
+        <button onClick={() => setHasError(true)}>Fail advanced value</button>
+        <AdvancedSection label="More options" persistKey={persistKey} hasError={hasError}>
+          <label>
+            Endpoint
+            <input
+              aria-label="Endpoint"
+              value={value}
+              onChange={event => {
+                setValue(event.target.value);
+                setHasError(false);
+              }}
+            />
+          </label>
+        </AdvancedSection>
+      </>;
+    }
+
+    const host = mount(<Harness />);
+    const trigger = host.querySelector<HTMLButtonElement>(".studio-disclosure-fold-trigger")!;
+    const input = host.querySelector<HTMLInputElement>("input")!;
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(window.localStorage.getItem(storageKey)).toBe("false");
+
+    flushSync(() => host.querySelector<HTMLButtonElement>("button")!.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    flushSync(() => trigger.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(setItem).not.toHaveBeenCalled();
+
+    input.focus();
+    flushSync(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "corrected");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector("input")).toBe(input);
+    expect(input.value).toBe("corrected");
+    expect(document.activeElement).toBe(input);
+    expect(window.localStorage.getItem(storageKey)).toBe("false");
+    expect(setItem).not.toHaveBeenCalled();
+
+    flushSync(() => trigger.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(host.querySelector("input")).toBe(input);
+    expect(input.value).toBe("corrected");
+    expect(window.localStorage.getItem(storageKey)).toBe("false");
+    expect(setItem).toHaveBeenCalledTimes(1);
+    expect(setItem).toHaveBeenCalledWith(storageKey, "false");
+  });
+
+  it("lets Runs collapse More filters while preserving unapplied drafts and applied criteria", () => {
     const host = mount(
       <AdvancedSection label="More filters" setCount={2} defaultOpen allowCollapseWhenSet>
         <input aria-label="Unapplied artifact" defaultValue="draft-artifact" />
@@ -291,7 +382,7 @@ describe("AdvancedSection", () => {
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
     expect(host.textContent).toContain("2 set");
     field.value = "unfinished draft";
-    flushSync(() => trigger.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    flushSync(() => trigger.click());
 
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
     expect(hiddenBody.hasAttribute("hidden")).toBe(true);
@@ -299,25 +390,53 @@ describe("AdvancedSection", () => {
     expect(field.value).toBe("unfinished draft");
     expect(host.textContent).toContain("2 set");
 
-    flushSync(() => trigger.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    flushSync(() => trigger.click());
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector("input[aria-label='Unapplied artifact']")).toBe(field);
     expect(field.value).toBe("unfinished draft");
   });
 
-  it("keeps errors and explicit force-open authoritative with opt-in collapse", () => {
-    for (const props of [{ setCount: 1, forceOpen: true }, { hasError: true }]) {
-      const host = mount(
-        <AdvancedSection label="More filters" allowCollapseWhenSet {...props}>
-          <span>Visible state</span>
+  it.each(["forceOpen", "setCount"] as const)("retains a recovered %s reveal until manual collapse", reason => {
+    const persistKey = `connection.more-options.${reason}`;
+    const { storageKey, setItem } = seedCollapsedPreference(persistKey);
+
+    function Harness() {
+      const [forced, setForced] = useState(false);
+      return <>
+        <button onClick={() => setForced(true)}>Force open</button>
+        <button onClick={() => setForced(false)}>Recover</button>
+        <AdvancedSection
+          label="More options"
+          persistKey={persistKey}
+          forceOpen={reason === "forceOpen" && forced}
+          setCount={reason === "setCount" && forced ? 1 : 0}
+        >
+          <span>Forced content</span>
         </AdvancedSection>
-      );
-      const trigger = host.querySelector<HTMLButtonElement>(".studio-disclosure-fold-trigger")!;
-      expect(trigger.getAttribute("aria-expanded")).toBe("true");
-      flushSync(() => trigger.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-      expect(trigger.getAttribute("aria-expanded")).toBe("true");
-      cleanup?.();
-      cleanup = null;
+      </>;
     }
+
+    const host = mount(<Harness />);
+    const trigger = host.querySelector<HTMLButtonElement>(".studio-disclosure-fold-trigger")!;
+    const actionButtons = host.querySelectorAll<HTMLButtonElement>("button");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+
+    flushSync(() => actionButtons[0].click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    flushSync(() => trigger.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(setItem).not.toHaveBeenCalled();
+
+    flushSync(() => actionButtons[1].click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(window.localStorage.getItem(storageKey)).toBe("false");
+    expect(setItem).not.toHaveBeenCalled();
+
+    flushSync(() => trigger.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(window.localStorage.getItem(storageKey)).toBe("false");
+    expect(setItem).toHaveBeenCalledTimes(1);
+    expect(setItem).toHaveBeenCalledWith(storageKey, "false");
   });
 });
 

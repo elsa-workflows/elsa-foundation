@@ -479,3 +479,19 @@ Essentials/apps/Elsa.Workbench/shells.Development.json
 
 # Nuplane lock file the Workbench generates on startup (ADR 0079, Generate mode)
 Essentials/apps/Elsa.Workbench/nuplane.lock.json
+
+# Speckit active-feature pointer: per-checkout working state written by speckit-specify, never shared.
+# Committing it made every pair of concurrent spec PRs conflict on one line.
+.specify/feature.json
+Studio/.specify/feature.json
+
+# Generated documentation maps: produced locally by `dotnet run --project tools/maps/Elsa.Maps.Generator -- all`
+# and published by CI to the generated-maps branch, never committed (spec 257, docs/contributing/generated-maps.md).
+# README.md stays committed. dependency-map.json is not committed either: the versioning calculator derives it from
+# each commit's tree (spec 259).
+docs/maps/*.md
+!docs/maps/README.md
+docs/maps/manifest.json
+docs/maps/dependency-map.json
+docs/reports/maps-v1-findings.md
+docs/reports/maps-v2-findings.md

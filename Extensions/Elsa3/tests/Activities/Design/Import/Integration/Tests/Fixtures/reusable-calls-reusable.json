@@ -1,0 +1,272 @@
+[
+  {
+    "id": "inner-v1",
+    "definitionId": "inner",
+    "name": "inner",
+    "description": "Test-owned reusable inner, version 1.",
+    "createdAt": "1970-01-01T00:00:00Z",
+    "version": 1,
+    "toolVersion": "3.6.0",
+    "variables": [],
+    "inputs": [],
+    "outputs": [],
+    "outcomes": [],
+    "customProperties": {},
+    "isReadonly": false,
+    "isSystem": false,
+    "isLatest": true,
+    "isPublished": true,
+    "options": {
+      "usableAsActivity": true
+    },
+    "root": {
+      "id": "inner-root",
+      "nodeId": "inner-root",
+      "name": "inner-root",
+      "type": "Elsa.Flowchart",
+      "version": 1,
+      "customProperties": {
+        "canStartWorkflow": false,
+        "runAsynchronously": false
+      },
+      "metadata": {
+        "designer": {
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "size": {
+            "width": 100,
+            "height": 50
+          }
+        }
+      },
+      "activities": [
+        {
+          "id": "write",
+          "nodeId": "write",
+          "name": "write",
+          "type": "Elsa.WriteLine",
+          "version": 1,
+          "customProperties": {
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+          },
+          "metadata": {
+            "designer": {
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "size": {
+                "width": 100,
+                "height": 50
+              }
+            }
+          },
+          "text": {
+            "typeName": "String",
+            "expression": {
+              "type": "Literal",
+              "value": "inner v1"
+            }
+          }
+        }
+      ],
+      "connections": [],
+      "variables": []
+    }
+  },
+  {
+    "id": "inner-v2",
+    "definitionId": "inner",
+    "name": "inner",
+    "description": "Test-owned reusable inner, version 2.",
+    "createdAt": "1970-01-02T00:00:00Z",
+    "version": 2,
+    "toolVersion": "3.6.0",
+    "variables": [],
+    "inputs": [],
+    "outputs": [],
+    "outcomes": [],
+    "customProperties": {},
+    "isReadonly": false,
+    "isSystem": false,
+    "isLatest": true,
+    "isPublished": true,
+    "options": {
+      "usableAsActivity": true
+    },
+    "root": {
+      "id": "inner-root",
+      "nodeId": "inner-root",
+      "name": "inner-root",
+      "type": "Elsa.Flowchart",
+      "version": 1,
+      "customProperties": {
+        "canStartWorkflow": false,
+        "runAsynchronously": false
+      },
+      "metadata": {
+        "designer": {
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "size": {
+            "width": 100,
+            "height": 50
+          }
+        }
+      },
+      "activities": [
+        {
+          "id": "write",
+          "nodeId": "write",
+          "name": "write",
+          "type": "Elsa.WriteLine",
+          "version": 1,
+          "customProperties": {
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+          },
+          "metadata": {
+            "designer": {
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "size": {
+                "width": 100,
+                "height": 50
+              }
+            }
+          },
+          "text": {
+            "typeName": "String",
+            "expression": {
+              "type": "Literal",
+              "value": "inner v2"
+            }
+          }
+        }
+      ],
+      "connections": [],
+      "variables": []
+    }
+  },
+  {
+    "id": "outer-v1",
+    "definitionId": "outer",
+    "name": "outer",
+    "description": "Test-owned reusable outer: calls inner version 1 by exact version.",
+    "createdAt": "1970-01-01T00:00:00Z",
+    "version": 1,
+    "toolVersion": "3.6.0",
+    "variables": [],
+    "inputs": [],
+    "outputs": [],
+    "outcomes": [],
+    "customProperties": {},
+    "isReadonly": false,
+    "isSystem": false,
+    "isLatest": true,
+    "isPublished": true,
+    "options": {
+      "usableAsActivity": true
+    },
+    "root": {
+      "id": "outer-root",
+      "nodeId": "outer-root",
+      "name": "outer-root",
+      "type": "Elsa.Flowchart",
+      "version": 1,
+      "customProperties": {
+        "canStartWorkflow": false,
+        "runAsynchronously": false
+      },
+      "metadata": {
+        "designer": {
+          "position": {
+            "x": 0,
+            "y": 0
+          },
+          "size": {
+            "width": 100,
+            "height": 50
+          }
+        }
+      },
+      "activities": [
+        {
+          "id": "call",
+          "nodeId": "call",
+          "name": "call",
+          "type": "inner",
+          "version": 1,
+          "customProperties": {
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+          },
+          "metadata": {
+            "designer": {
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "size": {
+                "width": 100,
+                "height": 50
+              }
+            }
+          },
+          "workflowDefinitionVersionId": "inner-v1"
+        },
+        {
+          "id": "after",
+          "nodeId": "after",
+          "name": "after",
+          "type": "Elsa.WriteLine",
+          "version": 1,
+          "customProperties": {
+            "canStartWorkflow": false,
+            "runAsynchronously": false
+          },
+          "metadata": {
+            "designer": {
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "size": {
+                "width": 100,
+                "height": 50
+              }
+            }
+          },
+          "text": {
+            "typeName": "String",
+            "expression": {
+              "type": "Literal",
+              "value": "after"
+            }
+          }
+        }
+      ],
+      "connections": [
+        {
+          "source": {
+            "activity": "call",
+            "port": "Done"
+          },
+          "target": {
+            "activity": "after",
+            "port": "In"
+          },
+          "vertices": []
+        }
+      ],
+      "variables": []
+    }
+  }
+]

@@ -3,6 +3,7 @@ using Elsa.Expressions;
 using Elsa.Expressions.Core.Contracts;
 using Elsa.Expressions.Core.Models;
 using Elsa.Expressions.JavaScript;
+using Elsa.Expressions.JavaScript.Core.Contracts;
 using Elsa.Expressions.JavaScript.Jint;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -28,6 +29,22 @@ internal static class PortableJavaScript
         return await evaluator.EvaluateAsync(new ExpressionEvaluationRequest(
             definition,
             args ?? new Dictionary<string, JsonElement>(),
+            CancellationToken.None));
+    }
+
+    /// <summary>Runs a converted RunJavaScript body with the Elsa 4 script evaluator, with no arguments (spec 262 R-5).</summary>
+    public static async Task<JsonElement?> RunScriptAsync(string source)
+    {
+        var services = new ServiceCollection();
+        new ExpressionsFeature().ConfigureServices(services);
+        new JavaScriptFeature().ConfigureServices(services);
+        new JintFeature().ConfigureServices(services);
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var evaluator = scope.ServiceProvider.GetRequiredService<IJavaScriptScriptEvaluator>();
+        return await evaluator.EvaluateAsync(new JavaScriptScriptEvaluationRequest(
+            source,
+            JsonSerializer.SerializeToElement(new { }),
             CancellationToken.None));
     }
 }

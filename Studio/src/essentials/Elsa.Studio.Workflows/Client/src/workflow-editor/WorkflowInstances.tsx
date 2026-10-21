@@ -2,7 +2,7 @@ import "./activityInspection.css";
 import { createCursorHistory, getPreviousCursor, moveCursorHistoryNext, moveCursorHistoryPrevious, reconcileCursorHistory } from "./cursorHistory";
 import { Component, lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { applyNodeChanges, ReactFlow, Background, Controls, MiniMap, type Edge, type Node, type NodeChange, type ReactFlowInstance } from "@xyflow/react";
-import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Workflow as WorkflowIcon } from "lucide-react";
+import { Activity as ActivityIcon, AlertCircle, Boxes, ChevronLeft, ChevronRight, ListTree, Maximize2, Minimize2, RotateCcw, SlidersHorizontal, Sparkles, Undo2, Workflow as WorkflowIcon } from "lucide-react";
 import type { StudioActivityInputDescriptor, StudioAiContributionApi, StudioEndpointContext, StudioExpressionEditorContribution, StudioExpressionSourceRendererContext } from "@elsa-workflows/studio-sdk";
 import { listActivities } from "../api/activityDesign";
 import { deleteWorkflowInstance, getActivityExecutionInspection, getExecutable, getExecutableInputSources, getWorkflowInstance, listWorkflowInstances, supportsActivityExecutionInspection, supportsWorkflowInstanceDeletion, supportsWorkflowInstanceHealthFilter, WorkflowInstanceHealthFilterUnavailableError, type WorkflowInstanceListPage } from "../api/runtime";
@@ -15,6 +15,7 @@ import { resolveActivityLabel } from "../activityPresentation";
 import {
   buildCanvas,
   buildUnsupportedActivityCanvas,
+  findActivityNode,
   findNodeScopePath,
   getActivityDesignerSupport,
   getChildSlots,
@@ -30,7 +31,7 @@ import {
 import { applyRuntimeOverlays, isActiveIncident } from "../workflowRuntimeOverlays";
 import { buildInputInspectionRows, evaluationPhase, evaluationSequence, type InputInspectionRow, type InputInspectionState } from "../inputInspectionRows";
 import { buildExecutableActivityGraph, findExecutableGraphNodeId, findExecutableNodeFacts, type ExecutableActivityGraph, type ExecutableGraphNodeFacts } from "../executableGraph";
-import { formatActivityVersion, formatDate, formatDuration, shortTypeName } from "../workflowFormatting";
+import { formatActivityVersion, formatDate, formatDuration, resolutionOutcomeLabel, shortTypeName } from "../workflowFormatting";
 import { WorkflowExecutionTimeline } from "../WorkflowInstanceTimeline";
 import { WfEmptyState, WfErrorCard, WfListSkeleton } from "./StatusViews";
 import { PanelTabList } from "./PanelTabList";
@@ -38,6 +39,11 @@ import { WorkflowStatusBadge } from "./WorkflowStatusBadge";
 import { nodeTypes, edgeTypes } from "./graph";
 import { ScopeBreadcrumb } from "./ScopeBreadcrumb";
 import { ReadOnlyWorkflowSequence } from "./ReadOnlyWorkflowSequence";
+import { CompensationScopeDesigner, type CompensationOperatorControls } from "../graph-authoring/CompensationScopeDesigner";
+import { compensationStepsSlotId } from "../compensationScope";
+import { deriveCompensationRuntime, isCompensationHandlerExecution, type CompensationJournalSource, type CompensationScopeRuntime } from "../compensationRuntime";
+import { useCompensationJournals, useOperatorActions, type CompensationJournals, type OperatorActionsApi } from "./useOperatorActions";
+import { writeRunSelection } from "./runSelectionUrl";
 import { buildBpmnCanvas, type BpmnNodeData } from "../bpmn/bpmnAdapter";
 import { CopyValueButton } from "./executableShared";
 import { useDialogFocus } from "./useDialogFocus";
@@ -865,9 +871,71 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
     if (initialInspectorTab === "issues" || initialInspectorTab === "activity") openInspector();
   }, [initialInspectorTab, openInspector]);
   const instanceAction = findAiAction(ai, "weaver.workflows.explain-instance");
+  const journals = useCompensationJournals(context, workflowExecutionId);
 
+  // Spec 260: re-reads the run's details and incidents while an operator action is applied, without resetting the view.
+  const refreshRun = useCallback(async () => {
+    if (!workflowExecutionId) return null;
+    try {
+      const details = await getWorkflowInstance(context, workflowExecutionId);
+      const supported = await supportsActivityExecutionInspection(context).catch(() => false);
+      const summaries = await loadActiveIncidentActivitySummaries(
+        details,
+        supported ? activityExecutionId => getActivityExecutionInspection(context, workflowExecutionId, activityExecutionId) : null);
+      setData(current => current && current.details.instance.workflowExecutionId === workflowExecutionId
+        ? {
+          ...current,
+          details,
+          incidentActivityExecutions: combineActivityExecutions(current.incidentActivityExecutions, summaries.activities),
+          pendingIncidentActivityExecutionIds: summaries.pendingActivityExecutionIds,
+          incidentAssociationLookupIncomplete: summaries.incomplete
+        }
+        : current);
+      return details;
+    } catch {
+      return null;
+    }
+  }, [context, workflowExecutionId]);
+
+  const rootActivity = data?.definitionVersion?.state.rootActivity ?? null;
+  const labelOfNode = useCallback((nodeId: string | undefined) => {
+    if (!nodeId || !data?.definitionVersion?.state.rootActivity) return undefined;
+    const node = findActivityNode(data.definitionVersion.state.rootActivity, nodeId);
+    if (!node) return undefined;
+    return resolveActivityLabel(
+      data.definitionVersion.activityPresentation?.find(record => record.nodeId === node.nodeId),
+      data.activityCatalog.find(item => item.activityVersionId === node.activityVersionId),
+      node.activityVersionId);
+  }, [data]);
+  const operator = useOperatorActions({
+    context,
+    workflowExecutionId,
+    details: data?.details ?? null,
+    root: rootActivity,
+    activities: associationActivities,
+    journals,
+    labelOf: labelOfNode,
+    refreshRun
+  });
+
+  // The selected occurrence lives in the URL (spec 260 FR-423): an activity execution, or the one an incident names.
+  const selectedUrlActivityId = state !== "ready" || !selectedEvidenceId
+    ? null
+    : associationActivities.some(activity => activity.activityExecutionId === selectedEvidenceId)
+      ? selectedEvidenceId
+      : (() => {
+        const incident = data?.details.incidents?.find(item => item.incidentId === selectedEvidenceId);
+        return incident ? readIncidentActivityExecutionId(incident) ?? null : null;
+      })();
+  useEffect(() => {
+    if (state !== "ready") return;
+    writeRunSelection(selectedUrlActivityId);
+  }, [selectedUrlActivityId, state]);
+
+  const resetJournals = journals.reset;
   const load = useCallback(async () => {
     const generation = ++loadGeneration.current;
+    resetJournals();
     latestIncidentActivityLookupById.current.clear();
     incidentNavigationRequest.current += 1;
     setIncidentAssociationMessage(null);
@@ -973,7 +1041,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
       setError(formatWorkflowRunLoadError(e, workflowExecutionId));
       setState("failed");
     }
-  }, [context, initialActivityExecutionId, workflowExecutionId]);
+  }, [context, initialActivityExecutionId, resetJournals, workflowExecutionId]);
 
   useEffect(() => {
     void load();
@@ -1255,7 +1323,9 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
             <Sparkles size={13} /> Explain
           </button>
         ) : null}
+        {operator.status}
       </div>
+      {operator.dialog}
       {state === "loading" ? <div className="wf-empty">Loading workflow run...</div> : null}
       {state === "failed" ? <WfErrorCard message={error} /> : null}
       {state === "ready" && data ? (
@@ -1285,6 +1355,13 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
             frames={frames}
             onNavigateToScope={navigateToScope}
             inactive={mode === "medium" && mediumDrawerOpen}
+            journals={journals}
+            operator={{
+              canAct: operator.canAct,
+              workflowExecutionId: data.details.instance.workflowExecutionId,
+              pending: operator.pending,
+              onAction: operator.open
+            }}
           />
           {mediumDrawerOpen ? (
             <button type="button" className="wf-run-inspector-backdrop" aria-label="Close run details" onClick={closeResponsiveInspector} />
@@ -1324,6 +1401,7 @@ export function WorkflowInstanceDetailsWorkbench({ context, ai, expressionEditor
             onLoadMoreIncidentAssociations={loadMoreIncidentAssociations}
             focusInputKey={focusInputKey}
             onSelectActivityExecution={selectActivityExecution}
+            renderIncidentActions={operator.renderIncidentActions}
             activityCatalog={data.activityCatalog}
             executableGraph={data.executableGraph}
             definitionName={data.definitionName ?? data.definitionVersion?.definition.name}
@@ -1600,7 +1678,9 @@ function WorkflowInstanceCanvas({
   focusRequestId,
   frames,
   onNavigateToScope,
-  inactive = false
+  inactive = false,
+  journals,
+  operator
 }: {
   definitionVersion: WorkflowDefinitionVersionDetails | null;
   definitionVersionError: string;
@@ -1617,13 +1697,24 @@ function WorkflowInstanceCanvas({
   frames: ScopeFrame[];
   onNavigateToScope(frames: ScopeFrame[]): void;
   inactive?: boolean;
+  journals?: CompensationJournals;
+  operator?: CompensationOperatorControls;
 }) {
   const scopeKey = getInstanceScopeKey(frames);
   const [flowInstance, setFlowInstance] = useState<WorkflowRunFlowInstance | null>(null);
+  const journalOf = journals?.get;
   const canvas = useMemo(
-    () => buildInstanceCanvas(definitionVersion, activityCatalog, details, selectedEvidenceId, frames, onNavigateToScope, onOpenIncident, associationActivities, executableGraph),
-    [activityCatalog, associationActivities, definitionVersion, details, executableGraph, frames, onNavigateToScope, onOpenIncident, selectedEvidenceId]
+    () => buildInstanceCanvas(definitionVersion, activityCatalog, details, selectedEvidenceId, frames, onNavigateToScope, onOpenIncident, associationActivities, executableGraph, journalOf),
+    [activityCatalog, associationActivities, definitionVersion, details, executableGraph, frames, journalOf, onNavigateToScope, onOpenIncident, selectedEvidenceId]
   );
+  // Spec 260: a live scope's rows come from its journal; read it once the shown occurrence is known.
+  const shownScopeExecutionId = canvas.mode === "compensation" ? canvas.compensation?.runtime.scopeActivityExecutionId : undefined;
+  const shownScopeStatus = shownScopeExecutionId ? associationActivities.find(activity => activity.activityExecutionId === shownScopeExecutionId)?.status : undefined;
+  const requestJournal = journals?.request;
+  const journalGeneration = journals?.generation;
+  useEffect(() => {
+    if (shownScopeExecutionId && requestJournal) requestJournal(shownScopeExecutionId, shownScopeStatus);
+  }, [journalGeneration, requestJournal, shownScopeExecutionId, shownScopeStatus]);
   const focusCanvasNodeId = focusNodeId
     ? canvas.nodes.find(node => nodeRuntimeId(node) === focusNodeId)?.id ?? null
     : null;
@@ -1665,7 +1756,21 @@ function WorkflowInstanceCanvas({
           </div>
         ) : null}
         {definitionVersion && canvas.mode === "graph" && canvas.nodes.length === 0 ? <div className="wf-empty">No workflow activities are available for this executable.</div> : null}
-        {definitionVersion && canvas.mode === "sequence" ? (
+        {definitionVersion && canvas.mode === "compensation" && canvas.compensation ? (
+          <CompensationScopeDesigner
+            key={scopeKey}
+            owner={canvas.compensation.owner}
+            nodes={canvas.nodes}
+            selectedNodeId={null}
+            readOnly
+            runtime={canvas.compensation.runtime}
+            onSelect={nodeId => nodeId && onSelectActivity(nodeId)}
+            onSelectExecution={onSelectEvidence}
+            onOpenIncident={incidentId => onOpenIncident(incidentId)}
+            onOpenSlot={canvas.compensation.openSlot}
+            operator={operator}
+          />
+        ) : definitionVersion && canvas.mode === "sequence" ? (
           <ReadOnlyWorkflowSequence
             key={scopeKey}
             nodes={canvas.nodes}
@@ -1770,8 +1875,14 @@ export function buildInstanceCanvas(
   onNavigateToScope: (frames: ScopeFrame[]) => void,
   onOpenIncident: (incidentId: string, nodeId?: string | null) => void = () => undefined,
   associationActivities: ActivityExecutionStateSummary[] = details.activities,
-  executableGraph: ExecutableActivityGraph | null = null
-): { nodes: Node<WorkflowNodeData>[]; edges: Edge<WorkflowEdgeData>[]; mode: "sequence" | "graph" } {
+  executableGraph: ExecutableActivityGraph | null = null,
+  journalOf?: (scopeActivityExecutionId: string | undefined) => CompensationJournalSource | undefined
+): {
+  nodes: Node<WorkflowNodeData>[];
+  edges: Edge<WorkflowEdgeData>[];
+  mode: "sequence" | "graph" | "compensation";
+  compensation?: { owner: ActivityNode; runtime: CompensationScopeRuntime; openSlot(ownerNodeId: string, ownerLabel: string, slot: ChildSlot): void };
+} {
   const root = definitionVersion?.state.rootActivity;
   if (!definitionVersion || !root) return { nodes: [], edges: [], mode: "graph" };
 
@@ -1820,6 +1931,30 @@ export function buildInstanceCanvas(
     applyRuntimeOverlays(readonlyNodes, associationActivities, Array.isArray(details.incidents) ? details.incidents : [], selectedEvidenceId, activityCatalog, executableGraph),
     baseCanvas.edges.map(edge => ({ ...edge, deletable: false }))
   );
+  if (support !== "unsupported" && scope?.slot.id === compensationStepsSlotId) {
+    const incidents = Array.isArray(details.incidents) ? details.incidents : [];
+    const options = { complete: !details.activityNextContinuationToken, selectedActivityExecutionId: selectedEvidenceId, root };
+    const derived = deriveCompensationRuntime(scopeOwner, associationActivities, incidents, options);
+    const journal = journalOf?.(derived.scopeActivityExecutionId);
+    // The scope's name as the canvas shows it, for the operator actions' labels.
+    const scopeLabel = resolveActivityLabel(
+      definitionVersion.activityPresentation?.find(record => record.nodeId === scopeOwner.nodeId),
+      scopeOwnerCatalogItem,
+      scopeOwner.activityVersionId);
+    return {
+      ...canvas,
+      mode: "compensation",
+      compensation: {
+        owner: scopeOwner,
+        runtime: { ...(journal ? deriveCompensationRuntime(scopeOwner, associationActivities, incidents, { ...options, journal }) : derived), scopeLabel },
+        openSlot: (ownerNodeId, ownerLabel, slot) => {
+          const plan = planSlotNavigation(frames, scopeOwner, ownerNodeId, slot, slotCrumbLabel(ownerLabel, slot), activityCatalog);
+          if (plan) onNavigateToScope(plan.frames);
+        }
+      }
+    };
+  }
+
   return {
     ...canvas,
     mode: support !== "unsupported" && scope?.slot.mode === "sequence" && scope.slot.cardinality === "many"
@@ -1897,6 +2032,7 @@ function WorkflowInstanceInspector({
   onLoadMoreIncidentAssociations,
   focusInputKey,
   onSelectActivityExecution,
+  renderIncidentActions,
   graphNodeIds,
   rootNodeId,
   activityCatalog = [],
@@ -1932,6 +2068,7 @@ function WorkflowInstanceInspector({
   onLoadMoreIncidentAssociations(): Promise<void>;
   focusInputKey: string | null;
   onSelectActivityExecution(activityExecutionId: string): void;
+  renderIncidentActions?: OperatorActionsApi["renderIncidentActions"];
   graphNodeIds?: Set<string>;
   rootNodeId?: string | null;
   activityCatalog?: ActivityCatalogItem[];
@@ -2054,6 +2191,7 @@ function WorkflowInstanceInspector({
                   executableNodeFacts={findExecutableNodeFacts(executableGraph, selectedActivity)}
                   expressionEditors={expressionEditors}
                   focusInputKey={focusInputKey}
+                  onSelectEvidence={openActivityEvidence}
                 />
               ) : activeTab === "issues" ? (
                 <>
@@ -2072,6 +2210,7 @@ function WorkflowInstanceInspector({
                     onShowAffectedActivity={onShowAffectedActivity}
                     onViewInput={onViewInput}
                     onLoadMoreIncidentAssociations={onLoadMoreIncidentAssociations}
+                    renderIncidentActions={renderIncidentActions}
                   />
                   <WorkflowUnmatchedEvidence details={details} graphNodeIds={graphNodeIds} rootNodeId={rootNodeId} activityCatalog={activityCatalog} executableGraph={executableGraph} />
                 </>
@@ -2240,13 +2379,31 @@ function resolveReportedCount(count: number | null | undefined, legacyIds: reado
   return count !== undefined ? count : Array.isArray(legacyIds) ? legacyIds.length : null;
 }
 
+// A compensation handler occurrence names the forward occurrence it undid, linked so the operator can go to it.
+function CompensatesRow({ forwardActivityExecutionId, stepName, onSelectEvidence }: {
+  forwardActivityExecutionId: string;
+  stepName?: string;
+  onSelectEvidence?(evidenceId: string): void;
+}) {
+  const target = stepName ? `${stepName} (occurrence ${forwardActivityExecutionId})` : `occurrence ${forwardActivityExecutionId}`;
+  return (
+    <p className="wf-activity-compensates">
+      <Undo2 size={14} aria-hidden="true" /> <span>Compensation · Compensates </span>
+      {onSelectEvidence ? (
+        <button type="button" className="wf-activity-compensates-link" onClick={() => onSelectEvidence(forwardActivityExecutionId)}>{target}</button>
+      ) : <code>{target}</code>}
+    </p>
+  );
+}
+
 export function WorkflowActivityExecutionDetails({
   context,
   activity,
   activityCatalog,
   executableNodeFacts,
   expressionEditors = [],
-  focusInputKey = null
+  focusInputKey = null,
+  onSelectEvidence
 }: {
   context: StudioEndpointContext;
   activity: ActivityExecutionStateSummary | null;
@@ -2254,6 +2411,7 @@ export function WorkflowActivityExecutionDetails({
   executableNodeFacts?: ExecutableGraphNodeFacts;
   expressionEditors?: StudioExpressionEditorContribution[];
   focusInputKey?: string | null;
+  onSelectEvidence?(evidenceId: string): void;
 }) {
   const selectedActivityExecutionId = activity?.activityExecutionId ?? null;
   const selectedWorkflowExecutionId = activity?.workflowExecutionId ?? null;
@@ -2402,6 +2560,14 @@ export function WorkflowActivityExecutionDetails({
           <ActivityMetadataValue label="Duration" value={durationLabel} copiedLabel="duration" onCopied={markCopied} onCopyFailed={markCopyFailed} />
           <ActivityMetadataValue label="Incidents" value={incidentCount == null ? "Unavailable" : String(incidentCount)} copiedLabel="incident count" onCopied={markCopied} onCopyFailed={markCopyFailed} />
         </dl>
+
+        {isCompensationHandlerExecution(activity) && activity.provenance?.schedulingActivityExecutionId ? (
+          <CompensatesRow
+            forwardActivityExecutionId={activity.provenance.schedulingActivityExecutionId}
+            stepName={currentInspectionState.status === "ready" ? currentInspectionState.inspection?.provenance?.metadata?.["compensation.step"] : undefined}
+            onSelectEvidence={onSelectEvidence}
+          />
+        ) : null}
 
         {copyStatus ? <p className="wf-copy-status" role="status" aria-live="polite">{copyStatus}</p> : null}
       </section>
@@ -2978,7 +3144,8 @@ export function WorkflowIncidentList({
   onSelectEvidence,
   onShowAffectedActivity,
   onViewInput,
-  onLoadMoreIncidentAssociations
+  onLoadMoreIncidentAssociations,
+  renderIncidentActions
 }: {
   incidents?: IncidentStateSummary[] | null;
   activities?: ActivityExecutionStateSummary[];
@@ -2994,6 +3161,8 @@ export function WorkflowIncidentList({
   onShowAffectedActivity?(incident: IncidentStateSummary): void;
   onViewInput?(incident: IncidentStateSummary): void;
   onLoadMoreIncidentAssociations?(): Promise<void>;
+  /** Spec 260: the operator actions of a waiting incident, shown in its details dialog. */
+  renderIncidentActions?: OperatorActionsApi["renderIncidentActions"];
 }) {
   const [copyStatus, setCopyStatus] = useState("");
   const [loadingAssociations, setLoadingAssociations] = useState(false);
@@ -3057,6 +3226,7 @@ export function WorkflowIncidentList({
           return (
             <article
               className="wf-instance-incident"
+              data-incident-id={incident.incidentId}
               data-severity={incident.severity.toLowerCase()}
               data-selected={incident.incidentId === selectedEvidenceId}
               key={incident.incidentId}
@@ -3080,7 +3250,7 @@ export function WorkflowIncidentList({
                 ) : inputKey ? (
                   <span className="wf-instance-note">Input key is recorded, but its exact activity execution is unavailable.</span>
                 ) : null}
-                <button type="button" onClick={() => setIncidentDetailsId(incident.incidentId)}>Open incident details</button>
+                <button type="button" className="wf-incident-open-details" onClick={() => setIncidentDetailsId(incident.incidentId)}>Open incident details</button>
                 <CopyValueButton
                   value={formatIncidentForClipboard(incident)}
                   ariaLabel={`Copy incident ${incident.failureType}`}
@@ -3099,7 +3269,17 @@ export function WorkflowIncidentList({
         })()
       ))}
       {copyStatus ? <p className="wf-copy-status" role="status">{copyStatus}</p> : null}
-      {incidentDetails ? <IncidentDetailsDialog incident={incidentDetails} onClose={() => setIncidentDetailsId(null)} /> : null}
+      {incidentDetails ? (
+        <IncidentDetailsDialog
+          incident={incidentDetails}
+          onClose={() => setIncidentDetailsId(null)}
+          actions={renderIncidentActions?.(
+            incidentDetails,
+            incidentActivityLabel(incidentDetails, activities, activityCatalog, executableGraph),
+            () => setIncidentDetailsId(null),
+            () => document.querySelector<HTMLElement>(`.wf-instance-incident[data-incident-id="${CSS.escape(incidentDetails.incidentId)}"] .wf-incident-open-details`)?.focus())}
+        />
+      ) : null}
     </section>
   );
 }
@@ -3181,7 +3361,7 @@ function IncidentTechnicalContent({ incident }: { incident: IncidentStateSummary
         <dt>Status</dt><dd>{incident.status}</dd>
         <dt>Severity</dt><dd>{incident.severity}</dd>
         <dt>Blocking</dt><dd>{incident.isBlocking ? "Yes" : "No"}</dd>
-        {incident.resolutionAction ? <><dt>Resolution action</dt><dd>{incident.resolutionAction}</dd></> : null}
+        {incident.resolutionOutcome ? <><dt>Resolution action</dt><dd>{resolutionOutcomeLabel(incident.resolutionOutcome)}</dd></> : null}
         <dt>Created</dt><dd>{formatDate(incident.createdAt)}</dd>
         {incident.resolvedAt ? <><dt>Resolved</dt><dd>{formatDate(incident.resolvedAt)}</dd></> : null}
         {innerType ? <><dt>Root cause type</dt><dd><code>{innerType}</code></dd></> : null}
@@ -3201,7 +3381,20 @@ function IncidentTechnicalContent({ incident }: { incident: IncidentStateSummary
   );
 }
 
-function IncidentDetailsDialog({ incident, onClose }: { incident: IncidentStateSummary; onClose(): void }) {
+// The label the incident list shows for an incident's activity, for the operator dialog's target line.
+function incidentActivityLabel(
+  incident: IncidentStateSummary,
+  activities: ActivityExecutionStateSummary[],
+  activityCatalog: ActivityCatalogItem[],
+  executableGraph: ExecutableActivityGraph | null | undefined
+) {
+  const association = resolveIncidentActivityAssociation(incident, activities, executableGraph);
+  const activityFacts = findExecutableNodeFacts(executableGraph, association?.activityExecution) ??
+    (association?.nodeId ? executableGraph?.factsByNodeId.get(association.nodeId) : undefined);
+  return getIncidentActivityLabel(association?.activityExecution ?? activityFacts, activityCatalog, activityFacts?.presentation) ?? incident.failureType;
+}
+
+function IncidentDetailsDialog({ incident, onClose, actions }: { incident: IncidentStateSummary; onClose(): void; actions?: ReactNode }) {
   const dialogRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
   const [copyStatus, setCopyStatus] = useState("");
@@ -3245,6 +3438,7 @@ function IncidentDetailsDialog({ incident, onClose }: { incident: IncidentStateS
             />
             {copyStatus ? <p className="wf-copy-status" role="status">{copyStatus}</p> : null}
           </div>
+          {actions}
           <IncidentTechnicalContent incident={incident} />
         </div>
       </section>
@@ -3328,7 +3522,7 @@ function formatIncidentForClipboard(incident: IncidentStateSummary) {
     `Status: ${incident.status}`,
     `Severity: ${incident.severity}`,
     `Blocking: ${incident.isBlocking ? "Yes" : "No"}`,
-    incident.resolutionAction ? `Resolution action: ${incident.resolutionAction}` : "",
+    incident.resolutionOutcome ? `Resolution action: ${resolutionOutcomeLabel(incident.resolutionOutcome)}` : "",
     `Created: ${formatDate(incident.createdAt)}`,
     incident.resolvedAt ? `Resolved: ${formatDate(incident.resolvedAt)}` : "",
     "",

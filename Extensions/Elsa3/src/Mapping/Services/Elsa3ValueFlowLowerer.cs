@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa3.Mapping.Conversion;
 using System.Text.Json.Nodes;
 using Elsa.Expressions.Core.Models;
 using Elsa.Primitives.Models;
@@ -66,6 +67,20 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 continue;
             }
 
+            if (property.InputContract is not null && DropsTypedConversion(property, property.InputContract.Type))
+            {
+                var declared = ReadType(property.Value).Alias;
+                diagnostics.Add(CreateDiagnostic(
+                    input,
+                    property,
+                    Elsa3ImportDiagnosticCodes.IncompatibleValue,
+                    $"Property '{property.PropertyName}' is a script declared as '{declared}'. Elsa 3 converted its result to '{declared}', but the Elsa 4 member '{property.InputContract.Type.Alias}' takes the value exactly as the script returns it.",
+                    $"Declare the expression's type as Object if the script already returns a {declared}; otherwise convert the value in the script before import.",
+                    $"{property.JsonPath}.typeName",
+                    property.MemoryReferenceId));
+                continue;
+            }
+
             if ((property.Expression is not null || property.MemoryReferenceId is not null) &&
                 property.InputContract is not null &&
                 !ValueFits(property, property.InputContract.Type))
@@ -92,6 +107,23 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
 
             if (property.MemoryReferenceId is null)
                 continue;
+
+            if (isReusable)
+            {
+                // A captured output writes the value; anything else bound to a memory reference reads it.
+                var captures = directions.Contains(Elsa3PropertyDirection.Output);
+                diagnostics.Add(CreateDiagnostic(
+                    input,
+                    property,
+                    Elsa3ActivityDiagnosticCodes.ReusableValueReadUnsupported,
+                    captures
+                        ? $"Output '{property.PropertyName}' of reusable workflow node '{property.ActivityNodeId}' is captured into a variable, which nothing in an Elsa 4 graph activity body can read yet."
+                        : $"Property '{property.PropertyName}' of reusable workflow node '{property.ActivityNodeId}' reads a variable or another activity's result, which an Elsa 4 graph activity body cannot reach yet.",
+                    captures ? Elsa3ReusableGuidance.Capture : ReusableValueReadGuidance,
+                    $"{property.JsonPath}.memoryReference",
+                    property.MemoryReferenceId));
+                continue;
+            }
 
             if (string.IsNullOrWhiteSpace(property.MemoryReferenceId))
             {
@@ -272,7 +304,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
             return;
         }
 
-        var resultType = ReadType(property.Value);
+        var resultType = ExpressionResultType(property);
         var rewrite = expressionRewriter.Rewrite(
             expression.Type,
             expression.Value,
@@ -479,6 +511,14 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         AccessorScope accessors,
         Elsa3AmbientReference ambient)
     {
+        // A graph body node's bindings resolve against the started workflow, never the graph (spec 246 D-8). Generated
+        // get{Name}() accessors resolve through here too, so they are refused alike.
+        if (accessors.IsReusable && ambient.Kind is Elsa3AmbientReferenceKind.WorkflowRequest or Elsa3AmbientReferenceKind.Variable or Elsa3AmbientReferenceKind.ActivityResult)
+            return Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
+                Elsa3ActivityDiagnosticCodes.ReusableValueReadUnsupported,
+                $"The reusable workflow body reads {ambient.Kind} '{ambient.Name}', which an Elsa 4 graph activity body cannot reach yet.",
+                ReusableValueReadGuidance));
+
         switch (ambient.Kind)
         {
             case Elsa3AmbientReferenceKind.WorkflowRequest:
@@ -634,6 +674,8 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
                 Collect(child);
         }
     }
+
+    private const string ReusableValueReadGuidance = Elsa3ReusableGuidance.ValueRead;
 
     private static Elsa3ExpressionParameterResolution MissingAmbient(Elsa3AmbientReference ambient) =>
         Elsa3ExpressionParameterResolution.Failure(new Elsa3ExpressionRewriteIssue(
@@ -800,6 +842,19 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         }
     }
 
+    /// <summary>
+    /// The result type a lowered expression declares. Publication requires it to equal the member's type verbatim. A JSON
+    /// member (<c>JsonElement</c>, <c>Object</c>, <c>Any</c>) accepts any expression value, so the expression declares
+    /// the member's own type, for every activity (spec 256: an Elsa 3 <c>Object</c> response body binds Elsa 4's
+    /// <c>JsonElement?</c>). <see cref="DropsTypedConversion"/> has already refused a script with a typed declaration
+    /// there, so no Elsa 3 conversion is lost. A typed member keeps the declared Elsa 3 type, so publication still
+    /// refuses a real mismatch.
+    /// </summary>
+    private static TypeReference ExpressionResultType(ActivityProperty property) =>
+        property.InputContract?.Type is { } member && IsUntyped(member, SimpleName(member.Alias))
+            ? member
+            : ReadType(property.Value);
+
     private static TypeReference ReadType(JsonElement value)
     {
         if (!value.TryGetProperty("typeName", out var typeName) || typeName.ValueKind != JsonValueKind.String)
@@ -815,16 +870,44 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     }
 
     /// <summary>
+    /// The declared Elsa 3 type in the Elsa 4 shape normalization has already put the value in (spec 248 R-4): Elsa 3's
+    /// generic list syntax (<c>List&lt;String&gt;</c>) is a list of its element, and the Elsa 3 names below are what
+    /// their Elsa 4 member holds. <c>HttpStatusCode</c> is an integer because the narrowed contract (R5) turned a status
+    /// name into its number and refused an expression declared as the enum.
+    /// </summary>
+    private static TypeReference ReadNormalizedType(JsonElement value)
+    {
+        if (value.TryGetProperty("typeName", out var typeName) && typeName.ValueKind == JsonValueKind.String &&
+            typeName.GetString() is { } token && token.IndexOf('<') is var open and > 0 && token.EndsWith('>') &&
+            SimpleName(token[..open]) is "List" or "IList" or "ICollection" or "IEnumerable" or "IReadOnlyList" or "IReadOnlyCollection" &&
+            token[(open + 1)..^1] is var element && element.IndexOfAny([',', '<']) < 0)
+            return new TypeReference(SimpleName(element), CollectionKind.List);
+
+        var declared = ReadType(value);
+        return Elsa3TypeShapes.GetValueOrDefault(declared.Alias) ?? declared;
+    }
+
+    private static readonly IReadOnlyDictionary<string, TypeReference> Elsa3TypeShapes = new Dictionary<string, TypeReference>(StringComparer.Ordinal)
+    {
+        ["HttpStatusCode"] = new("Int32"),
+        ["HttpHeaders"] = new("String[]", CollectionKind.Dictionary),
+        ["ObjectDictionary"] = new("Object", CollectionKind.Dictionary),
+    };
+
+    /// <summary>
     /// Whether a value of type <paramref name="value"/> may bind a member of type <paramref name="member"/>. Aliases are
     /// compared by simple name (Elsa 3 writes <c>String</c>, the catalog <c>System.String</c> or
     /// <c>System.Text.Json.JsonElement?</c>). An untyped side (<c>Object</c>, <c>JsonElement</c>, <c>Any</c>) matches
-    /// anything, and a String value may bind a scalar member, which Elsa 4 converts from text (a URI, a number, an enum).
+    /// anything, or any element of the same collection kind, and a String value may bind a scalar member, which Elsa 4
+    /// converts from text (a URI, a number, an enum).
     /// </summary>
     private static bool TypesMatch(TypeReference value, TypeReference member)
     {
         var valueName = SimpleName(value.Alias);
         var memberName = SimpleName(member.Alias);
         if (IsUntyped(value, valueName) || IsUntyped(member, memberName))
+            return true;
+        if ((IsUntypedName(valueName) || IsUntypedName(memberName)) && value.CollectionKind == member.CollectionKind)
             return true;
         if (valueName.Equals("String", StringComparison.OrdinalIgnoreCase) &&
             value.CollectionKind == CollectionKind.Single &&
@@ -840,7 +923,7 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     /// </summary>
     private static bool ValueFits(ActivityProperty property, TypeReference member)
     {
-        var declared = ReadType(property.Value);
+        var declared = ReadNormalizedType(property.Value);
         if (property.Expression is null ||
             !property.Expression.Type.Equals("Literal", StringComparison.OrdinalIgnoreCase) ||
             !SimpleName(declared.Alias).Equals("String", StringComparison.OrdinalIgnoreCase) ||
@@ -861,8 +944,31 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
         };
     }
 
+    /// <summary>
+    /// Spec 256 FR-013: whether a script bound to a JSON member (<c>JsonElement</c>, <c>Object</c>, <c>Any</c>) carries a
+    /// typed Elsa 3 declaration. Elsa 3 converted the script's result to that type (<c>Int32</c> turns <c>"5"</c> into
+    /// 5); the JSON member takes the value as the script returns it, so the conversion would be lost silently. An untyped
+    /// declaration, or a collection or dictionary of untyped values, involves no conversion. Literals, variables and
+    /// object values are data, not scripts.
+    /// </summary>
+    private static bool DropsTypedConversion(ActivityProperty property, TypeReference member)
+    {
+        if (property.Expression is not { } expression ||
+            expression.Type.Equals("Literal", StringComparison.OrdinalIgnoreCase) ||
+            expression.Type.Equals("Object", StringComparison.OrdinalIgnoreCase) ||
+            expression.Type.Equals("Secret", StringComparison.OrdinalIgnoreCase) ||
+            expression.Type.Equals("Variable", StringComparison.OrdinalIgnoreCase) ||
+            !IsUntyped(member, SimpleName(member.Alias)))
+            return false;
+
+        var declared = SimpleName(ReadNormalizedType(property.Value).Alias);
+        return !IsUntypedName(declared) && declared is not ("IDictionary" or "Dictionary" or "JsonObject" or "JsonArray");
+    }
+
     private static bool IsUntyped(TypeReference type, string simpleName) =>
-        type.CollectionKind == CollectionKind.Single &&
+        type.CollectionKind == CollectionKind.Single && IsUntypedName(simpleName);
+
+    private static bool IsUntypedName(string simpleName) =>
         simpleName is "Object" or "object" or "JsonElement" or "JsonNode" or "Any" or "ExpandoObject";
 
     private static string SimpleName(string alias)

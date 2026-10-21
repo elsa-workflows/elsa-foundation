@@ -98,6 +98,10 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.Sqlite
                         .HasMaxLength(256)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Tombstone")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -142,7 +146,7 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.Sqlite
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.HasKey("TenantId", "NormalizedName");
+                    b.HasKey("TenantId", "NormalizedName", "Tombstone");
 
                     b.HasIndex("SchemaVersion");
 

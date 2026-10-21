@@ -1,5 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
-import type { ElsaStudioModuleApi, StudioContributionRegistry } from "@elsa-workflows/studio-sdk";
+import { describe, expect, it } from "vitest";
+import {
+  createAiContributionApi,
+  createContributionRegistry,
+  createDashboardWidgetRegistry,
+  createDialogController,
+  createEndpointContext,
+  studioSlots,
+  type ElsaStudioModuleApi
+} from "@elsa-workflows/studio-sdk";
 import { register } from "../module";
 
 describe("secrets module", () => {
@@ -33,29 +41,45 @@ describe("secrets module", () => {
 });
 
 function stubApi(): ElsaStudioModuleApi {
+  const dashboardWidgets = createDashboardWidgetRegistry();
   return {
-    backend: {
-      baseUrl: "https://server.example",
-      http: {
-        requestJson: vi.fn(),
-        getJson: vi.fn(),
-        postJson: vi.fn(),
-        putJson: vi.fn(),
-        deleteJson: vi.fn(),
-        postForm: vi.fn()
-      }
+    host: {
+      ...createEndpointContext("https://studio.example/"),
+      hostVersion: "1.0.0",
+      sdkVersion: "1.0.0"
     },
-    featureAreas: registry(),
-    propertyEditors: registry(),
-    expressionEditors: registry()
-  };
-}
-
-function registry<T>(): StudioContributionRegistry<T> & { items: T[] } {
-  const items: T[] = [];
-  return {
-    items,
-    add: item => items.push(item),
-    list: () => items
+    backend: createEndpointContext("https://server.example/"),
+    runtime: {},
+    featureAreas: createContributionRegistry({ slot: studioSlots.featureAreas }),
+    navigation: createContributionRegistry({ slot: studioSlots.navigation }),
+    routes: createContributionRegistry({ slot: studioSlots.routes }),
+    dashboardWidgets,
+    homeWidgets: dashboardWidgets,
+    diagnosticsWidgets: createContributionRegistry({ slot: studioSlots.diagnosticsWidgets }),
+    panels: createContributionRegistry({ slot: studioSlots.panels }),
+    toolbarActions: createContributionRegistry({ slot: studioSlots.toolbarActions }),
+    activityEditors: createContributionRegistry({ slot: studioSlots.activityEditors }),
+    propertyEditors: createContributionRegistry({ slot: studioSlots.propertyEditors }),
+    expressionEditors: createContributionRegistry({ slot: studioSlots.expressionEditors }),
+    workflowRunInputEditors: createContributionRegistry({ slot: studioSlots.workflowRunInputEditors }),
+    workflowTestStimulusEditors: createContributionRegistry({ slot: studioSlots.workflowTestStimulusEditors }),
+    settingEditors: createContributionRegistry({ slot: studioSlots.settingEditors }),
+    agent: {
+      contextProviders: createContributionRegistry({ slot: studioSlots.agentContextProviders }),
+      promptStarters: createContributionRegistry({ slot: studioSlots.agentPromptStarters }),
+      capabilities: createContributionRegistry({ slot: studioSlots.agentCapabilities }),
+      actions: createContributionRegistry({ slot: studioSlots.agentActions }),
+      toolSlots: createContributionRegistry({ slot: studioSlots.agentToolSlots }),
+      toolContracts: createContributionRegistry({ slot: studioSlots.agentToolContracts }),
+      resultRenderers: createContributionRegistry({ slot: studioSlots.agentResultRenderers })
+    },
+    workflowDesigner: {
+      nodeRenderers: createContributionRegistry({ slot: studioSlots.workflowDesignerNodeRenderers }),
+      toolboxItems: createContributionRegistry({ slot: studioSlots.workflowDesignerToolboxItems }),
+      panels: createContributionRegistry({ slot: studioSlots.workflowDesignerPanels })
+    },
+    ai: createAiContributionApi(),
+    dialogs: createDialogController().api,
+    diagnostics: createContributionRegistry({ slot: studioSlots.diagnostics })
   };
 }

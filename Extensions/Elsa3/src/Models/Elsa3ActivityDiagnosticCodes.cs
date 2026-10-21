@@ -73,6 +73,20 @@ public static class Elsa3ActivityDiagnosticCodes
     /// </summary>
     public const string GraphStartTriggerMisplaced = "ELS3-ACTIVITY-GRAPH-START-TRIGGER-MISPLACED";
 
+    /// <summary>
+    /// A reusable workflow's body uses an activity that converts to an Elsa 4 engine intrinsic (SetVariable, SetOutput,
+    /// Correlate, SetName). A graph activity resolves every node to a published activity version and intrinsics have
+    /// none, so the reusable cannot be published (spec 246 D-7).
+    /// </summary>
+    public const string ReusableIntrinsicUnsupported = "ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED";
+
+    /// <summary>
+    /// A reusable workflow's body reads a value a graph activity body cannot reach in Elsa 4 yet: one of its own inputs
+    /// (<c>getInput</c>), a variable (<c>getVariable</c>, a memory reference), or another activity's result or captured
+    /// output. A graph body node's bindings resolve against the started workflow, not the graph (spec 246 D-8).
+    /// </summary>
+    public const string ReusableValueReadUnsupported = "ELS3-ACTIVITY-REUSABLE-VALUE-READ-UNSUPPORTED";
+
     /// <summary>Activities nest deeper than the conversion supports.</summary>
     public const string NestingTooDeep = "ELS3-ACTIVITY-NESTING-TOO-DEEP";
 
@@ -117,6 +131,12 @@ public static class Elsa3ActivityDiagnosticCodes
 
     /// <summary>A reusable workflow's declared outcome is reached by no Complete; it is dropped from the contract.</summary>
     public const string OutcomeUnreached = "ELS3-BEHAVIOUR-OUTCOME-UNREACHED";
+
+    /// <summary>
+    /// WriteHttpResponse: an object body with a JSON content type Elsa 3 did not match exactly (letter case, a parameter,
+    /// a <c>+json</c> type). Elsa 3 sent the value's type name; Elsa 4 sends the JSON.
+    /// </summary>
+    public const string HttpResponseJsonVariant = "ELS3-BEHAVIOUR-HTTP-RESPONSE-JSON-VARIANT";
 
     /// <summary>A connection Elsa 3 never follows (leaving Complete, End or Break, or a FlowFork port outside its branches) is removed.</summary>
     public const string DeadConnectionRemoved = "ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED";

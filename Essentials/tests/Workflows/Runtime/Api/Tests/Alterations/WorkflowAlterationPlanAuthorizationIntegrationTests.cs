@@ -82,6 +82,68 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
     }
 
     [Fact]
+    public async Task Retry_faulted_activity_submission_requires_runtime_manage_permission()
+    {
+        await using var host = await AlterationApiHost.StartAsync();
+        var body = new
+        {
+            target = new { executionIds = new[] { "execution-a" } },
+            alterations = new[]
+            {
+                new { kind = "RetryFaultedActivity", schemaVersion = 1, payload = new { sourceActivityExecutionId = "activity-a", reason = "Delivery service restored" } }
+            }
+        };
+
+        using (var anonymous = await SendRetryAsync(host, body, "retry-anonymous"))
+            Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+
+        host.Authorize(PermissionNames.WorkflowRuntimeRead, "tenant-a");
+        using (var readOnly = await SendRetryAsync(host, body, "retry-read-only"))
+            Assert.Equal(HttpStatusCode.Forbidden, readOnly.StatusCode);
+
+        host.Authorize(PermissionNames.WorkflowRuntimeManage, "tenant-a");
+        using (var manage = await SendRetryAsync(host, body, "retry-manage"))
+            Assert.Equal(HttpStatusCode.Accepted, manage.StatusCode);
+    }
+
+    [Fact]
+    public async Task Decide_intervention_submission_requires_runtime_manage_permission_and_creates_no_plan_without_it()
+    {
+        await using var host = await AlterationApiHost.StartAsync();
+        var body = new
+        {
+            target = new { executionIds = new[] { "execution-a" } },
+            alterations = new[]
+            {
+                new { kind = "DecideIntervention", schemaVersion = 1, payload = new { incidentId = "incident-a", decision = "compensation.abandon", reason = "Order written off" } }
+            }
+        };
+
+        using (var anonymous = await SendRetryAsync(host, body, "decide-anonymous"))
+            Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+
+        host.Authorize(PermissionNames.WorkflowRuntimeRead, "tenant-a");
+        using (var readOnly = await SendRetryAsync(host, body, "decide-read-only"))
+            Assert.Equal(HttpStatusCode.Forbidden, readOnly.StatusCode);
+
+        host.Authorize(PermissionNames.WorkflowRuntimeManage, "tenant-a");
+        using (var manage = await SendRetryAsync(host, body, "decide-read-only"))
+        {
+            // The forbidden attempt created nothing under its key: the first managed submission is accepted, not replayed.
+            Assert.Equal(HttpStatusCode.Accepted, manage.StatusCode);
+            using var document = JsonDocument.Parse(await manage.Content.ReadAsStringAsync());
+            Assert.Equal("Accepted", document.RootElement.GetProperty("submissionDisposition").GetString());
+        }
+    }
+
+    private static Task<HttpResponseMessage> SendRetryAsync(AlterationApiHost host, object body, string idempotencyKey)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Post, "/runtime/workflows/alteration-plans") { Content = JsonContent.Create(body) };
+        request.Headers.Add("Idempotency-Key", idempotencyKey);
+        return host.Client.SendAsync(request);
+    }
+
+    [Fact]
     public async Task Query_target_read_uses_the_documented_redacted_shape()
     {
         await using var host = await AlterationApiHost.StartAsync();
@@ -212,6 +274,111 @@ public sealed class WorkflowAlterationPlanAuthorizationIntegrationTests
         using var jobDocument = JsonDocument.Parse(jobBody);
         Assert.Equal("operator-1", planDocument.RootElement.GetProperty("submittedBy").GetProperty("subject").GetString());
         Assert.Equal("operator-1", jobDocument.RootElement.GetProperty("submittedBy").GetProperty("subject").GetString());
+    }
+
+    [Fact]
+    public async Task Explicit_targets_are_authorized_per_run_and_a_refused_run_fails_like_a_missing_one()
+    {
+        // Spec 260 FR-406: an explicit-id plan authorizes each named run as run deletion does, with the run's state as
+        // the permission resource. A refused run is never captured or altered, and its job reads exactly like the job of
+        // a run that does not exist, so the plan never reveals that the refused run exists.
+        var handler = new DenyOneRunResourceHandler("execution-b");
+        await using var host = await AlterationApiHost.StartAsync(services => services.AddSingleton<IPermissionResourceHandler>(handler));
+        await SeedWorkflowAsync(host.Services, "execution-a");
+        await SeedWorkflowAsync(host.Services, "execution-b");
+        host.Authorize(PermissionNames.WorkflowRuntimeManage, "tenant-a");
+        var body = new
+        {
+            target = new { executionIds = new[] { "execution-a", "execution-b", "execution-missing" } },
+            alterations = new[] { new { kind = "CancelWorkflow", schemaVersion = 1, payload = new { } } }
+        };
+        using var accepted = await SendRetryAsync(host, body, "per-run-authorization");
+        Assert.Equal(HttpStatusCode.Accepted, accepted.StatusCode);
+        var planId = (await accepted.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("planId").GetString()!;
+        Assert.Contains("execution-a", handler.Evaluated);
+        Assert.Contains("execution-b", handler.Evaluated);
+
+        using (var scope = host.Services.CreateScope())
+        {
+            await scope.ServiceProvider.GetRequiredService<WorkflowAlterationTargetCaptureTask>().CaptureNextAsync(planId, 100);
+            await scope.ServiceProvider.GetRequiredService<WorkflowAlterationJobTask>().DispatchAvailableAsync(planId, "api-test", 100, TimeSpan.FromMinutes(1));
+        }
+
+        await WaitForTerminalJobsAsync(host.Services, planId, 3);
+        IReadOnlyDictionary<string, WorkflowAlterationJobState> jobs;
+        using (var scope = host.Services.CreateScope())
+        {
+            var workflows = scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>();
+            Assert.Equal(WorkflowExecutionStatus.Cancelled, (await workflows.FindAsync("execution-a"))!.Status);
+            Assert.Equal(WorkflowExecutionStatus.Running, (await workflows.FindAsync("execution-b"))!.Status);
+            var page = await scope.ServiceProvider.GetRequiredService<IWorkflowAlterationStore>().PageJobsAsync(planId, 100, null);
+            jobs = page.Items.ToDictionary(job => job.WorkflowExecutionId, StringComparer.Ordinal);
+        }
+
+        Assert.Equal(WorkflowAlterationJobStatus.Succeeded, jobs["execution-a"].Status);
+        var refused = jobs["execution-b"];
+        var missing = jobs["execution-missing"];
+        Assert.Equal(WorkflowAlterationJobStatus.Failed, refused.Status);
+        Assert.Null(refused.CapturedConcurrency);
+        Assert.Empty(refused.Outcomes);
+        Assert.Equal(missing.Status, refused.Status);
+        Assert.Equal("TargetNotFound", refused.SafeFailure!.Code);
+        Assert.Equal(missing.SafeFailure!.Code, refused.SafeFailure.Code);
+        Assert.Equal(missing.SafeFailure.Message, refused.SafeFailure.Message);
+
+        host.Authorize(PermissionNames.WorkflowRuntimeRead, "tenant-a");
+        using var refusedRead = await host.Client.GetAsync($"/runtime/workflows/alteration-plans/{planId}/jobs/{refused.JobId}");
+        using var missingRead = await host.Client.GetAsync($"/runtime/workflows/alteration-plans/{planId}/jobs/{missing.JobId}");
+        Assert.Equal(HttpStatusCode.OK, refusedRead.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, missingRead.StatusCode);
+        using var refusedDocument = JsonDocument.Parse(await refusedRead.Content.ReadAsStringAsync());
+        using var missingDocument = JsonDocument.Parse(await missingRead.Content.ReadAsStringAsync());
+        Assert.Equal(missingDocument.RootElement.GetProperty("status").GetString(), refusedDocument.RootElement.GetProperty("status").GetString());
+        Assert.Equal(missingDocument.RootElement.GetProperty("failure").GetRawText(), refusedDocument.RootElement.GetProperty("failure").GetRawText());
+        using var planRead = await host.Client.GetAsync($"/runtime/workflows/alteration-plans/{planId}");
+        Assert.DoesNotContain("authorized", await planRead.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Explicit_targets_pass_when_a_resource_handler_allows_or_abstains()
+    {
+        var handler = new DenyOneRunResourceHandler(deniedExecutionId: null);
+        await using var host = await AlterationApiHost.StartAsync(services => services.AddSingleton<IPermissionResourceHandler>(handler));
+        await SeedWorkflowAsync(host.Services, "execution-a");
+        host.Authorize(PermissionNames.WorkflowRuntimeManage, "tenant-a");
+        var body = new
+        {
+            target = new { executionIds = new[] { "execution-a" } },
+            alterations = new[] { new { kind = "CancelWorkflow", schemaVersion = 1, payload = new { } } }
+        };
+        using var accepted = await SendRetryAsync(host, body, "per-run-abstain");
+        Assert.Equal(HttpStatusCode.Accepted, accepted.StatusCode);
+        var planId = (await accepted.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("planId").GetString()!;
+        await CaptureAndDispatchAsync(host.Services, planId);
+        await WaitForTerminalJobsAsync(host.Services, planId, 1);
+
+        using var scope = host.Services.CreateScope();
+        Assert.Equal(new[] { "execution-a" }, handler.Evaluated);
+        Assert.Equal(WorkflowExecutionStatus.Cancelled, (await scope.ServiceProvider.GetRequiredService<IWorkflowExecutionStateStore>().FindAsync("execution-a"))!.Status);
+    }
+
+    /// <summary>Refuses runtime manage on one named run and abstains for everything else, as a host policy would.</summary>
+    private sealed class DenyOneRunResourceHandler(string? deniedExecutionId) : IPermissionResourceHandler
+    {
+        private readonly List<string> _evaluated = [];
+        public IReadOnlyList<string> Evaluated { get { lock (_evaluated) return _evaluated.ToArray(); } }
+
+        public ValueTask<PermissionEvaluationResult?> EvaluateAsync(PermissionEvaluationContext context, CancellationToken cancellationToken = default)
+        {
+            if (context.Resource is not WorkflowExecutionState execution ||
+                !StringComparer.Ordinal.Equals(context.Permission, PermissionNames.WorkflowRuntimeManage))
+                return ValueTask.FromResult<PermissionEvaluationResult?>(null);
+            lock (_evaluated)
+                _evaluated.Add(execution.WorkflowExecutionId);
+            return ValueTask.FromResult(StringComparer.Ordinal.Equals(execution.WorkflowExecutionId, deniedExecutionId)
+                ? PermissionEvaluationResult.Denied("This run is outside the operator's area.")
+                : null);
+        }
     }
 
     [Fact]

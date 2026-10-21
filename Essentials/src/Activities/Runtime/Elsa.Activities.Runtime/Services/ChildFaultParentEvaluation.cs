@@ -97,7 +97,12 @@ internal static class ChildFaultParentEvaluation
             parentOutcome);
 
         var now = timeProvider.GetUtcNow();
-        var commandMetadata = sourceWorkItem.CommandMetadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        var commandMetadata = SchedulerWorkItems.WithSchedulingMetadata(sourceWorkItem.CommandMetadata, faultedChildState);
+        // A fault raised while evaluating a descendant-fault delivery is the receiver's own fault: its parent gets it as
+        // an ordinary child fault, not as a descendant's (spec 258 R-3).
+        commandMetadata.Remove(RuntimeMetadataKeys.DescendantFault);
+        commandMetadata.Remove(RuntimeMetadataKeys.DescendantFaultViaChildActivityExecutionId);
+        commandMetadata.Remove(RuntimeMetadataKeys.DescendantFaultViaChildExecutableNodeId);
         commandMetadata[RuntimeMetadataKeys.ChildFaulted] = bool.TrueString;
         commandMetadata[RuntimeMetadataKeys.IncidentId] = incidentId;
         commandMetadata[RuntimeMetadataKeys.ParentActivityExecutionId] = parentActivityExecutionId;

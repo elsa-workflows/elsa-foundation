@@ -10,8 +10,8 @@ namespace Elsa.Architecture.Tests;
 /// <c>$(ElsaVersionLine)</c> from it (<c>B</c> by default, <c>A</c> when the project's name appears in the
 /// list). Nothing in MSBuild stops a project file, or a nested <c>Directory.Build.props</c>/<c>.targets</c>,
 /// from setting either property itself. If one did, MSBuild's notion of the project's line would silently
-/// disagree with the reviewed list and with <c>docs/maps/dependency-map.json</c> (generated from the same
-/// list by <c>tools/maps/Elsa.Maps.Generator</c>), and both #2078 (PublicApiAnalyzers gated on
+/// disagree with the reviewed list and with the dependency-map dataset (scanned from the same list by
+/// <c>tools/maps/Elsa.Maps.Projects</c>), and both #2078 (PublicApiAnalyzers gated on
 /// <c>$(ElsaVersionLine) == 'A'</c>) and #2080 (version computation reading the same property) would act on
 /// the wrong line for that project without either failing loudly.
 /// </summary>

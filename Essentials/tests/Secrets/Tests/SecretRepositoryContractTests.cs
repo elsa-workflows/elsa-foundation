@@ -43,14 +43,75 @@ public sealed class SecretRepositoryContractTests
 
     [Theory]
     [MemberData(nameof(RepositoryFactories))]
-    public async Task TryAdd_Reserves_Deleted_Name(string _, Func<ISecretRepository> repositoryFactory)
+    public async Task TryAdd_Accepts_A_Name_Only_A_Deleted_Secret_Holds(string _, Func<ISecretRepository> repositoryFactory)
     {
         var repository = repositoryFactory();
-        var secret = DeletedSecret();
+        var deleted = DeletedSecret();
+        await repository.SaveAsync(deleted);
+        var successor = ActiveSecret(deleted.Name);
 
-        await repository.SaveAsync(secret);
+        Assert.True(await repository.TryAddAsync(successor));
 
-        Assert.False(await repository.TryAddAsync(ActiveSecret(secret.Name)));
+        Assert.Equal(successor.Id, (await repository.FindAsync(TenantId, deleted.Name))!.Id);
+        var stored = (await repository.ListPageAsync(TenantId, new SecretRepositoryListRequest())).Items;
+        Assert.Equal(new[] { deleted.Id, successor.Id }.Order(), stored.Select(secret => secret.Id).Order());
+    }
+
+    [Theory]
+    [MemberData(nameof(RepositoryFactories))]
+    public async Task TryAdd_Refuses_A_Name_A_Revoked_Secret_Holds(string _, Func<ISecretRepository> repositoryFactory)
+    {
+        var repository = repositoryFactory();
+        var revoked = ActiveSecret("payments.api");
+        revoked.Status = SecretStatus.Revoked;
+        await repository.SaveAsync(revoked);
+
+        Assert.False(await repository.TryAddAsync(ActiveSecret(revoked.Name)));
+
+        Assert.Equal(revoked.Id, (await repository.FindAsync(TenantId, revoked.Name))!.Id);
+    }
+
+    [Theory]
+    [MemberData(nameof(RepositoryFactories))]
+    public async Task Find_Returns_A_Deleted_Secret_Only_While_No_Secret_Holds_The_Name(
+        string _,
+        Func<ISecretRepository> repositoryFactory)
+    {
+        var repository = repositoryFactory();
+        var first = DeletedSecret();
+        await repository.SaveAsync(first);
+        var second = ActiveSecret(first.Name);
+        Assert.True(await repository.TryAddAsync(second));
+
+        Assert.Equal(SecretStatus.Active, (await repository.FindAsync(TenantId, first.Name))!.Status);
+
+        second.Status = SecretStatus.Deleted;
+        await repository.SaveAsync(second);
+
+        Assert.Equal(SecretStatus.Deleted, (await repository.FindAsync(TenantId, first.Name))!.Status);
+        var deleted = await repository.ListPageAsync(TenantId, new SecretRepositoryListRequest(status: SecretStatus.Deleted));
+        Assert.Equal(new[] { first.Id, second.Id }.Order(), deleted.Items.Select(secret => secret.Id).Order());
+    }
+
+    [Theory]
+    [MemberData(nameof(RepositoryFactories))]
+    public async Task Saving_An_Earlier_Secrets_Deleted_Copy_Leaves_Its_Successor_Holding_The_Name(
+        string _,
+        Func<ISecretRepository> repositoryFactory)
+    {
+        var repository = repositoryFactory();
+        var earlier = ActiveSecret("payments.api");
+        await repository.SaveAsync(earlier);
+        earlier.Status = SecretStatus.Deleted;
+        await repository.SaveAsync(earlier);
+        var successor = ActiveSecret(earlier.Name);
+        Assert.True(await repository.TryAddAsync(successor));
+
+        await repository.SaveAsync(earlier);
+
+        var holder = (await repository.FindAsync(TenantId, earlier.Name))!;
+        Assert.Equal(successor.Id, holder.Id);
+        Assert.Equal(SecretStatus.Active, holder.Status);
     }
 
     [Theory]

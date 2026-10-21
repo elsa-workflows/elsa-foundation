@@ -102,6 +102,9 @@
       the graph resolves 2.0.0, which carries a high-severity advisory (GHSA-v5pm-xwqc-g5wc).
     -->
     <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
+    <!-- Isolated tools/hosting Orleans composition probe; no shipping runtime dependency. -->
+    <PackageVersion Include="Microsoft.Orleans.Clustering.AdoNet" Version="10.4.0" />
+    <PackageVersion Include="Microsoft.Orleans.Server" Version="10.4.0" />
     <PackageVersion Include="YamlDotNet" Version="16.3.0" />
     <PackageVersion Include="MySql.Data" Version="26.7.0" />
     <PackageVersion Include="MySql.EntityFrameworkCore" Version="10.0.9" />

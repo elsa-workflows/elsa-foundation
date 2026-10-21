@@ -90,6 +90,12 @@ public sealed class RuntimeCheckpointCommitter
             decision = new RuntimeCheckpointPersistenceDecision(
                 RuntimeCheckpointPersistenceMode.Immediate,
                 "Background activity work participants require an atomic checkpoint flush.");
+        else if (HasDelayedIntent(commit))
+            // R-7 (spec 261): a delayed child schedule is written durably at once in every persistence mode. Folded into
+            // a coalesced segment it would live only in the drain's memory until the end-of-drain flush.
+            decision = new RuntimeCheckpointPersistenceDecision(
+                RuntimeCheckpointPersistenceMode.Immediate,
+                "A delayed post-commit intent requires a durable checkpoint.");
 
         if (activity is not null)
         {
@@ -193,8 +199,10 @@ public sealed class RuntimeCheckpointCommitter
 
         foreach (var intent in commit.PostCommitIntents)
         {
+            // A delayed intent (R-7) is delivered by the outbox sweep once it is due, never by this drain.
             if (intent.MaterializedSchedulerWorkItem is { } workItem &&
-                StringComparer.Ordinal.Equals(intent.Kind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork))
+                StringComparer.Ordinal.Equals(intent.Kind, RuntimePostCommitIntentKinds.EnqueueSchedulerWork) &&
+                !intent.IsDelayedPast(commit.Checkpoint.OccurredAt))
                 scope.PublishHopWorkItem(intent.IntentId, workItem);
         }
     }
@@ -205,8 +213,12 @@ public sealed class RuntimeCheckpointCommitter
             ? accessor.BeginConsumeAttempt(consumed.WorkItemId)
             : null;
 
+    private static bool HasDelayedIntent(RuntimeCheckpointCommit commit) =>
+        commit.PostCommitIntents.Any(intent => intent.IsDelayedPast(commit.Checkpoint.OccurredAt));
+
     private static bool IsMandatoryCheckpoint(RuntimeCheckpointCommit commit) =>
         !commit.StateChanges.BackgroundActivityWork.IsEmpty ||
+        HasDelayedIntent(commit) ||
         commit.Checkpoint.Metadata.TryGetValue(RuntimeMetadataKeys.CheckpointRequirement, out var requirement) &&
         StringComparer.Ordinal.Equals(requirement, RuntimeMetadataKeys.CheckpointRequirementMandatory);
 

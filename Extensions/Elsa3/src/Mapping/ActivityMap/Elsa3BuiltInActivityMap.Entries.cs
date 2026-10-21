@@ -89,7 +89,7 @@ internal sealed partial class Elsa3BuiltInActivityMap
 
     private static IEnumerable<Elsa3ActivityMapEntry> PrimitivesAndIntrinsics() =>
     [
-        Catalog("WriteLine", Primitives + "WriteLine", [Carry("Text", "text")]),
+        Catalog("WriteLine", Primitives + "WriteLine", [DefaultFlip("Text", "text", "")]),
         Catalog("ReadLine", Primitives + "ReadLine", [CarryOutput("Result", "Result")]),
         Catalog("Fault", Primitives + "Fault",
             [
@@ -165,8 +165,8 @@ internal sealed partial class Elsa3BuiltInActivityMap
         Catalog("WriteHttpResponse", Http + "WriteHttpResponse",
             [
                 Narrow("StatusCode", "StatusCode", Elsa3ValueContract.EnumNameToInt),
-                Narrow("Content", "Body", Elsa3ValueContract.StringOnly),
-                Carry("ContentType", "ContentType"),
+                Narrow("Content", "Body", Elsa3ValueContract.HttpResponseBody) with { BehaviourWarning = HttpResponseJsonVariant },
+                Narrow("ContentType", "ContentType", Elsa3ValueContract.HttpResponseContentType),
                 Carry("ResponseHeaders", "Headers")
             ]),
         NoCounterpart("DownloadHttpFile", "Elsa 4 has no file download activity."),
@@ -229,7 +229,8 @@ internal sealed partial class Elsa3BuiltInActivityMap
         Catalog("Event", Primitives + "Event",
             [
                 Carry("EventName", "EventName"),
-                Lost("Result"),
+                // Elsa 3's Result is the event payload; Elsa 4's Result is the event name, its payload output Payload (#3107).
+                CarryOutput("Result", "Payload"),
                 new Elsa3MemberRule("CanStartWorkflow", Elsa3MemberKind.CustomProperty, Elsa3MemberRuleKind.DefaultFlip, "CanStartWorkflow", Literal("false"))
             ]),
         Catalog("PublishEvent", Primitives + "PublishEvent",

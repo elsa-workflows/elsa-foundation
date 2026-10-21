@@ -104,8 +104,7 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
         </div>
         <button type="button" className="wf-icon-button wf-save-button" title="Save workflow" disabled={props.busy} onClick={props.onSave}><Save size={15} aria-hidden="true" /><span className="wf-toolbar-sr-only">Save</span></button>
         <PublishActionButton busy={props.busy} saving={props.saving} onPublish={props.onPublish} />
-        {props.runStatus}
-        <button type="button" className="wf-run-button" disabled={!props.canRun} title={props.runTitle} onClick={props.onRun}><Play size={15} aria-hidden="true" /> Run</button>
+        <button type="button" className="wf-run-button" disabled={!props.canRun} title={props.runTitle} onClick={props.onRun}><Play size={15} aria-hidden="true" /> Test Run</button>
         <button
           ref={triggerRef}
           type="button"
@@ -128,6 +127,7 @@ export function WorkflowEditorToolbar(props: WorkflowEditorToolbarProps) {
           }}
         ><MoreHorizontal size={18} /></button>
       </div>
+      {props.runStatus ? <div className="wf-editor-actions wf-editor-run-status">{props.runStatus}</div> : null}
       <AnchoredPopover anchorRef={triggerRef} open={open} className="wf-editor-actions-popover" minWidth={240} maxHeight={480} onDismiss={() => closeMenu(false)}>
         <div ref={menuRef} id={menuId} role="menu" aria-label="More workflow actions" onKeyDown={handleMenuKeyDown}>
           <div role="group" aria-label="Saving">

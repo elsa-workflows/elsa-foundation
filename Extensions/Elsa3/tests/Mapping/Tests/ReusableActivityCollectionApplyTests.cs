@@ -35,7 +35,7 @@ public sealed class ReusableActivityCollectionApplyTests
         var mutation = Assert.IsType<ReusableActivityImportMutation>(command.Mutation);
         var callerRoot = mutation.Workflows.Single(x => x.Version.Id == "caller-v1").Version.State.RootActivity!;
         Assert.Equal(["call:succeed->handled", "call:fail->failed"], Support.Elsa3FlowchartFixtures.Connections(callerRoot));
-        var subGraph = Assert.Single(mutation.Activities).Version.DescriptorPayload.GetRawText();
+        var subGraph = Assert.Single(mutation.Activities).Version.GraphManifest.GetRawText();
         Assert.Contains("\"decide\"", subGraph, StringComparison.Ordinal);
         Assert.Contains("\"True\"", subGraph, StringComparison.Ordinal);
     }
@@ -67,11 +67,11 @@ public sealed class ReusableActivityCollectionApplyTests
         Assert.Equal("a", aWrapper.Definition.Id);
         Assert.Equal(aItem.ActivityDefinitionVersionId, aWrapper.Version.State.RootActivity!.ActivityVersionId);
         var bGraph = mutation.Activities.Single(x => x.Version.Id == bItem.ActivityDefinitionVersionId);
-        Assert.Contains(aItem.ActivityDefinitionVersionId!, bGraph.Version.DescriptorPayload.GetRawText(), StringComparison.Ordinal);
+        Assert.Contains(aItem.ActivityDefinitionVersionId!, bGraph.Version.GraphManifest.GetRawText(), StringComparison.Ordinal);
         var consumer = mutation.Workflows.Single(x => x.Version.Id == "consumer-v1");
         Assert.Equal(bItem.ActivityDefinitionVersionId, consumer.Version.State.RootActivity!.ActivityVersionId);
-        Assert.All(mutation.Activities, x => Assert.Equal("elsa.activity-graph", x.Version.ProviderKey));
-        Assert.All(mutation.Activities, x => Assert.Equal("elsa.graph-activity", x.Version.ConsumerKey));
+        Assert.All(mutation.Activities, x => Assert.Equal("elsa.activity-graph", ReusableActivityImportDrafts.Draft(x.Version, null).State.Provider.ProviderKey));
+        Assert.All(mutation.Activities, x => Assert.Null(x.AuthoringState.HeadVersionId));
     }
 
     [Fact]
@@ -163,7 +163,7 @@ public sealed class ReusableActivityCollectionApplyTests
     private static ReusableActivityImportCollection ValidCollection()
     {
         var input = new Elsa3.Models.Elsa3WorkflowArgumentDefinition { Name = "message", Type = typeof(string).FullName! };
-        var a = ReusableActivityImportFixtures.Workflow("a", "a-v1", 1, true, ReusableActivityImportFixtures.Leaf("a-root", directStart: true), input);
+        var a = ReusableActivityImportFixtures.Workflow("a", "a-v1", 1, true, ReusableActivityImportFixtures.Leaf("a-root"), input);
         var b = ReusableActivityImportFixtures.Workflow("b", "b-v1", 1, true, ReusableActivityImportFixtures.Reference("b-to-a", targetVersionId: "a-v1"));
         var consumer = ReusableActivityImportFixtures.Workflow("consumer", "consumer-v1", 1, false, ReusableActivityImportFixtures.Reference("consumer-to-b", targetVersionId: "b-v1"));
         return ReusableActivityImportFixtures.Collection(a, b, consumer);

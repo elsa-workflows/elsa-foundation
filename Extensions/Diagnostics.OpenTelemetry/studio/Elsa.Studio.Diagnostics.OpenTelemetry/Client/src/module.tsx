@@ -1,88 +1,127 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import type { ElsaStudioModuleApi, StudioEndpointContext } from "@elsa-workflows/studio-sdk";
+import React, { useEffect, useMemo, useState } from "react";
+import type { ElsaStudioModuleApi, StudioRouteComponentProps } from "@elsa-workflows/studio-sdk";
 import "./styles.css";
 
-type OTelSignalTab = "overview" | "traces" | "metrics" | "logs";
-type OTelLoadStatus = "loading" | "ready" | "unavailable" | "unauthorized" | "failed";
+type OTelSignalTab = "overview" | "traces";
+type OTelLoadStatus = "idle" | "loading" | "ready" | "empty" | "unavailable" | "unauthorized" | "failed" | "missing";
 type SpanStatus = "Unset" | "Ok" | "Error";
+type ResourceStatus = "Unknown" | "Active" | "Stale";
 
 interface OTelFilters {
   serviceName: string;
-  operation: string;
+  search: string;
   status: "" | "Ok" | "Error" | "Unset";
   traceId: string;
   take: number;
 }
 
-interface OTelSource {
+interface OTelResource {
   id: string;
-  displayName?: string | null;
-  serviceName?: string | null;
-  environment?: string | null;
-  instanceId?: string | null;
-  lastSeen?: string | null;
+  serviceName: string;
+  serviceInstanceId: string | null;
+  telemetrySdkLanguage: string | null;
+  attributes: Record<string, string | null>;
+  lastSeen: string;
+  status: ResourceStatus;
 }
 
-interface OTelOverviewResponse {
-  sources?: OTelSource[];
-  traceCount?: number;
-  spanCount?: number;
-  metricCount?: number;
-  logCount?: number;
+interface OTelResourceWire {
+  id?: string;
+  serviceName?: string | null;
+  serviceInstanceId?: string | null;
+  telemetrySdkLanguage?: string | null;
+  attributes?: Record<string, string | null> | null;
   lastSeen?: string | null;
+  status?: string | null;
+}
+
+interface OTelResourceResultWire {
+  items?: OTelResourceWire[];
+  droppedCount?: number;
+}
+
+interface OTelStorageDiagnostics {
+  traceCapacity: number;
+  spanCapacity: number;
+  metricPointCapacity: number;
+  logRecordCapacity: number;
+  resourceCount?: number | null;
+  traceCount: number;
+  spanCount?: number | null;
+  metricInstrumentCount: number;
+  metricPointCount: number;
+  logRecordCount: number;
+  droppedTraceCount: number;
+  droppedSpanCount: number;
+  droppedMetricPointCount: number;
+  droppedLogRecordCount: number;
 }
 
 interface OTelTraceSummaryWire {
   traceId?: string;
   rootSpanId?: string | null;
   name?: string | null;
-  serviceName?: string | null;
   startTime?: string | null;
   endTime?: string | null;
-  durationMs?: number | null;
+  duration?: string | null;
+  resourceIds?: string[] | null;
+  workflowInstanceIds?: string[] | null;
   spanCount?: number | null;
-  errorCount?: number | null;
   status?: string | null;
 }
 
-interface OTelTraceDetailWire extends OTelTraceSummaryWire {
+interface OTelTraceDetailWire {
+  trace: OTelTraceSummaryWire;
   spans?: OTelSpanWire[];
+  resources?: OTelResourceWire[];
+  logs?: unknown[];
+}
+
+interface OTelTraceResultWire {
+  items?: OTelTraceSummaryWire[];
+  droppedCount?: number;
 }
 
 interface OTelSpanWire {
+  id?: string;
   traceId?: string;
   spanId?: string;
   parentSpanId?: string | null;
+  resourceId?: string | null;
   name?: string | null;
   kind?: string | null;
-  serviceName?: string | null;
   startTime?: string | null;
   endTime?: string | null;
-  durationMs?: number | null;
   status?: string | null;
   statusDescription?: string | null;
-  attributes?: Record<string, unknown> | Array<{ name: string; value?: unknown }> | null;
+  attributes?: Record<string, string | null> | Array<{ name: string; value?: unknown }> | null;
   events?: OTelSpanEventWire[] | null;
-  links?: unknown[] | null;
-  resource?: Record<string, unknown> | null;
+  links?: OTelSpanLinkWire[] | null;
 }
 
 interface OTelSpanEventWire {
   name?: string | null;
   timestamp?: string | null;
-  attributes?: Record<string, unknown> | null;
+  attributes?: Record<string, string | null> | null;
+}
+
+interface OTelSpanLinkWire {
+  traceId?: string;
+  spanId?: string;
+  attributes?: Record<string, string | null> | null;
 }
 
 export interface OTelTraceSummary {
   traceId: string;
   rootSpanId: string | null;
-  name: string;
-  serviceName: string;
+  name: string | null;
   startTime: string;
   endTime: string | null;
+  duration: string | null;
   durationMs: number;
   spanCount: number;
-  errorCount: number;
+  resourceIds: string[];
+  workflowInstanceIds: string[];
   status: SpanStatus;
 }
 
@@ -90,6 +129,7 @@ export interface OTelSpan {
   traceId: string;
   spanId: string;
   parentSpanId: string | null;
+  resourceId: string | null;
   name: string;
   kind: string;
   serviceName: string;
@@ -100,12 +140,24 @@ export interface OTelSpan {
   statusDescription: string | null;
   attributes: Array<{ name: string; value: string }>;
   events: OTelSpanEventWire[];
-  links: unknown[];
-  resource: Record<string, unknown> | null;
+  links: OTelSpanLinkWire[];
+  resource: OTelResource | null;
 }
 
 interface OTelTraceDetail extends OTelTraceSummary {
   spans: OTelSpan[];
+  resources: OTelResource[];
+}
+
+interface OTelRead<T> {
+  status: OTelLoadStatus;
+  data: T | null;
+  message: string;
+}
+
+interface OTelResourceCollection {
+  items: OTelResource[];
+  droppedCount: number;
 }
 
 interface ClassifiedError {
@@ -113,10 +165,11 @@ interface ClassifiedError {
   message: string;
 }
 
-const otelEndpointPrefix = "/_elsa/studio/diagnostics/otel";
+const diagnosticsEndpointPrefix = "/diagnostics/opentelemetry";
+const resourceSearchTake = 500;
 const defaultFilters: OTelFilters = {
   serviceName: "",
-  operation: "",
+  search: "",
   status: "",
   traceId: "",
   take: 100
@@ -164,7 +217,7 @@ export function OpenTelemetryPanel() {
   );
 }
 
-export function OpenTelemetryPage() {
+export function OpenTelemetryPage({ navigate }: { navigate?: StudioRouteComponentProps["navigate"] } = {}) {
   const state = useOpenTelemetry();
   const selectedTrace = state.selectedTrace;
   const selectedSpan = selectedTrace?.spans.find(span => span.spanId === state.selectedSpanId) ?? selectedTrace?.spans[0] ?? null;
@@ -176,16 +229,22 @@ export function OpenTelemetryPage() {
           <h2>OpenTelemetry</h2>
           <p>{state.message}</p>
         </div>
-        <div className="otel-header-summary">
-          <SignalCount label="Traces" value={state.overview?.traceCount} />
-          <SignalCount label="Spans" value={state.overview?.spanCount} />
-          <SignalCount label="Metrics" value={state.overview?.metricCount} />
-          <SignalCount label="Logs" value={state.overview?.logCount} />
-        </div>
       </header>
 
+      <aside className="otel-capability-note" aria-label="OpenTelemetry signal availability">
+        <p>Trace inspection is supported. Metrics and OpenTelemetry Logs are not available in this experience.</p>
+        <a
+          href="/diagnostics"
+          onClick={event => {
+            if (!navigate || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            navigate("/diagnostics");
+          }}
+        >Browse Diagnostics</a>
+      </aside>
+
       <div className="otel-tabs" role="tablist" aria-label="OpenTelemetry signals">
-        {(["overview", "traces", "metrics", "logs"] as OTelSignalTab[]).map(tab => (
+        {(["overview", "traces"] as OTelSignalTab[]).map(tab => (
           <button type="button" role="tab" aria-selected={state.activeTab === tab} className={state.activeTab === tab ? "active" : ""} onClick={() => state.setActiveTab(tab)} key={tab}>
             {getSignalTabLabel(tab)}
           </button>
@@ -194,8 +253,6 @@ export function OpenTelemetryPage() {
 
       {state.activeTab === "overview" ? <OverviewPanel state={state} /> : null}
       {state.activeTab === "traces" ? <TracesPanel state={state} selectedTrace={selectedTrace} selectedSpan={selectedSpan} /> : null}
-      {state.activeTab === "metrics" ? <SignalPlaceholder title="Metrics" status={state.status} message="Metric charts will appear here when the OpenTelemetry backend exposes metric instruments and datapoints." /> : null}
-      {state.activeTab === "logs" ? <SignalPlaceholder title="Logs" status={state.status} message="OpenTelemetry log records will appear here when the backend exposes the log signal. Structured application logs are available under Diagnostics / Structured logs." /> : null}
     </section>
   );
 }
@@ -203,25 +260,52 @@ export function OpenTelemetryPage() {
 function useOpenTelemetry() {
   const [activeTab, setActiveTab] = useState<OTelSignalTab>("traces");
   const [filters, setFilters] = useState<OTelFilters>(defaultFilters);
-  const [overview, setOverview] = useState<OTelOverviewResponse | null>(null);
+  const [storageRead, setStorageRead] = useState<OTelRead<OTelStorageDiagnostics>>({ status: "loading", data: null, message: "Loading stored data." });
+  const [resourcesRead, setResourcesRead] = useState<OTelRead<OTelResourceCollection>>({ status: "loading", data: null, message: "Loading resource metadata." });
   const [traces, setTraces] = useState<OTelTraceSummary[]>([]);
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
   const [selectedTrace, setSelectedTrace] = useState<OTelTraceDetail | null>(null);
+  const [detailStatus, setDetailStatus] = useState<OTelLoadStatus>("idle");
+  const [detailMessage, setDetailMessage] = useState("Select a trace to inspect its spans.");
   const [selectedSpanId, setSelectedSpanId] = useState<string | null>(null);
   const [status, setStatus] = useState<OTelLoadStatus>("loading");
   const [message, setMessage] = useState("Loading OpenTelemetry diagnostics.");
+  const resourcesById = useMemo(() => new Map((resourcesRead.data?.items ?? []).map(resource => [resource.id, resource])), [resourcesRead.data]);
 
   useEffect(() => {
     let cancelled = false;
-    async function loadOverview() {
+    async function loadStorage() {
       try {
-        const response = await moduleApi.backend.http.getJson<OTelOverviewResponse>(`${otelEndpointPrefix}/overview`);
-        if (!cancelled) setOverview(response);
-      } catch {
-        if (!cancelled) setOverview(null);
+        const response = await moduleApi.backend.http.getJson<OTelStorageDiagnostics>(`${diagnosticsEndpointPrefix}/storage`);
+        if (!cancelled) setStorageRead({ status: "ready", data: response, message: "" });
+      } catch (error) {
+        if (!cancelled) setStorageRead(classifyReadError(error, "Stored data"));
       }
     }
-    void loadOverview();
+    void loadStorage();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadResources() {
+      setResourcesRead({ status: "loading", data: null, message: "Loading resource metadata." });
+      try {
+        const response = await moduleApi.backend.http.postJson<OTelResourceResultWire>(
+          `${diagnosticsEndpointPrefix}/resources/search`, { take: resourceSearchTake });
+        if (cancelled) return;
+        const items = (response.items ?? []).map(normalizeResource);
+        const droppedCount = response.droppedCount ?? 0;
+        setResourcesRead({
+          status: items.length > 0 ? "ready" : "empty",
+          data: { items, droppedCount },
+          message: items.length > 0 ? "" : "No OpenTelemetry sources reported yet."
+        });
+      } catch (error) {
+        if (!cancelled) setResourcesRead(classifyReadError(error, "Resource metadata"));
+      }
+    }
+    void loadResources();
     return () => { cancelled = true; };
   }, []);
 
@@ -232,13 +316,14 @@ function useOpenTelemetry() {
 
     async function loadTraces() {
       try {
-        const response = await moduleApi.backend.http.getJson<OTelTraceSummaryWire[]>(createTracesPath(filters));
+        const response = await moduleApi.backend.http.postJson<OTelTraceResultWire>(
+          `${diagnosticsEndpointPrefix}/traces/search`, createTraceSearchBody(filters));
         if (cancelled) return;
-        const nextTraces = response.map(normalizeTraceSummary).sort(compareTraceSummaries);
+        const nextTraces = (response.items ?? []).map(normalizeTraceSummary).sort(compareTraceSummaries);
         setTraces(nextTraces);
-        setStatus("ready");
-        setMessage(`${nextTraces.length} trace${nextTraces.length === 1 ? "" : "s"} loaded.`);
-        setSelectedTraceId(current => current ?? nextTraces[0]?.traceId ?? null);
+        setStatus(nextTraces.length > 0 ? "ready" : "empty");
+        setMessage(nextTraces.length > 0 ? `${nextTraces.length} trace${nextTraces.length === 1 ? "" : "s"} loaded.` : "No traces match the current filters.");
+        setSelectedTraceId(current => nextTraces.some(trace => trace.traceId === current) ? current : nextTraces[0]?.traceId ?? null);
       } catch (error) {
         if (cancelled) return;
         const classified = classifyOpenTelemetryError(error);
@@ -257,20 +342,36 @@ function useOpenTelemetry() {
     let cancelled = false;
     setSelectedTrace(null);
     setSelectedSpanId(null);
-    if (!selectedTraceId) return () => { cancelled = true; };
+    if (!selectedTraceId) {
+      setDetailStatus("idle");
+      setDetailMessage("Select a trace to inspect its spans.");
+      return () => { cancelled = true; };
+    }
+    setDetailStatus("loading");
+    setDetailMessage("Loading trace details.");
 
     async function loadTrace() {
       try {
-        const response = await moduleApi.backend.http.getJson<OTelTraceDetailWire>(`${otelEndpointPrefix}/traces/${encodeURIComponent(selectedTraceId!)}`);
+        const response = await moduleApi.backend.http.getJson<OTelTraceDetailWire>(`${diagnosticsEndpointPrefix}/traces/${encodeURIComponent(selectedTraceId!)}`);
         if (cancelled) return;
         const detail = normalizeTraceDetail(response);
         setSelectedTrace(detail);
+        setDetailStatus("ready");
+        setDetailMessage("");
         setSelectedSpanId(detail.spans[0]?.spanId ?? null);
       } catch (error) {
         if (cancelled) return;
         const classified = classifyOpenTelemetryError(error);
-        setStatus(classified.status);
-        setMessage(classified.message);
+        if (classified.status === "unavailable") {
+          setDetailStatus("missing");
+          setDetailMessage("This trace is no longer available.");
+        } else if (classified.status === "unauthorized") {
+          setDetailStatus("unauthorized");
+          setDetailMessage("Permission denied while loading this trace.");
+        } else {
+          setDetailStatus("failed");
+          setDetailMessage("Trace details failed to load.");
+        }
       }
     }
 
@@ -307,11 +408,15 @@ function useOpenTelemetry() {
     filters,
     setFilters,
     resetFilters,
-    overview,
+    storageRead,
+    resourcesRead,
+    resourcesById,
     traces,
     selectedTraceId,
     setSelectedTraceId,
     selectedTrace,
+    detailStatus,
+    detailMessage,
     selectedSpanId,
     setSelectedSpanId,
     status,
@@ -324,25 +429,31 @@ function useOpenTelemetry() {
 type OTelState = ReturnType<typeof useOpenTelemetry>;
 
 function OverviewPanel({ state }: { state: OTelState }) {
-  const sources = state.overview?.sources ?? [];
+  const storageRead = state.storageRead;
+  const resourcesRead = state.resourcesRead;
   return (
     <div className="otel-overview">
       <section>
-        <h3>Signal Health</h3>
-        <div className="otel-signal-cards">
-          <SignalCard title="Traces" detail="Distributed request and workflow execution spans." status={state.status} count={state.overview?.traceCount} />
-          <SignalCard title="Metrics" detail="Measurements, counters, gauges, and histograms." status={state.overview?.metricCount ? "ready" : "unavailable"} count={state.overview?.metricCount} />
-          <SignalCard title="Logs" detail="OpenTelemetry log records correlated by trace/span IDs." status={state.overview?.logCount ? "ready" : "unavailable"} count={state.overview?.logCount} />
-        </div>
+        <h3>Stored data</h3>
+        {storageRead.data ? (
+          <div className="otel-signal-cards">
+            <StoredCountCard label="Resources" count={storageRead.data.resourceCount} />
+            <StoredCountCard label="Spans" count={storageRead.data.spanCount} />
+          </div>
+        ) : <p role="status" data-status={storageRead.status} className="otel-muted">{storageRead.message}</p>}
       </section>
       <section>
         <h3>Sources</h3>
-        {sources.length === 0 ? <p className="otel-muted">No OpenTelemetry sources reported yet.</p> : null}
+        {resourcesRead.status !== "ready" && <p role="status" data-status={resourcesRead.status} className="otel-muted">{resourcesRead.message}</p>}
         <div className="otel-source-list">
-          {sources.map(source => (
-            <div className="otel-source-row" key={source.id}>
-              <strong>{formatSourceLabel(source)}</strong>
-              <span>{[source.environment, source.instanceId, source.lastSeen ? `last seen ${formatDateTime(source.lastSeen)}` : null].filter(Boolean).join(" · ")}</span>
+          {(resourcesRead.data?.items ?? []).map(resource => (
+            <div className="otel-source-row" data-resource-id={resource.id} key={resource.id}>
+              <strong>{resource.serviceName || "Unknown"}</strong>
+              {resource.id ? <span>Resource ID: {resource.id}</span> : null}
+              <span>Resource status: {resource.status}</span>
+              {[resource.serviceInstanceId ? `Instance: ${resource.serviceInstanceId}` : null,
+                resource.telemetrySdkLanguage ? `Telemetry SDK language: ${resource.telemetrySdkLanguage}` : null,
+                resource.lastSeen ? `Last seen: ${formatDateTime(resource.lastSeen)}` : null].filter(Boolean).map(value => <span key={value}>{value}</span>)}
             </div>
           ))}
         </div>
@@ -358,19 +469,22 @@ function TracesPanel({ state, selectedTrace, selectedSpan }: { state: OTelState;
         <TraceToolbar state={state} />
         <div className="otel-trace-table" role="table" aria-label="Trace summaries">
           <div className="otel-trace-row header" role="row">
-            <span>Start</span><span>Service</span><span>Operation</span><span>Duration</span><span>Spans</span><span>Status</span>
+            <span>Start</span><span>Service</span><span>Trace</span><span>Duration</span><span>Spans</span><span>Status</span>
           </div>
-          {state.traces.length === 0 ? <div className="otel-empty">{state.status === "ready" ? "No traces match the current filters." : state.message}</div> : null}
-          {state.traces.map(trace => (
-            <button type="button" role="row" className={trace.traceId === state.selectedTraceId ? "otel-trace-row selected" : "otel-trace-row"} onClick={() => state.setSelectedTraceId(trace.traceId)} key={trace.traceId}>
-              <time title={trace.startTime}>{formatTime(trace.startTime)}</time>
-              <span title={trace.serviceName}>{trace.serviceName}</span>
-              <strong title={trace.name}>{trace.name}</strong>
-              <span>{formatDuration(trace.durationMs)}</span>
-              <span>{trace.spanCount}</span>
-              <StatusChip status={trace.status} errors={trace.errorCount} />
-            </button>
-          ))}
+          {state.traces.length === 0 ? <div className="otel-empty">{state.message}</div> : null}
+          {state.traces.map(trace => {
+            const serviceNames = getServiceNames(trace.resourceIds, state.resourcesById);
+            return (
+              <button type="button" role="row" className={trace.traceId === state.selectedTraceId ? "otel-trace-row selected" : "otel-trace-row"} onClick={() => state.setSelectedTraceId(trace.traceId)} key={trace.traceId}>
+                <time title={trace.startTime}>{formatTime(trace.startTime)}</time>
+                <span title={serviceNames.join(", ")}>{serviceNames.join(", ")}</span>
+                <strong title={trace.name ?? trace.traceId}>{trace.name ?? trace.traceId}{trace.name ? <small>{trace.traceId}</small> : null}</strong>
+                <span>{formatDuration(trace.durationMs)}</span>
+                <span>{trace.spanCount}</span>
+                <StatusChip status={trace.status} />
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -381,7 +495,7 @@ function TracesPanel({ state, selectedTrace, selectedSpan }: { state: OTelState;
             <TraceWaterfall trace={selectedTrace} selectedSpanId={state.selectedSpanId} onSelectSpan={state.setSelectedSpanId} />
             {selectedSpan ? <SpanInspector span={selectedSpan} /> : null}
           </>
-        ) : <div className="otel-empty">Select a trace to inspect its spans.</div>}
+        ) : <div className="otel-empty">{state.detailMessage}</div>}
       </section>
     </div>
   );
@@ -392,8 +506,8 @@ function TraceToolbar({ state }: { state: OTelState }) {
     <div className="otel-toolbar">
       <input aria-label="Filter by trace ID" placeholder="Trace ID" value={state.filters.traceId} onChange={event => state.setFilters({ ...state.filters, traceId: event.target.value })} />
       <input aria-label="Filter by service" placeholder="Service" value={state.filters.serviceName} onChange={event => state.setFilters({ ...state.filters, serviceName: event.target.value })} />
-      <input aria-label="Filter by operation" placeholder="Operation" value={state.filters.operation} onChange={event => state.setFilters({ ...state.filters, operation: event.target.value })} />
-      <select aria-label="Filter by span status" value={state.filters.status} onChange={event => state.setFilters({ ...state.filters, status: event.target.value as OTelFilters["status"] })}>
+      <input aria-label="Filter by trace name or ID" placeholder="Trace name or ID" value={state.filters.search} onChange={event => state.setFilters({ ...state.filters, search: event.target.value })} />
+      <select aria-label="Filter by trace status" value={state.filters.status} onChange={event => state.setFilters({ ...state.filters, status: event.target.value as OTelFilters["status"] })}>
         <option value="">All statuses</option>
         <option value="Ok">Ok</option>
         <option value="Error">Error</option>
@@ -408,12 +522,15 @@ function TraceToolbar({ state }: { state: OTelState }) {
 }
 
 function TraceDetailHeader({ trace, onCopy, onDownload }: { trace: OTelTraceDetail; onCopy(): Promise<void>; onDownload(): void }) {
+  const resourceById = new Map(trace.resources.map(resource => [resource.id, resource]));
+  const serviceNames = getServiceNames(trace.resourceIds, resourceById);
   return (
     <header className="otel-trace-detail-header">
       <div>
-        <span>{trace.serviceName} · {formatDuration(trace.durationMs)} · {trace.spanCount} spans</span>
-        <h3>{trace.name}</h3>
+        <span>{serviceNames.join(", ")} · {formatDuration(trace.durationMs)} · {trace.spanCount} spans · {trace.status}</span>
+        <h3>{trace.name ?? trace.traceId}</h3>
         <p>{trace.traceId}</p>
+        <time dateTime={trace.startTime}>{formatDateTime(trace.startTime)}</time>
       </div>
       <div>
         <button type="button" onClick={() => void onCopy()}>Copy JSON</button>
@@ -469,20 +586,13 @@ function SpanInspector({ span }: { span: OTelSpan }) {
   );
 }
 
-function SignalPlaceholder({ title, status, message }: { title: string; status: OTelLoadStatus; message: string }) {
-  return <div className="otel-placeholder"><h3>{title}</h3><p>{status === "unavailable" ? "OpenTelemetry diagnostics endpoint is unavailable." : message}</p></div>;
+function StoredCountCard({ label, count }: { label: string; count: number | null | undefined }) {
+  const displayCount = typeof count === "number" && Number.isFinite(count) && count >= 0 ? count : "Unavailable";
+  return <div className="otel-signal-card"><span>Stored data</span><strong>{displayCount}</strong><h4>{label} stored</h4><p>Currently stored by the backend.</p></div>;
 }
 
-function SignalCount({ label, value }: { label: string; value?: number }) {
-  return <span><strong>{value ?? "-"}</strong>{label}</span>;
-}
-
-function SignalCard({ title, detail, status, count }: { title: string; detail: string; status: OTelLoadStatus; count?: number }) {
-  return <div className="otel-signal-card" data-status={status}><span>{status}</span><strong>{count ?? "-"}</strong><h4>{title}</h4><p>{detail}</p></div>;
-}
-
-function StatusChip({ status, errors = 0 }: { status: SpanStatus; errors?: number }) {
-  return <span className="otel-status-chip" data-status={status.toLowerCase()}>{errors > 0 ? `${errors} errors` : status}</span>;
+function StatusChip({ status }: { status: SpanStatus }) {
+  return <span className="otel-status-chip" data-status={status.toLowerCase()}>{status}</span>;
 }
 
 function DetailRow({ name, value }: { name: string; value?: string | null }) {
@@ -490,14 +600,14 @@ function DetailRow({ name, value }: { name: string; value?: string | null }) {
   return <><dt>{name}</dt><dd>{value}</dd></>;
 }
 
-export function createTracesPath(filters: OTelFilters) {
-  const query = new URLSearchParams();
-  if (filters.traceId.trim()) query.set("traceId", filters.traceId.trim());
-  if (filters.serviceName.trim()) query.set("service", filters.serviceName.trim());
-  if (filters.operation.trim()) query.set("operation", filters.operation.trim());
-  if (filters.status) query.set("status", filters.status);
-  query.set("take", String(filters.take));
-  return `${otelEndpointPrefix}/traces?${query}`;
+function createTraceSearchBody(filters: OTelFilters) {
+  return {
+    traceId: filters.traceId.trim() || undefined,
+    serviceName: filters.serviceName.trim() || undefined,
+    status: filters.status || undefined,
+    search: filters.search.trim() || undefined,
+    take: filters.take
+  };
 }
 
 export function normalizeTraceSummary(trace: OTelTraceSummaryWire): OTelTraceSummary {
@@ -506,44 +616,69 @@ export function normalizeTraceSummary(trace: OTelTraceSummaryWire): OTelTraceSum
   return {
     traceId: trace.traceId ?? "",
     rootSpanId: trace.rootSpanId ?? null,
-    name: trace.name || "Unknown operation",
-    serviceName: trace.serviceName || "unknown-service",
+    name: trace.name || null,
     startTime,
     endTime,
-    durationMs: normalizeDuration(trace.durationMs, startTime, endTime),
+    duration: trace.duration ?? null,
+    durationMs: normalizeDuration(parseTimeSpanMilliseconds(trace.duration), startTime, endTime),
     spanCount: Number(trace.spanCount ?? 0),
-    errorCount: Number(trace.errorCount ?? (normalizeSpanStatus(trace.status) === "Error" ? 1 : 0)),
+    resourceIds: [...(trace.resourceIds ?? [])],
+    workflowInstanceIds: [...(trace.workflowInstanceIds ?? [])],
     status: normalizeSpanStatus(trace.status)
   };
 }
 
 export function normalizeTraceDetail(trace: OTelTraceDetailWire): OTelTraceDetail {
-  const summary = normalizeTraceSummary(trace);
-  const spans = (trace.spans ?? []).map(span => normalizeSpan(span, summary.traceId)).sort(compareSpans);
+  const summary = normalizeTraceSummary(trace.trace);
+  const resources = (trace.resources ?? []).map(normalizeResource);
+  const resourceById = new Map(resources.map(resource => [resource.id, resource]));
+  const spans = (trace.spans ?? []).map(span => normalizeSpan(span, summary.traceId, resourceById)).sort(compareSpans);
   const durationMs = summary.durationMs || calculateTraceDuration(spans);
-  return { ...summary, durationMs, spanCount: spans.length || summary.spanCount, errorCount: spans.filter(span => span.status === "Error").length || summary.errorCount, spans };
+  return { ...summary, durationMs, spanCount: spans.length || summary.spanCount, spans, resources };
 }
 
-export function normalizeSpan(span: OTelSpanWire, fallbackTraceId = ""): OTelSpan {
+export function normalizeSpan(span: OTelSpanWire, fallbackTraceId = "", resourceById: ReadonlyMap<string, OTelResource> = new Map()): OTelSpan {
   const startTime = span.startTime ?? new Date().toISOString();
   const endTime = span.endTime ?? null;
+  const resourceId = span.resourceId ?? null;
+  const resource = resourceId ? resourceById.get(resourceId) ?? null : null;
   return {
     traceId: span.traceId ?? fallbackTraceId,
     spanId: span.spanId ?? `${Date.now()}-${Math.random()}`,
     parentSpanId: span.parentSpanId ?? null,
+    resourceId,
     name: span.name || "Unnamed span",
     kind: span.kind || "Internal",
-    serviceName: span.serviceName || "unknown-service",
+    serviceName: resource?.serviceName || "Unknown",
     startTime,
     endTime,
-    durationMs: normalizeDuration(span.durationMs, startTime, endTime),
+    durationMs: normalizeDuration(null, startTime, endTime),
     status: normalizeSpanStatus(span.status),
     statusDescription: span.statusDescription ?? null,
     attributes: normalizeAttributes(span.attributes),
     events: span.events ?? [],
     links: span.links ?? [],
-    resource: span.resource ?? null
+    resource
   };
+}
+
+function normalizeResource(resource: OTelResourceWire): OTelResource {
+  return {
+    id: resource.id ?? "",
+    serviceName: resource.serviceName?.trim() ?? "",
+    serviceInstanceId: resource.serviceInstanceId ?? null,
+    telemetrySdkLanguage: resource.telemetrySdkLanguage ?? null,
+    attributes: resource.attributes ?? {},
+    lastSeen: resource.lastSeen ?? "",
+    status: normalizeResourceStatus(resource.status)
+  };
+}
+
+function normalizeResourceStatus(status: string | null | undefined): ResourceStatus {
+  const normalized = String(status ?? "Unknown").toLowerCase();
+  if (normalized === "active") return "Active";
+  if (normalized === "stale") return "Stale";
+  return "Unknown";
 }
 
 export function buildWaterfallRows(spans: OTelSpan[]) {
@@ -571,9 +706,21 @@ export function buildWaterfallRows(spans: OTelSpan[]) {
 
 export function classifyOpenTelemetryError(error: unknown): ClassifiedError {
   const message = error instanceof Error ? error.message : String(error);
-  if (/\b(401|403)\b/.test(message)) return { status: "unauthorized", message: "Permission denied while loading OpenTelemetry diagnostics." };
-  if (/\b404\b/.test(message)) return { status: "unavailable", message: "OpenTelemetry diagnostics are unavailable. Enable the backend OpenTelemetry diagnostics module." };
+  const hasStatus = typeof error === "object" && error !== null && "status" in error;
+  const status = hasStatus ? error.status : Number(message.match(/\b(401|403|404)\b/)?.[1]);
+  if (status === 401 || status === 403) return { status: "unauthorized", message: "Permission denied while loading OpenTelemetry diagnostics." };
+  if (status === 404) return { status: "unavailable", message: "OpenTelemetry diagnostics are unavailable. Enable the backend OpenTelemetry diagnostics module." };
   return { status: "failed", message: `OpenTelemetry diagnostics failed: ${message}` };
+}
+
+function classifyReadError<T>(error: unknown, source: string): OTelRead<T> {
+  const classified = classifyOpenTelemetryError(error);
+  const message = classified.status === "unauthorized"
+    ? `Permission denied while loading ${source.toLowerCase()}.`
+    : classified.status === "unavailable"
+      ? `${source} unavailable.`
+      : `${source} failed to load.`;
+  return { status: classified.status, data: null, message };
 }
 
 function normalizeSpanStatus(status: string | null | undefined): SpanStatus {
@@ -581,6 +728,15 @@ function normalizeSpanStatus(status: string | null | undefined): SpanStatus {
   if (normalized === "ok") return "Ok";
   if (normalized === "error") return "Error";
   return "Unset";
+}
+
+function parseTimeSpanMilliseconds(duration: string | null | undefined): number | null {
+  if (!duration) return null;
+  const match = /^(-)?(?:(\d+)\.)?(\d{1,2}):([0-5]\d):([0-5]\d)(?:\.(\d{1,7}))?$/.exec(duration);
+  if (!match) return null;
+  const milliseconds = (((Number(match[2] ?? 0) * 24 + Number(match[3])) * 60 + Number(match[4])) * 60 + Number(match[5])) * 1000
+    + Number(`0.${match[6] ?? "0"}`) * 1000;
+  return Math.max(0, (match[1] ? -1 : 1) * milliseconds);
 }
 
 function normalizeAttributes(attributes: OTelSpanWire["attributes"]): Array<{ name: string; value: string }> {
@@ -591,6 +747,15 @@ function normalizeAttributes(attributes: OTelSpanWire["attributes"]): Array<{ na
 
 function compareTraceSummaries(left: OTelTraceSummary, right: OTelTraceSummary) {
   return Date.parse(right.startTime) - Date.parse(left.startTime);
+}
+
+function getServiceNames(resourceIds: string[], resources: ReadonlyMap<string, OTelResource>) {
+  const services = resourceIds.map(id => resources.get(id)?.serviceName.trim());
+  if (!services.some(Boolean)) {
+    const count = new Set(resourceIds).size;
+    return [`Unknown (${count} resource${count === 1 ? "" : "s"})`];
+  }
+  return [...new Set(services.map(service => service || "Unknown"))];
 }
 
 function compareSpans(left: OTelSpan, right: OTelSpan) {
@@ -623,15 +788,11 @@ function formatDateTime(timestamp: string) {
   return new Date(timestamp).toLocaleString();
 }
 
-function formatSourceLabel(source: OTelSource) {
-  return source.displayName || source.serviceName || source.id;
-}
-
 function formatValue(value: unknown) {
   if (value == null) return "";
   return typeof value === "object" ? JSON.stringify(value) : String(value);
 }
 
 function getSignalTabLabel(tab: OTelSignalTab) {
-  return tab === "overview" ? "Overview" : tab === "traces" ? "Traces" : tab === "metrics" ? "Metrics" : "Logs";
+  return tab === "overview" ? "Overview" : "Traces";
 }

@@ -277,11 +277,17 @@
 
 .connection-credential-sources label {
   display: inline-flex;
+  min-height: 2.25rem;
   align-items: center;
   gap: 0.4rem;
 }
 
 .connection-credential-sources input[type="radio"] {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  min-height: 0;
+  padding: 0;
   accent-color: var(--connections-accent);
 }
 
@@ -325,6 +331,25 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: var(--spacing-xl, var(--spacing-lg));
+}
+
+.connections-create-guidance {
+  margin: 0;
+  padding-inline-start: 0.75rem;
+  border-inline-start: 2px solid var(--connections-accent);
+  color: var(--connections-text-muted);
+  font-size: var(--studio-label-size);
+}
+
+.connections-create-advanced-fields {
+  display: grid;
+  gap: 1rem;
+  padding-block: 0.75rem;
+}
+
+.connections-create-field-error {
+  color: var(--studio-danger-text);
+  font-size: var(--studio-label-size);
 }
 
 .connections-create-actions {
@@ -423,3 +448,5 @@
   .connections-name { min-width: 0; }
   .connections-date, .connection-status { white-space: normal; }
 }
+
+.connections-create-dialog .studio-disclosure-fold-trigger { justify-content: flex-start; }

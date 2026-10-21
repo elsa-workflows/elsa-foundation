@@ -17,6 +17,13 @@ namespace Elsa3.Mapping.Services;
 /// </summary>
 public sealed class Elsa3ExpressionRewriter
 {
+    /// <summary>
+    /// What to change in the Elsa 3 workflow when an expression assigns a value: Elsa 4 expressions are pure. In Elsa 3
+    /// terms, because the engineer edits the Elsa 3 workflow; the reusable caveat is spec 246 D-7.
+    /// </summary>
+    private const string MutationGuidance =
+        "Move the assignment into a Set Variable activity in the Elsa 3 workflow. In a reusable workflow, Elsa 4 cannot set variables yet (ELS3-ACTIVITY-REUSABLE-INTRINSIC-UNSUPPORTED).";
+
     public Elsa3ExpressionRewriteResult Rewrite(
         string language,
         string source,
@@ -26,7 +33,8 @@ public sealed class Elsa3ExpressionRewriter
 
     /// <param name="mode">
     /// <see cref="Elsa3JavaScriptMode.Expression"/>: the result is one expression, as Elsa 4 evaluates it; a statement
-    /// form is wrapped in a function returning its completion value (plan D-15).
+    /// form is wrapped in a function returning its completion value (plan D-15). Every value that leaves it ends in
+    /// <c>?? null</c>, because Elsa 3 returned null where Elsa 4 refuses undefined (spec 262).
     /// <see cref="Elsa3JavaScriptMode.Script"/>: a RunJavaScript body, whose completion value becomes a <c>return</c>
     /// (plan D-16).
     /// </param>
@@ -45,7 +53,7 @@ public sealed class Elsa3ExpressionRewriter
         return language switch
         {
             var value when value.Equals("JavaScript", StringComparison.OrdinalIgnoreCase) =>
-                RewriteJavaScript(source, resultType, resolve, mode),
+                CheckStrictMode(RewriteJavaScript(source, resultType, resolve, mode), mode),
             var value when value.Equals("Liquid", StringComparison.OrdinalIgnoreCase) =>
                 RewriteLiquid(source, resultType, resolve),
             _ => Elsa3ExpressionRewriteResult.Failure(new Elsa3ExpressionRewriteIssue(
@@ -93,18 +101,29 @@ public sealed class Elsa3ExpressionRewriter
             foreach (var bare in topLevelReturns.Where(statement => statement.Argument is null))
                 edits.Add(new SourceEdit(bare.Start + "return".Length, bare.Start + "return".Length, " null"));
 
+            // An expression's returned value becomes null when it is undefined (spec 262 R-1).
+            if (mode == Elsa3JavaScriptMode.Expression)
+            {
+                foreach (var returned in topLevelReturns.Where(statement => statement.Argument is not null))
+                    AddNullCoalescing(edits, returned.Argument!.Start, returned.Argument.End);
+            }
+
             // Every path ends in a return Elsa 3 would have returned: a trailing return keeps its value, a trailing
             // expression is Elsa 3's completion value and gets a return. Any other trailing statement could carry a
             // completion value that a return cannot reproduce (spec 247 research R-1).
             // A script's lost value only matters when its result is read, which the caller decides (as below).
             var preserved = body[^1] is ExpressionStatement or ReturnStatement;
             if (body[^1] is ExpressionStatement trailing)
+            {
+                if (mode == Elsa3JavaScriptMode.Expression)
+                    AddNullCoalescing(edits, trailing.Start, ExpressionEnd(source, trailing));
                 edits.Add(new SourceEdit(trailing.Start, trailing.Start, "return "));
+            }
 
             if (mode == Elsa3JavaScriptMode.Script)
             {
                 return Elsa3ExpressionRewriteResult.Success(
-                    CreateDefinition("JavaScript", prelude + ApplyEdits(source, edits), resultType, analyzer.Parameters),
+                    CreateDefinition("JavaScript", EndScript(prelude + ApplyEdits(source, edits)), resultType, analyzer.Parameters),
                     completionValueLost: !preserved);
             }
 
@@ -124,7 +143,7 @@ public sealed class Elsa3ExpressionRewriter
             if (hasCompletion)
                 edits.Add(new SourceEdit(body[^1].Start, body[^1].Start, "return "));
             return Elsa3ExpressionRewriteResult.Success(
-                CreateDefinition("JavaScript", prelude + ApplyEdits(source, edits), resultType, analyzer.Parameters),
+                CreateDefinition("JavaScript", EndScript(prelude + ApplyEdits(source, edits)), resultType, analyzer.Parameters),
                 completionValueLost: body.Count > 0 && !hasCompletion);
         }
 
@@ -147,17 +166,49 @@ public sealed class Elsa3ExpressionRewriter
             // One expression, evaluated by Elsa 4 inside parentheses: drop its statement semicolon, and end with a
             // newline when a line comment trails, so the comment cannot swallow the closing parenthesis. Block
             // comments are harmless and kept.
-            if (last.End > last.Expression.End)
-                edits.Add(new SourceEdit(last.Expression.End, last.End, string.Empty));
+            var end = ExpressionEnd(source, last);
+            if (last.End > end)
+                edits.Add(new SourceEdit(end, last.End, string.Empty));
+            AddNullCoalescing(edits, last.Start, end);
             if (source.AsSpan(last.End).Contains("//", StringComparison.Ordinal))
                 edits.Add(new SourceEdit(source.Length, source.Length, "\n"));
             return Elsa3ExpressionRewriteResult.Success(CreateDefinition("JavaScript", ApplyEdits(source, edits), resultType, analyzer.Parameters));
         }
 
         // Statements: an immediately invoked function that returns the last expression, Elsa 3's completion value.
+        AddNullCoalescing(edits, last.Start, ExpressionEnd(source, last));
         edits.Add(new SourceEdit(last.Start, last.Start, "return "));
         var wrapped = $"(function () {{\n{prelude}{ApplyEdits(source, edits)}\n}})()";
         return Elsa3ExpressionRewriteResult.Success(CreateDefinition("JavaScript", wrapped, resultType, analyzer.Parameters));
+    }
+
+    /// <summary>
+    /// Parses a converted source the way Elsa 4 will evaluate it: strict mode, as one expression in Expression mode and
+    /// inside the RunJavaScript arrow wrapper in Script mode (spec 262 R-3). Elsa 3 ran sloppy mode, so what fails here
+    /// cannot run in Elsa 4 and is refused. An Expression-mode source that is no longer an expression is refused too,
+    /// because Elsa 4 would then run it as statements.
+    /// </summary>
+    private static Elsa3ExpressionRewriteResult CheckStrictMode(Elsa3ExpressionRewriteResult result, Elsa3JavaScriptMode mode)
+    {
+        if (!result.Succeeded)
+            return result;
+
+        var source = result.Definition!.Source;
+        try
+        {
+            if (mode == Elsa3JavaScriptMode.Expression)
+                new Parser().ParseExpression(source, strict: true);
+            else
+                new Parser(new ParserOptions { AllowReturnOutsideFunction = true }).ParseScript($"(() => {{ {source} }})()", strict: true);
+            return result;
+        }
+        catch (ParseErrorException exception)
+        {
+            return Elsa3ExpressionRewriteResult.Failure(new Elsa3ExpressionRewriteIssue(
+                Elsa3ImportDiagnosticCodes.UnsupportedShape,
+                $"JavaScript only works in Elsa 3's sloppy mode; Elsa 4 runs it in strict mode, where it does not parse: {exception.Error.Description}.",
+                "Rewrite it in the Elsa 3 workflow without sloppy-mode syntax: no with statement, no legacy octal literal such as 010 (write 0o10 or 8), no duplicate parameter names, no delete of a variable, and no reserved word such as let, static or yield as a name, before import."));
+        }
     }
 
     private static Elsa3ExpressionRewriteResult RewriteLiquid(
@@ -187,7 +238,7 @@ public sealed class Elsa3ExpressionRewriter
             return Elsa3ExpressionRewriteResult.Failure(new Elsa3ExpressionRewriteIssue(
                 Elsa3ImportDiagnosticCodes.ForbiddenCapability,
                 "Liquid template performs assignment or mutation.",
-                "Move mutation into a graph-visible activity or Set intrinsic before import."));
+                MutationGuidance));
         }
 
         foreach (var member in syntax.OfType<Fluid.Ast.MemberExpression>())
@@ -272,6 +323,33 @@ public sealed class Elsa3ExpressionRewriter
             CollectTopLevelReturns(child, returns);
         }
     }
+
+    /// <summary>
+    /// Makes the value of <c>source[start..end]</c> null when it is undefined, as Elsa 3 did (spec 262 R-1). The parentheses
+    /// keep the expression one unit, so <c>a || b</c> and <c>a, b</c> stay valid. Edits are applied in descending start
+    /// order and, at one offset, in the order added: a replacement added earlier (an analyzer edit) keeps the opening
+    /// parenthesis in front of it, and an insertion added later at the same offset (<c>return </c>) lands before it.
+    /// </summary>
+    private static void AddNullCoalescing(List<SourceEdit> edits, int start, int end)
+    {
+        edits.Add(new SourceEdit(start, start, "("));
+        edits.Add(new SourceEdit(end, end, ") ?? null"));
+    }
+
+    /// <summary>
+    /// Where an expression statement's expression ends in the source: before its semicolon, if it has one. The parser's
+    /// expression range leaves out enclosing parentheses, so <c>({ a: 1 })</c> must be cut by the statement, not by it.
+    /// </summary>
+    private static int ExpressionEnd(string source, ExpressionStatement statement) =>
+        statement.End > statement.Expression.End && source[statement.End - 1] == ';' ? statement.End - 1 : statement.End;
+
+    /// <summary>
+    /// Ends a RunJavaScript body with a newline when its last line holds a <c>//</c>. Elsa 4 wraps the body on one line, so
+    /// a trailing line comment would swallow the end of the wrapper; Elsa 3 ran the body as is (spec 262 R-5). A
+    /// <c>//</c> inside a string on that line also gets the newline, which is harmless.
+    /// </summary>
+    private static string EndScript(string script) =>
+        script.AsSpan(script.LastIndexOf('\n') + 1).Contains("//", StringComparison.Ordinal) ? script + "\n" : script;
 
     private static ExpressionDefinition CreateDefinition(
         string language,
@@ -488,21 +566,109 @@ public sealed class Elsa3ExpressionRewriter
 
         private bool IsUnavailableGlobal(string name) => ElsaThreeGlobals.Contains(name) && !IsDeclared(name);
 
+        /// <summary>
+        /// The non-arrow functions (and class bodies) enclosing the node being visited, innermost last. Each owns its
+        /// own <c>this</c> and <c>arguments</c>; arrow functions share their enclosing one's (spec 262 R-6).
+        /// </summary>
+        private readonly List<FunctionContext> _functions = [];
+
         public void Visit(Node node)
         {
             var scope = ScopeOf(node);
             if (scope is not null)
                 _scopes.Add(scope);
+            var function = node switch
+            {
+                IFunction and not ArrowFunctionExpression => new FunctionContext(((IFunction)node).Params),
+                ClassBody => new FunctionContext([]),
+                _ => null,
+            };
+            if (function is not null)
+                _functions.Add(function);
             try
             {
                 VisitNode(node);
             }
             finally
             {
+                if (function is not null)
+                {
+                    _functions.RemoveAt(_functions.Count - 1);
+                    // Elsa 3's sloppy functions kept arguments and simple parameters linked; Elsa 4's strict ones do not.
+                    if (function.ReadsArguments)
+                    {
+                        foreach (var target in function.Writes)
+                            Issues.Add(AliasedArgumentWrite(target));
+                    }
+                }
                 if (scope is not null)
                     _scopes.RemoveAt(_scopes.Count - 1);
             }
         }
+
+        private sealed class FunctionContext(IEnumerable<Node> parameters)
+        {
+            public HashSet<string> Parameters { get; } = CollectParameters(parameters);
+            public bool ReadsArguments { get; set; }
+            public SortedSet<string> Writes { get; } = new(StringComparer.Ordinal);
+
+            private static HashSet<string> CollectParameters(IEnumerable<Node> parameters)
+            {
+                var names = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var parameter in parameters)
+                    CollectBindings(parameter, names);
+                return names;
+            }
+        }
+
+        /// <summary>
+        /// Records what Elsa 3's sloppy mode treated differently from Elsa 4's strict mode around <c>this</c> and
+        /// <c>arguments</c> (spec 262 R-6): either refused here (outside every function) or noted on the enclosing
+        /// function, which refuses its writes when it pops if it also read <c>arguments</c>.
+        /// </summary>
+        private void CheckThisAndArguments(Node node)
+        {
+            var function = _functions.Count > 0 ? _functions[^1] : null;
+            if (node is ThisExpression && function is null)
+                Issues.Add(TopLevelThis);
+
+            if (node is Identifier { Name: "arguments" } && !IsDeclared("arguments"))
+            {
+                if (function is null)
+                    Issues.Add(TopLevelArguments);
+                else
+                    function.ReadsArguments = true;
+            }
+
+            if (function is null)
+                return;
+
+            var target = node switch
+            {
+                AssignmentExpression assignment => assignment.Left,
+                UpdateExpression update => update.Argument,
+                _ => null,
+            };
+            if (target is MemberExpression { Object: Identifier { Name: "arguments" } })
+                function.Writes.Add("arguments[…]");
+            foreach (var written in WrittenNames(node).Where(function.Parameters.Contains))
+                function.Writes.Add(written);
+        }
+
+        private static readonly Elsa3ExpressionRewriteIssue TopLevelThis = new(
+            Elsa3ImportDiagnosticCodes.UnsupportedShape,
+            "JavaScript uses 'this' outside a function. In Elsa 3 it was the script engine's global object, which Elsa 4 does not have.",
+            "Read the value through getVariable or getInput, or a local variable, instead of this, before import.");
+
+        private static readonly Elsa3ExpressionRewriteIssue TopLevelArguments = new(
+            Elsa3ImportDiagnosticCodes.UnsupportedShape,
+            "JavaScript uses 'arguments' outside a function. Elsa 3 failed there; Elsa 4 would return an empty value.",
+            "Remove the reference to arguments in the Elsa 3 workflow before import.");
+
+        private static Elsa3ExpressionRewriteIssue AliasedArgumentWrite(string target) => new(
+            Elsa3ImportDiagnosticCodes.UnsupportedShape,
+            $"JavaScript changes '{target}' in a function that reads 'arguments'. Elsa 3 kept arguments and parameters linked; Elsa 4 runs in strict mode, where they are not.",
+            "Copy the value into a local let variable and change that, in the Elsa 3 workflow, before import.");
 
         private static HashSet<string>? ScopeOf(Node node)
         {
@@ -628,9 +794,15 @@ public sealed class Elsa3ExpressionRewriter
                 Issues.Add(new Elsa3ExpressionRewriteIssue(
                     Elsa3ImportDiagnosticCodes.ForbiddenCapability,
                     "JavaScript mutates an Elsa 3 ambient value.",
-                    "Move mutation into a graph-visible activity or Set intrinsic before import."));
+                    MutationGuidance));
                 return;
             }
+
+            // Elsa 3's sloppy mode turned a write to an undeclared name into a global; Elsa 4's strict mode throws
+            // (spec 262 R-4). The parse cannot see it, so the scopes decide.
+            foreach (var written in WrittenNames(node).Where(name => !IsDeclared(name)))
+                Issues.Add(UndeclaredWrite(written));
+            CheckThisAndArguments(node);
 
             // A function the script declares itself is a local call, not an Elsa 3 host function.
             if (node is CallExpression call && call.Callee is Identifier callee && !IsDeclared(callee.Name))
@@ -640,7 +812,7 @@ public sealed class Elsa3ExpressionRewriter
                     Issues.Add(new Elsa3ExpressionRewriteIssue(
                         Elsa3ImportDiagnosticCodes.ForbiddenCapability,
                         $"JavaScript calls forbidden mutation helper '{callee.Name}'.",
-                        "Move mutation into a graph-visible activity or Set intrinsic before import."));
+                        MutationGuidance));
                     return;
                 }
 
@@ -857,6 +1029,37 @@ public sealed class Elsa3ExpressionRewriter
             foreach (var child in node.ChildNodes)
                 Visit(child);
         }
+
+        /// <summary>
+        /// The names a node writes as a plain binding: an assignment or destructuring target, an update, or the head of a
+        /// <c>for…in</c>/<c>for…of</c> that declares nothing. Member targets are not names.
+        /// </summary>
+        private static IEnumerable<string> WrittenNames(Node node)
+        {
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            switch (node)
+            {
+                case AssignmentExpression assignment:
+                    CollectBindings(assignment.Left, names);
+                    break;
+                case UpdateExpression { Argument: Identifier updated }:
+                    names.Add(updated.Name);
+                    break;
+                case ForInStatement { Left: not VariableDeclaration } forIn:
+                    CollectBindings(forIn.Left, names);
+                    break;
+                case ForOfStatement { Left: not VariableDeclaration } forOf:
+                    CollectBindings(forOf.Left, names);
+                    break;
+            }
+
+            return names;
+        }
+
+        private static Elsa3ExpressionRewriteIssue UndeclaredWrite(string name) => new(
+            Elsa3ImportDiagnosticCodes.UnsupportedShape,
+            $"JavaScript assigns to '{name}', which it never declares. Elsa 3 created a global; Elsa 4 runs in strict mode, where the assignment fails.",
+            $"Declare it with let in the Elsa 3 workflow (let {name} = …;) before import.");
 
         private void AddResolvedEdit(Node node, Elsa3AmbientReferenceKind kind, string name)
         {

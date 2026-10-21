@@ -61,6 +61,32 @@ public sealed class HttpEndpointSyncResponseEndToEndTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SyncEndpoint_StructuredBodyWithoutContentType_IsSentAsJson_AndRecordedAsStructure()
+    {
+        // Spec 256 (#3050): an object body with no content type is sent as JSON with application/json, as in Elsa 3.
+        using var body = JsonDocument.Parse("""{ "Name": "Zoë", "items": [1, 2] }""");
+        await _fixture.PublishSyncEndpointWithWriteResponseWorkflowAsync(
+            artifactId: "artifact-sync-structured",
+            path: "sync/structured",
+            method: "POST",
+            resultValueId: "sync-structured-result",
+            statusCode: 200,
+            body: body.RootElement.Clone(),
+            contentType: null);
+
+        var response = await _fixture.Client.PostAsync($"{BasePath}sync/structured",
+            new StringContent("{}", Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("""{"Name":"Zoë","items":[1,2]}""", await response.Content.ReadAsStringAsync());
+        Assert.Equal("application/json", response.Content.Headers.ContentType!.MediaType);
+
+        var artifact = await ReadArtifactForSingleRunAsync();
+        Assert.Equal(JsonValueKind.Object, artifact.GetProperty("body").ValueKind);
+        Assert.Equal("Zoë", artifact.GetProperty("body").GetProperty("Name").GetString());
+    }
+
+    [Fact]
     public async Task SyncEndpoint_SuspendsBeforeWritingResponse_DegradesTo202WithExecutionId()
     {
         // A sync endpoint whose run suspends at a mid-flow endpoint BEFORE any WriteHttpResponse. No

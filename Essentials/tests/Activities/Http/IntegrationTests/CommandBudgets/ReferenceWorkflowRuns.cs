@@ -142,7 +142,7 @@ internal static class ReferenceWorkflowRuns
                     workflowExecutionId: executionId,
                     stimulusType: bookmark.StimulusType,
                     stimulusHash: bookmark.StimulusHash,
-                    input: JsonSerializer.SerializeToElement(new EventReceived(ReferenceWorkflows.EventName))));
+                    input: JsonSerializer.SerializeToElement(new { eventName = ReferenceWorkflows.EventName })));
         });
 
         Assert.Equal(BookmarkResumeDispatchStatus.Dispatched, resumed!.Status);

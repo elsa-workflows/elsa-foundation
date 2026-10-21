@@ -24,7 +24,7 @@ public sealed class Elsa3JavaScriptHostFunctionTests
 
         Assert.True(result.Succeeded, Describe(result.Diagnostics));
         var converted = ReadExpression(result);
-        Assert.Equal($"args.{parameter}", converted.Source);
+        Assert.Equal($"(args.{parameter}) ?? null", converted.Source);
         Assert.Equal(member, Assert.IsType<WorkflowInstanceExpressionParameterBinding>(converted.Parameters[parameter]).Member);
     }
 
