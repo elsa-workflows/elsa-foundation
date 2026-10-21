@@ -21,7 +21,7 @@ The host's trusted identity source validates deployed asset bytes against the re
 
 Direct facade calls freeze the trusted pin, artifact, canonical initial facts and resolved round limit once. Retries use the original envelope. Native publication freezes the same pin in immutable executable metadata. A runtime consumes only the executable and Rules artifact; the package host never opens mutable design storage to recover a run.
 
-A worker advertises only pins it actually loaded and verified. Mismatches are Unavailable, with no new refusal, repinning or state mutation. Existing matching invocation identity is checked before local semantic availability so exact admission/terminal replay remains possible. Cancellation uses the common envelope independently of the old language implementation. Delivery support depends on the terminal schema and committed parent proof, not inference availability.
+A worker advertises only pins it actually loaded and verified. Mismatched evaluation is Unavailable, with no new refusal, repinning or semantic reinterpretation. A previously accepted common receipt can still be consumed by a worker supporting its retained schemas; the next evaluation remains owed to a deployment that verifies the original pin. Existing matching invocation identity is checked before local semantic availability so exact admission/terminal replay remains possible. Cancellation uses the common envelope independently of the old language implementation. Delivery support depends on the terminal schema and committed parent proof, not inference availability.
 
 ## Clean consumer and process witness
 

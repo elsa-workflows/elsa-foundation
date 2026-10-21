@@ -10,7 +10,8 @@ namespace Elsa.Rules.Persistence.EntityFrameworkCore;
 
 /// <summary>Rules-owned admission and settlement transactions. Worker operations are implemented separately.</summary>
 internal sealed partial class EfRuleRunStore(IDbContextFactory<RulesDbContext> contexts, IRuleAdmissionValidator validator,
-    TimeSpan? workLeaseDuration = null, IRuleRoundValidator? roundValidator = null)
+    TimeSpan? workLeaseDuration = null, IRuleRoundValidator? roundValidator = null,
+    IRuleDeliveryProofValidator? deliveryProofValidator = null, TimeSpan? deliveryLeaseDuration = null) : IRuleRunStore, IRuleRunReader
 {
     private readonly TimeSpan _workLeaseDuration = ValidateLeaseDuration(workLeaseDuration ?? TimeSpan.FromMinutes(1));
     private const int MaximumWriteAttempts = 8;

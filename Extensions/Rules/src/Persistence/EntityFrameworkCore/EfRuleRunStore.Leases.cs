@@ -13,7 +13,7 @@ internal sealed partial class EfRuleRunStore
         ArgumentNullException.ThrowIfNull(request);
         cancellationToken.ThrowIfCancellationRequested();
         var pins = request.SupportedImplementations.Select(RuleRecordCodec.PinHash).Distinct(StringComparer.Ordinal).ToArray();
-        if (pins.Length == 0 || request.InvocationSchemas.Count == 0 || request.ReceiptSchemas.Count == 0 || request.StateSchemas.Count == 0)
+        if (request.InvocationSchemas.Count == 0 || request.ReceiptSchemas.Count == 0 || request.StateSchemas.Count == 0)
             return new(RuleWorkClaimDisposition.NoEligibleWork, null);
 
         for (var attempt = 0; attempt < MaximumWriteAttempts; attempt++)
@@ -28,7 +28,7 @@ internal sealed partial class EfRuleRunStore
                 {
                     // Page addresses, not multi-megabyte payloads. A schema-incompatible row cannot hide later work.
                     var query = db.Runs.AsNoTracking().Where(row => row.Status == (int)RuleRunStatus.Running
-                        && row.Admitted && pins.Contains(row.PinHash64)
+                        && row.Admitted && (row.PendingReceiptId64 != null || pins.Contains(row.PinHash64))
                         && (row.WorkExpiresAtUtcTicks == null || row.WorkExpiresAtUtcTicks <= now));
                     if (after is not null) query = query.Where(row => string.Compare(row.RunKey, after) > 0);
                     var keys = await query.OrderBy(row => row.RunKey).Select(row => row.RunKey)
@@ -39,16 +39,31 @@ internal sealed partial class EfRuleRunStore
                         db.ChangeTracker.Clear();
                         var row = await db.Runs.SingleOrDefaultAsync(row => row.RunKey == key, cancellationToken);
                         if (row is null || row.Status != (int)RuleRunStatus.Running || !row.Admitted
-                            || row.WorkExpiresAtUtcTicks > now || !pins.Contains(row.PinHash64, StringComparer.Ordinal)) continue;
+                            || row.WorkExpiresAtUtcTicks > now
+                            || (row.PendingReceiptId64 is null && !pins.Contains(row.PinHash64, StringComparer.Ordinal))) continue;
                         RuleRowCodec.State state;
-                        try { state = RuleRowCodec.Read(row); }
-                        catch (NotSupportedException)
+                        try
                         {
-                            // A newer retained envelope/provider schema must not hide compatible rows behind it.
+                            state = RuleRowCodec.Read(row);
+                            if (!Supports(request, state.Invocation)) continue;
+                            if (row.PendingReceiptId64 is { } pendingId)
+                            {
+                                // Consumption validates the accepted common record without executing the
+                                // old interpreter. Recheck the joined snapshot before validating it.
+                                var pending = await db.Receipts.AsNoTracking().SingleOrDefaultAsync(
+                                    candidate => candidate.RunKey == row.RunKey && candidate.ReceiptId64 == pendingId, cancellationToken);
+                                if (!await IsCurrentAsync(db, row, cancellationToken)) continue;
+                                if (pending is null) throw new InvalidDataException("rules.missing-pending-receipt");
+                                RuleRoundRecords.RequirePending(row, RuleRoundRecords.Read(row, pending));
+                            }
+                        }
+                        catch (Exception error) when (error is NotSupportedException || IsInvalidRecord(error))
+                        {
+                            // One incompatible or corrupt invocation must not hide healthy work behind it.
+                            // Leave it untouched; if no usable candidate exists, report Unavailable.
                             unsupported = true;
                             continue;
                         }
-                        if (!Supports(request, state.Invocation)) continue;
                         row.WorkOwner = request.Owner;
                         row.WorkFence = checked(row.WorkFence + 1);
                         row.WorkExpiresAtUtcTicks = NewExpiry(now);

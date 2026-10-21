@@ -1,8 +1,8 @@
 # Durable Rules acceptance quickstart
 
-These are implementation targets. The commands become runnable only when their owning tasks are delivered; this document is not evidence that they ran. Run heavy commands through the normal build-slot wrapper. Do not parallelize full builds on the shared machine.
+Section 1 is runnable for the implemented semantics, migrated SQLite and direct host composition. Sections 2–4 remain implementation targets and their commands become runnable only when their owning tasks are delivered. See the [direct-runtime checkpoint](evidence/direct-runtime-checkpoint.md) for executed evidence; this document alone is not evidence that a command ran. Run heavy commands through the normal build-slot wrapper. Do not parallelize full builds on the shared machine.
 
-## 1. Focused semantics and native tests
+## 1. Focused semantics and direct-runtime tests
 
 ```bash
 dotnet test Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj
@@ -10,7 +10,7 @@ dotnet test Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj
 
 The shared finite witness starts with `seed`, derives `left/right`, then `joined`, then `final`, then commits an empty-addition round. Expect four committed rounds, Succeeded and exactly `final,joined,left,right,seed`. With MaxRounds=3 expect Faulted `rules.round-budget-exhausted` after committing the same facts. Require tests for no-addition success at the final limit, invalid budgets, omission of applicable firings, canonical UTF-8 bounds, equivalent receipt replay and cancellation before/after admission.
 
-Native integration cases run real persisted Sequence and Flowchart, observe the following activity and sibling/join semantics, then cover child fault/cancellation/refusal, parent-terminal proof, duplicate delivery and recoverable Unavailable. A root-only invocation is insufficient. Results include facts and use canonical content equality after serialization.
+Planned native integration cases must run real persisted Sequence and Flowchart, observe the following activity and sibling/join semantics, then cover child fault/cancellation/refusal, parent-terminal proof, duplicate delivery and recoverable Unavailable. A root-only invocation is insufficient. Results include facts and use canonical content equality after serialization.
 
 ## 2. Required four-engine suite
 

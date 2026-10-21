@@ -3,8 +3,16 @@
     <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="CShells.Abstractions" />
+    <PackageReference Include="Elsa.Specifications.PackageManifest.Generator" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="../Core/Elsa.Rules.Core.csproj" />
     <ProjectReference Include="../Persistence/Core/Elsa.Rules.Persistence.Core.csproj" />
+    <ProjectReference Include="../../../../Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj" />
     <InternalsVisibleTo Include="Elsa.Rules.Tests" />
   </ItemGroup>
 </Project>

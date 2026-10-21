@@ -1,1 +1,16 @@
 #nullable enable
+Elsa.Rules.Runtime.RulesRuntimeFeature
+Elsa.Rules.Runtime.RulesRuntimeFeature.AcceptNewInvocations.get -> bool
+Elsa.Rules.Runtime.RulesRuntimeFeature.AcceptNewInvocations.set -> void
+Elsa.Rules.Runtime.RulesRuntimeFeature.DeploymentReceiptPath.get -> string!
+Elsa.Rules.Runtime.RulesRuntimeFeature.DeploymentReceiptPath.set -> void
+Elsa.Rules.Runtime.RulesRuntimeFeature.HostDepsPath.get -> string!
+Elsa.Rules.Runtime.RulesRuntimeFeature.HostDepsPath.set -> void
+Elsa.Rules.Runtime.RulesRuntimeFeature.HostRoot.get -> string!
+Elsa.Rules.Runtime.RulesRuntimeFeature.HostRoot.set -> void
+Elsa.Rules.Runtime.RulesRuntimeFeature.MaxConcurrentAttempts.get -> int
+Elsa.Rules.Runtime.RulesRuntimeFeature.MaxConcurrentAttempts.set -> void
+Elsa.Rules.Runtime.RulesRuntimeFeature.PollIntervalMilliseconds.get -> int
+Elsa.Rules.Runtime.RulesRuntimeFeature.PollIntervalMilliseconds.set -> void
+Elsa.Rules.Runtime.RulesRuntimeFeature.RulesRuntimeFeature() -> void
+virtual Elsa.Rules.Runtime.RulesRuntimeFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void

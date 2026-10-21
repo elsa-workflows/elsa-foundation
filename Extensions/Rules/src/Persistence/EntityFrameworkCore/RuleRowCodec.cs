@@ -108,13 +108,19 @@ internal static class RuleRowCodec
                 && row.DeliveryAcknowledged == (row.DeliveryAcknowledgementJson is not null)
                 && (!row.DeliveryAcknowledged || (row.DeliveryOwner is null && row.DeliveryExpiresAtUtcTicks is null)),
                 "rules.terminal-delivery");
-            // This slice cannot verify a durable parent-consumption proof yet. Never treat an opaque
-            // acknowledgement string as settlement; delivery support must add its canonical proof reader.
-            if (row.DeliveryAcknowledged) throw new NotSupportedException("rules.delivery-acknowledgement-schema");
             var envelope = RuleRecordCodec.ReadDeliveryRecord(Bytes(row.DeliveryPayloadJson!));
             Require(envelope.DeliveryId == row.DeliveryId64 && envelope.CanonicalPayloadSha256 == row.DeliveryPayloadSha25664
                 && row.DeliveryPayloadJson == Encoding.UTF8.GetString(RuleRecordCodec.DeliveryRecordBytes(row.DeliveryId64!, destination, terminal)),
                 "rules.delivery-projection");
+            if (row.DeliveryAcknowledged)
+            {
+                // The external durable parent proof was checked at acknowledgement time. Recovery
+                // verifies its immutable common binding without requiring the native adapter again.
+                var proof = RuleRecordCodec.ReadDeliveryAcknowledgement(Bytes(row.DeliveryAcknowledgementJson!));
+                Require(proof.DestinationIdentity == RuleRecordCodec.DestinationIdentity(destination)
+                    && proof.TerminalId == terminal.TerminalId && proof.PayloadSha256 == envelope.CanonicalPayloadSha256,
+                    "rules.delivery-proof-projection");
+            }
         }
         else
             Require(row.DeliveryId64 is null && row.DeliveryPayloadJson is null && row.DeliveryPayloadSha25664 is null

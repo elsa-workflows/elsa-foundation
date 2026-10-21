@@ -628,3 +628,24 @@ static Elsa.Rules.Persistence.Core.RuleWorkReadResult.operator !=(Elsa.Rules.Per
 static Elsa.Rules.Persistence.Core.RuleWorkReadResult.operator ==(Elsa.Rules.Persistence.Core.RuleWorkReadResult? left, Elsa.Rules.Persistence.Core.RuleWorkReadResult? right) -> bool
 static Elsa.Rules.Persistence.Core.RuleWorkToken.operator !=(Elsa.Rules.Persistence.Core.RuleWorkToken? left, Elsa.Rules.Persistence.Core.RuleWorkToken? right) -> bool
 static Elsa.Rules.Persistence.Core.RuleWorkToken.operator ==(Elsa.Rules.Persistence.Core.RuleWorkToken? left, Elsa.Rules.Persistence.Core.RuleWorkToken? right) -> bool
+Elsa.Rules.Persistence.Core.IRuleDeliveryProofValidator
+Elsa.Rules.Persistence.Core.IRuleDeliveryProofValidator.ValidateAsync(Elsa.Rules.Core.RuleTerminalEnvelope! envelope, Elsa.Rules.Core.RuleDeliveryProof! proof, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationResult!>
+Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationDisposition
+Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationDisposition.Equivalent = 0 -> Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationDisposition
+Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationDisposition.Invalid = 2 -> Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationDisposition
+Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationDisposition.Unavailable = 1 -> Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationDisposition
+Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationResult
+Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationResult.<Clone>$() -> Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationResult!
+Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationResult.Deconstruct(out Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationDisposition Disposition) -> void
+Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationResult.Disposition.get -> Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationDisposition
+Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationResult.Disposition.init -> void
+Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationResult.Equals(Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationResult? other) -> bool
+Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationResult.RuleDeliveryProofValidationResult(Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationDisposition Disposition) -> void
+override Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationResult.Equals(object? obj) -> bool
+override Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationResult.GetHashCode() -> int
+override Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationResult.ToString() -> string!
+static Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationResult.operator !=(Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationResult? left, Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationResult? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationResult.operator ==(Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationResult? left, Elsa.Rules.Persistence.Core.RuleDeliveryProofValidationResult? right) -> bool
+static Elsa.Rules.Persistence.Core.RuleRecordCodec.DeliveryAcknowledgementBytes(Elsa.Rules.Core.RuleDeliveryProof! proof) -> byte[]!
+static Elsa.Rules.Persistence.Core.RuleRecordCodec.DestinationIdentity(Elsa.Rules.Core.RuleNativeResultAddress! destination) -> string!
+static Elsa.Rules.Persistence.Core.RuleRecordCodec.ReadDeliveryAcknowledgement(System.ReadOnlyMemory<byte> bytes) -> Elsa.Rules.Core.RuleDeliveryProof!

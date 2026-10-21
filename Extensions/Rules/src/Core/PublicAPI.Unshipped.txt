@@ -228,3 +228,21 @@ static Elsa.Rules.Core.RuleScope.operator !=(Elsa.Rules.Core.RuleScope? left, El
 static Elsa.Rules.Core.RuleScope.operator ==(Elsa.Rules.Core.RuleScope? left, Elsa.Rules.Core.RuleScope? right) -> bool
 static Elsa.Rules.Core.RuleTerminalEnvelope.operator !=(Elsa.Rules.Core.RuleTerminalEnvelope? left, Elsa.Rules.Core.RuleTerminalEnvelope? right) -> bool
 static Elsa.Rules.Core.RuleTerminalEnvelope.operator ==(Elsa.Rules.Core.RuleTerminalEnvelope? left, Elsa.Rules.Core.RuleTerminalEnvelope? right) -> bool
+Elsa.Rules.Core.IRuleInvocationFactory
+Elsa.Rules.Core.IRuleInvocationFactory.PrepareAsync(Elsa.Rules.Core.RuleRunIdentity! identity, Elsa.Rules.Core.RuleProgram! program, System.Collections.Generic.IReadOnlyList<Elsa.Rules.Core.RuleFact!>! initialFacts, int? maxRounds = null, Elsa.Rules.Core.RuleNativeResultAddress? nativeDestination = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Core.RuleInvocationPreparation!>
+Elsa.Rules.Core.RuleInvocationPreparation
+Elsa.Rules.Core.RuleInvocationPreparation.<Clone>$() -> Elsa.Rules.Core.RuleInvocationPreparation!
+Elsa.Rules.Core.RuleInvocationPreparation.Diagnostic.get -> Elsa.Rules.Core.RuleRunDiagnostic?
+Elsa.Rules.Core.RuleInvocationPreparation.Disposition.get -> Elsa.Rules.Core.RuleInvocationPreparationDisposition
+Elsa.Rules.Core.RuleInvocationPreparation.Equals(Elsa.Rules.Core.RuleInvocationPreparation? other) -> bool
+Elsa.Rules.Core.RuleInvocationPreparation.Invocation.get -> Elsa.Rules.Core.RuleInvocationEnvelope?
+Elsa.Rules.Core.RuleInvocationPreparation.RuleInvocationPreparation(Elsa.Rules.Core.RuleInvocationPreparationDisposition disposition, Elsa.Rules.Core.RuleInvocationEnvelope? invocation, Elsa.Rules.Core.RuleRunDiagnostic? diagnostic) -> void
+Elsa.Rules.Core.RuleInvocationPreparationDisposition
+Elsa.Rules.Core.RuleInvocationPreparationDisposition.Invalid = 1 -> Elsa.Rules.Core.RuleInvocationPreparationDisposition
+Elsa.Rules.Core.RuleInvocationPreparationDisposition.Prepared = 0 -> Elsa.Rules.Core.RuleInvocationPreparationDisposition
+Elsa.Rules.Core.RuleInvocationPreparationDisposition.Unavailable = 2 -> Elsa.Rules.Core.RuleInvocationPreparationDisposition
+override Elsa.Rules.Core.RuleInvocationPreparation.Equals(object? obj) -> bool
+override Elsa.Rules.Core.RuleInvocationPreparation.GetHashCode() -> int
+override Elsa.Rules.Core.RuleInvocationPreparation.ToString() -> string!
+static Elsa.Rules.Core.RuleInvocationPreparation.operator !=(Elsa.Rules.Core.RuleInvocationPreparation? left, Elsa.Rules.Core.RuleInvocationPreparation? right) -> bool
+static Elsa.Rules.Core.RuleInvocationPreparation.operator ==(Elsa.Rules.Core.RuleInvocationPreparation? left, Elsa.Rules.Core.RuleInvocationPreparation? right) -> bool

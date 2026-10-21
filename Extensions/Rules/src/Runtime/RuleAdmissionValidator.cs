@@ -4,12 +4,16 @@ using Elsa.Rules.Persistence.Core;
 
 namespace Elsa.Rules.Runtime;
 
-internal sealed class RuleAdmissionValidator(IRuleImplementationIdentitySource identitySource) : IRuleAdmissionValidator
+internal sealed class RuleAdmissionValidator(IRuleImplementationIdentitySource identitySource, bool acceptNewInvocations = true) : IRuleAdmissionValidator
 {
     public async ValueTask<RuleAdmissionValidationResult> ValidateAsync(RuleInvocationEnvelope invocation,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        // Providers invoke this only after checking retained identity/replay. Rollback therefore
+        // closes new admission without disabling old cancellation or accepted-receipt recovery.
+        if (!acceptNewInvocations)
+            return new(RuleAdmissionValidationDisposition.Unavailable, new("rules.admissions-disabled"));
         try
         {
             _ = RuleRecordCodec.InvocationBytes(invocation);
