@@ -4,7 +4,7 @@ Implementation: [PR #3156](https://github.com/elsa-workflows/elsa-foundation/pul
 
 ## Exact reviewed-head gate
 
-Four bounded self-review rounds ended clean. Concrete findings were repaired and the affected checks repeated; no independent approval is inferred from skipped scanners. The owner's standing self-review/normal-merge authority and current repository rules were checked before merge. No force, admin option or branch-protection bypass was used.
+Four bounded self-review rounds ended clean. The [review record](https://github.com/elsa-workflows/elsa-foundation/pull/3156#issuecomment-6322017709) and [integrated checkpoint](final-integration-checkpoint.md#review-findings-resolved) identify separate agent correctness, acceptance and API/Studio/contract reviews, followed by root integration and verification. These satisfy T021's independent review perspectives; they are not Code Review app or maintainer approval. Concrete findings were repaired and the affected checks repeated; no independent approval is inferred from skipped scanners. The owner's standing self-review/normal-merge authority and current repository rules were checked before merge. No force, admin option or branch-protection bypass was used.
 
 [CI 39641906120](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39641906120) passed at the reviewed head. Completed logs show 95 backend suite summaries: **18,863 passed, zero failed, 32 skipped**. Included suites were ETL 1,009; workflow runtime 2,530; runtime EF 1,002; HTTP integration 94; Workbench 62; import integration 44; architecture 584. Separate core-only validation passed 4,199 with one skip; separate architecture passed 584 with no skips. These repeat some backend tests and are not additive unique coverage.
 
