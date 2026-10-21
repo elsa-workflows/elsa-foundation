@@ -26,8 +26,9 @@ Before any product edit, add the behavior regressions only in `Extensions/Featur
 The single focused RED run must exercise these independent contracts without asserting source text:
 
 - Existing required single/bulk cascade is reflected in impact, optional edges are excluded, and filtered-out affected features remain visible.
-- Multiple pending direct roots show every transitive required-edge path for an automatic change; reversing a root recomputes the remaining reasons, and a net-zero feature disappears.
+- Multiple pending direct roots each show a cycle-safe transitive required-edge explanation path for an automatic change; reversing a root recomputes the remaining reasons, and a net-zero feature disappears.
 - Superseded-root regression: from baseline `A=off`, `B=on` with required edge `A → B`, disable B and then enable A. Assert final `A=on`, `B=on`; B has no impact row; and `(B, off)` classifies or explains no surviving change. In a bounded companion case, leave a direct setting edit on B different from baseline; assert B is then present only for that direct setting change and the superseded `(B, off)` state root is still absent.
+- Retained-effect regression: from baseline A=off/B=off with required A → B, enable A and then disable A. Preserve final A=off/B=on; show B as an automatic retained earlier-cascade effect, omit net-zero A and assert no direct B edit or pending/current A requirement. Reset clears both impact and retained provenance.
 - Direct setting edits appear using existing sensitive-value handling; supplied restart metadata is distinguished from unknown reload behavior.
 - Cancel sends no Apply and preserves the draft. Reset only returns the selected host to its loaded baseline.
 - Apply after a current review uses the same host, complete state, and revision; a draft mutation, host switch, refresh, or catalog replacement invalidates it.

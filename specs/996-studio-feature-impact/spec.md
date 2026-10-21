@@ -26,7 +26,7 @@ As a feature administrator, I can stage single or bulk enable and disable change
 
 ### User Story 2 - Review the complete impact (Priority: P1)
 
-As a feature administrator, I can inspect the selected host's complete pending impact before applying it. The review distinguishes my direct enable/disable and setting edits from automatically affected features, explains which pending edits require each automatic change, and includes changes hidden by the current filter.
+As a feature administrator, I can inspect the selected host's complete pending impact before applying it. The review distinguishes my direct enable/disable and setting edits from automatically affected features, explains the current pending edits or clearly historical cascade causes behind automatic changes, and includes changes hidden by the current filter.
 
 **Why this priority**: Operators need to understand the complete consequence of a change before they authorize it, rather than infer it from a filtered list.
 
@@ -40,6 +40,7 @@ As a feature administrator, I can inspect the selected host's complete pending i
 4. **Given** the operator reverses or resets pending edits so a feature matches its loaded baseline, **When** the review is refreshed, **Then** that feature is omitted as a net-zero change and no reverted action is presented as pending.
 5. **Given** the operator cancels the review, **When** the operator returns to editing, **Then** the staged draft is still available and no saved host configuration has changed.
 6. **Given** the operator changed a feature setting, **When** the operator reviews the draft, **Then** that direct setting edit is represented in the review using the existing handling for sensitive setting values.
+7. **Given** A and required B start disabled, **When** the operator enables A and then disables A, **Then** the existing cascade leaves B enabled, the review shows B as an automatic retained effect of the earlier dependency change, omits net-zero A, and does not claim a direct B edit, a pending A edit, or that disabled A currently requires B.
 
 ### User Story 3 - Apply only what was reviewed (Priority: P1)
 
@@ -74,6 +75,7 @@ As an authenticated user who can inspect feature management but cannot manage it
 - A cascade changes a feature outside the current text or category filter.
 - More than one pending direct edit requires the same feature to change.
 - A later edit reverses a prior direct or automatic change, leaving the feature at its loaded baseline.
+- Reverting a direct enable leaves its required dependency changed under the existing cascade; that retained automatic effect still needs a truthful explanation.
 - The operator switches between Studio and Server while a review is open; drafts and reviews must remain host-specific.
 - The loaded feature catalog is refreshed or replaced while a review is open.
 - The backend reports a stale configuration revision or refuses activation; both remain visible without false success or an unsupported explanation.
@@ -88,8 +90,8 @@ As an authenticated user who can inspect feature management but cannot manage it
 - **FR-002**: Optional dependencies MUST NOT cause an automatic feature change solely because the related feature is enabled or disabled.
 - **FR-003**: Drafts MUST remain isolated by selected host; a review MUST identify whether it applies to Studio or Server and MUST NOT affect the other host.
 - **FR-004**: Before Apply, the operator MUST be able to review every net change between the selected host's loaded state and its complete desired draft, including direct setting edits and regardless of the current feature filter.
-- **FR-005**: The review MUST distinguish direct edits from automatically affected features and MUST explain each automatic change using the required dependency or dependant path from its pending root edit. Direct setting edits MUST follow existing handling for sensitive setting values.
-- **FR-006**: For each automatic change, the review MUST identify all applicable pending direct edits that require it. Explanations MUST be recalculated from the remaining pending draft when edits change; reverted or net-zero changes MUST NOT be shown as pending impact.
+- **FR-005**: The review MUST distinguish direct edits from automatically affected features. For automatic changes required by current pending edits, it MUST show the required dependency or dependant path from each applicable root. An automatic change retained after its initiating edit is reverted MUST instead be explained as an earlier cascade effect, with historical context clearly distinguished from a current pending requirement. It MUST NOT invent a direct edit or a current requirement. Direct setting edits MUST follow existing handling for sensitive setting values.
+- **FR-006**: For each automatic change, the review MUST identify all applicable pending direct edits that require it. Explanations MUST be recalculated from the remaining pending draft when edits change; reverted or net-zero changes MUST NOT be shown as pending impact. A retained automatic effect may identify its earlier dependency path only as history, with no effective pending root asserted for it.
 - **FR-007**: The review MUST show known reload implications for the selected host when that information is available. It MUST label unknown implications as unknown and MUST NOT imply an unverified hot reload, activation, or rollback guarantee.
 - **FR-008**: A review MUST be bound to the selected host, the complete desired feature state, the loaded feature catalog snapshot, and the current feature-configuration revision represented by that snapshot.
 - **FR-009**: A draft mutation, selected-host change, catalog refresh, or catalog replacement MUST invalidate the review; Apply MUST NOT silently use an invalidated review.
@@ -113,7 +115,7 @@ As an authenticated user who can inspect feature management but cannot manage it
 ### Measurable Outcomes
 
 - **SC-001**: In the single and bulk enable/disable acceptance scenarios, the review includes every net feature change, including changes hidden by the active filter, and labels direct and automatic changes distinctly.
-- **SC-002**: In overlapping-cascade scenarios, every automatically affected feature identifies all applicable pending direct edits and required-dependency reasons; net-zero features are absent.
+- **SC-002**: In overlapping-cascade scenarios, every automatically affected feature identifies all applicable pending direct edits and required-dependency reasons; net-zero features are absent. Retained automatic effects without an applicable pending root are explained as earlier cascade effects without false direct or pending-edit claims.
 - **SC-003**: In both Studio and Server scenarios, Apply changes only the host and complete draft named by the current review; a changed draft, target, or catalog cannot be applied under an old review.
 - **SC-004**: Cancellation and Reset do not change saved configuration; stale revisions and other backend refusals remain visible without a false success state.
 - **SC-005**: Authenticated read-only scenarios allow inspection but no draft-changing or Apply action, while the existing unauthenticated demo behavior is preserved.

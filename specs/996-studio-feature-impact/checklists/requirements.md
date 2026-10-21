@@ -34,3 +34,5 @@
 - Root reviewed all 16 items against the specification and issue #3074, including the source-readiness receipt. No unresolved material ambiguity remains; approved for planning only.
 - The revision boundary is explicitly limited to the loaded catalog snapshot and existing feature-configuration revision.
 - Checklist items marked complete indicate specification quality only; they do not claim that the feature is implemented or verified.
+
+- Root clarified the source-confirmed retained-dependency case in FR-005/006 before product work: historical automatic causes are distinguished from current pending roots, preserving the existing cascade and every net change.

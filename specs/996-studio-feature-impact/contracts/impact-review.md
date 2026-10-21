@@ -10,6 +10,8 @@ This is the user-visible behavior contract for Feature Management's pre-Apply re
 - Each automatic effect names all effective enabled-state roots that require it and the required dependency/dependant path for each root. These roots span the host's full pending draft, not only the most recent toggle or bulk action. A later cascade that overwrites a root's requested state makes that root inapplicable; it cannot classify or explain current impact. Still-changed direct setting edits remain represented independently from enabled-state roots.
 - Explanations are recalculated as edits change. A feature that returns to its loaded baseline disappears as net-zero; a reverted action is not shown as pending.
 - With baseline `A=off`, `B=on`, and required edge `A → B`, disabling B then enabling A leaves `A=on`, `B=on`. B is omitted as net-zero, and the earlier `(B, off)` root cannot explain any surviving impact. A still-changed direct setting field on B remains visible independently.
+- If the existing cascade leaves an automatic change after its initiating edit is reverted, keep that net difference and explain its earlier dependency/dependant cause as history. Example: baseline A=off/B=off, A requires B; enable A then disable A leaves B on. B is an automatic retained effect, A is omitted as net-zero, and no direct B edit or pending/current A requirement is asserted. Reset clears that retained cause.
+- Show a cycle-safe explanation path for each applicable root; the review need not enumerate every equivalent route through the same dependency graph.
 - Optional dependency relationships are excluded from reason paths and automatic changes.
 
 ## Review snapshot and actions
