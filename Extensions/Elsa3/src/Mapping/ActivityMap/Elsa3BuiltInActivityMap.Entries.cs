@@ -229,7 +229,8 @@ internal sealed partial class Elsa3BuiltInActivityMap
         Catalog("Event", Primitives + "Event",
             [
                 Carry("EventName", "EventName"),
-                Lost("Result"),
+                // Elsa 3's Result is the event payload; Elsa 4's Result is the event name, its payload output Payload (#3107).
+                CarryOutput("Result", "Payload"),
                 new Elsa3MemberRule("CanStartWorkflow", Elsa3MemberKind.CustomProperty, Elsa3MemberRuleKind.DefaultFlip, "CanStartWorkflow", Literal("false"))
             ]),
         Catalog("PublishEvent", Primitives + "PublishEvent",

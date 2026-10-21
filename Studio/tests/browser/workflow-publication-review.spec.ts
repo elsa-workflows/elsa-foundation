@@ -1,4 +1,5 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+import axe from "axe-core";
 
 test("keeps the publication decision calm and actions visible at constrained height", async ({ page }) => {
   await page.setViewportSize({ width: 1100, height: 620 });
@@ -90,3 +91,49 @@ test("shows trigger counts while keeping exact identifiers in an explicit techni
   await expect(technical.locator(".wf-publication-claims")).not.toBeVisible();
   await expect(dialog.getByRole("button", { name: "Publish", exact: true })).toBeEnabled();
 });
+
+// Spec 261 FR-515: warnings are listed under their own heading with text and an icon, and Publish stays enabled.
+test("lists validation warnings without blocking Publish", async ({ page }) => {
+  await page.goto("/?mode=publication-review&warnings=1&theme=light");
+  const dialog = page.getByRole("dialog", { name: "Publish workflow" });
+
+  const warnings = dialog.getByRole("region", { name: "Warnings" });
+  await expect(warnings).toBeVisible();
+  await expect(warnings.getByRole("listitem")).toHaveCount(2);
+  await expect(warnings.getByRole("listitem").first()).toContainText("\"Charge card\" is marked safe to repeat");
+  await expect(warnings).toContainText("These do not block publishing.");
+  await expect(dialog.getByRole("alert")).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Publish" })).toBeEnabled();
+
+  await dialog.getByRole("button", { name: "Publish" }).click();
+  await expect(page.getByRole("dialog", { name: "Published" })).toContainText("Version 2.0.0 is active in default.");
+});
+
+for (const theme of ["light", "dark"]) {
+  for (const width of [390, 1200]) {
+    test(`the warnings fit ${width}px in ${theme} with no serious accessibility violations`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto(`/?mode=publication-review&warnings=1&theme=${theme}`);
+      const warnings = page.getByRole("dialog", { name: "Publish workflow" }).getByRole("region", { name: "Warnings" });
+      await expect(warnings).toBeVisible();
+
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+      const box = await warnings.boundingBox();
+      expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+      expect(await seriousViolations(page, ".wf-publication-warnings")).toEqual([]);
+    });
+  }
+}
+
+// Checks the new warnings section. The rest of this fixture page predates spec 261 and is not part of this check.
+async function seriousViolations(page: Page, selector: string) {
+  await page.addScriptTag({ content: axe.source });
+  return page.evaluate(async scope => {
+    const result = await (window as Window & {
+      axe: { run: (root: Element, options: object) => Promise<{ violations: Array<{ id: string; impact: string | null; help: string; nodes: Array<{ target: unknown[] }> }> }> };
+    }).axe.run(document.querySelector(scope)!, { resultTypes: ["violations"] });
+    return result.violations
+      .filter(violation => violation.impact === "critical" || violation.impact === "serious")
+      .map(violation => `${violation.id}: ${violation.help} (${violation.nodes.map(node => node.target.join(" ")).join(", ")})`);
+  }, selector);
+}

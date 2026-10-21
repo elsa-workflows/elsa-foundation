@@ -154,6 +154,7 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [detail, setDetail] = useState("Connecting to structured logs.");
+  const [recentFailure, setRecentFailure] = useState<ReturnType<typeof classifyStructuredLogError> | null>(null);
   const [paused, setPaused] = useState(false);
   const [bufferedRows, setBufferedRows] = useState<StructuredLogEntry[]>([]);
   const [queuedCount, setQueuedCount] = useState(0);
@@ -247,6 +248,7 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
     setQueuedCount(0);
     setUpstreamDroppedCount(0);
     setLocalDiscardedCount(0);
+    setRecentFailure(null);
     setStatus("connecting");
     setDetail("Loading recent structured logs.");
 
@@ -259,14 +261,13 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
       } catch (error) {
         if (!cancelled) {
           const classified = classifyStructuredLogError(error);
-          setStatus(classified.status);
-          setDetail(classified.message);
+          setRecentFailure(classified);
         }
       }
     }
 
     function connect() {
-      eventSource = new EventSource(createStreamUrl(moduleApi.backend, filters));
+      eventSource = new EventSource(createStreamUrl(moduleApi.backend, filters), { withCredentials: true });
 
       eventSource.onopen = () => {
         if (cancelled)
@@ -371,8 +372,8 @@ function useStructuredLogs({ includeInspector }: { includeInspector: boolean }) 
     rows,
     selectedEntryId,
     setSelectedEntryId,
-    status,
-    detail,
+    status: recentFailure?.status ?? status,
+    detail: recentFailure?.message ?? detail,
     paused,
     togglePaused,
     queuedCount,
@@ -485,7 +486,7 @@ function StructuredLogRows({ state, panelMode = false }: { state: StructuredLogs
       </div>
       {state.rows.length === 0 ? (
         <div className="structured-logs-empty">
-          {state.status === "unavailable" || state.status === "unauthorized" ? state.detail : "No structured logs received yet."}
+          {state.status === "live" || state.status === "paused" ? "No structured logs received yet." : state.detail}
         </div>
       ) : null}
       {state.rows.map(row => (

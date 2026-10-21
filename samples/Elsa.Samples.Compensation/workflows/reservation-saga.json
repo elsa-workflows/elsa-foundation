@@ -1,0 +1,132 @@
+{
+  "name": "Compensation sample: reservation saga",
+  "description": "S1. Reserves inventory and a delivery slot; the order is rejected, so the delivery and then the inventory are released.",
+  "state": {
+    "variables": [],
+    "inputs": [],
+    "outputs": [],
+    "rootActivity": {
+      "nodeId": "order",
+      "activityVersionId": "Elsa.Activities.Compensation.Activities.CompensationScope",
+      "inputs": [],
+      "outputs": [],
+      "structure": {
+        "kind": "elsa.compensation-scope.structure",
+        "schemaVersion": "1.0.0",
+        "payload": {
+          "steps": [
+            {
+              "name": "Reserve inventory",
+              "activity": {
+                "nodeId": "reserve-inventory",
+                "activityVersionId": "Elsa.Samples.Compensation.Activities.Reserve",
+                "inputs": [
+                  {
+                    "referenceKey": "resource",
+                    "value": {
+                      "expressionType": "Literal",
+                      "value": "inventory"
+                    }
+                  }
+                ],
+                "outputs": []
+              },
+              "compensation": {
+                "nodeId": "release-inventory",
+                "activityVersionId": "Elsa.Samples.Compensation.Activities.Release",
+                "inputs": [
+                  {
+                    "referenceKey": "resource",
+                    "value": {
+                      "expressionType": "Literal",
+                      "value": "inventory"
+                    }
+                  },
+                  {
+                    "referenceKey": "reservation",
+                    "value": {
+                      "expressionType": "ActivityResult",
+                      "value": {
+                        "producerNodeId": "reserve-inventory",
+                        "projectionKey": "reservation",
+                        "producerScopeId": "order"
+                      }
+                    }
+                  }
+                ],
+                "outputs": []
+              }
+            },
+            {
+              "name": "Reserve delivery",
+              "activity": {
+                "nodeId": "reserve-delivery",
+                "activityVersionId": "Elsa.Samples.Compensation.Activities.Reserve",
+                "inputs": [
+                  {
+                    "referenceKey": "resource",
+                    "value": {
+                      "expressionType": "Literal",
+                      "value": "delivery"
+                    }
+                  }
+                ],
+                "outputs": []
+              },
+              "compensation": {
+                "nodeId": "release-delivery",
+                "activityVersionId": "Elsa.Samples.Compensation.Activities.Release",
+                "inputs": [
+                  {
+                    "referenceKey": "resource",
+                    "value": {
+                      "expressionType": "Literal",
+                      "value": "delivery"
+                    }
+                  },
+                  {
+                    "referenceKey": "reservation",
+                    "value": {
+                      "expressionType": "ActivityResult",
+                      "value": {
+                        "producerNodeId": "reserve-delivery",
+                        "projectionKey": "reservation",
+                        "producerScopeId": "order"
+                      }
+                    }
+                  }
+                ],
+                "outputs": []
+              }
+            },
+            {
+              "name": "Confirm order",
+              "activity": {
+                "nodeId": "confirm-order",
+                "activityVersionId": "Elsa.Samples.Compensation.Activities.Reserve",
+                "inputs": [
+                  {
+                    "referenceKey": "resource",
+                    "value": {
+                      "expressionType": "Literal",
+                      "value": "order"
+                    }
+                  },
+                  {
+                    "referenceKey": "reject",
+                    "value": {
+                      "expressionType": "Literal",
+                      "value": true
+                    }
+                  }
+                ],
+                "outputs": []
+              },
+              "compensation": null
+            }
+          ]
+        }
+      }
+    }
+  }
+}

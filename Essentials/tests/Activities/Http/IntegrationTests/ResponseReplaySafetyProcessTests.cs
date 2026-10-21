@@ -1184,6 +1184,11 @@ public sealed class ResponseReplaySafetyProcessTests
 
     private static void StripExecutableNodeContractMetadata(JsonObject node)
     {
+        // A capability the compiler derives from the activity type (#3135), so a node compiled after it was added
+        // carries it while the historical baseline cannot.
+        if (node["metadata"] is JsonObject metadata)
+            metadata.Remove(RuntimeMetadataKeys.AcceptsRescheduledFaultedChild);
+
         if (node["descriptorType"]?.GetValue<string>() == "elsa.clr-activity" &&
             node["activityContract"] is JsonObject contract &&
             contract["descriptorKind"]?.GetValue<string>() == "Elsa.Primitives.Models.ClrActivityDescriptor")

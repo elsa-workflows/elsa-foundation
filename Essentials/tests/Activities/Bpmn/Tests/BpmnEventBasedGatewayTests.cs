@@ -78,7 +78,7 @@ public sealed class BpmnEventBasedGatewayTests
         Assert.Equal(2, armedRace.MemberTokenIds.Count);
 
         // The message stimulus fires first: it wins, routes onward, and the timer sibling loses.
-        var resumed = await fixture.ResumeAsync(messageBookmark, JsonSerializer.SerializeToElement(new EventReceived("order-shipped")));
+        var resumed = await fixture.ResumeAsync(messageBookmark, JsonSerializer.SerializeToElement(new { eventName = "order-shipped" }));
 
         resumed.AssertCompleted("node-wait");
         Assert.Equal(WorkflowExecutionStatus.Running, resumed.WorkflowState?.Status);
@@ -138,7 +138,7 @@ public sealed class BpmnEventBasedGatewayTests
         Assert.Equal(3, (await fixture.BookmarksAsync()).Count);
         var winnerBookmark = Assert.Single(await fixture.BookmarksAsync(), candidate => candidate.StimulusHash == EventStimulus.Hash("evt-a"));
 
-        var resumed = await fixture.ResumeAsync(winnerBookmark, JsonSerializer.SerializeToElement(new EventReceived("evt-a")));
+        var resumed = await fixture.ResumeAsync(winnerBookmark, JsonSerializer.SerializeToElement(new { eventName = "evt-a" }));
 
         // The winner runs to completion; both losing siblings' children are torn down and their bookmarks cleaned.
         resumed.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
@@ -224,7 +224,7 @@ public sealed class BpmnEventBasedGatewayTests
         var run = await fixture.RunAsync(executable);
         var messageBookmark = Assert.Single(await fixture.BookmarksAsync(), candidate => candidate.StimulusHash == EventStimulus.Hash("order-shipped"));
 
-        var resumed = await fixture.ResumeAsync(messageBookmark, JsonSerializer.SerializeToElement(new EventReceived("order-shipped")));
+        var resumed = await fixture.ResumeAsync(messageBookmark, JsonSerializer.SerializeToElement(new { eventName = "order-shipped" }));
 
         var process = resumed.State(BpmnRuntimeFixture.ProcessNodeId);
         Assert.Equal(ActivityExecutionStatus.Faulted, process.Status);
@@ -284,7 +284,7 @@ public sealed class BpmnEventBasedGatewayTests
         Assert.Equal(3, (await fixture.BookmarksAsync()).Count);
         var killBookmark = Assert.Single(await fixture.BookmarksAsync(), candidate => candidate.StimulusHash == EventStimulus.Hash("kill"));
 
-        var resumed = await fixture.ResumeAsync(killBookmark, JsonSerializer.SerializeToElement(new EventReceived("kill")));
+        var resumed = await fixture.ResumeAsync(killBookmark, JsonSerializer.SerializeToElement(new { eventName = "kill" }));
 
         resumed.AssertCompleted(BpmnRuntimeFixture.ProcessNodeId);
         Assert.Empty(await fixture.Provider.GetRequiredService<IIncidentStateStore>()

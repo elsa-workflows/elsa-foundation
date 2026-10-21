@@ -111,7 +111,7 @@ describe("CompensationScopeDesigner", () => {
           { step: "Reserve inventory", forward: { state: "Completed", activityExecutionId: "ae-1" }, recovery: { state: "Compensated", activityExecutionId: "ae-5", order: 1 } },
           { step: "Confirm order", forward: { state: "Faulted", activityExecutionId: "ae-3" }, recovery: { state: "NotApplicable" } }
         ],
-        cause: { step: "Confirm order", activityExecutionId: "ae-3", failureType: "order.rejected", message: "Order rejected" }
+        cause: { kind: "fault", step: "Confirm order", activityExecutionId: "ae-3", failureType: "order.rejected", message: "Order rejected" }
       } satisfies CompensationScopeRuntime
     });
 
@@ -129,6 +129,33 @@ describe("CompensationScopeDesigner", () => {
     click(button("Recovery: Compensated (1st). Show this occurrence"));
     click([...container.querySelectorAll<HTMLButtonElement>("button")].find(candidate => candidate.textContent === "Show failed step")!);
     expect(onSelectExecution.mock.calls).toEqual([["ae-5"], ["ae-3"]]);
+  });
+
+  it("shows uncertain steps and handlers that need an operator, with their attempts and incident", () => {
+    const onOpenIncident = vi.fn();
+    mount({
+      readOnly: true,
+      onSelectExecution: vi.fn(),
+      onOpenIncident,
+      runtime: {
+        scopeActivityExecutionId: "ae-scope",
+        phase: "AwaitingIntervention",
+        rows: [
+          { step: "Reserve inventory", forward: { state: "Uncertain", activityExecutionId: "ae-1" }, recovery: { state: "NeedsAction", activityExecutionId: "ae-6", order: 1, attempts: { count: 3, max: 3 }, incidentId: "inc-6" } },
+          { step: "Confirm order", forward: { state: "NotRun" }, recovery: { state: "NotApplicable" } }
+        ],
+        cause: { kind: "uncertain", step: "Reserve inventory", activityExecutionId: "ae-1", failureType: "inventory.timeout" }
+      } satisfies CompensationScopeRuntime
+    });
+
+    expect(container.querySelector(".wf-compensation-phase")?.textContent).toContain("Needs action");
+    expect(container.querySelector(".wf-compensation-cause")?.textContent).toContain("Recovery started because Reserve inventory could not confirm its outcome: inventory.timeout.");
+    expect([...container.querySelectorAll(".wf-compensation-state")].slice(0, 2).map(chip => chip.getAttribute("aria-label"))).toEqual([
+      "Forward: Uncertain. Show this occurrence",
+      "Recovery: Needs action (1st) · Attempt 3 of 3. Show this occurrence"
+    ]);
+    click(button("Show the incident Reserve inventory is waiting on"));
+    expect(onOpenIncident).toHaveBeenCalledWith("inc-6");
   });
 
   it("moves focus between the same cell of neighbouring rows with the arrow keys", () => {
@@ -150,6 +177,165 @@ describe("CompensationScopeDesigner", () => {
     expect(container.textContent).toContain("No steps yet");
     click([...container.querySelectorAll<HTMLButtonElement>("button")].find(candidate => candidate.textContent?.trim() === "Add first step")!);
     expect(props.onRequestActivity).toHaveBeenCalledWith({ kind: "new-step", index: 0 }, expect.anything());
+  });
+});
+
+describe("CompensationScopeDesigner scheduled retry (spec 261)", () => {
+  it("shows a waiting retry as text and icon with its attempt and due time, and offers no action", () => {
+    const dueAt = new Date(Date.now() + 60_000).toISOString();
+    mount({
+      readOnly: true,
+      onSelectExecution: vi.fn(),
+      onOpenIncident: vi.fn(),
+      runtime: {
+        scopeActivityExecutionId: "ae-scope",
+        phase: "Compensating",
+        rows: [
+          { step: "Reserve inventory", forward: { state: "Completed", activityExecutionId: "ae-1" }, recovery: { state: "RetryScheduled", activityExecutionId: "ae-4", order: 1, attempts: { count: 2, max: 3 }, retryNotBefore: dueAt } },
+          { step: "Confirm order", forward: { state: "Faulted", activityExecutionId: "ae-3" }, recovery: { state: "NotApplicable" } }
+        ]
+      } satisfies CompensationScopeRuntime
+    });
+
+    const chip = container.querySelectorAll(".wf-compensation-state")[1];
+    expect(chip.getAttribute("data-state")).toBe("RetryScheduled");
+    expect(chip.getAttribute("aria-label")).toMatch(/^Recovery: Retry scheduled \(1st\) · Attempt 2 of 3 · after \d{1,2}:\d{2}:\d{2}.*\. Show this occurrence$/);
+    expect(chip.querySelector("svg")).not.toBeNull();
+    expect(container.querySelector(".wf-compensation-actions, [data-operator-action]")).toBeNull();
+    expect(button("Show the incident Reserve inventory is waiting on")).toBeNull();
+  });
+
+  it("names the date of a waiting retry that is due on another day", () => {
+    const dueAt = new Date(Date.now() + 2 * 24 * 60 * 60_000);
+    mount({
+      readOnly: true,
+      onSelectExecution: vi.fn(),
+      onOpenIncident: vi.fn(),
+      runtime: {
+        scopeActivityExecutionId: "ae-scope",
+        phase: "Compensating",
+        rows: [
+          { step: "Reserve inventory", forward: { state: "Completed", activityExecutionId: "ae-1" }, recovery: { state: "RetryScheduled", activityExecutionId: "ae-4", order: 1, attempts: { count: 2, max: 3 }, retryNotBefore: dueAt.toISOString() } },
+          { step: "Confirm order", forward: { state: "Faulted", activityExecutionId: "ae-3" }, recovery: { state: "NotApplicable" } }
+        ]
+      } satisfies CompensationScopeRuntime
+    });
+
+    const label = container.querySelectorAll(".wf-compensation-state")[1].getAttribute("aria-label") ?? "";
+    expect(label).toContain(` · after ${dueAt.toLocaleString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", year: "numeric", month: "short", day: "numeric" })}`);
+    expect(label).toContain(String(dueAt.getFullYear()));
+  });
+
+  it("says a retry is due without a time once its due time passed", () => {
+    mount({
+      readOnly: true,
+      runtime: {
+        scopeActivityExecutionId: "ae-scope",
+        phase: "Compensating",
+        rows: [
+          { step: "Reserve inventory", forward: { state: "Completed", activityExecutionId: "ae-1" }, recovery: { state: "RetryScheduled", order: 1, attempts: { count: 2, max: 3 }, retryNotBefore: "2020-01-01T00:00:00Z" } },
+          { step: "Confirm order", forward: { state: "Faulted", activityExecutionId: "ae-3" }, recovery: { state: "NotApplicable" } }
+        ]
+      } satisfies CompensationScopeRuntime
+    });
+
+    expect(container.querySelectorAll(".wf-compensation-state")[1].getAttribute("aria-label")).toBe("Recovery: Retry due (1st) · Attempt 2 of 3");
+  });
+});
+
+describe("CompensationScopeDesigner nesting states (spec 258)", () => {
+  it("lists handed-over work with a link to the inner scope it came from", () => {
+    const onSelectExecution = vi.fn();
+    mount({ readOnly: true, onSelectExecution, runtime: {
+      scopeActivityExecutionId: "ae-outer",
+      phase: "Compensating",
+      rows: [
+        { step: "Reserve inventory", forward: { state: "Completed", activityExecutionId: "ae-1" }, recovery: { state: "Compensated", activityExecutionId: "ae-4", order: 1 } },
+        { step: "Confirm order", forward: { state: "Faulted", activityExecutionId: "ae-3" }, recovery: { state: "NotApplicable" } }
+      ],
+      received: [{
+        step: "Reserve hotel",
+        forward: { state: "Completed", activityExecutionId: "ae-hotel" },
+        recovery: { state: "Running", activityExecutionId: "ae-cancel-hotel", order: 2 },
+        origin: { scopeNodeId: "inner", label: "Book hotel", activityExecutionId: "ae-inner", iterationId: "it-2" }
+      }]
+    } });
+
+    expect(document.getElementById(container.querySelector(".wf-compensation-received")!.getAttribute("aria-labelledby")!)?.textContent)
+      .toBe("Handed over by inner scopes");
+    expect(rowLabels().at(-1)).toBe("Reserve hotel, from Book hotel (iteration it-2)");
+    click(button("Show Book hotel (iteration it-2), where Reserve hotel ran"));
+    expect(onSelectExecution).toHaveBeenCalledWith("ae-inner");
+    expect(button("Recovery: Undoing (2nd). Show this occurrence")).not.toBeNull();
+  });
+
+  it("shows Confirmed and compensable-by states as text and icon, and opens what confirmed a step", () => {
+    const onSelectExecution = vi.fn();
+    mount({ readOnly: true, onSelectExecution, runtime: {
+      scopeActivityExecutionId: "ae-inner",
+      phase: "Completed",
+      rows: [
+        { step: "Reserve inventory", forward: { state: "Completed", activityExecutionId: "ae-1" }, recovery: { state: "Confirmed", confirmedBy: "ae-confirm" } },
+        { step: "Confirm order", forward: { state: "Completed", activityExecutionId: "ae-3" },
+          recovery: { state: "HandedOver", handedOverTo: { scopeNodeId: "outer", label: "Travel booking", activityExecutionId: "ae-outer" } } }
+      ]
+    } });
+
+    const chips = [...container.querySelectorAll(".wf-compensation-state[data-kind='recovery']")];
+    expect(chips.map(chip => chip.getAttribute("aria-label"))).toEqual(["Recovery: Confirmed", "Recovery: Compensable by Travel booking. Show this occurrence"]);
+    expect(chips.every(chip => chip.querySelector("svg"))).toBe(true);
+    click(button("Show what confirmed Reserve inventory"));
+    expect(onSelectExecution).toHaveBeenCalledWith("ae-confirm");
+    click(button("Recovery: Compensable by Travel booking. Show this occurrence"));
+    expect(onSelectExecution).toHaveBeenLastCalledWith("ae-outer");
+  });
+
+  it("names a Compensate request as the cause and says a cancelled scope undid nothing", () => {
+    const onSelectExecution = vi.fn();
+    mount({ readOnly: true, onSelectExecution, runtime: {
+      scopeActivityExecutionId: "ae-scope",
+      phase: "Compensated",
+      rows: [
+        { step: "Reserve inventory", forward: { state: "Completed", activityExecutionId: "ae-1" }, recovery: { state: "Compensated", activityExecutionId: "ae-4", order: 1 } },
+        { step: "Confirm order", forward: { state: "Uncertain", activityExecutionId: "ae-3" }, recovery: { state: "Kept" } }
+      ],
+      cause: { kind: "explicit", step: "Confirm order", activityExecutionId: "ae-undo", requestedBy: "ae-undo" }
+    } });
+
+    expect(container.querySelector(".wf-compensation-cause")?.textContent).toContain("Recovery started because a Compensate activity asked for it while Confirm order was running.");
+    click([...container.querySelectorAll<HTMLButtonElement>("button")].find(candidate => candidate.textContent === "Show request")!);
+    expect(onSelectExecution).toHaveBeenCalledWith("ae-undo");
+
+    mount({ readOnly: true, runtime: {
+      scopeActivityExecutionId: "ae-scope",
+      phase: "Cancelled",
+      rows: [{ step: "Reserve inventory", forward: { state: "Completed", activityExecutionId: "ae-1" }, recovery: { state: "Kept" } }]
+    } });
+    expect(container.querySelector(".wf-compensation-phase")?.textContent).toContain("Cancelled — nothing undone");
+  });
+
+  it("picks a scope occurrence from a labelled list when the scope ran more than once", () => {
+    const onSelectExecution = vi.fn();
+    mount({ readOnly: true, onSelectExecution, runtime: {
+      scopeActivityExecutionId: "ae-inner-2",
+      phase: "Running",
+      rows: [{ step: "Reserve inventory", forward: { state: "Running", activityExecutionId: "ae-2" }, recovery: { state: "NotApplicable" } }],
+      occurrences: [
+        { activityExecutionId: "ae-inner-1", label: "Occurrence 1 · iteration it-1", status: "Completed", iterationId: "it-1" },
+        { activityExecutionId: "ae-inner-2", label: "Occurrence 2 · iteration it-2", status: "Running", iterationId: "it-2" }
+      ]
+    } });
+
+    const picker = container.querySelector<HTMLSelectElement>(".wf-compensation-occurrence select")!;
+    expect([...picker.labels!].map(label => label.textContent)).toEqual(["Occurrence"]);
+    expect(picker.value).toBe("ae-inner-2");
+    expect([...picker.options].map(option => option.textContent)).toEqual(["Occurrence 1 · iteration it-1 · Completed", "Occurrence 2 · iteration it-2 · Running"]);
+    expect(document.getElementById(picker.getAttribute("aria-describedby")!)?.textContent).toBe("This scope ran 2 times. Choose the occurrence to show.");
+    flushSync(() => {
+      picker.value = "ae-inner-1";
+      picker.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(onSelectExecution).toHaveBeenCalledWith("ae-inner-1");
   });
 });
 

@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Http;
 namespace Elsa.Connections.Design.Services;
 
 /// <summary>
-/// Publish-time tenant is the principal's tenant when an HTTP caller is present, otherwise the
+/// The validator's tenant is the principal's tenant when an HTTP caller is present, otherwise the
 /// persistence partition already selected for the draft operation. Owner/run-as stays reserved (D5).
 /// </summary>
 public sealed class PersistenceScopeConnectionPublishTenantAccessor(

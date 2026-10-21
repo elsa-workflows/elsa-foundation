@@ -210,7 +210,8 @@ export async function moveWorkflowDefinitions(
   await context.http.postJson<unknown>(path, request);
 }
 
-export async function listDefinitions(context: StudioEndpointContext, request: DefinitionListRequest) {
+export async function listDefinitions(context: StudioEndpointContext, request: DefinitionListRequest, signal?: AbortSignal) {
+  const requestOptions: [options?: { signal: AbortSignal }] = signal ? [{ signal }] : [];
   const parameters = new URLSearchParams({
     state: request.state ?? "active"
   });
@@ -226,7 +227,7 @@ export async function listDefinitions(context: StudioEndpointContext, request: D
     const response = await context.http.getJson<{
       items: WorkflowDefinitionsResponse["definitions"];
       nextContinuationToken?: string | null;
-    }>(`${pagedPath}?${parameters.toString()}`);
+    }>(`${pagedPath}?${parameters.toString()}`, ...requestOptions);
     return {
       definitions: response.items ?? [],
       page: request.page,
@@ -237,7 +238,7 @@ export async function listDefinitions(context: StudioEndpointContext, request: D
   }
 
   const response = await context.http.getJson<{ items: WorkflowDefinitionsResponse["definitions"] }>(
-    `${await definitionsPath(context)}?${parameters.toString()}`);
+    `${await definitionsPath(context)}?${parameters.toString()}`, ...requestOptions);
   const offset = Math.max(0, request.page - 1) * request.pageSize;
   const definitions = response.items ?? [];
   return {

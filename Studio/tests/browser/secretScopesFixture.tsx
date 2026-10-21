@@ -25,8 +25,11 @@ const suggestedScopes = [
 ];
 
 const descriptors: SecretDescriptorsResponse = {
-  types: [{ name: "text", displayName: "Text", description: tallDescription, editorHint: "text", supportedStoreNames: ["encrypted"] }],
-  stores: [{ name: "encrypted", displayName: "Encrypted", description: tallDescription, isReadOnly: false }],
+  types: [{ name: "text", displayName: "Text", description: tallDescription, editorHint: "text", supportedStoreNames: scenario === "configuration" ? ["configuration", "encrypted"] : ["encrypted"] }],
+  stores: [
+    ...(scenario === "configuration" ? [{ name: "configuration", displayName: "Configuration", isReadOnly: false }] : []),
+    { name: "encrypted", displayName: "Encrypted", description: tallDescription, isReadOnly: false }
+  ],
   scopes: suggestedScopes
 };
 
@@ -47,6 +50,7 @@ const initialEditorSecret: SecretMetadata = {
 };
 
 function Fixture() {
+  const [unexpectedReadCount, setUnexpectedReadCount] = useState(0);
   const [createdMetadata, setCreatedMetadata] = useState<Pick<SecretMetadata, "name" | "displayName" | "typeName" | "storeName" | "scope" | "tags" | "status"> | null>(null);
   const [updatedMetadata, setUpdatedMetadata] = useState<Pick<SecretMetadata, "name" | "displayName" | "description" | "typeName" | "storeName" | "scope" | "status"> | null>(null);
   const editorSecret = useRef<SecretMetadata>({ ...initialEditorSecret });
@@ -60,6 +64,10 @@ function Fixture() {
           descriptorRequestCount.current += 1;
           const requestNumber = descriptorRequestCount.current;
 
+          if (scenario === "focused-retry" && requestNumber === 2) {
+            await new Promise<void>(resolve => window.addEventListener("fixture-scope-failure", () => resolve(), { once: true }));
+            throw new Error("Fixture scope catalog refresh failed.");
+          }
           if (scenario === "retry-removed" && requestNumber === 2) {
             throw new Error("Fixture scope catalog refresh failed.");
           }
@@ -74,6 +82,7 @@ function Fixture() {
           const items = scenario.startsWith("editor") ? [editorSecret.current] : [];
           return { items, totalCount: items.length } as T;
         }
+        setUnexpectedReadCount(count => count + 1);
         throw new Error(`Unexpected fixture GET ${url}`);
       },
       postJson: async <T,>(url: string, body: unknown) => {
@@ -144,6 +153,7 @@ function Fixture() {
   return (
     <ThemeProvider>
       <SecretsPage context={context} dialogs={{ confirm: async () => true, prompt: async () => null, alert: async () => undefined }} />
+      <output data-testid="unexpected-secret-reads">{unexpectedReadCount}</output>
       {createdMetadata ? <output data-testid="created-secret-metadata">{JSON.stringify(createdMetadata)}</output> : null}
       {updatedMetadata ? <output data-testid="updated-secret-metadata">{JSON.stringify(updatedMetadata)}</output> : null}
     </ThemeProvider>

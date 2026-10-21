@@ -301,6 +301,21 @@ describe("workflow run workbench incident navigation", () => {
     expect(scrollIntoView).toHaveBeenCalled();
   });
 
+  it("keeps the selected occurrence in the URL so a reload reopens it (spec 260 FR-423)", async () => {
+    window.history.replaceState(null, "", "/workflows/instances/run-1?activityExecutionId=execution-target&tab=activity");
+    api.getWorkflowInstance.mockResolvedValue(workflowDetails({ incidents: [] }));
+    api.supportsActivityExecutionInspection.mockResolvedValue(true);
+    api.getActivityExecutionInspection.mockResolvedValue(activityInspection({ incidents: [] }));
+
+    renderWorkbench("activity", "execution-target");
+
+    await vi.waitFor(() => expect(window.location.search).toBe("?tab=activity&selected=execution-target"));
+    click(container.querySelector<HTMLButtonElement>(".wf-sequence-step[data-id='target-node']"));
+    // A design node is not an occurrence, so the URL no longer names one.
+    await vi.waitFor(() => expect(window.location.search).toBe("?tab=activity"));
+    window.history.replaceState(null, "", "/");
+  });
+
   it("does not restore Activity or reopen the drawer after a user changes tab and closes during lookup", async () => {
     observedWidth = 600;
     api.getWorkflowInstance.mockResolvedValue(workflowDetails({ activities: [] }));
@@ -1038,7 +1053,7 @@ function incident(overrides: Partial<IncidentStateSummary> = {}): IncidentStateS
     executableNodeId: "compiled-target",
     severity: "Error",
     status: "Open",
-    resolutionAction: "None",
+    resolutionOutcome: null,
     failureType: "ActivityInputFailed",
     message: "The Text input failed.",
     createdAt: "2026-10-01T12:00:00Z",

@@ -2,6 +2,7 @@ using System.Text.Json;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Services.ActivityExecutions;
 using Elsa.Workflows.Runtime.Services.Checkpoints;
 using Microsoft.Extensions.Options;
 
@@ -62,7 +63,11 @@ internal sealed class BackgroundActivityCoordinator(
         var request = new BackgroundActivityWorkRequest(
             workId, workItem.WorkflowExecutionId, payload.ActivityExecutionId, prepared.Claim.Attempt,
             payload.PinnedExecutable, payload.ExecutableNodeId, node.ActivityContract!.SchemaFingerprint,
-            state.InputSnapshot, resultWorkItem);
+            state.InputSnapshot, resultWorkItem)
+        {
+            OperationKey = ActivityOperationKeyResolver.ResolveOperationKey(state),
+            TargetOperationKey = ActivityOperationKeyResolver.ResolveTargetOperationKey(state)
+        };
         var metadata = new Dictionary<string, string>(prepared.Claim.State.Metadata, StringComparer.Ordinal)
         {
             [BackgroundActivityEligibility.WorkIdMetadataKey] = workId

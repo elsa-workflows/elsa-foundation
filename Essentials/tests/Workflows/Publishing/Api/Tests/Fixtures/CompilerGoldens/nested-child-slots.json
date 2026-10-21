@@ -122,6 +122,10 @@
       {
         "Key": "executionType",
         "Value": "Action"
+      },
+      {
+        "Key": "runtime.acceptsRescheduledFaultedChild",
+        "Value": "true"
       }
     ],
     "structure": {

@@ -181,7 +181,7 @@ function incident(overrides: Partial<IncidentStateSummary> = {}): IncidentStateS
     workflowExecutionId: "run-1",
     severity: "Error",
     status: "Open",
-    resolutionAction: "None",
+    resolutionOutcome: null,
     failureType: "ActivityFailed",
     message: "The activity failed.",
     createdAt: "2026-10-18T12:00:00Z",

@@ -36,7 +36,6 @@ INCLUDE = (
 # ...and none of these. Each is a file a build or test reads, so changing it needs the full run.
 EXCLUDE = (
     "EXTENSION_POINTS.md",  # CatalogLinkGuardTests and the extension-point map layer read the root catalog
-    "docs/maps/dependency-map.json",  # DependencyMapTests, NuGetLockFileTests and the versioning calculator read it
     "specs/*/contracts/**",  # ManagementApiOperationInventoryTests reads a spec's OpenAPI contract
 )
 
@@ -102,7 +101,7 @@ def self_test() -> int:
         (["Studio/specs/004-x/tasks.md"], True),
         (["docs/maps/README.md"], True),
         (["EXTENSION_POINTS.md"], False),
-        (["docs/maps/dependency-map.json"], False),
+        (["Essentials/src/Tasks/Elsa.Tasks/packages.lock.json"], False),
         (["specs/220-domain-owned-apis/contracts/management-api.openapi.yaml"], False),
         ([".claude/x/.editorconfig"], False),
         (["docs/Directory.Build.props"], False),

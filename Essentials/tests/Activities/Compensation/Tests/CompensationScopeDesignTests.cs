@@ -35,7 +35,7 @@ public sealed class CompensationScopeDesignTests : IDisposable
     public void Dispose() => _provider.Dispose();
 
     [Fact]
-    public void The_feature_registers_the_structure_handler_and_the_Draft_validator()
+    public void The_feature_registers_the_structure_handler_and_the_Draft_validators()
     {
         Assert.Equal(CompensationScope.StructureKind, _handler.Kind);
         Assert.Equal(CompensationScope.StructureSchemaVersion, _handler.SchemaVersion);
@@ -43,9 +43,11 @@ public sealed class CompensationScopeDesignTests : IDisposable
 
         var services = new ServiceCollection();
         new ActivitiesCompensationFeature().ConfigureServices(services);
-        var validator = Assert.Single(services, descriptor => descriptor.ServiceType == typeof(IDraftValidator));
-        Assert.Equal(typeof(CompensationScopeValidator), validator.ImplementationType);
-        Assert.Equal(ServiceLifetime.Scoped, validator.Lifetime);
+        var validators = services.Where(descriptor => descriptor.ServiceType == typeof(IDraftValidator)).ToArray();
+        Assert.Equal(
+            [typeof(CompensationScopeValidator), typeof(CompensationTargetValidator), typeof(CompensationHandlerVariableValidator), typeof(CompensationReplaySafeValidator)],
+            validators.Select(validator => validator.ImplementationType));
+        Assert.All(validators, validator => Assert.Equal(ServiceLifetime.Scoped, validator.Lifetime));
     }
 
     [Fact]
@@ -167,6 +169,124 @@ public sealed class CompensationScopeDesignTests : IDisposable
     {
         Assert.Empty(await ValidateAsync(ScopeNode("scope", ("Reserve", Leaf("a"), Leaf("b")), ("Confirm", Leaf("c"), null))));
     }
+
+    // --- Spec 261 T507: the handler retry inputs ---
+
+    [Fact]
+    public async Task The_default_retry_inputs_and_unbound_ones_are_valid()
+    {
+        Assert.Empty(await ValidateAsync(ScopeWithInputs(("handlerRetryDelay", "00:00:00", null), ("handlerRetryBackoffMultiplier", 2, null), ("handlerRetryMaxDelay", "00:05:00", null))));
+        Assert.Empty(await ValidateAsync(ScopeWithInputs()));
+    }
+
+    [Theory]
+    [InlineData("-00:00:01")]
+    [InlineData("1.00:00:01")]
+    [InlineData("not a duration")]
+    public async Task A_retry_delay_outside_0_to_24_hours_is_refused(string delay)
+    {
+        var error = Assert.Single(await ValidateAsync(ScopeWithInputs(("handlerRetryDelay", delay, null))));
+
+        Assert.Equal((CompensationScopeValidator.InvalidRetryDelayType, "scope/inputs/handlerRetryDelay"), (error.Type, error.Path));
+        Assert.Equal("Handler retry delay must be between 0 and 24 hours.", error.Message);
+        Assert.Equal(ValidationSeverities.Error, error.Severity);
+    }
+
+    [Theory]
+    [InlineData("00:00:00")]
+    [InlineData("1.00:00:00")]
+    [InlineData("00:00:30")]
+    public async Task A_retry_delay_within_0_to_24_hours_is_valid(string delay)
+    {
+        Assert.Empty(await ValidateAsync(ScopeWithInputs(("handlerRetryDelay", delay, null), ("handlerRetryMaxDelay", "1.00:00:00", null))));
+    }
+
+    [Theory]
+    [InlineData(0.99)]
+    [InlineData(0)]
+    [InlineData(-2)]
+    [InlineData(double.NaN)]
+    public async Task A_backoff_multiplier_below_1_is_refused(double multiplier)
+    {
+        var error = Assert.Single(await ValidateAsync(ScopeWithInputs(("handlerRetryBackoffMultiplier", multiplier.ToString(System.Globalization.CultureInfo.InvariantCulture), null))));
+
+        Assert.Equal((CompensationScopeValidator.InvalidBackoffMultiplierType, "scope/inputs/handlerRetryBackoffMultiplier"), (error.Type, error.Path));
+        Assert.Equal("Handler retry backoff multiplier must be at least 1.", error.Message);
+    }
+
+    [Theory]
+    [InlineData(1.0)]
+    [InlineData(3.5)]
+    public async Task A_backoff_multiplier_of_at_least_1_is_valid(double multiplier)
+    {
+        Assert.Empty(await ValidateAsync(ScopeWithInputs(("handlerRetryBackoffMultiplier", multiplier, null))));
+    }
+
+    [Theory]
+    [InlineData("00:00:30", "00:00:29")]
+    [InlineData("00:00:00", "1.00:00:01")]
+    [InlineData("00:00:00", "-00:00:01")]
+    public async Task A_max_delay_below_the_delay_or_over_24_hours_is_refused(string delay, string maxDelay)
+    {
+        var error = Assert.Single(await ValidateAsync(ScopeWithInputs(("handlerRetryDelay", delay, null), ("handlerRetryMaxDelay", maxDelay, null))));
+
+        Assert.Equal((CompensationScopeValidator.InvalidRetryMaxDelayType, "scope/inputs/handlerRetryMaxDelay"), (error.Type, error.Path));
+        Assert.Equal("Handler retry max delay must be at least the retry delay and at most 24 hours.", error.Message);
+    }
+
+    [Fact]
+    public async Task A_max_delay_equal_to_the_delay_is_valid()
+    {
+        Assert.Empty(await ValidateAsync(ScopeWithInputs(("handlerRetryDelay", "00:01:00", null), ("handlerRetryMaxDelay", "00:01:00", null))));
+    }
+
+    [Fact]
+    public async Task A_literal_delay_above_the_default_max_delay_needs_a_max_delay()
+    {
+        // An unbound max delay takes its 5-minute default, which a 10-minute delay would silently raise at run time.
+        var error = Assert.Single(await ValidateAsync(ScopeWithInputs(("handlerRetryDelay", "00:10:00", null))));
+        Assert.Equal((CompensationScopeValidator.InvalidRetryMaxDelayType, "scope/inputs/handlerRetryMaxDelay"), (error.Type, error.Path));
+        Assert.Empty(await ValidateAsync(ScopeWithInputs(("handlerRetryDelay", "00:05:00", null))));
+        Assert.Empty(await ValidateAsync(ScopeWithInputs(("handlerRetryDelay", "00:10:00", null), ("handlerRetryMaxDelay", "00:10:00", null))));
+    }
+
+    [Fact]
+    public async Task An_expression_input_is_not_validated_at_design_time()
+    {
+        Assert.Empty(await ValidateAsync(ScopeWithInputs(
+            ("handlerRetryDelay", "-1", "JavaScript"),
+            ("handlerRetryBackoffMultiplier", "0", "JavaScript"),
+            ("handlerRetryMaxDelay", "variables.cap", "JavaScript"))));
+
+        // With the delay known only at run time, the cap is still checked against its own range.
+        var error = Assert.Single(await ValidateAsync(ScopeWithInputs(("handlerRetryDelay", "delay", "JavaScript"), ("handlerRetryMaxDelay", "2.00:00:00", null))));
+        Assert.Equal(CompensationScopeValidator.InvalidRetryMaxDelayType, error.Type);
+    }
+
+    [Fact]
+    public async Task Each_invalid_retry_input_of_a_nested_scope_is_reported_on_that_scope()
+    {
+        var inner = ScopeWithInputs("inner", ("handlerRetryDelay", "-00:00:05", null), ("handlerRetryBackoffMultiplier", 0.5, null));
+        var outer = ScopeNode("outer", ("Inner", inner, null));
+
+        var errors = await ValidateAsync(outer);
+
+        Assert.Equal(["inner/inputs/handlerRetryBackoffMultiplier", "inner/inputs/handlerRetryDelay"], errors.Select(error => error.Path).Order(StringComparer.Ordinal));
+    }
+
+    private static ActivityNode ScopeWithInputs(params (string Key, object Value, string? ExpressionType)[] inputs) =>
+        ScopeWithInputs("scope", inputs);
+
+    private static ActivityNode ScopeWithInputs(string nodeId, params (string Key, object Value, string? ExpressionType)[] inputs) =>
+        ScopeNode(nodeId, ("Reserve", Leaf($"{nodeId}-a"), Leaf($"{nodeId}-b"))) with
+        {
+            Inputs = inputs
+                .Select(input => new ArgumentState(
+                    input.Key,
+                    new Elsa.Expressions.Core.Models.ArgumentValue(input.Value is string text ? JsonSerializer.SerializeToElement(text) : JsonSerializer.SerializeToElement(input.Value), input.ExpressionType),
+                    null, null, null, null))
+                .ToArray()
+        };
 
     private async Task<IReadOnlyList<ValidationError>> ValidateAsync(ActivityNode rootActivity)
     {

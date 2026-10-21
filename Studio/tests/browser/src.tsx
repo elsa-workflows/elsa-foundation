@@ -21,11 +21,13 @@ import { ActivityDefinitionDraftCodeView } from "../../src/essentials/Elsa.Studi
 import { ActivityDefinitionDiagnosticsPanel } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionDiagnosticsPanel";
 import { ActivityDefinitionTestRunDialog } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/ActivityDefinitionTestRunDialog";
 import { WorkflowLazyBoundary } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/WorkflowLazyBoundary";
+import { TestRunStatus } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/editorPanels";
 import { WorkflowEditorToolbar } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowEditorToolbar";
 import { builtInPropertyEditors } from "../../src/apps/Elsa.Studio.Web/Client/src/app/propertyEditors";
 import { Download, ListTree, Package, PackageOpen, Play, Sparkles, Upload } from "lucide-react";
 import { PanelTabList } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/PanelTabList";
 import { WorkflowDefinitions } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/WorkflowDefinitions";
+import { useWorkflowDefinitionBrowseSession } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/workflowDefinitionBrowseSession";
 import { setDialogs } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/dialogs";
 import { useRunDetailLayout } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflow-editor/useRunDetailLayout";
 import {
@@ -41,7 +43,8 @@ import type {
   ActivityCatalogItem,
   ActivityExecutionStateSummary,
   ActivityNode,
-  WorkflowDraft
+  WorkflowDraft,
+  WorkflowTestRunView
 } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/workflowTypes";
 import { listActivities, listRecommendedActivityDefinitions, useFullActivityDefinitionVersion } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/activityDesign";
 import { runExecutable } from "../../src/essentials/Elsa.Studio.Workflows/Client/src/api/runtime";
@@ -118,6 +121,11 @@ const expressionToolingUnavailable = searchParams.get("tooling") === "unavailabl
 const expressionFieldCount = Math.max(1, Math.min(50, Number(searchParams.get("fields") ?? 1)));
 const referenceJavaScriptExpression = `formatTotal(total)${" + total".repeat(248)}`;
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+function DirectWorkflowDefinitions({ context, ai }: { context: StudioEndpointContext; ai: StudioAiContributionApi }) {
+  const session = useWorkflowDefinitionBrowseSession(context);
+  return <WorkflowDefinitions context={context} ai={ai} onOpen={() => undefined} session={session} />;
+}
 const endpointContext = createEndpointContext(window.location.origin);
 
 const DeferredWorkflowPanel = lazy(() => new Promise<{ default: React.ComponentType }>(resolve => {
@@ -127,6 +135,7 @@ const DeferredWorkflowPanel = lazy(() => new Promise<{ default: React.ComponentT
 function WorkflowToolbarFixture() {
   const [status, setStatus] = useState("");
   const [autosave, setAutosave] = useState(true);
+  const [runStatus, setRunStatus] = useState("");
   const [selectedAction, setSelectedAction] = useState("");
   const selectAction = (label: string) => () => setSelectedAction(label);
   return (
@@ -146,9 +155,10 @@ function WorkflowToolbarFixture() {
         onAutoLayout={selectAction("Auto-layout")}
         onBack={selectAction("Definitions")}
         onSave={selectAction("Save")}
-        onPublish={mode => selectAction(mode === "publish" ? "Publish" : "Review and Publish")()}
-        onRun={selectAction("Run")}
+        onPublish={mode => selectAction(mode === "publish" ? "Publish" : "Review & publish")()}
+        onRun={selectAction("Test Run")}
         canRun
+        runStatus={runStatus ? <TestRunStatus testRun={toolbarTestRun(runStatus)} stale={runStatus === "stale"} onOpenDetails={selectAction("Runtime details")} /> : null}
         runTitle="Run a transient test of the current design"
         moreActions={[
           { label: "Weaver", actions: [
@@ -167,10 +177,22 @@ function WorkflowToolbarFixture() {
         <label>Save status<select aria-label="Save status" value={status} onChange={event => setStatus(event.target.value)}>
           {["", "Autosaving...", "Autosaved", "Saving before review...", "Published to an unusually long publication channel"].map(value => <option key={value} value={value}>{value || "Empty"}</option>)}
         </select></label>
+        <label>Test Run status<select aria-label="Test Run status" value={runStatus} onChange={event => setRunStatus(event.target.value)}>
+          {["", "accepted", "rejected", "incidents", "runtime-issue", "stale"].map(value => <option key={value} value={value}>{value || "None"}</option>)}
+        </select></label>
         <p>Selected action: {selectedAction || "None"}</p>
       </section>
     </main>
   );
+}
+
+function toolbarTestRun(state: string): WorkflowTestRunView {
+  return {
+    testRunId: "toolbar-test-run", definitionId: "toolbar-definition", definitionVersionId: "draft:1",
+    status: state === "rejected" ? "Rejected" : "DispatchAccepted",
+    commandDispatchStatus: state === "runtime-issue" ? "AcceptedButFaulted" : "Accepted",
+    incidentCount: state === "incidents" ? 2 : 0
+  };
 }
 
 function ActivityDefinitionRoutesFixture() {
@@ -975,7 +997,7 @@ function MoveDefinitionsFixture() {
 
   return <main className="wf-editor browser-fixture" data-moved={moved}>
     <h1>Workflow definitions</h1>
-    <WorkflowDefinitions context={context} ai={ai} onOpen={() => undefined} />
+    <DirectWorkflowDefinitions context={context} ai={ai} />
   </main>;
 }
 
@@ -1123,7 +1145,7 @@ function FolderRestructureFixture() {
 
   return <main className="wf-editor browser-fixture">
     <h1>Workflow folders</h1>
-    <WorkflowDefinitions context={context} ai={ai} onOpen={() => undefined} />
+    <DirectWorkflowDefinitions context={context} ai={ai} />
   </main>;
 }
 
@@ -1573,6 +1595,13 @@ function publicationReview(): PublicationReviewState {
   });
   return {
     ...review,
+    // Spec 261 FR-515: `warnings=1` lists the replay-safe warnings a compensation scope with Write Line steps gets.
+    validationWarnings: searchParams.get("warnings") === "1"
+      ? [
+        "\"Charge card\" is marked safe to repeat, so its call may not be committed before it runs; if the process stops, recovery may not know it happened. Mark it as an external effect unless it has none.",
+        "The compensation of \"Charge card\" is marked safe to repeat, so an undo may run again after a restart without a committed claim. Mark it as an external effect unless it is idempotent and has no effect of its own."
+      ]
+      : review.validationWarnings,
     exactVersionSupported: searchParams.get("exact") !== "unsupported",
     versionPreflightSupported: searchParams.get("exact") !== "unsupported",
     proposedVersion: "2.0.0",
@@ -1739,7 +1768,9 @@ async function renderRequestedFixture() {
   }
   if (searchParams.get("mode") === "compensation-scope") {
     const { CompensationScopeFixture } = await import("./compensationScopeFixture");
-    root.render(<CompensationScopeFixture view={searchParams.get("view") === "run" ? "run" : "author"} />);
+    const view = searchParams.get("view");
+    const views = ["run", "waiting", "retry", "nested", "confirmed", "loop", "actions", "resolved", "abandoned", "readonly", "derived", "step", "incident"] as const;
+    root.render(<CompensationScopeFixture view={views.find(candidate => candidate === view) ?? "author"} outcome={searchParams.get("outcome") ?? undefined} />);
     return;
   }
   if (searchParams.get("mode") === "incident-diagnostics") {
@@ -1750,6 +1781,11 @@ async function renderRequestedFixture() {
   if (searchParams.get("mode") === "definition-versions") {
     const { DefinitionVersionsFixture } = await import("./definitionVersionsFixture");
     root.render(<DefinitionVersionsFixture />);
+    return;
+  }
+  if (searchParams.get("mode") === "workflow-definition-browse") {
+    const { WorkflowDefinitionBrowseFixture } = await import("./workflowDefinitionBrowseFixture");
+    root.render(<WorkflowDefinitionBrowseFixture />);
     return;
   }
   if (navBeforeFixture) {

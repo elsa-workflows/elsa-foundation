@@ -97,6 +97,203 @@ public sealed class RescheduleActivityAlterationHandlerTests
     }
 
     [Fact]
+    public async Task PreflightAsync_SuccessorDropsTheSourcesPerInvocationMetadata()
+    {
+        // Named explicitly rather than read from the list under test, so a key dropped from that list fails here.
+        string[] perInvocationKeys =
+        [
+            RuntimeMetadataKeys.ActivityAttemptActivationClaim,
+            RuntimeMetadataKeys.ActivityAttemptActivationClaimWorkItemId,
+            RuntimeMetadataKeys.ActivityActivationCompletedWorkItemId,
+            RuntimeMetadataKeys.ActivityAttemptOrdinalHighWatermark,
+            RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId,
+            RuntimeMetadataKeys.ParentOutcomeWorkItemId,
+            RuntimeMetadataKeys.DescendantFaultProcessedWorkItemId,
+            RuntimeMetadataKeys.IncidentId,
+            RuntimeMetadataKeys.FaultSubStatus,
+            RuntimeMetadataKeys.FaultType,
+            RuntimeMetadataKeys.FaultMessage,
+            RuntimeMetadataKeys.FaultStackTrace,
+            RuntimeMetadataKeys.FaultInnerType,
+            RuntimeMetadataKeys.FaultInnerMessage,
+            RuntimeMetadataKeys.CausalIncidentId,
+            RuntimeMetadataKeys.CausalActivityExecutionId,
+            RuntimeMetadataKeys.CausalExecutableNodeId,
+            RuntimeMetadataKeys.CausationKind,
+            RuntimeMetadataKeys.BackgroundActivityWorkId
+        ];
+        // A source an ancestor already received the fault of is refused outright, so that marker is left out here.
+        var metadata = perInvocationKeys
+            .Where(key => key != RuntimeMetadataKeys.DescendantFaultProcessedWorkItemId)
+            .ToDictionary(key => key, _ => "source-value", StringComparer.Ordinal);
+        metadata["custom.kept"] = "kept";
+        // The parent already evaluated the source's fault, so it must be running and accept a rescheduled child.
+        var source = Source(ActivityExecutionStatus.Faulted) with { Metadata = metadata, ParentActivityExecutionId = "parent" };
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        await executableStore.SaveAsync(ExecutableWithParent(acceptsRescheduledFaultedChild: true));
+        var staging = new Staging();
+
+        var result = await Handler(executableStore).PreflightAsync(Context(source, staging, Parent(ActivityExecutionStatus.Running)));
+
+        Assert.True(result.IsAccepted);
+        var builder = Apply(Assert.IsAssignableFrom<IWorkflowAlterationRuntimeCheckpointStagedChange>(Assert.Single(staging.StagedChanges)));
+        var successor = Assert.Single(builder.ActivityExecutions, change => change.StateId != source.Execution.ActivityExecutionId).State;
+        Assert.Equal(
+            new Dictionary<string, string>
+            {
+                ["custom.kept"] = "kept",
+                [RuntimeMetadataKeys.SupersedesActivityExecutionId] = source.Execution.ActivityExecutionId
+            },
+            successor.Metadata);
+        // The superseded source keeps its own record of what happened to it.
+        var superseded = Assert.Single(builder.ActivityExecutions, change => change.StateId == source.Execution.ActivityExecutionId).State;
+        Assert.Equal("source-value", superseded.Metadata[RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId]);
+    }
+
+    [Fact]
+    public async Task PreflightAsync_SuccessorCommandCarriesTheSchedulingMetadataItsParentGaveTheSource()
+    {
+        var source = Source(ActivityExecutionStatus.Waiting) with
+        {
+            ParentActivityExecutionId = "parent",
+            Provenance = ActivitySchedulingProvenance.From("workflow", "parent", "parent", null, null, null, "source", "test",
+                new Dictionary<string, string> { ["test.route"] = "step-1" })
+        };
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        await executableStore.SaveAsync(Executable());
+        var staging = new Staging();
+
+        var result = await Handler(executableStore).PreflightAsync(Context(source, staging));
+
+        Assert.True(result.IsAccepted);
+        var builder = Apply(Assert.IsAssignableFrom<IWorkflowAlterationRuntimeCheckpointStagedChange>(Assert.Single(staging.StagedChanges)));
+        var successor = Assert.Single(builder.ActivityExecutions, change => change.StateId != source.Execution.ActivityExecutionId).State;
+        Assert.Equal("step-1", successor.Provenance.Metadata["test.route"]);
+        var commandMetadata = Assert.Single(builder.PostCommitIntents).MaterializedSchedulerWorkItem!.CommandMetadata;
+        Assert.Equal("step-1", commandMetadata["test.route"]);
+        Assert.Equal("parent", commandMetadata[RuntimeMetadataKeys.ParentActivityExecutionId]);
+        Assert.Equal(source.Execution.ExecutableNodeId, commandMetadata[RuntimeMetadataKeys.ChildExecutableNodeId]);
+        Assert.Equal("RescheduleActivity", commandMetadata["runtime.alteration.kind"]);
+    }
+
+    [Theory]
+    [InlineData(true, ActivityExecutionStatus.Running, null)]
+    [InlineData(false, ActivityExecutionStatus.Running, "ParentDoesNotAcceptRescheduledChild")]
+    [InlineData(true, ActivityExecutionStatus.Cancelled, "SourceParentNotRunning")]
+    public async Task PreflightAsync_ASourceWhoseFaultItsParentEvaluated_NeedsARunningParentThatAcceptsIt(
+        bool acceptsRescheduledFaultedChild,
+        ActivityExecutionStatus parentStatus,
+        string? expectedCode)
+    {
+        var source = Source(ActivityExecutionStatus.Faulted) with
+        {
+            ParentActivityExecutionId = "parent",
+            Metadata = new Dictionary<string, string> { [RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId] = "work-1" }
+        };
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        await executableStore.SaveAsync(ExecutableWithParent(acceptsRescheduledFaultedChild));
+        var staging = new Staging();
+
+        var result = await Handler(executableStore).PreflightAsync(Context(source, staging, Parent(parentStatus)));
+
+        Assert.Equal(expectedCode is null, result.IsAccepted);
+        Assert.Equal(expectedCode, result.Failure?.Code);
+        if (expectedCode is not null)
+        {
+            Assert.Empty(staging.StagedChanges);
+            return;
+        }
+
+        // Accepted: the successor carries no parent-completion marker, so its outcome reaches the parent.
+        var builder = Apply(Assert.IsAssignableFrom<IWorkflowAlterationRuntimeCheckpointStagedChange>(Assert.Single(staging.StagedChanges)));
+        var successor = Assert.Single(builder.ActivityExecutions,
+            change => change.StateId != source.Execution.ActivityExecutionId && change.StateId != "parent").State;
+        Assert.DoesNotContain(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId, successor.Metadata.Keys);
+    }
+
+    [Fact]
+    public async Task PreflightAsync_RefusesASourceWhoseFaultAnAncestorAlreadyReceived()
+    {
+        // The direct parent is running and accepts it, but an ancestor past it already decided on the fault.
+        var source = Source(ActivityExecutionStatus.Faulted) with
+        {
+            ParentActivityExecutionId = "parent",
+            Metadata = new Dictionary<string, string>
+            {
+                [RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId] = "work-1",
+                [RuntimeMetadataKeys.DescendantFaultProcessedWorkItemId] = "work-2"
+            }
+        };
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        await executableStore.SaveAsync(ExecutableWithParent(acceptsRescheduledFaultedChild: true));
+        var staging = new Staging();
+
+        var result = await Handler(executableStore).PreflightAsync(Context(source, staging, Parent(ActivityExecutionStatus.Running)));
+
+        Assert.False(result.IsAccepted);
+        Assert.Equal("SourceFaultHandledByAncestor", result.Failure!.Code);
+        Assert.Empty(staging.StagedChanges);
+    }
+
+    [Fact]
+    public async Task PreflightAsync_RefusesAFaultedSourceWhoseParentFaultedOnItsFault()
+    {
+        // A parent whose fault evaluation faulted it writes no processed marker on the child.
+        var source = Source(ActivityExecutionStatus.Faulted) with { ParentActivityExecutionId = "parent" };
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        await executableStore.SaveAsync(ExecutableWithParent(acceptsRescheduledFaultedChild: true));
+        var staging = new Staging();
+
+        var result = await Handler(executableStore).PreflightAsync(Context(source, staging, Parent(ActivityExecutionStatus.Faulted)));
+
+        Assert.False(result.IsAccepted);
+        Assert.Equal("SourceParentNotRunning", result.Failure!.Code);
+        Assert.Empty(staging.StagedChanges);
+    }
+
+    [Fact]
+    public async Task PreflightAsync_RefusesAFaultedSourceUnderAnAncestorThatIsNoLongerRunning()
+    {
+        // The parent is running and accepts it, but the scope above it faulted on the fault without cancelling it.
+        var source = Source(ActivityExecutionStatus.Faulted) with
+        {
+            ParentActivityExecutionId = "parent",
+            Metadata = new Dictionary<string, string> { [RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId] = "work-1" }
+        };
+        var parent = Parent(ActivityExecutionStatus.Running) with { ParentActivityExecutionId = "grandparent" };
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        await executableStore.SaveAsync(ExecutableWithParent(acceptsRescheduledFaultedChild: true));
+        var staging = new Staging();
+
+        var result = await Handler(executableStore).PreflightAsync(
+            Context(source, staging, parent, Source(ActivityExecutionStatus.Faulted, "grandparent")));
+
+        Assert.False(result.IsAccepted);
+        Assert.Equal("SourceAncestorNotRunning", result.Failure!.Code);
+        Assert.Empty(staging.StagedChanges);
+    }
+
+    [Fact]
+    public async Task PreflightAsync_AcceptsAFaultedSourceWhenItsParentAndEveryAncestorAreRunning()
+    {
+        var source = Source(ActivityExecutionStatus.Faulted) with
+        {
+            ParentActivityExecutionId = "parent",
+            Metadata = new Dictionary<string, string> { [RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId] = "work-1" }
+        };
+        var parent = Parent(ActivityExecutionStatus.Running) with { ParentActivityExecutionId = "grandparent" };
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        await executableStore.SaveAsync(ExecutableWithParent(acceptsRescheduledFaultedChild: true));
+        var staging = new Staging();
+
+        var result = await Handler(executableStore).PreflightAsync(
+            Context(source, staging, parent, Source(ActivityExecutionStatus.Running, "grandparent")));
+
+        Assert.True(result.IsAccepted);
+        Assert.Single(staging.StagedChanges);
+    }
+
+    [Fact]
     public async Task PreflightAsync_KeepsIntrinsicSuccessorScheduledEvenWhenInputsArePinned()
     {
         var source = Source(ActivityExecutionStatus.Faulted) with
@@ -276,6 +473,23 @@ public sealed class RescheduleActivityAlterationHandlerTests
             : new Dictionary<string, RuntimeInputBinding>();
         var node = new ExecutableNode("node", "node", "test", "1", "consumer", JsonSerializer.SerializeToElement(new { }), bindings, new Dictionary<string, string>(), intrinsicKind: intrinsic ? WorkflowIntrinsicKind.Return : null);
         return new WorkflowExecutable(Workflow().PinnedExecutable, node, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UnixEpoch, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference);
+    }
+
+    private static WorkflowExecutable ExecutableWithParent(bool acceptsRescheduledFaultedChild)
+    {
+        var child = new ExecutableNode("node", "node", "test", "1", "consumer", JsonSerializer.SerializeToElement(new { }), new Dictionary<string, RuntimeInputBinding>(), new Dictionary<string, string>());
+        var parentMetadata = acceptsRescheduledFaultedChild
+            ? new Dictionary<string, string> { [RuntimeMetadataKeys.AcceptsRescheduledFaultedChild] = "true" }
+            : new Dictionary<string, string>();
+        var parent = new ExecutableNode("parent-node", "parent-node", "test-parent", "1", "consumer", JsonSerializer.SerializeToElement(new { }),
+            new Dictionary<string, RuntimeInputBinding>(), parentMetadata, childSlots: [new ExecutableChildSlot("children", [child])]);
+        return new WorkflowExecutable(Workflow().PinnedExecutable, parent, new Dictionary<string, WorkflowExecutableResumeTarget>(), DateTimeOffset.UnixEpoch, new Dictionary<string, string>(), IncidentStrategyBuiltIns.FaultReference);
+    }
+
+    private static ActivityExecutionState Parent(ActivityExecutionStatus status)
+    {
+        var parent = Source(status, "parent");
+        return parent with { Execution = parent.Execution with { ExecutableNodeId = "parent-node" } };
     }
 
     private static ActivityExecutionState Source(ActivityExecutionStatus status, string id = "source") => new(

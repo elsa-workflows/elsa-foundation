@@ -6,7 +6,9 @@ using Elsa.Serialization.SystemText;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
 using Elsa.Workflows.Runtime.Core.Models;
+using Elsa.Workflows.Runtime.Core.Models.Alterations;
 using Elsa.Workflows.Runtime.Services.Executions;
+using Elsa.Workflows.Runtime.Services.Recovery;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
@@ -132,21 +134,148 @@ public sealed class CompensationScopeRuntimeTests
     }
 
     [Fact]
-    public async Task A_handler_fault_stays_a_blocking_incident_and_its_entry_is_never_reported_compensated()
+    public async Task A_handler_that_fails_on_every_attempt_waits_for_intervention_and_the_run_keeps_running()
     {
         var participant = new Participant().Rejecting("confirm-order", "cancel-delivery");
         await using var harness = NewHarness(participant);
 
         var run = await harness.RunAsync(Executable(ReservationJourney()), allowPendingWorkOnTerminalCompletion: true, allowAcceptedButFaulted: true);
 
-        // The default incident strategy faults the run; the remaining handler does not run.
-        Assert.Equal(WorkflowExecutionStatus.Faulted, run.WorkflowState?.Status);
+        // Spec 251 J4: three attempts, then the last attempt's incident waits for an operator; nothing is compensated.
+        Assert.Equal(WorkflowExecutionStatus.Running, run.WorkflowState?.Status);
+        Assert.Equal(3, run.States("cancel-delivery").Count);
         run.AssertDidNotRun("release-inventory");
 
         var state = ScopeState(run);
-        Assert.Equal(CompensationScopePhase.Compensating, state.Phase);
+        Assert.Equal(CompensationScopePhase.AwaitingIntervention, state.Phase);
+        Assert.Equal("Confirm order", state.Cause!.Step);
         Assert.Equal(CompensationEntryStatus.Registered, state.Entries[0].Status);
-        Assert.Equal(CompensationEntryStatus.Compensating, state.Entries[1].Status);
+        var failed = state.Entries[1];
+        Assert.Equal(CompensationEntryStatus.Failed, failed.Status);
+        Assert.Equal(3, failed.HandlerAttempts.Count);
+
+        var blocking = await harness.Services.GetRequiredService<IIncidentStateStore>().ListBlockingAsync(run.WorkflowState!.WorkflowExecutionId);
+        var waiting = Assert.Single(blocking);
+        Assert.Equal(failed.InterventionIncidentId, waiting.IncidentId);
+        Assert.Equal(IncidentResolutionActionKinds.WaitForIntervention, waiting.ResolutionOutcome?.ActionKind);
+        Assert.Equal(IncidentResolutionSystemSources.StructuralIntervention, waiting.ResolutionOutcome?.SystemSource);
+    }
+
+    [Fact]
+    public async Task An_operator_retry_of_the_waiting_handler_finishes_the_recovery_once()
+    {
+        // Spec 251 J5: the handler fails on all three attempts, the operator retries it, and the fourth call succeeds.
+        var participant = new Participant().Rejecting("confirm-order").FailingTimes("cancel-delivery", 3);
+        await using var harness = NewHarness(participant);
+        // An alteration targets a run started from a published source in a tenant partition.
+        var reference = await harness.PublishAsync(Executable(ReservationJourney()), "source-operator-retry");
+        await harness.StartPublishedAsync(reference, harness.ExecutionId, tenantId: WorkflowExecutionHarness.Partition.Value);
+        var executionId = harness.ExecutionId;
+        var incident = Assert.Single(await harness.Services.GetRequiredService<IIncidentStateStore>().ListBlockingAsync(executionId));
+
+        var job = await OperatorRetry.RetryAsync(harness, executionId, incident.ActivityExecutionId!, "retry-1", WorkflowExecutionHarness.Partition);
+
+        Assert.True(job.Status == WorkflowAlterationJobStatus.Succeeded,
+            $"{job.Status} {job.SafeFailure} {string.Join("; ", job.Outcomes.Select(outcome => $"{outcome.Code}: {outcome.Message}"))}");
+        var run = await harness.ReadRunAsync(executionId);
+        Assert.Equal(WorkflowExecutionStatus.Completed, run.WorkflowState?.Status);
+        run.AssertOutcomes(ScopeNodeId, CompensationScope.CompensatedOutcome);
+        Assert.Equal(["reserve-inventory", "reserve-delivery", "cancel-delivery", "release-inventory"], participant.EffectOrder);
+        Assert.Single(participant.Calls.Where(call => call.NodeId == "cancel-delivery").Select(call => call.OperationKey).Distinct());
+        Assert.Empty(participant.Present);
+    }
+
+    [Fact]
+    public async Task A_retried_uncertain_step_that_faults_with_nothing_to_undo_faults_the_scope_when_asked_to()
+    {
+        // The only step loses its response and has no handler, so the scope waits; the operator's retry is rejected.
+        var participant = new Participant().LosingResponseAfterEffectOf("confirm-order");
+        await using var harness = NewHarness(participant);
+        var reference = await harness.PublishAsync(Executable(Scope(faultAfterCompensation: true, new Step("Confirm order", Participant("confirm-order")))), "source-retried-step");
+        await harness.StartPublishedAsync(reference, harness.ExecutionId, tenantId: WorkflowExecutionHarness.Partition.Value);
+        var incident = Assert.Single(await harness.Services.GetRequiredService<IIncidentStateStore>().ListBlockingAsync(harness.ExecutionId));
+        participant.Rejecting("confirm-order");
+
+        await OperatorRetry.RetryAsync(harness, harness.ExecutionId, incident.ActivityExecutionId!, "retry-step", WorkflowExecutionHarness.Partition);
+
+        // A definite fault with nothing to undo: the scope re-raises it rather than also absorbing it.
+        var run = await harness.ReadRunAsync(harness.ExecutionId);
+        Assert.Equal(WorkflowExecutionStatus.Faulted, run.WorkflowState?.Status);
+        var scope = run.State(ScopeNodeId);
+        Assert.Equal(ActivityExecutionStatus.Faulted, scope.Status);
+        Assert.Equal(CompensationScope.CompensatedFaultCode, scope.Fault?.Code);
+    }
+
+    [Fact]
+    public async Task A_handler_that_recovers_within_its_attempts_undoes_once_with_one_operation_key()
+    {
+        var participant = new Participant().Rejecting("confirm-order").FailingTimes("cancel-delivery", 2);
+        await using var harness = NewHarness(participant);
+
+        var run = await harness.RunAsync(Executable(ReservationJourney()), allowPendingWorkOnTerminalCompletion: true);
+
+        // Spec 251 J3: two failed attempts, the third succeeds, recovery continues.
+        run.AssertWorkflowCompleted();
+        run.AssertOutcomes(ScopeNodeId, CompensationScope.CompensatedOutcome);
+        Assert.Equal(3, run.States("cancel-delivery").Count);
+        var cancels = participant.Calls.Where(call => call.NodeId == "cancel-delivery").ToArray();
+        Assert.Equal(3, cancels.Length);
+        Assert.Single(cancels.Select(call => call.OperationKey).Distinct());
+        Assert.Single(participant.Effects, effect => effect.NodeId == "cancel-delivery");
+        Assert.Empty(participant.Present);
+    }
+
+    [Fact]
+    public async Task A_lost_response_is_undone_as_an_uncertain_step_and_leaves_no_reservation()
+    {
+        var participant = new Participant().LosingResponseAfterEffectOf("reserve-delivery");
+        await using var harness = NewHarness(participant);
+
+        var run = await harness.RunAsync(Executable(ReservationJourney()), allowPendingWorkOnTerminalCompletion: true);
+
+        // Spec 251 J1: the reservation exists although its response was lost; recovery undoes it, then inventory.
+        run.AssertWorkflowCompleted();
+        run.AssertOutcomes(ScopeNodeId, CompensationScope.CompensatedOutcome);
+        run.AssertDidNotRun("confirm-order");
+        Assert.Empty(participant.Present);
+        // A completed scope keeps no journal, so the participant is the witness: delivery was undone, newest first.
+        Assert.Equal(["reserve-inventory", "reserve-delivery", "cancel-delivery", "release-inventory"], participant.EffectOrder);
+        var reserveKey = participant.Calls.Single(call => call.NodeId == "reserve-delivery").OperationKey;
+        Assert.Equal(reserveKey, participant.Calls.Single(call => call.NodeId == "cancel-delivery").TargetOperationKey);
+    }
+
+    [Fact]
+    public async Task A_forward_effect_that_arrives_after_its_compensation_is_refused()
+    {
+        var participant = new Participant().DelayingEffectOf("reserve-delivery");
+        await using var harness = NewHarness(participant);
+
+        var run = await harness.RunAsync(Executable(ReservationJourney()), allowPendingWorkOnTerminalCompletion: true);
+        run.AssertWorkflowCompleted();
+        var reserveKey = participant.Calls.Single(call => call.NodeId == "reserve-delivery").OperationKey!;
+
+        // Spec 251 J2: the compensation found nothing to undo and left a tombstone, so the late request is refused.
+        Assert.Contains(reserveKey, participant.Tombstones);
+        Assert.Equal(ForwardResult.Refused, participant.ApplyLate(reserveKey));
+        Assert.Empty(participant.Present);
+    }
+
+    [Fact]
+    public async Task An_uncertain_step_without_a_handler_waits_for_intervention_instead_of_moving_on()
+    {
+        var participant = new Participant().LosingResponseAfterEffectOf("confirm-order");
+        await using var harness = NewHarness(participant);
+
+        var run = await harness.RunAsync(Executable(ReservationJourney()), allowPendingWorkOnTerminalCompletion: true, allowAcceptedButFaulted: true);
+
+        // Spec 251 J6: the scope never treats the step as "no effect", and undoes nothing on its own.
+        Assert.Equal(WorkflowExecutionStatus.Running, run.WorkflowState?.Status);
+        run.AssertDidNotRun("release-inventory", "cancel-delivery");
+        var state = ScopeState(run);
+        Assert.Equal(CompensationScopePhase.AwaitingIntervention, state.Phase);
+        Assert.Equal(CompensationEntryStatus.Uncertain, state.Entries.Single(entry => entry.Step == "Confirm order").Status);
+        var waiting = Assert.Single(await harness.Services.GetRequiredService<IIncidentStateStore>().ListBlockingAsync(run.WorkflowState!.WorkflowExecutionId));
+        Assert.Equal("unknown", waiting.ResolutionOutcome?.Metadata[CompensationScope.MetadataKeys.ForwardOutcome]);
     }
 
     [Fact]
@@ -172,6 +301,7 @@ public sealed class CompensationScopeRuntimeTests
                 services.AddSingleton(participant);
                 HostKillSwitch.Install(services, new HostKillSwitch());
                 services.Replace(ServiceDescriptor.Singleton<IRuntimeExecutionIdGenerator>(_ => new ShortRuntimeExecutionIdGenerator(TimeProvider.System)));
+                services.TryAddScoped<IRuntimeResumptionService, RuntimeResumptionService>();
             })
             .Build();
 }

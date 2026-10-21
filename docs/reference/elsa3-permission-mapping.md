@@ -71,13 +71,19 @@ authorizes requests whether the grant reaches any registered permission.
 | Expressions | `expressions:read`, `expressions/javascript:render` | `Elsa.Expressions.Api`, `Elsa.Expressions.JavaScript.Rendering` |
 | Diagnostics | `diagnostics/opentelemetry:read`, `diagnostics/structured-logs:read` | `Elsa.Diagnostics.OpenTelemetry`, `Elsa.Diagnostics.StructuredLogs` |
 | Secrets | `secrets:read`, `secrets:write`, `secrets:update-value`, `secrets:delete`, `secrets:test`, `secrets:use`, `secrets:import`, `secrets:export` | `Elsa.Secrets.Api` |
-| Connections | `connections:read`, `connections:use`, `connections:manage`, `connections:bind-secret`, `connections:test` | `Elsa.Connections.Api` |
+| Connections | `connections:manage`, `connections:bind-secret`, `connections:test` | `Elsa.Connections.Api` |
 | Studio preferences | `studio/preferences:read`, `studio/preferences:write`, `studio/preferences/defaults:manage` | `Elsa.Studio.Preferences.Api` |
 | Platform | `attention:read`, `api-capabilities:read`, `module-management:read`, `module-management:manage` | `Elsa.Attention.Api`, `Elsa.Api.Capabilities`, `Elsa.Modularity.Api` |
 | Extensions | `elsa3-import:read`, `elsa3-import:manage`, `extension-builder:read`, `extension-builder:manage`, `agent:use`, `agent/proposals:manage`, `agent/audit:read` | `Elsa3.Activities.Design.Import`, `Elsa.ExtensionBuilder.Api`, `Elsa.Agent.Api` |
 
 The execution evidence delete endpoint accepts `workflows/execution-evidence:delete` or
 `workflows/execution-evidence:manage`.
+
+Connections has no read or use permission of its own. Listing connections, their types and their metadata, never a
+secret value, requires `workflows/design:read` or `connections:manage`. Binding a connection in a workflow draft requires
+`workflows/design:manage`, which the Workflow Design routes that write drafts or versions, or promote drafts, already
+require; draft validation never checks the caller, so every viewer sees the same findings. Otherwise the three
+Connections permissions guard administration.
 
 ## Elsa 3.9 to Elsa 4
 

@@ -8,14 +8,16 @@ namespace Elsa.Versioning.Calculator;
 /// under which package id and on which version line, and what each depends on.
 /// </summary>
 /// <remarks>
-/// This is the calculator's only source of those facts; it never scans a project file for them (spec 149 SC-005).
+/// This is the calculator's only source of those facts. It reads them from the copy committed in the commit, or from
+/// the JSON the shared project-graph scan derives for the commit's tree (spec 259); it never reads a project file for
+/// them itself, and both sources pass through this one reader.
 /// The shape is checked when it is read, as spec 149 leaves to its consumers: a schema version this code was not
 /// written for is refused rather than half-understood. That includes version 1, which predates the pinned-transitive
 /// edges: read as version 2, it would claim no package reaches any pin transitively.
 /// </remarks>
 internal sealed class DependencyMapDataset
 {
-    public const string RelativePath = "docs/maps/dependency-map.json";
+    public const string RelativePath = Elsa.Maps.Projects.DependencyMapJson.RelativePath;
 
     public const int SupportedSchemaVersion = 2;
 

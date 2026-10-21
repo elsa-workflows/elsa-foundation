@@ -53,22 +53,27 @@ describe("Workflow Test Run controls", () => {
       .mockRejectedValueOnce(new Error("connection dropped"))
       .mockResolvedValueOnce({ status: "Delivered" });
     publishingMocks.getInstance.mockResolvedValue({ instance: { workflowExecutionId: "execution-1", status: "Suspended" } });
-    publishingMocks.getWaits.mockResolvedValueOnce({ waits: [customWait] }).mockResolvedValueOnce({ waits: [customWait] }).mockResolvedValueOnce({ waits: [] });
+    let releaseWaits!: (result: { waits: typeof customWait[] }) => void;
+    const pendingWaits = new Promise<{ waits: typeof customWait[] }>(resolve => { releaseWaits = resolve; });
+    publishingMocks.getWaits.mockImplementation(() => pendingWaits);
     const onRunViewUpdated = vi.fn();
     let savedWaitState: WorkflowTestRunWaitDraftState | undefined;
     const onWaitDraftUpdated = vi.fn((_waitId: string, state: WorkflowTestRunWaitDraftState) => { savedWaitState = state; });
     const editors = createContributionRegistry<StudioTestStimulusEditorContribution>();
     editors.add(customWaitEditor);
     const container = render({ stimulusEditors: editors.list(), onRunViewUpdated, onWaitDraftUpdated });
-    await settle();
-    expect(container.textContent).toContain("Waiting");
-
-    const input = container.querySelector<HTMLInputElement>("input[aria-label='Custom wait payload']")!;
+    await vi.waitFor(() => expect(container.querySelector(".wf-test-run-execution-state")?.textContent).toContain("Waiting"));
+    // Runtime status can already be Waiting while the separate waits request is still loading.
+    expect(container.querySelector("input[aria-label='Custom wait payload']")).toBeNull();
+    releaseWaits({ waits: [customWait] });
+    const { input, form: waitForm } = await waitForCustomEditor(container);
     changeValue(input, '{"orderId":"wait-123"}');
-    const waitForm = container.querySelector(".wf-test-run-wait form")!;
     flushSync(() => waitForm.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
-    await settle();
-    expect(container.textContent).toContain("outcome is uncertain");
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain("outcome is uncertain");
+      expect(waitForm.querySelector<HTMLButtonElement>("button[type='submit']")?.disabled).toBe(false);
+      expect(savedWaitState?.attempt?.deliveryId).toBeTruthy();
+    });
 
     flushSync(() => active!.root.unmount());
     container.remove();
@@ -79,11 +84,11 @@ describe("Workflow Test Run controls", () => {
       onWaitDraftUpdated,
       testRun: { ...testRun, waitDrafts: { "wait-1": savedWaitState! } }
     });
-    await settle();
-    expect(restored.querySelector<HTMLInputElement>("input[aria-label='Custom wait payload']")?.value).toBe('{"orderId":"wait-123"}');
-    const restoredForm = restored.querySelector(".wf-test-run-wait form")!;
+    const { input: restoredInput, form: restoredForm } = await waitForCustomEditor(restored);
+    expect(restoredInput.value).toBe('{"orderId":"wait-123"}');
+    publishingMocks.getWaits.mockResolvedValue({ waits: [] });
     flushSync(() => restoredForm.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
-    await settle();
+    await vi.waitFor(() => expect(restored.textContent).toContain("Event delivered"));
     expect(publishingMocks.deliver).toHaveBeenCalledTimes(2);
     const firstRequest = publishingMocks.deliver.mock.calls[0]?.[2];
     const secondRequest = publishingMocks.deliver.mock.calls[1]?.[2];
@@ -100,21 +105,18 @@ describe("Workflow Test Run controls", () => {
     publishingMocks.getRun.mockResolvedValue(stoppedView);
     const onRunViewUpdated = vi.fn();
     const container = render({ stimulusEditors: [], onRunViewUpdated });
-    await settle();
 
     const button = [...container.querySelectorAll<HTMLButtonElement>("button")].find(item => item.textContent === "Stop Test Run")!;
     flushSync(() => button.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-    await settle();
+    await vi.waitFor(() => expect(onRunViewUpdated).toHaveBeenCalledWith(stoppedView));
     expect(publishingMocks.stop).toHaveBeenCalledWith(expect.anything(), "test-run-1");
     expect(publishingMocks.getRun).toHaveBeenCalledWith(expect.anything(), "test-run-1");
-    expect(onRunViewUpdated).toHaveBeenCalledWith(stoppedView);
   });
 
   it("shows Waiting for an active wait and refreshes the wait list while the root is Running", async () => {
     publishingMocks.getInstance.mockResolvedValue({ instance: { workflowExecutionId: "execution-1", status: "Running" } });
     const container = render({ stimulusEditors: [] });
-    // settle() is one macrotask. Seed 1 can run this case first, before React has applied both
-    // the wait-list and execution effects, so the execution-state node is still missing.
+    // Wait for the observable state after both the waits-list and execution effects settle.
     await vi.waitFor(() => {
       const text = container.querySelector(".wf-test-run-execution-state")?.textContent;
       expect(text).toBeTruthy();
@@ -184,11 +186,16 @@ function changeValue(element: HTMLInputElement, value: string) {
   flushSync(() => element.dispatchEvent(new Event("change", { bubbles: true })));
 }
 
-async function settle() {
-  await Promise.resolve();
-  await Promise.resolve();
-  await new Promise(resolve => setTimeout(resolve, 0));
-  flushSync(() => undefined);
+async function waitForCustomEditor(container: HTMLElement) {
+  return vi.waitFor(() => {
+    const input = container.querySelector<HTMLInputElement>("input[aria-label='Custom wait payload']");
+    const form = input?.closest("form");
+    if (!(input instanceof HTMLInputElement) || !(form instanceof HTMLFormElement))
+      throw new Error("The custom wait editor and form are not mounted yet.");
+    expect(input.disabled).toBe(false);
+    expect(form.querySelector<HTMLButtonElement>("button[type='submit']")?.disabled).toBe(false);
+    return { input, form };
+  });
 }
 
 async function flushEffects(turns = 10) {

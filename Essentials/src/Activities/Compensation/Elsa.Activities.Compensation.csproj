@@ -6,6 +6,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Design\Core\Elsa.Activities.Design.Core.csproj" />
     <ProjectReference Include="..\Runtime\Core\Elsa.Activities.Runtime.Core.csproj" />
     <ProjectReference Include="..\..\Workflows\Design\Core\Elsa.Workflows.Design.Core.csproj" />
     <ProjectReference Include="..\..\Workflows\Design\Validations\Core\Elsa.Workflows.Design.Validations.Core.csproj" />
@@ -14,6 +15,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Elsa.Activities.Compensation.Tests" />
+    <InternalsVisibleTo Include="Elsa.Activities.Compensation.Persistence.EntityFrameworkCore.ProviderTests" />
   </ItemGroup>
 
 </Project>

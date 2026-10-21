@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <ElsaTrackPublicApi>true</ElsaTrackPublicApi>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Elsa.Etl.Persistence.EntityFrameworkCore" />
+    <InternalsVisibleTo Include="Elsa.Etl.Workflows.Runtime" />
+    <InternalsVisibleTo Include="Elsa.Etl.Tests" />
+  </ItemGroup>
+
+</Project>

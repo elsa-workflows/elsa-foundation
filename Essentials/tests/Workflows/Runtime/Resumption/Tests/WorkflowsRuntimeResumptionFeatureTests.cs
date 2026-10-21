@@ -38,6 +38,20 @@ public sealed class WorkflowsRuntimeResumptionFeatureTests
             d.Lifetime == ServiceLifetime.Singleton);
     }
 
+    // Spec 261 R-7: the sweep is what delivers a delayed child schedule once it is due, so the feature that registers it
+    // also declares the capability. Without this registration every delayed schedule faults with
+    // runtime.delayed-schedule.unavailable.
+    [Fact]
+    public void DeclaresTheDelayedScheduleCapability()
+    {
+        var services = new ServiceCollection();
+
+        new WorkflowsRuntimeResumptionFeature().ConfigureServices(services);
+
+        using var provider = services.BuildServiceProvider();
+        Assert.NotNull(provider.GetService<IRuntimeDelayedScheduleCapability>());
+    }
+
     [Fact]
     public void ContributesResumptionDurabilityEvidence()
     {

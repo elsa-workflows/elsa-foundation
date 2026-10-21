@@ -1,5 +1,7 @@
 /** Shared presentational formatters used across the workflow editor and instance views. */
 
+import type { IncidentResolutionOutcomeSummary } from "./workflowTypes";
+
 export function formatDate(value?: string | null) {
   if (!value) return "";
   const date = new Date(value);
@@ -99,4 +101,10 @@ export function formatActivityDefinitionDate(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime()) || date.getFullYear() < 2000) return "—";
   return date.toLocaleDateString();
+}
+
+/** Names an incident's resolution action and who applied it, e.g. "WaitForIntervention (StructuralIntervention)". */
+export function resolutionOutcomeLabel(outcome: IncidentResolutionOutcomeSummary) {
+  const source = outcome.strategy ? `${outcome.strategy.alias}/${outcome.strategy.version}` : outcome.systemSource;
+  return source ? `${outcome.actionKind} (${source})` : outcome.actionKind;
 }

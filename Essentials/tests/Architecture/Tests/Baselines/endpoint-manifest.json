@@ -3877,6 +3877,45 @@
       "contentTypes": [
         "application/json"
       ],
+      "displayName": "HTTP: GET runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/state-view",
+      "methods": [
+        "GET"
+      ],
+      "owner": "Elsa.Workflows.Runtime.Api",
+      "ownerKind": "Module",
+      "responses": [
+        {
+          "bodyType": "Elsa.Workflows.Runtime.Api.Models.ActivityStateView",
+          "contentTypes": [
+            "application/json"
+          ],
+          "statusCode": 200
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 401
+        },
+        {
+          "bodyType": "System.Void",
+          "contentTypes": [],
+          "statusCode": 403
+        }
+      ],
+      "route": {
+        "value": "/runtime/workflows/instances/{param}/activity-executions/{param}/state-view"
+      },
+      "securityDisposition": {
+        "kind": "Permission",
+        "value": "Elsa.Permission:v1:s:V09SS0ZMT1dTL1JVTlRJTUU6UkVBRA"
+      },
+      "sourceIdentity": "ElsaWorkflowsRuntimeApiEndpointsGetActivityStateView"
+    },
+    {
+      "authoringModel": "Minimal API",
+      "contentTypes": [
+        "application/json"
+      ],
       "displayName": "HTTP: GET runtime/workflows/instances/{workflowExecutionId}/activity-executions/{activityExecutionId}/value-evidence/{evidenceId}/payload",
       "methods": [
         "GET"

@@ -13,7 +13,7 @@ public static class MapSetPublisherContractTests
     {
         var published = new HashSet<string>(StringComparer.Ordinal)
         {
-            "docs/maps/test-map.md", "docs/maps/domain-map.md", "docs/reports/maps-v1-findings.md"
+            "docs/maps/test-map.md", "docs/maps/domain-map.md", "docs/maps/dependency-map.json", "docs/reports/maps-v1-findings.md"
         };
 
         Rewrites("in-set sibling stays relative", "[d](domain-map.md)", "[d](domain-map.md)", published);
@@ -21,8 +21,8 @@ public static class MapSetPublisherContractTests
         Rewrites("source project is pinned",
             "[T](../../Essentials/tests/X/Tests/X.Tests.csproj)",
             $"[T]({RepoUrl}/blob/{Sha}/Essentials/tests/X/Tests/X.Tests.csproj)", published);
-        Rewrites("committed dataset next to the maps is pinned",
-            "[ds](dependency-map.json)", $"[ds]({RepoUrl}/blob/{Sha}/docs/maps/dependency-map.json)", published);
+        Rewrites("published dataset next to the maps stays relative",
+            "[ds](dependency-map.json)", "[ds](dependency-map.json)", published);
         Rewrites("out-of-set report keeps its anchor when pinned",
             "[r](../reports/other.md#top)", $"[r]({RepoUrl}/blob/{Sha}/docs/reports/other.md#top)", published);
         Rewrites("anchor-only link untouched", "[a](#summary)", "[a](#summary)", published);
