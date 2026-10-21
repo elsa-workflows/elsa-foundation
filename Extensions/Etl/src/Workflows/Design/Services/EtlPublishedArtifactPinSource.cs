@@ -19,7 +19,8 @@ namespace Elsa.Etl.Workflows.Design.Services;
 internal sealed class EtlPublishedArtifactPinSource(
     IEtlDefinitionStore definitionStore,
     IEtlArtifactCompiler artifactCompiler,
-    IPersistenceAccessContextAccessor accessContextAccessor) : IExecutableCompilationSource
+    IPersistenceAccessContextAccessor accessContextAccessor,
+    IEtlArtifactCompilerV2? artifactCompilerV2 = null) : IExecutableCompilationSource
 {
     private const string PinMetadataKey = "etl.pipeline.v1";
     private const string PipelineInputKey = nameof(RunEtl.Pipeline);
@@ -87,7 +88,7 @@ internal sealed class EtlPublishedArtifactPinSource(
         EtlPublishedSelection selection,
         ExecutableNode node)
     {
-        if (artifact.FormatVersion != EtlArtifact.CurrentFormatVersion ||
+        if (artifact.FormatVersion is not (EtlArtifact.CurrentFormatVersion or EtlArtifactV2Json.FormatVersion) ||
             string.IsNullOrEmpty(artifact.DefinitionId) || artifact.DefinitionId.Length > 256 || artifact.DefinitionVersion <= 0 ||
             string.IsNullOrEmpty(artifact.ArtifactId) || artifact.ArtifactId.Length > 96 ||
             string.IsNullOrEmpty(artifact.ContentHash) || artifact.ContentHash.Length != 64 ||
@@ -95,19 +96,42 @@ internal sealed class EtlPublishedArtifactPinSource(
             JsonMarshal.GetRawUtf8Value(artifact.Pipeline).Length > EtlArtifact.MaximumByteLength)
             throw Refused(node, "resolved an invalid or oversized published ETL artifact.");
 
+        if (artifact.FormatVersion == EtlArtifactV2Json.FormatVersion && artifactCompilerV2 is null)
+            throw Refused(node, "requires a v2 artifact compiler capability to pin this connector artifact.");
+
         EtlArtifact? compiled;
+        var canonicalV2 = true;
         try
         {
-            var pipeline = EtlArtifactJson.Read(artifact.Pipeline);
-            compiled = artifactCompiler.Compile(selection.DefinitionId, selection.DefinitionVersion, pipeline).Artifact;
+            if (artifact.FormatVersion == EtlArtifact.CurrentFormatVersion)
+            {
+                var pipeline = EtlArtifactJson.Read(artifact.Pipeline);
+                compiled = artifactCompiler.Compile(selection.DefinitionId, selection.DefinitionVersion, pipeline).Artifact;
+            }
+            else
+            {
+                var pipeline = EtlArtifactV2Json.Read(artifact.Pipeline);
+                var canonical = EtlArtifactV2Json.Write(pipeline);
+                canonicalV2 = StringComparer.Ordinal.Equals(artifact.Pipeline.GetRawText(), canonical.GetRawText());
+                compiled = canonicalV2
+                    ? artifactCompilerV2!.Compile(selection.DefinitionId, selection.DefinitionVersion, pipeline).Artifact
+                    : null;
+            }
         }
         catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or JsonException or
                                           NotSupportedException or NullReferenceException or OverflowException)
         {
-            throw Refused(node, "resolved an invalid published ETL artifact.", exception);
+            var reason = artifact.FormatVersion == EtlArtifact.CurrentFormatVersion
+                ? "resolved an invalid published ETL artifact."
+                : "resolved an invalid or unsupported v2 published ETL artifact.";
+            throw Refused(node, reason, exception);
         }
 
+        if (!canonicalV2)
+            throw Refused(node, "resolved a noncanonical v2 published ETL artifact.");
+
         if (compiled is null ||
+            compiled.FormatVersion != artifact.FormatVersion ||
             !StringComparer.Ordinal.Equals(artifact.DefinitionId, selection.DefinitionId) ||
             artifact.DefinitionVersion != selection.DefinitionVersion ||
             !StringComparer.Ordinal.Equals(artifact.ContentHash, selection.ContentHash) ||

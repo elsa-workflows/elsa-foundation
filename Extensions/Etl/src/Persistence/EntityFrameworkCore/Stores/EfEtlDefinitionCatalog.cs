@@ -34,7 +34,8 @@ internal sealed class EfEtlDefinitionCatalog(EtlDesignDbContext dbContext) : IEt
                 row.Revision,
                 row.LastPublishedVersion,
                 row.SchemaVersion,
-                row.UpdatedAtUtcTicks))
+                row.UpdatedAtUtcTicks,
+                row.FormatVersion))
             .ToListAsync(cancellationToken);
 
         return rows.Select(row => EtlDefinitionRecordCodec.ReadDraftSummary(
@@ -47,7 +48,7 @@ internal sealed class EfEtlDefinitionCatalog(EtlDesignDbContext dbContext) : IEt
                 row.LastPublishedVersion,
                 row.SchemaVersion,
                 row.UpdatedAtUtcTicks,
-                scope))
+                scope, row.FormatVersion))
             .ToArray();
     }
 
@@ -87,7 +88,8 @@ internal sealed class EfEtlDefinitionCatalog(EtlDesignDbContext dbContext) : IEt
                 row.SchemaVersion,
                 row.ArtifactEnvelopeHash,
                 row.PipelineHash,
-                row.PublishedAtUtcTicks))
+                row.PublishedAtUtcTicks,
+                row.FormatVersion))
             .ToListAsync(cancellationToken);
 
         return rows.Select(row => EtlDefinitionRecordCodec.ReadPublishedVersionSummary(
@@ -102,7 +104,7 @@ internal sealed class EfEtlDefinitionCatalog(EtlDesignDbContext dbContext) : IEt
                 row.ContentHash,
                 row.PublishedAtUtcTicks,
                 scope,
-                definitionId))
+                definitionId, row.FormatVersion))
             .ToArray();
     }
 
@@ -121,7 +123,8 @@ internal sealed class EfEtlDefinitionCatalog(EtlDesignDbContext dbContext) : IEt
         long Revision,
         int LastPublishedVersion,
         string SchemaVersion,
-        long UpdatedAtUtcTicks);
+        long UpdatedAtUtcTicks,
+        int FormatVersion);
 
     private sealed record PublishedMetadata(
         string ScopeKey,
@@ -133,5 +136,6 @@ internal sealed class EfEtlDefinitionCatalog(EtlDesignDbContext dbContext) : IEt
         string SchemaVersion,
         string ArtifactEnvelopeHash,
         string ContentHash,
-        long PublishedAtUtcTicks);
+        long PublishedAtUtcTicks,
+        int FormatVersion);
 }

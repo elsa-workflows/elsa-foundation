@@ -32,7 +32,9 @@ internal static class EtlDesignEntityFrameworkCoreRegistration
         Binding.AddContext<EtlDesignSqliteDbContext>(services, options.Pooling, (serviceProvider, builder) =>
             Binding.Apply(builder, serviceProvider, provider, options.ConnectionString, options.ConnectionName, options.Schema));
         services.AddScoped<EtlDesignDbContext>(providerServices => providerServices.GetRequiredService<EtlDesignSqliteDbContext>());
-        services.AddScoped<IEtlDefinitionStore, EfEtlDefinitionStore>();
+        services.AddScoped<EfEtlDefinitionStore>();
+        services.AddScoped<IEtlDefinitionStore>(providerServices => providerServices.GetRequiredService<EfEtlDefinitionStore>());
+        services.AddScoped<IEtlDefinitionStoreV2>(providerServices => providerServices.GetRequiredService<EfEtlDefinitionStore>());
         services.AddScoped<IEtlDefinitionCatalog, EfEtlDefinitionCatalog>();
         return services;
     }
