@@ -28,7 +28,7 @@ using WhileActivity = Elsa.Activities.While.Activities.While;
 namespace Elsa.Activities.While.Tests;
 
 /// <summary>
-/// Spec 260 (ADR 0088 D2), T014: a condition-driven loop re-materializes its inputs on every pass, so a <c>Clock</c>
+/// Spec 262 (ADR 0088 D2), T014: a condition-driven loop re-materializes its inputs on every pass, so a <c>Clock</c>
 /// parameter in its condition reads that pass's own instant and a <c>UniqueId</c> in its body differs per pass. The
 /// host clock is a <see cref="ManualClock"/> the loop body advances by one second each pass; a condition pinned to
 /// the entry instant would never become false and the drain would hit its cycle limit.

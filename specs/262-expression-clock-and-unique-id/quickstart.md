@@ -1,4 +1,4 @@
-# Quickstart: verify spec 260
+# Quickstart: verify spec 262
 
 Build and test only the touched projects (AGENTS.md: shared machine).
 

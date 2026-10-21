@@ -1286,7 +1286,7 @@ public sealed class WorkflowExecutableCompilerTests
             variable.RootActivity.InputBindings[nameof(WriteHttpResponse.Body)].Source);
         var expressionBinding = expression.RootActivity.InputBindings[nameof(WriteHttpResponse.StatusCode)];
         Assert.Equal(RuntimeInputBindingSource.Expression, expressionBinding.Source);
-        // Plain-source JavaScript is published under binding-pure-v2 (ADR 0088 D4, spec 260 FR-021).
+        // Plain-source JavaScript is published under binding-pure-v2 (ADR 0088 D4, spec 262 FR-021).
         Assert.Equal(
             Elsa.Expressions.Core.Models.ExpressionCapabilityProfiles.BindingPureV2,
             expressionBinding.Expression!.CapabilityProfile);

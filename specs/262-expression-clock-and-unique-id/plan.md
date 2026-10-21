@@ -2,7 +2,7 @@
 
 **Branch**: `agent/claude/3026-deterministic-expression-capability` | **Date**: 2026-10-20 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `specs/260-expression-clock-and-unique-id/spec.md`; decisions in
+**Input**: Feature specification from `specs/262-expression-clock-and-unique-id/spec.md`; decisions in
 [ADR 0088](../../docs/adr/0088-expressions-read-time-and-unique-values-through-recorded-parameters.md) D1 to D4.
 
 ## Summary
@@ -81,7 +81,7 @@ table drives the runtime messages, the authoring validator and the editor typing
 ### Documentation (this feature)
 
 ```text
-specs/260-expression-clock-and-unique-id/
+specs/262-expression-clock-and-unique-id/
 ├── spec.md
 ├── plan.md
 ├── research.md

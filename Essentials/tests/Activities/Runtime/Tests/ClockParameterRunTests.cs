@@ -30,7 +30,7 @@ using Xunit;
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// Spec 260 (ADR 0088 D2), T012: a JavaScript input that declares <c>Clock</c> and <c>UniqueId</c> parameters reads the
+/// Spec 262 (ADR 0088 D2), T012: a JavaScript input that declares <c>Clock</c> and <c>UniqueId</c> parameters reads the
 /// instant its inputs are evaluated at, through the real agent, scheduler and Jint evaluator. The host clock is a
 /// <see cref="FakeTimeProvider"/>, so every expected value is exact. The values are pinned by the commit that records
 /// the evaluated input: a retry of a faulted activity sees them again, after the clock has moved on.

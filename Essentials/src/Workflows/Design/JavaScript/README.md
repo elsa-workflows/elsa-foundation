@@ -20,7 +20,7 @@ Declare what an expression needs as parameters: `{"kind":"Clock"}` gives the eva
 | `toLocaleDateString()` | `toISOString().slice(0, 10)` |
 | `toLocaleTimeString()` | `toISOString().slice(11, 23)` |
 
-Each removed form fails with exactly that guidance at runtime, and authoring validation reports it before publish. `Temporal`, `Intl` and `Math.random` stay unavailable. The full contract is in [spec 260](../../../../../specs/260-expression-clock-and-unique-id/contracts/clock-uniqueid-and-binding-pure-v2.md).
+Each removed form fails with exactly that guidance at runtime, and authoring validation reports it before publish. `Temporal`, `Intl` and `Math.random` stay unavailable. The full contract is in [spec 262](../../../../../specs/262-expression-clock-and-unique-id/contracts/clock-uniqueid-and-binding-pure-v2.md).
 
 ## Cross-domain contributions
 

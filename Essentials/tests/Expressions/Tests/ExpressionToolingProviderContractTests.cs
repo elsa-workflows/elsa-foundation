@@ -236,7 +236,7 @@ public sealed class ExpressionToolingProviderContractTests
     [InlineData("new Date(0).toLocaleTimeString()", "toLocaleTimeString() depends on a locale", true, 0)]
     public async Task JavaScript_validation_reports_a_removed_date_form_with_its_guidance(string source, string messageStart, bool warning, int line)
     {
-        // Spec 260 FR-019: the same text the binding-pure-v2 sandbox throws, at the authored position, without evaluating.
+        // Spec 262 FR-019: the same text the binding-pure-v2 sandbox throws, at the authored position, without evaluating.
         var provider = new JavaScriptExpressionToolingProvider();
 
         var result = await provider.ValidateAsync(new(CreateScope("JavaScript", []), source), CancellationToken.None);

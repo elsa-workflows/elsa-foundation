@@ -1,7 +1,7 @@
 # Expressions Read Time And Unique Values Through Recorded Parameters
 
 Status: accepted (2026-10-21, approved by the owner; proposed 2026-10-20). Settles [#3026](https://github.com/elsa-workflows/elsa-foundation/issues/3026) through
-an owner grilling session; specified by [spec 260](../../specs/260-expression-clock-and-unique-id/spec.md).
+an owner grilling session; specified by [spec 262](../../specs/262-expression-clock-and-unique-id/spec.md).
 
 Related: [ADR 0045 §3 and §5](0045-workflow-value-flow-uses-role-owned-bindings-and-immutable-invocation-records.md)
 (pinned inputs, pure expressions, the #977 and #2717 amendments), [ADR 0083](0083-javascript-binding-grammar-is-pinned-at-publish.md)
@@ -178,5 +178,5 @@ version 7 instead of version 4; and a GUID arrives as a string, not a CLR `Guid`
 
 ## Follow-up
 
-- Spec 260 specifies D1 to D4.
+- Spec 262 specifies D1 to D4.
 - [#3166](https://github.com/elsa-workflows/elsa-foundation/issues/3166) (needs-triage) covers the converter rules in D5 and updates the mapping README and refusal guidance.

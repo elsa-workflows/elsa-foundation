@@ -46,7 +46,7 @@ UniqueId()                      // a new lowercase UUID version 7
 instance's correlation ID or instance ID from committed runtime state as a declared parameter, so it satisfies
 the "instance identity declared as a parameter" rule below. `Clock` and `UniqueId` were added by
 [ADR 0088](../../../docs/adr/0088-expressions-read-time-and-unique-values-through-recorded-parameters.md)
-(spec 260): they read the instant the consumer's inputs are evaluated at, so the commit that pins the
+(spec 262): they read the instant the consumer's inputs are evaluated at, so the commit that pins the
 evaluated inputs pins them, and they are the "separately ratified deterministic capability" for time and
 GUIDs that the profile list below refers to.
 
@@ -130,7 +130,7 @@ The `binding-pure-v1` capability profile permits deterministic value transforms 
 UTC on every host, ISO 8601 parsing only, and `new Date()`, `Date()`, `Date.now()` and the `toLocale*`
 methods throw guidance errors. Plain-source JavaScript is published under it; stored executables keep
 the profile they were stamped with. The member-by-member contract is
-[spec 260's contract](../../260-expression-clock-and-unique-id/contracts/clock-uniqueid-and-binding-pure-v2.md).
+[spec 262's contract](../../262-expression-clock-and-unique-id/contracts/clock-uniqueid-and-binding-pure-v2.md).
 
 JavaScript/Liquid extension registration MUST declare the capability profiles in which it is allowed.
 The evaluator builds its processor/filter set from that allowlist. A global extension registration

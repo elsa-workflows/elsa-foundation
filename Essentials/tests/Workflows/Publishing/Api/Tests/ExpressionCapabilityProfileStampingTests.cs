@@ -9,7 +9,7 @@ using WorkflowArgumentState = Elsa.Workflows.Design.Core.Models.ArgumentState;
 namespace Elsa.Workflows.Publishing.Api.Tests;
 
 /// <summary>
-/// ADR 0088 D4 / spec 260 FR-021: plain-source JavaScript is published under binding-pure-v2, every other language
+/// ADR 0088 D4 / spec 262 FR-021: plain-source JavaScript is published under binding-pure-v2, every other language
 /// keeps binding-pure-v1, a portable definition keeps the profile it declares, and a stored binding keeps its stamp.
 /// </summary>
 public sealed class ExpressionCapabilityProfileStampingTests

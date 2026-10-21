@@ -5,7 +5,7 @@ using Xunit;
 namespace Elsa.Expressions.JavaScript.Jint.Tests;
 
 /// <summary>
-/// ADR 0088 D4 / spec 260 FR-017: every Date form binding-pure-v2 removes fails with a message that names it, says
+/// ADR 0088 D4 / spec 262 FR-017: every Date form binding-pure-v2 removes fails with a message that names it, says
 /// why, and gives the rewrite. The texts are the contract's, verbatim.
 /// </summary>
 public sealed class ClocklessDateDiagnosticTests

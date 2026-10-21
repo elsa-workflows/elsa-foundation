@@ -9,7 +9,7 @@ using Xunit;
 namespace Elsa.Expressions.JavaScript.Jint.Tests;
 
 /// <summary>
-/// ADR 0088 D4 / spec 260: under binding-pure-v2 the sandbox has a <c>Date</c> that cannot read the clock, is UTC on
+/// ADR 0088 D4 / spec 262: under binding-pure-v2 the sandbox has a <c>Date</c> that cannot read the clock, is UTC on
 /// every host, and parses only ISO 8601 date-time strings. Everything else about <c>Date</c> follows ECMAScript.
 /// </summary>
 public sealed class ClocklessDateTests

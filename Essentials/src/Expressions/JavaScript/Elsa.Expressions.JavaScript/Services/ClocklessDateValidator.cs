@@ -6,7 +6,7 @@ namespace Elsa.Expressions.JavaScript.Services;
 
 /// <summary>
 /// Finds the <c>Date</c> forms binding-pure-v2 removes, without evaluating the source, and reports each with the same
-/// guidance the sandbox throws (ADR 0088 D4, spec 260 FR-019). Authored JavaScript publishes under binding-pure-v2.
+/// guidance the sandbox throws (ADR 0088 D4, spec 262 FR-019). Authored JavaScript publishes under binding-pure-v2.
 /// </summary>
 internal static class ClocklessDateValidator
 {
