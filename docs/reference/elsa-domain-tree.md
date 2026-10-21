@@ -3,7 +3,7 @@
 Supports Elsa constitution §E2.1, which pins only the domain names (owner decision D1, #2578). Moved verbatim from Elsa constitution v5.0.0.
 
 Applying framework §2.18's methodology to Elsa, the root-level domains are listed below *(domains
-reconciled against the shipped tree 2026-09-16; ETL admitted by [ADR 0087](../adr/0087-etl-owns-its-execution-domain.md) on 2026-10-20)*. This table records only what a generated map cannot:
+reconciled against the shipped tree 2026-09-16; ETL admitted by [ADR 0087](../adr/0087-etl-owns-its-execution-domain.md) on 2026-10-20; Rules admitted by [ADR 0088](../adr/0088-rules-owns-its-execution-domain.md) on 2026-10-21)*. This table records only what a generated map cannot:
 each domain's purpose. It deliberately names no packages. Package names changed faster than this
 table was maintained, and by 2026-09-16 roughly a quarter of the names it listed no longer existed.
 The generated [domain map](https://github.com/elsa-workflows/elsa-foundation/blob/generated-maps/docs/maps/domain-map.md) owns package enumeration and project counts,
@@ -29,6 +29,7 @@ and CI regenerates it after every merge (see the [maps index](../maps/README.md)
 | `Elsa.Persistence` | Provides the shared EF Core persistence policy that each domain's `*.Persistence.EntityFrameworkCore` module builds on (ADR 0073). |
 | `Elsa.Pipelines` | Defines pipeline contracts for composable middleware. |
 | `Elsa.Primitives` | Provides dependency-free base primitives and hosting seams (charter in §E2.3). |
+| `Elsa.Rules` | Executes finite rule inference with durable round progression. |
 | `Elsa.Secrets` | Stores and resolves secrets. |
 | `Elsa.Serialization` | Serialises payloads and workflow models. |
 | `Elsa.Studio` | Persists Studio client state, currently per-user preferences. |
