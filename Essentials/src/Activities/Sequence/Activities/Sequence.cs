@@ -17,7 +17,9 @@ namespace Elsa.Activities.Sequence.Activities;
 [ActivityOutcome(ActivityOutcomes.Done)]
 [ActivityOutcome(ActivityOutcomes.Break)]
 [ActivitySideEffectProfile(SideEffectProfile.ReplaySafe)]
-public sealed class Sequence : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler
+// A faulted child leaves the sequence waiting on it (it handles no child faults), and the next step follows from the
+// completed node alone, so a rescheduled faulted child's completion continues the sequence (#3135).
+public sealed class Sequence : StructuralActivity, IRuntimeStructuralActivity, IRuntimeActivityChildCompletionHandler, IRuntimeAcceptsRescheduledFaultedChild
 {
     public const string ActivitiesSlotName = "Sequence.Activities";
     public const string StructureKind = "elsa.sequence.structure";

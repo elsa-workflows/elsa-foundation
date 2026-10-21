@@ -867,6 +867,41 @@ public sealed class ConnectionManagerAndResolverTests
     }
 
     [Fact]
+    public async Task DeleteThenRecreateWithAnInlineValue_CreatesAFreshOwnedSecret()
+    {
+        await using var provider = CreateProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
+        var resolver = scope.ServiceProvider.GetRequiredService<IConnectionResolver>();
+        var secrets = scope.ServiceProvider.GetRequiredService<ISecretManager>();
+        const string connectionName = "recreated";
+        const string ownedSecretName = "connection:recreated:token";
+        CreateConnectionRequest InlineToken(string value) => new()
+        {
+            Name = connectionName,
+            AuthScheme = HttpAuthSchemes.Bearer,
+            Settings = new Dictionary<string, string> { [HttpConnectionSettingKeys.AllowedHosts] = "api.example" },
+            SecretFields = new Dictionary<string, ConnectionSecretFieldInput>
+            {
+                [HttpConnectionSecretFields.Token] = new() { Value = value }
+            }
+        };
+
+        await manager.CreateAsync(Tenant, InlineToken("first-value"));
+        var firstSecretId = (await secrets.FindAsync(Tenant, ownedSecretName))!.Id;
+        Assert.True(await manager.DeleteAsync(Tenant, connectionName));
+        Assert.Null(await secrets.FindAsync(Tenant, ownedSecretName));
+
+        await manager.CreateAsync(Tenant, InlineToken("second-value"));
+
+        var ownedSecret = (await secrets.FindAsync(Tenant, ownedSecretName))!;
+        Assert.NotEqual(firstSecretId, ownedSecret.Id);
+        Assert.Equal(1, ownedSecret.CurrentVersion);
+        await using var resolved = await resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = connectionName });
+        Assert.Equal("second-value", (await resolved.GetSensitiveAsync(HttpConnectionSecretFields.Token)).Reveal());
+    }
+
+    [Fact]
     public async Task Create_PreservesRawWhitespaceInNonblankInlineSecretValues()
     {
         await using var provider = CreateProvider();

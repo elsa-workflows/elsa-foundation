@@ -62,6 +62,11 @@ public static class RuntimeMetadataKeys
     public const string StructuralFaultHandling = "runtime.structuralFaultHandling";
     public const string StructuralFaultHandlingChild = "child";
     public const string StructuralFaultHandlingDescendant = "descendant";
+    /// <summary>
+    /// Executable-node capability compiled from the node's activity type when it implements
+    /// <c>IRuntimeAcceptsRescheduledFaultedChild</c>; value <c>true</c>, absent for every other node (#3135).
+    /// </summary>
+    public const string AcceptsRescheduledFaultedChild = "runtime.acceptsRescheduledFaultedChild";
     /// <summary>Marks a child-fault evaluation work item that delivers a descendant's fault (spec 258 R-3).</summary>
     public const string DescendantFault = "runtime.descendantFault";
     /// <summary>The receiver's direct child the delivered descendant fault passed through.</summary>
