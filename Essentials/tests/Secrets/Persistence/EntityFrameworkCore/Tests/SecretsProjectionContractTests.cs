@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
+using Elsa.Secrets.Persistence.EntityFrameworkCore.Configuration;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.DependencyInjection;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.Support;
@@ -251,26 +252,51 @@ public sealed class SecretsProjectionContractTests
     }
 
     /// <summary>
-    /// A deleted secret in the row that holds its name would keep the name taken for good, and a live secret under a
-    /// tombstone would be invisible to every lookup. Either way the row is not where its document belongs.
+    /// A live secret under a tombstone would be invisible to every lookup, and nothing says it should take the name back.
+    /// A deleted secret in the row that holds its name is moved under its id by the reindex, which an id that is blank or
+    /// longer than the column cannot be. None of these rows is repaired: the audit and the reindex both fail closed on it,
+    /// naming the row, and leave it as it was.
     /// </summary>
     [Theory]
-    [InlineData(SecretStatus.Deleted, false)]
-    [InlineData(SecretStatus.Active, true)]
-    public async Task A_row_whose_tombstone_disagrees_with_its_secrets_status_fails_closed(SecretStatus status, bool tombstoned)
+    [InlineData("live-under-a-tombstone")]
+    [InlineData("deleted-with-a-blank-id")]
+    [InlineData("deleted-with-an-oversized-id")]
+    public async Task A_row_whose_tombstone_disagrees_with_its_secrets_status_fails_closed_unless_the_reindex_can_move_it(
+        string misplacement)
     {
         await using var fixture = await SqliteProjectionFixture.CreateAsync();
         var secret = CreateSecret("text", "misplaced");
-        secret.Status = status;
+        var tombstone = "";
+        switch (misplacement)
+        {
+            case "live-under-a-tombstone":
+                tombstone = secret.Id;
+                break;
+            case "deleted-with-a-blank-id":
+                secret.Status = SecretStatus.Deleted;
+                secret.Id = " ";
+                break;
+            case "deleted-with-an-oversized-id":
+                secret.Status = SecretStatus.Deleted;
+                secret.Id = new string('x', SecretRecordConfiguration.TombstoneMaximumLength + 1);
+                break;
+            default:
+                throw new InvalidOperationException($"Unknown test misplacement '{misplacement}'.");
+        }
+
         var record = SecretDocument.FromSecret(secret).ToRecord();
-        record.Tombstone = tombstoned ? secret.Id : "";
+        record.Tombstone = tombstone;
         fixture.Context.Secrets.Add(record);
         await fixture.Context.SaveChangesAsync();
         fixture.Context.ChangeTracker.Clear();
 
-        var exception = await Assert.ThrowsAsync<SecretsProjectionException>(
+        var startup = await Assert.ThrowsAsync<SecretsProjectionException>(
             () => SecretsProjectionContract.EnsureCurrentAsync(fixture.Context));
-        Assert.Equal("misplaced", exception.NormalizedName);
+        Assert.Equal("misplaced", startup.NormalizedName);
+        var reindex = await Assert.ThrowsAsync<SecretsProjectionException>(
+            () => SecretsProjectionContract.ReindexAsync(fixture.Context));
+        Assert.Equal("misplaced", reindex.NormalizedName);
+        Assert.Equal(tombstone, (await fixture.Context.Secrets.AsNoTracking().SingleAsync()).Tombstone);
     }
 
     [Fact]

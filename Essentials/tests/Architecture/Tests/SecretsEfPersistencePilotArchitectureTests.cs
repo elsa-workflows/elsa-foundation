@@ -321,6 +321,7 @@ public sealed class SecretsEfPersistencePilotArchitectureTests
         "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SecretsSearchKeysTests.cs",
         "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/SqliteEfSecretRepositoryTests.cs",
         "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/PersistenceCliProcessRunner.cs",
+        "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/PreReuseSecretsModel.cs",
         "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/PreStampSecretsModel.cs",
         "Essentials/tests/Secrets/Persistence/EntityFrameworkCore/Tests/Support/SecretNameReuseScenario.cs"
     ];

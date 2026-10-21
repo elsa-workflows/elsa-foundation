@@ -31,9 +31,9 @@ already references `Microsoft.EntityFrameworkCore.Sqlite` for OpenIddict, so Sql
 EF works without another provider package. SqlServer / PostgreSql / MySql require the host to
 add that engine.
 
-The MySQL context and provider selection are production-owned, but MySQL migration artifacts and
-full lifecycle proof remain deferred to the migration work unit. The focused MySQL model and
-repository proof is under `Essentials/tests/Secrets/Persistence/EntityFrameworkCore/MySql/Tests`.
+MySQL is production-owned like the other three providers: it has had its own migration chain since
+#1755, and its repository and migration proof is under
+`Essentials/tests/Secrets/Persistence/EntityFrameworkCore/MySql/Tests`.
 
 Enable `SecretsEntityFrameworkCore` in `shells.json` (or the docker compose overlay). Registering a
 second Secrets persistence backend throws an `InvalidOperationException` naming both backends.
@@ -102,10 +102,21 @@ raw `ALTER TABLE`: `MySql.EntityFrameworkCore` generates no SQL for `DropPrimary
 so a migration relying on them applies and is recorded while the old key stays. MySQL refuses a
 configured schema, so raw SQL cannot be misdirected there.
 
+Stop every host on a build from before `FreeNameOnDelete` before applying it. Such a host knows no
+tombstone, so a secret it deletes afterwards stays in the row that holds its name, and the name stays
+taken. Host startup then fails closed naming `post-migrate`, whose `SecretsProjectionReindex` moves
+that row under the secret's id, which frees the name.
+
+A secret's tenant id, name and id together are limited to 450 characters
+(`SecretNameConstraints.MaximumKeyLength`) on every provider, because the row a delete writes is keyed
+by all three, and 450 UTF-16 characters are the 900 bytes SQL Server allows a clustered key. Generated
+ids have 11 characters, so a tenant id and a name have 439 between them. A create past the limit is
+refused with a validation error that names the longest name the tenant can have, so a secret that
+could be created can always be deleted.
+
 Derived contexts: `SecretsSqliteDbContext`, `SecretsSqlServerDbContext`,
-`SecretsPostgreSqlDbContext`, and `SecretsMySqlDbContext`. The SQLite, SQL Server, and PostgreSQL
-contexts each have their own `Migrations/` folder and `ModelSnapshot`; MySQL production migrations
-are intentionally not included in this slice.
+`SecretsPostgreSqlDbContext`, and `SecretsMySqlDbContext`. Each has its own
+`Migrations/<Provider>/` folder and `ModelSnapshot`.
 History table: `__EFMigrationsHistory_ElsaSecrets`.
 
 ### Persisted text projections
@@ -132,9 +143,10 @@ authoritative `Secret` payload in bounded keyset transactions over the whole key
 whose runtime casing data differed from this pinned table otherwise remain unreadable through
 canonical lookups. Host startup — and `apply`/`validate` — audit every row in bounded, read-only
 keyset pages over the same key and fail closed naming `post-migrate` instead of silently serving a
-partially readable store. The audit also fails closed on a row whose tombstone disagrees with its
-secret's status: a deleted secret holding its name, or a live one under a tombstone. No command ever
-reindexes as a side effect; only `post-migrate` does (ADR 0076 D8).
+partially readable store. A deleted secret still in the row that holds its name, which a host on a
+build from before `FreeNameOnDelete` leaves, makes `post-migrate` required in the same way, and the
+reindex moves it under the secret's id. A live secret under a tombstone fails closed as a damaged
+row. No command ever reindexes as a side effect; only `post-migrate` does (ADR 0076 D8).
 
 The mapping deviates from plain Unicode 16 only at the exact, exhaustively tested boundary `U+017F`
 and `U+16EBB` through `U+16ED3`. This module persists projected text rather than a separate

@@ -16,6 +16,9 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Migrations.SqlServer
             // not empty. Their ids are inside the JSON payload, which a migration cannot read without raw SQL, and raw
             // SQL cannot follow a host's configured schema, so they all get one constant instead. It sorts below every
             // generated id, so a later deletion under the same name is the one a read reports.
+            // Stop every host on an older build before applying this. Such a host knows no tombstone, so a secret it
+            // deletes afterwards stays in the row holding its name; the startup audit then names post-migrate, whose
+            // reindex moves that row under the secret's id.
             migrationBuilder.AddColumn<string>(
                 name: "Tombstone",
                 table: "elsa_secrets",

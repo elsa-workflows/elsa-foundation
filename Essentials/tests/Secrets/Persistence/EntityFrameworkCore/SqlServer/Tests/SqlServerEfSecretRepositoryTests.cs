@@ -126,6 +126,38 @@ public sealed class SqlServerEfSecretRepositoryTests(SqlServerContainerFixture f
         await SecretNameReuseScenario.RunAsync(context, bypass);
     }
 
+    /// <summary>
+    /// <see cref="SecretNameConstraints.MaximumKeyLength"/> is SQL Server's own bound on the row a delete writes: a secret
+    /// whose tenant id, name and id fill it is created and deleted, and the engine refuses that row one character past it,
+    /// which is the delete the bound keeps a create from leading to.
+    /// </summary>
+    [SkippableFact]
+    public async Task A_secret_at_the_key_limit_is_created_and_deleted_and_sql_server_refuses_the_row_one_past_it()
+    {
+        Skip.IfNot(fixture.IsAvailable, fixture.SkipReason ?? "Docker unavailable.");
+        var connectionString = await fixture.CreateIsolatedDatabaseAsync();
+        await using var context = CreateContext(connectionString);
+        await EfDatabaseMigrator.ApplyAsync(context, SecretsSqlServerDbContext.ExpectedProviderName);
+        var repository = new EfSecretRepository(context);
+        var revisions = (IRevisionAwareSecretRepository)repository;
+        var tenantId = new string('t', 200);
+        var atLimit = Secret(tenantId, new string('a', SecretNameConstraints.MaximumKeyLength - tenantId.Length - 11), "value");
+        Assert.Equal(SecretNameConstraints.MaximumKeyLength, tenantId.Length + atLimit.Name.Length + atLimit.Id.Length);
+
+        Assert.True(await repository.TryAddAsync(atLimit));
+        var loaded = (await revisions.FindWithRevisionAsync(tenantId, atLimit.Name))!;
+        loaded.Secret.Status = SecretStatus.Deleted;
+        Assert.Equal(SecretRevisionSaveStatus.Saved, (await revisions.SaveWithRevisionAsync(loaded.Secret, loaded.Revision)).Status);
+        Assert.Equal(atLimit.Id, (await context.Secrets.AsNoTracking().SingleAsync()).Tombstone);
+
+        var pastLimit = Secret(tenantId, atLimit.Name + "a", "value");
+        pastLimit.Status = SecretStatus.Deleted;
+        await using var bypass = CreateContext(connectionString);
+        bypass.Secrets.Add(SecretDocument.FromSecret(pastLimit).ToRecord());
+        var refused = await Assert.ThrowsAsync<DbUpdateException>(() => bypass.SaveChangesAsync());
+        Assert.Contains("maximum length of 900 bytes", refused.InnerException!.Message, StringComparison.Ordinal);
+    }
+
     private static SecretsSqlServerDbContext CreateContext(string connectionString) => new(Options(connectionString).Options);
 
     /// <summary>A context with the model builds from before the schema-version stamp had, to write rows the way they did.</summary>

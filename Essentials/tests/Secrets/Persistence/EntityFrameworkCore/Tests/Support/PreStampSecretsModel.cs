@@ -7,20 +7,17 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.Support;
 
 /// <summary>
-/// The Secrets model as builds from before the schema-version stamp had it: without the stamp column, and keyed by tenant
-/// and name alone, because those builds also predate the tombstone that lets a deleted secret free its name. A context
-/// built with it writes a row the way those builds did, with <see cref="WriteAsync"/>, into a database still at a migration
-/// before the stamp. It only writes: migrating with it would report the stamp as a pending model change.
+/// The Secrets model as builds from before the schema-version stamp had it: <see cref="PreReuseSecretsModel"/>, because
+/// those builds also predate the tombstone, without the stamp column either. A context built with it writes a row the way
+/// those builds did, with <see cref="WriteAsync"/>, into a database still at a migration before the stamp. It only writes:
+/// migrating with it would report the stamp as a pending model change.
 /// </summary>
-internal sealed class PreStampSecretsModel(ModelCustomizerDependencies dependencies) : ModelCustomizer(dependencies)
+internal sealed class PreStampSecretsModel(ModelCustomizerDependencies dependencies) : PreReuseSecretsModel(dependencies)
 {
     public override void Customize(ModelBuilder modelBuilder, DbContext context)
     {
         base.Customize(modelBuilder, context);
-        var secret = modelBuilder.Entity<SecretRecord>();
-        secret.HasKey(record => new { record.TenantId, record.NormalizedName });
-        secret.Ignore(record => record.Tombstone);
-        secret.Ignore(record => record.SchemaVersion);
+        modelBuilder.Entity<SecretRecord>().Ignore(record => record.SchemaVersion);
     }
 
     /// <summary>Makes <paramref name="options"/> build this model instead of the current one.</summary>

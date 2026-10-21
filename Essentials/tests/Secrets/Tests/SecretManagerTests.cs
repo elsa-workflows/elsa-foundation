@@ -164,6 +164,27 @@ public sealed class SecretManagerTests : IDisposable
             new SecretRepositoryListRequest(status: SecretStatus.Deleted))).TotalCount);
     }
 
+    /// <summary>
+    /// A store keys a deleted secret by its tenant id, name and id, so the manager refuses a name that leaves that key no
+    /// room within <see cref="SecretNameConstraints.MaximumKeyLength"/>, whatever the store, and says how long a name the
+    /// tenant can have. One at the limit is created and deleted.
+    /// </summary>
+    [Fact]
+    public async Task Create_Refuses_A_Name_Whose_Deleted_Secret_Would_Not_Fit_The_Key()
+    {
+        var tenantId = new string('t', 200);
+        var limit = SecretNameConstraints.MaximumKeyLength - tenantId.Length - 11;
+        var atLimit = await CreateEncryptedAsync(new string('a', limit), tenantId: tenantId);
+        Assert.Equal(SecretNameConstraints.MaximumKeyLength, tenantId.Length + atLimit.Name.Length + atLimit.Id.Length);
+        Assert.True(await _manager.DeleteAsync(tenantId, atLimit.Name));
+
+        var refused = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await CreateEncryptedAsync(new string('b', limit + 1), tenantId: tenantId));
+
+        Assert.Contains($"Secret name cannot exceed {limit} characters in this tenant", refused.Message, StringComparison.Ordinal);
+        Assert.Null(await _repository.FindAsync(tenantId, new string('b', limit + 1)));
+    }
+
     [Fact]
     public async Task Create_Is_Still_Refused_While_A_Revoked_Secret_Holds_The_Name()
     {

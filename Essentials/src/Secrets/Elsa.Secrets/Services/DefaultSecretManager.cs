@@ -49,6 +49,8 @@ public sealed class DefaultSecretManager(
                 Tags = new HashSet<string>(request.Tags, StringComparer.OrdinalIgnoreCase),
                 CreatedAt = now
             };
+            // Settled before a store holds anything: the bound counts the secret's id, which exists only from here on.
+            SecretNameConstraints.ValidateKeyLength(tenantId, normalizedName, secret.Id);
             var version = new SecretVersion
             {
                 Version = 1,

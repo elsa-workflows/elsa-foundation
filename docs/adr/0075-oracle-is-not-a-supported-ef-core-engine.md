@@ -213,6 +213,7 @@ Costs and risks:
 | 2026-09-19 | ADR 0075 accepted | Sipke Schoorstra accepted the recommendation. D1 stays at four engines, the status and the Elsa 3 route are documented, and the trigger is recorded as a three-part condition. |
 | 2026-09-30 | Amendment | The Context's "almost no provider-specific SQL" claim gains two named sites, `EfInsertIfAbsent` (#2162) and `EfSchemaFinalizationCheck`, guarded by `RawSqlArchitectureTests`; the decision is unchanged. |
 | 2026-10-10 | Amendment | `RawSqlArchitectureTests` is deleted by #2573 (ADR 0080 D1: tests do not assert on source text). The two named sites still hold, kept by review. |
+| 2026-10-21 | Amendment | A third named site: the MySQL `FreeNameOnDelete` migration in Secrets (#2855) moves the key with `migrationBuilder.Sql`. The decision is unchanged. |
 
 ## Amendment — 2026-09-30, factual
 
@@ -243,3 +244,20 @@ runs, and a benign startup race must not log an error.
 
 The cost of a fifth engine therefore includes a fifth shape in `EfInsertIfAbsent`, and the revisit condition in D4 is not
 changed by it. `RawSqlArchitectureTests` now names every production file that sends raw SQL, so the set cannot grow unseen.
+
+## Amendment — 2026-10-21, factual
+
+The Context's "no `migrationBuilder.Sql(` calls" is no longer true either. A third production file sends raw SQL: the MySQL
+`FreeNameOnDelete` migration in Secrets (`Migrations/MySql/20261020202445_FreeNameOnDelete.cs`, #2855), which moves the
+`elsa_secrets` primary key to `(TenantId, NormalizedName, Tombstone)` with one `ALTER TABLE ... DROP PRIMARY KEY, ADD PRIMARY
+KEY (...)` statement, and its `Down` moves it back the same way. It has two reasons:
+
+- `MySql.EntityFrameworkCore`, Oracle's MySQL provider, emits no SQL at all for `DropPrimaryKey` or `AddPrimaryKey`. The
+  generated migration applied and was recorded in the history table while the old key stayed, which refused every name a
+  deleted secret held. A fast test now checks that every provider's script moves the key.
+- MySQL refuses a configured schema (`EfSchema`), because a MySQL schema is a database, so the statement's unqualified table
+  name always reaches the connection's database. On SQL Server and PostgreSQL a raw statement could not follow a host's
+  configured schema, so those chains keep the generated operations and send no raw SQL.
+
+It is a workaround for one provider, not a per-engine shape a fifth engine would have to add, so the cost estimate and the
+revisit condition in D4 are unchanged. A fifth engine's provider would need the same check that its key operations emit SQL.

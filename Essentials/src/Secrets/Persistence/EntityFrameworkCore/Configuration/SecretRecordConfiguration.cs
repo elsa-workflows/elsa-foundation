@@ -10,6 +10,12 @@ public sealed class SecretRecordConfiguration : IEntityTypeConfiguration<SecretR
     /// <summary>The longest secret id a deleted row can carry as its tombstone.</summary>
     public const int TombstoneMaximumLength = 64;
 
+    /// <summary>
+    /// Whether a deleted secret's <paramref name="id"/> can be its row's tombstone: not blank, which would read as the row
+    /// holding the name, and within the column.
+    /// </summary>
+    internal static bool IsTombstone(string? id) => !string.IsNullOrWhiteSpace(id) && id.Length <= TombstoneMaximumLength;
+
     public void Configure(EntityTypeBuilder<SecretRecord> builder)
     {
         builder.ToTable(SecretsEfModule.TableName);

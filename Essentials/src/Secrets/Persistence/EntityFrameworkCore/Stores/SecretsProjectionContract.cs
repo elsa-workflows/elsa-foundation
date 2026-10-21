@@ -1,13 +1,15 @@
 using System.Text.Json;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Secrets.Core.Models;
+using Elsa.Secrets.Persistence.EntityFrameworkCore.Configuration;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 
 /// <summary>
-/// Audits and repairs projection fields written before the persisted Unicode algorithm was pinned.
+/// Audits and repairs projection fields written before the persisted Unicode algorithm was pinned, and rows a writer
+/// from before <c>FreeNameOnDelete</c> deleted in place, leaving the deleted secret in the row that holds its name.
 /// Reindexing is an explicit operator action; ordinary startup only validates and fails closed.
 /// Both paths page by the <c>(TenantId, NormalizedName, Tombstone)</c> key so each bounded batch is a single
 /// forward seek rather than a growing OFFSET rescan. The cursor carries the whole key: a name shared by the secret
@@ -21,7 +23,7 @@ public static class SecretsProjectionContract
     /// <summary>
     /// Validates stored row and payload projections in bounded keyset pages.
     /// </summary>
-    /// <exception cref="InvalidOperationException">Legacy projection bytes remain; the operator must reindex.</exception>
+    /// <exception cref="InvalidOperationException">Legacy projection bytes, or a secret deleted in place, remain; the operator must reindex.</exception>
     /// <exception cref="SecretsProjectionException">A row payload cannot be parsed or does not match its key.</exception>
     public static async Task EnsureCurrentAsync(
         SecretsDbContext context,
@@ -32,14 +34,15 @@ public static class SecretsProjectionContract
 
         throw new InvalidOperationException(
             "One or more Secrets rows do not use persisted projection " +
-            $"'{SecretsSearchKeys.UnicodeOrdinalIgnoreCaseAlgorithmId}'. " +
+            $"'{SecretsSearchKeys.UnicodeOrdinalIgnoreCaseAlgorithmId}', or hold a secret that a host from before " +
+            "FreeNameOnDelete deleted in place. " +
             $"Quiesce writers and run '{EfPostMigrationActions.Command}' for this host's provider to " +
             "reindex legacy rows before starting the host.");
     }
 
     /// <summary>
     /// The same read-only audit as <see cref="EnsureCurrentAsync"/>, reporting its verdict instead of throwing
-    /// it: <c>true</c> when any row still carries a legacy projection. This is what
+    /// it: <c>true</c> when any row still carries a legacy projection or a secret deleted in place. This is what
     /// <c>SecretsProjectionReindex.AuditAsync</c> calls, because an <c>IEfPostMigrationAction</c> has to
     /// tell "required" apart from "the database could not be read" — and laundering the one
     /// <see cref="InvalidOperationException"/> that means the former out of every other one that means the
@@ -75,7 +78,8 @@ public static class SecretsProjectionContract
     }
 
     /// <summary>
-    /// Rewrites legacy projection columns and payload copies from the authoritative stored secret.
+    /// Rewrites legacy projection columns and payload copies from the authoritative stored secret, and moves a secret
+    /// deleted in place out of the row that holds its name into a row of its own under its id, which frees the name.
     /// </summary>
     /// <exception cref="SecretsProjectionException">A row payload cannot be parsed or does not match its key; the current batch is rolled back.</exception>
     public static async Task<int> ReindexAsync(
@@ -96,6 +100,17 @@ public static class SecretsProjectionContract
                 foreach (var record in records)
                 {
                     var (stored, current) = ReadDocuments(record);
+                    if (DeletedInPlace(record, stored))
+                    {
+                        // The same move a delete makes, in this batch's save: the row holding the name goes, its
+                        // revision still guarding the delete against a concurrent writer, and the secret's own row
+                        // takes its id as the tombstone. The revision carries over, as for every row this repairs.
+                        context.Secrets.Remove(record);
+                        context.Secrets.Add(current.ToRecord(record.ConcurrencyToken));
+                        updatedBatch++;
+                        continue;
+                    }
+
                     if (Matches(record, stored, current))
                         continue;
 
@@ -154,8 +169,15 @@ public static class SecretsProjectionContract
     private static bool IsCurrent(SecretRecord record)
     {
         var (stored, current) = ReadDocuments(record);
-        return Matches(record, stored, current);
+        return !DeletedInPlace(record, stored) && Matches(record, stored, current);
     }
+
+    /// <summary>
+    /// A deleted secret still in the row that holds its name: what a host from before <c>FreeNameOnDelete</c> leaves when
+    /// it deletes in place, since it knows no tombstone. The name stays taken until the reindex moves the row.
+    /// </summary>
+    private static bool DeletedInPlace(SecretRecord record, SecretDocument stored) =>
+        record.Tombstone.Length == 0 && stored.Secret.Status == SecretStatus.Deleted;
 
     private static (SecretDocument Stored, SecretDocument Current) ReadDocuments(SecretRecord record)
     {
@@ -195,13 +217,15 @@ public static class SecretsProjectionContract
             throw SecretsProjectionException.ForPayload(record, exception);
         }
 
-        // A deleted secret in the row that holds its name would keep the name taken, and a live one under a tombstone
-        // would be invisible to every lookup; either way the row is not where its document says it belongs.
+        // A live secret under a tombstone would be invisible to every lookup, and nothing says it should take the name
+        // back, so it fails closed. A deleted secret in the row that holds its name is repairable: the reindex moves it
+        // under its id, unless that id cannot be a tombstone.
         if (!string.Equals(stored.TenantId, record.TenantId, StringComparison.Ordinal) ||
             !string.Equals(stored.NormalizedName, record.NormalizedName, StringComparison.Ordinal) ||
             !string.Equals(current.TenantId, record.TenantId, StringComparison.Ordinal) ||
             !string.Equals(current.NormalizedName, record.NormalizedName, StringComparison.Ordinal) ||
-            (stored.Secret.Status == SecretStatus.Deleted) == (record.Tombstone.Length == 0))
+            record.Tombstone.Length > 0 && stored.Secret.Status != SecretStatus.Deleted ||
+            DeletedInPlace(record, stored) && !SecretRecordConfiguration.IsTombstone(stored.Secret.Id))
         {
             throw SecretsProjectionException.ForIdentity(record);
         }

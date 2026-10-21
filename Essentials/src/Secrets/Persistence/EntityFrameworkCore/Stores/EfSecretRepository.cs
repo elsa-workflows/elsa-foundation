@@ -73,7 +73,7 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(secret);
         ValidateIdentity(secret);
-        var record = SecretDocument.FromSecret(secret).ToRecord();
+        var record = NewRecord(SecretDocument.FromSecret(secret));
         // Only the row holding the name refuses a new secret; rows of secrets deleted under it do not.
         var exists = await context.Secrets.AnyAsync(
             row => row.TenantId == record.TenantId &&
@@ -112,7 +112,7 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
         {
             var existing = await context.Secrets.FindAsync([secret.TenantId, secret.Name, document.Tombstone], cancellationToken);
             if (existing is null)
-                context.Secrets.Add(document.ToRecord());
+                context.Secrets.Add(NewRecord(document));
             else
             {
                 // A row this build cannot read is never overwritten in this build's format.
@@ -166,7 +166,7 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
         {
             if (existing is not null)
                 return new SecretRevisionSaveResult(SecretRevisionSaveStatus.Conflict);
-            saved = document.ToRecord();
+            saved = NewRecord(document);
             context.Secrets.Add(saved);
         }
         else if (existing is null)
@@ -228,6 +228,17 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
             .OrderBy(row => row.Tombstone != "")
             .ThenByDescending(row => row.Tombstone)
             .FirstOrDefaultAsync(cancellationToken);
+
+    /// <summary>
+    /// The row a write adds for <paramref name="document"/>. A row that holds a name is added only when the row its delete
+    /// will write under the secret's id fits the key as well, so a secret this store accepts can always be deleted.
+    /// </summary>
+    private static SecretRecord NewRecord(SecretDocument document)
+    {
+        if (document.Tombstone.Length == 0)
+            SecretNameConstraints.ValidateKeyLength(document.TenantId, document.NormalizedName, document.Secret.Id);
+        return document.ToRecord();
+    }
 
     /// <summary>
     /// Takes the row holding the name out of the save that writes <paramref name="secret"/>'s tombstoned row, so the
@@ -350,7 +361,7 @@ public sealed class EfSecretRepository(SecretsDbContext context) : ISecretReposi
             return;
 
         // A deleted secret's id becomes its row's tombstone, and a blank one would read as the row holding the name.
-        if (string.IsNullOrWhiteSpace(secret.Id) || secret.Id.Length > SecretRecordConfiguration.TombstoneMaximumLength)
+        if (!SecretRecordConfiguration.IsTombstone(secret.Id))
         {
             throw new ArgumentException(
                 $"A deleted secret needs a non-blank id of at most {SecretRecordConfiguration.TombstoneMaximumLength} characters.",
