@@ -1661,6 +1661,12 @@
         }
       },
       "elsa.maps.generator": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Maps.Projects": "[1.0.0, )"
+        }
+      },
+      "elsa.maps.projects": {
         "type": "Project"
       },
       "elsa.mediator": {

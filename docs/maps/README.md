@@ -3,7 +3,8 @@
 Maps are navigation and generated-fact surfaces. They should be cheap to regenerate and should not become long-form concept documentation.
 
 The documentation maps below are **never committed to `main`**. CI regenerates them after every merge and publishes
-them on the `generated-maps` branch. The one generated dataset committed here is [`dependency-map.json`](dependency-map.json).
+them on the `generated-maps` branch, together with the dependency-map dataset, `dependency-map.json`, which the
+versioning calculator derives from each commit's tree, so it is not committed either (spec 259).
 See [Generated maps](../contributing/generated-maps.md) for how publication and the freshness check work.
 
 ## Where to read the maps
@@ -24,7 +25,7 @@ See [Generated maps](../contributing/generated-maps.md) for how publication and 
 
 ## Maps
 
-- [Dependency map](dependency-map.json) - the canonical project-graph dataset (spec 149) the project-graph maps below are projections of; committed. See [Dependency map dataset](#dependency-map-dataset).
+- [Dependency map](https://github.com/elsa-workflows/elsa-foundation/blob/generated-maps/docs/maps/dependency-map.json) - the canonical project-graph dataset (spec 149) the project-graph maps below are projections of; derived per commit, not committed. See [Dependency map dataset](#dependency-map-dataset).
 - [Repo-wide extension points](../../EXTENSION_POINTS.md) - index of per-domain extension catalogs; committed, hand-maintained.
 - Per-domain `EXTENSION_POINTS.md` files under `src/` - replace/contribute/event surfaces owned by each domain.
 - [Project reference map](https://github.com/elsa-workflows/elsa-foundation/blob/generated-maps/docs/maps/project-reference-map.md) - direct project references.
@@ -59,13 +60,15 @@ if it is absent or blank, the map displays `-`. Ordinary headings and prose, inc
 
 `dependency-map.json` is the one scan of the project files. The project-reference, package, test, domain,
 architecture-reference and feature-dependency maps take every project and package fact from it rather than reading
-`.csproj` files themselves, and publishing reads it (spec 150). The `dependency-map` layer writes it, `-- all` includes
-it, and it is the one file the freshness check compares. Unlike the maps above, it is committed to `main`, because
-the versioning calculator reads it from each commit's tree.
+`.csproj` files themselves, and publishing reads it (spec 150). The `dependency-map` layer writes it locally and
+`-- all` includes it. It is not committed (spec 259): the scan lives in `tools/maps/Elsa.Maps.Projects`, and the
+versioning calculator runs it over each commit's git objects to derive the same bytes. Only commits from before spec
+259 still carry a committed copy, which the calculator reads as it is, so the inputs recorded for their publishes never
+move.
 
 - `schema_version` changes when the shape changes in a way a consumer could misread. A consumer checks it when it reads the file; generation does not gate on it.
 - `nodes` holds one node per project under `src/` and `tests/`, ordered by `path`, the node's identity. Each records `name`, `kind` (`source` or `test`), `domain`, `sub_domain`, `role`, `declared_target_framework` (null when inherited), and `packable`, with MSBuild's defaults applied. `package_id` and `line` (`A` or `B`, from `VersionLines.props`) are set on packable nodes and null on every other node.
-- Each node's `edges` are typed. An `internal` edge is a `ProjectReference`, with the target's package `id` and project `path`; that path can name a project outside `src/` and `tests/` that has no node. An `external` edge is a `PackageReference`, with the package `id` and the `version` that central package management declares. A `pinned-transitive` edge, on packable nodes only, is a package the project reaches only through its other dependencies whose version `Directory.Packages.props` pins, with its `id` and pinned `version`: `CentralPackageTransitivePinningEnabled` makes pack write each one into the nuspec. These come from the project's committed `packages.lock.json`: its `CentralTransitive` entries that a reference not declared `PrivateAssets="all"` reaches, which is the list pack writes. So generating or checking the dataset needs no restore; a lock file older than the project's pins or references is refused (see [NuGet lock files](../reference/nuget-lock-files.md)).
+- Each node's `edges` are typed. An `internal` edge is a `ProjectReference`, with the target's package `id` and project `path`; that path can name a project outside `src/` and `tests/` that has no node. An `external` edge is a `PackageReference`, with the package `id` and the `version` that central package management declares. A `pinned-transitive` edge, on packable nodes only, is a package the project reaches only through its other dependencies whose version `Directory.Packages.props` pins, with its `id` and pinned `version`: `CentralPackageTransitivePinningEnabled` makes pack write each one into the nuspec. These come from the project's committed `packages.lock.json`: its `CentralTransitive` entries that a reference not declared `PrivateAssets="all"` reaches, which is the list pack writes. So generating or deriving the dataset needs no restore; a lock file older than the project's pins or references is refused (see [NuGet lock files](../reference/nuget-lock-files.md)).
 - A file belongs to the node whose directory is the longest prefix of its path. When no node's directory contains the file, it has no owner.
 - It holds no publish state and no list of source files, so it changes only when the project graph does.
 
@@ -103,10 +106,11 @@ bash tools/maps/generate-feature-dependency-map.sh
 dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 ```
 
-- The check regenerates the dependency map into a scratch directory and byte-compares it with the committed
-  `dependency-map.json`. When it is red, run `-- dependency-map` and commit `docs/maps/dependency-map.json`. CI runs
-  it in the `Generated maps fresh` job, beside the solution-filter check and the generator self-tests.
-- The documentation maps cannot go stale on `main`, because none is committed. The copy on `generated-maps` describes
+- The check regenerates the solution filters into a scratch directory and byte-compares them with the committed
+  `Elsa.Server.*.slnf` files, as `-- solution-filters-check` does: they are the only generated files left on `main`.
+  CI runs the filter check in the `Generated maps fresh` job, beside the generator self-tests.
+- The dependency map and the documentation maps cannot go stale on `main`, because none is committed: the
+  calculator derives the dataset per commit (spec 259). The copy on `generated-maps` describes
   the commit its `Source-Commit:` trailer names; a local `-- all` describes your working tree.
 - Review the generated findings reports, `docs/reports/maps-v1-findings.md` and `maps-v2-findings.md`, before
   relying on a map as evidence. If they expose drift that makes the current work unsafe, stop and tell the user.

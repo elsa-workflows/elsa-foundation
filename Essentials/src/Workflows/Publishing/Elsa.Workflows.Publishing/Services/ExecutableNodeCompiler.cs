@@ -172,6 +172,9 @@ public sealed class ExecutableNodeCompiler(
         // Spec 258 R-3: how the node handles faults below it, read by the runtime without constructing the activity.
         if (StructuralFaultHandling(clrActivityType) is { } faultHandling)
             metadata[RuntimeMetadataKeys.StructuralFaultHandling] = faultHandling;
+        // #3135: whether rescheduling a faulted child the node already evaluated may reach it, read at preflight.
+        if (clrActivityType is not null && typeof(IRuntimeAcceptsRescheduledFaultedChild).IsAssignableFrom(clrActivityType))
+            metadata[RuntimeMetadataKeys.AcceptsRescheduledFaultedChild] = "true";
 
         return metadata;
     }
@@ -460,11 +463,8 @@ public sealed class ExecutableNodeCompiler(
             supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true));
     }
 
-    // An unmarked activity is External (fail-safe); only an explicit
-    // [ActivitySideEffectProfile(ReplaySafe)] opts a pure/deterministic activity into a deferrable claim boundary.
-    private static SideEffectProfile ResolveSideEffectProfile(Type activityType) =>
-        activityType.GetCustomAttribute<ActivitySideEffectProfileAttribute>(inherit: true)?.Profile
-        ?? SideEffectProfile.External;
+    // The rule is shared with the design-time ActivitySideEffectProfileReader (spec 261 FR-513).
+    private static SideEffectProfile ResolveSideEffectProfile(Type activityType) => ActivitySideEffectProfiles.Of(activityType);
 
     private static ValueRepresentation ResolveSourceRepresentation(
         OutputAttribute attribute,

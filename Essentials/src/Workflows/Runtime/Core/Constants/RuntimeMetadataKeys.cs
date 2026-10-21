@@ -62,6 +62,11 @@ public static class RuntimeMetadataKeys
     public const string StructuralFaultHandling = "runtime.structuralFaultHandling";
     public const string StructuralFaultHandlingChild = "child";
     public const string StructuralFaultHandlingDescendant = "descendant";
+    /// <summary>
+    /// Executable-node capability compiled from the node's activity type when it implements
+    /// <c>IRuntimeAcceptsRescheduledFaultedChild</c>; value <c>true</c>, absent for every other node (#3135).
+    /// </summary>
+    public const string AcceptsRescheduledFaultedChild = "runtime.acceptsRescheduledFaultedChild";
     /// <summary>Marks a child-fault evaluation work item that delivers a descendant's fault (spec 258 R-3).</summary>
     public const string DescendantFault = "runtime.descendantFault";
     /// <summary>The receiver's direct child the delivered descendant fault passed through.</summary>
@@ -314,6 +319,13 @@ public static class RuntimeMetadataKeys
     public const string OperationKey = "runtime.operationKey";
     /// <summary>Operation key of the effect a child acts on, assigned by its structural parent like <see cref="OperationKey"/>.</summary>
     public const string TargetOperationKey = "runtime.targetOperationKey";
+    /// <summary>
+    /// Set by the runtime on a <c>ScheduleActivity</c> work item that a structural parent staged with a due time (R-7,
+    /// spec 261): the round-trip ("O") UTC time before which it must not be delivered. Its post-commit intent becomes
+    /// available at that time, and on delivery the schedule handler acknowledges it without scheduling the child when
+    /// the run is gone or terminal or the scheduling parent is no longer running. Never inherited by derived work.
+    /// </summary>
+    public const string ScheduleNotBefore = "runtime.scheduleNotBefore";
     /// <summary>Set on a successor that replaced a source activity execution through an alteration.</summary>
     public const string SupersedesActivityExecutionId = "runtime.supersedesActivityExecutionId";
     /// <summary>Set on the successor a <c>RetryFaultedActivity</c> alteration scheduled for a faulted source.</summary>

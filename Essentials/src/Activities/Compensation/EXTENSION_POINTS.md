@@ -23,11 +23,18 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
 - Operator decisions (spec 260, runtime seam R-5): a waiting scope offers `compensation.resolve.effect-absent`,
   `compensation.resolve.effect-accepted` and `compensation.abandon` on its intervention incident and implements
   `IRuntimeActivityInterventionDecisionHandler` to apply them. Entry status `ResolvedManually` and phase `Abandoned`
-  are part of private state version 4.
+  are part of private state version 4 (the current version is 5, spec 261).
 - Descendant faults (spec 258 R-3): the scope implements `IRuntimeActivityDescendantFaultHandler`, so a fault under a
   Sequence or loop step reaches it as a fault of that step. Direct/combined child faults route from the callback's
   committed child provenance, and descendant faults from its committed via-child provenance; delivery-command keys
   do not substitute for that ownership evidence.
+- Handler retry backoff (spec 261): the inputs `handlerRetryDelay` (default `00:00:00`, at most 24 hours),
+  `handlerRetryBackoffMultiplier` (default `2`, at least 1) and `handlerRetryMaxDelay` (default `00:05:00`, at least the
+  delay and at most 24 hours). After the n-th failed attempt the scope waits `min(max delay, delay × multiplier^(n − 1))`
+  and schedules the same handler, with the same keys, through the runtime's delayed child schedule (R-7,
+  `ScheduleChildActivity(..., notBefore)`); a zero wait schedules it at once as before. A value from an expression is
+  clamped into range at run time. Operator retries never wait. Private state version 5 records the attempt's
+  `notBefore` and `delayClamped`, and the journal carries both on its attempts.
 
 ## Cross-domain contributions
 
@@ -50,6 +57,17 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   `{nodeId}/outputs/{key}` or `{nodeId}/variable`). It reads container declarations through
   `IActivityStructureService.ProjectScopedVariables` and checks structured `Variable` references only; script
   expressions are not analyzed (spec 258 R18).
+- `CompensationScopeValidator` also refuses literal retry inputs out of range (spec 261 FR-509):
+  `CompensationScope/InvalidRetryDelay`, `CompensationScope/InvalidBackoffMultiplier` and
+  `CompensationScope/InvalidRetryMaxDelay`, with path `{scopeNodeId}/inputs/{key}`. An expression input is not
+  validated at design time.
+- `CompensationReplaySafeValidator` implements `IDraftValidator` (spec 261 FR-514, spec 250 FR-014). It reports, with
+  severity `Warning` and so without blocking promotion, a step that has a compensation and whose forward activity is a
+  `ReplaySafe` leaf (`CompensationScope/ReplaySafeStep`) and a compensation that is one
+  (`CompensationScope/ReplaySafeHandler`), with path `{scopeNodeId}/steps/{index}`. A node with a structure never warns.
+  It reads profiles through `IActivitySideEffectProfileReader` (`Elsa.Activities.Runtime.Core`), whose one
+  implementation, `ActivitySideEffectProfileReader`, is registered by `WorkflowsPublishingFeature` and applies the
+  executable compiler's own rule; without a reader (a host without Publishing) it reports nothing.
 - `CompensationJournalProjector` implements `IActivityStateViewProjector` (`Elsa.Workflows.Runtime.Core`, spec 260
   R-6). Registered by `ActivitiesCompensationFeature` for private state `Elsa.CompensationScope.State`, it projects the
   journal view `compensation.journal` version 1 (phase, cause, entries with attempts, waits and offered decisions,

@@ -191,6 +191,7 @@ internal static class StructuralCallbackEvaluation
                 var scheduledChildren = context.GetChildActivityScheduleRequests();
                 if (!continuation.IsDeferred && scheduledChildren.Count > 0)
                     throw new InvalidOperationException($"A terminal structural decision cannot also schedule child activities in the same {definition.EvaluationName} evaluation.");
+                RuntimeDelayedSchedules.Validate(serviceProvider, timeProvider, payload.ExecutableNodeId, scheduledChildren);
 
                 // Seam-B fault absorption and intervention stay child-fault-evaluation-only powers.
                 if (context.GetChildFaultAbsorptionRequests().Count > 0)

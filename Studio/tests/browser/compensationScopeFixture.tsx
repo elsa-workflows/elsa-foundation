@@ -67,6 +67,22 @@ const waitingRuntime: CompensationScopeRuntime = {
   cause: { kind: "uncertain", step: "Reserve delivery", activityExecutionId: "ae-2", failureType: "delivery.timeout", message: "No response from the delivery service." }
 };
 
+// Spec 261: cancelling delivery failed once; the scope waits 30 seconds before the second attempt. No action is offered.
+const retryRuntime: CompensationScopeRuntime = {
+  scopeActivityExecutionId: "ae-scope",
+  phase: "Compensating",
+  rows: [
+    { step: "Reserve inventory", forward: { state: "Completed", activityExecutionId: "ae-1" }, recovery: { state: "Pending" } },
+    {
+      step: "Reserve delivery",
+      forward: { state: "Completed", activityExecutionId: "ae-2" },
+      recovery: { state: "RetryScheduled", activityExecutionId: "ae-4", order: 1, attempts: { count: 2, max: 3 }, retryNotBefore: "2099-10-20T10:42:30Z" }
+    },
+    { step: "Confirm order", forward: { state: "Faulted", activityExecutionId: "ae-3" }, recovery: { state: "NotApplicable" } }
+  ],
+  cause: { kind: "fault", step: "Confirm order", activityExecutionId: "ae-3", failureType: "order.rejected", message: "The order was rejected." }
+};
+
 // Spec 258: the outer scope also undoes the hotel booking that the inner "Book hotel" scope handed over when it completed.
 const nestedRuntime: CompensationScopeRuntime = {
   scopeActivityExecutionId: "ae-outer",
@@ -210,12 +226,13 @@ const stepRuntime: CompensationScopeRuntime = {
 };
 
 export type CompensationOperatorFixtureView = "actions" | "resolved" | "abandoned" | "readonly" | "derived" | "step" | "incident";
-export type CompensationScopeFixtureView = "author" | "run" | "waiting" | "nested" | "confirmed" | "loop" | CompensationOperatorFixtureView;
+export type CompensationScopeFixtureView = "author" | "run" | "waiting" | "retry" | "nested" | "confirmed" | "loop" | CompensationOperatorFixtureView;
 export const compensationOperatorFixtureViews: CompensationOperatorFixtureView[] = ["actions", "resolved", "abandoned", "readonly", "derived", "step", "incident"];
 
 const runtimes: Partial<Record<CompensationScopeFixtureView, CompensationScopeRuntime>> = {
   run: runtime,
   waiting: waitingRuntime,
+  retry: retryRuntime,
   nested: nestedRuntime,
   confirmed: confirmedRuntime
 };

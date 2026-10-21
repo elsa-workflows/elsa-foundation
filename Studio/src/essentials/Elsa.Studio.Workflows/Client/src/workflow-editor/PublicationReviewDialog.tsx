@@ -233,6 +233,8 @@ export function PublicationReviewDialog({
                   </div>
                 ) : null}
 
+                <PublicationWarnings warnings={review.validationWarnings} />
+
                 {versionIssues.length ? (
                   <div className="wf-publication-risks" role="alert">
                     <strong>Choose a valid version</strong>
@@ -476,6 +478,20 @@ export function PublicationReviewDialog({
         </form>
       </section>
     </div>
+  );
+}
+
+// Spec 261 FR-515: warnings are listed with text and an icon, and never disable Publish.
+function PublicationWarnings({ warnings }: { warnings: string[] }) {
+  if (!warnings?.length) return null;
+  return (
+    <section className="wf-publication-warnings" aria-labelledby="publication-warnings-title">
+      <h4 id="publication-warnings-title">
+        <span className="wf-publication-warnings-mark" aria-hidden="true">⚠</span> Warnings
+      </h4>
+      <p>These do not block publishing. Review them before you publish.</p>
+      <ul>{warnings.map((message, index) => <li key={`${index}-${message}`}>{message}</li>)}</ul>
+    </section>
   );
 }
 

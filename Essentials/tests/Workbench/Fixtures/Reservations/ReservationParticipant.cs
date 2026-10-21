@@ -124,11 +124,12 @@ public sealed partial class ReservationParticipant : Activity<ReservationResult>
 
     protected override async ValueTask<ActivityTransition<ReservationResult>> ExecuteAsync(ActivityExecutionContext context)
     {
+        var startedAt = DateTimeOffset.UtcNow;
         Directory.CreateDirectory(DirectoryPath);
         var calls = Path.Combine(DirectoryPath, Key + ".calls");
         var previousCalls = File.Exists(calls) ? (await File.ReadAllLinesAsync(calls, context.CancellationToken)).Length : 0;
         await File.AppendAllTextAsync(calls,
-            $"{Environment.ProcessId}|{context.InvocationId}|{context.AttemptId}|{context.OperationKey}{Environment.NewLine}", context.CancellationToken);
+            $"{Environment.ProcessId}|{context.InvocationId}|{context.AttemptId}|{context.OperationKey}|{startedAt:O}{Environment.NewLine}", context.CancellationToken);
 
         if (Undoes is not null)
             await File.AppendAllTextAsync(Path.Combine(DirectoryPath, Key + ".undoes"), Undoes + Environment.NewLine, context.CancellationToken);

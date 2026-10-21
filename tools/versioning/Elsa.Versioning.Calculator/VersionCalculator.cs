@@ -9,9 +9,9 @@ public sealed class VersionGateException(string message) : Exception(message);
 /// </summary>
 /// <remarks>
 /// <para>
-/// The result is a function of the commit and the record alone (FR-009): history is read only from local git objects
-/// and the dependency map committed in them, never from the working tree, a clock, the environment or a feed
-/// (FR-006, FR-013). The record is an input beside the commit, never part of any tree compared, so no revision of it
+/// The result is a function of the commit and the record alone (FR-009): history is read only from local git objects,
+/// the dependency map included — committed in them or derived from them (spec 259) — never from the working tree, a
+/// clock, the environment or a feed (FR-006, FR-013). The record is an input beside the commit, never part of any tree compared, so no revision of it
 /// can mark a package changed (FR-016).
 /// </para>
 /// <para>
@@ -41,18 +41,19 @@ public static class VersionCalculator
     /// <param name="revision">The commit being built.</param>
     /// <param name="record">The revision of the last-published record to compute against.</param>
     /// <param name="forced">Packages to advance although their inputs did not change (FR-003), or null.</param>
+    /// <param name="source">Where every snapshot's dependency map comes from (spec 259); <see cref="DatasetSource.Auto"/> unless comparing.</param>
     /// <exception cref="VersionGateException">The forward-only (FR-021) or monotonicity (FR-012) gate refused.</exception>
     /// <exception cref="InvalidOperationException">
     /// An input could not be read, or does not describe the repository, or <paramref name="forced"/> names a package
     /// the commit does not have.
     /// </exception>
-    public static VersionComputation Compute(GitRepository git, string revision, PublishedVersions record, ForcedAdvance? forced = null)
+    public static VersionComputation Compute(GitRepository git, string revision, PublishedVersions record, ForcedAdvance? forced = null, DatasetSource source = DatasetSource.Auto)
     {
         var commit = git.ResolveCommit(revision);
         RequireForwardOnly(git, commit, record);
 
-        var objects = new ObjectCache(git);
-        var built = new CommitSnapshot(objects, commit);
+        using var objects = new ObjectCache(git);
+        var built = new CommitSnapshot(objects, commit, source);
         var snapshots = new Dictionary<string, CommitSnapshot>(StringComparer.Ordinal) { [commit] = built };
         CommitSnapshot Snapshot(string at)
         {
@@ -64,7 +65,7 @@ public static class VersionCalculator
                     $"The record names {at} as a last-published commit, but it is not in this repository. Fetch full history (a shallow " +
                     "clone lacks it); if main was rewritten, the entry has to be settled with the repair workflow (spec 150 FR-019).");
 
-            return snapshots[at] = new CommitSnapshot(objects, at);
+            return snapshots[at] = new CommitSnapshot(objects, at, source);
         }
 
         var lines = VersionLineSettings.Parse(built.ReadFile(VersionLineSettings.RelativePath), $"{VersionLineSettings.RelativePath} at {commit}");
@@ -126,28 +127,32 @@ public static class VersionCalculator
     }
 
     /// <summary>
-    /// The dependency map committed with the commit being built must describe that commit's projects, or a project
-    /// added without regenerating it would own nothing and never publish, and a changed Line A list would put packages
-    /// on the wrong line.
+    /// The dependency map for the commit being built must describe that commit's projects, or a project the map lacks
+    /// would own nothing and never publish, and a changed Line A list would put packages on the wrong line. A committed
+    /// map goes stale when it is not regenerated. A derived one is scanned from the same tree, so a disagreement means
+    /// the scan and this inventory disagree about where projects live (<see cref="RepoLayout.IsProjectPath"/>).
     /// </summary>
     private static void RequireMapDescribesTree(CommitSnapshot built, VersionLineSettings lines)
     {
+        var map = built.MapDerived ? $"The dependency map derived at {built.Commit}" : $"{DependencyMapDataset.RelativePath} at {built.Commit}";
+        var remedy = built.MapDerived
+            ? ". The project-graph scan and the calculator's project inventory disagree about where projects live; see RepoLayout.IsProjectPath in tools/maps/Elsa.Maps.Projects"
+            : ". Regenerate it with: dotnet run --project tools/maps/Elsa.Maps.Generator -- dependency-map";
+
         var inTree = built.ProjectFiles().ToHashSet(StringComparer.Ordinal);
         var inMap = built.Map.Nodes.Select(node => node.Path).ToHashSet(StringComparer.Ordinal);
         var unmapped = inTree.Except(inMap).Order(StringComparer.Ordinal).ToArray();
         var missing = inMap.Except(inTree).Order(StringComparer.Ordinal).ToArray();
         if (unmapped.Length + missing.Length > 0)
             throw new InvalidOperationException(
-                $"{DependencyMapDataset.RelativePath} at {built.Commit} does not describe the projects in that commit" +
-                Listed("; projects it lacks", unmapped) + Listed("; nodes with no project", missing) +
-                ". Regenerate it with: dotnet run --project tools/maps/Elsa.Maps.Generator -- dependency-map");
+                $"{map} does not describe the projects in that commit" +
+                Listed("; projects it lacks", unmapped) + Listed("; nodes with no project", missing) + remedy);
 
         var lineA = built.Map.Packable.Values.Where(node => node.Line == "A").Select(node => node.Name).ToHashSet(StringComparer.Ordinal);
         if (!lineA.SetEquals(lines.LineAMembers))
             throw new InvalidOperationException(
-                $"{DependencyMapDataset.RelativePath} at {built.Commit} puts {Listed(string.Empty, [.. lineA.Order(StringComparer.Ordinal)])} on Line A, " +
-                $"but {VersionLineSettings.RelativePath} lists {Listed(string.Empty, [.. lines.LineAMembers.Order(StringComparer.Ordinal)])}. " +
-                "Regenerate it with: dotnet run --project tools/maps/Elsa.Maps.Generator -- dependency-map");
+                $"{map} puts {Listed(string.Empty, [.. lineA.Order(StringComparer.Ordinal)])} on Line A, " +
+                $"but {VersionLineSettings.RelativePath} lists {Listed(string.Empty, [.. lines.LineAMembers.Order(StringComparer.Ordinal)])}" + remedy);
     }
 
     /// <summary>

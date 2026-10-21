@@ -144,6 +144,10 @@ The run inspector and execution evidence render a withheld value by its marker; 
 [Runtime API](../Api/README.md#withheld-and-protected-values) and
 [execution evidence](../../ExecutionEvidence/README.md#value-dispositions) documentation.
 
+## Delayed child schedules
+
+A structural activity can schedule a child not before a due time (spec 261 R-7) with the `ScheduleChildActivity` overload that takes `notBefore`. The child's schedule commits in the evaluation's checkpoint as a post-commit outbox item that becomes available at the due time; the checkpoint is durable in every persistence mode, and the outbox sweep of `WorkflowsRuntimeResumption` delivers the item once it is due, so the delay is a minimum of one sweep interval's precision (10 seconds by default). Nothing else of the run waits behind the item. A host without that feature refuses delayed schedules (`runtime.delayed-schedule.unavailable`), as does a due time more than `RuntimeDelayedScheduleOptions.MaxDelay` ahead (`runtime.delayed-schedule.too-far`). When the item is delivered to a run that is gone or terminal, or to a parent that is no longer running, it schedules nothing. See the `IRuntimeStructuralActivity` entry in [EXTENSION_POINTS.md](EXTENSION_POINTS.md).
+
 ## Composition
 
 Call `AddWorkflowRuntime()` for the host-agnostic runtime. It supplies in-memory development stores and a

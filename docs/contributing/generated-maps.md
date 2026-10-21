@@ -1,14 +1,18 @@
 # Generated maps
 
 Moved from `AGENTS.md` (#2578). Rewritten by spec 257: the documentation maps are no longer committed to `main`.
+Spec 259 removed the dependency-map dataset from `main` too.
 
 ## What is committed and what is published
 
 - **Published, never committed:** the markdown maps under `docs/maps/` (every `*.md` except `README.md`),
-  `docs/maps/manifest.json`, `docs/reports/maps-v1-findings.md` and `docs/reports/maps-v2-findings.md`. Git ignores
-  them, so a PR never touches them and two PRs can never conflict on them.
-- **Committed and checked:** `docs/maps/dependency-map.json`, which the versioning calculator reads from each commit's
-  tree, and the `Elsa.Server.*.slnf` solution filters. Commit them only when they change.
+  `docs/maps/manifest.json`, the dependency-map dataset `docs/maps/dependency-map.json`,
+  `docs/reports/maps-v1-findings.md` and `docs/reports/maps-v2-findings.md`. Git ignores them, so a PR never touches
+  them and two PRs can never conflict on them.
+- **Derived, never committed:** the versioning calculator does not need the dataset committed. It derives it from each
+  commit's own git objects with the scan the generator runs (`tools/maps/Elsa.Maps.Projects`, spec 259), and reads the
+  committed copy only for commits from before spec 259.
+- **Committed and checked:** the `Elsa.Server.*.slnf` solution filters. Commit them only when they change.
 
 The [maps index](../maps/README.md) lists every map and links to each one.
 
@@ -18,8 +22,8 @@ The [maps index](../maps/README.md) lists every map and links to each one.
 dotnet run --project tools/maps/Elsa.Maps.Generator -- all
 ```
 
-This writes the full set at its usual paths, so relative links between maps resolve, and leaves `git status` clean
-apart from a changed `dependency-map.json`. Pass a layer name instead of `all` to regenerate one layer; the
+This writes the full set at its usual paths, so relative links between maps resolve, and leaves `git status`
+clean. Pass a layer name instead of `all` to regenerate one layer; the
 PowerShell and Bash shims under `tools/maps/` call the same tool and produce byte-identical output, so a local run and
 the CI set for the same commit match.
 
@@ -35,7 +39,7 @@ After every push to `main`, the `Publish generated maps` job in `.github/workflo
 `-- publish` and commits it to the `generated-maps` branch:
 
 - **Layout:** the same paths as on `main` (`docs/maps/*.md`, `docs/maps/manifest.json`,
-  `docs/reports/maps-v{1,2}-findings.md`) plus a root `README.md` naming the source commit. Links that point outside
+  `docs/maps/dependency-map.json`, `docs/reports/maps-v{1,2}-findings.md`) plus a root `README.md` naming the source commit. Links that point outside
   the set are pinned to `https://github.com/elsa-workflows/elsa-foundation/blob/<source-sha>/...`, so each one opens
   the file as it was at the commit the map describes.
 - **Commits:** one per `main` commit that changed the set, named `Maps for <short-sha>`, with a `Source-Commit: <sha>`
@@ -63,12 +67,14 @@ commit and running `-- all`.
 dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 ```
 
-`-- check` regenerates the dependency map into a scratch directory and byte-compares it with the committed
-`docs/maps/dependency-map.json`. When it is red, run `-- dependency-map` and commit that file. The required
-`Generated maps fresh` job runs it on every pull request and every push to `main`, together with the solution-filter
-check and the generator self-tests. It does not gate on a fingerprint over the inputs, which would move on every source
-edit. The documentation maps have no freshness check, because none is committed: the branch copy describes the commit
-its trailer names, and a local run describes your working tree.
+`-- check` regenerates the solution filters into a scratch directory and byte-compares them with the committed
+`Elsa.Server.*.slnf` files, the only generated files left on `main`; it is the same check as
+`-- solution-filters-check`. When it is red, run `-- solution-filters` and commit the filters. The required
+`Generated maps fresh` job runs the filter check on every pull request and every push to `main`, together with the
+generator self-tests. The dependency map and the documentation maps have no freshness check, because none is
+committed: the calculator derives the dataset per commit, the branch copy describes the commit its trailer names, and
+a local run describes your working tree. A tree the scan cannot read, such as a stale lock file, fails
+`DependencyMapTests` in `Build & test` on the pull request rather than the publish on `main`.
 
 ## Findings reports
 

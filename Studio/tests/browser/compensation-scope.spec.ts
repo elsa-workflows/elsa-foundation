@@ -64,6 +64,23 @@ test("the run view shows an uncertain step and a handler that needs an operator,
   await expect(page.getByTestId("fixture-incident")).toHaveText("inc-6");
 });
 
+// Spec 261: a handler retry that waits for its due time.
+
+test("the run view shows a scheduled retry as text and icon with its attempt and due time, and offers no action", async ({ page }) => {
+  await page.goto("/?mode=compensation-scope&view=retry&theme=light");
+
+  await expect(page.locator(".wf-compensation-phase")).toContainText("Compensating");
+  const retry = page.locator(".wf-compensation-state[data-kind='recovery'][data-state='RetryScheduled']");
+  await expect(retry).toBeVisible();
+  await expect(retry).toContainText(/^\s*Retry scheduled \(1st\) · Attempt 2 of 3 · after .*2099.*\d{1,2}:\d{2}:\d{2}/);
+  await expect(retry.locator("svg")).toHaveCount(1);
+  await expect(page.locator(".wf-compensation-operator-action")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /waiting on/ })).toHaveCount(0);
+
+  await retry.press("Enter");
+  await expect(page.getByTestId("fixture-execution")).toHaveText("ae-4");
+});
+
 // Spec 258: nesting, confirmation, Compensate, cancellation and repeated scopes.
 
 test("an outer scope lists work an inner scope handed over and links to where it ran", async ({ page }) => {
@@ -243,7 +260,7 @@ test("the incident dialog offers Retry and each offered decision with its label"
 });
 
 const listItemsByView: Record<string, number> = {
-  author: 3, run: 3, waiting: 3, nested: 4, confirmed: 3, loop: 3,
+  author: 3, run: 3, waiting: 3, retry: 3, nested: 4, confirmed: 3, loop: 3,
   actions: 4, resolved: 5, abandoned: 4, readonly: 4, derived: 4, step: 3
 };
 // Each dialog, opened from the waiting scope, is checked the same way.

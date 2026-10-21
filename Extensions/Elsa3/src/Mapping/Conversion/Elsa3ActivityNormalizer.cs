@@ -631,6 +631,10 @@ internal sealed class Elsa3ActivityNormalizer(
                     return null;
                 }
                 return value;
+            case Elsa3ValueContract.HttpResponseBody:
+                return CheckHttpResponseBody(context, propertyName, value, isLiteral, alias);
+            case Elsa3ValueContract.HttpResponseContentType:
+                return IsBlankExpression(value) ? null : value;
             default:
                 return value;
         }
@@ -641,6 +645,67 @@ internal sealed class Elsa3ActivityNormalizer(
             return null;
         }
     }
+
+    /// <summary>
+    /// Elsa 3 sent text as is and serialized any other value as JSON when the content type was unset (inferred
+    /// <c>application/json</c>) or exactly a type its JSON writer handled; otherwise it sent the value's type name.
+    /// Elsa 4 sends text as is and any other value as JSON, so only the JSON cases convert faithfully. A script with a
+    /// typed declaration (<c>String</c>, <c>Int32</c>, …) passes here and is refused by value-flow lowering (FR-013),
+    /// because Elsa 3 converted its result to that type.
+    /// </summary>
+    private static JsonElement? CheckHttpResponseBody(
+        Elsa3RewriteContext context, string propertyName, JsonElement value, bool isLiteral, string? alias)
+    {
+        if (isLiteral || string.Equals(alias, "String", StringComparison.OrdinalIgnoreCase))
+            return value;
+
+        if (alias is not null && (alias.Equals("Byte[]", StringComparison.OrdinalIgnoreCase) ||
+                                  alias.EndsWith("Stream", StringComparison.OrdinalIgnoreCase)))
+            return Outside($"is binary content ('{alias}'), which Elsa 3 sent as application/octet-stream; Elsa 4 sends text or JSON only",
+                "Return text or a JSON value instead.");
+
+        var contentType = context.Activity.AdditionalProperties
+            .FirstOrDefault(property => property.Key.Equals("contentType", StringComparison.OrdinalIgnoreCase)).Value;
+        if (!Elsa3TypedValues.IsBound(contentType) || IsBlankExpression(contentType))
+            return value;
+        if (Elsa3TypedValues.TryGetLiteral(contentType, out var mediaType))
+        {
+            if (mediaType is "application/json" or "text/json")
+                return value;
+            if (IsJsonMediaType(mediaType))
+            {
+                // Elsa 3 matched its JSON writer by exact string, so it sent the value's type name; Elsa 4 sends the JSON.
+                Warn(context, HttpResponseJsonVariant, propertyName);
+                return value;
+            }
+            return Outside($"is declared as '{alias}', but content type '{mediaType}' is not JSON; Elsa 3 sent the value's type name as text",
+                "Return a string, or set ContentType to application/json.");
+        }
+        return Outside($"is declared as '{alias}', and its content type is computed by an expression; Elsa 3 sent JSON only when the run-time content type was exactly a JSON type",
+            "Set ContentType to the literal application/json, or return a string.");
+
+        JsonElement? Outside(string reason, string guidance)
+        {
+            context.Error(ValueOutsideContract, $"Input '{propertyName}' {reason}.", guidance, propertyName);
+            return null;
+        }
+    }
+
+    /// <summary>A JSON media type, ignoring letter case and parameters: <c>application/json</c>, <c>text/json</c> or a <c>+json</c> type.</summary>
+    private static bool IsJsonMediaType(string? mediaType)
+    {
+        var type = mediaType?.Split(';', 2)[0].Trim() ?? string.Empty;
+        return type.Equals("application/json", StringComparison.OrdinalIgnoreCase) ||
+               type.Equals("text/json", StringComparison.OrdinalIgnoreCase) ||
+               type.EndsWith("+json", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Whether the property is bound to a non-literal expression whose script is blank (Elsa 3 evaluates it to null).</summary>
+    private static bool IsBlankExpression(JsonElement value) =>
+        Elsa3TypedValues.IsExpression(value) &&
+        Elsa3TypedValues.TryGetExpression(value, out _, out var script) &&
+        script.ValueKind == JsonValueKind.String &&
+        string.IsNullOrWhiteSpace(script.GetString());
 
     private static bool IsJson(string? literal)
     {
@@ -850,5 +915,6 @@ internal sealed class Elsa3ActivityNormalizer(
         [ScriptOutcomeRouting] = "Elsa 4 routes RunJavaScript by its return value; setOutcomes with several outcomes is refused.",
         [OutcomeUndeclared] = "The reusable workflow completes with an outcome its definition does not declare; it is declared in the converted contract.",
         [OutcomeUnreached] = "The reusable workflow declares an outcome that nothing completes with; it is left out of the converted contract.",
+        [HttpResponseJsonVariant] = "Elsa 3 matched this JSON content type only by exact string and sent the object's type name; Elsa 4 sends the object as JSON.",
     };
 }

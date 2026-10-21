@@ -1,7 +1,7 @@
 using System.IO.Compression;
 using System.Text.Json;
 using System.Xml.Linq;
-using Elsa.Maps.Generator;
+using Elsa.Maps.Projects;
 using Xunit;
 using static Elsa.Architecture.Tests.RepoPaths;
 

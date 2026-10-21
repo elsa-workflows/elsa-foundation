@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Elsa.Activities.Compensation.Activities;
 using Elsa.Workflows.Runtime.Core.Constants;
 using Elsa.Workflows.Runtime.Core.Contracts;
@@ -9,7 +10,8 @@ namespace Elsa.Activities.Compensation.Internal;
 /// <summary>
 /// Projects a live compensation scope's private state into the read-only journal operators read (spec 260 FR-414, view
 /// <c>compensation.journal</c> version 1): phase, cause, every entry with its forward and handler occurrences, attempts
-/// and incidents, the wait and the decisions it offers, resolutions, origins and confirmations, the entries still to
+/// and incidents (with the due time of a retry scheduled after a wait, spec 261), the wait and the decisions it offers,
+/// resolutions, origins and confirmations, the entries still to
 /// undo in recovery order, the hand-over progress and the abandonment. It carries no captured value; the cause message
 /// is included only for a caller who may inspect sensitive values.
 /// </summary>
@@ -87,7 +89,7 @@ internal sealed class CompensationJournalProjector : IActivityStateViewProjector
     {
         var handlerNodeId = CompensationScope.HandlerNodeOf(navigator, entry);
         var attempts = entry.HandlerAttempts
-            .Select((attempt, index) => new AttemptView(index + 1, attempt.ActivityExecutionId, attempt.IncidentId, attempt.Result.ToString()))
+            .Select((attempt, index) => new AttemptView(index + 1, attempt.ActivityExecutionId, attempt.IncidentId, attempt.Result.ToString(), attempt.NotBefore, attempt.DelayClamped))
             .ToArray();
         var waiting = entry.InterventionIncidentId is { } waitingIncidentId
             ? new WaitingView(waitingIncidentId, OfferedDecisions(incidents.GetValueOrDefault(waitingIncidentId)))
@@ -165,7 +167,15 @@ internal sealed class CompensationJournalProjector : IActivityStateViewProjector
 
     private sealed record HandlerView(string ExecutableNodeId, bool Remaining);
 
-    private sealed record AttemptView(int Number, string? ActivityExecutionId, string? IncidentId, string Result);
+    // NotBefore and DelayClamped (spec 261) are present only on a retry the scope scheduled after a wait; journal/1
+    // readers ignore fields they do not know.
+    private sealed record AttemptView(
+        int Number,
+        string? ActivityExecutionId,
+        string? IncidentId,
+        string Result,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] DateTimeOffset? NotBefore,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] bool? DelayClamped);
 
     private sealed record WaitingView(string IncidentId, IReadOnlyList<string> Decisions);
 

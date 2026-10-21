@@ -45,7 +45,9 @@ export type CompensationRecoveryState =
   | "Confirmed" | "HandedOver"
   // Spec 260: a handler running again after a failed attempt, an entry an operator settled without running it, and an
   // entry an abandoned recovery left as it was.
-  | "Retrying" | "ResolvedAbsent" | "ResolvedKept" | "NotUndone";
+  | "Retrying" | "ResolvedAbsent" | "ResolvedKept" | "NotUndone"
+  // Spec 261: an automatic retry that waits for its due time before the handler runs again.
+  | "RetryScheduled";
 
 /** A scope occurrence as the run view names it: the scope's execution and, inside a loop, its iteration. */
 export interface CompensationScopeReference {
@@ -98,6 +100,8 @@ export interface CompensationRowRuntime {
     attempts?: { count: number; max?: number };
     /** The blocking incident an operator must act on, when the state is NeedsAction. */
     incidentId?: string;
+    /** When the waiting retry runs at the earliest (ISO 8601), when the state is RetryScheduled (spec 261). */
+    retryNotBefore?: string;
     /** The Confirm (or the scope itself, with confirm on complete) that made the entry Confirmed. */
     confirmedBy?: string;
     /** The enclosing scope that can still undo the entry, when the state is HandedOver. */
@@ -191,7 +195,11 @@ export interface CompensationJournalEntry {
   operationKey: string;
   forward: { activityExecutionId: string; iterationId?: string | null };
   handler?: { executableNodeId: string; remaining: boolean } | null;
-  attempts: Array<{ number: number; activityExecutionId?: string | null; incidentId?: string | null; result: string }>;
+  /**
+   * Every run of the handler. Spec 261: a retry the scope scheduled after a wait carries `notBefore`, its due time, and
+   * `delayClamped` when an expression's value was clamped into range; both are absent otherwise.
+   */
+  attempts: Array<{ number: number; activityExecutionId?: string | null; incidentId?: string | null; result: string; notBefore?: string | null; delayClamped?: boolean | null }>;
   waiting?: { incidentId: string; decisions: string[] } | null;
   resolution?: { outcome: "EffectAbsent" | "EffectAccepted" | string; incidentId: string } | null;
   origin?: { scopeActivityExecutionId: string; entryId: string } | null;
@@ -437,7 +445,7 @@ export function deriveCompensationRuntime(
 }
 
 // Recovery states an abandoned scope leaves as they were: anything not undone, settled or confirmed.
-const notUndoneStates: ReadonlySet<CompensationRecoveryState> = new Set(["Pending", "Failed", "NeedsAction", "Registered", "Kept", "Running", "Retrying"]);
+const notUndoneStates: ReadonlySet<CompensationRecoveryState> = new Set(["Pending", "Failed", "NeedsAction", "Registered", "Kept", "Running", "Retrying", "RetryScheduled"]);
 
 // A running handler after a failed attempt is a retry; an entry an operator resolved reads as resolved, unless the scope
 // was cancelled before the decision reached it (spec 260).
@@ -572,7 +580,10 @@ function journalRow(row: CompensationRowRuntime, entry: CompensationJournalEntry
     return { ...row, entryId: entry.id, operationKey: entry.operationKey, actions: undefined };
   }
   const waiting = entry.waiting && !cancelled ? entry.waiting : undefined;
-  const state = journalRecoveryState(entry, phase);
+  // A retry waits only in a recovery that is still going; a cancelled or ended scope never runs it.
+  const retryNotBefore = phase === "Compensating" ? scheduledRetryOf(entry, row) : undefined;
+  const journalState = journalRecoveryState(entry, phase);
+  const state: CompensationRecoveryState = retryNotBefore && journalState === "Retrying" ? "RetryScheduled" : journalState;
   const max = row.recovery.attempts?.max;
   const attempts = entry.attempts.length > 1 || max !== undefined ? { count: entry.attempts.length, ...(max !== undefined ? { max } : {}) } : undefined;
   const latestAttempt = entry.attempts.at(-1)?.activityExecutionId ?? undefined;
@@ -592,9 +603,19 @@ function journalRow(row: CompensationRowRuntime, entry: CompensationJournalEntry
       ...(row.recovery.order && entry.attempts.length > 0 ? { order: row.recovery.order } : {}),
       ...(attempts ? { attempts } : {}),
       ...(waiting ? { incidentId: waiting.incidentId } : {}),
+      ...(state === "RetryScheduled" ? { retryNotBefore } : {}),
       ...(state === "Confirmed" && entry.confirmedBy ? { confirmedBy: entry.confirmedBy } : {})
     }
   };
+}
+
+// Spec 261: the due time of a retry that has not started yet. The journal's latest attempt is running and names when it
+// may run; it has started once the run data shows as many handler occurrences as the journal has attempts.
+function scheduledRetryOf(entry: CompensationJournalEntry, row: CompensationRowRuntime): string | undefined {
+  const latest = entry.attempts.at(-1);
+  if (entry.status !== "Compensating" || entry.attempts.length < 2 || latest?.result !== "Running" || !latest.notBefore) return undefined;
+  const started = row.recovery.attempts?.count ?? (row.recovery.activityExecutionId ? 1 : 0);
+  return started >= entry.attempts.length ? undefined : latest.notBefore;
 }
 
 function journalPhase(phase: string, activityStatus: string): CompensationScopeRunPhase {
@@ -723,17 +744,26 @@ export function recoveryStateLabel(state: CompensationRecoveryState): string {
     case "Confirmed": return "Confirmed";
     case "HandedOver": return "Compensable by the enclosing scope";
     case "Retrying": return "Retrying";
+    case "RetryScheduled": return "Retry scheduled";
     case "ResolvedAbsent": return "Resolved: effect absent";
     case "ResolvedKept": return "Resolved: effect kept";
     case "NotUndone": return "Not undone (recovery abandoned)";
   }
 }
 
-// The row's recovery label, naming the scope that can still undo a handed-over entry.
-export function recoveryLabel(recovery: CompensationRowRuntime["recovery"]): string {
-  return recovery.state === "HandedOver" && recovery.handedOverTo
-    ? `Compensable by ${recovery.handedOverTo.label}`
-    : recoveryStateLabel(recovery.state);
+// The row's recovery label, naming the scope that can still undo a handed-over entry, and saying whether a scheduled
+// retry is still waiting or already due (spec 261).
+export function recoveryLabel(recovery: CompensationRowRuntime["recovery"], now: Date = new Date()): string {
+  if (recovery.state === "HandedOver" && recovery.handedOverTo) return `Compensable by ${recovery.handedOverTo.label}`;
+  if (recovery.state === "RetryScheduled" && isRetryDue(recovery, now)) return "Retry due";
+  return recoveryStateLabel(recovery.state);
+}
+
+/** Whether a scheduled retry's due time has passed: it runs at the next outbox sweep (spec 261). */
+export function isRetryDue(recovery: Pick<CompensationRowRuntime["recovery"], "state" | "retryNotBefore">, now: Date = new Date()): boolean {
+  if (recovery.state !== "RetryScheduled" || !recovery.retryNotBefore) return false;
+  const due = Date.parse(recovery.retryNotBefore);
+  return Number.isFinite(due) && due <= now.getTime();
 }
 
 export function scopePhaseLabel(phase: CompensationScopeRunPhase): string {

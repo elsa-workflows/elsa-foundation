@@ -1131,6 +1131,7 @@ public sealed class ResponseReplaySafetyProcessTests
         var candidateArtifact = candidateClosure.GetProperty("artifacts").EnumerateArray().Single(artifact =>
             artifact.GetProperty("identity").GetProperty("artifactId").GetString() == candidateArtifactId);
         var baselineProjection = AuthoredBehaviorProjection(baselineArtifact);
+        ApplyStructuredBodyContractChange(baselineProjection);
         var candidateProjection = AuthoredBehaviorProjection(candidateArtifact);
         Assert.True(JsonNode.DeepEquals(baselineProjection, candidateProjection),
             "Normal candidate publication changed authored variables, node order/types, or input bindings beyond the reviewed contract-profile/version metadata allowance.\n" +
@@ -1148,6 +1149,33 @@ public sealed class ResponseReplaySafetyProcessTests
         return projected;
     }
 
+    /// <summary>
+    /// Reviewed allowance for spec 256 (#3050): the frozen baseline predates WriteHttpResponse.Body becoming a JSON value.
+    /// Only its <c>String</c> Body type is upgraded to the current contract; any other difference still fails.
+    /// </summary>
+    private static void ApplyStructuredBodyContractChange(JsonObject artifact)
+    {
+        const string bodyType = "System.Text.Json.JsonElement?";
+        var writeResponse = ((artifact["rootActivity"]?["childSlots"] as JsonArray) ?? [])
+            .SelectMany(slot => (slot?["activities"] as JsonArray) ?? [])
+            .OfType<JsonObject>()
+            .Single(node => node["authoredActivityId"]?.GetValue<string>() == "write-response");
+
+        Upgrade(writeResponse["inputBindings"]?["Body"]?["targetType"], "alias");
+        Upgrade(writeResponse["inputBindings"]?["Body"]?["expression"]?["resultType"], "id");
+        Upgrade(writeResponse["activityContract"]?["inputs"]?["Body"]?["type"], "alias");
+        Upgrade(writeResponse["activityContract"]?["result"]?["projections"]?["Body"]?["type"], "alias");
+        if (writeResponse["activityContract"]?["result"]?["projections"]?["Body"] is JsonObject projection &&
+            projection["sourceRepresentation"]?.GetValue<string>() == "TextValue")
+            projection["sourceRepresentation"] = "TypedValue";
+
+        void Upgrade(JsonNode? holder, string property)
+        {
+            if (holder is JsonObject value && value[property]?.GetValue<string>() == "String")
+                value[property] = bodyType;
+        }
+    }
+
     private static void StripAllowedContractMetadata(JsonObject artifact)
     {
         if (artifact["rootActivity"] is JsonObject rootActivity)
@@ -1156,6 +1184,11 @@ public sealed class ResponseReplaySafetyProcessTests
 
     private static void StripExecutableNodeContractMetadata(JsonObject node)
     {
+        // A capability the compiler derives from the activity type (#3135), so a node compiled after it was added
+        // carries it while the historical baseline cannot.
+        if (node["metadata"] is JsonObject metadata)
+            metadata.Remove(RuntimeMetadataKeys.AcceptsRescheduledFaultedChild);
+
         if (node["descriptorType"]?.GetValue<string>() == "elsa.clr-activity" &&
             node["activityContract"] is JsonObject contract &&
             contract["descriptorKind"]?.GetValue<string>() == "Elsa.Primitives.Models.ClrActivityDescriptor")

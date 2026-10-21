@@ -180,6 +180,69 @@ describe("CompensationScopeDesigner", () => {
   });
 });
 
+describe("CompensationScopeDesigner scheduled retry (spec 261)", () => {
+  it("shows a waiting retry as text and icon with its attempt and due time, and offers no action", () => {
+    const dueAt = new Date(Date.now() + 60_000).toISOString();
+    mount({
+      readOnly: true,
+      onSelectExecution: vi.fn(),
+      onOpenIncident: vi.fn(),
+      runtime: {
+        scopeActivityExecutionId: "ae-scope",
+        phase: "Compensating",
+        rows: [
+          { step: "Reserve inventory", forward: { state: "Completed", activityExecutionId: "ae-1" }, recovery: { state: "RetryScheduled", activityExecutionId: "ae-4", order: 1, attempts: { count: 2, max: 3 }, retryNotBefore: dueAt } },
+          { step: "Confirm order", forward: { state: "Faulted", activityExecutionId: "ae-3" }, recovery: { state: "NotApplicable" } }
+        ]
+      } satisfies CompensationScopeRuntime
+    });
+
+    const chip = container.querySelectorAll(".wf-compensation-state")[1];
+    expect(chip.getAttribute("data-state")).toBe("RetryScheduled");
+    expect(chip.getAttribute("aria-label")).toMatch(/^Recovery: Retry scheduled \(1st\) · Attempt 2 of 3 · after \d{1,2}:\d{2}:\d{2}.*\. Show this occurrence$/);
+    expect(chip.querySelector("svg")).not.toBeNull();
+    expect(container.querySelector(".wf-compensation-actions, [data-operator-action]")).toBeNull();
+    expect(button("Show the incident Reserve inventory is waiting on")).toBeNull();
+  });
+
+  it("names the date of a waiting retry that is due on another day", () => {
+    const dueAt = new Date(Date.now() + 2 * 24 * 60 * 60_000);
+    mount({
+      readOnly: true,
+      onSelectExecution: vi.fn(),
+      onOpenIncident: vi.fn(),
+      runtime: {
+        scopeActivityExecutionId: "ae-scope",
+        phase: "Compensating",
+        rows: [
+          { step: "Reserve inventory", forward: { state: "Completed", activityExecutionId: "ae-1" }, recovery: { state: "RetryScheduled", activityExecutionId: "ae-4", order: 1, attempts: { count: 2, max: 3 }, retryNotBefore: dueAt.toISOString() } },
+          { step: "Confirm order", forward: { state: "Faulted", activityExecutionId: "ae-3" }, recovery: { state: "NotApplicable" } }
+        ]
+      } satisfies CompensationScopeRuntime
+    });
+
+    const label = container.querySelectorAll(".wf-compensation-state")[1].getAttribute("aria-label") ?? "";
+    expect(label).toContain(` · after ${dueAt.toLocaleString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", year: "numeric", month: "short", day: "numeric" })}`);
+    expect(label).toContain(String(dueAt.getFullYear()));
+  });
+
+  it("says a retry is due without a time once its due time passed", () => {
+    mount({
+      readOnly: true,
+      runtime: {
+        scopeActivityExecutionId: "ae-scope",
+        phase: "Compensating",
+        rows: [
+          { step: "Reserve inventory", forward: { state: "Completed", activityExecutionId: "ae-1" }, recovery: { state: "RetryScheduled", order: 1, attempts: { count: 2, max: 3 }, retryNotBefore: "2020-01-01T00:00:00Z" } },
+          { step: "Confirm order", forward: { state: "Faulted", activityExecutionId: "ae-3" }, recovery: { state: "NotApplicable" } }
+        ]
+      } satisfies CompensationScopeRuntime
+    });
+
+    expect(container.querySelectorAll(".wf-compensation-state")[1].getAttribute("aria-label")).toBe("Recovery: Retry due (1st) · Attempt 2 of 3");
+  });
+});
+
 describe("CompensationScopeDesigner nesting states (spec 258)", () => {
   it("lists handed-over work with a link to the inner scope it came from", () => {
     const onSelectExecution = vi.fn();

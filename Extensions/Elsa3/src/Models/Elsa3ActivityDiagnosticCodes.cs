@@ -132,6 +132,12 @@ public static class Elsa3ActivityDiagnosticCodes
     /// <summary>A reusable workflow's declared outcome is reached by no Complete; it is dropped from the contract.</summary>
     public const string OutcomeUnreached = "ELS3-BEHAVIOUR-OUTCOME-UNREACHED";
 
+    /// <summary>
+    /// WriteHttpResponse: an object body with a JSON content type Elsa 3 did not match exactly (letter case, a parameter,
+    /// a <c>+json</c> type). Elsa 3 sent the value's type name; Elsa 4 sends the JSON.
+    /// </summary>
+    public const string HttpResponseJsonVariant = "ELS3-BEHAVIOUR-HTTP-RESPONSE-JSON-VARIANT";
+
     /// <summary>A connection Elsa 3 never follows (leaving Complete, End or Break, or a FlowFork port outside its branches) is removed.</summary>
     public const string DeadConnectionRemoved = "ELS3-BEHAVIOUR-DEAD-CONNECTION-REMOVED";
 }

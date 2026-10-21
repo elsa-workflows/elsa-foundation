@@ -23,6 +23,6 @@ $ARGUMENTS
 3. For the current working tree rather than the latest merge, generate locally; see `elsa-refresh-generated-maps`.
 4. Parse `.csproj` files for `ProjectReference` and `PackageReference` when needed.
 5. Group findings by domain/feature and flag external package version clusters or dependency-envelope concerns.
-6. Output point-in-time report findings or a regenerated `docs/maps/dependency-map.json` when the project graph changed; the documentation maps are not committed.
+6. Output point-in-time report findings; the dependency map and the documentation maps are generated or read from the `generated-maps` branch, never committed.
 
 Do not make compatibility claims beyond the evidence available in maps/source.

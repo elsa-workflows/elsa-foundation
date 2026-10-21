@@ -1,9 +1,12 @@
+using System.Data.Common;
 using Elsa.Persistence.EntityFramework;
 using Elsa.Persistence.EntityFramework.Tests;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
+using Elsa.Secrets.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Secrets.Persistence.EntityFrameworkCore.Tests.Support;
+using Elsa.Secrets.Tests.Support;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -16,6 +19,9 @@ namespace Elsa.Secrets.Persistence.EntityFrameworkCore.Tests;
 public sealed class SqliteEfSecretRepositoryTests
 {
     private static readonly DateTimeOffset Now = new(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
+
+    /// <summary>SQL Server's error for an index entry longer than the key allows.</summary>
+    private const int KeyTooLong = 1946;
 
     [Fact]
     public async Task Migrate_crud_revision_conflict_and_tenant_isolation()
@@ -52,7 +58,36 @@ public sealed class SqliteEfSecretRepositoryTests
         current.Secret.Status = SecretStatus.Deleted;
         await repository.SaveAsync(current.Secret);
         Assert.Equal(SecretStatus.Deleted, (await repository.FindAsync("tenant-a", alpha.Name))!.Status);
-        Assert.False(await repository.TryAddAsync(Secret("tenant-a", alpha.Name, "reserved")));
+        var successor = Secret("tenant-a", alpha.Name, "successor");
+        Assert.True(await repository.TryAddAsync(successor));
+        Assert.Equal(successor.Id, (await repository.FindAsync("tenant-a", alpha.Name))!.Id);
+    }
+
+    [Fact]
+    public async Task A_deleted_name_is_free_while_the_key_admits_one_row_holding_the_name_on_sqlite()
+    {
+        await using var fixture = await SqliteFixture.CreateAsync();
+        await using var bypass = await fixture.CreateSiblingAsync();
+        await SecretNameReuseScenario.RunAsync(fixture.Context, bypass.Context);
+    }
+
+    [Fact]
+    public async Task Saving_an_earlier_secrets_deleted_copy_leaves_its_successor_holding_the_name()
+    {
+        await using var fixture = await SqliteFixture.CreateAsync();
+        var repository = fixture.Repository;
+        var earlier = Secret("tenant-a", "payments.api", "earlier");
+        await repository.SaveAsync(earlier);
+        earlier.Status = SecretStatus.Deleted;
+        await repository.SaveAsync(earlier);
+        var successor = Secret("tenant-a", earlier.Name, "successor");
+        Assert.True(await repository.TryAddAsync(successor));
+
+        await repository.SaveAsync(earlier);
+
+        var holder = (await repository.FindAsync("tenant-a", earlier.Name))!;
+        Assert.Equal(successor.Id, holder.Id);
+        Assert.Equal(SecretStatus.Active, holder.Status);
     }
 
     [Fact]
@@ -164,7 +199,7 @@ public sealed class SqliteEfSecretRepositoryTests
 
         // Load an intentionally stale tracked row in the second context before the first writer
         // advances the optimistic token. SaveAsync must refresh and apply the later writer.
-        _ = await second.Context.Secrets.FindAsync([seed.TenantId, seed.Name]);
+        _ = await second.Context.Secrets.FindAsync([seed.TenantId, seed.Name, ""]);
         await first.Repository.SaveAsync(Secret("tenant-a", "racing.update", "first"));
         await second.Repository.SaveAsync(Secret("tenant-a", "racing.update", "second"));
 
@@ -380,22 +415,197 @@ public sealed class SqliteEfSecretRepositoryTests
     [Fact]
     public async Task A_row_written_before_the_stamp_existed_carries_the_version_it_was_written_in_after_the_stamp_migration()
     {
-        await using var database = new TemporarySqliteDatabase("secrets-ef-prestamp");
-        await using var connection = new SqliteConnection(database.ConnectionString);
-        await connection.OpenAsync();
-        await using var context = new SecretsSqliteDbContext(SqliteOptions(connection).Options);
-        var migrations = context.Database.GetMigrations().ToArray();
-        var stampMigration = Assert.Single(migrations, migration => migration.EndsWith("_SchemaVersionStamp", StringComparison.Ordinal));
-        var migrator = context.GetService<IMigrator>();
-        await migrator.MigrateAsync(migrations[Array.IndexOf(migrations, stampMigration) - 1]);
-        await using (var preStamp = new SecretsSqliteDbContext(PreStampSecretsModel.Use(SqliteOptions(connection)).Options))
-            await new EfSecretRepository(preStamp).SaveAsync(Secret("tenant-a", "payments.api", "alpha"));
+        await using var database = await MigrateToJustBeforeAsync("_SchemaVersionStamp");
+        await using (var preStamp = new SecretsSqliteDbContext(PreStampSecretsModel.Use(SqliteOptions(database.Connection)).Options))
+            await PreStampSecretsModel.WriteAsync(preStamp, Secret("tenant-a", "payments.api", "alpha"));
 
-        await migrator.MigrateAsync();
+        await database.Migrator.MigrateAsync();
 
+        var context = database.Context;
         Assert.Equal(SecretsEfModule.SchemaVersion, (await context.Secrets.AsNoTracking().SingleAsync()).SchemaVersion);
         Assert.Equal("alpha", (await new EfSecretRepository(context).FindAsync("tenant-a", "payments.api"))!.LatestActiveVersion!.Payload.Value);
         Assert.False(await new SecretsProjectionReindex().AuditAsync(context));
+    }
+
+    /// <summary>
+    /// Rows written under the old key, one per name whatever their status, upgrade into the key that frees a deleted
+    /// secret's name: the live row keeps its name, the deleted row moves aside and keeps its history, the deleted name
+    /// takes a new secret, and the startup audit, which now pages by the whole key, reads every row as current.
+    /// </summary>
+    [Fact]
+    public async Task Rows_written_before_names_could_be_reused_upgrade_with_deleted_names_freed()
+    {
+        await using var database = await MigrateToJustBeforeAsync("_SchemaVersionStamp");
+        var deletedBeforeUpgrade = Secret("tenant-a", "deleted.before.upgrade", "deleted-value");
+        deletedBeforeUpgrade.Status = SecretStatus.Deleted;
+        await using (var preStamp = new SecretsSqliteDbContext(PreStampSecretsModel.Use(SqliteOptions(database.Connection)).Options))
+        {
+            await PreStampSecretsModel.WriteAsync(preStamp, Secret("tenant-a", "live.before.upgrade", "live-value"));
+            await PreStampSecretsModel.WriteAsync(preStamp, deletedBeforeUpgrade);
+        }
+
+        await database.Migrator.MigrateAsync();
+
+        var context = database.Context;
+        var rows = await context.Secrets.AsNoTracking().OrderBy(row => row.NormalizedName).ToListAsync();
+        Assert.Equal(["deleted.before.upgrade", "live.before.upgrade"], rows.Select(row => row.NormalizedName));
+        Assert.NotEqual("", rows[0].Tombstone);
+        Assert.Equal("", rows[1].Tombstone);
+        Assert.False(await new SecretsProjectionReindex().AuditAsync(context));
+
+        var repository = new EfSecretRepository(context);
+        Assert.Equal("live-value", (await repository.FindAsync("tenant-a", "live.before.upgrade"))!.LatestActiveVersion!.Payload.Value);
+        Assert.False(await repository.TryAddAsync(Secret("tenant-a", "live.before.upgrade", "duplicate")));
+        var successor = Secret("tenant-a", deletedBeforeUpgrade.Name, "successor-value");
+        Assert.True(await repository.TryAddAsync(successor));
+        Assert.Equal(successor.Id, (await repository.FindAsync("tenant-a", deletedBeforeUpgrade.Name))!.Id);
+        var history = Assert.Single((await repository.ListPageAsync(
+            "tenant-a",
+            new SecretRepositoryListRequest(status: SecretStatus.Deleted))).Items);
+        Assert.Equal(deletedBeforeUpgrade.Id, history.Id);
+        Assert.Equal("deleted-value", Assert.Single(history.Versions).Payload.Value);
+    }
+
+    /// <summary>
+    /// A host still on a build from before <c>FreeNameOnDelete</c> knows no tombstone, so a delete it makes after the
+    /// migration has been applied updates the row in place and leaves the deleted secret holding its name. The audit
+    /// reports the declared reindex as required, the one answer <c>post-migrate</c> acts on, rather than calling the
+    /// database current or failing it as damaged, and the reindex moves the row under the secret's id: the name is free
+    /// and the deleted secret keeps its history.
+    /// </summary>
+    [Fact]
+    public async Task A_secret_an_older_host_deleted_in_place_requires_the_reindex_which_frees_its_name()
+    {
+        await using var fixture = await SqliteFixture.CreateAsync();
+        var secret = await AddDeletedInPlaceAsync(fixture, "deleted.in.place");
+
+        var deletedInPlace = await fixture.Context.Secrets.AsNoTracking().SingleAsync();
+        Assert.Equal(("", "deleted"), (deletedInPlace.Tombstone, deletedInPlace.Status));
+        Assert.False(await fixture.Repository.TryAddAsync(Secret("tenant-a", secret.Name, "refused-value")));
+        var startup = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => SecretsProjectionContract.EnsureCurrentAsync(fixture.Context));
+        Assert.IsNotType<SecretsProjectionException>(startup);
+        Assert.Contains(EfPostMigrationActions.Command, startup.Message, StringComparison.Ordinal);
+        var reindex = new SecretsProjectionReindex();
+        Assert.True(await reindex.AuditAsync(fixture.Context));
+
+        await reindex.RunAsync(fixture.Context);
+
+        Assert.False(await reindex.AuditAsync(fixture.Context));
+        await SecretsProjectionContract.EnsureCurrentAsync(fixture.Context);
+        var moved = await fixture.Context.Secrets.AsNoTracking().SingleAsync();
+        Assert.Equal(secret.Id, moved.Tombstone);
+        Assert.Equal(deletedInPlace.ConcurrencyToken, moved.ConcurrencyToken);
+        var successor = Secret("tenant-a", secret.Name, "successor-value");
+        Assert.True(await fixture.Repository.TryAddAsync(successor));
+        Assert.Equal(successor.Id, (await fixture.Repository.FindAsync("tenant-a", secret.Name))!.Id);
+        var history = Assert.Single((await fixture.Repository.ListPageAsync(
+            "tenant-a",
+            new SecretRepositoryListRequest(status: SecretStatus.Deleted))).Items);
+        Assert.Equal(secret.Id, history.Id);
+        Assert.Equal("kept-value", Assert.Single(history.Versions).Payload.Value);
+    }
+
+    /// <summary>
+    /// The database can refuse the row the reindex moves a secret deleted in place to: SQL Server does for a secret
+    /// created before <see cref="SecretNameConstraints.MaximumKeyLength"/> whose tenant id and name leave its id no room
+    /// in the key. The reindex then names that row and says to shorten or remove it by hand, and its batch rolls back, so
+    /// a move that succeeded before it in the batch is undone too and nothing is left half repaired.
+    /// </summary>
+    [Fact]
+    public async Task A_move_the_database_refuses_names_the_row_to_shorten_or_remove_and_rolls_back_its_batch()
+    {
+        var refuseSecondMove = new RefuseInsertInterceptor(refusedInsert: 2, () => new ProviderFailures.SqlException(KeyTooLong));
+        await using var fixture = await SqliteFixture.CreateAsync(refuseSecondMove);
+        await AddDeletedInPlaceAsync(fixture, "a.moves.first");
+        await AddDeletedInPlaceAsync(fixture, "b.refused");
+        refuseSecondMove.Armed = true;
+        var reindex = new SecretsProjectionReindex();
+
+        var refused = await Assert.ThrowsAsync<SecretsProjectionException>(() => reindex.RunAsync(fixture.Context));
+
+        Assert.Equal(("tenant-a", "b.refused"), (refused.TenantId, refused.NormalizedName));
+        Assert.Contains("Shorten this row's tenant id or name, or remove the row, by hand", refused.Message, StringComparison.Ordinal);
+        Assert.Contains(EfPostMigrationActions.Command, refused.Message, StringComparison.Ordinal);
+        Assert.IsType<ProviderFailures.SqlException>(Assert.IsType<DbUpdateException>(refused.InnerException).InnerException);
+        refuseSecondMove.Armed = false;
+        Assert.All(
+            await fixture.Context.Secrets.AsNoTracking().ToListAsync(),
+            row => Assert.Equal(("", "deleted"), (row.Tombstone, row.Status)));
+        Assert.True(await reindex.AuditAsync(fixture.Context));
+    }
+
+    /// <summary>
+    /// Only a key the database refuses as too long is a row to shorten. Any other failure of a move, a dropped connection
+    /// or a timeout among them, says nothing about the row, so the reindex lets it through as the failure it is, and its
+    /// batch still rolls back.
+    /// </summary>
+    [Fact]
+    public async Task A_move_that_fails_for_another_reason_surfaces_untranslated()
+    {
+        var failMove = new RefuseInsertInterceptor(refusedInsert: 1, () => new ProviderFailures.SyntheticProviderException());
+        await using var fixture = await SqliteFixture.CreateAsync(failMove);
+        await AddDeletedInPlaceAsync(fixture, "deleted.in.place");
+        failMove.Armed = true;
+
+        var failure = await Assert.ThrowsAsync<DbUpdateException>(() => SecretsProjectionContract.ReindexAsync(fixture.Context));
+
+        Assert.IsType<ProviderFailures.SyntheticProviderException>(failure.InnerException);
+        failMove.Armed = false;
+        var row = await fixture.Context.Secrets.AsNoTracking().SingleAsync();
+        Assert.Equal(("", "deleted"), (row.Tombstone, row.Status));
+    }
+
+    /// <summary>
+    /// A concurrent writer that changes the row a move removes is a lost race, not a row to shorten: the reindex reports
+    /// it as the concurrency failure it is.
+    /// </summary>
+    [Fact]
+    public async Task A_concurrent_write_during_a_move_surfaces_as_a_concurrency_failure()
+    {
+        await using var fixture = await SqliteFixture.CreateAsync();
+        await AddDeletedInPlaceAsync(fixture, "deleted.in.place");
+        await using var reindexing = new SecretsSqliteDbContext(SqliteOptions(fixture.Connection)
+            .AddInterceptors(new AlwaysFailConcurrencyInterceptor())
+            .Options);
+
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => SecretsProjectionContract.ReindexAsync(reindexing));
+    }
+
+    /// <summary>
+    /// Deleting a secret writes a row keyed by its tenant id, name and id, so a secret is accepted only when that row fits
+    /// <see cref="SecretNameConstraints.MaximumKeyLength"/>, on every provider: one at the limit is created and deleted,
+    /// and one past it is refused by every write that would add it.
+    /// </summary>
+    [Fact]
+    public async Task A_secret_is_accepted_only_when_the_row_its_delete_writes_fits_the_key()
+    {
+        await using var fixture = await SqliteFixture.CreateAsync();
+        var revisions = Assert.IsAssignableFrom<IRevisionAwareSecretRepository>(fixture.Repository);
+        var tenantId = SecretKeyLimit.TenantId;
+        var atLimit = Secret(tenantId, new string('a', SecretKeyLimit.NameLength), "value");
+        SecretKeyLimit.AssertFillsKey(atLimit.Name, atLimit.Id);
+
+        Assert.True(await fixture.Repository.TryAddAsync(atLimit));
+        var loaded = (await revisions.FindWithRevisionAsync(tenantId, atLimit.Name))!;
+        loaded.Secret.Status = SecretStatus.Deleted;
+        Assert.Equal(SecretRevisionSaveStatus.Saved, (await revisions.SaveWithRevisionAsync(loaded.Secret, loaded.Revision)).Status);
+        Assert.Equal(atLimit.Id, (await fixture.Context.Secrets.AsNoTracking().SingleAsync()).Tombstone);
+
+        var pastLimit = Secret(tenantId, atLimit.Name + "a", "value");
+        Func<Task>[] writes =
+        [
+            () => fixture.Repository.TryAddAsync(pastLimit).AsTask(),
+            () => fixture.Repository.SaveAsync(pastLimit).AsTask(),
+            () => revisions.SaveWithRevisionAsync(pastLimit, null).AsTask()
+        ];
+        foreach (var write in writes)
+        {
+            var refused = await Assert.ThrowsAsync<ArgumentException>(write);
+            Assert.Contains($"cannot exceed {atLimit.Name.Length} characters", refused.Message, StringComparison.Ordinal);
+        }
+
+        Assert.Equal(1, await fixture.Context.Secrets.CountAsync());
     }
 
     /// <summary>
@@ -410,7 +620,9 @@ public sealed class SqliteEfSecretRepositoryTests
         await connection.OpenAsync();
         await using var context = new SecretsSqliteDbContext(SqliteOptions(connection).Options);
         await context.Database.MigrateAsync();
-        await using var preStamp = new SecretsSqliteDbContext(PreStampSecretsModel.Use(SqliteOptions(connection)).Options);
+        await using var preStamp = new SecretsSqliteDbContext(SqliteOptions(connection)
+            .ReplaceService<IModelCustomizer, UnstampedSecretsModel>()
+            .Options);
 
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(
             () => new EfSecretRepository(preStamp).SaveAsync(Secret("tenant-a", "payments.api", "alpha")).AsTask());
@@ -419,11 +631,51 @@ public sealed class SqliteEfSecretRepositoryTests
         Assert.Contains($"{SecretsEfModule.TableName}.SchemaVersion", constraint.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Adds a secret in <c>tenant-a</c> and deletes it the way a host from before <c>FreeNameOnDelete</c> does, in place,
+    /// leaving it in the row that holds its name.
+    /// </summary>
+    private static async Task<Secret> AddDeletedInPlaceAsync(SqliteFixture fixture, string name)
+    {
+        var secret = Secret("tenant-a", name, "kept-value");
+        Assert.True(await fixture.Repository.TryAddAsync(secret));
+        await using var olderHost = new SecretsSqliteDbContext(SqliteOptions(fixture.Connection)
+            .ReplaceService<IModelCustomizer, PreReuseSecretsModel>()
+            .Options);
+        var row = await olderHost.Secrets.SingleAsync(record => record.NormalizedName == name);
+        secret.Status = SecretStatus.Deleted;
+        SecretDocument.FromSecret(secret).CopyProjectionsTo(row);
+        await olderHost.SaveChangesAsync();
+        return secret;
+    }
+
     private static DbContextOptionsBuilder<SecretsSqliteDbContext> SqliteOptions(SqliteConnection connection) =>
         new DbContextOptionsBuilder<SecretsSqliteDbContext>()
             .UseSqlite(connection, sqlite => sqlite
                 .MigrationsAssembly(typeof(SecretsSqliteDbContext).Assembly.GetName().Name)
                 .MigrationsHistoryTable(SecretsEfModule.HistoryTableName));
+
+    /// <summary>
+    /// A database migrated up to the migration just before the one whose name ends with <paramref name="migrationSuffix"/>,
+    /// for a test that writes rows the way builds from before that migration did and then applies the rest.
+    /// </summary>
+    private static async Task<PartlyMigratedDatabase> MigrateToJustBeforeAsync(string migrationSuffix)
+    {
+        var database = new PartlyMigratedDatabase();
+        try
+        {
+            await database.Connection.OpenAsync();
+            var migrations = database.Context.Database.GetMigrations().ToArray();
+            var migration = Assert.Single(migrations, candidate => candidate.EndsWith(migrationSuffix, StringComparison.Ordinal));
+            await database.Migrator.MigrateAsync(migrations[Array.IndexOf(migrations, migration) - 1]);
+            return database;
+        }
+        catch
+        {
+            await database.DisposeAsync();
+            throw;
+        }
+    }
 
     private static Secret Secret(
         string tenantId,
@@ -542,6 +794,28 @@ public sealed class SqliteEfSecretRepositoryTests
         private readonly IInterceptor? _interceptor;
     }
 
+    private sealed class PartlyMigratedDatabase : IAsyncDisposable
+    {
+        private readonly TemporarySqliteDatabase _database = new("secrets-ef-upgrade");
+
+        public PartlyMigratedDatabase()
+        {
+            Connection = new SqliteConnection(_database.ConnectionString);
+            Context = new SecretsSqliteDbContext(SqliteOptions(Connection).Options);
+        }
+
+        public SqliteConnection Connection { get; }
+        public SecretsSqliteDbContext Context { get; }
+        public IMigrator Migrator => Context.GetService<IMigrator>();
+
+        public async ValueTask DisposeAsync()
+        {
+            await Context.DisposeAsync();
+            await Connection.DisposeAsync();
+            await _database.DisposeAsync();
+        }
+    }
+
     private sealed class SaveBarrierInterceptor(int participantCount) : SaveChangesInterceptor
     {
         private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -557,6 +831,53 @@ public sealed class SqliteEfSecretRepositoryTests
 
             await _release.Task.WaitAsync(cancellationToken);
             return result;
+        }
+    }
+
+    /// <summary>The current model without the stamp column, so the only thing a write with it leaves out is the stamp.</summary>
+    private sealed class UnstampedSecretsModel(ModelCustomizerDependencies dependencies) : ModelCustomizer(dependencies)
+    {
+        public override void Customize(ModelBuilder modelBuilder, DbContext context)
+        {
+            base.Customize(modelBuilder, context);
+            modelBuilder.Entity<SecretRecord>().Ignore(record => record.SchemaVersion);
+        }
+    }
+
+    /// <summary>
+    /// Once armed, fails the <paramref name="refusedInsert"/>th command that inserts a row with the provider error
+    /// <paramref name="failure"/> makes; EF reports it as the <see cref="DbUpdateException"/> of the save.
+    /// </summary>
+    private sealed class RefuseInsertInterceptor(int refusedInsert, Func<DbException> failure) : DbCommandInterceptor
+    {
+        private int _inserts;
+
+        public bool Armed { get; set; }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            RefuseIfDue(command);
+            return ValueTask.FromResult(result);
+        }
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<int> result,
+            CancellationToken cancellationToken = default)
+        {
+            RefuseIfDue(command);
+            return ValueTask.FromResult(result);
+        }
+
+        private void RefuseIfDue(DbCommand command)
+        {
+            if (Armed && command.CommandText.Contains("INSERT INTO", StringComparison.OrdinalIgnoreCase) && ++_inserts == refusedInsert)
+                throw failure();
         }
     }
 

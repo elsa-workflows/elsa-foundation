@@ -84,6 +84,7 @@
           "Elsa.Secrets.Core": "[4.0.0-dev, )",
           "Microsoft.Extensions.Configuration.Abstractions": "[10.0.10, )",
           "Microsoft.Extensions.DependencyInjection": "[10.0.10, )",
+          "Microsoft.Extensions.Logging.Abstractions": "[10.0.10, )",
           "Microsoft.Extensions.Options": "[10.0.10, )"
         }
       },
@@ -157,6 +158,15 @@
         "requested": "[10.0.10, )",
         "resolved": "10.0.10",
         "contentHash": "z/2xXlFw2aLGjHyEm6E0tQ+In6VfzQzTrtArbQ2c0TQE16ZbyDCMGPvaUT9I0s8rgy9sRWlU2P9waW37qV04qA=="
+      },
+      "Microsoft.Extensions.Logging.Abstractions": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.10, )",
+        "resolved": "10.0.10",
+        "contentHash": "zkFxGYUvdxAvIKTyXHrmW+Sux53D4SezD9dMyZ6hrwwzPQJNuwCRy1f5W7AvYTqacEGhWF2XderRQG1OvbV8og==",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10"
+        }
       },
       "Microsoft.Extensions.Options": {
         "type": "CentralTransitive",
