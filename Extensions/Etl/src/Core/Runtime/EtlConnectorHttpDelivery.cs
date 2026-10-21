@@ -10,8 +10,9 @@ public sealed record EtlHttpDeliveryAttempt(string RequestId, int Number, long F
     DateTimeOffset StartedAt, DateTimeOffset ExpiresAt);
 /// <summary>Transport outcome without a response body, URL or exception. Null status means uncertain delivery.</summary>
 /// <remarks>RetryAfter is an already parsed absolute UTC instant; transport parsing remains the caller's responsibility.
-/// ResponseReceivedAtUtc is the time a complete bounded response was received, separate from the durable time at which
-/// the store reconciles this outcome. It is optional for compatibility with callers that cannot provide a receipt time.</remarks>
+/// ResponseReceivedAtUtc records completion of bounded response handling, separate from the durable time at which
+/// the store reconciles this outcome. Acknowledgement uses status; draining a response body is optional and bounded.
+/// The timestamp is optional for compatibility with callers that cannot provide it.</remarks>
 public sealed record EtlHttpDeliveryResponse(int? StatusCode, DateTimeOffset? RetryAfter)
 {
     public DateTimeOffset? ResponseReceivedAtUtc { get; init; }
