@@ -148,69 +148,87 @@ public sealed partial class EtlRuntimeStoreTests
     }
 
     [Fact]
-    public async Task Http_delivery_recovers_partial_route_ack_and_honors_retry_after_while_other_partition_progresses()
+    public async Task Http_delivery_recovers_partial_route_ack_and_retry_after_across_reopened_stores()
     {
         await using var database = await TestDatabase.CreateAsync();
         var clock = new MutableTimeProvider();
-        await using var context = database.CreateContext();
-        var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock);
         var admission = ConnectorAdmission("http-delivery-partial-recovery", new("tenant-a", "http-delivery-partial-recovery"), httpShardIds: ["shard-a", "shard-b"]);
-        var initialLeases = await StartHttpRunAsync(store, admission, "worker");
-        var firstLease = initialLeases.Single(item => item.PartitionOrdinal == 0);
-        var secondLease = initialLeases.Single(item => item.PartitionOrdinal == 1);
-        var (lease, batch, output) = await PrepareHttpOutputBatchAsync(store, admission, firstLease, "first-output");
-
-        var mainPermit = Assert.IsType<EtlHttpDeliveryAttempt>((await store.BeginConnectorHttpDeliveryAsync(
-            lease, batch.BatchId, EtlOutputRoute.Main, DeliveryRequestId(10))).Permit);
-        var mainComplete = await store.CompleteConnectorHttpDeliveryAsync(lease, batch.BatchId, EtlOutputRoute.Main,
-            mainPermit, new(204, null));
-        var errorPermit = Assert.IsType<EtlHttpDeliveryAttempt>((await store.BeginConnectorHttpDeliveryAsync(
-            lease, batch.BatchId, EtlOutputRoute.Error, DeliveryRequestId(11))).Permit);
         var retryAt = clock.GetUtcNow().AddSeconds(10);
-        var errorComplete = await store.CompleteConnectorHttpDeliveryAsync(lease, batch.BatchId, EtlOutputRoute.Error,
-            errorPermit, new(429, retryAt));
-        var earlyRetry = await store.BeginConnectorHttpDeliveryAsync(lease, batch.BatchId, EtlOutputRoute.Error, DeliveryRequestId(12));
+        EtlConnectorPartitionLease lease;
+        EtlConnectorBatchDescriptor batch;
+        EtlConnectorBatchOutput output;
+        EtlHttpDeliveryAttempt errorPermit;
+        DateTimeOffset originalDeadline;
+        await using (var context = database.CreateContext())
+        {
+            var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock);
+            var initialLeases = await StartHttpRunAsync(store, admission, "worker");
+            var firstLease = initialLeases.Single(item => item.PartitionOrdinal == 0);
+            var secondLease = initialLeases.Single(item => item.PartitionOrdinal == 1);
+            (lease, batch, output) = await PrepareHttpOutputBatchAsync(store, admission, firstLease, "first-output");
 
-        Assert.Equal(EtlStoreStatus.Applied, mainComplete.Status);
-        Assert.Equal(EtlHttpDeliveryPhase.Acknowledged, mainComplete.Delivery!.Phase);
-        Assert.Equal(EtlStoreStatus.Applied, errorComplete.Status);
-        Assert.Equal(EtlHttpDeliveryPhase.Waiting, errorComplete.Delivery!.Phase);
-        Assert.Equal(retryAt, errorComplete.Delivery.NotBefore);
-        Assert.Equal(EtlStoreStatus.Conflict, earlyRetry.Status);
-        Assert.Null(earlyRetry.Permit);
+            var mainPermit = Assert.IsType<EtlHttpDeliveryAttempt>((await store.BeginConnectorHttpDeliveryAsync(
+                lease, batch.BatchId, EtlOutputRoute.Main, DeliveryRequestId(10))).Permit);
+            var mainComplete = await store.CompleteConnectorHttpDeliveryAsync(lease, batch.BatchId, EtlOutputRoute.Main,
+                mainPermit, new(204, null));
+            errorPermit = Assert.IsType<EtlHttpDeliveryAttempt>((await store.BeginConnectorHttpDeliveryAsync(
+                lease, batch.BatchId, EtlOutputRoute.Error, DeliveryRequestId(11))).Permit);
+            var errorComplete = await store.CompleteConnectorHttpDeliveryAsync(lease, batch.BatchId, EtlOutputRoute.Error,
+                errorPermit, new(429, retryAt));
+            var earlyRetry = await store.BeginConnectorHttpDeliveryAsync(lease, batch.BatchId, EtlOutputRoute.Error, DeliveryRequestId(12));
 
-        Assert.Equal(EtlStoreStatus.Applied, await store.ReleaseConnectorPartitionAsync(lease));
-        Assert.Equal(EtlStoreStatus.Applied, await store.ReleaseConnectorPartitionAsync(secondLease));
-        var other = Assert.IsType<EtlConnectorPartitionLease>(await store.ClaimConnectorPartitionAsync(
-            admission.Invocation.Scope, admission.Invocation.RunId, "other-partition-worker"));
-        Assert.Equal(1, other.PartitionOrdinal);
-        var emptyPage = await store.AttachTestHttpPageAsync(other, RetainedPage(other, "other-empty-page", 5, 0));
-        var exhausted = await store.AdvanceEmptyHttpPageAsync(Assert.IsType<EtlConnectorPartitionLease>(emptyPage.Lease));
-        Assert.True(Assert.IsType<EtlConnectorHttpPosition>(exhausted.Lease!.Position).Exhausted);
-        Assert.Equal(EtlStoreStatus.Applied, await store.ReleaseConnectorPartitionAsync(exhausted.Lease));
-        Assert.Null(await store.ClaimConnectorPartitionAsync(admission.Invocation.Scope, admission.Invocation.RunId, "too-early"));
+            Assert.Equal(EtlStoreStatus.Applied, mainComplete.Status);
+            Assert.Equal(EtlHttpDeliveryPhase.Acknowledged, mainComplete.Delivery!.Phase);
+            Assert.Equal(EtlStoreStatus.Applied, errorComplete.Status);
+            Assert.Equal(EtlHttpDeliveryPhase.Waiting, errorComplete.Delivery!.Phase);
+            Assert.Equal(retryAt, errorComplete.Delivery.NotBefore);
+            originalDeadline = errorComplete.Delivery.Deadline;
+            Assert.Equal(EtlStoreStatus.Conflict, earlyRetry.Status);
+            Assert.Null(earlyRetry.Permit);
+            Assert.Equal(EtlStoreStatus.Applied, await store.ReleaseConnectorPartitionAsync(lease));
+            Assert.Equal(EtlStoreStatus.Applied, await store.ReleaseConnectorPartitionAsync(secondLease));
+        }
 
-        clock.Advance(retryAt - clock.GetUtcNow());
-        var recovered = Assert.IsType<EtlConnectorPartitionLease>(await store.ClaimConnectorPartitionAsync(
+        await using (var context = database.CreateContext())
+        {
+            var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock);
+            var other = Assert.IsType<EtlConnectorPartitionLease>(await store.ClaimConnectorPartitionAsync(
+                admission.Invocation.Scope, admission.Invocation.RunId, "other-partition-worker"));
+            Assert.Equal(1, other.PartitionOrdinal);
+            await ExhaustAndReleaseHttpPartitionAsync(store, other);
+            Assert.Null(await store.ClaimConnectorPartitionAsync(admission.Invocation.Scope, admission.Invocation.RunId, "too-early"));
+            clock.Advance(retryAt - clock.GetUtcNow() - TimeSpan.FromTicks(1));
+            Assert.Null(await store.ClaimConnectorPartitionAsync(admission.Invocation.Scope, admission.Invocation.RunId, "still-too-early"));
+        }
+
+        clock.Advance(TimeSpan.FromTicks(1));
+        await using var recoveredContext = database.CreateContext();
+        var recoveredStore = (IEtlConnectorRuntimeStore)database.CreateStore(recoveredContext, clock);
+        var recovered = Assert.IsType<EtlConnectorPartitionLease>(await recoveredStore.ClaimConnectorPartitionAsync(
             admission.Invocation.Scope, admission.Invocation.RunId, "delivery-recovery"));
         Assert.Equal(0, recovered.PartitionOrdinal);
+        Assert.True(recovered.Fence > lease.Fence);
         var recoveredBatch = Assert.IsType<EtlConnectorBatchReservation>(recovered.OwedBatch);
         Assert.Equal(batch, recoveredBatch.Batch);
         Assert.Equal(output, recoveredBatch.Output);
         Assert.Equal(EtlHttpDeliveryPhase.Acknowledged, recoveredBatch.HttpDeliveries!.Main!.Phase);
         Assert.Equal(EtlHttpDeliveryPhase.Waiting, recoveredBatch.HttpDeliveries.Errors!.Phase);
-        var mainReplay = await store.BeginConnectorHttpDeliveryAsync(recovered, batch.BatchId, EtlOutputRoute.Main, DeliveryRequestId(14));
-
-        var retry = await store.BeginConnectorHttpDeliveryAsync(recovered, batch.BatchId, EtlOutputRoute.Error, DeliveryRequestId(13));
+        Assert.Equal(retryAt, recoveredBatch.HttpDeliveries.Errors.NotBefore);
+        Assert.Equal(originalDeadline, recoveredBatch.HttpDeliveries.Errors.Deadline);
+        Assert.Equal(errorPermit, recoveredBatch.HttpDeliveries.Errors.Attempts[0].Attempt);
+        var mainReplay = await recoveredStore.BeginConnectorHttpDeliveryAsync(recovered, batch.BatchId, EtlOutputRoute.Main, DeliveryRequestId(14));
+        var retry = await recoveredStore.BeginConnectorHttpDeliveryAsync(recovered, batch.BatchId, EtlOutputRoute.Error, DeliveryRequestId(13));
         var retryPermit = Assert.IsType<EtlHttpDeliveryAttempt>(retry.Permit);
-        var retryComplete = await store.CompleteConnectorHttpDeliveryAsync(recovered, batch.BatchId, EtlOutputRoute.Error,
+        var retryComplete = await recoveredStore.CompleteConnectorHttpDeliveryAsync(recovered, batch.BatchId, EtlOutputRoute.Error,
             retryPermit, new(201, null));
-        var viewAfterRetry = Assert.IsType<EtlConnectorRunView>(await store.FindConnectorRunAsync(
+        var viewAfterRetry = Assert.IsType<EtlConnectorRunView>(await recoveredStore.FindConnectorRunAsync(
             admission.Invocation.Scope, admission.Invocation.RunId));
 
         Assert.Equal(EtlStoreStatus.Applied, retry.Status);
         Assert.Equal(2, retryPermit.Number);
+        Assert.Equal(retryAt, retryPermit.StartedAt);
         Assert.Equal(output.Errors!.EffectId, retryPermit.EffectId);
+        Assert.Equal(originalDeadline, retry.Delivery!.Deadline);
         Assert.Equal(EtlStoreStatus.Replay, mainReplay.Status);
         Assert.Null(mainReplay.Permit);
         Assert.Equal(EtlStoreStatus.Applied, retryComplete.Status);
@@ -218,7 +236,7 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(2, viewAfterRetry.Run.OutstandingRecords);
         Assert.Equal(5, viewAfterRetry.Run.OutstandingBytes);
         Assert.Equal(0, Assert.IsType<EtlConnectorHttpPosition>(recovered.Position).NextItem);
-        Assert.False(await context.ConnectorBatches.AsNoTracking().Select(row => row.Settled).SingleAsync());
+        Assert.False(await recoveredContext.ConnectorBatches.AsNoTracking().Select(row => row.Settled).SingleAsync());
     }
 
     [Fact]
@@ -240,6 +258,64 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(before, await DeliveryAccountingAsync(context, lease.PartitionOrdinal));
         Assert.Equal(EtlStoreStatus.Applied, (await store.CompleteConnectorHttpDeliveryAsync(lease,
             batch.BatchId, EtlOutputRoute.Main, permit, new(200, null))).Status);
+    }
+
+    [Fact]
+    public async Task Http_delivery_completion_replays_identical_receipt_and_refuses_conflicting_receipt_after_store_reopen()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var clock = new MutableTimeProvider();
+        var admission = ConnectorAdmission("http-delivery-completion-replay", new("tenant-a", "http-delivery-completion-replay"), httpShardIds: ["shard"]);
+        EtlConnectorPartitionLease lease;
+        EtlConnectorBatchDescriptor batch;
+        EtlConnectorBatchOutput output;
+        EtlHttpDeliveryAttempt permit;
+        await using (var context = database.CreateContext())
+        {
+            var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock);
+            (lease, batch, output) = await PrepareHttpOutputBatchAsync(store, admission, "worker");
+            permit = Assert.IsType<EtlHttpDeliveryAttempt>((await store.BeginConnectorHttpDeliveryAsync(
+                lease, batch.BatchId, EtlOutputRoute.Main, DeliveryRequestId(30))).Permit);
+            Assert.Equal(output.Main!.EffectId, permit.EffectId);
+
+            var completed = await store.CompleteConnectorHttpDeliveryAsync(lease, batch.BatchId, EtlOutputRoute.Main,
+                permit, new(204, null));
+            Assert.Equal(EtlStoreStatus.Applied, completed.Status);
+            Assert.Equal(EtlHttpDeliveryPhase.Acknowledged, completed.Delivery!.Phase);
+        }
+
+        await using var reopenedContext = database.CreateContext();
+        var reopenedStore = (IEtlConnectorRuntimeStore)database.CreateStore(reopenedContext, clock);
+        var before = await DeliveryAccountingAsync(reopenedContext, lease.PartitionOrdinal);
+        var batchBefore = await reopenedContext.ConnectorBatches.AsNoTracking().SingleAsync();
+        var retainedOutput = EtlConnectorRecordCodec.Read<EtlConnectorBatchOutput>(batchBefore.OutputJson!);
+        Assert.Equal(output, retainedOutput);
+        Assert.Equal(output.Main!.EffectId, permit.EffectId);
+
+        var replay = await reopenedStore.CompleteConnectorHttpDeliveryAsync(lease, batch.BatchId, EtlOutputRoute.Main,
+            permit, new(204, null));
+        var afterReplay = await DeliveryAccountingAsync(reopenedContext, lease.PartitionOrdinal);
+        var batchAfterReplay = await reopenedContext.ConnectorBatches.AsNoTracking().SingleAsync();
+
+        Assert.Equal(EtlStoreStatus.Replay, replay.Status);
+        Assert.Equal(EtlHttpDeliveryPhase.Acknowledged, replay.Delivery!.Phase);
+        var replayedAttempt = Assert.Single(replay.Delivery.Attempts);
+        Assert.Equal(permit, replayedAttempt.Attempt);
+        Assert.Equal(new EtlHttpDeliveryResponse(204, null), replayedAttempt.Response);
+        Assert.NotNull(replayedAttempt.CompletedAt);
+        Assert.Equal(before, afterReplay);
+        Assert.Equal(batchBefore.OutputJson, batchAfterReplay.OutputJson);
+        Assert.Equal(batchBefore.OutputDigest, batchAfterReplay.OutputDigest);
+
+        var conflict = await reopenedStore.CompleteConnectorHttpDeliveryAsync(lease, batch.BatchId, EtlOutputRoute.Main,
+            permit, new(201, null));
+        var afterConflict = await DeliveryAccountingAsync(reopenedContext, lease.PartitionOrdinal);
+        var batchAfterConflict = await reopenedContext.ConnectorBatches.AsNoTracking().SingleAsync();
+
+        Assert.Equal(EtlStoreStatus.Conflict, conflict.Status);
+        Assert.Equal(before, afterConflict);
+        Assert.Equal(batchBefore.OutputJson, batchAfterConflict.OutputJson);
+        Assert.Equal(batchBefore.OutputDigest, batchAfterConflict.OutputDigest);
     }
 
     [Fact]
@@ -428,7 +504,9 @@ public sealed partial class EtlRuntimeStoreTests
 
     private static async Task<(long RunMetadataBytes, long OutstandingRecords, long OutstandingBytes,
         long PartitionMetadataBytes, long BatchMetadataBytes, long RetainedOutputBytes,
-        string? DeliveryJson, string? DeliveryDigest)> DeliveryAccountingAsync(
+        string? DeliveryJson, string? DeliveryDigest, string PositionJson, bool Settled,
+        long AcceptedBatchCount, long AcceptedRecords, long RejectedRecords, long FilteredRecords,
+        long RunAcceptedRecords, long RunRejectedRecords, long RunFilteredRecords)> DeliveryAccountingAsync(
         EtlRuntimeDbContext context, int partitionOrdinal)
     {
         var run = await context.Runs.AsNoTracking().SingleAsync();
@@ -437,6 +515,8 @@ public sealed partial class EtlRuntimeStoreTests
         var batch = await context.ConnectorBatches.AsNoTracking().SingleAsync(row => row.PartitionOrdinal == partitionOrdinal);
         return (connector.RetainedMetadataBytes, run.OutstandingRecords, run.OutstandingBytes,
             partition.MetadataBytes, partition.BatchMetadataBytes, partition.RetainedOutputBytes,
-            batch.HttpDeliveryJson, batch.HttpDeliveryDigest);
+            batch.HttpDeliveryJson, batch.HttpDeliveryDigest, partition.PositionJson, batch.Settled,
+            partition.AcceptedBatchCount, partition.AcceptedRecords, partition.RejectedRecords, partition.FilteredRecords,
+            run.AcceptedRecords, run.RejectedRecords, run.FilteredRecords);
     }
 }

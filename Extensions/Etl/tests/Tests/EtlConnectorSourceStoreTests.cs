@@ -194,27 +194,62 @@ public sealed partial class EtlRuntimeStoreTests
     }
 
     [Fact]
-    public async Task Source_waiting_is_durable_and_does_not_block_another_partition()
+    public async Task Source_waiting_survives_store_recreation_and_does_not_block_another_partition()
     {
         await using var database = await TestDatabase.CreateAsync();
-        await using var context = database.CreateContext();
         var clock = new MutableTimeProvider();
-        var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock);
         var admission = ConnectorAdmission("source-wait", new("tenant-a", "source-wait"), httpShardIds: ["a", "b"]);
-        var leases = await StartHttpRunAsync(store, admission, "worker");
-        var first = leases[0];
-        var begin = await store.BeginConnectorHttpSourceAsync(first, Guid.NewGuid().ToString("N"));
-        var wait = await store.CompleteConnectorHttpSourceAsync(first, begin.Permit!, new(429, clock.GetUtcNow().AddSeconds(20), false));
-        Assert.Equal(EtlConnectorHttpSourceFetchPhase.Waiting, wait.Fetch!.Phase);
-        Assert.Equal(EtlStoreStatus.Applied, await store.ReleaseConnectorPartitionAsync(first));
-        Assert.Equal(EtlStoreStatus.Applied, await store.ReleaseConnectorPartitionAsync(leases[1]));
-        var other = await store.ClaimConnectorPartitionAsync(first.Scope, first.RunId, "replacement");
-        Assert.Equal(leases[1].PartitionOrdinal, other!.PartitionOrdinal);
-        clock.Advance(TimeSpan.FromSeconds(21));
-        var recovered = await store.ClaimConnectorPartitionAsync(first.Scope, first.RunId, "replacement");
-        Assert.Equal(first.PartitionOrdinal, recovered!.PartitionOrdinal);
-        var retry = await store.BeginConnectorHttpSourceAsync(recovered, Guid.NewGuid().ToString("N"));
+        var retryAt = clock.GetUtcNow().AddSeconds(20);
+        EtlConnectorPartitionLease first;
+        EtlHttpSourceFetchAttempt originalPermit;
+        DateTimeOffset originalDeadline;
+        int otherOrdinal;
+        await using (var context = database.CreateContext())
+        {
+            var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock);
+            var leases = await StartHttpRunAsync(store, admission, "worker");
+            first = leases[0];
+            otherOrdinal = leases[1].PartitionOrdinal;
+            var begin = await store.BeginConnectorHttpSourceAsync(first, Guid.NewGuid().ToString("N"));
+            originalPermit = Assert.IsType<EtlHttpSourceFetchAttempt>(begin.Permit);
+            originalDeadline = begin.Fetch!.Deadline;
+            var wait = await store.CompleteConnectorHttpSourceAsync(first, originalPermit, new(429, retryAt, false));
+            Assert.Equal(EtlStoreStatus.Applied, wait.Status);
+            Assert.Equal(EtlConnectorHttpSourceFetchPhase.Waiting, wait.Fetch!.Phase);
+            Assert.Equal(retryAt, wait.Fetch.NotBefore);
+            Assert.Equal(EtlStoreStatus.Applied, await store.ReleaseConnectorPartitionAsync(first));
+            Assert.Equal(EtlStoreStatus.Applied, await store.ReleaseConnectorPartitionAsync(leases[1]));
+        }
+
+        // Recreate both context and store: eligibility must come from persisted state, not a live tracker.
+        await using (var context = database.CreateContext())
+        {
+            var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock);
+            var other = Assert.IsType<EtlConnectorPartitionLease>(await store.ClaimConnectorPartitionAsync(
+                first.Scope, first.RunId, "other-partition-worker"));
+            Assert.Equal(otherOrdinal, other.PartitionOrdinal);
+            await ExhaustAndReleaseHttpPartitionAsync(store, other);
+            Assert.Null(await store.ClaimConnectorPartitionAsync(first.Scope, first.RunId, "too-early"));
+            clock.Advance(retryAt - clock.GetUtcNow() - TimeSpan.FromTicks(1));
+            Assert.Null(await store.ClaimConnectorPartitionAsync(first.Scope, first.RunId, "still-too-early"));
+        }
+
+        clock.Advance(TimeSpan.FromTicks(1));
+        await using var recoveredContext = database.CreateContext();
+        var recoveredStore = (IEtlConnectorRuntimeStore)database.CreateStore(recoveredContext, clock);
+        var recovered = Assert.IsType<EtlConnectorPartitionLease>(await recoveredStore.ClaimConnectorPartitionAsync(
+            first.Scope, first.RunId, "replacement"));
+        Assert.Equal(first.PartitionOrdinal, recovered.PartitionOrdinal);
+        Assert.True(recovered.Fence > first.Fence);
+        var retry = await recoveredStore.BeginConnectorHttpSourceAsync(recovered, Guid.NewGuid().ToString("N"));
+        Assert.Equal(EtlStoreStatus.Applied, retry.Status);
         Assert.Equal(2, retry.Permit!.Number);
-        Assert.Equal(begin.Fetch!.Deadline, retry.Fetch!.Deadline);
+        Assert.Equal(originalPermit.RequestHash, retry.Permit.RequestHash);
+        Assert.NotEqual(originalPermit.RequestId, retry.Permit.RequestId);
+        Assert.Equal(originalDeadline, retry.Fetch!.Deadline);
+        Assert.Equal(originalPermit, retry.Fetch.Attempts[0].Attempt);
+        Assert.Equal(429, retry.Fetch.Attempts[0].Outcome!.StatusCode);
+        Assert.Equal(retryAt, retry.Fetch.Attempts[0].Outcome!.RetryAfter);
+        Assert.Equal(retryAt, retry.Permit.StartedAt);
     }
 }

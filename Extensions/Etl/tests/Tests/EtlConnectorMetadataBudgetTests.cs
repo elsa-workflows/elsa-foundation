@@ -352,7 +352,8 @@ public sealed partial class EtlRuntimeStoreTests
         string priorPosition;
         long priorMetadataBytes;
         long priorInputBytes;
-        string[] priorRequests;
+        string priorRequests;
+        long priorInputReservation;
         EtlConnectorPositionResult expired;
         var admission = ConnectorAdmission("metadata-attach-expiry", new("tenant", "metadata-attach-expiry"), httpShardIds: ["shard"]);
 
@@ -360,14 +361,18 @@ public sealed partial class EtlRuntimeStoreTests
         {
             var store = database.CreateStore(context, clock);
             var lease = Assert.Single(await StartHttpRunAsync(store, admission, "worker"));
+            var page = RetainedPage(lease, "expired-page", 8, 0, "cursor-1");
+            await CaptureHttpPageForAttachmentAsync(store, lease, page);
             priorPosition = await context.ConnectorPartitions.AsNoTracking().Select(partition => partition.PositionJson).SingleAsync();
             priorMetadataBytes = (await context.ConnectorRuns.AsNoTracking().SingleAsync()).RetainedMetadataBytes;
             priorInputBytes = (await context.ConnectorRuns.AsNoTracking().SingleAsync()).RetainedInputBytes;
-            priorRequests = await context.ConnectorHttpRequests.AsNoTracking().OrderBy(request => request.PageSequence)
-                .Select(request => request.RequestHash + ":" + request.RequestJson).ToArrayAsync();
+            priorInputReservation = (await context.ConnectorRuns.AsNoTracking().SingleAsync()).SourceInputReservedBytes;
+            Assert.Equal(page.Body.ByteLength, priorInputReservation);
+            priorRequests = System.Text.Json.JsonSerializer.Serialize(await context.ConnectorHttpRequests.AsNoTracking()
+                .OrderBy(request => request.PageSequence).ToArrayAsync());
 
             expire.Armed = true;
-            expired = await store.AttachTestHttpPageAsync(lease, RetainedPage(lease, "expired-page", 8, 0, "cursor-1"));
+            expired = await store.AttachHttpPageAsync(lease, page);
         }
 
         Assert.Equal(EtlStoreStatus.LeaseLost, expired.Status);
@@ -379,8 +384,12 @@ public sealed partial class EtlRuntimeStoreTests
             (await verificationContext.ConnectorRuns.AsNoTracking().SingleAsync()).RetainedMetadataBytes);
         Assert.Equal(priorInputBytes,
             (await verificationContext.ConnectorRuns.AsNoTracking().SingleAsync()).RetainedInputBytes);
-        Assert.Equal(priorRequests, await verificationContext.ConnectorHttpRequests.AsNoTracking().OrderBy(request => request.PageSequence)
-            .Select(request => request.RequestHash + ":" + request.RequestJson).ToArrayAsync());
+        Assert.Equal(priorInputReservation,
+            (await verificationContext.ConnectorRuns.AsNoTracking().SingleAsync()).SourceInputReservedBytes);
+        Assert.Equal(priorInputReservation,
+            (await verificationContext.ConnectorPartitions.AsNoTracking().SingleAsync()).SourceInputReservedBytes);
+        Assert.Equal(priorRequests, System.Text.Json.JsonSerializer.Serialize(await verificationContext.ConnectorHttpRequests
+            .AsNoTracking().OrderBy(request => request.PageSequence).ToArrayAsync()));
         Assert.Empty(await verificationContext.ConnectorHttpPages.AsNoTracking().ToListAsync());
         Assert.Equal(0L, (await verificationContext.ConnectorPartitions.AsNoTracking().SingleAsync()).PageCount);
         Assert.Equal(0L, (await verificationContext.ConnectorPartitions.AsNoTracking().SingleAsync()).PageBytes);

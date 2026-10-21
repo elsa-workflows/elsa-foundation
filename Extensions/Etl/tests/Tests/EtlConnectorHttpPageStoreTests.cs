@@ -269,10 +269,12 @@ public sealed partial class EtlRuntimeStoreTests
             var store = (IEtlConnectorRuntimeStore)database.CreateStore(context);
             var admission = ConnectorAdmission("http-page-stale-owner", new EtlScope("tenant-a", "http-page-stale-owner"), httpShardIds: ["shard-a"]);
             var lease = Assert.Single(await StartHttpRunAsync(store, admission, "first-worker"));
+            var page = RetainedPage(lease, "stale-page", byteLength: 8, recordCount: 0);
+            await CaptureHttpPageForAttachmentAsync(store, lease, page);
             Assert.Equal(EtlStoreStatus.Applied, await store.ReleaseConnectorPartitionAsync(lease));
             Assert.NotNull(await store.ClaimConnectorPartitionAsync(admission.Invocation.Scope, admission.Invocation.RunId, "replacement-worker"));
 
-            var stale = await store.AttachTestHttpPageAsync(lease, RetainedPage(lease, "stale-page", byteLength: 8, recordCount: 0));
+            var stale = await store.AttachHttpPageAsync(lease, page);
 
             Assert.Equal(EtlStoreStatus.LeaseLost, stale.Status);
             Assert.Null(stale.Lease);
@@ -288,8 +290,10 @@ public sealed partial class EtlRuntimeStoreTests
             var admission = ConnectorAdmission("http-page-expiry", new EtlScope("tenant-a", "http-page-expiry"), httpShardIds: ["shard-a"]);
             var lease = Assert.Single(await StartHttpRunAsync(store, admission, "worker"));
 
+            var page = RetainedPage(lease, "rolled-back-page", byteLength: 8, recordCount: 0);
+            await CaptureHttpPageForAttachmentAsync(store, lease, page);
             expire.Armed = true;
-            var expired = await store.AttachTestHttpPageAsync(lease, RetainedPage(lease, "rolled-back-page", byteLength: 8, recordCount: 0));
+            var expired = await store.AttachHttpPageAsync(lease, page);
             context.ChangeTracker.Clear();
 
             Assert.Equal(EtlStoreStatus.LeaseLost, expired.Status);
@@ -359,6 +363,27 @@ public sealed partial class EtlRuntimeStoreTests
                 admission.Invocation.Scope, admission.Invocation.RunId, workerId)));
         }
         return leases;
+    }
+
+    private static async Task CaptureHttpPageForAttachmentAsync(
+        IEtlConnectorRuntimeStore store, EtlConnectorPartitionLease lease, EtlRetainedHttpPage page)
+    {
+        var begin = await store.BeginConnectorHttpSourceAsync(lease, Guid.NewGuid().ToString("N"));
+        Assert.Equal(EtlStoreStatus.Applied, begin.Status);
+        Assert.NotNull(begin.Permit);
+        var permit = begin.Permit;
+        var captured = await store.CaptureConnectorHttpSourceAsync(lease, permit, page, permit.StartedAt);
+        Assert.Equal(EtlStoreStatus.Applied, captured.Status);
+    }
+
+    private static async Task ExhaustAndReleaseHttpPartitionAsync(IEtlConnectorRuntimeStore store, EtlConnectorPartitionLease lease)
+    {
+        var page = await store.AttachTestHttpPageAsync(lease, RetainedPage(lease, "other-empty-page", 5, 0));
+        Assert.Equal(EtlStoreStatus.Applied, page.Status);
+        var exhausted = await store.AdvanceEmptyHttpPageAsync(Assert.IsType<EtlConnectorPartitionLease>(page.Lease));
+        Assert.Equal(EtlStoreStatus.Applied, exhausted.Status);
+        Assert.True(Assert.IsType<EtlConnectorHttpPosition>(exhausted.Lease!.Position).Exhausted);
+        Assert.Equal(EtlStoreStatus.Applied, await store.ReleaseConnectorPartitionAsync(exhausted.Lease));
     }
 
     private static EtlRetainedHttpPage RetainedPage(EtlConnectorPartitionLease lease, string key,

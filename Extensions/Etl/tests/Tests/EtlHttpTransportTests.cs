@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text;
 using Elsa.Connections.Core.Contracts;
@@ -46,16 +47,47 @@ public sealed class EtlHttpTransportTests
         Assert.Equal(new EtlHttpSourceFetchOutcome(200, null, InvalidPage: true), tooLarge.Outcome);
 
         await using var rejectedServer = await EtlHttpLoopbackServer.StartAsync((_, _) =>
-            ValueTask.FromResult(new EtlHttpLoopbackResponse(206, "partial",
-                headers: new Dictionary<string, string> { ["Retry-After"] = "17" })));
+            ValueTask.FromResult(new EtlHttpLoopbackResponse(206, "partial")));
         await using var rejectedBinding = await ResolveAsync(rejectedServer.CreateUri("/page"), "Source");
         var rejected = await transport.FetchAsync(rejectedBinding, rejectedServer.CreateUri("/page"), NewFetchAttempt(), 1024);
 
         Assert.Null(rejected.Body);
         Assert.Null(rejected.ResponseReceivedAtUtc);
         Assert.Equal(206, rejected.Outcome.StatusCode);
-        Assert.InRange(rejected.Outcome.RetryAfter!.Value, DateTimeOffset.UtcNow.AddSeconds(15), DateTimeOffset.UtcNow.AddSeconds(20));
+        Assert.Null(rejected.Outcome.RetryAfter);
         Assert.False(rejected.Outcome.InvalidPage);
+
+        await using var retryableServer = await EtlHttpLoopbackServer.StartAsync((_, _) =>
+            ValueTask.FromResult(new EtlHttpLoopbackResponse(429, "",
+                headers: new Dictionary<string, string> { ["Retry-After"] = "17" })));
+        await using var retryableBinding = await ResolveAsync(retryableServer.CreateUri("/page"), "Source");
+        var requestStarted = DateTimeOffset.UtcNow;
+        var retryable = await transport.FetchAsync(retryableBinding, retryableServer.CreateUri("/page"), NewFetchAttempt(), 1024);
+        var responseObserved = DateTimeOffset.UtcNow;
+
+        Assert.Null(retryable.Body);
+        Assert.Equal(429, retryable.Outcome.StatusCode);
+        Assert.False(retryable.Outcome.InvalidPage);
+        Assert.InRange(retryable.Outcome.RetryAfter!.Value, requestStarted.AddSeconds(17), responseObserved.AddSeconds(17));
+    }
+
+    [Fact]
+    public async Task Fetch_parses_retry_after_http_date_as_exact_utc_time()
+    {
+        var expected = new DateTimeOffset(2099, 6, 5, 12, 0, 0, TimeSpan.Zero);
+        var retryAfter = expected.ToString("r", CultureInfo.InvariantCulture);
+        await using var server = await EtlHttpLoopbackServer.StartAsync((_, _) =>
+            ValueTask.FromResult(new EtlHttpLoopbackResponse(429, "",
+                headers: new Dictionary<string, string> { ["Retry-After"] = retryAfter })));
+        await using var binding = await ResolveAsync(server.CreateUri("/page"), "Source");
+        using var transport = new EtlHttpTransport(TimeProvider.System);
+
+        var response = await transport.FetchAsync(binding, server.CreateUri("/page"), NewFetchAttempt(), 1024);
+
+        Assert.Null(response.Body);
+        Assert.Equal(429, response.Outcome.StatusCode);
+        Assert.Equal(expected, response.Outcome.RetryAfter);
+        Assert.Equal(TimeSpan.Zero, response.Outcome.RetryAfter!.Value.Offset);
     }
 
     [Fact]
