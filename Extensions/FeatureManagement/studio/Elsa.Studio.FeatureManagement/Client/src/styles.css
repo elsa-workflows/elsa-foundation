@@ -915,6 +915,19 @@
   gap: 12px;
 }
 
+.feature-management-impact-heading > div:first-child,
+.feature-management-impact-section dt,
+.feature-management-impact-reason span {
+  min-width: 0;
+}
+
+.feature-management-impact-heading h4,
+.feature-management-impact-heading code,
+.feature-management-impact-section dt,
+.feature-management-impact-reason span {
+  overflow-wrap: anywhere;
+}
+
 .feature-management-impact-heading h4 {
   margin: 0 0 3px;
   color: var(--studio-text, var(--foreground));

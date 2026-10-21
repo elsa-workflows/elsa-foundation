@@ -255,7 +255,7 @@ describe("feature management module", () => {
     expect(container.textContent).toContain("Studio: 1 enabled of 1 available");
     expect(container.textContent).toContain("StudioFeature");
     expect(container.textContent).not.toContain("ServerFeature");
-    expect((buttonByText(container, "Apply") as HTMLButtonElement).disabled).toBe(true);
+    expect((buttonByText(container, "Review changes") as HTMLButtonElement).disabled).toBe(true);
     expect((container.querySelector("[aria-label='Disable StudioFeature']") as HTMLButtonElement).disabled).toBe(false);
 
     await unmount();
@@ -1198,6 +1198,182 @@ describe("feature impact review", () => {
     await unmount();
   });
 
+  it("invalidates the review when a raw settings draft changes", async () => {
+    let postCount = 0;
+    const api = stubApi({
+      getJson: async () => ({
+        revision: "server-rev-1",
+        features: [
+          feature("Configured", true, { Mode: "slow" }, [], { settings: [setting({ name: "Mode", displayName: "Mode" })] }),
+          feature("Other", false, {})
+        ]
+      }),
+      postJson: async () => {
+        postCount++;
+        return { catalog: { revision: "server-rev-2", features: [] }, featureDescriptorCount: 0, reloadedShellCount: 0 };
+      }
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    await click(container.querySelector("[aria-label='Enable Other']"));
+    await openImpactReview(container);
+    await click(buttonByText(container, "Edit settings"));
+    const settingsDialog = Array.from(container.querySelectorAll("[role='dialog']"))
+      .find(dialog => dialog.textContent?.includes("Save draft"));
+    const modeLabel = Array.from(settingsDialog?.querySelectorAll("label") ?? [])
+      .find(label => label.textContent?.includes("Mode"));
+    await changeInput(modeLabel?.querySelector("input, textarea") as HTMLInputElement | null, "fast");
+    await click(buttonByText(settingsDialog!, "Save draft"));
+
+    expect(impactReviewRegion(container)).toBeNull();
+    expect(container.textContent).toContain("Unsaved changes");
+    expect(postCount).toBe(0);
+    await unmount();
+  });
+
+  it("invalidates the review as soon as a catalog refresh starts", async () => {
+    let serverRead = 0;
+    let finishRefresh: ((value: unknown) => void) | undefined;
+    let postCount = 0;
+    const original = [feature("FeatureA", true, {})];
+    const api = stubApi({
+      getJson: async () => {
+        serverRead++;
+        if (serverRead === 1) {
+          return { revision: "server-rev-1", features: original };
+        }
+        return new Promise(resolve => { finishRefresh = resolve; });
+      },
+      postJson: async () => {
+        postCount++;
+        return { catalog: { revision: "server-rev-2", features: original }, featureDescriptorCount: 0, reloadedShellCount: 0 };
+      }
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    await click(container.querySelector("[aria-label='Disable FeatureA']"));
+    await openImpactReview(container);
+    await click(container.querySelector("[aria-label='Refresh features']"));
+
+    expect(impactReviewRegion(container)).toBeNull();
+    expect(postCount).toBe(0);
+    finishRefresh?.({ revision: "server-rev-2", features: original });
+    await flushPromises();
+    await unmount();
+  });
+
+  it("keeps the review open and blocks duplicate Apply or dismissal while submitting", async () => {
+    let postCount = 0;
+    let finishPost: ((value: unknown) => void) | undefined;
+    const api = stubApi({
+      getJson: async () => ({ revision: "server-rev-1", features: [feature("FeatureA", true, {})] }),
+      postJson: async () => {
+        postCount++;
+        return new Promise(resolve => { finishPost = resolve; });
+      }
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    await click(container.querySelector("[aria-label='Disable FeatureA']"));
+    const review = await openImpactReview(container);
+    const applyButton = buttonByText(review, "Apply");
+    flushSync(() => {
+      applyButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      applyButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flushPromises();
+
+    expect(postCount).toBe(1);
+    expect(buttonByText(review, "Close").hasAttribute("disabled")).toBe(true);
+    expect(buttonByText(review, "Cancel").hasAttribute("disabled")).toBe(true);
+    flushSync(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    expect(impactReviewRegion(container)).not.toBeNull();
+
+    finishPost?.({
+      catalog: { revision: "server-rev-2", features: [feature("FeatureA", false, {})] },
+      featureDescriptorCount: 1,
+      reloadedShellCount: 0
+    });
+    await flushPromises();
+    expect(impactReviewRegion(container)).toBeNull();
+    await unmount();
+  });
+
+  it("shows backend Apply failures inside the review without stale success claims", async () => {
+    const reason = "Feature 'FeatureA' cannot be enabled while its runtime is unavailable.";
+    const api = stubApi({
+      getJson: async () => ({ revision: "server-rev-1", features: [feature("FeatureA", false, {})] }),
+      postJson: async () => { throw httpError(409, reason); }
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    await click(container.querySelector("[aria-label='Enable FeatureA']"));
+    const review = await openImpactReview(container);
+    await click(buttonByText(review, "Apply"));
+
+    expect(impactReviewRegion(container)).not.toBeNull();
+    expect(impactReviewRegion(container)?.textContent).toContain(reason);
+    expect(impactReviewRegion(container)?.textContent).not.toContain("Applied ");
+    expect(impactReviewRegion(container)?.textContent).not.toContain("configuration was unchanged");
+    await unmount();
+  });
+
+  it("moves focus to a rejected Apply reason when the review list is scrolled", async () => {
+    const reason = "Feature changes were rejected by the host.";
+    const api = stubApi({
+      getJson: async () => ({
+        revision: "server-rev-1",
+        features: Array.from({ length: 16 }, (_, index) => feature(`Feature${index + 1}`, false, {}))
+      }),
+      postJson: async () => { throw httpError(409, reason); }
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    for (let index = 1; index <= 16; index++) {
+      await click(container.querySelector(`[aria-label='Select Feature${index}']`));
+    }
+    await click(container.querySelector("[aria-label='Enable selected features']"));
+    const review = await openImpactReview(container);
+    const body = review.querySelector(".feature-management-dialog-body") as HTMLElement | null;
+    if (!body) {
+      throw new Error("The feature impact review should expose its scrollable body.");
+    }
+    body.scrollTop = 1200;
+    expect(body.scrollTop).toBe(1200);
+
+    await click(buttonByText(review, "Apply"));
+
+    const error = review.querySelector("[role='alert']");
+    expect(review.textContent).toContain(reason);
+    expect(error).not.toBeNull();
+    expect(error?.parentElement?.getAttribute("tabindex")).toBe("-1");
+    expect(document.activeElement).toBe(error?.parentElement);
+    await unmount();
+  });
+
+  it("clears a prior Apply success when a new draft is staged", async () => {
+    const api = stubApi({
+      getJson: async () => ({ revision: "server-rev-1", features: [feature("FeatureA", true, {})] }),
+      postJson: async () => ({ catalog: { revision: "server-rev-2", features: [feature("FeatureA", false, {})] }, featureDescriptorCount: 1, reloadedShellCount: 0 })
+    });
+    register(api);
+    const { container, unmount } = await renderFeatureManagementPage();
+
+    await click(container.querySelector("[aria-label='Disable FeatureA']"));
+    const review = await openImpactReview(container);
+    await click(buttonByText(review, "Apply"));
+    expect(container.textContent).toContain("Applied 1 descriptor(s); reloaded 0 shell(s).");
+
+    await click(container.querySelector("[aria-label='Enable FeatureA']"));
+    expect(container.textContent).not.toContain("Applied 1 descriptor(s); reloaded 0 shell(s).");
+    await unmount();
+  });
+
   it("mounts authenticated inspect-only users without editable controls", async () => {
     const api = stubApi({
       getJson: async () => ({ revision: "server-rev-1", features: [feature("FeatureA", false, {}, [], { settings: [setting({ name: "Mode", displayName: "Mode" })] })] })
@@ -1219,24 +1395,33 @@ describe("feature impact review", () => {
   });
 
   it("keeps authenticated inspect-only users out of every draft-changing control", async () => {
+    let postCount = 0;
     const api = stubApi({
-      getJson: async () => ({ revision: "server-rev-1", features: [feature("FeatureA", false, {}, [], { settings: [setting({ name: "Mode", displayName: "Mode" })] })] })
+      getJson: async () => ({ revision: "server-rev-1", features: [feature("FeatureA", false, {}, [], { settings: [setting({ name: "Mode", displayName: "Mode" })] })] }),
+      postJson: async () => {
+        postCount++;
+        return { catalog: { revision: "server-rev-2", features: [] }, featureDescriptorCount: 0, reloadedShellCount: 0 };
+      }
     });
     register(api);
     const page = await renderFeatureManagementPage(authenticatedProvider(["module-management:read", "module-management:manage"]));
 
     await click(page.container.querySelector("[aria-label='Enable FeatureA']"));
+    await openImpactReview(page.container);
     page.rerender(authenticatedProvider(["module-management:read"]));
     await flushPromises();
 
     expect(page.container.textContent).toContain("FeatureA");
+    const review = impactReviewRegion(page.container);
+    expect(review).not.toBeNull();
+    expectControlUnavailableByText(review!, "Apply");
     expectControlUnavailable(page.container, "[aria-label='Disable FeatureA']");
     expectControlUnavailable(page.container, "[aria-label='Select FeatureA']");
     expectControlUnavailable(page.container, "[aria-label='Enable selected features']");
     expectControlUnavailable(page.container, "[aria-label='Disable selected features']");
     expectControlUnavailableByText(page.container, "Edit settings");
     expectControlUnavailableByText(page.container, "Reset");
-    expectControlUnavailableByText(page.container, "Apply");
+    expect(postCount).toBe(0);
     await page.unmount();
   });
 
@@ -1472,7 +1657,8 @@ async function editSettingValue(container: Element, featureId: string, settingLa
   await click(card ?? null);
   await click(buttonByText(container, "Edit settings"));
 
-  const dialog = container.querySelector("[role='dialog']");
+  const dialog = Array.from(container.querySelectorAll("[role='dialog']"))
+    .find(candidate => Array.from(candidate.querySelectorAll("button")).some(button => button.textContent === "Save draft")) ?? null;
   const settingField = Array.from(dialog?.querySelectorAll("label") ?? [])
     .find(label => label.textContent?.includes(settingLabel));
   const input = settingField?.querySelector("input, textarea") as HTMLInputElement | null;

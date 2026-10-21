@@ -1,7 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, FlaskConical, Package, Settings2, ShieldAlert, RefreshCcw } from "lucide-react";
 import {
+  useAuthSession,
   useDialogFocus,
+  usePermissions,
   type ElsaStudioModuleApi,
   type StudioSettingDescriptor
 } from "@elsa-workflows/studio-sdk";
@@ -127,6 +129,14 @@ interface FeatureHostState {
   error: string | null;
   enabledRoots: FeatureToggleRoot[];
   stateCauses: Record<string, FeatureStateCause>;
+}
+
+interface FeatureReviewSnapshot {
+  hostId: FeatureHostId;
+  catalog: FeatureCatalogResponse;
+  catalogSignature: string | undefined;
+  draftSignature: string | undefined;
+  payload: ReturnType<typeof createApplyPayload>;
 }
 
 const AllCategoriesId = "__all";
@@ -389,9 +399,13 @@ function stageFeatureToggle(state: FeatureHostState, rootIds: Iterable<string>, 
 }
 
 export function FeatureManagementPage() {
+  const session = useAuthSession();
+  const permissions = usePermissions();
   const hosts = useMemo(() => getFeatureHosts(moduleApi), []);
   const [activeHostId, setActiveHostId] = useState<FeatureHostId>("server");
-  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewSnapshot, setReviewSnapshot] = useState<FeatureReviewSnapshot | null>(null);
+  const reviewSnapshotRef = useRef<FeatureReviewSnapshot | null>(null);
+  const applyInProgressRef = useRef(false);
   const [hostStates, setHostStates] = useState<Record<FeatureHostId, FeatureHostState>>(() => ({
     studio: createInitialHostState(),
     server: createInitialHostState()
@@ -428,7 +442,8 @@ export function FeatureManagementPage() {
   const checkedVisibleCount = filteredDraft.filter(feature => checkedFeatureIds.has(feature.id)).length;
   const allVisibleChecked = filteredDraft.length > 0 && checkedVisibleCount === filteredDraft.length;
   const checkedFeatures = draft.filter(feature => checkedFeatureIds.has(feature.id));
-  const readOnly = !activeHost.writable;
+  const readOnly = !activeHost.writable
+    || (session.status === "authenticated" && !permissions.has("module-management:manage"));
   const editingDisabled = loading || applying || readOnly;
 
   useEffect(() => {
@@ -458,11 +473,31 @@ export function FeatureManagementPage() {
     }));
   }
 
+  function clearReview() {
+    reviewSnapshotRef.current = null;
+    setReviewSnapshot(null);
+  }
+
+  function closeReview() {
+    if (!applyInProgressRef.current) {
+      clearReview();
+    }
+  }
+
   async function refreshHost(hostId = activeHost.id) {
+    if (applyInProgressRef.current) {
+      return;
+    }
     const host = hosts.find(candidate => candidate.id === hostId) ?? activeHost;
-    updateHostState(host.id, state => ({ ...state, loading: true, error: null }));
+    if (reviewSnapshotRef.current?.hostId === host.id) {
+      clearReview();
+    }
+    updateHostState(host.id, state => ({ ...state, loading: true, error: null, status: null }));
     try {
       const response = await host.context.http.getJson<FeatureCatalogResponse>("/modularity/features");
+      if (reviewSnapshotRef.current?.hostId === host.id) {
+        clearReview();
+      }
       updateHostState(host.id, state => ({
         ...state,
         catalog: response,
@@ -478,17 +513,37 @@ export function FeatureManagementPage() {
     }
   }
 
-  async function apply() {
-    if (!catalog || !dirty || readOnly) {
+  async function applyReviewedSnapshot() {
+    const snapshot = reviewSnapshotRef.current;
+    if (!snapshot || applyInProgressRef.current || readOnly) {
       return;
     }
 
-    updateHostState(activeHost.id, state => ({ ...state, applying: true, error: null, status: null }));
+    const currentState = hostStates[snapshot.hostId];
+    const snapshotIsCurrent = snapshot.hostId === activeHost.id
+      && snapshot.catalog === currentState.catalog
+      && snapshot.catalogSignature === stableStringify(currentState.catalog)
+      && snapshot.draftSignature === stableStringify(currentState.draft)
+      && !currentState.loading
+      && isDirty(currentState.catalog, currentState.draft);
+    if (!snapshotIsCurrent) {
+      clearReview();
+      return;
+    }
+
+    const host = hosts.find(candidate => candidate.id === snapshot.hostId);
+    if (!host) {
+      clearReview();
+      return;
+    }
+
+    applyInProgressRef.current = true;
+    updateHostState(snapshot.hostId, state => ({ ...state, applying: true, error: null, status: null }));
     try {
-      const response = await activeHost.context.http.postJson<FeatureApplyResult>(
+      const response = await host.context.http.postJson<FeatureApplyResult>(
         "/modularity/features/apply",
-        createApplyPayload(catalog.revision, draft));
-      updateHostState(activeHost.id, state => ({
+        JSON.parse(JSON.stringify(snapshot.payload)));
+      updateHostState(snapshot.hostId, state => ({
         ...state,
         catalog: response.catalog,
         draft: response.catalog.features.map(toDraftFeature),
@@ -497,34 +552,57 @@ export function FeatureManagementPage() {
         status: `Applied ${response.featureDescriptorCount} descriptor(s); reloaded ${response.reloadedShellCount} shell(s).`,
         applying: false
       }));
-      setReviewOpen(false);
+      clearReview();
 
-      if (activeHost.id === "studio") {
+      if (snapshot.hostId === "studio") {
         window.dispatchEvent(new Event(ModulesChangedEventName));
       }
     } catch (e) {
-      updateHostState(activeHost.id, state => ({ ...state, error: getErrorMessage(e), applying: false }));
+      updateHostState(snapshot.hostId, state => ({ ...state, error: getErrorMessage(e), applying: false, status: null }));
+    } finally {
+      applyInProgressRef.current = false;
     }
   }
 
-  function updateFeature(id: string, update: (feature: DraftFeature) => DraftFeature) {
-    if (readOnly) {
+  function openReview() {
+    if (!catalog || !dirty || loading || applying || readOnly || applyInProgressRef.current) {
       return;
     }
 
+    const snapshot: FeatureReviewSnapshot = {
+      hostId: activeHost.id,
+      catalog,
+      catalogSignature: stableStringify(catalog),
+      draftSignature: stableStringify(draft),
+      payload: JSON.parse(JSON.stringify(createApplyPayload(catalog.revision, draft)))
+    };
+    updateHostState(activeHost.id, state => ({ ...state, error: null, status: null }));
+    reviewSnapshotRef.current = snapshot;
+    setReviewSnapshot(snapshot);
+  }
+
+  function updateFeature(id: string, update: (feature: DraftFeature) => DraftFeature) {
+    if (readOnly || applyInProgressRef.current) {
+      return;
+    }
+
+    clearReview();
     updateHostState(activeHost.id, state => ({
       ...state,
+      status: null,
+      error: null,
       draft: state.draft.map(feature => feature.id === id ? update(feature) : feature)
     }));
   }
 
   function toggleFeature(feature: DraftFeature) {
-    if (readOnly) {
+    if (readOnly || applyInProgressRef.current) {
       return;
     }
 
+    clearReview();
     const enabled = !feature.enabled;
-    updateHostState(activeHost.id, state => stageFeatureToggle(state, [feature.id], enabled));
+    updateHostState(activeHost.id, state => ({ ...stageFeatureToggle(state, [feature.id], enabled), status: null, error: null }));
   }
 
   function toggleCheckedFeature(id: string, checked: boolean) {
@@ -564,11 +642,12 @@ export function FeatureManagementPage() {
   }
 
   function setCheckedFeaturesEnabled(enabled: boolean) {
-    if (readOnly || checkedFeatureIds.size === 0) {
+    if (readOnly || applyInProgressRef.current || checkedFeatureIds.size === 0) {
       return;
     }
 
-    updateHostState(activeHost.id, state => stageFeatureToggle(state, state.checkedFeatureIds, enabled));
+    clearReview();
+    updateHostState(activeHost.id, state => ({ ...stageFeatureToggle(state, state.checkedFeatureIds, enabled), status: null, error: null }));
   }
 
   function updateSetting(feature: DraftFeature, setting: StudioSettingDescriptor, value: unknown) {
@@ -582,10 +661,11 @@ export function FeatureManagementPage() {
   }
 
   function reset() {
-    if (!catalog) {
+    if (!catalog || readOnly || applyInProgressRef.current) {
       return;
     }
 
+    clearReview();
     updateHostState(activeHost.id, state => ({
       ...state,
       draft: catalog.features.map(toDraftFeature),
@@ -594,7 +674,6 @@ export function FeatureManagementPage() {
       status: null,
       error: null
     }));
-    setReviewOpen(false);
   }
 
   return (
@@ -610,7 +689,7 @@ export function FeatureManagementPage() {
               <RefreshCcw size={15} />
             </button>
             <button type="button" className="studio-button" onClick={reset} disabled={!dirty || loading || applying || readOnly}>Reset</button>
-            <button type="button" className="studio-button studio-button-primary" onClick={() => setReviewOpen(true)} disabled={!dirty || loading || applying || readOnly}>
+            <button type="button" className="studio-button studio-button-primary" onClick={openReview} disabled={!dirty || loading || applying || readOnly}>
               Review changes
             </button>
           </StudioToolbarGroup>
@@ -620,12 +699,18 @@ export function FeatureManagementPage() {
       <StudioTabs
         tabs={hosts.map(host => ({ id: host.id, label: host.label }))}
         activeTab={activeHost.id}
-        onSelect={hostId => setActiveHostId(hostId as FeatureHostId)}
+        onSelect={hostId => {
+          if (applyInProgressRef.current) {
+            return;
+          }
+          clearReview();
+          setActiveHostId(hostId as FeatureHostId);
+        }}
         ariaLabel="Hosts"
       />
 
-      {error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
-      {status ? <StudioAlert tone="success">{status}</StudioAlert> : null}
+      {!reviewSnapshot && error ? <StudioAlert tone="danger">{error}</StudioAlert> : null}
+      {!reviewSnapshot && status ? <StudioAlert tone="success">{status}</StudioAlert> : null}
       <div className="feature-management-layout">
         <div className="feature-management-list-column">
           <div className="feature-management-list-toolbar">
@@ -692,15 +777,16 @@ export function FeatureManagementPage() {
         />
       </div>
 
-      {reviewOpen && catalog ? (
+      {reviewSnapshot && reviewSnapshot.hostId === activeHost.id ? (
         <FeatureImpactReviewDialog
           hostLabel={activeHost.label}
           entries={impactEntries}
           dirty={dirty}
           applying={applying}
           readOnly={readOnly}
-          onClose={() => setReviewOpen(false)}
-          onApply={apply}
+          error={error}
+          onClose={closeReview}
+          onApply={applyReviewedSnapshot}
         />
       ) : null}
     </section>
@@ -713,6 +799,7 @@ function FeatureImpactReviewDialog({
   dirty,
   applying,
   readOnly,
+  error,
   onClose,
   onApply
 }: {
@@ -721,11 +808,19 @@ function FeatureImpactReviewDialog({
   dirty: boolean;
   applying: boolean;
   readOnly: boolean;
+  error: string | null;
   onClose(): void;
   onApply(): void;
 }) {
   const dialogRef = useRef<HTMLElement | null>(null);
-  useDialogFocus(dialogRef, onClose);
+  const errorRef = useRef<HTMLDivElement | null>(null);
+  useDialogFocus(dialogRef, applying ? null : onClose);
+
+  useLayoutEffect(() => {
+    if (error) {
+      errorRef.current?.focus();
+    }
+  }, [error]);
 
   return (
     <div className="feature-management-dialog-backdrop" role="presentation">
@@ -743,10 +838,15 @@ function FeatureImpactReviewDialog({
             <span>{hostLabel} feature configuration</span>
             <h3 id="feature-management-impact-title">Review changes</h3>
           </div>
-          <button type="button" onClick={onClose} data-dialog-initial-focus>Close</button>
+          <button type="button" onClick={onClose} disabled={applying} data-dialog-initial-focus>Close</button>
         </div>
 
         <div className="feature-management-dialog-body">
+          {error ? (
+            <div ref={errorRef} tabIndex={-1}>
+              <StudioAlert tone="danger">{error}</StudioAlert>
+            </div>
+          ) : null}
           <p className="feature-management-impact-intro">
             This review includes every changed feature for {hostLabel}, including features hidden by the current filters.
             Apply submits the complete desired feature state.
@@ -763,7 +863,7 @@ function FeatureImpactReviewDialog({
         <div className="feature-management-dialog-actions">
           <span>Reviewing {entries.length} changed feature{entries.length === 1 ? "" : "s"}.</span>
           <div>
-            <button type="button" onClick={onClose}>Cancel</button>
+            <button type="button" onClick={onClose} disabled={applying}>Cancel</button>
             <button type="button" className="primary" onClick={onApply} disabled={!dirty || applying || readOnly}>
               {applying ? "Applying" : "Apply"}
             </button>
@@ -1716,10 +1816,6 @@ function canonicalize(features: FeatureCatalogItem[] | DraftFeature[]) {
 
 export function getErrorMessage(error: unknown) {
   if (isHttpError(error)) {
-    if (error.status === 409) {
-      return `The feature catalog changed before your changes were applied. Refresh and review the latest feature state. ${error.message}`;
-    }
-
     if (error.status === 400) {
       return `The feature configuration was rejected. ${error.message}`;
     }

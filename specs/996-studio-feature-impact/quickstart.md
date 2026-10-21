@@ -44,7 +44,7 @@ After root accepts the RED checkpoint, implement the planned module, test, and s
 ```bash
 cd Studio
 pnpm --filter @elsa-workflows/studio-feature-management exec vitest run src/__tests__/module.test.ts
-pnpm --filter @elsa-workflows/studio-feature-management exec tsc --noEmit -p tsconfig.json
+pnpm exec tsc --noEmit -p ../Extensions/FeatureManagement/studio/Elsa.Studio.FeatureManagement/Client/tsconfig.json
 pnpm --filter @elsa-workflows/studio-feature-management build
 ```
 
