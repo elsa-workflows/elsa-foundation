@@ -12,7 +12,7 @@ using Elsa.Etl.Tests.Support;
 
 namespace Elsa.Etl.Tests;
 
-public sealed class EtlHttpTransportTests
+public sealed partial class EtlHttpTransportTests
 {
     [Fact]
     public async Task Fetch_retains_a_complete_200_body_and_uses_utc_receive_time()

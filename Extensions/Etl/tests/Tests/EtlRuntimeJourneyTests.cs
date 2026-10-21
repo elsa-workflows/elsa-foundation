@@ -275,13 +275,14 @@ public sealed partial class EtlRuntimeJourneyTests
         private readonly HashSet<string> _workerRoles = new(StringComparer.Ordinal);
         private readonly string _source;
         private readonly string _lookup;
-        public EtlScope Scope { get; } = new(null, "runtime-journey");
+        public EtlScope Scope { get; }
         public string SnapshotRoot => Path.Combine(_directory, "snapshots");
         public string OutputRoot => Path.Combine(_directory, "output");
         public string ErrorRoot => Path.Combine(_directory, "errors");
 
-        public RuntimeFiles(string source)
+        public RuntimeFiles(string source, EtlScope? scope = null)
         {
+            Scope = scope ?? new EtlScope(null, "runtime-journey");
             Directory.CreateDirectory(_directory);
             _source = Path.Combine(_directory, "source.csv");
             _lookup = Path.Combine(_directory, "lookup.csv");

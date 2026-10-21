@@ -11,6 +11,22 @@ HTTP-to-JSONL and CSV-to-HTTP execution with optional CSV lookup and durable ret
 capacity, terminal delivery and optional provider boundary as file ETL. Full HTTP native continuation, Studio,
 operator and process-recovery acceptance is still in progress; the file-only evidence below does not establish it.
 
+### HTTP credentials and diagnostics
+
+Each physical HTTP attempt resolves its retained connection under the run's tenant. Credential rotation can
+therefore take effect on a retry without changing the non-secret pin. Revocation or non-secret configuration
+drift refuses the retry; it does not silently redirect the run or use anonymous credentials. These point-of-use
+checks cannot recall a request already sent to the remote system.
+
+ETL-owned errors and worker logs use stable codes, counts and failure types. They omit raw request URLs,
+credentials, headers, payload values and provider exception details. The transport constructs its own HTTP
+client without an automatic URI logger and currently emits no custom ETL spans. This does not disable platform HTTP tracing: under the
+[.NET URI-redaction default](https://learn.microsoft.com/en-us/dotnet/core/diagnostics/distributed-tracing-builtin-activities),
+`System.Net.Http` request spans retain the origin and path while replacing the query with `*`. Hosts own
+exporters, additional instrumentation and redaction configuration. Do not place credentials in endpoint paths
+or assume that arbitrary host telemetry is covered by ETL's diagnostic boundary. The workflow activity fault
+mask is a separate adapter concern, not a global telemetry scrubber.
+
 ## Implemented boundaries
 
 - Core: typed finite topology, exact nullable-tenant/required-persistence scope, immutable versioned artifact envelope, typed JSON representation and SHA-256. Complete v1 envelopes are limited to 256 KiB; a definition may request a lower limit. Unknown saved formats remain observable and are refused at publication/read boundaries.
