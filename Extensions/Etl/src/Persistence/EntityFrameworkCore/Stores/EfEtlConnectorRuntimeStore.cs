@@ -181,6 +181,7 @@ internal sealed partial class EfEtlRuntimeStore
             join connector in db.ConnectorRuns on new { run.ScopeKey, run.RunKey } equals new { connector.ScopeKey, connector.RunKey }
             where partition.ScopeKey == scopeKey && (runKey == null || partition.RunKey == runKey) &&
                 run.Status == (int)EtlRunStatus.Running && !partition.Completed &&
+                (partition.NotBeforeUtcTicks == null || partition.NotBeforeUtcTicks <= now) &&
                 (partition.ExpiresAtUtcTicks == null || partition.ExpiresAtUtcTicks <= now)
             orderby (partition.OwedBatchId != null) descending, run.CreatedAtUtcTicks, partition.RunKey, partition.PartitionOrdinal
             select new { Run = run, Connector = connector, Partition = partition }).FirstOrDefaultAsync(cancellationToken);

@@ -42,6 +42,9 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                     b.Property<long?>("ExpiresAtUtcTicks")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long?>("NotBeforeUtcTicks")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("Fence")
                         .HasColumnType("INTEGER");
 
@@ -88,6 +91,8 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
 
                     b.HasIndex("ScopeKey", "RunKey", "Completed", "ExpiresAtUtcTicks");
 
+                    b.HasIndex("ScopeKey", "RunKey", "Completed", "NotBeforeUtcTicks", "ExpiresAtUtcTicks");
+
                     b.HasIndex("ScopeKey", "RunKey", "PartitionOrdinal", "CurrentRequestSequence", "CurrentRequestHash");
 
                     b.HasIndex("ScopeKey", "RunKey", "PartitionOrdinal", "OwedBatchId");
@@ -96,6 +101,7 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                         {
                             t.HasCheckConstraint("CK_elsa_etl_connector_partitions_CurrentRequestPointer", "(CurrentRequestSequence IS NULL AND CurrentRequestHash IS NULL) OR (CurrentRequestSequence IS NOT NULL AND CurrentRequestHash IS NOT NULL)");
                             t.HasCheckConstraint("CK_elsa_etl_connector_partitions_NonNegativeCounters", "PageCount >= 0 AND PageBytes >= 0 AND MetadataBytes >= 0 AND BatchMetadataBytes >= 0");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_partitions_NotBeforeUtcTicks", "NotBeforeUtcTicks IS NULL OR NotBeforeUtcTicks > 0");
                             t.HasCheckConstraint("CK_elsa_etl_connector_partitions_RetainedOutputBytes", "RetainedOutputBytes >= 0");
                         });
                 });
@@ -127,6 +133,10 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("HttpDeliveryDigest")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("DescriptorJson")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -136,6 +146,9 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("OutputJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("HttpDeliveryJson")
                         .HasColumnType("TEXT");
 
                     b.Property<long>("InputBytes")
@@ -171,6 +184,7 @@ namespace Elsa.Etl.Persistence.EntityFrameworkCore.Migrations.Sqlite.Runtime
                         {
                             t.HasCheckConstraint("CK_elsa_etl_connector_batches_OutputBytes", "OutputBytes >= 0 AND (OutputJson IS NOT NULL OR OutputBytes = 0)");
                             t.HasCheckConstraint("CK_elsa_etl_connector_batches_OutputPlan", "(OutputJson IS NULL AND OutputDigest IS NULL) OR (OutputJson IS NOT NULL AND OutputDigest IS NOT NULL AND length(OutputDigest) = 64)");
+                            t.HasCheckConstraint("CK_elsa_etl_connector_batches_HttpDeliveryPlan", "(HttpDeliveryJson IS NULL AND HttpDeliveryDigest IS NULL) OR (HttpDeliveryJson IS NOT NULL AND HttpDeliveryDigest IS NOT NULL AND length(HttpDeliveryDigest) = 64 AND OutputJson IS NOT NULL)");
                         });
                 });
 

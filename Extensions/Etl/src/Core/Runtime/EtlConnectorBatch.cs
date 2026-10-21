@@ -19,6 +19,8 @@ public sealed record EtlConnectorBatchReservation(EtlConnectorBatchDescriptor Ba
 {
     /// <summary>Immutable output plan recovered before delivery; retention is not acknowledgement.</summary>
     public EtlConnectorBatchOutput? Output { get; init; }
+    /// <summary>Retained HTTP attempt/outcome state; file delivery is a separate capability.</summary>
+    public EtlConnectorHttpDeliveries? HttpDeliveries { get; init; }
 }
 public sealed record EtlConnectorReservationResult(EtlStoreStatus Status, EtlConnectorBatchReservation? Reservation);
 

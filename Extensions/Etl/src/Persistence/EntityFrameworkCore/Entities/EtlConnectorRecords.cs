@@ -22,6 +22,7 @@ internal sealed class EtlConnectorPartitionRecord
     public bool Completed { get; set; }
     public string? Owner { get; set; }
     public long Fence { get; set; }
+    public long? NotBeforeUtcTicks { get; set; }
     public long? ExpiresAtUtcTicks { get; set; }
     public long PageCount { get; set; }
     public long PageBytes { get; set; }
@@ -46,6 +47,8 @@ internal sealed class EtlConnectorBatchRecord
     public string DescriptorDigest { get; set; } = null!;
     public string? OutputJson { get; set; }
     public string? OutputDigest { get; set; }
+    public string? HttpDeliveryJson { get; set; }
+    public string? HttpDeliveryDigest { get; set; }
     public long OutputBytes { get; set; }
     public long RecordCount { get; set; }
     public long InputBytes { get; set; }

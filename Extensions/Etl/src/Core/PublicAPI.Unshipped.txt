@@ -1440,3 +1440,121 @@ static Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.operator ==(Elsa.Etl.Core.
 static Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? left, Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? right) -> bool
 static Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? left, Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? right) -> bool
 static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorEffectId(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission! admission, string! batchId, Elsa.Etl.Core.Runtime.EtlOutputRoute route, string! contentHash, long byteLength, long recordCount) -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.HttpDeliveries.get -> Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries?
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.HttpDeliveries.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.Deconstruct(out Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? Main, out Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? Errors) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.Equals(Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.Errors.get -> Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.Errors.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.EtlConnectorHttpDeliveries(Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? Main, Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? Errors) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.Main.get -> Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.Main.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Attempts.get -> System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord!>!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Attempts.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Deadline.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Deadline.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Deconstruct(out System.DateTimeOffset Deadline, out System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord!>! Attempts, out Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase Phase, out System.DateTimeOffset? NotBefore, out Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure Failure, out System.DateTimeOffset UpdatedAt) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Equals(Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.EtlConnectorHttpDelivery(System.DateTimeOffset Deadline, System.Collections.Generic.IReadOnlyList<Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord!>! Attempts, Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase Phase, System.DateTimeOffset? NotBefore, Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure Failure, System.DateTimeOffset UpdatedAt) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Failure.get -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Failure.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.NotBefore.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.NotBefore.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Phase.get -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Phase.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.UpdatedAt.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.UpdatedAt.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult!
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.Deconstruct(out Elsa.Etl.Core.Runtime.EtlStoreStatus Status, out Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? Delivery, out Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt? Permit) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.Delivery.get -> Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.Delivery.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.Equals(Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.EtlConnectorHttpDeliveryResult(Elsa.Etl.Core.Runtime.EtlStoreStatus Status, Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? Delivery, Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt? Permit) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.Permit.get -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt?
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.Permit.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.Status.get -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.Status.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt!
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.Deconstruct(out string! RequestId, out int Number, out long Fence, out string! EffectId, out System.DateTimeOffset StartedAt, out System.DateTimeOffset ExpiresAt) -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.EffectId.get -> string!
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.EffectId.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.Equals(Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt? other) -> bool
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.EtlHttpDeliveryAttempt(string! RequestId, int Number, long Fence, string! EffectId, System.DateTimeOffset StartedAt, System.DateTimeOffset ExpiresAt) -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.ExpiresAt.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.ExpiresAt.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.Fence.get -> long
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.Fence.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.Number.get -> int
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.Number.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.RequestId.get -> string!
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.RequestId.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.StartedAt.get -> System.DateTimeOffset
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.StartedAt.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord!
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.Attempt.get -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt!
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.Attempt.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.CompletedAt.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.CompletedAt.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.Deconstruct(out Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt! Attempt, out Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse? Response, out System.DateTimeOffset? CompletedAt) -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.Equals(Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord? other) -> bool
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.EtlHttpDeliveryAttemptRecord(Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt! Attempt, Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse? Response, System.DateTimeOffset? CompletedAt) -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.Response.get -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse?
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.Response.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure.AttemptsExhausted = 1 -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure.DeadlineExceeded = 2 -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure.None = 0 -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure.ResponseRejected = 3 -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryFailure
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase.Acknowledged = 2 -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase.Failed = 3 -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase.InFlight = 0 -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase.Waiting = 1 -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryPhase
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse!
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.Deconstruct(out int? StatusCode, out System.DateTimeOffset? RetryAfter) -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.Equals(Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse? other) -> bool
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.EtlHttpDeliveryResponse(int? StatusCode, System.DateTimeOffset? RetryAfter) -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.RetryAfter.get -> System.DateTimeOffset?
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.RetryAfter.init -> void
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.StatusCode.get -> int?
+Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.StatusCode.init -> void
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.BeginConnectorHttpDeliveryAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, string! batchId, Elsa.Etl.Core.Runtime.EtlOutputRoute route, string! requestId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult!>
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.CompleteConnectorHttpDeliveryAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, string! batchId, Elsa.Etl.Core.Runtime.EtlOutputRoute route, Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt! attempt, Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse! response, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult!>
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.ToString() -> string!
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveries? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpDelivery? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult? left, Elsa.Etl.Core.Runtime.EtlConnectorHttpDeliveryResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.operator !=(Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt? left, Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt.operator ==(Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt? left, Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttempt? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.operator !=(Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord? left, Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord.operator ==(Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord? left, Elsa.Etl.Core.Runtime.EtlHttpDeliveryAttemptRecord? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.operator !=(Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse? left, Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse.operator ==(Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse? left, Elsa.Etl.Core.Runtime.EtlHttpDeliveryResponse? right) -> bool

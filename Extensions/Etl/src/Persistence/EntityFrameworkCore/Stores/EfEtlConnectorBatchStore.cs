@@ -97,18 +97,23 @@ internal sealed partial class EfEtlRuntimeStore
         var output = ReadConnectorBatchOutput(retained);
         if (output is not null && ValidateConnectorOutput(output, records, admission, descriptor.BatchId) > pipeline.Limits.MaxOutputBatchBytes)
             throw new InvalidDataException("The connector output exceeds its admitted batch bound.");
-        return new(descriptor, false) { Output = output };
+        var deliveries = ReadConnectorHttpDeliveries(retained, output, pipeline.Http);
+        if (row.NotBeforeUtcTicks != ConnectorNotBefore(output, deliveries))
+            throw new InvalidDataException("The partition retry eligibility differs from its owed output.");
+        return new(descriptor, false) { Output = output, HttpDeliveries = deliveries };
     }
 
     private static EtlConnectorBatchDescriptor ReadConnectorBatch(EtlConnectorBatchRecord row)
     {
         EnsureSchema(row.SchemaVersion);
         var batch = EtlConnectorRecordCodec.Read<EtlConnectorBatchDescriptor>(row.DescriptorJson);
-        if (row.DescriptorDigest != MetadataDigest(row.DescriptorJson) || row.MetadataBytes != checked(MetadataBytes(row.DescriptorJson) + (row.OutputJson is null ? 0 : MetadataBytes(row.OutputJson))) ||
+        if (row.DescriptorDigest != MetadataDigest(row.DescriptorJson) || row.MetadataBytes != checked(MetadataBytes(row.DescriptorJson) + (row.OutputJson is null ? 0 : MetadataBytes(row.OutputJson)) +
+                HttpDeliveryMetadataBytes(row.HttpDeliveryJson)) ||
             batch.BatchId != row.BatchId || row.StartKey != ConnectorBatchStartKey(batch.Range) || batch.InputBytes != row.InputBytes ||
             batch.InputBytes <= 0 || !EtlRuntimeRecordCodec.IsSha256(batch.InputHash) || row.RecordCount <= 0)
             throw new InvalidDataException("The connector batch metadata is inconsistent.");
         ReadConnectorBatchOutput(row);
+        ValidateHttpDeliveryEnvelope(row);
         return batch;
     }
 

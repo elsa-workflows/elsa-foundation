@@ -53,7 +53,8 @@ using System.Runtime.CompilerServices;
 [assembly: EfSchemaContent(
     Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEfModule.SchemaFamily,
     typeof(EtlConnectorBatchRecord),
-    nameof(EtlConnectorBatchRecord.DescriptorJson), nameof(EtlConnectorBatchRecord.OutputJson))]
+    nameof(EtlConnectorBatchRecord.DescriptorJson), nameof(EtlConnectorBatchRecord.OutputJson),
+    nameof(EtlConnectorBatchRecord.HttpDeliveryJson))]
 [assembly: EfSchemaContent(
     Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEfModule.SchemaFamily,
     typeof(EtlConnectorHttpRequestRecord),

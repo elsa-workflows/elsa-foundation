@@ -74,6 +74,9 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
                 "CK_elsa_etl_connector_partitions_RetainedOutputBytes",
                 "RetainedOutputBytes >= 0");
             table.HasCheckConstraint(
+                "CK_elsa_etl_connector_partitions_NotBeforeUtcTicks",
+                "NotBeforeUtcTicks IS NULL OR NotBeforeUtcTicks > 0");
+            table.HasCheckConstraint(
                 "CK_elsa_etl_connector_partitions_CurrentRequestPointer",
                 "(CurrentRequestSequence IS NULL AND CurrentRequestHash IS NULL) OR (CurrentRequestSequence IS NOT NULL AND CurrentRequestHash IS NOT NULL)");
         });
@@ -88,6 +91,7 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
         connectorPartitions.Property(row => row.Revision).IsConcurrencyToken();
         connectorPartitions.Property(row => row.SchemaVersion).HasMaxLength(EtlRuntimeEfModule.SchemaVersionMaximumLength).IsRequired();
         connectorPartitions.HasIndex(row => new { row.ScopeKey, row.RunKey, row.Completed, row.ExpiresAtUtcTicks });
+        connectorPartitions.HasIndex(row => new { row.ScopeKey, row.RunKey, row.Completed, row.NotBeforeUtcTicks, row.ExpiresAtUtcTicks });
         connectorPartitions.HasIndex(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.CurrentRequestSequence, row.CurrentRequestHash });
         connectorPartitions.HasIndex(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.OwedBatchId });
         connectorPartitions.HasOne<EtlConnectorRunRecord>()
@@ -113,6 +117,9 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
                 "CK_elsa_etl_connector_batches_OutputPlan",
                 "(OutputJson IS NULL AND OutputDigest IS NULL) OR (OutputJson IS NOT NULL AND OutputDigest IS NOT NULL AND length(OutputDigest) = 64)");
             table.HasCheckConstraint(
+                "CK_elsa_etl_connector_batches_HttpDeliveryPlan",
+                "(HttpDeliveryJson IS NULL AND HttpDeliveryDigest IS NULL) OR (HttpDeliveryJson IS NOT NULL AND HttpDeliveryDigest IS NOT NULL AND length(HttpDeliveryDigest) = 64 AND OutputJson IS NOT NULL)");
+            table.HasCheckConstraint(
                 "CK_elsa_etl_connector_batches_OutputBytes",
                 "OutputBytes >= 0 AND (OutputJson IS NOT NULL OR OutputBytes = 0)");
         });
@@ -124,6 +131,7 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
         connectorBatches.Property(row => row.DescriptorJson).IsRequired();
         connectorBatches.Property(row => row.DescriptorDigest).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
         connectorBatches.Property(row => row.OutputDigest).HasMaxLength(EtlRuntimeEfModule.HashLength);
+        connectorBatches.Property(row => row.HttpDeliveryDigest).HasMaxLength(EtlRuntimeEfModule.HashLength);
         connectorBatches.Property(row => row.OutputBytes).HasDefaultValue(0L);
         connectorBatches.Property(row => row.SchemaVersion).HasMaxLength(EtlRuntimeEfModule.SchemaVersionMaximumLength).IsRequired();
         connectorBatches.HasIndex(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.StartKey }).IsUnique();

@@ -191,11 +191,11 @@ public sealed record EtlHttpPolicy
     /// <summary>The maximum retained source input bytes for the run.</summary>
     public long MaxRetainedInputBytes { get; init; } = 1024L * 1024 * 1024;
 
-    /// <summary>The maximum logical UTF-8 bytes per run across retained positions, request and page history, batch descriptors, and output plans.</summary>
-    /// <remarks>The budget counts canonical <c>PositionJson</c>, <c>RequestJson</c>, <c>PageJson</c>, batch-descriptor, and output-plan JSON bytes. It excludes admission, prepared, and native-terminal envelopes and database or index overhead; it does not promise an aggregate physical database size. Retained route-body bytes are charged separately to <see cref="EtlConnectorLimits.MaxRetainedOutputBytes"/>. The default value is omitted from the v2 JSON representation to preserve existing artifact bytes and hashes.</remarks>
+    /// <summary>The maximum logical UTF-8 bytes per run across retained positions, request and page history, batch descriptors, output plans, and HTTP delivery journals.</summary>
+    /// <remarks>The budget counts canonical <c>PositionJson</c>, <c>RequestJson</c>, <c>PageJson</c>, batch-descriptor, output-plan, and HTTP delivery journal JSON bytes, plus bounded transition headroom for nonterminal HTTP deliveries. It excludes admission, prepared, and native-terminal envelopes and database or index overhead; it does not promise an aggregate physical database size. Retained route-body bytes are charged separately to <see cref="EtlConnectorLimits.MaxRetainedOutputBytes"/>. The default value is omitted from the v2 JSON representation to preserve existing artifact bytes and hashes.</remarks>
     public long MaxRetainedMetadataBytes { get; init; } = DefaultMaxRetainedMetadataBytes;
 
-    /// <summary>The maximum physical attempts for one HTTP route delivery.</summary>
+    /// <summary>The maximum durably allocated attempts for one HTTP route delivery.</summary>
     public int MaxAttempts { get; init; } = 5;
 
     /// <summary>The route-delivery deadline in seconds.</summary>

@@ -30,6 +30,15 @@ public interface IEtlConnectorRuntimeStore
     /// <remarks>The caller verifies immutable bodies before retention. Identical replay does not charge again.
     /// Retention neither acknowledges delivery nor advances input.</remarks>
     ValueTask<EtlConnectorOutputResult> RetainConnectorBatchOutputAsync(EtlConnectorPartitionLease lease, string batchId, EtlConnectorBatchOutput output, CancellationToken cancellationToken = default);
+    /// <summary>Allocates a bounded attempt before transport. Conflict with retained Waiting state means not yet eligible.</summary>
+    /// <remarks>Only a returned permit authorizes sending. Identical begin replay can return the original live permit;
+    /// the caller must not dispatch it concurrently or interpret it as proof that an earlier send did not happen.
+    /// A replacement or expired in-flight attempt is first recorded as uncertain and delayed; it is not immediately resent.</remarks>
+    ValueTask<EtlConnectorHttpDeliveryResult> BeginConnectorHttpDeliveryAsync(EtlConnectorPartitionLease lease, string batchId,
+        EtlOutputRoute route, string requestId, CancellationToken cancellationToken = default);
+    /// <summary>Records an exact allocated attempt's synchronous outcome without advancing input.</summary>
+    ValueTask<EtlConnectorHttpDeliveryResult> CompleteConnectorHttpDeliveryAsync(EtlConnectorPartitionLease lease, string batchId,
+        EtlOutputRoute route, EtlHttpDeliveryAttempt attempt, EtlHttpDeliveryResponse response, CancellationToken cancellationToken = default);
     ValueTask<EtlStoreStatus> RenewConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default);
     ValueTask<EtlStoreStatus> ReleaseConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default);
 

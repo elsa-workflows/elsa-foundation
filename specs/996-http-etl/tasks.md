@@ -22,6 +22,8 @@ Issue [#3151](https://github.com/elsa-workflows/elsa-foundation/issues/3151). On
   - Typed nonempty batch reservations, replay, quota accounting and replacement-worker recovery: [checkpoint](evidence/connector-reservation-checkpoint.md). Route effects, durable attempts/retries and atomic acceptance remain owed; T005 stays open.
   - Retained output plans, pinned route effect identities and independent output/metadata accounting: [checkpoint](evidence/connector-output-checkpoint.md). Dispatch attempts, acknowledgements and atomic acceptance remain owed; T005 stays open.
 
+  - Durable HTTP route attempts, bounded retries/receipt headroom and partial-route recovery: [checkpoint](evidence/connector-http-delivery-checkpoint.md). Source-fetch attempts, file publication/atomic acceptance and execution remain owed; T005 stays open.
+
 ## Phase 3 — US1: Author and execute HTTP integrations
 
 Independent proof: real publication/selection plus HTTP->HTTP, HTTP->JSONL and CSV->HTTP, two independently progressing HTTP shards, and native Sequence/Flowchart continuation.

@@ -1,5 +1,4 @@
 using Elsa.Etl.Persistence.EntityFrameworkCore;
-using Elsa.Etl.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -41,13 +40,15 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Single(await context.Runs.AsNoTracking().ToListAsync());
         var connectorRun = await context.ConnectorRuns.AsNoTracking().SingleAsync();
         Assert.Equal(0, connectorRun.RetainedOutputBytes);
-        var partition = await context.ConnectorPartitions.AsNoTracking().SingleAsync();
+        var partition = await context.ConnectorPartitions.AsNoTracking()
+            .Select(row => new { row.OwedBatchId, row.BatchMetadataBytes, row.RetainedOutputBytes }).SingleAsync();
         Assert.Equal(batchId, partition.OwedBatchId);
         Assert.Equal(17, partition.BatchMetadataBytes);
         Assert.Equal(0, partition.RetainedOutputBytes);
         Assert.Single(await context.ConnectorHttpRequests.AsNoTracking().ToListAsync());
         Assert.Single(await context.ConnectorHttpPages.AsNoTracking().ToListAsync());
-        var batch = await context.ConnectorBatches.AsNoTracking().SingleAsync();
+        var batch = await context.ConnectorBatches.AsNoTracking()
+            .Select(row => new { row.BatchId, row.Settled, row.MetadataBytes, row.OutputJson, row.OutputDigest, row.OutputBytes }).SingleAsync();
         Assert.Equal(batchId, batch.BatchId);
         Assert.False(batch.Settled);
         Assert.Equal(17, batch.MetadataBytes);
@@ -68,22 +69,14 @@ public sealed partial class EtlRuntimeStoreTests
         await migrator.MigrateAsync("20261021130000_ConnectorBatchOutputs");
 
         const string batchId = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
-        await context.ConnectorBatches.AddAsync(new EtlConnectorBatchRecord
-        {
-            ScopeKey = new string('a', 64),
-            RunKey = "migration-run",
-            PartitionOrdinal = 0,
-            BatchId = batchId,
-            StartKey = new string('f', 64),
-            DescriptorJson = "{}",
-            DescriptorDigest = new string('d', 64),
-            RecordCount = 0,
-            InputBytes = 0,
-            MetadataBytes = 0,
-            Settled = false,
-            SchemaVersion = EtlRuntimeEfModule.SchemaVersion
-        });
-        await context.SaveChangesAsync();
+        // Insert only columns available at this historical migration target.
+        await context.Database.ExecuteSqlInterpolatedAsync($$"""
+            INSERT INTO elsa_etl_connector_batches
+                (ScopeKey, RunKey, PartitionOrdinal, BatchId, StartKey, DescriptorJson, DescriptorDigest,
+                 RecordCount, InputBytes, MetadataBytes, Settled, SchemaVersion)
+            VALUES ({{new string('a', 64)}}, {{"migration-run"}}, 0, {{batchId}}, {{new string('f', 64)}}, '{}',
+                    {{new string('d', 64)}}, 0, 0, 0, 0, {{EtlRuntimeEfModule.SchemaVersion}});
+            """);
 
         var missingPlanError = await Assert.ThrowsAsync<SqliteException>(() =>
             context.Database.ExecuteSqlInterpolatedAsync($"UPDATE elsa_etl_connector_batches SET OutputDigest = {new string('a', 64)} WHERE BatchId = {batchId}"));

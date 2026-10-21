@@ -27,7 +27,7 @@ internal sealed partial class EfEtlRuntimeStore
         EtlConnectorRunBindings bindings, EtlConnectorPreparedRun? prepared, CancellationToken cancellationToken, bool auditHistory = false)
     {
         var position = ReadConnectorPosition(row, pipeline, bindings, prepared);
-        if (row.RetainedOutputBytes < 0 || row.PageBytes < 0 || row.BatchMetadataBytes < 0 || row.MetadataBytes < checked(MetadataBytes(row.PositionJson) + row.BatchMetadataBytes))
+        if (row.OwedBatchId is null && row.NotBeforeUtcTicks is not null || row.RetainedOutputBytes < 0 || row.PageBytes < 0 || row.BatchMetadataBytes < 0 || row.MetadataBytes < checked(MetadataBytes(row.PositionJson) + row.BatchMetadataBytes))
             throw new InvalidDataException("The connector partition accounting is invalid.");
         if (auditHistory) await AuditConnectorBatchHistoryAsync(row, cancellationToken);
         if (position is not EtlConnectorHttpPosition http)

@@ -52,7 +52,8 @@ The HTTP page companion table retains immutable metadata keyed by scope/run/part
 with a unique request digest per partition. Its payload is an object reference, not inline response
 JSON. Total retained-input accounting includes every retained page body. A separate authored metadata limit
 (default 64 MiB, bounded by the host default ceiling of 256 MiB) accounts for UTF-8 bytes of all
-request/page JSON, retained batch-descriptor/output-plan JSON and each current partition-position JSON across the run. Fixed SQL row/index/file
+request/page JSON, retained batch-descriptor/output-plan/delivery-journal JSON and each current partition-position JSON across the run,
+plus bounded headroom for recording in-flight HTTP outcomes and pending retry exhaustion. Fixed SQL row/index/file
 overhead is excluded; admission/preparation/terminal envelopes retain their independent bounds.
 Partition and run counters are updated in the same transaction as metadata and position changes;
 replay does not recharge. Empty-page progression keeps
@@ -96,3 +97,33 @@ lease. Identical replay does not charge again. A replacement claims the original
 identity and body accounting, and keeps the original owed input charge. Cancellation retains that
 evidence and rejects further writes. The additive output migration preserves existing reservations;
 provider upgrade checks here are structural, not proof of retained old-worker execution.
+
+
+### Durable HTTP route attempts (partial T005)
+
+A retained HTTP route may allocate a bounded request attempt under current partition ownership.
+The caller supplies an attempt request ID; only a non-null returned permit authorizes transport.
+An identical live replay can return that same permit and must not be dispatched concurrently.
+The stable effect ID and immutable body remain unchanged across retries and replacement workers.
+There is no claim of exactly-once physical HTTP delivery.
+
+Per-route journals retain allocated attempts, timeout and original deadline, response status and
+parsed absolute Retry-After, closure time, next eligibility and explicit terminal failure reason.
+Only 200/201/204 acknowledge; 202 is not synchronous completion. Uncertain delivery and the selected
+transient statuses use capped exponential backoff, extended by a valid later Retry-After. A retry
+at or beyond the deadline fails rather than starting early. Replacement/expired attempts first
+record uncertainty and wait; stale physical completions cannot acknowledge the successor's work.
+
+Canonical journal bytes are charged with 512 bytes of transition headroom per in-flight route and
+256 per waiting route; terminal routes need none. Each completion releases enough space for its
+bounded receipt or deadline outcome even when other work has filled the metadata budget. A next
+attempt pays its history growth and replenished headroom before a permit is returned. Both actual
+JSON and headroom must fit the private document bound. These are logical accounting allowances,
+not a promise about physical database or live-worker memory.
+
+The additive 1400 migration preserves prior reservations/output and foreign keys. When all remaining
+HTTP routes are waiting, an indexed partition not-before value defers acquisition until the earliest
+route is due. Acknowledged routes are not resent. File publication evidence is still pending, so a
+mixed file/HTTP batch remains eligible while its file route has no settled publication record.
+Delivery acknowledgement neither advances input nor releases the owed record/byte reservation.
+Atomic accepted progress and source-fetch attempt state remain required before runtime activation.
