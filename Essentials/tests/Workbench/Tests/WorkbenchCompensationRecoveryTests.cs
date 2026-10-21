@@ -17,7 +17,7 @@ namespace Elsa.Workbench.Tests;
 /// and the process is killed after the first handed-over handler's effect. In all, the participant applies each effect
 /// once and the scope finishes Compensated. Spec 260 (M4): an operator retries, resolves and abandons over REST on runs
 /// a Studio test run started, and the process is killed after a resolve's alteration checkpoint and before the decision
-/// reaches the scope.
+/// reaches the scope. Spec 261 (M5): a handler retry waits for its delay, and the process is killed during the wait; a replay-safe step with a compensation warns without blocking publication.
 /// </summary>
 /// <remarks>
 /// The participant keeps its state in files under the content root, which outlive the killed process. The recovery
@@ -33,6 +33,7 @@ public sealed class WorkbenchCompensationRecoveryTests
     private const string ParticipantType = PackageId + ".ReservationParticipant";
     private const string ScopeType = "Elsa.Activities.Compensation.Activities.CompensationScope";
     private const string ConfirmType = "Elsa.Activities.Compensation.Activities.Confirm";
+    private const string WriteLineType = "Elsa.Activities.Primitives.Activities.WriteLine";
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(120);
 
     [Fact]
@@ -191,6 +192,100 @@ public sealed class WorkbenchCompensationRecoveryTests
         Assert.Contains("Done", Activity(completed, "inner")["outcomeNames"]!.AsArray().Select(outcome => outcome!.GetValue<string>()));
         Assert.Contains("Compensated", Activity(completed, "scope")["outcomeNames"]!.AsArray().Select(outcome => outcome!.GetValue<string>()));
         Assert.Equal("compensation", Activity(completed, "delivery-cancel")["provenance"]!["schedulingCause"]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// Spec 261 (M5): with a handler retry delay, a failed delivery cancellation waits before its second attempt, the run
+    /// yields while it waits, and the process is killed during the wait. The restarted process runs the retry once, after
+    /// its due time, with the same operation key, and the recovery finishes.
+    /// </summary>
+    [Fact]
+    public async Task A_handler_retry_that_waits_survives_a_kill_and_runs_once_after_its_due_time()
+    {
+        await using var original = await WorkbenchProcess.StartAsync(WitnessShell(), PrepareContentRoot);
+        await LoginAsync(original);
+        var journal = Path.Combine(original.ContentRoot, "reservations");
+        var reservations = new Reservations(await ActivityVersionAsync(original, ParticipantType), journal);
+        var published = await PublishScopeAsync(original, "Compensation backoff witness",
+            [Input("faultAfterCompensation", false), Input("handlerMaxAttempts", 3), Input("handlerRetryDelay", "00:00:30")],
+            Step("Reserve inventory", reservations.Participant("inventory", "backoff-inventory"),
+                reservations.Participant("inventory-release", "backoff-inventory-release")),
+            Step("Reserve delivery", reservations.Participant("delivery", "backoff-delivery"),
+                reservations.Participant("delivery-cancel", "backoff-delivery-cancel", failTimes: 1)),
+            Step("Confirm order", reservations.Participant("confirm", "backoff-confirm", reject: true), null));
+
+        using (var executed = await original.Client.PostAsJsonAsync($"/runtime/workflows/executables/{published.ArtifactId}/execute",
+                   new { sourceReferenceId = published.SourceReferenceId }))
+            Assert.True(executed.IsSuccessStatusCode, await executed.Content.ReadAsStringAsync());
+        await WaitForAsync(original, () => Calls(journal, "backoff-delivery-cancel").Length == 1,
+            "the first delivery cancellation attempt to fail", () => Describe(journal));
+        var executionId = await ExecutionIdAsync(original, published.ArtifactId);
+
+        // The run yielded while the retry waits: it is running, nothing blocks, and the journal shows the due time.
+        var waitingRun = await WaitForStateAsync(original, executionId, instance =>
+            instance["incidents"]!.AsArray().All(item => item?["isBlocking"]?.GetValue<bool>() != true));
+        Assert.Equal("Running", waitingRun["instance"]!["status"]!.GetValue<string>());
+        var waitingJournal = await AssertJournalAsync(original, waitingRun, "Compensating");
+        var delivery = Assert.Single(waitingJournal["entries"]!.AsArray(), entry => entry?["step"]?.GetValue<string>() == "Reserve delivery")!;
+        var scheduled = delivery["attempts"]!.AsArray()[^1]!;
+        Assert.Equal("Running", scheduled["result"]!.GetValue<string>());
+        var notBefore = scheduled["notBefore"]!.GetValue<DateTimeOffset>();
+        Assert.True(notBefore > DateTimeOffset.UtcNow, $"The retry was due at {notBefore:O}, before the kill.");
+
+        await using var restarted = await original.CrashAndRestartAsync(_ => { });
+        await LoginAsync(restarted);
+        if (DateTimeOffset.UtcNow < notBefore - TimeSpan.FromSeconds(2))
+            Assert.Single(Calls(journal, "backoff-delivery-cancel"));
+        var completed = await WaitForStateAsync(restarted, executionId, instance => instance["instance"]?["status"]?.GetValue<string>() == "Completed");
+
+        var cancelCalls = Calls(journal, "backoff-delivery-cancel");
+        Assert.Equal(2, cancelCalls.Length);
+        Assert.True(cancelCalls[1].StartedAt >= notBefore, $"The retry started at {cancelCalls[1].StartedAt:O}, before its due time {notBefore:O}.");
+        Assert.Single(cancelCalls.Select(call => call.OperationKey).Distinct());
+        Assert.Single(Calls(journal, "backoff-inventory-release"));
+        Assert.Contains("Compensated", Activity(completed, "scope")["outcomeNames"]!.AsArray().Select(outcome => outcome!.GetValue<string>()));
+    }
+
+    /// <summary>
+    /// Spec 261 W6 (FR-514, OD20 A), over REST: a step that has a compensation and is a replay-safe Write Line gets one
+    /// warning in the draft's validations, on the step's row with severity Warning, and the draft still promotes and
+    /// publishes. The external participant steps beside it get none.
+    /// </summary>
+    [Fact]
+    public async Task A_replay_safe_step_with_a_compensation_warns_without_blocking_promotion_or_publication()
+    {
+        await using var host = await WorkbenchProcess.StartAsync(WitnessShell(), PrepareContentRoot);
+        await LoginAsync(host);
+        var reservations = new Reservations(await ActivityVersionAsync(host, ParticipantType), Path.Combine(host.ContentRoot, "reservations"));
+        var writeLine = await ActivityVersionAsync(host, WriteLineType);
+        var root = Node("scope", await ActivityVersionAsync(host, ScopeType), [Input("faultAfterCompensation", false)], ScopeStructure(
+            Step("Reserve inventory", reservations.Participant("inventory", "warning-inventory"),
+                reservations.Participant("inventory-release", "warning-inventory-release")),
+            Step("Log the order", Node("log", writeLine, [Input("text", "Order received")]),
+                reservations.Participant("log-undo", "warning-log-undo"))));
+        var added = await PostAsync(host, "/design/workflows/definitions", new
+        {
+            name = "Compensation warning witness", description = "A replay-safe step with a compensation",
+            initialState = new { variables = Array.Empty<object>(), inputs = Array.Empty<object>(), outputs = Array.Empty<object>(), rootActivity = root }
+        });
+        var draftId = added["draft"]!["id"]!.GetValue<string>();
+
+        var validations = await host.Client.GetFromJsonAsync<JsonNode>($"/design/workflows/drafts/{draftId}/validations");
+        var warning = Assert.Single(validations!["errors"]!.AsArray())!;
+        Assert.Equal(("CompensationScope/ReplaySafeStep", "Warning", "scope", "steps/1"), (
+            warning["code"]!.GetValue<string>(), warning["severity"]!.GetValue<string>(),
+            warning["nodeId"]!.GetValue<string>(), warning["member"]!.GetValue<string>()));
+        Assert.StartsWith("\"Log the order\" is marked safe to repeat", warning["message"]!.GetValue<string>());
+
+        // Studio's publication review asks the promotion preflight first; a warning must not make it unready (found by
+        // the spec 261 live journeys: the preflight listed the warning as a blocking draft-validation issue).
+        var preflight = await PostAsync(host, $"/design/workflows/drafts/{draftId}/promotion-preflight", new { });
+        Assert.True(preflight["isReady"]!.GetValue<bool>(), preflight.ToJsonString());
+        Assert.DoesNotContain(preflight["issues"]!.AsArray(), issue => issue!["code"]!.GetValue<string>() == "draft-validation");
+
+        var version = await PostAsync(host, $"/design/workflows/drafts/{draftId}/promote", new { });
+        var published = await PostAsync(host, $"/publishing/workflows/{version["id"]!.GetValue<string>()}/publish", new { });
+        Assert.False(string.IsNullOrEmpty(published["artifactId"]?.GetValue<string>()), published.ToJsonString());
     }
 
     /// <summary>
@@ -461,7 +556,11 @@ public sealed class WorkbenchCompensationRecoveryTests
         var path = Path.Combine(journal, key + ".calls");
         return File.Exists(path)
             ? File.ReadAllLines(path).Select(line => line.Split('|')).Where(parts => parts.Length >= 3)
-                .Select(parts => new ParticipantCall(parts[0], parts[1], parts.Length > 3 ? parts[3] : "")).ToArray()
+                .Select(parts => new ParticipantCall(
+                    parts[0],
+                    parts[1],
+                    parts.Length > 3 ? parts[3] : "",
+                    parts.Length > 4 ? DateTimeOffset.Parse(parts[4], System.Globalization.CultureInfo.InvariantCulture) : DateTimeOffset.MinValue)).ToArray()
             : [];
     }
 
@@ -567,7 +666,7 @@ public sealed class WorkbenchCompensationRecoveryTests
         stream.Write(Encoding.UTF8.GetBytes(value));
     }
 
-    private sealed record ParticipantCall(string ProcessId, string InvocationId, string OperationKey);
+    private sealed record ParticipantCall(string ProcessId, string InvocationId, string OperationKey, DateTimeOffset StartedAt);
 
     private sealed record PublishedWorkflow(string ArtifactId, string SourceReferenceId);
 }

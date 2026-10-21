@@ -187,6 +187,20 @@ feature's `IActivityDraftTestRunStore`.
   `ExecutableNodeMetadataCollecting` event, and this engine owns the single active `CollectExecutableNodeMetadata`
   handler. New contributors register the generalized compilation source instead.
 
+## Design-time side-effect profile
+
+### `IActivitySideEffectProfileReader` *(Core — `Elsa.Activities.Runtime.Core`, spec 261 FR-513)*
+
+- **Kind:** Replacement contract with one implementation, `ActivitySideEffectProfileReader`, registered by
+  `WorkflowsPublishingFeature` (`TryAddScoped`).
+- **Usage:** `ReadAsync(activityVersionId)` returns the `SideEffectProfile` the executable compiler would pin for an
+  activity version: a CLR activity's `[ActivitySideEffectProfile]` (`External` when unmarked) and `External` for any
+  other consumer, such as a reusable graph activity; null when the version does not exist or its CLR type is not loaded.
+  The attribute rule lives in one internal helper, `ActivitySideEffectProfiles`, which `ExecutableNodeCompiler` uses too,
+  so a design-time validator and publication cannot disagree.
+- **Consumer:** `CompensationReplaySafeValidator` *(cross-domain — Activities.Compensation)*, which treats a missing
+  reader as "no warning".
+
 ## Activity-template provider contributors
 
 | Contract | Kind and registration | Consumer | Known implementation |

@@ -158,11 +158,20 @@ internal static class SchedulerWorkItems
             // their own keys (or their own defaults), never the composite's inherited through command metadata.
             foreach (var key in AssignedOperationKeyNames)
                 childCommandMetadata.Remove(key);
+            // So does a due time: only the delayed schedule itself waits (R-7).
+            childCommandMetadata.Remove(RuntimeMetadataKeys.ScheduleNotBefore);
             foreach (var item in request.Metadata)
                 childCommandMetadata[item.Key] = item.Value;
 
             childCommandMetadata[RuntimeMetadataKeys.ParentActivityExecutionId] = parentActivityExecutionId;
             childCommandMetadata[RuntimeMetadataKeys.ChildExecutableNodeId] = request.ExecutableNodeId;
+            // R-7 (spec 261): a due time after now makes this a delayed schedule. Its post-commit intent becomes available
+            // then (SchedulerWorkHandlerHelpers.NewEnqueueSchedulerWorkIntent), and the schedule handler checks the run
+            // and the parent again when it is delivered. A due time at or before now schedules as usual.
+            if (request.NotBefore is { } notBefore && notBefore > now)
+                childCommandMetadata[RuntimeMetadataKeys.ScheduleNotBefore] = RuntimeDelayedSchedules.Format(notBefore);
+            else
+                childCommandMetadata.Remove(RuntimeMetadataKeys.ScheduleNotBefore);
 
             yield return new RuntimeSchedulerWorkItem(
                 workItemId: RuntimeChainId.Derive(sourceWorkItem.WorkItemId, $"schedule-child:{request.ExecutableNodeId}:{childActivityExecutionId}"),

@@ -26,14 +26,35 @@ The scope's `faultAfterCompensation` input decides how it ends after undoing its
 - Steps run in order. When a step completes, the scope records it in its journal and schedules the next step in one commit.
 - When a step faults, the scope absorbs the fault and runs the compensations of the completed steps, newest first. The failed step's own compensation does not run: the step never completed.
 - If every step completes, the scope finishes with the outcome `Done` and no compensation runs.
-- If a compensation fails, the scope runs it again straight away, up to the scope's **Handler max attempts** (3 by default, counting every run). If every attempt fails, the scope waits for an operator: the compensation's incident stays open with "wait for intervention", the workflow keeps running, and the step is never reported as compensated. See [Resume a waiting recovery](#resume-a-waiting-recovery).
+- If a compensation fails, the scope runs it again, up to the scope's **Handler max attempts** (3 by default, counting every run). By default it runs again straight away. If every attempt fails, the scope waits for an operator: the compensation's incident stays open with "wait for intervention", the workflow keeps running, and the step is never reported as compensated. See [Act on a waiting recovery](#act-on-a-waiting-recovery).
 - If a step cannot tell whether its effect happened (a lost response), it reports an uncertain outcome. The scope treats the step as possibly done and runs its compensation, which must work whether or not the effect exists. A step that has no compensation waits for an operator instead; it is never treated as if nothing happened. See [Uncertain outcomes](#uncertain-outcomes).
+
+### Wait between attempts
+
+A compensation that fails because a service is briefly unavailable often succeeds a little later. Three scope inputs make the scope wait before each automatic retry:
+
+| Input | Default | Meaning |
+|---|---|---|
+| **Handler retry delay** (`handlerRetryDelay`) | `00:00:00` | The wait before the second attempt. Zero retries at once. At most 24 hours. |
+| **Handler retry backoff multiplier** (`handlerRetryBackoffMultiplier`) | `2` | How much each further wait grows. At least 1; 1 keeps the wait fixed. |
+| **Handler retry max delay** (`handlerRetryMaxDelay`) | `00:05:00` | The longest any one wait may be. At least the delay and at most 24 hours. |
+
+After the n-th failed attempt the scope waits `min(max delay, delay × multiplier^(n − 1))`. With a delay of 30 seconds, a multiplier of 2, a max delay of 90 seconds and four attempts, the waits before attempts 2, 3 and 4 are 30, 60 and 90 seconds.
+
+- The wait is a minimum. A due retry runs at the next sweep of the runtime's outbox, which runs every 10 seconds by default, so a 30-second wait can take up to 40 seconds.
+- Every attempt sends the participant the same operation keys, and the wait survives a restart: the retry is committed with the failed attempt and runs once, after its due time. A retry that fell due while the process was down runs at the first sweep after it starts.
+- Nothing else waits behind it. The rest of the workflow, an enclosing scope that receives handed-over work, and cancellation carry on while the retry waits; cancelling the run means the compensation never starts.
+- While it waits there is no incident, so Studio offers no action and an operator cannot skip the wait. An operator's retry after every attempt failed always runs at once.
+- Publication refuses a literal value outside these ranges. A value from an expression is brought into range when the scope uses it, and the attempt records that it was adjusted.
+- The inputs are fixed when the workflow is published, like every scope input, so runs already in flight keep the timing they started with. The defaults keep the earlier behaviour, retrying at once.
 
 ## Crashes and repeated calls
 
 Recovery survives a restart in every [persistence mode](persistence-modes.md). After a crash the scope carries on where its last commit left it and never runs a compensation that already completed again.
 
 A step or compensation that was running when the process stopped runs again after the restart. Its effect may already have happened, so key every external effect on the activity's **operation key** (`OperationKey` on the activity context). It is the same on every run of that step or compensation: after a crash, after an automatic retry and after an operator retry. A compensation also gets `TargetOperationKey`, the operation key of the step it undoes. Activities that call out to other systems are committed before they run (see [persistence modes](persistence-modes.md)), so a repeat is never silent.
+
+An activity marked safe to repeat (`ReplaySafe`) is not committed before it runs: after a crash, recovery may not know that its effect happened. That is fine for an activity with no effect outside the workflow, such as **Write Line**, but not for a step whose effect a compensation must undo, or for a compensation that makes a change of its own. So publication warns when a step that has a compensation, or a compensation, is a replay-safe activity. The warning does not block publishing: Studio lists it under **Warnings** in **Review & publish** and keeps **Publish** enabled. Composite activities such as a Sequence or a nested scope never warn, because their marking describes the container, not the work inside it. Unless the activity truly has no effect of its own, mark it as an external effect (the default for an activity without the marking).
 
 ### What a participant must do
 
@@ -160,7 +181,7 @@ Cancelling a run never starts recovery. A scope that is cancelled while it runs 
 
 ## Inspect a run
 
-Open the run and the scope's **Steps**. Each row shows the forward state (`Completed`, `Uncertain`, `Faulted`, `Not run`) and the recovery state (`Can be undone` while the scope still runs, `Kept` once it has ended without undoing the step, `Waiting to undo` while recovery runs, `Undoing`, `Retrying` when a compensation runs again after a failed attempt, `Compensated` with its order, `Undo failed`, `Needs action` with its attempts, `Resolved: effect absent` or `Resolved: effect kept` after an operator resolved it, `Not undone (recovery abandoned)`, `Not applicable`). A banner names the step whose failure started recovery, or the Compensate that asked for it; the failure's message shows only to a reader who may see captured values. While recovery runs, a line lists the steps still to undo, in order. Select a state to open that occurrence; a compensation's activity details link to the occurrence it undid, and the timeline tags compensation runs. The address keeps the selected occurrence (`?selected=`), so a reload or a shared link opens it again.
+Open the run and the scope's **Steps**. Each row shows the forward state (`Completed`, `Uncertain`, `Faulted`, `Not run`) and the recovery state (`Can be undone` while the scope still runs, `Kept` once it has ended without undoing the step, `Waiting to undo` while recovery runs, `Undoing`, `Retry scheduled` with its attempt and the time after which it runs while an automatic retry waits (then `Retry due` once that time has passed), `Retrying` when a compensation runs again after a failed attempt, `Compensated` with its order, `Undo failed`, `Needs action` with its attempts, `Resolved: effect absent` or `Resolved: effect kept` after an operator resolved it, `Not undone (recovery abandoned)`, `Not applicable`). A banner names the step whose failure started recovery, or the Compensate that asked for it; the failure's message shows only to a reader who may see captured values. While recovery runs, a line lists the steps still to undo, in order. Select a state to open that occurrence; a compensation's activity details link to the occurrence it undid, and the timeline tags compensation runs. The address keeps the selected occurrence (`?selected=`), so a reload or a shared link opens it again.
 
 While a scope is live, the view comes from its journal and says **From the scope's journal**. A completed scope keeps no journal, so its view is derived from the run's activities and incidents and says so; the states are the same. An abandoned scope shows **Abandoned**.
 
@@ -177,7 +198,5 @@ A scope that ran more than once, in a loop or because its parent ran again, has 
 
 These behaviours are planned and not yet available:
 
-- a delay between automatic retries of a failed compensation;
 - a compensation that can be handed over and reads a container's variable from a script expression is not checked at publication; it fails when it runs and waits for an operator;
-- a failure inside a Sequence inside a Flowchart step does not reach the scope;
-- a warning when a step or compensation is marked safe to repeat, so its effect may not be committed before it runs.
+- a failure inside a Sequence inside a Flowchart step does not reach the scope.

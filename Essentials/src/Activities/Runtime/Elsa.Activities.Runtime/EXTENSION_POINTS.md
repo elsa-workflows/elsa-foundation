@@ -18,6 +18,10 @@ The per-domain catalog (framework §2.22.1). Anchored at `Elsa.Activities.Runtim
 - **Register:** `ActivitiesRuntimeFeature` registers it as an `IWorkflowSchedulerWorkHandler`.
 - **Usage:** handles `ParentCompletionEvaluation` by reactivating the transient parent from its pinned snapshot and invoking `IRuntimeActivityChildCompletionHandler` for a completed child, or `IRuntimeActivityChildFaultHandler` for a faulted child (work items tagged `runtime.childFaulted`, #308). Each callback returns a `RuntimeStructuralContinuation` for the runtime to apply. For a faulted child whose parent does not implement `IRuntimeActivityChildFaultHandler` the handler no-ops, leaving the fault a blocking incident, unless an ancestor that implements `IRuntimeActivityDescendantFaultHandler` is in reach (spec 258 R-3), in which case the fault is also delivered there. It does not interpret workflow-level edges or load Design-owned authored workflow models.
 
+### Delayed child schedules *(Activities Runtime — `Elsa.Activities.Runtime`, spec 261 R-7)*
+- **Kind:** Staging rule shared by the structural evaluations; not an extension point of its own.
+- **Usage:** the invoke, parent-completion and structural-callback (notification, intervention decision) evaluations call `RuntimeDelayedSchedules.Validate` on the staged child schedules, so a refused due time faults the evaluation with `runtime.delayed-schedule.too-far` or `runtime.delayed-schedule.unavailable` and commits none of its schedules. `SchedulerWorkItems.NewChildActivityScheduleWorkItems` stamps `runtime.scheduleNotBefore` on a child schedule whose due time is later than now and never lets a child inherit it through command metadata. The commit and delivery rules are in the [Workflows Runtime catalog](../../../Workflows/Runtime/Elsa.Workflows.Runtime/EXTENSION_POINTS.md) under `IRuntimeStructuralActivity`.
+
 ### `WorkflowNotifyParentActivitySchedulerWorkHandler` *(Activities Runtime — `Elsa.Activities.Runtime`)*
 - **Kind:** Scheduler work contributor.
 - **Register:** `ActivitiesRuntimeFeature` registers it as an `IWorkflowSchedulerWorkHandler`.

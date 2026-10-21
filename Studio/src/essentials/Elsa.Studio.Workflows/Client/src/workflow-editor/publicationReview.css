@@ -302,6 +302,33 @@
   padding-left: 20px;
 }
 
+/* Spec 261 FR-515: warnings are listed, in the warning tone, and never block publishing. */
+.wf-publication-warnings {
+  border: 1px solid color-mix(in srgb, var(--wf-warning) 40%, var(--wf-border));
+  border-radius: var(--wf-radius);
+  background: var(--wf-warning-soft);
+  color: var(--wf-warning-text);
+  line-height: 1.45;
+  padding: 10px 12px;
+}
+
+.wf-publication-warnings h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: inherit;
+}
+
+.wf-publication-warnings p {
+  margin-top: 4px;
+}
+
+.wf-publication-warnings ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
 @media (max-width: 640px) {
   .wf-publication-detail-grid {
     grid-template-columns: 1fr;

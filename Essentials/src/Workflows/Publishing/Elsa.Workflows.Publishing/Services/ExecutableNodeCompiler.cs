@@ -463,11 +463,8 @@ public sealed class ExecutableNodeCompiler(
             supportsBackgroundExecution: activityType.IsDefined(typeof(BackgroundExecutionSafeAttribute), inherit: true));
     }
 
-    // An unmarked activity is External (fail-safe); only an explicit
-    // [ActivitySideEffectProfile(ReplaySafe)] opts a pure/deterministic activity into a deferrable claim boundary.
-    private static SideEffectProfile ResolveSideEffectProfile(Type activityType) =>
-        activityType.GetCustomAttribute<ActivitySideEffectProfileAttribute>(inherit: true)?.Profile
-        ?? SideEffectProfile.External;
+    // The rule is shared with the design-time ActivitySideEffectProfileReader (spec 261 FR-513).
+    private static SideEffectProfile ResolveSideEffectProfile(Type activityType) => ActivitySideEffectProfiles.Of(activityType);
 
     private static ValueRepresentation ResolveSourceRepresentation(
         OutputAttribute attribute,

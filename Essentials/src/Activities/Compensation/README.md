@@ -20,9 +20,11 @@ so a bookmark resume uses the same scope/step identity as a synchronous child.
 
 A forward fault categorized `outcome-unknown` is journaled as uncertain and recovered like a completed step when
 it has a handler; without one, the scope waits for intervention. Failed handlers retry up to `handlerMaxAttempts`
-(default 3), then retain a blocking intervention incident. An operator can continue with `RetryFaultedActivity/1`.
-Workflow cancellation runs no handler; a fault inside a `Sequence` step does not reach the scope because `Sequence`
-does not propagate child faults. Native compensation is separate from BPMN compensation
+(default 3), at once by default or, with `handlerRetryDelay`, after a growing wait that the runtime keeps durably
+(spec 261); then the scope retains a blocking intervention incident. An operator can continue with
+`RetryFaultedActivity/1`. Publication warns, without blocking, on a step that has a compensation, or a compensation,
+that is a replay-safe leaf activity. Workflow cancellation runs no handler; a fault under a `Sequence` or loop step
+reaches the scope as a fault of that step (spec 258). Native compensation is separate from BPMN compensation
 ([ADR 0086](../../../../docs/adr/0086-native-and-bpmn-compensation-stay-separate.md)). Semantics and milestones:
 [spec 250](../../../../specs/250-native-compensation/spec.md) and
 [spec 251](../../../../specs/251-compensation-uncertainty/spec.md).

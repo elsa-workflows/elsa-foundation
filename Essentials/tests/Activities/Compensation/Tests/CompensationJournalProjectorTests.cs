@@ -50,7 +50,7 @@ public sealed class CompensationJournalProjectorTests
         var view = await ProjectAsync(state, []);
 
         Assert.Equal("Running", view.GetProperty("phase").GetString());
-        Assert.Equal(4, view.GetProperty("stateVersion").GetInt32());
+        Assert.Equal(5, view.GetProperty("stateVersion").GetInt32());
         Assert.Equal(JsonValueKind.Null, view.GetProperty("cause").ValueKind);
         Assert.Equal(["e2", "e1"], Strings(view.GetProperty("remaining")));
         var first = view.GetProperty("entries")[0];
@@ -86,6 +86,52 @@ public sealed class CompensationJournalProjectorTests
         Assert.Equal(["e2", "e1"], Strings(view.GetProperty("remaining")));
         Assert.Equal("Confirm order", view.GetProperty("cause").GetProperty("step").GetString());
         Assert.Equal("ActivityReturnedFault", view.GetProperty("cause").GetProperty("failureType").GetString());
+    }
+
+    // Spec 261 T510: a retry the scope scheduled after a wait carries its due time (and the clamp, when one applied); every
+    // other attempt carries neither field, so the rest of the journal is unchanged.
+    [Fact]
+    public async Task A_scheduled_retry_shows_its_due_time_and_other_attempts_do_not()
+    {
+        var dueAt = new DateTimeOffset(2026, 10, 20, 10, 42, 30, TimeSpan.Zero);
+        var state = CompensationScopeState.Initial with
+        {
+            Phase = CompensationScopePhase.Compensating,
+            NextStepIndex = 3,
+            NextOrdinal = 3,
+            Cause = new CompensationRecoveryCause(CompensationRecoveryCause.FaultKind, "Confirm order", "ae-7", "inc-1"),
+            Entries =
+            [
+                Entry("e1", "Reserve inventory", 1, CompensationEntryStatus.Registered),
+                Entry("e2", "Reserve delivery", 2, CompensationEntryStatus.Compensating) with
+                {
+                    HandlerAttempts =
+                    [
+                        new CompensationHandlerAttempt(CompensationAttemptResult.Faulted, "ae-9", "inc-4"),
+                        new CompensationHandlerAttempt(CompensationAttemptResult.Running, notBefore: dueAt, delayClamped: true)
+                    ]
+                }
+            ]
+        };
+
+        var view = await ProjectAsync(state, [Cause()]);
+
+        var attempts = view.GetProperty("entries")[1].GetProperty("attempts").EnumerateArray().ToArray();
+        Assert.False(attempts[0].TryGetProperty("notBefore", out _));
+        Assert.False(attempts[0].TryGetProperty("delayClamped", out _));
+        Assert.Equal("Running", attempts[1].GetProperty("result").GetString());
+        Assert.Equal(dueAt, attempts[1].GetProperty("notBefore").GetDateTimeOffset());
+        Assert.True(attempts[1].GetProperty("delayClamped").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, attempts[1].GetProperty("activityExecutionId").ValueKind);
+    }
+
+    [Fact]
+    public async Task An_attempt_without_a_wait_has_neither_backoff_field()
+    {
+        var view = await ProjectAsync(WaitingState(), [Cause(), WaitingIncident(Offer)]);
+
+        Assert.DoesNotContain("notBefore", view.GetRawText(), StringComparison.Ordinal);
+        Assert.DoesNotContain("delayClamped", view.GetRawText(), StringComparison.Ordinal);
     }
 
     [Fact]
