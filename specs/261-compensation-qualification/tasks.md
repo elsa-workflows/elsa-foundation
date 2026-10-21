@@ -28,7 +28,7 @@ Each task names its files and its test. `[P]` marks a task that can run in paral
 - [x] T514 Studio publication review: `ValidationError.severity`; split errors and warnings in `useWorkflowOperations.ts` and `PublicationReviewDialog.tsx`; warnings listed with text and icon, **Publish** enabled. First confirm research R6 (whether the saved draft already carries warnings). Vitest: warnings only → Publish enabled; an error and a warning → blocked; a missing severity reads as error; the Connections warning case.
 - [x] T515 [P] Studio **Retry scheduled** state from the journal's `notBefore` in `compensationRuntime.ts` and `CompensationScopeDesigner.tsx`. Vitest per label (scheduled, due, then retrying); the mocked browser fixture gains a waiting-retry run with axe at 390 and 1200 px in light and dark.
 - [x] T516 PR 1 docs: guide rows A2, A3, A11, A15 and the two removed limits of A12 ([contracts/docs-and-samples.md](contracts/docs-and-samples.md#audit)); glossary "Scheduled retry (compensation)" and "Replay-safe warning"; compensation `EXTENSION_POINTS.md` (the inputs, the reader contract, the validator); spec 250 FR-014 and spec 251 OD7 gain "implemented by spec 261". Test: docs build and link check.
-- [ ] T517 Run negative controls N501–N506 once by hand on the full suites, each reverted; record the failing counts in the PR and in quickstart.md.
+- [x] T517 Run negative controls N501–N506 once by hand on the full suites, each reverted; record the failing counts in the PR and in quickstart.md.
 
 ## Phase D — Qualification (PR 2, after #3140 and PR 1 merge)
 

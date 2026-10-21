@@ -94,6 +94,20 @@ Run once by hand on the full suites, each reverted; record the failing counts in
 | N505 | The delay formula's exponent (use a fixed delay) | BK3's recorded waits |
 | N506 | The warning validator, and separately Studio's severity filter | W1/W2; W6 and the M1 live journey's publish step |
 
+### Results (PR 1, run once by hand, each reverted)
+
+Suites: Workflows.Runtime (2,508 tests), Activities.Runtime (653) and Activities.Compensation (375, including the SQLite D2/D4 and the BK journeys); for N506 also the Workbench W6 test, the Studio Workflows Vitest suite (2,281) and the publication-review browser spec (10). Every suite passed before and after each control.
+
+| ID | What was removed | Failing tests | Notes |
+|---|---|---|---|
+| N501 | `RuntimePostCommitOutboxItems.AvailableAt` returns the commit time | 50: Runtime 5 (the T501 immediate-dispatch, Balanced/Ephemeral and recovery checks, and the D9 replay), Activities.Runtime 21 (six `DelayedScheduleExecutionTests` cases in every mode, the terminal-run case for a completed and a faulted run: first-sweep delivery, other work not held back, terminal run, parent not running, a run that only waits, the child-completion path), Compensation 24 (BK1 with both restart points, BK2, BK3, BK4, BK6; SQLite D2 and D4) | As expected. |
+| N502 | The committer's hop skip for a delayed intent | 1: `DelayedSchedule_TheInProcessHopDoesNotPublishANotYetDueIntent` | D2 and BK1 do **not** fail. The hop carrier is only a payload cache (R2 outcome): the drain delivers an item only once the outbox selects it, and the outbox honours `AvailableAt`. The skip is hygiene, so only its unit test guards it. The immediate dispatch has no separate skip to remove; it is guarded by `AvailableAt` itself, which N501 covers. |
+| N503 | The parent-not-running check on delivery | 3: D5 (`DelayedSchedule_AParentThatIsNoLongerRunningGetsNoChild`) in every mode | BK4 does **not** fail: cancelling the run makes the run terminal, and the terminal-run check (D6) refuses the retry first. The parent check covers a parent that ended while its run still runs, which only D5 exercises. |
+| N504 | The mandatory, `Immediate` checkpoint for a delayed intent | 2: `DelayedSchedule_ABalancedOrEphemeralDrainFlushesItDurablyWithItsDueTime` (Balanced, Ephemeral) | D7 and BK2 do **not** fail. Without the override the item lives in the coalescing overlay until the end-of-drain flush, which keeps its `AvailableAt`; a stop before that flush loses the whole buffered segment, and replay from the last durable checkpoint recreates the same intent, so no retry is lost. A failed handler also opens an incident, whose checkpoint is already mandatory. The override is defence in depth: the item is durable at its own commit and does not depend on the replay. |
+| N505 | The exponent (a fixed delay) | 13: BK2 and BK3 in every mode (6), the formula and cap unit tests (7) | As expected. |
+| N506a | The warning validator (it reports nothing when a reader is present) | Compensation 6 (W1, W2, both-at-once, nested, read-once; the no-reader case inverts), Workbench W6 1 | As expected. |
+| N506b | Studio's severity filter (`isWarningSeverity` never true) | Vitest 9 (seven in `publicationReviewWarnings.test.tsx`, two in `workflowPublicationOperations.test.tsx`) | The browser spec does **not** fail: its fixture builds the review with its warnings already split, so it guards the rendering and accessibility, not the filter. The M1 live journey was not run here; it needs a live host and is broken today (#3142, R7, PR 2). |
+
 ## Run locally
 
 ```bash
