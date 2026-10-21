@@ -74,7 +74,8 @@ Independent proof: controlled time/endpoints show persistent Retry-After, releas
 
 ## Phase 6 — Final integration and evidence
 
-- [ ] T020 Update affected public API baselines, extension catalogs, migration/provider inventory and current program/spec docs; run affected full suites, architecture/core and map/filter/diff checks. Record exact commands/results in `specs/996-http-etl/evidence/`.
+- [x] T020 Update affected public API baselines, extension catalogs, migration/provider inventory and current program/spec docs; run affected full suites, architecture/core and map/filter/diff checks. Record exact commands/results in `specs/996-http-etl/evidence/`.
+  - Completed integrated local gate: [checkpoint](evidence/final-integration-checkpoint.md). Main401 integrated; legacy provider compatibility and timely-receipt race repaired. ETL1009, architecture584, core4198 (two explicit skips), Studio69/typecheck/build, rebuilt REST/browser and frozen-v1 upgrade passed. **20/22 tasks complete**; exact-head CI and resulting-main verification remain required.
 - [ ] T021 Run independent correctness/standards/acceptance review of the integrated exact diff, fix concrete findings and rerun affected proof. Open/update the single #3151 draft PR with per-criterion evidence; require green exact-head checks before normal merge.
 - [ ] T022 Verify resulting-main CI/Studio/CodeQL/maps and runtime delivery evidence, reconcile issue/parent/program/project state and release the exact claim. Preserve parent continuous/SQL/RabbitMQ/BPMN and task-runner boundaries in `docs/program-goals/unified-execution.md`.
 
