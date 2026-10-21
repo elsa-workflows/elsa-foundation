@@ -262,7 +262,9 @@ internal sealed class CaptureAuthenticationHandler(
         var claims = new ClaimsIdentity(Scheme.Name);
         claims.AddClaim(new Claim(IdentityClaimTypes.Normalized, "v1"));
         claims.AddClaim(new Claim(IdentityClaimTypes.Permission, PermissionKey.Wildcard));
-        claims.AddClaim(new Claim(IdentityClaimTypes.TenantId, "capture-tenant"));
+        var tenantId = Request.Headers[PublishingCompatibilityCases.TenantHeader].ToString();
+        claims.AddClaim(new Claim(IdentityClaimTypes.TenantId,
+            string.IsNullOrWhiteSpace(tenantId) ? "capture-tenant" : tenantId));
         claims.AddClaim(new Claim(ClaimTypes.NameIdentifier, "capture-actor"));
         return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(claims), Scheme.Name)));
     }

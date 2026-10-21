@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using Elsa.Activities.Runtime.Core.Contracts;
 
 namespace Elsa.Activities.Runtime.Core.Models;
@@ -13,11 +14,24 @@ public sealed class ActivityChildCompletedContext
         string completedChildExecutableNodeId,
         IReadOnlyCollection<string> outcomeNames,
         string? completedChildIterationId = null)
+        : this(parentContext, completedChildActivityExecutionId, completedChildExecutableNodeId, outcomeNames,
+            completedChildIterationId, FrozenDictionary<string, string>.Empty)
+    {
+    }
+
+    public ActivityChildCompletedContext(
+        IActivityExecutionContext parentContext,
+        string completedChildActivityExecutionId,
+        string completedChildExecutableNodeId,
+        IReadOnlyCollection<string> outcomeNames,
+        string? completedChildIterationId,
+        IReadOnlyDictionary<string, string> childSchedulingMetadata)
     {
         ArgumentNullException.ThrowIfNull(parentContext);
         ArgumentException.ThrowIfNullOrWhiteSpace(completedChildActivityExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(completedChildExecutableNodeId);
         ArgumentNullException.ThrowIfNull(outcomeNames);
+        ArgumentNullException.ThrowIfNull(childSchedulingMetadata);
 
         var outcomeSnapshot = outcomeNames.ToArray();
         if (outcomeSnapshot.Any(string.IsNullOrWhiteSpace))
@@ -31,7 +45,14 @@ public sealed class ActivityChildCompletedContext
         CompletedChildExecutableNodeId = completedChildExecutableNodeId;
         OutcomeNames = outcomeSnapshot;
         CompletedChildIterationId = completedChildIterationId;
+        ChildSchedulingMetadata = childSchedulingMetadata.ToFrozenDictionary(StringComparer.Ordinal);
     }
+
+    /// <summary>
+    /// Immutable metadata from the completed child's committed scheduling provenance. This belongs to the
+    /// child invocation; metadata on a later resume or callback command is a separate delivery concern.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> ChildSchedulingMetadata { get; }
 
     public IActivityExecutionContext ParentContext { get; }
     public string CompletedChildActivityExecutionId { get; }

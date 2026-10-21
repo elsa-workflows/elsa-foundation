@@ -1,0 +1,48 @@
+#nullable enable
+Elsa.Etl.Runtime.EtlHostFileBindingOptions
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.Alias.get -> string!
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.Alias.set -> void
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.AtomicPublication.get -> bool
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.AtomicPublication.set -> void
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.EtlHostFileBindingOptions() -> void
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.ExpectedSha256.get -> string?
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.ExpectedSha256.set -> void
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.ImmutableInput.get -> bool
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.ImmutableInput.set -> void
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.IsCurrent.get -> bool
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.IsCurrent.set -> void
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.Path.get -> string!
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.Path.set -> void
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.PersistencePartition.get -> string!
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.PersistencePartition.set -> void
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.Revision.get -> string!
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.Revision.set -> void
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.Role.get -> string!
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.Role.set -> void
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.TenantId.get -> string?
+Elsa.Etl.Runtime.EtlHostFileBindingOptions.TenantId.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature
+virtual Elsa.Etl.Runtime.EtlRuntimeFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.EtlRuntimeFeature() -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.FileBindings.get -> System.Collections.Generic.List<Elsa.Etl.Runtime.EtlHostFileBindingOptions!>!
+Elsa.Etl.Runtime.EtlRuntimeFeature.FileBindings.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxConcurrentAttempts.get -> int
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxConcurrentAttempts.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLiveInputBytes.get -> long
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLiveInputBytes.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLiveLookupBytes.get -> long
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLiveLookupBytes.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLiveOutputBytes.get -> long
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLiveOutputBytes.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLiveRecords.get -> long
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLiveRecords.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLookupCells.get -> long
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLookupCells.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLookupRecords.get -> long
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxLookupRecords.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxPartitions.get -> int
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxPartitions.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxSnapshotBytes.get -> long
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxSnapshotBytes.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.SnapshotRoot.get -> string!
+Elsa.Etl.Runtime.EtlRuntimeFeature.SnapshotRoot.set -> void

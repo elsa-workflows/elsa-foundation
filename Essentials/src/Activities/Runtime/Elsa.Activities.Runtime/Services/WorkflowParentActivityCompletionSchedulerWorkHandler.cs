@@ -314,7 +314,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                         ReadIncidentId(workItem),
                         completedChildState.IterationId,
                         descendantFault?.Code,
-                        descendantFault?.Metadata.GetValueOrDefault(ActivityFault.CategoryMetadataKey)));
+                        descendantFault?.Metadata.GetValueOrDefault(ActivityFault.CategoryMetadataKey),
+                        viaChildState!.Provenance.Metadata));
                 }
                 else if (childFaulted)
                 {
@@ -328,7 +329,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                             completedChildState.IterationId,
                             outcome.Fault,
                             outcome.IncidentId,
-                            outcome.Notifications));
+                            outcome.Notifications,
+                            completedChildState.Provenance.Metadata));
                     }
                     else if (isParentOutcomeEvaluation && parentActivity is IRuntimeActivityChildNotificationHandler)
                     {
@@ -348,7 +350,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                             ReadIncidentId(workItem),
                             completedChildState.IterationId,
                             childFault?.Code,
-                            childFault?.Metadata.GetValueOrDefault(ActivityFault.CategoryMetadataKey));
+                            childFault?.Metadata.GetValueOrDefault(ActivityFault.CategoryMetadataKey),
+                            completedChildState.Provenance.Metadata);
 
                         continuation = await ((IRuntimeActivityChildFaultHandler)parentActivity).OnChildFaultedAsync(childFaultedContext);
                     }
@@ -360,7 +363,8 @@ public sealed class WorkflowParentActivityCompletionSchedulerWorkHandler : Runti
                         completedChildActivityExecutionId,
                         completedChildState.Execution.ExecutableNodeId,
                         payload.OutcomeNames,
-                        completedChildState.IterationId);
+                        completedChildState.IterationId,
+                        completedChildState.Provenance.Metadata);
 
                     continuation = await ((IRuntimeActivityChildCompletionHandler)parentActivity).OnChildCompletedAsync(childCompletedContext);
                 }

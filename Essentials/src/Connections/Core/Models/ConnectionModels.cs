@@ -183,11 +183,6 @@ public sealed class ConnectionResolveRequest
     public required string Name { get; init; }
     public string? RequiredType { get; init; }
     public string Owner { get; init; } = ConnectionOwners.Tenant;
-    /// <summary>
-    /// When false, skip the live principal use check. Set for already-published workflow runtime;
-    /// use was recorded against the publisher at publish time.
-    /// </summary>
-    public bool CheckUsePermission { get; init; } = true;
 }
 
 public sealed class ConnectionCredentialRequest

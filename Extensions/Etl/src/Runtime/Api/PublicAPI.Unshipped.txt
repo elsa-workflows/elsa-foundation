@@ -1,0 +1,289 @@
+#nullable enable
+Elsa.Etl.Runtime.Api.Endpoints.CancelRun.Endpoint
+Elsa.Etl.Runtime.Api.Endpoints.CancelRun.Endpoint.Endpoint(Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations! operations) -> void
+Elsa.Etl.Runtime.Api.Endpoints.GetRun.Endpoint
+Elsa.Etl.Runtime.Api.Endpoints.GetRun.Endpoint.Endpoint(Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations! operations) -> void
+Elsa.Etl.Runtime.Api.Endpoints.ListPartitions.Endpoint
+Elsa.Etl.Runtime.Api.Endpoints.ListPartitions.Endpoint.Endpoint(Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations! operations) -> void
+Elsa.Etl.Runtime.Api.Endpoints.ListRuns.Endpoint
+Elsa.Etl.Runtime.Api.Endpoints.ListRuns.Endpoint.Endpoint(Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations! operations) -> void
+Elsa.Etl.Runtime.Api.EtlRuntimeApi
+Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature
+virtual Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature.CursorSigningKey.get -> string?
+Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature.CursorSigningKey.set -> void
+Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature.EtlRuntimeApiFeature() -> void
+virtual Elsa.Etl.Runtime.Api.EtlRuntimeApiFeature.MapEndpoints(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, Microsoft.Extensions.Hosting.IHostEnvironment? environment) -> void
+Elsa.Etl.Runtime.Api.EtlRuntimePermissions
+Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView
+Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView!
+Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Deconstruct(out string! Source, out string! Lookup, out string! Output, out string! Errors) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView? other) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Errors.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Errors.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.EtlRunBindingAliasesView(string! Source, string! Lookup, string! Output, string! Errors) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Lookup.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Lookup.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Output.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Output.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Source.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Source.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView
+Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView!
+Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView.CancellationAccepted.get -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView.CancellationAccepted.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView.Deconstruct(out bool CancellationAccepted, out Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView! TerminalResult) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView? other) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView.EtlRunCancellationView(bool CancellationAccepted, Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView! TerminalResult) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView.TerminalResult.get -> Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView!
+Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView.TerminalResult.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunDetailView!
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.AcceptedRecords.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.AcceptedRecords.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.BindingAliases.get -> Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView?
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.BindingAliases.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.Deconstruct(out string! RunId, out string! Selection, out string! Status, out long? SourceRecordCount, out long OutstandingRecords, out long OutstandingBytes, out long AcceptedRecords, out long RejectedRecords, out long FilteredRecords, out Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView? BindingAliases, out Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView? Diagnostic, out Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView? TerminalResult) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.Diagnostic.get -> Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView?
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.Diagnostic.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunDetailView? other) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.EtlRunDetailView(string! RunId, string! Selection, string! Status, long? SourceRecordCount, long OutstandingRecords, long OutstandingBytes, long AcceptedRecords, long RejectedRecords, long FilteredRecords, Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView? BindingAliases, Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView? Diagnostic, Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView? TerminalResult) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.FilteredRecords.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.FilteredRecords.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.LookupInput.get -> Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView?
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.LookupInput.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.OutstandingBytes.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.OutstandingBytes.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.OutstandingRecords.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.OutstandingRecords.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.RejectedRecords.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.RejectedRecords.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.RunId.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.RunId.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.Selection.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.Selection.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.SourceInput.get -> Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView?
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.SourceInput.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.SourceRecordCount.get -> long?
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.SourceRecordCount.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.Status.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.Status.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.TerminalResult.get -> Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView?
+Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.TerminalResult.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView
+Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView!
+Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView.Code.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView.Code.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView.Deconstruct(out string! Code, out long? RecordOrdinal, out string? Field) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView? other) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView.EtlRunDiagnosticView(string! Code, long? RecordOrdinal, string? Field) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView.Field.get -> string?
+Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView.Field.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView.RecordOrdinal.get -> long?
+Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView.RecordOrdinal.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView
+Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView!
+Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView.BindingRevision.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView.BindingRevision.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView.Deconstruct(out string! BindingRevision, out string? ExpectedSha256, out string? SnapshotSha256, out long? SnapshotByteLength) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView? other) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView.EtlRunInputIdentityView(string! BindingRevision, string? ExpectedSha256, string? SnapshotSha256, long? SnapshotByteLength) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView.ExpectedSha256.get -> string?
+Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView.ExpectedSha256.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView.SnapshotByteLength.get -> long?
+Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView.SnapshotByteLength.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView.SnapshotSha256.get -> string?
+Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView.SnapshotSha256.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView
+Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView!
+Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView.Deconstruct(out long StartOrdinal, out long EndOrdinalExclusive, out long InputBytes) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView.EndOrdinalExclusive.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView.EndOrdinalExclusive.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView? other) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView.EtlRunOwedBatchView(long StartOrdinal, long EndOrdinalExclusive, long InputBytes) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView.InputBytes.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView.InputBytes.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView.StartOrdinal.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView.StartOrdinal.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPage<T>
+Elsa.Etl.Runtime.Api.Models.EtlRunPage<T>.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunPage<T>!
+Elsa.Etl.Runtime.Api.Models.EtlRunPage<T>.Deconstruct(out System.Collections.Generic.IReadOnlyList<T>! Items, out string? NextCursor) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPage<T>.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunPage<T>? other) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunPage<T>.EtlRunPage(System.Collections.Generic.IReadOnlyList<T>! Items, string? NextCursor) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPage<T>.Items.get -> System.Collections.Generic.IReadOnlyList<T>!
+Elsa.Etl.Runtime.Api.Models.EtlRunPage<T>.Items.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPage<T>.NextCursor.get -> string?
+Elsa.Etl.Runtime.Api.Models.EtlRunPage<T>.NextCursor.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest
+Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest!
+Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest.Cursor.get -> string?
+Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest.Cursor.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest.Deconstruct(out string? Cursor, out int Limit) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest? other) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest.EtlRunPageRequest(string? Cursor = null, int Limit = 50) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest.Limit.get -> int
+Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest.Limit.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView!
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.ClaimExpiresAt.get -> System.DateTimeOffset?
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.ClaimExpiresAt.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.ClaimFence.get -> long?
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.ClaimFence.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.Deconstruct(out int PartitionOrdinal, out long StartOrdinal, out long EndOrdinalExclusive, out long NextOrdinal, out bool IsClaimed, out long? ClaimFence, out System.DateTimeOffset? ClaimExpiresAt, out Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView? OwedBatch) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.EndOrdinalExclusive.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.EndOrdinalExclusive.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView? other) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.EtlRunPartitionView(int PartitionOrdinal, long StartOrdinal, long EndOrdinalExclusive, long NextOrdinal, bool IsClaimed, long? ClaimFence, System.DateTimeOffset? ClaimExpiresAt, Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView? OwedBatch) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.IsClaimed.get -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.IsClaimed.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.NextOrdinal.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.NextOrdinal.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.OwedBatch.get -> Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView?
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.OwedBatch.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.PartitionOrdinal.get -> int
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.PartitionOrdinal.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.StartOrdinal.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.StartOrdinal.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest!
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest.Cursor.get -> string?
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest.Cursor.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest.Deconstruct(out string! Id, out string? Cursor, out int Limit) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest? other) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest.EtlRunPartitionsRequest(string! Id, string? Cursor = null, int Limit = 50) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest.Id.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest.Id.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest.Limit.get -> int
+Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest.Limit.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunRequest
+Elsa.Etl.Runtime.Api.Models.EtlRunRequest.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunRequest!
+Elsa.Etl.Runtime.Api.Models.EtlRunRequest.Deconstruct(out string! Id) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunRequest.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunRequest? other) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunRequest.EtlRunRequest(string! Id) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunRequest.Id.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunRequest.Id.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView!
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.AcceptedRecords.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.AcceptedRecords.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.Deconstruct(out string! RunId, out string! Selection, out string! Status, out long? SourceRecordCount, out long OutstandingRecords, out long OutstandingBytes, out long AcceptedRecords, out long RejectedRecords, out long FilteredRecords, out Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView? Diagnostic) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.Diagnostic.get -> Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView?
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.Diagnostic.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView? other) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.EtlRunSummaryView(string! RunId, string! Selection, string! Status, long? SourceRecordCount, long OutstandingRecords, long OutstandingBytes, long AcceptedRecords, long RejectedRecords, long FilteredRecords, Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView? Diagnostic) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.FilteredRecords.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.FilteredRecords.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.OutstandingBytes.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.OutstandingBytes.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.OutstandingRecords.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.OutstandingRecords.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.RejectedRecords.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.RejectedRecords.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.RunId.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.RunId.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.Selection.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.Selection.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.SourceRecordCount.get -> long?
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.SourceRecordCount.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.Status.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.Status.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView
+Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.<Clone>$() -> Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView!
+Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.AcceptedRecords.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.AcceptedRecords.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.Deconstruct(out string! Outcome, out long AcceptedRecords, out long RejectedRecords, out long FilteredRecords, out Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView? Diagnostic, out System.DateTimeOffset SettledAt) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.Diagnostic.get -> Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView?
+Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.Diagnostic.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.Equals(Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView? other) -> bool
+Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.EtlRunTerminalResultView(string! Outcome, long AcceptedRecords, long RejectedRecords, long FilteredRecords, Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView? Diagnostic, System.DateTimeOffset SettledAt) -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.FilteredRecords.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.FilteredRecords.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.Outcome.get -> string!
+Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.Outcome.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.RejectedRecords.get -> long
+Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.RejectedRecords.init -> void
+Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.SettledAt.get -> System.DateTimeOffset
+Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.SettledAt.init -> void
+Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations
+Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations.CancelAsync(Elsa.Etl.Runtime.Api.Models.EtlRunRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView!>!
+Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations.GetRunAsync(Elsa.Etl.Runtime.Api.Models.EtlRunRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunDetailView!>!
+Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations.ListPartitionsAsync(Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunPage<Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView!>!>!
+Elsa.Etl.Runtime.Api.Models.IEtlRuntimeOperations.ListRunsAsync(Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunPage<Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView!>!>!
+NativeEndpoints.Generated.ElsaEtlRuntimeApiEndpoints
+const Elsa.Etl.Runtime.Api.EtlRuntimePermissions.CancelRuns = "etl/runs:cancel" -> string!
+const Elsa.Etl.Runtime.Api.EtlRuntimePermissions.ReadRuns = "etl/runs:read" -> string!
+override Elsa.Etl.Runtime.Api.Endpoints.CancelRun.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Runtime.Api.Endpoints.CancelRun.Endpoint.HandleAsync(Elsa.Etl.Runtime.Api.Models.EtlRunRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView!>!
+override Elsa.Etl.Runtime.Api.Endpoints.GetRun.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Runtime.Api.Endpoints.GetRun.Endpoint.HandleAsync(Elsa.Etl.Runtime.Api.Models.EtlRunRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunDetailView!>!
+override Elsa.Etl.Runtime.Api.Endpoints.ListPartitions.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Runtime.Api.Endpoints.ListPartitions.Endpoint.HandleAsync(Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunPage<Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView!>!>!
+override Elsa.Etl.Runtime.Api.Endpoints.ListRuns.Endpoint.Configure(NativeEndpoints.ApiEndpointOptions! options) -> void
+override Elsa.Etl.Runtime.Api.Endpoints.ListRuns.Endpoint.HandleAsync(Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest! request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Elsa.Etl.Runtime.Api.Models.EtlRunPage<Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView!>!>!
+override Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.GetHashCode() -> int
+override Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.ToString() -> string!
+override Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView.GetHashCode() -> int
+override Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView.ToString() -> string!
+override Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.GetHashCode() -> int
+override Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.ToString() -> string!
+override Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView.GetHashCode() -> int
+override Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView.ToString() -> string!
+override Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView.GetHashCode() -> int
+override Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView.ToString() -> string!
+override Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView.GetHashCode() -> int
+override Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView.ToString() -> string!
+override Elsa.Etl.Runtime.Api.Models.EtlRunPage<T>.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.Api.Models.EtlRunPage<T>.GetHashCode() -> int
+override Elsa.Etl.Runtime.Api.Models.EtlRunPage<T>.ToString() -> string!
+override Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest.GetHashCode() -> int
+override Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest.ToString() -> string!
+override Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.GetHashCode() -> int
+override Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.ToString() -> string!
+override Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest.GetHashCode() -> int
+override Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest.ToString() -> string!
+override Elsa.Etl.Runtime.Api.Models.EtlRunRequest.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.Api.Models.EtlRunRequest.GetHashCode() -> int
+override Elsa.Etl.Runtime.Api.Models.EtlRunRequest.ToString() -> string!
+override Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.GetHashCode() -> int
+override Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.ToString() -> string!
+override Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.GetHashCode() -> int
+override Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.ToString() -> string!
+static Elsa.Etl.Runtime.Api.EtlRuntimeApi.MapEtlRuntimeApi(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints) -> void
+static Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView? left, Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView? left, Elsa.Etl.Runtime.Api.Models.EtlRunBindingAliasesView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView? left, Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView? left, Elsa.Etl.Runtime.Api.Models.EtlRunCancellationView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunDetailView? left, Elsa.Etl.Runtime.Api.Models.EtlRunDetailView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunDetailView.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunDetailView? left, Elsa.Etl.Runtime.Api.Models.EtlRunDetailView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView? left, Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView? left, Elsa.Etl.Runtime.Api.Models.EtlRunDiagnosticView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView? left, Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView? left, Elsa.Etl.Runtime.Api.Models.EtlRunInputIdentityView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView? left, Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView? left, Elsa.Etl.Runtime.Api.Models.EtlRunOwedBatchView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunPage<T>.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunPage<T>? left, Elsa.Etl.Runtime.Api.Models.EtlRunPage<T>? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunPage<T>.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunPage<T>? left, Elsa.Etl.Runtime.Api.Models.EtlRunPage<T>? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest? left, Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest? left, Elsa.Etl.Runtime.Api.Models.EtlRunPageRequest? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView? left, Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView? left, Elsa.Etl.Runtime.Api.Models.EtlRunPartitionView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest? left, Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest? left, Elsa.Etl.Runtime.Api.Models.EtlRunPartitionsRequest? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunRequest.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunRequest? left, Elsa.Etl.Runtime.Api.Models.EtlRunRequest? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunRequest.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunRequest? left, Elsa.Etl.Runtime.Api.Models.EtlRunRequest? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView? left, Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView? left, Elsa.Etl.Runtime.Api.Models.EtlRunSummaryView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.operator !=(Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView? left, Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView? right) -> bool
+static Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView.operator ==(Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView? left, Elsa.Etl.Runtime.Api.Models.EtlRunTerminalResultView? right) -> bool
+static NativeEndpoints.Generated.ElsaEtlRuntimeApiEndpoints.Map(this NativeEndpoints.EndpointGroup! group, string? routePrefix = null) -> NativeEndpoints.EndpointGroup!

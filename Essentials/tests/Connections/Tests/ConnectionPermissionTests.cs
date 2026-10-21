@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Elsa.Activities.Http.Connections;
 using Elsa.Activities.Runtime.Core.Models;
+using Elsa.Connections.Api.Authorization;
 using Elsa.Connections.Api.Services;
 using Elsa.Connections.Core.Contracts;
 using Elsa.Connections.Core.Exceptions;
@@ -24,31 +25,29 @@ public sealed class ConnectionPermissionTests
     private const string Tenant = "tenant-a";
 
     [Fact]
-    public async Task Resolve_RequiresUsePermission()
+    public void The_catalog_carries_only_the_connection_admin_rights()
     {
-        await using var provider = CreateProvider(new RecordingGate { DenyUse = true });
-        await using var scope = provider.CreateAsyncScope();
-        var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
-        var resolver = scope.ServiceProvider.GetRequiredService<IConnectionResolver>();
+        var keys = new ConnectionsPermissionContributor().Contribute().Select(permission => permission.Key);
 
-        await manager.CreateAsync(Tenant, BearerRequest("gated"));
-        var refused = await Assert.ThrowsAsync<ConnectionUnavailableException>(() => resolver.ResolveAsync(new ConnectionResolveRequest
-        {
-            TenantId = Tenant,
-            Name = "gated"
-        }).AsTask());
-        Assert.Equal(ConnectionFaultCodes.Forbidden, refused.Code);
+        Assert.Equal([ConnectionsPermissions.Manage, ConnectionsPermissions.BindSecret, ConnectionsPermissions.Test], keys);
     }
 
     [Fact]
-    public async Task Apply_OnAPublishedBinding_DoesNotRequireTheRunTriggerToHoldUse()
+    public async Task ResolveAndApply_DoNotAskTheCallerForAnyConnectionRight()
     {
-        await using var provider = CreateProvider(new RecordingGate { DenyUse = true }, workflows: true);
+        var gate = new RecordingGate();
+        await using var provider = CreateProvider(gate, workflows: true);
         await using var scope = provider.CreateAsyncScope();
         var manager = scope.ServiceProvider.GetRequiredService<IConnectionManager>();
+        var resolver = scope.ServiceProvider.GetRequiredService<IConnectionResolver>();
         var applicator = scope.ServiceProvider.GetRequiredService<IHttpConnectionApplicator>();
 
         await manager.CreateAsync(Tenant, BearerRequest("published-apply"));
+        gate.DenyManage = gate.DenyTest = gate.DenyBindSecret = true;
+
+        await using var resolved = await resolver.ResolveAsync(new ConnectionResolveRequest { TenantId = Tenant, Name = "published-apply" });
+        Assert.Equal("published-apply", resolved.Name);
+
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.example/v1");
         await applicator.ApplyAsync(
             request,
@@ -237,7 +236,7 @@ public sealed class ConnectionPermissionTests
     }
 
     [Fact]
-    public async Task Test_RequiresTestPermission_AndDoesNotTreatItAsUse()
+    public async Task Test_RequiresTestPermission()
     {
         var gate = new RecordingGate { DenyTest = true };
         await using var provider = CreateProvider(gate);
@@ -248,7 +247,6 @@ public sealed class ConnectionPermissionTests
         var refused = await Assert.ThrowsAsync<ConnectionUnavailableException>(() => manager.TestAsync(Tenant, "needs-test").AsTask());
         Assert.Equal(ConnectionFaultCodes.Forbidden, refused.Code);
         Assert.Equal([ConnectionsPermissions.Test], gate.TestCalls);
-        Assert.Empty(gate.UseCalls);
     }
 
     [Fact]
@@ -272,11 +270,9 @@ public sealed class ConnectionPermissionTests
         var accessor = new HttpContextAccessor();
         var gate = new HttpContextConnectionPermissionGate(authorization, accessor);
 
-        var use = await Assert.ThrowsAsync<ConnectionUnavailableException>(() => gate.EnsureUseAsync(Tenant).AsTask());
         var bind = await Assert.ThrowsAsync<ConnectionUnavailableException>(() => gate.EnsureBindSecretAsync(Tenant).AsTask());
         var manage = await Assert.ThrowsAsync<ConnectionUnavailableException>(() => gate.EnsureManageAsync(Tenant).AsTask());
         var test = await Assert.ThrowsAsync<ConnectionUnavailableException>(() => gate.EnsureTestAsync(Tenant).AsTask());
-        Assert.Equal(ConnectionFaultCodes.Forbidden, use.Code);
         Assert.Equal(ConnectionFaultCodes.Forbidden, bind.Code);
         Assert.Equal(ConnectionFaultCodes.Forbidden, manage.Code);
         Assert.Equal(ConnectionFaultCodes.Forbidden, test.Code);
@@ -284,9 +280,9 @@ public sealed class ConnectionPermissionTests
     }
 
     [Fact]
-    public async Task HttpContextGate_EnforcesUseAndBindSecretForAnAuthenticatedPrincipal()
+    public async Task HttpContextGate_EnforcesEachRightForAnAuthenticatedPrincipal()
     {
-        var authorization = new FakeAuthorization { Allowed = { ConnectionsPermissions.Use } };
+        var authorization = new FakeAuthorization { Allowed = { ConnectionsPermissions.Manage } };
         var accessor = new HttpContextAccessor
         {
             HttpContext = new DefaultHttpContext
@@ -298,11 +294,11 @@ public sealed class ConnectionPermissionTests
         };
         var gate = new HttpContextConnectionPermissionGate(authorization, accessor);
 
-        await gate.EnsureUseAsync(Tenant);
+        await gate.EnsureManageAsync(Tenant);
 
         var refused = await Assert.ThrowsAsync<ConnectionUnavailableException>(() => gate.EnsureBindSecretAsync(Tenant).AsTask());
         Assert.Equal(ConnectionFaultCodes.Forbidden, refused.Code);
-        Assert.Equal([ConnectionsPermissions.Use, ConnectionsPermissions.BindSecret], authorization.Seen);
+        Assert.Equal([ConnectionsPermissions.Manage, ConnectionsPermissions.BindSecret], authorization.Seen);
     }
 
     private static CreateConnectionRequest BearerRequest(string name) => new()
@@ -329,12 +325,10 @@ public sealed class ConnectionPermissionTests
 
     private sealed class RecordingGate : IConnectionPermissionGate
     {
-        public bool DenyUse { get; init; }
         public bool DenyBindSecret { get; set; }
-        public bool DenyManage { get; init; }
-        public bool DenyTest { get; init; }
+        public bool DenyManage { get; set; }
+        public bool DenyTest { get; set; }
         public List<string> BindCalls { get; } = [];
-        public List<string> UseCalls { get; } = [];
         public List<string> TestCalls { get; } = [];
 
         public ValueTask EnsureManageAsync(string tenantId, CancellationToken cancellationToken = default)
@@ -345,20 +339,6 @@ public sealed class ConnectionPermissionTests
                     "connection",
                     ConnectionFaultCodes.Forbidden,
                     $"Permission '{ConnectionsPermissions.Manage}' is required.");
-            }
-
-            return ValueTask.CompletedTask;
-        }
-
-        public ValueTask EnsureUseAsync(string tenantId, CancellationToken cancellationToken = default)
-        {
-            UseCalls.Add(tenantId);
-            if (DenyUse)
-            {
-                throw new ConnectionUnavailableException(
-                    "connection",
-                    ConnectionFaultCodes.Forbidden,
-                    $"Permission '{ConnectionsPermissions.Use}' is required.");
             }
 
             return ValueTask.CompletedTask;

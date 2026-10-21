@@ -263,10 +263,10 @@ public sealed class CompensationScopeUncertaintyTests
             [CompensationScope.MetadataKeys.Entry] = "e1",
             [CompensationScope.MetadataKeys.Forward] = "ae-1"
         };
-        var context = NewContext(privateState, m1HandlerMetadata);
+        var context = NewContext(privateState, new Dictionary<string, string>());
 
         var continuation = await new CompensationScope().OnChildCompletedAsync(
-            new ActivityChildCompletedContext(context, "ae-5", "release-inventory", [ActivityOutcomes.Done]));
+            new ActivityChildCompletedContext(context, "ae-5", "release-inventory", [ActivityOutcomes.Done], null, m1HandlerMetadata));
 
         // The completion is not dropped: the entry is compensated and, with nothing left, the scope finishes.
         Assert.False(continuation.IsDeferred);
@@ -319,9 +319,9 @@ public sealed class CompensationScopeUncertaintyTests
 
     private static async Task<Evaluation> CompletedAsync(RuntimeStructuralStateUpdate? state, RuntimeChildActivityScheduleRequest child, string childExecutionId, int maxAttempts = 3)
     {
-        var context = NewContext(state, child.Metadata);
+        var context = NewContext(state, new Dictionary<string, string>());
         var continuation = await new CompensationScope { HandlerMaxAttempts = maxAttempts }.OnChildCompletedAsync(
-            new ActivityChildCompletedContext(context, childExecutionId, child.ExecutableNodeId, [ActivityOutcomes.Done]));
+            new ActivityChildCompletedContext(context, childExecutionId, child.ExecutableNodeId, [ActivityOutcomes.Done], null, child.Metadata));
         return new(continuation, context, context.GetChildActivityScheduleRequests().ToArray(), state);
     }
 
@@ -333,9 +333,9 @@ public sealed class CompensationScopeUncertaintyTests
         string? category,
         int maxAttempts = 3)
     {
-        var context = NewContext(state, child.Metadata);
+        var context = NewContext(state, new Dictionary<string, string>());
         var continuation = await new CompensationScope { HandlerMaxAttempts = maxAttempts }.OnChildFaultedAsync(
-            new ActivityChildFaultedContext(context, childExecutionId, child.ExecutableNodeId, incidentId, faultCode: "participant.fault", faultCategory: category));
+            new ActivityChildFaultedContext(context, childExecutionId, child.ExecutableNodeId, incidentId, null, "participant.fault", category, child.Metadata));
         return new(continuation, context, context.GetChildActivityScheduleRequests().ToArray(), state);
     }
 

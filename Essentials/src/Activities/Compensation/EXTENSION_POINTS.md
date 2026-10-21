@@ -25,7 +25,9 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   `IRuntimeActivityInterventionDecisionHandler` to apply them. Entry status `ResolvedManually` and phase `Abandoned`
   are part of private state version 4 (the current version is 5, spec 261).
 - Descendant faults (spec 258 R-3): the scope implements `IRuntimeActivityDescendantFaultHandler`, so a fault under a
-  Sequence or loop step reaches it as a fault of that step.
+  Sequence or loop step reaches it as a fault of that step. Direct/combined child faults route from the callback's
+  committed child provenance, and descendant faults from its committed via-child provenance; delivery-command keys
+  do not substitute for that ownership evidence.
 - Handler retry backoff (spec 261): the inputs `handlerRetryDelay` (default `00:00:00`, at most 24 hours),
   `handlerRetryBackoffMultiplier` (default `2`, at least 1) and `handlerRetryMaxDelay` (default `00:05:00`, at least the
   delay and at most 24 hours). After the n-th failed attempt the scope waits `min(max delay, delay × multiplier^(n − 1))`

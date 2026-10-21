@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import React from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
@@ -19,20 +19,28 @@ import {
 } from "../module";
 import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 
-const mountedPages = new Set<() => void>();
-let originalEventSource: typeof EventSource | undefined;
-let eventSourceCaptured = false;
-
-afterEach(() => {
-  for (const unmount of [...mountedPages]) unmount();
-  if (eventSourceCaptured) {
-    globalThis.EventSource = originalEventSource as typeof EventSource;
-    originalEventSource = undefined;
-    eventSourceCaptured = false;
-  }
-});
+const renderedPanelCleanups = new Set<() => Promise<void>>();
 
 describe("structured logs module", () => {
+  let originalEventSource: PropertyDescriptor | undefined;
+  let originalClipboard: PropertyDescriptor | undefined;
+
+  beforeEach(() => {
+    originalEventSource = Object.getOwnPropertyDescriptor(globalThis, "EventSource");
+    originalClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    StubEventSource.instances = [];
+    globalThis.EventSource = StubEventSource as unknown as typeof EventSource;
+  });
+
+  afterEach(async () => {
+    try {
+      await Promise.all([...renderedPanelCleanups].map(cleanup => cleanup()));
+    } finally {
+      restoreProperty(globalThis, "EventSource", originalEventSource);
+      restoreProperty(navigator, "clipboard", originalClipboard);
+    }
+  });
+
   it("registers navigation, route, and bottom panel contributions", () => {
     const api = stubApi();
 
@@ -70,9 +78,96 @@ describe("structured logs module", () => {
       .toBe("https://backend.example/_elsa/studio/diagnostics/structured-logs/stream?minLevel=Warning&category=Elsa.Workflows&source=server-1");
   });
 
+  it.each([
+    ["same-origin", `${window.location.origin}/`],
+    ["separate-origin", "https://backend.example/"]
+  ])("passes credentials to the rendered EventSource for a %s backend without changing its filter URL", async (_, baseUrl) => {
+    register(stubApi({ baseUrl }));
+
+    await renderPanel();
+
+    const source = StubEventSource.instances[0];
+    expect(StubEventSource.instances).toHaveLength(1);
+    expect(source?.url).toBe(new URL("/_elsa/studio/diagnostics/structured-logs/stream?minLevel=Information", baseUrl).toString());
+    expect(source?.initOptions).toEqual({ withCredentials: true });
+  });
+
+  it("replaces the credentialed stream for each filter and closes the active stream on unmount", async () => {
+    register(stubApi({
+      getJson: async url => url.includes("/sources") ? [{ id: "server-1", displayName: "Server" }] : []
+    }));
+
+    const { container, unmount } = await renderPanel(StructuredLogsPage);
+    const scenarios = [
+      { selector: "[aria-label='Minimum log level']", value: "Warning", query: "minLevel=Warning" },
+      { selector: "[aria-label='Structured log source']", value: "server-1", query: "minLevel=Warning&source=server-1" },
+      { selector: "[aria-label='Filter by category']", value: "Elsa.Workflows", query: "minLevel=Warning&category=Elsa.Workflows&source=server-1" }
+    ];
+    let expectedStreamCount = 1;
+
+    for (const scenario of scenarios) {
+      const previous = StubEventSource.instances.at(-1);
+      await changeControlValue(container, scenario.selector, scenario.value);
+
+      const current = StubEventSource.instances.at(-1);
+      expectedStreamCount++;
+      expect(StubEventSource.instances).toHaveLength(expectedStreamCount);
+      expect(previous?.readyState).toBe(StubEventSource.CLOSED);
+      expect(current?.url).toBe(`https://backend.example/_elsa/studio/diagnostics/structured-logs/stream?${scenario.query}`);
+      expect(current?.initOptions).toEqual({ withCredentials: true });
+    }
+
+    const active = StubEventSource.instances.at(-1);
+    await unmount();
+    expect(active?.readyState).toBe(StubEventSource.CLOSED);
+  });
+
+  it("preserves streamed page entries through pause and reconnect callbacks on the existing stream", async () => {
+    register(stubApi());
+
+    const { container, unmount } = await renderPanel(StructuredLogsPage);
+    const source = StubEventSource.instances[0];
+    expect(StubEventSource.instances).toHaveLength(1);
+    if (!source)
+      throw new Error("Expected the rendered page to open its structured log stream.");
+
+    flushSync(() => source.onopen?.call(source, new Event("open")));
+    await flushPromises();
+    expect(container.querySelector(".structured-logs-status.live")).toBeTruthy();
+
+    flushSync(() => source.dispatchEvent(new MessageEvent("entry", { data: JSON.stringify(wireEntry(1, "first streamed entry")) })));
+    await flushPromises();
+    expect(container.querySelectorAll(".structured-log-row")).toHaveLength(1);
+    expect(container.textContent).toContain("first streamed entry");
+
+    clickButton(container, "Pause");
+    flushSync(() => source.dispatchEvent(new MessageEvent("entry", { data: JSON.stringify(wireEntry(2, "buffered streamed entry")) })));
+    await flushPromises();
+    expect(container.querySelectorAll(".structured-log-row")).toHaveLength(1);
+    expect(container.textContent).toContain("1 buffered while paused");
+    expect(container.textContent).not.toContain("buffered streamed entry");
+
+    clickButton(container, "Resume");
+    expect(container.querySelectorAll(".structured-log-row")).toHaveLength(2);
+    expect(container.textContent).toContain("buffered streamed entry");
+
+    flushSync(() => source.onerror?.call(source, new Event("error")));
+    await flushPromises();
+    expect(container.querySelector(".structured-logs-status.disconnected")).toBeTruthy();
+    expect(container.textContent).toContain("The browser will retry automatically.");
+    expect(StubEventSource.instances).toEqual([source]);
+    expect(source.readyState).not.toBe(StubEventSource.CLOSED);
+
+    flushSync(() => source.onopen?.call(source, new Event("open")));
+    await flushPromises();
+    expect(container.querySelector(".structured-logs-status.live")).toBeTruthy();
+    expect(StubEventSource.instances).toEqual([source]);
+
+    await unmount();
+    expect(source.readyState).toBe(StubEventSource.CLOSED);
+  });
+
   it("renders a minimum log level selector in the bottom panel", async () => {
-    const previousEventSource = globalThis.EventSource;
-    globalThis.EventSource = StubEventSource as unknown as typeof EventSource;
     register(stubApi({
       getJson: async url => url.includes("/sources") ? [] : []
     }));
@@ -82,12 +177,9 @@ describe("structured logs module", () => {
     expect(container.querySelector("[aria-label='Minimum log level']")).toBeTruthy();
 
     await unmount();
-    globalThis.EventSource = previousEventSource;
   });
 
   it("renders a structured log download action in the bottom panel", async () => {
-    const previousEventSource = globalThis.EventSource;
-    globalThis.EventSource = StubEventSource as unknown as typeof EventSource;
     register(stubApi({
       getJson: async url => url.includes("/sources") ? [] : [wireEntry(1)]
     }));
@@ -98,14 +190,10 @@ describe("structured logs module", () => {
     expect([...container.querySelectorAll("button")].some(button => button.textContent === "Download")).toBe(true);
 
     await unmount();
-    globalThis.EventSource = previousEventSource;
   });
 
   it("copies a single structured log message from the row action", async () => {
-    const previousEventSource = globalThis.EventSource;
-    const previousClipboard = navigator.clipboard;
     const copiedText: string[] = [];
-    globalThis.EventSource = StubEventSource as unknown as typeof EventSource;
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: { writeText: async (text: string) => copiedText.push(text) }
@@ -123,8 +211,6 @@ describe("structured logs module", () => {
     expect(copiedText).toEqual(["copy this message"]);
 
     await unmount();
-    Object.defineProperty(navigator, "clipboard", { configurable: true, value: previousClipboard });
-    globalThis.EventSource = previousEventSource;
   });
 
   it("exports visible rows as structured JSONL", () => {
@@ -204,21 +290,24 @@ describe("structured logs module", () => {
   });
 
   it("renders loading separately from an empty live result", async () => {
-    const loading = renderPage(() => new Promise(() => {}));
+    register(stubApi({ getJson: () => new Promise(() => {}) }));
+    const loading = await renderPanel(StructuredLogsPage);
     await flushPromises();
 
     expect(loading.container.textContent).toContain("Loading recent structured logs.");
     expect(loading.container.textContent).not.toContain("No structured logs received yet.");
-    loading.unmount();
+    await loading.unmount();
 
-    const empty = renderPage(async () => []);
+    register(stubApi());
+    const empty = await renderPanel(StructuredLogsPage);
     await flushPromises();
-    StubEventSource.latest()?.open();
+    const emptyStream = StubEventSource.instances.at(-1);
+    flushSync(() => emptyStream?.onopen?.call(emptyStream, new Event("open")));
     await flushPromises();
 
     expect(empty.container.textContent).toContain("live");
     expect(empty.container.querySelector(".structured-logs-empty")?.textContent).toContain("No structured logs received yet.");
-    empty.unmount();
+    await empty.unmount();
   });
 
   it.each([
@@ -227,26 +316,27 @@ describe("structured logs module", () => {
     ["unavailable", "Status code '404'", /Structured logs are not available on this backend/],
     ["failure", "Status code '500'", /Structured logs failed:/]
   ])("renders a distinct structured logs %s state for %s", async (_state, message, expected) => {
-    const { container } = renderPage(async () => { throw new Error(message); });
+    register(stubApi({ getJson: async () => { throw new Error(message); } }));
+    const { container } = await renderPanel(StructuredLogsPage);
     await flushPromises();
 
     expect(container.textContent).toMatch(expected);
     expect(container.querySelector(".structured-logs-empty")?.textContent).not.toContain("No structured logs received yet.");
 
-    const stream = StubEventSource.latest();
+    const stream = StubEventSource.instances.at(-1);
     const streamUrl = "https://backend.example/_elsa/studio/diagnostics/structured-logs/stream?minLevel=Information";
     expect(stream).toBeDefined();
     expect(StubEventSource.instances).toEqual([stream]);
     expect(stream?.url).toBe(streamUrl);
 
-    stream?.onerror?.call(stream as unknown as EventSource, new Event("error"));
+    flushSync(() => stream?.onerror?.call(stream, new Event("error")));
     await flushPromises();
 
     expect(container.textContent).toMatch(expected);
     expect(StubEventSource.instances).toEqual([stream]);
     expect(stream?.url).toBe(streamUrl);
 
-    stream?.open();
+    flushSync(() => stream?.onopen?.call(stream, new Event("open")));
     await flushPromises();
 
     expect(container.textContent).toMatch(expected);
@@ -257,57 +347,51 @@ describe("structured logs module", () => {
   it("keeps a recent-query permission state through pause/resume and recovers after filters change", async () => {
     const recentUrls: string[] = [];
     const permissionMessage = "You do not have permission to view structured logs.";
-    const { container } = renderPage(async url => {
-      if (url.endsWith("/sources")) {
-        return [];
-      }
+    register(stubApi({
+      getJson: async url => {
+        if (url.endsWith("/sources"))
+          return [];
 
-      if (url.includes("/recent")) {
-        recentUrls.push(url);
-        if (recentUrls.length === 1) {
-          throw new Error("Status code '403'");
+        if (url.includes("/recent")) {
+          recentUrls.push(url);
+          if (recentUrls.length === 1)
+            throw new Error("Status code '403'");
+          return [];
         }
-        return [];
-      }
 
-      throw new Error(`Unexpected structured logs request: ${url}`);
-    });
+        throw new Error(`Unexpected structured logs request: ${url}`);
+      }
+    }));
+    const { container } = await renderPanel(StructuredLogsPage);
     await flushPromises();
 
     expect(recentUrls).toHaveLength(1);
     expect(recentUrls[0]).toContain("minLevel=Information");
     expect(container.querySelector(".structured-logs-empty")?.textContent).toBe(permissionMessage);
 
-    const originalStream = StubEventSource.latest();
+    const originalStream = StubEventSource.instances.at(-1);
     expect(originalStream).toBeDefined();
     expect(StubEventSource.instances).toEqual([originalStream]);
 
-    const pauseButton = [...container.querySelectorAll("button")].find(button => button.textContent === "Pause")!;
-    flushSync(() => pauseButton.click());
+    clickButton(container, "Pause");
     expect(container.querySelector(".structured-logs-empty")?.textContent).toBe(permissionMessage);
 
-    const resumeButton = [...container.querySelectorAll("button")].find(button => button.textContent === "Resume")!;
-    flushSync(() => resumeButton.click());
+    clickButton(container, "Resume");
     expect(container.querySelector(".structured-logs-empty")?.textContent).toBe(permissionMessage);
 
-    const minimumLevel = container.querySelector<HTMLSelectElement>("[aria-label='Minimum log level']")!;
-    const nativeValueSetter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!;
-    flushSync(() => {
-      nativeValueSetter.call(minimumLevel, "Warning");
-      minimumLevel.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await changeControlValue(container, "[aria-label='Minimum log level']", "Warning");
     await flushPromises();
 
     expect(recentUrls).toHaveLength(2);
     expect(recentUrls[1]).toContain("minLevel=Warning");
     expect(originalStream?.readyState).toBe(StubEventSource.CLOSED);
 
-    const replacementStream = StubEventSource.latest();
+    const replacementStream = StubEventSource.instances.at(-1);
     expect(replacementStream).not.toBe(originalStream);
     expect(StubEventSource.instances).toEqual([originalStream, replacementStream]);
     expect(replacementStream?.url).toBe("https://backend.example/_elsa/studio/diagnostics/structured-logs/stream?minLevel=Warning");
 
-    replacementStream?.open();
+    flushSync(() => replacementStream?.onopen?.call(replacementStream, new Event("open")));
     await flushPromises();
 
     expect(container.querySelector(".structured-logs-status")?.classList.contains("live")).toBe(true);
@@ -316,32 +400,15 @@ describe("structured logs module", () => {
   });
 });
 
-function renderPage(getJson: (url: string, init?: RequestInit) => Promise<unknown>) {
-  if (!eventSourceCaptured) {
-    originalEventSource = globalThis.EventSource;
-    eventSourceCaptured = true;
-  }
-  StubEventSource.clear();
-  globalThis.EventSource = StubEventSource as unknown as typeof EventSource;
-  register(stubApi({ getJson }));
-  const container = document.createElement("div");
-  document.body.appendChild(container);
-  const root = createRoot(container);
-  flushSync(() => root.render(React.createElement(StructuredLogsPage)));
-  const unmount = () => {
-    if (!mountedPages.delete(unmount)) return;
-    flushSync(() => root.unmount());
-    container.remove();
-  };
-  mountedPages.add(unmount);
-  return { container, unmount };
-}
-
-function stubApi(http?: {
+function stubApi(options?: {
+  baseUrl?: string;
   getJson?: (url: string, init?: RequestInit) => Promise<unknown>;
 }) {
   return {
-    backend: { baseUrl: "https://backend.example/", http: { getJson: http?.getJson ?? (async () => []) } },
+    backend: {
+      baseUrl: options?.baseUrl ?? "https://backend.example/",
+      http: { getJson: options?.getJson ?? (async () => []) }
+    },
     navigation: registry(),
     routes: registry(),
     panels: registry()
@@ -352,24 +419,66 @@ function stubApi(http?: {
   };
 }
 
-async function renderPanel() {
+async function renderPanel(component: React.ComponentType = StructuredLogsPanel) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
+  let mounted = true;
 
-  flushSync(() => {
-    root.render(React.createElement(StructuredLogsPanel));
-  });
-  await flushPromises();
+  const unmount = async () => {
+    if (!mounted)
+      return;
+
+    mounted = false;
+    try {
+      flushSync(() => root.unmount());
+    } finally {
+      container.remove();
+      renderedPanelCleanups.delete(unmount);
+    }
+    await flushPromises();
+  };
+
+  renderedPanelCleanups.add(unmount);
+
+  try {
+    flushSync(() => {
+      root.render(React.createElement(component));
+    });
+    await flushPromises();
+  } catch (error) {
+    await unmount();
+    throw error;
+  }
 
   return {
     container,
-    unmount: async () => {
-      flushSync(() => root.unmount());
-      container.remove();
-      await flushPromises();
-    }
+    unmount
   };
+}
+
+async function changeControlValue(container: HTMLElement, selector: string, value: string) {
+  const control = container.querySelector<HTMLInputElement | HTMLSelectElement>(selector);
+  if (!control)
+    throw new Error(`Expected to find filter control ${selector}.`);
+
+  const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(control), "value")?.set;
+  if (!setter)
+    throw new Error(`Expected ${selector} to expose a value setter.`);
+
+  flushSync(() => {
+    setter.call(control, value);
+    control.dispatchEvent(new Event(control instanceof HTMLSelectElement ? "change" : "input", { bubbles: true }));
+  });
+  await flushPromises();
+}
+
+function clickButton(container: HTMLElement, label: string) {
+  const button = [...container.querySelectorAll("button")].find(candidate => candidate.textContent === label);
+  if (!button)
+    throw new Error(`Expected to find the ${label} button.`);
+
+  flushSync(() => button.click());
 }
 
 async function flushPromises() {
@@ -379,7 +488,6 @@ async function flushPromises() {
 }
 
 class StubEventSource extends EventTarget {
-  static instances: StubEventSource[] = [];
   static readonly CONNECTING = 0;
   static readonly OPEN = 1;
   static readonly CLOSED = 2;
@@ -390,30 +498,29 @@ class StubEventSource extends EventTarget {
   onmessage: ((this: EventSource, ev: MessageEvent) => unknown) | null = null;
   onopen: ((this: EventSource, ev: Event) => unknown) | null = null;
   readyState = StubEventSource.OPEN;
+  static instances: StubEventSource[] = [];
   url: string;
-  withCredentials = false;
+  initOptions: EventSourceInit | undefined;
+  withCredentials: boolean;
 
-  constructor(url: string | URL) {
+  constructor(url: string | URL, initOptions?: EventSourceInit) {
     super();
     this.url = String(url);
+    this.initOptions = initOptions;
+    this.withCredentials = initOptions?.withCredentials ?? false;
     StubEventSource.instances.push(this);
-  }
-
-  static latest() {
-    return StubEventSource.instances.at(-1);
-  }
-
-  static clear() {
-    StubEventSource.instances = [];
-  }
-
-  open() {
-    this.onopen?.call(this as unknown as EventSource, new Event("open"));
   }
 
   close() {
     this.readyState = StubEventSource.CLOSED;
   }
+}
+
+function restoreProperty(target: object, property: PropertyKey, descriptor: PropertyDescriptor | undefined) {
+  if (descriptor)
+    Object.defineProperty(target, property, descriptor);
+  else
+    Reflect.deleteProperty(target, property);
 }
 
 function registry() {

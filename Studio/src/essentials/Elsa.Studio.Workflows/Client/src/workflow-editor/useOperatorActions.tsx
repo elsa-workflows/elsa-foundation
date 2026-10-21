@@ -186,11 +186,16 @@ export function useOperatorActions({
     };
   }, [context]);
 
+  // The run this hook shows now; null once it unmounts. A submission that resolves after a switch only stores its plan.
+  const currentRun = useRef<string | null>(workflowExecutionId);
+
   // A different run, or leaving the page, stops following; the stored plan is resumed when the run is opened again.
   useEffect(() => {
+    currentRun.current = workflowExecutionId;
     setFollowed(null);
     setMessage(null);
     return () => {
+      currentRun.current = null;
       following.current?.controller.abort();
       following.current = null;
     };
@@ -311,6 +316,8 @@ export function useOperatorActions({
         ...(state.model.scopeActivityExecutionId ? { scopeActivityExecutionId: state.model.scopeActivityExecutionId } : {})
       };
       storePendingOperatorAction(workflowExecutionId, pending);
+      // The page moved on while the submission was in flight: the stored plan is followed when this run opens again.
+      if (currentRun.current !== workflowExecutionId) return;
       setMessage({ text: state.model.submittedLabel, tone: "info" });
       close(state);
       void follow(pending);

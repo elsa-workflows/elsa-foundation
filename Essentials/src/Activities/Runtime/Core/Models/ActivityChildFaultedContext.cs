@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using Elsa.Activities.Runtime.Core.Contracts;
 
 namespace Elsa.Activities.Runtime.Core.Models;
@@ -18,8 +19,23 @@ public sealed class ActivityChildFaultedContext
         string? faultedChildIterationId = null,
         string? faultCode = null,
         string? faultCategory = null)
+        : this(parentContext, faultedChildActivityExecutionId, faultedChildExecutableNodeId, incidentId,
+            faultedChildIterationId, faultCode, faultCategory, FrozenDictionary<string, string>.Empty)
+    {
+    }
+
+    public ActivityChildFaultedContext(
+        IActivityExecutionContext parentContext,
+        string faultedChildActivityExecutionId,
+        string faultedChildExecutableNodeId,
+        string? incidentId,
+        string? faultedChildIterationId,
+        string? faultCode,
+        string? faultCategory,
+        IReadOnlyDictionary<string, string> childSchedulingMetadata)
     {
         ArgumentNullException.ThrowIfNull(parentContext);
+        ArgumentNullException.ThrowIfNull(childSchedulingMetadata);
         ArgumentException.ThrowIfNullOrWhiteSpace(faultedChildActivityExecutionId);
         ArgumentException.ThrowIfNullOrWhiteSpace(faultedChildExecutableNodeId);
 
@@ -36,7 +52,14 @@ public sealed class ActivityChildFaultedContext
         FaultedChildIterationId = faultedChildIterationId;
         FaultCode = string.IsNullOrWhiteSpace(faultCode) ? null : faultCode;
         FaultCategory = string.IsNullOrWhiteSpace(faultCategory) ? null : faultCategory;
+        ChildSchedulingMetadata = childSchedulingMetadata.ToFrozenDictionary(StringComparer.Ordinal);
     }
+
+    /// <summary>
+    /// Immutable metadata from the faulted child's committed scheduling provenance, independent of the
+    /// command that delivered its fault. Mirrors <see cref="ActivityChildCompletedContext.ChildSchedulingMetadata"/>.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> ChildSchedulingMetadata { get; }
 
     public IActivityExecutionContext ParentContext { get; }
     public string FaultedChildActivityExecutionId { get; }

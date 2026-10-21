@@ -511,6 +511,13 @@ public sealed class CompensationScopeDecisionTests
         [CompensationScope.MetadataKeys.Attempt] = attempt.ToString(System.Globalization.CultureInfo.InvariantCulture)
     };
 
+    private static Dictionary<string, string> PoisonedRoutingMetadata() => new(StringComparer.Ordinal)
+    {
+        [CompensationScope.MetadataKeys.Role] = CompensationScope.MetadataKeys.HandlerRole,
+        [CompensationScope.MetadataKeys.Scope] = "spoofed-scope",
+        [CompensationScope.MetadataKeys.Step] = "spoofed-step"
+    };
+
     private static async Task<Evaluation> ExecuteAsync(ExecutableNode journey)
     {
         var context = NewContext(journey, state: null, commandMetadata: new Dictionary<string, string>());
@@ -526,9 +533,9 @@ public sealed class CompensationScopeDecisionTests
         string childNodeId,
         int maxAttempts = 3)
     {
-        var context = NewContext(journey, state, metadata);
+        var context = NewContext(journey, state, PoisonedRoutingMetadata());
         var continuation = await new CompensationScope { HandlerMaxAttempts = maxAttempts }.OnChildCompletedAsync(
-            new ActivityChildCompletedContext(context, childExecutionId, childNodeId, [ActivityOutcomes.Done]));
+            new ActivityChildCompletedContext(context, childExecutionId, childNodeId, [ActivityOutcomes.Done], null, metadata));
         return new(continuation, context, context.GetChildActivityScheduleRequests().ToArray(), state);
     }
 
@@ -542,9 +549,9 @@ public sealed class CompensationScopeDecisionTests
         string? category,
         int maxAttempts = 3)
     {
-        var context = NewContext(journey, state, child.Metadata);
+        var context = NewContext(journey, state, PoisonedRoutingMetadata());
         var continuation = await new CompensationScope { HandlerMaxAttempts = maxAttempts }.OnChildFaultedAsync(
-            new ActivityChildFaultedContext(context, childExecutionId, child.ExecutableNodeId, incidentId, faultCode: faultCode, faultCategory: category));
+            new ActivityChildFaultedContext(context, childExecutionId, child.ExecutableNodeId, incidentId, null, faultCode, category, child.Metadata));
         return new(continuation, context, context.GetChildActivityScheduleRequests().ToArray(), state);
     }
 

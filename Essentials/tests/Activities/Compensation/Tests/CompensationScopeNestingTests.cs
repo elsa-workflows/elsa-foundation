@@ -409,14 +409,39 @@ public sealed class CompensationScopeNestingTests
     {
         var afterInventory = await RunToDeliveryAsync();
         var step = Child("reserve-delivery", Step("Reserve delivery"));
-        var context = NewContext(afterInventory.State, step.Metadata);
+        var context = NewContext(afterInventory.State, PoisonedRoutingMetadata());
 
         var continuation = await new CompensationScope().OnDescendantFaultedAsync(new ActivityDescendantFaultedContext(
-            context, "actexec-leaf", "node-leaf", "actexec-reserve-delivery", "reserve-delivery", "incident-leaf", faultCode: "participant.fault"));
+            context, "actexec-leaf", "node-leaf", "actexec-reserve-delivery", "reserve-delivery", "incident-leaf",
+            null, "participant.fault", null, step.Metadata));
 
         Assert.Equal("incident-leaf", Assert.Single(context.GetChildFaultAbsorptionRequests()).IncidentId);
         Assert.Equal("release-inventory", Assert.Single(context.GetChildActivityScheduleRequests()).ExecutableNodeId);
         Assert.Equal(CompensationScopePhase.Compensating, CompensationScopeStatePersister.Deserialize(continuation.StateUpdate!.Value.InlineValue!.Value).Phase);
+    }
+
+    [Fact]
+    public async Task A_combined_child_outcome_routes_from_committed_child_metadata_not_delivery_metadata()
+    {
+        var afterInventory = await RunToDeliveryAsync();
+        var step = Child("reserve-delivery", Step("Reserve delivery"));
+        var context = NewContext(afterInventory.State, PoisonedRoutingMetadata());
+        var notification = new ActivityChildNotifiedContext("actexec-reserve-delivery", "reserve-delivery", "test.signal");
+
+        var continuation = await new CompensationScope().OnChildOutcomeAsync(new ActivityChildOutcomeContext(
+            context,
+            "actexec-reserve-delivery",
+            "reserve-delivery",
+            null,
+            new ActivityFault("participant.fault", "the step failed"),
+            "incident-delivery",
+            [notification],
+            step.Metadata));
+
+        Assert.Equal("incident-delivery", Assert.Single(context.GetChildFaultAbsorptionRequests()).IncidentId);
+        Assert.Equal("release-inventory", Assert.Single(context.GetChildActivityScheduleRequests()).ExecutableNodeId);
+        Assert.Equal(CompensationScopePhase.Compensating,
+            CompensationScopeStatePersister.Deserialize(continuation.StateUpdate!.Value.InlineValue!.Value).Phase);
     }
 
     private static CompensationHandedOverEntry HandedOver(string entryId, string step, string handler) =>
@@ -427,6 +452,13 @@ public sealed class CompensationScopeNestingTests
         [CompensationScope.MetadataKeys.Role] = CompensationScope.MetadataKeys.StepRole,
         [CompensationScope.MetadataKeys.Scope] = ScopeExecutionId,
         [CompensationScope.MetadataKeys.Step] = name
+    };
+
+    private static Dictionary<string, string> PoisonedRoutingMetadata() => new(StringComparer.Ordinal)
+    {
+        [CompensationScope.MetadataKeys.Role] = CompensationScope.MetadataKeys.HandlerRole,
+        [CompensationScope.MetadataKeys.Scope] = "spoofed-scope",
+        [CompensationScope.MetadataKeys.Step] = "spoofed-step"
     };
 
     private static RuntimeChildActivityScheduleRequest Child(string nodeId, IReadOnlyDictionary<string, string> metadata) =>
@@ -464,7 +496,7 @@ public sealed class CompensationScopeNestingTests
     {
         var context = NewContext(state, child.Metadata, graph);
         var continuation = await new CompensationScope { ConfirmOnComplete = confirmOnComplete }.OnChildCompletedAsync(
-            new ActivityChildCompletedContext(context, childExecutionId, child.ExecutableNodeId, [ActivityOutcomes.Done]));
+            new ActivityChildCompletedContext(context, childExecutionId, child.ExecutableNodeId, [ActivityOutcomes.Done], null, child.Metadata));
         return new(continuation, context, context.GetChildActivityScheduleRequests().ToArray(), state);
     }
 
@@ -478,7 +510,7 @@ public sealed class CompensationScopeNestingTests
     {
         var context = NewContext(state, child.Metadata);
         var continuation = await new CompensationScope().OnChildFaultedAsync(
-            new ActivityChildFaultedContext(context, childExecutionId, child.ExecutableNodeId, incidentId, faultCode: code, faultCategory: category));
+            new ActivityChildFaultedContext(context, childExecutionId, child.ExecutableNodeId, incidentId, null, code, category, child.Metadata));
         return new(continuation, context, context.GetChildActivityScheduleRequests().ToArray(), state);
     }
 
