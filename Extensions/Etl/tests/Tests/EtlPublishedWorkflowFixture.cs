@@ -108,7 +108,7 @@ internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
     public WorkflowExecutable Executable { get; }
     public WorkflowExecutableSourceReference Reference { get; }
 
-    public static async Task<EtlPublishedWorkflowFixture> CreateAsync(bool flowchart)
+    public static async Task<EtlPublishedWorkflowFixture> CreateAsync(bool flowchart, string? catalogSourceId = null)
     {
         var directory = Path.Combine(Path.GetTempPath(), "Elsa.Etl.PublishedWorkflow", Guid.NewGuid().ToString("N"));
         WorkflowExecutionHarness? authoring = null;
@@ -142,7 +142,7 @@ internal sealed class EtlPublishedWorkflowFixture : IAsyncDisposable
             await using (var operation = await OpenPartitionScopeAsync(authoring.Services, scope))
             {
                 var services = operation.ServiceProvider;
-                sourceCatalog = NativeEtlAuthoredComposite.CreateSourceCatalog(services, ActivityTypeKeys(flowchart));
+                sourceCatalog = NativeEtlAuthoredComposite.CreateSourceCatalog(services, ActivityTypeKeys(flowchart), catalogSourceId);
                 var compiler = services.GetRequiredService<IEtlArtifactCompiler>();
                 var definitions = services.GetRequiredService<IEtlDefinitionStore>();
                 var initialPipeline = EtlTestPipelines.Create();
