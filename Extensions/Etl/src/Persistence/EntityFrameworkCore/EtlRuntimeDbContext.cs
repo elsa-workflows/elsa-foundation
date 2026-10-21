@@ -10,6 +10,7 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
     internal DbSet<EtlRuntimeRunRecord> Runs => Set<EtlRuntimeRunRecord>();
     internal DbSet<EtlConnectorRunRecord> ConnectorRuns => Set<EtlConnectorRunRecord>();
     internal DbSet<EtlConnectorPartitionRecord> ConnectorPartitions => Set<EtlConnectorPartitionRecord>();
+    internal DbSet<EtlConnectorHttpPageRecord> ConnectorHttpPages => Set<EtlConnectorHttpPageRecord>();
     internal DbSet<EtlRuntimePreparedRecord> PreparedRuns => Set<EtlRuntimePreparedRecord>();
     internal DbSet<EtlRuntimePartitionRecord> Partitions => Set<EtlRuntimePartitionRecord>();
     internal DbSet<EtlRuntimeReservationRecord> Reservations => Set<EtlRuntimeReservationRecord>();
@@ -65,6 +66,20 @@ internal abstract class EtlRuntimeDbContext(DbContextOptions options) : DbContex
         connectorPartitions.HasOne<EtlConnectorRunRecord>()
             .WithMany()
             .HasForeignKey(row => new { row.ScopeKey, row.RunKey })
+            .OnDelete(DeleteBehavior.Restrict);
+
+        var connectorHttpPages = modelBuilder.Entity<EtlConnectorHttpPageRecord>();
+        connectorHttpPages.ToTable(EtlRuntimeEfModule.ConnectorHttpPageTableName);
+        connectorHttpPages.HasKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.PageSequence });
+        connectorHttpPages.Property(row => row.ScopeKey).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
+        connectorHttpPages.Property(row => row.RunKey).HasMaxLength(EtlRuntimeEfModule.EncodedIdentityMaximumLength).IsRequired();
+        connectorHttpPages.Property(row => row.RequestHash).HasMaxLength(EtlRuntimeEfModule.HashLength).IsRequired();
+        connectorHttpPages.Property(row => row.PageJson).IsRequired();
+        connectorHttpPages.Property(row => row.SchemaVersion).HasMaxLength(EtlRuntimeEfModule.SchemaVersionMaximumLength).IsRequired();
+        connectorHttpPages.HasIndex(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.RequestHash }).IsUnique();
+        connectorHttpPages.HasOne<EtlConnectorPartitionRecord>()
+            .WithMany()
+            .HasForeignKey(row => new { row.ScopeKey, row.RunKey, row.PartitionOrdinal })
             .OnDelete(DeleteBehavior.Restrict);
 
         var prepared = modelBuilder.Entity<EtlRuntimePreparedRecord>();

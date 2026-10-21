@@ -52,5 +52,9 @@ using System.Runtime.CompilerServices;
     nameof(EtlConnectorPartitionRecord.PositionJson))]
 [assembly: EfSchemaContent(
     Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEfModule.SchemaFamily,
+    typeof(EtlConnectorHttpPageRecord),
+    nameof(EtlConnectorHttpPageRecord.PageJson))]
+[assembly: EfSchemaContent(
+    Elsa.Etl.Persistence.EntityFrameworkCore.EtlRuntimeEfModule.SchemaFamily,
     typeof(EtlRuntimeTerminalRecord),
     nameof(EtlRuntimeTerminalRecord.ResultJson))]

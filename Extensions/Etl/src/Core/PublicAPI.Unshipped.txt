@@ -856,6 +856,7 @@ Elsa.Etl.Core.EtlHttpPolicy.MaxRetainedInputBytes.get -> long
 Elsa.Etl.Core.EtlHttpPolicy.MaxRetainedInputBytes.init -> void
 Elsa.Etl.Core.EtlHttpPolicy.RequestTimeoutSeconds.get -> int
 Elsa.Etl.Core.EtlHttpPolicy.RequestTimeoutSeconds.init -> void
+const Elsa.Etl.Core.EtlHttpPolicy.MaximumSupportedContinuationBytes = 65536 -> int
 Elsa.Etl.Core.EtlJsonField
 Elsa.Etl.Core.EtlJsonField.<Clone>$() -> Elsa.Etl.Core.EtlJsonField!
 Elsa.Etl.Core.EtlJsonField.Deconstruct(out string! Name, out string! Pointer, out Elsa.Etl.Core.EtlColumnType Type, out bool Required) -> void
@@ -1264,3 +1265,20 @@ static Elsa.Etl.Core.Runtime.EtlRetainedHttpPage.operator ==(Elsa.Etl.Core.Runti
 virtual Elsa.Etl.Core.Runtime.EtlConnectorPosition.EqualityContract.get -> System.Type!
 virtual Elsa.Etl.Core.Runtime.EtlConnectorPosition.Equals(Elsa.Etl.Core.Runtime.EtlConnectorPosition? other) -> bool
 virtual Elsa.Etl.Core.Runtime.EtlConnectorPosition.PrintMembers(System.Text.StringBuilder! builder) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorPositionResult
+Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorPositionResult!
+Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.Deconstruct(out Elsa.Etl.Core.Runtime.EtlStoreStatus Status, out Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease? Lease) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.Equals(Elsa.Etl.Core.Runtime.EtlConnectorPositionResult? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.EtlConnectorPositionResult(Elsa.Etl.Core.Runtime.EtlStoreStatus Status, Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease? Lease) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.Lease.get -> Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease?
+Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.Lease.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.Status.get -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.Status.init -> void
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.AdvanceEmptyHttpPageAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorPositionResult!>
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.AttachHttpPageAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, Elsa.Etl.Core.Runtime.EtlRetainedHttpPage! page, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorPositionResult!>
+override Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.ToString() -> string!
+static Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorPositionResult? left, Elsa.Etl.Core.Runtime.EtlConnectorPositionResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorPositionResult.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorPositionResult? left, Elsa.Etl.Core.Runtime.EtlConnectorPositionResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.HttpRequestHash(Elsa.Etl.Core.Runtime.EtlHttpRequest! request) -> string!

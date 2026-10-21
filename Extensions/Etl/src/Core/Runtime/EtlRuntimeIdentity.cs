@@ -6,10 +6,18 @@ using System.Text;
 
 namespace Elsa.Etl.Core.Runtime;
 
-/// <summary>Version-one mechanical identities shared by ETL producers and persistence providers.</summary>
+/// <summary>Versioned mechanical identities shared by ETL producers and persistence providers.</summary>
 /// <remarks>Values are length-framed, lossless little-endian UTF-16 code units with a distinct null marker. No worker, attempt, lease or fence is included.</remarks>
 public static class EtlRuntimeIdentity
 {
+    /// <summary>Stable digest of a request within its pinned shard, independent of worker or attempt.</summary>
+    public static string HttpRequestHash(EtlHttpRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(request.ShardId);
+        return Hash("etl-http-request-v2", request.ShardId, request.Continuation);
+    }
+
     public static string ScopeKey(EtlScope scope)
     {
         ArgumentNullException.ThrowIfNull(scope);

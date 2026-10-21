@@ -120,7 +120,7 @@ internal static class EtlJsonPageReader
         if (firstRecordOrdinal < 0 || limits.MaxRecordBytes <= 0 || limits.MaxFields <= 0 ||
             source.Fields is null || source.Fields.Count == 0 || source.Fields.Count > limits.MaxFields ||
             policy.MaxPageBytes <= 0 || policy.MaxPageRecords <= 0 || policy.MaxJsonDepth is <= 0 or > 64 ||
-            policy.MaxContinuationBytes <= 0)
+            policy.MaxContinuationBytes <= 0 || policy.MaxContinuationBytes > EtlHttpPolicy.MaximumSupportedContinuationBytes)
             throw Refused("etl.http.page-policy-invalid");
 
         var fieldNames = new HashSet<string>(StringComparer.Ordinal);

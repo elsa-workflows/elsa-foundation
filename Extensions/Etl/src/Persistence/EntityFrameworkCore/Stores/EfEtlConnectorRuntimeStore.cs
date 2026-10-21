@@ -56,11 +56,11 @@ internal sealed partial class EfEtlRuntimeStore
         var snapshot = await (from run in RunSnapshots(key.ScopeKey)
             join connector in db.ConnectorRuns.AsNoTracking() on new { run.Run.ScopeKey, run.Run.RunKey } equals new { connector.ScopeKey, connector.RunKey }
             where run.Run.RunKey == key.RunKey
-            select new { Snapshot = run, Connector = connector }).SingleOrDefaultAsync(cancellationToken);
+            select new { Snapshot = run, Connector = connector, PageBytes = db.ConnectorHttpPages.Where(page => page.ScopeKey == connector.ScopeKey && page.RunKey == connector.RunKey).Sum(page => (long?)page.ByteLength) ?? 0 }).SingleOrDefaultAsync(cancellationToken);
         if (snapshot is null) return null;
         ValidateRun(snapshot.Snapshot.Run, scope, runId);
         var view = BuildRunView(snapshot.Snapshot.Run, snapshot.Snapshot.Prepared, snapshot.Snapshot.Terminal);
-        var state = ReadConnectorState(view.Invocation, snapshot.Connector);
+        var state = ReadConnectorState(view.Invocation, snapshot.Connector, snapshot.PageBytes);
         return new(view, state.Bindings, state.Prepared, snapshot.Connector.RetainedInputBytes);
     }
 
@@ -81,7 +81,7 @@ internal sealed partial class EfEtlRuntimeStore
         var row = candidate.Run;
         var runId = EtlRuntimeRecordCodec.DecodeIdentity(row.RunId, "run id");
         ValidateRun(row, scope, runId);
-        var state = ReadConnectorState(EtlRuntimeRecordCodec.ReadInvocation(row.InvocationJson), candidate.Connector);
+        var state = await ReadConnectorStateAsync(EtlRuntimeRecordCodec.ReadInvocation(row.InvocationJson), candidate.Connector, cancellationToken);
         if (state.Prepared is not null) throw new InvalidDataException("A preparing connector already has prepared state.");
         now = NowTicks();
         row.PreparationOwner = EtlRuntimeRecordCodec.EncodeIdentity(workerId, "worker id");
@@ -105,7 +105,7 @@ internal sealed partial class EfEtlRuntimeStore
         if (run is null) return EtlStoreStatus.NotFound;
         var connector = await ConnectorRowAsync(key, cancellationToken);
         if (connector is null) return EtlStoreStatus.Invalid;
-        var state = ReadConnectorState(EtlRuntimeRecordCodec.ReadInvocation(run.InvocationJson), connector);
+        var state = await ReadConnectorStateAsync(EtlRuntimeRecordCodec.ReadInvocation(run.InvocationJson), connector, cancellationToken);
         string preparedJson;
         try { preparedJson = EtlConnectorRecordCodec.ValidatePrepared(state.Pipeline, state.Bindings, prepared); }
         catch (Exception exception) when (exception is ArgumentException or OverflowException) { return EtlStoreStatus.Invalid; }
@@ -156,8 +156,8 @@ internal sealed partial class EfEtlRuntimeStore
         if (candidate is null) return null;
         runId = EtlRuntimeRecordCodec.DecodeIdentity(candidate.Run.RunId, "run id");
         ValidateRun(candidate.Run, scope, runId);
-        var state = ReadConnectorState(EtlRuntimeRecordCodec.ReadInvocation(candidate.Run.InvocationJson), candidate.Connector);
-        var position = ReadConnectorPosition(candidate.Partition, state.Pipeline, state.Bindings, state.Prepared);
+        var state = await ReadConnectorStateAsync(EtlRuntimeRecordCodec.ReadInvocation(candidate.Run.InvocationJson), candidate.Connector, cancellationToken);
+        var position = await ReadConnectorPositionAsync(candidate.Partition, state.Pipeline, state.Bindings, state.Prepared, cancellationToken);
         var row = candidate.Partition;
         now = NowTicks();
         row.Owner = EtlRuntimeRecordCodec.EncodeIdentity(workerId, "worker id");
@@ -188,8 +188,8 @@ internal sealed partial class EfEtlRuntimeStore
         var row = await db.ConnectorPartitions.SingleOrDefaultAsync(x => x.ScopeKey == key.ScopeKey && x.RunKey == key.RunKey && x.PartitionOrdinal == lease.PartitionOrdinal, cancellationToken);
         if (row is null) return EtlStoreStatus.NotFound;
         var connector = await ConnectorRowAsync(key, cancellationToken) ?? throw new InvalidDataException("The connector admission is missing.");
-        var state = ReadConnectorState(EtlRuntimeRecordCodec.ReadInvocation(run.InvocationJson), connector);
-        ReadConnectorPosition(row, state.Pipeline, state.Bindings, state.Prepared);
+        var state = await ReadConnectorStateAsync(EtlRuntimeRecordCodec.ReadInvocation(run.InvocationJson), connector, cancellationToken);
+        await ReadConnectorPositionAsync(row, state.Pipeline, state.Bindings, state.Prepared, cancellationToken);
         var now = NowTicks();
         if (run.Status != (int)EtlRunStatus.Running || !HasConnectorAuthority(row, lease.Owner, lease.Fence, now) ||
             row.PositionJson != EtlConnectorRecordCodec.Write(lease.Position)) return EtlStoreStatus.LeaseLost;
@@ -206,11 +206,11 @@ internal sealed partial class EfEtlRuntimeStore
     private async ValueTask<EtlConnectorRunView> ConnectorViewAsync(EtlRuntimeRunRecord run, EtlConnectorRunRecord connector, CancellationToken cancellationToken)
     {
         var view = await ReadViewAsync(run, cancellationToken);
-        var state = ReadConnectorState(view.Invocation, connector);
+        var state = await ReadConnectorStateAsync(view.Invocation, connector, cancellationToken);
         return new(view, state.Bindings, state.Prepared, connector.RetainedInputBytes);
     }
 
-    private (EtlPipelineV2 Pipeline, EtlConnectorRunBindings Bindings, EtlConnectorPreparedRun? Prepared) ReadConnectorState(EtlInvocation invocation, EtlConnectorRunRecord connector)
+    private (EtlPipelineV2 Pipeline, EtlConnectorRunBindings Bindings, EtlConnectorPreparedRun? Prepared) ReadConnectorState(EtlInvocation invocation, EtlConnectorRunRecord connector, long pageBytes)
     {
         EnsureSchema(connector.SchemaVersion);
         try
@@ -220,7 +220,7 @@ internal sealed partial class EfEtlRuntimeStore
             EtlConnectorRecordCodec.ValidateBindings(pipeline, bindings, options.MaximumPartitionsPerRun);
             var prepared = connector.PreparedJson is null ? null : EtlConnectorRecordCodec.Read<EtlConnectorPreparedRun>(connector.PreparedJson);
             if (prepared is not null) EtlConnectorRecordCodec.ValidatePrepared(pipeline, bindings, prepared);
-            if (connector.RetainedInputBytes != (prepared is null ? 0 : EtlConnectorRecordCodec.RetainedBytes(prepared)) ||
+            if (pageBytes < 0 || connector.RetainedInputBytes != checked((prepared is null ? 0 : EtlConnectorRecordCodec.RetainedBytes(prepared)) + pageBytes) ||
                 connector.RetainedInputBytes > pipeline.Http.MaxRetainedInputBytes || prepared is null && connector.RetainedInputBytes != 0)
                 throw new InvalidDataException("The retained connector input accounting is invalid.");
             return (pipeline, bindings, prepared);
@@ -278,12 +278,14 @@ internal sealed partial class EfEtlRuntimeStore
         var connector = await ConnectorRowAsync(key, cancellationToken);
         if (connector?.PreparedJson is null) return false;
         var run = await db.Runs.SingleAsync(x => x.ScopeKey == key.ScopeKey && x.RunKey == key.RunKey, cancellationToken);
-        var state = ReadConnectorState(EtlRuntimeRecordCodec.ReadInvocation(run.InvocationJson), connector);
+        var state = await ReadConnectorStateAsync(EtlRuntimeRecordCodec.ReadInvocation(run.InvocationJson), connector, cancellationToken);
         var rows = await db.ConnectorPartitions.Where(x => x.ScopeKey == key.ScopeKey && x.RunKey == key.RunKey)
-            .Take(options.MaximumPartitionsPerRun + 1).ToListAsync(cancellationToken);
+            .Take(options.MaximumPartitionsPerRun == int.MaxValue ? int.MaxValue : options.MaximumPartitionsPerRun + 1).ToListAsync(cancellationToken);
         var count = InitialPositions(state.Pipeline, state.Bindings, state.Prepared!).Count();
         if (rows.Count != count) return false;
-        return rows.All(row => EtlConnectorRecordCodec.Complete(ReadConnectorPosition(row, state.Pipeline, state.Bindings, state.Prepared)));
+        foreach (var row in rows)
+            if (!EtlConnectorRecordCodec.Complete(await ReadConnectorPositionAsync(row, state.Pipeline, state.Bindings, state.Prepared, cancellationToken))) return false;
+        return true;
     }
 
     private async ValueTask<long?> ConnectorFailureExpiryAsync(EtlTerminalProposal proposal, long now, CancellationToken cancellationToken)
@@ -293,8 +295,8 @@ internal sealed partial class EfEtlRuntimeStore
         if (row is null) return null;
         var connector = await ConnectorRowAsync(key, cancellationToken) ?? throw new InvalidDataException("The connector admission is missing.");
         var run = await FindRunRowAsync(proposal.Scope, proposal.RunId, cancellationToken) ?? throw new InvalidDataException("The connector run is missing.");
-        var state = ReadConnectorState(EtlRuntimeRecordCodec.ReadInvocation(run.InvocationJson), connector);
-        ReadConnectorPosition(row, state.Pipeline, state.Bindings, state.Prepared);
+        var state = await ReadConnectorStateAsync(EtlRuntimeRecordCodec.ReadInvocation(run.InvocationJson), connector, cancellationToken);
+        await ReadConnectorPositionAsync(row, state.Pipeline, state.Bindings, state.Prepared, cancellationToken);
         return HasConnectorAuthority(row, proposal.PartitionOwner!, proposal.PartitionFence!.Value, now) ? row.ExpiresAtUtcTicks : null;
     }
 

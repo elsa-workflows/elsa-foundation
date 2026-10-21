@@ -41,6 +41,37 @@ public sealed class EtlConnectorExecutableReaderTests
     }
 
     [Fact]
+    public void Host_and_executable_readers_enforce_the_supported_continuation_ceiling()
+    {
+        Assert.Throws<InvalidOperationException>(() => CreateRuntime(feature => feature.HttpLimits = new EtlHttpHostLimits
+        {
+            MaxContinuationBytes = EtlHttpPolicy.MaximumSupportedContinuationBytes + 1
+        }));
+
+        using var runtime = CreateRuntime(feature => feature.HttpLimits = new EtlHttpHostLimits
+        {
+            MaxContinuationBytes = EtlHttpPolicy.MaximumSupportedContinuationBytes
+        });
+        var defaults = EtlV2TestPipelines.Create();
+        var boundaryPipeline = defaults with
+        {
+            Http = defaults.Http with
+            {
+                MaxContinuationBytes = EtlHttpPolicy.MaximumSupportedContinuationBytes
+            }
+        };
+        Assert.Equal(EtlHttpPolicy.MaximumSupportedContinuationBytes,
+            runtime.Reader.Read(Compile(boundaryPipeline)).Http.MaxContinuationBytes);
+
+        var unsupportedPipeline = boundaryPipeline with
+        {
+            Http = boundaryPipeline.Http with { MaxContinuationBytes = EtlHttpPolicy.MaximumSupportedContinuationBytes + 1 }
+        };
+        var exception = Assert.Throws<EtlExecutableException>(() => runtime.Reader.Read(CreateArtifact(unsupportedPipeline)));
+        Assert.Equal("etl.executable.limits-exceeded", exception.Code);
+    }
+
+    [Fact]
     public void Reader_refuses_artifact_batch_limits_above_live_host_capacity()
     {
         using var runtime = CreateRuntime(feature => feature.MaxLiveInputBytes = 1024);

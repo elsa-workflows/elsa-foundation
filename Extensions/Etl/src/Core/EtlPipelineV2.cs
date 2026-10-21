@@ -161,6 +161,10 @@ public sealed record EtlConnectorLimits
 /// <summary>Finite HTTP page, cursor, retention, retry, and request-time bounds for a v2 pipeline.</summary>
 public sealed record EtlHttpPolicy
 {
+    /// <summary>The largest continuation supported by the persisted HTTP page and cursor metadata.</summary>
+    /// <remarks>Runtime metadata uses a lossless UTF-16 representation and is bounded to 512 KiB; this ceiling leaves room for both request and response continuations and their surrounding identities.</remarks>
+    public const int MaximumSupportedContinuationBytes = 64 * 1024;
+
     /// <summary>The maximum raw response bytes retained for one HTTP page.</summary>
     public long MaxPageBytes { get; init; } = 8L * 1024 * 1024;
 
@@ -170,7 +174,7 @@ public sealed record EtlHttpPolicy
     /// <summary>The maximum JSON nesting depth accepted from an HTTP page.</summary>
     public int MaxJsonDepth { get; init; } = 32;
 
-    /// <summary>The maximum UTF-8 bytes in one opaque continuation value.</summary>
+    /// <summary>The maximum UTF-8 bytes in one opaque continuation value, up to <see cref="MaximumSupportedContinuationBytes"/>.</summary>
     public int MaxContinuationBytes { get; init; } = 8 * 1024;
 
     /// <summary>The maximum pages allowed for one source partition.</summary>

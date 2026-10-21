@@ -124,6 +124,21 @@ public sealed class EtlArtifactCompilerV2Tests
     }
 
     [Fact]
+    public void Continuation_limit_obeys_the_persisted_metadata_ceiling()
+    {
+        var pipeline = EtlV2TestPipelines.Create();
+
+        AssertRejected(pipeline with
+        {
+            Http = pipeline.Http with { MaxContinuationBytes = EtlHttpPolicy.MaximumSupportedContinuationBytes + 1 }
+        }, "http.limits.invalid");
+        Assert.Empty(Compile(pipeline with
+        {
+            Http = pipeline.Http with { MaxContinuationBytes = EtlHttpPolicy.MaximumSupportedContinuationBytes }
+        }).Diagnostics);
+    }
+
+    [Fact]
     public void Oversized_input_and_mapping_are_rejected_with_bounded_diagnostics()
     {
         var p = EtlV2TestPipelines.Create();

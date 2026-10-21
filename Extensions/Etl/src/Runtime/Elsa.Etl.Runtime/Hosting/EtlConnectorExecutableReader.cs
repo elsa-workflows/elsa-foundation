@@ -76,6 +76,7 @@ internal sealed class EtlConnectorExecutableReader(EtlRuntimeOptions options)
              limits.MaxLookupBytes > options.Capacity.LookupBytes))
             throw Refused("etl.executable.limits-exceeded");
         if (http.MaxPageBytes <= 0 || http.MaxPageRecords <= 0 || http.MaxJsonDepth is <= 0 or > 64 || http.MaxContinuationBytes <= 0 ||
+            http.MaxContinuationBytes > EtlHttpPolicy.MaximumSupportedContinuationBytes ||
             http.MaxPagesPerPartition <= 0 || http.MaxRetainedInputBytes <= 0 || http.MaxAttempts <= 0 || http.DeadlineSeconds <= 0 ||
             http.RequestTimeoutSeconds <= 0 || http.InitialDelaySeconds <= 0 || http.MaxDelaySeconds <= 0 ||
             http.MaxPageBytes > http.MaxRetainedInputBytes || http.MaxContinuationBytes > http.MaxPageBytes ||

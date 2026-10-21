@@ -96,7 +96,8 @@ internal sealed partial class EtlArtifactCompiler
         if (http is null)
             diagnostics.Add("http.required", "http", "Finite HTTP page and request policy must be declared.");
         else if (http.MaxPageBytes <= 0 || http.MaxPageRecords <= 0 || http.MaxJsonDepth is <= 0 or > 64 ||
-                 http.MaxContinuationBytes <= 0 || http.MaxPagesPerPartition <= 0 || http.MaxRetainedInputBytes <= 0 ||
+                 http.MaxContinuationBytes <= 0 || http.MaxContinuationBytes > EtlHttpPolicy.MaximumSupportedContinuationBytes ||
+                 http.MaxPagesPerPartition <= 0 || http.MaxRetainedInputBytes <= 0 ||
                  http.MaxAttempts <= 0 || http.DeadlineSeconds <= 0 || http.RequestTimeoutSeconds <= 0 ||
                  http.InitialDelaySeconds <= 0 || http.MaxDelaySeconds <= 0 ||
                  http.MaxPageBytes > http.MaxRetainedInputBytes || http.MaxContinuationBytes > http.MaxPageBytes ||

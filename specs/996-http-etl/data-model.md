@@ -46,3 +46,10 @@ Connector admission/preparation and ownership are the first part of T005. Page a
 request history, reservations, route attempts/acknowledgements and atomic batch acceptance must be
 added before the runtime's explicit connector-unavailable refusal is removed. Completion must then
 include those owed-work tables in the same transaction as the shared terminal decision.
+
+The HTTP page companion table retains immutable metadata keyed by scope/run/partition/page sequence,
+with a unique request digest per partition. Its payload is an object reference, not inline response
+JSON. Total retained-input accounting includes every retained page; empty-page progression keeps
+that history for replay and loop checks. Source request identities are separate from worker attempts
+and lease fences. Nonempty progress must be proved by atomic batch acceptance, not the empty-page
+operation.

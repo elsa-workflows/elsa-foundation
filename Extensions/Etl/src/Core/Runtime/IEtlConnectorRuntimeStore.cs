@@ -17,6 +17,13 @@ public interface IEtlConnectorRuntimeStore
     ValueTask<EtlPreparationLease?> ClaimConnectorPreparationAsync(EtlScope scope, string workerId, CancellationToken cancellationToken = default);
     ValueTask<EtlStoreStatus> CommitConnectorPreparationAsync(EtlPreparationLease lease, EtlConnectorPreparedRun prepared, CancellationToken cancellationToken = default);
     ValueTask<EtlConnectorPartitionLease?> ClaimConnectorPartitionAsync(EtlScope scope, string? runId, string workerId, CancellationToken cancellationToken = default);
+    /// <summary>Retains one verified response for the expected request under current partition ownership.</summary>
+    /// <remarks>The caller verifies the immutable body first. RequestHash is produced by
+    /// <see cref="EtlRuntimeIdentity.HttpRequestHash"/>. Null continuation ends the shard; empty is invalid.
+    /// Replays do not charge retained bytes again. Use the returned position for subsequent operations.</remarks>
+    ValueTask<EtlConnectorPositionResult> AttachHttpPageAsync(EtlConnectorPartitionLease lease, EtlRetainedHttpPage page, CancellationToken cancellationToken = default);
+    /// <summary>Advances only a retained empty page; nonempty pages require batch acceptance.</summary>
+    ValueTask<EtlConnectorPositionResult> AdvanceEmptyHttpPageAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default);
     ValueTask<EtlStoreStatus> RenewConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default);
     ValueTask<EtlStoreStatus> ReleaseConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default);
 
@@ -54,3 +61,6 @@ public sealed record EtlConnectorHttpPosition(long PageSequence, int NextItem, E
     EtlRetainedHttpPage? Page, bool Exhausted) : EtlConnectorPosition;
 public sealed record EtlConnectorPartitionLease(EtlScope Scope, string RunId, int PartitionOrdinal, string Owner,
     long Fence, DateTimeOffset ExpiresAt, EtlConnectorPosition Position);
+
+/// <summary>Authoritative position after an applied or identical replayed transition; no lease on refusal.</summary>
+public sealed record EtlConnectorPositionResult(EtlStoreStatus Status, EtlConnectorPartitionLease? Lease);

@@ -17,6 +17,7 @@ Issue [#3151](https://github.com/elsa-workflows/elsa-foundation/issues/3151). On
   - Completed versioned foundation with runtime-only validation, typed transformation and retained terminal envelopes: [checkpoint](evidence/v2-runtime-reader-checkpoint.md). Connector requests still receive an explicit unavailable refusal until T005/T009 are integrated.
 - [ ] T005 Add typed HTTP page/position/effect/retry store contracts in `Extensions/Etl/src/Core/Runtime/`, EF records/migrations in `src/Persistence/EntityFrameworkCore/` and provider upgrade/claim-shape tests; share current fence/quota/terminal invariants while retaining v1 provider composition.
   - Partial typed admission/preparation/ownership implementation: [checkpoint](evidence/connector-preparation-checkpoint.md). Page, reservation, effect and retry transitions remain owed.
+  - Retained page attachment, request history and empty-page progression: [checkpoint](evidence/http-page-store-checkpoint.md). Nonempty batch/effect/retry transitions and the checkpoint's aggregate-metadata/history-validation resource findings remain owed.
 
 ## Phase 3 — US1: Author and execute HTTP integrations
 

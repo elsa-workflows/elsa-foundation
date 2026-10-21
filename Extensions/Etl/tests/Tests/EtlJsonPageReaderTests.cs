@@ -263,6 +263,20 @@ public sealed class EtlJsonPageReaderTests
     }
 
     [Fact]
+    public void Continuation_policy_is_capped_by_the_persisted_metadata_bound()
+    {
+        var unsupported = Assert.Throws<EtlJsonPageReadException>(() => Read("{\"records\":[]}",
+            policy: new EtlHttpPolicy { MaxContinuationBytes = EtlHttpPolicy.MaximumSupportedContinuationBytes + 1 }));
+        Assert.Equal("etl.http.page-policy-invalid", unsupported.Code);
+
+        var continuation = new string('c', EtlHttpPolicy.MaximumSupportedContinuationBytes);
+        using var document = JsonDocument.Parse(JsonSerializer.Serialize(new { records = Array.Empty<object>(), next = continuation }));
+        var accepted = EtlJsonPageReader.Read(Encoding.UTF8.GetBytes(document.RootElement.GetRawText()), Source(),
+            new EtlConnectorLimits(), new EtlHttpPolicy { MaxContinuationBytes = EtlHttpPolicy.MaximumSupportedContinuationBytes });
+        Assert.Equal(continuation, accepted.Continuation);
+    }
+
+    [Fact]
     public void Single_page_profile_does_not_read_a_continuation_selector()
     {
         var source = Source(pagination: new EtlSinglePagePagination());

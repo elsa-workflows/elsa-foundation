@@ -52,7 +52,9 @@ internal static class EtlConnectorRecordCodec
             limits.MaxPartitions > maximumPartitions || limits.MaxSnapshotBytes <= 0 || limits.MaxLookupBytes <= 0 ||
             limits.MaxLookupBytes > limits.MaxSnapshotBytes || pipeline.Http.MaxRetainedInputBytes <= 0 ||
             pipeline.Http.MaxPagesPerPartition <= 0 || pipeline.Http.MaxPageBytes <= 0 || pipeline.Http.MaxPageRecords <= 0 ||
-            pipeline.Http.MaxContinuationBytes <= 0 || pipeline.Http.MaxPageBytes > pipeline.Http.MaxRetainedInputBytes ||
+            pipeline.Http.MaxContinuationBytes <= 0 ||
+            pipeline.Http.MaxContinuationBytes > EtlHttpPolicy.MaximumSupportedContinuationBytes ||
+            pipeline.Http.MaxPageBytes > pipeline.Http.MaxRetainedInputBytes ||
             pipeline.Http.MaxContinuationBytes > pipeline.Http.MaxPageBytes)
             throw new ArgumentException("The connector storage limits are invalid.");
         switch (pipeline.Source)
@@ -153,7 +155,7 @@ internal static class EtlConnectorRecordCodec
             throw new InvalidDataException("The HTTP position exceeds its finite limits.");
         if (position.Page is { } page && (page.Body.ByteLength > policy.MaxPageBytes || page.RecordCount > policy.MaxPageRecords ||
             page.NextContinuation is { } next && Encoding.UTF8.GetByteCount(next) > policy.MaxContinuationBytes ||
-            page.RequestHash != EtlRuntimeRecordCodec.HashText(Write(position.Request))))
+            page.RequestHash != EtlRuntimeIdentity.HttpRequestHash(position.Request)))
             throw new InvalidDataException("The HTTP page does not match its request or finite limits.");
     }
 

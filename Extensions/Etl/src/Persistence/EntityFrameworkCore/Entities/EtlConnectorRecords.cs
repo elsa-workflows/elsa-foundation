@@ -24,3 +24,15 @@ internal sealed class EtlConnectorPartitionRecord
     public long Revision { get; set; }
     public string SchemaVersion { get; set; } = null!;
 }
+
+internal sealed class EtlConnectorHttpPageRecord
+{
+    public string ScopeKey { get; set; } = null!;
+    public string RunKey { get; set; } = null!;
+    public int PartitionOrdinal { get; set; }
+    public long PageSequence { get; set; }
+    public string RequestHash { get; set; } = null!;
+    public string PageJson { get; set; } = null!;
+    public long ByteLength { get; set; }
+    public string SchemaVersion { get; set; } = null!;
+}
