@@ -73,3 +73,9 @@ dotnet run --project tools/maps/Elsa.Maps.Generator -- check
 ```
 
 Use the normal repository build-slot wrapper for every dotnet command. Coordinate all heavy local verification with root and do not run a second heavy local check concurrently. There is no product or test dependency on #3132; root owns the single serial integration lane and base reconciliation.
+
+## Root normal-host checkpoint
+
+The normal engine-bridge proof ran with host binaries from2381e6459 and final rebuilt OpenTelemetry CSS/Trace-heading assets, whose source/bundle hashes and served-byte comparison are retained in the external execution evidence. The harmless workflow completed; actual trace search/detail returned200 with14engine spans, all14resource joins and12parent-child links. Standard Development UI sign-in, More tools → Diagnostics → OpenTelemetry and the exact generated trace filter led to the real activity span and matching execution tag. Stored-data UI showed one resource and15spans, with no invented trace-total card.
+
+Before/after laptop evidence at1440light and1280dark verifies the corrected long-tag wrapping and visible list Status. Final module26/26, build and CSS lint pass. Failed locator attempts, the first browser tool timeout and initial build-process failure are retained as failures, with successful bounded retries recorded separately. Owned browsers/hosts exited, both ports are free and guarded private-root cleanup completed. This is scoped happy-path/data/layout evidence; backend authorization21/21 remains separate from a denied browser journey, and final integrated gates/review/CI/main remain pending.

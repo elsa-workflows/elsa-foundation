@@ -243,8 +243,8 @@ html[data-theme-mode="dark"] .otel-panel {
 .otel-trace-row {
   width: 100%;
   display: grid;
-  grid-template-columns: 76px minmax(90px, 0.8fr) minmax(150px, 1.4fr) 76px 52px 82px;
-  gap: 10px;
+  grid-template-columns: 64px minmax(0, 0.8fr) minmax(0, 1.4fr) 60px 44px 60px;
+  gap: 6px;
   align-items: center;
   border: 0;
   border-bottom: 1px solid var(--otel-border);
@@ -253,7 +253,7 @@ html[data-theme-mode="dark"] .otel-panel {
   cursor: pointer;
   font: inherit;
   font-size: 12px;
-  padding: 8px 10px;
+  padding: 8px;
   text-align: left;
 }
 
@@ -405,6 +405,12 @@ html[data-theme-mode="dark"] .otel-panel {
   margin: 10px 0;
 }
 
+.otel-span-inspector dt,
+.otel-span-inspector dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .otel-span-inspector dt {
   color: var(--otel-text-muted);
   font-size: 11px;
@@ -413,9 +419,7 @@ html[data-theme-mode="dark"] .otel-panel {
 }
 
 .otel-span-inspector dd {
-  min-width: 0;
   margin: 0;
-  overflow-wrap: anywhere;
 }
 
 .otel-span-inspector h4 {

@@ -469,7 +469,7 @@ function TracesPanel({ state, selectedTrace, selectedSpan }: { state: OTelState;
         <TraceToolbar state={state} />
         <div className="otel-trace-table" role="table" aria-label="Trace summaries">
           <div className="otel-trace-row header" role="row">
-            <span>Start</span><span>Service</span><span>Trace name or ID</span><span>Duration</span><span>Spans</span><span>Status</span>
+            <span>Start</span><span>Service</span><span>Trace</span><span>Duration</span><span>Spans</span><span>Status</span>
           </div>
           {state.traces.length === 0 ? <div className="otel-empty">{state.message}</div> : null}
           {state.traces.map(trace => {
