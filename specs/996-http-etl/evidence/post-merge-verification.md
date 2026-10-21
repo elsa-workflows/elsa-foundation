@@ -1,6 +1,6 @@
 # HTTP ETL delivery verification
 
-Implementation: [PR #3156](https://github.com/elsa-workflows/elsa-foundation/pull/3156), reviewed head `adbc7417c42055e32437eddaeb2f80c980d4c666`, merged normally by the Elsa Workflows Codex App on 21 October 2026 at 18:09:14 UTC as `9462cb743c08a515e9b8973c57110e3f44df0f7f`. [Merge receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3156#issuecomment-6323105067). This closes implementation and T021; T022 remains in progress until the resulting-main gate and bookkeeping below complete.
+Implementation: [PR #3156](https://github.com/elsa-workflows/elsa-foundation/pull/3156), reviewed head `adbc7417c42055e32437eddaeb2f80c980d4c666`, merged normally by the Elsa Workflows Codex App on 21 October 2026 at 18:09:14 UTC as `9462cb743c08a515e9b8973c57110e3f44df0f7f`. [Merge receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3156#issuecomment-6323105067). Implementation, T021 and T022 are complete. The exact resulting-main gate and verified issue/project bookkeeping are recorded below; documentation PR #3182 reconciles this source snapshot.
 
 ## Exact reviewed-head gate
 
@@ -18,11 +18,13 @@ All entries below refer to exact merge `9462cb743c08a515e9b8973c57110e3f44df0f7f
 
 | Gate | Current evidence |
 |---|---|
-| [CI 39650145673](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39650145673) | **In progress.** Final backend/core/architecture logs and summaries are not yet available. Transient live output is not retained here as acceptance evidence; T022 remains incomplete. |
+| [CI 39650145673](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39650145673) | Passed, attempt 1. Completed backend log: **18,863 passed, zero failed, 32 skipped across 95 suites**. Separate core-only: **4,199 passed, zero failed, one skipped across 19 suites**. Separate architecture: **584 passed, zero failed/skipped**. ETL 1,009; workflow runtime 2,530; runtime EF 1,002; HTTP integration 94; Workbench 62 passed. |
 | [Studio CI 39650145447](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39650145447) | Passed. Completed logs: .NET 462, browser 361/five skipped, ETL frontend 69 and workflows frontend 2,285 plus three shuffled repetitions. Lint/typecheck/bundle and host/package/image checks passed. |
 | [CodeQL 39650145255](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39650145255) | Passed for Actions, C#, JavaScript/TypeScript and Python. |
 | [Generated maps fresh](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39650145673/job/119396032059) | Passed. The generator/filter/manifest contracts completed. |
 | [Published maps](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39650145673/job/119396031964) | Passed. The completed log identifies this exact source SHA and maps commit `3da767fe1bd99d79a3d9e777d18dbf46721452b5`. |
+
+Root retained and inspected the [backend log](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39650145673/job/119396031104), [core-only log](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39650145673/job/119420781128) and [architecture log](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39650145673/job/119420781321). The first evidence parser omitted an interleaved workflow-runtime summary in the core log; the corrected extraction accounts for all 19 summaries and matches the raw 2,530-test result. No test or workflow was rerun to change that accounting. Backend/core skips have the same explicit categories listed above. [Final implementation-main receipt](https://github.com/elsa-workflows/elsa-foundation/pull/3156#issuecomment-6324159475).
 
 The five Studio browser skips are opt-in screenshot capture cases, not ETL acceptance. Scheduled-only EF jobs in the main CI run are skipped, not passed. Existing automatic [Packages](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39650145685) and [Docker Images](https://github.com/elsa-workflows/elsa-foundation/actions/runs/39650487584) workflows succeeded; no manual release or deployment was performed.
 
@@ -36,4 +38,4 @@ Physical remote effects remain at least once. Historical receipt/HTTP timeout ca
 
 ## Bookkeeping
 
-GitHub auto-closed #3151 on the implementation merge, but its final gate criterion, `status:in-review` label, project Review/Verification Running state and retained claim intentionally still show T022 pending. Parent #2908 and Program #2892 remain open. A final receipt, reconciled status/acceptance and explicit claim release follow only after completed resulting-main evidence. #3181 remains queued and unclaimed.
+All nine #3151 acceptance criteria are checked. The issue remains closed with `status:done`; Project readback confirms Done / Complete / Verification Passed. The [final bookkeeping and claim release](https://github.com/elsa-workflows/elsa-foundation/issues/3151#issuecomment-6324180064) closes the whole-leaf runtime delivery claim. [Parent #2908](https://github.com/elsa-workflows/elsa-foundation/issues/2908#issuecomment-6324180849) records finite HTTP acceptance while retaining remaining connector/continuous/BPMN and four-provider obligations. Program #2892 remains open and keeps this workroom’s documentation PR #3182 as the sole integration lane; #3181 stays queued until that source-record closeout merges. Documentation-only CI skips are not additional runtime evidence, and the source-closeout commit is not the implementation merge verified above.
