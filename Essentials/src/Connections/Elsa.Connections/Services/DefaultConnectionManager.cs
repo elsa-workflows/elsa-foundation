@@ -153,8 +153,7 @@ internal sealed class DefaultConnectionManager(
             {
                 TenantId = tenantId,
                 Name = document.Definition.Name,
-                RequiredType = document.Definition.TypeName,
-                CheckUsePermission = false
+                RequiredType = document.Definition.TypeName
             }, cancellationToken);
 
             var result = await type.TestAsync(resolved, cancellationToken);

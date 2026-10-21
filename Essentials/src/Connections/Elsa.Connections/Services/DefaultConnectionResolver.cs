@@ -7,17 +7,13 @@ namespace Elsa.Connections.Services;
 internal sealed class DefaultConnectionResolver(
     IConnectionRepository repository,
     IConnectionTypeRegistry types,
-    IConnectionCredentialSourceRegistry credentials,
-    IConnectionPermissionGate permissionGate) : IConnectionResolver
+    IConnectionCredentialSourceRegistry credentials) : IConnectionResolver
 {
     public async ValueTask<IResolvedConnection> ResolveAsync(ConnectionResolveRequest request, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.TenantId);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Name);
-
-        if (request.CheckUsePermission)
-            await permissionGate.EnsureUseAsync(request.TenantId, cancellationToken);
 
         if (!string.Equals(request.Owner, ConnectionOwners.Tenant, StringComparison.OrdinalIgnoreCase))
         {

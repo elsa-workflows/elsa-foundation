@@ -159,13 +159,17 @@ public sealed class ActivityStateViewAndOperatorAccessTests
     [Fact]
     public async Task A_duplicate_projector_fails_startup()
     {
-        await Assert.ThrowsAnyAsync<Exception>(async () =>
+        var thrown = await Record.ExceptionAsync(async () =>
         {
             await using var host = await StateViewHost.StartAsync(Reader, duplicateProjector: true);
             using var scope = host.Services.CreateScope();
             foreach (var task in scope.ServiceProvider.GetServices<Elsa.Tasks.Core.IStartupTask>())
                 await task.ExecuteAsync(CancellationToken.None);
         });
+
+        // Dependency injection may wrap the registry's own failure; the cause must be the duplicate alias.
+        var exception = Assert.IsType<InvalidOperationException>(thrown?.GetBaseException());
+        Assert.Contains(TestProjector.Alias, exception.Message, StringComparison.Ordinal);
     }
 
     // --- FR-416: the permission signal on the run details ---
