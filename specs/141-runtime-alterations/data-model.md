@@ -266,14 +266,17 @@ Rules:
 
 The source transitions to `Superseded`; the replacement retains pinned inputs and records lineage.
 It is a fresh invocation: it keeps the source's metadata except the per-invocation runtime markers
-(activation claims, the attempt-ordinal watermark, parent-outcome and descendant-fault markers,
-background work id, incident, fault and causation metadata). It keeps the scheduling metadata the
+(activation claims, the attempt-ordinal watermark, parent-completion, parent-outcome and
+descendant-fault markers, background work id, incident, fault and causation metadata). It keeps the scheduling metadata the
 parent gave the source in its provenance, and its schedule command carries that metadata, so a parent
 that routes on it recognises the successor's outcome. Routing data a parent kept only in the child's
 command metadata (for example `bpmn.tokenId`) is not durable and is lost, so such a parent resolves the
-successor as it resolves a resumed child. A source whose fault its parent already evaluated passes on
-its parent-completion marker, so the successor's completion is not delivered to that parent; whether it
-should be is open in #3135.
+successor as it resolves a resumed child. A source whose fault its parent already evaluated (it carries
+the parent-completion marker) is accepted only when that parent is still running
+(`SourceParentNotRunning` otherwise) and its executable node carries
+`runtime.acceptsRescheduledFaultedChild`, compiled from `IRuntimeAcceptsRescheduledFaultedChild`
+(`ParentDoesNotAcceptRescheduledChild` otherwise); the successor's outcome then reaches the parent as
+that child's outcome (#3135). Executables published before the capability existed do not carry it.
 
 ### Migrate/1
 

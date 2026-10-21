@@ -14,14 +14,15 @@ using Elsa.Workflows.Runtime.Services.Recovery;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
+using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 
 namespace Elsa.Activities.Runtime.Tests;
 
 /// <summary>
-/// <c>RescheduleActivity/1</c> end to end under a structural parent that routes on its children's command metadata. A
-/// rescheduled suspended child's successor reaches the parent as an ordinary, routable child completion. A rescheduled
-/// faulted child whose fault the parent already evaluated still runs, but the parent is not told: whether it should be
-/// is open (#3135).
+/// <c>RescheduleActivity/1</c> end to end. A rescheduled suspended child's successor reaches a parent that routes on
+/// its children's command metadata as an ordinary, routable child completion. A faulted child whose fault its parent
+/// already evaluated can be rescheduled only under a running parent that accepts a rescheduled faulted child, such as
+/// a Sequence, which then continues; any other parent refuses it (#3135).
 /// </summary>
 public sealed class RescheduleActivityAlterationExecutionTests
 {
@@ -51,7 +52,7 @@ public sealed class RescheduleActivityAlterationExecutionTests
     }
 
     [Fact]
-    public async Task RescheduledFaultedLeafWhoseFaultTheParentEvaluated_Completes_ButTheParentIsNotTold()
+    public async Task FaultedLeafWhoseFaultTheParentEvaluated_UnderAParentThatDoesNotAcceptIt_IsRefused()
     {
         // The parent deferred on the fault without handling it, and ContinueWithIncidents keeps the run running.
         await using var fixture = await RescheduleFixture.StartAsync(typeof(OutcomeUnknownActivity));
@@ -62,19 +63,61 @@ public sealed class RescheduleActivityAlterationExecutionTests
 
         var job = await fixture.RescheduleAsync(source.Execution.ActivityExecutionId, "reschedule-faulted");
 
+        Assert.Equal(WorkflowAlterationJobStatus.Failed, job.Status);
+        Assert.Equal("ParentDoesNotAcceptRescheduledChild", Assert.Single(job.Outcomes).Code);
+        var run = await fixture.ReadRunAsync();
+        Assert.Equal(ActivityExecutionStatus.Faulted, Assert.Single(run.States("node-f")).Status);
+        Assert.Equal(ActivityExecutionStatus.Running, run.State("node-parent").Status);
+        Assert.Empty(fixture.Log.Completions);
+    }
+
+    [Fact]
+    public async Task FaultedLeafUnderASequence_IsRescheduled_AndTheSequenceContinues()
+    {
+        // The node flag below stands in for what the compiler derives from this.
+        Assert.True(typeof(IRuntimeAcceptsRescheduledFaultedChild).IsAssignableFrom(typeof(SequenceActivity)));
+        // The sequence handles no child faults, so ContinueWithIncidents leaves it waiting on the faulted step.
+        await using var fixture = await RescheduleFixture.StartAsync(
+            NewSequenceNode(InterventionTestSupport.NewLeafNode("node-f", typeof(OutcomeUnknownActivity)), WorkflowExecutionHarness.NewProbeNode("node-b")),
+            "actexec-sequence", "actexec-f", "actexec-b");
+        var source = fixture.Run.State("node-f");
+        Assert.Equal(ActivityExecutionStatus.Faulted, source.Status);
+        Assert.True(source.Metadata.ContainsKey(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId));
+        Assert.Equal(ActivityExecutionStatus.Running, fixture.Run.State("node-sequence").Status);
+        Assert.Empty(fixture.Run.States("node-b"));
+
+        var job = await fixture.RescheduleAsync(source.Execution.ActivityExecutionId, "reschedule-sequence-step");
+
         Assert.Equal(WorkflowAlterationJobStatus.Succeeded, job.Status);
         var run = await fixture.ReadRunAsync();
         var successor = Assert.Single(run.States("node-f"), state => state.Status == ActivityExecutionStatus.Completed);
-        Assert.Single(fixture.Log.Faults);
-        Assert.Empty(fixture.Log.Completions);
-        Assert.Equal(ActivityExecutionStatus.Running, run.State("node-parent").Status);
-        // The successor keeps only the parent-completion marker among the source's per-invocation metadata.
-        Assert.Equal(
+        // The sequence processed the successor's own completion, not the source's fault evaluation again.
+        Assert.NotEqual(
             source.Metadata[RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId],
             successor.Metadata[RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId]);
-        Assert.DoesNotContain(successor.Metadata.Keys, key => key.StartsWith("runtime.fault", StringComparison.Ordinal));
-        Assert.DoesNotContain(RuntimeMetadataKeys.IncidentId, successor.Metadata.Keys);
+        run.AssertCompleted("node-b");
+        run.AssertCompleted("node-sequence");
+        run.AssertWorkflowCompleted();
     }
+
+    // The executable compiler sets the capability from the activity type; the harness builds nodes by hand.
+    private static ExecutableNode NewSequenceNode(params ExecutableNode[] children) =>
+        new(
+            executableNodeId: "node-sequence",
+            authoredActivityId: "authored-sequence",
+            activityType: typeof(SequenceActivity).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptorType: typeof(SequenceDescriptor).FullName!,
+            descriptorPayload: JsonSerializer.SerializeToElement(new SequenceDescriptor()),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            metadata: new Dictionary<string, string> { [RuntimeMetadataKeys.AcceptsRescheduledFaultedChild] = "true" },
+            childSlots: [new ExecutableChildSlot(SequenceActivity.ActivitiesSlotName, children)],
+            structure: new ExecutableActivityStructure(
+                SequenceActivity.StructureKind,
+                SequenceActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new { activities = children.Select(child => child.ExecutableNodeId).ToArray() })));
+
+    private sealed record SequenceDescriptor;
 
     /// <summary>
     /// Schedules its slot children with a marker in their scheduling metadata; on a child fault it records the fault and
@@ -161,7 +204,13 @@ public sealed class RescheduleActivityAlterationExecutionTests
         public ChildEvaluationLog Log { get; }
         public WorkflowExecutionRun Run { get; }
 
-        public static async Task<RescheduleFixture> StartAsync(Type leafType)
+        public static Task<RescheduleFixture> StartAsync(Type leafType) =>
+            StartAsync(
+                StructuralExecutionTestSupport.NewStructuralNode("node-parent", typeof(RoutingParentActivity),
+                    InterventionTestSupport.NewLeafNode("node-f", leafType)),
+                "actexec-parent", "actexec-f");
+
+        public static async Task<RescheduleFixture> StartAsync(ExecutableNode root, params string[] activityExecutionIds)
         {
             var log = new ChildEvaluationLog();
             var harness = WorkflowExecutionHarness.Create()
@@ -173,10 +222,9 @@ public sealed class RescheduleActivityAlterationExecutionTests
                     services.AddSingleton(new FailureBudget(1));
                     services.TryAddScoped<IRuntimeResumptionService, RuntimeResumptionService>();
                 })
-                .Build("actexec-parent", "actexec-f");
+                .Build(activityExecutionIds);
             var executable = StructuralExecutionTestSupport.NewExecutable(
-                StructuralExecutionTestSupport.NewStructuralNode("node-parent", typeof(RoutingParentActivity),
-                    InterventionTestSupport.NewLeafNode("node-f", leafType)),
+                root,
                 waitingNodeIds: ["node-f"],
                 incidentStrategy: IncidentStrategyBuiltIns.ContinueWithIncidentsReference);
             var reference = await harness.PublishAsync(executable, "reschedule-source");

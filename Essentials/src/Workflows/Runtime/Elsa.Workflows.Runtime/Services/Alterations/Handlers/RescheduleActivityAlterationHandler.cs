@@ -61,6 +61,8 @@ public sealed class RescheduleActivityAlterationHandler(
         var executable = await _executableStore.FindAsync(workflow.PinnedExecutable.ArtifactId, cancellationToken);
         if (executable is null || !Equals(executable.Identity, workflow.PinnedExecutable) || !executable.NodesById.TryGetValue(source.Execution.ExecutableNodeId, out var sourceNode))
             return WorkflowAlterationPreflightResult.Rejected("PinnedExecutableUnavailable", "The source activity node is unavailable in the pinned executable.");
+        if (ParentThatEvaluatedSourceRefusal(source, activities, executable) is { } parentRefusal)
+            return parentRefusal;
 
         var successorId = ActivitySuccessorStaging.SuccessorId(context, Slug, source);
         var scopeId = ActivitySuccessorStaging.SuccessorScopeId(successorId);
@@ -82,7 +84,7 @@ public sealed class RescheduleActivityAlterationHandler(
             successorId,
             scopeId,
             provenance,
-            NewMetadata(source),
+            ActivitySuccessorStaging.SuccessorMetadata(source.Metadata, source.Execution.ActivityExecutionId),
             now);
         var superseded = ActivitySuccessorStaging.Supersede(source, successorId, now);
 
@@ -102,14 +104,31 @@ public sealed class RescheduleActivityAlterationHandler(
     }
 
     // A parent that already evaluated the source's fault may have stopped tracking the child (a BPMN error boundary or
-    // late-fault guard drops it), and the runtime cannot tell whether it still expects an outcome. Until that is
-    // decided (#3135), the successor keeps the source's parent-completion marker, so its completion is not delivered.
-    private static Dictionary<string, string> NewMetadata(ActivityExecutionState source)
+    // late-fault guard drops it), and the runtime cannot tell from outside whether it still expects an outcome. So the
+    // successor's outcome may only go to a running parent that opted in (IRuntimeAcceptsRescheduledFaultedChild, #3135);
+    // otherwise the reschedule is refused rather than leaving the successor to run with no one to receive its outcome.
+    private static WorkflowAlterationPreflightResult? ParentThatEvaluatedSourceRefusal(
+        ActivityExecutionState source,
+        IReadOnlyCollection<ActivityExecutionState> activities,
+        WorkflowExecutable executable)
     {
-        var metadata = ActivitySuccessorStaging.SuccessorMetadata(source.Metadata, source.Execution.ActivityExecutionId);
-        if (source.Metadata.TryGetValue(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId, out var processedWorkItemId))
-            metadata[RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId] = processedWorkItemId;
-        return metadata;
+        if (!source.Metadata.TryGetValue(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId, out var processedWorkItemId) ||
+            string.IsNullOrWhiteSpace(processedWorkItemId))
+            return null;
+
+        var parent = source.ParentActivityExecutionId is { } parentId
+            ? activities.SingleOrDefault(state => StringComparer.Ordinal.Equals(state.Execution.ActivityExecutionId, parentId))
+            : null;
+        if (parent is not { Status: ActivityExecutionStatus.Running })
+            return WorkflowAlterationPreflightResult.Rejected(
+                "SourceParentNotRunning",
+                "The source activity's parent already evaluated its outcome and is no longer running, so nothing would receive the successor's outcome.");
+        if (!executable.NodesById.TryGetValue(parent.Execution.ExecutableNodeId, out var parentNode) ||
+            !StringComparer.OrdinalIgnoreCase.Equals(parentNode.Metadata.GetValueOrDefault(RuntimeMetadataKeys.AcceptsRescheduledFaultedChild), "true"))
+            return WorkflowAlterationPreflightResult.Rejected(
+                "ParentDoesNotAcceptRescheduledChild",
+                "The source activity's parent already evaluated its fault and does not accept a rescheduled child's outcome.");
+        return null;
     }
 
     private static bool TryReadPayload(JsonElement payload, out string sourceId)
