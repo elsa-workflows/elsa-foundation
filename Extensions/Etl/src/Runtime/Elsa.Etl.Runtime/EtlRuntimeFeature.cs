@@ -51,6 +51,9 @@ public class EtlRuntimeFeature : IShellFeature
     [ManifestSetting(DisplayName = "Maximum snapshot bytes", Description = "Maximum size of each host-approved ETL snapshot.", Category = "Capacity")]
     public long MaxSnapshotBytes { get; set; } = 4L * 1024 * 1024 * 1024;
 
+    [ManifestSetting(DisplayName = "HTTP limits", Description = "Host ceilings for finite HTTP pages, retention and retries; independent of authored limits.", Category = "Capacity")]
+    public EtlHttpHostLimits HttpLimits { get; set; } = new();
+
     public virtual void ConfigureServices(IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
@@ -63,6 +66,7 @@ public class EtlRuntimeFeature : IShellFeature
         services.AddScoped(_ => new HostFileBindings(options.FileBindings));
         services.TryAddScoped<IEtlBindingCatalog>(provider => provider.GetRequiredService<HostFileBindings>());
         services.AddScoped<EtlExecutableReader>();
+        services.AddScoped<EtlConnectorExecutableReader>();
         services.AddScoped<EtlBatchProcessor>();
         services.AddScoped(provider => new EtlFilePreparer(
             provider.GetRequiredService<HostFileBindings>(),

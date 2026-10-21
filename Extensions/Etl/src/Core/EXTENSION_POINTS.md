@@ -32,3 +32,10 @@ source, pagination and destination variants are explicit. `EtlArtifactV2Json` pr
 serialization independently of `EtlPipeline` / `EtlArtifactJson` v1. Model declarations contain host binding
 aliases and selectors, not endpoint or credential values. Artifact validity and host runtime admission are
 separate decisions; a successfully decoded document is not proof that the configured runtime can execute it.
+
+The runtime applies independent `EtlRuntimeFeature.HttpLimits` and live-attempt capacity ceilings, and checks
+mapping/filter/lookup semantics without design services. A compiler-valid artifact can exceed a particular
+host's ceilings. A missing lookup does not reserve a synthetic lookup allowance. The existing file store still
+rejects v2 admissions; known canonical v2 invocations can be retained for cancellation or refusal and terminal
+delivery. This checkpoint does not yet supply a connector worker. See the
+[runtime reader checkpoint](../../../../specs/996-http-etl/evidence/v2-runtime-reader-checkpoint.md).

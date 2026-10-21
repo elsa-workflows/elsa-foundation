@@ -102,27 +102,45 @@ internal static class EtlRuntimeRecordCodec
         ValidateIdentity(invocation.RunId, "run id");
 
         var artifact = invocation.Artifact;
-        if (artifact.FormatVersion != EtlArtifact.CurrentFormatVersion ||
+        if (artifact.FormatVersion is not (EtlArtifact.CurrentFormatVersion or EtlArtifactV2Json.FormatVersion) ||
             artifact.DefinitionVersion <= 0 || artifact.ArtifactId is null or { Length: 0 or > 128 } ||
             artifact.DefinitionId is null or { Length: 0 or > 450 } || !IsSha256(artifact.ContentHash) ||
             artifact.Pipeline.ValueKind != JsonValueKind.Object ||
             JsonMarshal.GetRawUtf8Value(artifact.Pipeline).Length > EtlArtifact.MaximumByteLength)
             throw new ArgumentException("The ETL invocation carries an unsupported or invalid artifact.", nameof(invocation));
 
-        EtlPipeline pipeline;
-        try
+        EtlLimits? v1Limits = null;
+        JsonElement canonicalPipeline;
+        switch (artifact.FormatVersion)
         {
-            pipeline = EtlArtifactJson.Read(artifact.Pipeline);
+            case EtlArtifact.CurrentFormatVersion:
+            {
+                EtlPipeline pipeline;
+                try { pipeline = EtlArtifactJson.Read(artifact.Pipeline); }
+                catch (JsonException exception)
+                {
+                    throw new ArgumentException("The ETL invocation carries an invalid typed pipeline.", nameof(invocation), exception);
+                }
+                canonicalPipeline = EtlArtifactJson.Write(pipeline);
+                if (!StringComparer.Ordinal.Equals(artifact.Pipeline.GetRawText(), canonicalPipeline.GetRawText()))
+                    throw new ArgumentException("The ETL invocation artifact pipeline is not in its typed canonical representation.", nameof(invocation));
+                if (!StringComparer.Ordinal.Equals(EtlArtifactJson.Hash(canonicalPipeline), artifact.ContentHash))
+                    throw new ArgumentException("The ETL invocation artifact hash does not match its pipeline.", nameof(invocation));
+                v1Limits = pipeline.Limits;
+                break;
+            }
+            case EtlArtifactV2Json.FormatVersion:
+            {
+                // The shared runtime store must retain known v2 invocations for pre-admission
+                // cancellation/refusal and terminal delivery. Its responsibility is bounded,
+                // format-specific canonical identity; connector host policy is checked by the
+                // v2 executable reader before execution.
+                canonicalPipeline = ValidateV2Artifact(artifact);
+                break;
+            }
+            default:
+                throw new ArgumentException("The ETL invocation carries an unsupported artifact format.", nameof(invocation));
         }
-        catch (JsonException exception)
-        {
-            throw new ArgumentException("The ETL invocation carries an invalid typed pipeline.", nameof(invocation), exception);
-        }
-        var canonicalPipeline = EtlArtifactJson.Write(pipeline);
-        if (!StringComparer.Ordinal.Equals(artifact.Pipeline.GetRawText(), canonicalPipeline.GetRawText()))
-            throw new ArgumentException("The ETL invocation artifact pipeline is not in its typed canonical representation.", nameof(invocation));
-        if (!StringComparer.Ordinal.Equals(EtlArtifactJson.Hash(canonicalPipeline), artifact.ContentHash))
-            throw new ArgumentException("The ETL invocation artifact hash does not match its pipeline.", nameof(invocation));
 
         var address = invocation.ResultAddress;
         if (address.FormatVersion != EtlNativeResultAddress.CurrentFormatVersion ||
@@ -142,9 +160,11 @@ internal static class EtlRuntimeRecordCodec
         ValidateIdentity(address.StimulusHash, "stimulus hash");
         ValidateIdentity(address.PayloadTypeAlias, "payload type alias");
         ValidateIdentity(address.DeduplicationPolicy, "deduplication policy");
-        ValidatePipelineLimits(pipeline.Limits);
+        var isV1Artifact = artifact.FormatVersion == EtlArtifact.CurrentFormatVersion;
+        if (isV1Artifact)
+            ValidatePipelineLimits(v1Limits!);
         var artifactBytes = JsonSerializer.SerializeToUtf8Bytes(artifact).Length;
-        if (artifactBytes > EtlArtifact.MaximumByteLength || artifactBytes > pipeline.Limits.MaxArtifactBytes)
+        if (artifactBytes > EtlArtifact.MaximumByteLength || isV1Artifact && artifactBytes > v1Limits!.MaxArtifactBytes)
             throw new ArgumentException("The ETL invocation artifact exceeds its configured serialized size limit.", nameof(invocation));
         if (Encoding.UTF8.GetByteCount(Write(invocation)) > EtlArtifact.MaximumByteLength + 64 * 1024)
             throw new ArgumentException("The ETL invocation exceeds its persisted size bound.", nameof(invocation));
@@ -152,9 +172,36 @@ internal static class EtlRuntimeRecordCodec
         return invocation;
     }
 
+    private static JsonElement ValidateV2Artifact(EtlArtifact artifact)
+    {
+        try
+        {
+            var pipeline = EtlArtifactV2Json.Read(artifact.Pipeline);
+            var canonical = EtlArtifactV2Json.Write(pipeline);
+            if (!StringComparer.Ordinal.Equals(artifact.Pipeline.GetRawText(), canonical.GetRawText()))
+                throw new ArgumentException("The ETL invocation v2 artifact pipeline is not in its typed canonical representation.");
+            if (!StringComparer.Ordinal.Equals(EtlArtifactJson.Hash(canonical), artifact.ContentHash))
+                throw new ArgumentException("The ETL invocation v2 artifact hash does not match its pipeline.");
+
+            var expectedArtifactId = EtlArtifactJson.CreateArtifactId(artifact.FormatVersion, artifact.DefinitionId,
+                artifact.DefinitionVersion, artifact.ContentHash);
+            if (!StringComparer.Ordinal.Equals(artifact.ArtifactId, expectedArtifactId))
+                throw new ArgumentException("The ETL invocation v2 artifact identity does not match its provenance.");
+            return canonical;
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or JsonException or
+                                          NullReferenceException or KeyNotFoundException or OverflowException or NotSupportedException)
+        {
+            throw new ArgumentException("The ETL invocation carries an invalid or unsupported v2 artifact.", nameof(artifact), exception);
+        }
+    }
+
     public static string ValidateBindings(EtlInvocation invocation, EtlRunBindings bindings)
     {
+        ArgumentNullException.ThrowIfNull(invocation);
         ArgumentNullException.ThrowIfNull(bindings);
+        if (invocation.Artifact.FormatVersion != EtlArtifact.CurrentFormatVersion)
+            throw new ArgumentException("The file ETL runtime store cannot admit connector-format artifacts.", nameof(invocation));
         var pipeline = EtlArtifactJson.Read(invocation.Artifact.Pipeline);
         ValidateBinding(bindings.Source, pipeline.Bindings.Source, input: true);
         ValidateBinding(bindings.Lookup, pipeline.Bindings.Lookup, input: true);

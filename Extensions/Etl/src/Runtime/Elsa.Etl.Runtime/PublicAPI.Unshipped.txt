@@ -46,3 +46,34 @@ Elsa.Etl.Runtime.EtlRuntimeFeature.MaxSnapshotBytes.get -> long
 Elsa.Etl.Runtime.EtlRuntimeFeature.MaxSnapshotBytes.set -> void
 Elsa.Etl.Runtime.EtlRuntimeFeature.SnapshotRoot.get -> string!
 Elsa.Etl.Runtime.EtlRuntimeFeature.SnapshotRoot.set -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits
+Elsa.Etl.Runtime.EtlHttpHostLimits.EtlHttpHostLimits() -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.<Clone>$() -> Elsa.Etl.Runtime.EtlHttpHostLimits!
+Elsa.Etl.Runtime.EtlHttpHostLimits.Equals(Elsa.Etl.Runtime.EtlHttpHostLimits? other) -> bool
+override Elsa.Etl.Runtime.EtlHttpHostLimits.Equals(object? obj) -> bool
+override Elsa.Etl.Runtime.EtlHttpHostLimits.GetHashCode() -> int
+override Elsa.Etl.Runtime.EtlHttpHostLimits.ToString() -> string!
+static Elsa.Etl.Runtime.EtlHttpHostLimits.operator !=(Elsa.Etl.Runtime.EtlHttpHostLimits? left, Elsa.Etl.Runtime.EtlHttpHostLimits? right) -> bool
+static Elsa.Etl.Runtime.EtlHttpHostLimits.operator ==(Elsa.Etl.Runtime.EtlHttpHostLimits? left, Elsa.Etl.Runtime.EtlHttpHostLimits? right) -> bool
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxPageBytes.get -> long
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxPageBytes.init -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxPageRecords.get -> int
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxPageRecords.init -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxJsonDepth.get -> int
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxJsonDepth.init -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxContinuationBytes.get -> int
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxContinuationBytes.init -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxPagesPerPartition.get -> int
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxPagesPerPartition.init -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxRetainedInputBytes.get -> long
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxRetainedInputBytes.init -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxAttempts.get -> int
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxAttempts.init -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxDeadlineSeconds.get -> int
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxDeadlineSeconds.init -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxRequestTimeoutSeconds.get -> int
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxRequestTimeoutSeconds.init -> void
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxDelaySeconds.get -> int
+Elsa.Etl.Runtime.EtlHttpHostLimits.MaxDelaySeconds.init -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.HttpLimits.get -> Elsa.Etl.Runtime.EtlHttpHostLimits!
+Elsa.Etl.Runtime.EtlRuntimeFeature.HttpLimits.set -> void

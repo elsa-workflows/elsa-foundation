@@ -15,6 +15,7 @@ internal sealed class EtlExecution(
     HostFileBindings bindings,
     EtlRuntimeOptions options,
     EtlExecutableReader executableReader,
+    EtlConnectorExecutableReader connectorExecutableReader,
     EtlFilePreparer preparer,
     EtlBatchProcessor batchProcessor,
     EtlAttemptBudget budget,
@@ -31,6 +32,13 @@ internal sealed class EtlExecution(
         EtlRunAdmission admission;
         try
         {
+            if (invocation.Artifact.FormatVersion == EtlArtifactV2Json.FormatVersion)
+            {
+                connectorExecutableReader.Read(invocation.Artifact);
+                // Until a connector store/worker is composed, retain a deliverable refusal.
+                // Never reinterpret a connector artifact as a file-only admission.
+                return await RefuseAsync(invocation, "etl.connector-runtime-unavailable", cancellationToken);
+            }
             var pipeline = executableReader.Read(invocation.Artifact);
             var scope = invocation.Scope;
             admission = new(invocation, new(
