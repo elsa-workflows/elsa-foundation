@@ -18,7 +18,7 @@ Elsa has no imposed greenfield TDD cadence (constitution 6.0.0 D9). Implement an
 - [ ] T007 Validate semantic witness, budget/default capture, malformed/duplicate/noncanonical receipts, vocabulary membership and byte/count boundaries in `Extensions/Rules/tests/Tests/`; include omission-of-applicable-rule and fixed-point-vs-budget removal controls.
 - [ ] T008 Register real projects in `Elsa.Server.slnx` and affected `tools/solution-filters/profiles.json` selections; verify scoped build, public API tracking and feature composition with actual services. Root serializes shared registrations.
 
-Checkpoint status: T004–T006 implemented. Fifty-one focused semantic/value/encoding tests pass with complete-firing and encoded-byte removal controls; exact/one-over artifact and invocation bounds are covered. T007 durable fixed-point/budget controls and T008 composition remain pending. See [encoding checkpoint](evidence/admission-encoding-checkpoint.md). No durable/package/native qualification claimed yet.
+Checkpoint status: T004–T006 implemented. Sixty-five focused semantic/value/encoding/admission/record tests pass, with complete-firing, encoded-byte and receipt-reader integrity removal controls. Common recovery encoding is in Persistence.Core; admission/deployment identity seams and the context-only EF schema are implemented. T007 durable fixed-point/budget controls, T008 composition and T009 migration/provider verification remain pending. See [encoding checkpoint](evidence/admission-encoding-checkpoint.md) and [persistence boundary checkpoint](evidence/persistence-boundary-checkpoint.md). No durable/package/native qualification claimed yet.
 
 ## Phase 3: US1 — Direct durable invocation and actual packages (P1)
 

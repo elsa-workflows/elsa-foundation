@@ -47,7 +47,7 @@ public class RuleValueTests
     public void Artifact_bytes_are_snapshotted_on_input_and_output()
     {
         byte[] bytes = [1, 2, 3];
-        var snapshot = new RuleArtifactSnapshot(1, "artifact", RulesCodec.Hash(bytes), bytes);
+        var snapshot = new RuleArtifactSnapshot(1, "artifact", RuleRecordCodec.Hash(bytes), bytes);
         bytes[0] = 9;
         var exposed = snapshot.CanonicalBytes;
         Assert.True(MemoryMarshal.TryGetArray(exposed, out var segment));

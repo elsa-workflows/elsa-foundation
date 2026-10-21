@@ -1,3 +1,4 @@
+using Elsa.Rules.Persistence.Core;
 using System.Globalization;
 using System.Text;
 using Elsa.Rules.Core;
@@ -82,12 +83,12 @@ public class RuleCountBoundaryTests
     public void Artifact_snapshot_enforces_byte_limit_independently_of_json_validity()
     {
         var exactBytes = new byte[RuleLimits.MaxArtifactBytes];
-        var exact = new RuleArtifactSnapshot(1, "raw-bytes", RulesCodec.Hash(exactBytes), exactBytes);
+        var exact = new RuleArtifactSnapshot(1, "raw-bytes", RuleRecordCodec.Hash(exactBytes), exactBytes);
         Assert.Equal(RuleLimits.MaxArtifactBytes, exact.CanonicalBytes.Length);
 
         var overBytes = new byte[RuleLimits.MaxArtifactBytes + 1];
         Assert.Throws<ArgumentOutOfRangeException>(() => new RuleArtifactSnapshot(
-            1, "raw-bytes-over", RulesCodec.Hash(overBytes), overBytes));
+            1, "raw-bytes-over", RuleRecordCodec.Hash(overBytes), overBytes));
     }
 
     [Fact]
@@ -95,7 +96,7 @@ public class RuleCountBoundaryTests
     {
         var emitted = 0;
 
-        Assert.Throws<InvalidDataException>(() => RulesCodec.CanonicalFacts(EndlessFacts()));
+        Assert.Throws<InvalidDataException>(() => RuleRecordCodec.CanonicalFacts(EndlessFacts()));
         Assert.Equal(RuleLimits.MaxVocabularyFacts + 1, emitted);
 
         IEnumerable<RuleFact> EndlessFacts()

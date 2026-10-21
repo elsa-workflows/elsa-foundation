@@ -110,6 +110,7 @@
   </Folder>
   <Folder Name="/Extensions/Rules/src/Persistence/">
     <Project Path="Extensions/Rules/src/Persistence/Core/Elsa.Rules.Persistence.Core.csproj" />
+    <Project Path="Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj" />
   </Folder>
   <Folder Name="/Extensions/Rules/tests/">
     <Project Path="Extensions/Rules/tests/Tests/Elsa.Rules.Tests.csproj" />

@@ -1,4 +1,6 @@
 #nullable enable
+Elsa.Rules.Core.IRuleImplementationIdentitySource
+Elsa.Rules.Core.IRuleImplementationIdentitySource.ReadAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Rules.Core.RuleSemanticPin?>
 Elsa.Rules.Core.RuleAdmissionRefusal
 Elsa.Rules.Core.RuleAdmissionRefusal.<Clone>$() -> Elsa.Rules.Core.RuleAdmissionRefusal!
 Elsa.Rules.Core.RuleAdmissionRefusal.Deconstruct(out Elsa.Rules.Core.RuleInvocationEnvelope! Invocation, out Elsa.Rules.Core.RuleRunDiagnostic! Diagnostic) -> void

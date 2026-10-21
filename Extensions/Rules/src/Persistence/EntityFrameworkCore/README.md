@@ -1,0 +1,7 @@
+# Elsa.Rules.Persistence.EntityFrameworkCore
+
+This project owns the EF Core mapping for Rules durable runs and their append-only receipt and fact history. The context depends on the Rules provider-neutral persistence contracts and shared EF persistence infrastructure; inference and receipt semantics remain in `Elsa.Rules.Runtime`.
+
+The current provider context is SQLite. This is an initial implementation slice, not four-provider qualification. The module declares its own migration-history identity and schema family, so later migrations can coexist with the host's other EF modules. The SQLite migration and model snapshot are not part of this context-only slice; schema creation must go through the shared migration lifecycle, and tests and hosts must not use `EnsureCreated` as a substitute.
+
+The run row keeps a lowercase digest as its indexed key and retains the complete framed identity for exact equality checks. `ModelRevision` tracks semantic progress; `ConcurrencyToken` is a provider-level optimistic concurrency token. Round receipts retain logical semantics separately from the first accepted physical attempt, and fact history uses an integer position rather than database atom collation.

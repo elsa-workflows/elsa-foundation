@@ -30,6 +30,12 @@ Hosting selects where a run's work executes. Rules persistence owns authoritativ
 
 Each planned module has a concrete intended consumer exercised by the acceptance cases. No empty provider umbrella, general operator UI or new API product is admitted. Runtime consumes frozen artifact and installed deployment identity; mutable design storage is unavailable during recovery acceptance.
 
+## Persistence boundary implementation
+
+Common canonical record framing, hashes and bounded recovery readers live in `Rules.Persistence.Core`; they do not interpret an artifact's rule language. The EF provider therefore does not reference the Runtime implementation. Runtime supplies `IRuleAdmissionValidator` and `IRuleRoundValidator`; the trusted deployed-package identity comes through `IRuleImplementationIdentitySource`. New admission validates only after lookup of the durable identity, and the provider must recheck a concurrent winner even when validation fails. Existing replay and cancellation do not require the old interpreter. Unsupported schemas remain unavailable rather than becoming malformed-input refusals.
+
+The narrow initial EF dependency admission is `Extensions/Rules/src/Persistence/EntityFrameworkCore/Elsa.Rules.Persistence.EntityFrameworkCore.csproj`: `Microsoft.EntityFrameworkCore`, `.Abstractions`, `.Analyzers` and `.Relational` only. The architecture guard checks this exact restored closure in Debug and Release. Provider engines remain host/test dependencies; adding them to acceptance hosts requires its own explicit closure update. This admits the context implementation, not a provider qualification claim.
+
 ## Guarantees and qualification
 
 Accepting a complete round receipt and consuming it are distinct atomic model transitions. The validator recomputes all applicable firings; consumption alone advances facts and produces one next round or terminal result. The closure round adds no facts. Positive lower budgets can fault after their last adding round; they cannot claim convergence.

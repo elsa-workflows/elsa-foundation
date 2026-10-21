@@ -11,13 +11,13 @@ internal sealed class RuleRoundEvaluator : IRuleRoundValidator
     {
         ArgumentNullException.ThrowIfNull(input);
         var program = RulesCodec.ReadArtifact(input.Artifact);
-        var facts = RulesCodec.CanonicalFacts(input.Facts);
+        var facts = RuleRecordCodec.CanonicalFacts(input.Facts);
         if (!facts.Select(fact => fact.Atom).SequenceEqual(input.Facts.Select(fact => fact.Atom), StringComparer.Ordinal))
             throw new InvalidDataException("rules.noncanonical-input");
         RulesCodec.ResolveMaxRounds(program, facts, input.MaxRounds);
         ValidateIdentity(input.Identity);
         if (input.Identity.Ordinal < 0 || input.Identity.Ordinal >= input.MaxRounds || input.ModelRevision <= 0
-            || input.Identity.InputStateSha256 != RulesCodec.FactsHash(facts))
+            || input.Identity.InputStateSha256 != RuleRecordCodec.FactsHash(facts))
             throw new InvalidDataException("rules.round-input-identity");
         var pin = input.Implementation;
         if (pin.PinSchemaVersion != 1 || pin.LanguageId != RulesCodec.LanguageId || pin.LanguageVersion != 1
@@ -29,11 +29,11 @@ internal sealed class RuleRoundEvaluator : IRuleRoundValidator
         var additions = fired.Select(rule => rule.Conclusion).Where(fact => !known.Contains(fact.Atom))
             .DistinctBy(fact => fact.Atom, StringComparer.Ordinal).OrderBy(fact => fact.Atom, StringComparer.Ordinal).ToArray();
         var firings = fired.Select(rule => new RuleFiringEvidence(rule.Id, rule.Conclusion)).ToArray();
-        var receipt = new RuleRoundReceipt(input.Identity, RulesCodec.PinHash(pin), additions, firings, new string('0', 64));
-        var bytes = RulesCodec.ReceiptBytes(receipt);
+        var receipt = new RuleRoundReceipt(input.Identity, RuleRecordCodec.PinHash(pin), additions, firings, new string('0', 64));
+        var bytes = RuleRecordCodec.ReceiptBytes(receipt);
         if (bytes.Length > RuleLimits.MaxEnvelopeBytes) throw new InvalidDataException("rules.receipt-too-large");
-        var result = new RuleRoundReceipt(receipt.Identity, receipt.ImplementationPinHash, additions, firings, RulesCodec.Hash(bytes));
-        _ = RulesCodec.ReceiptRecordBytes(result);
+        var result = new RuleRoundReceipt(receipt.Identity, receipt.ImplementationPinHash, additions, firings, RuleRecordCodec.Hash(bytes));
+        _ = RuleRecordCodec.ReceiptRecordBytes(result);
         return result;
     }
 
@@ -47,7 +47,7 @@ internal sealed class RuleRoundEvaluator : IRuleRoundValidator
             ArgumentNullException.ThrowIfNull(input);
             var expected = Evaluate(input.Input);
             ValidateIdentity(candidate.Identity);
-            RulesCodec.CanonicalFacts(candidate.AddedFacts);
+            RuleRecordCodec.CanonicalFacts(candidate.AddedFacts);
             if (candidate.FiringEvidence.Count > RuleLimits.MaxRules)
                 throw new InvalidDataException("rules.too-many-firings");
             foreach (var firing in candidate.FiringEvidence)
@@ -55,11 +55,11 @@ internal sealed class RuleRoundEvaluator : IRuleRoundValidator
                 RuleValueValidation.Identifier(firing?.RuleId!, nameof(candidate));
                 RuleValueValidation.Identifier(firing?.Conclusion?.Atom!, nameof(candidate));
             }
-            var bytes = RulesCodec.ReceiptBytes(candidate);
-            _ = RulesCodec.ReceiptRecordBytes(candidate);
+            var bytes = RuleRecordCodec.ReceiptBytes(candidate);
+            _ = RuleRecordCodec.ReceiptRecordBytes(candidate);
             var equivalent = bytes.Length <= RuleLimits.MaxEnvelopeBytes
                 && candidate.SemanticReceiptSha256 == expected.SemanticReceiptSha256
-                && bytes.AsSpan().SequenceEqual(RulesCodec.ReceiptBytes(expected));
+                && bytes.AsSpan().SequenceEqual(RuleRecordCodec.ReceiptBytes(expected));
             return ValueTask.FromResult(new RuleRoundValidationResult(
                 equivalent ? RuleValidationDisposition.Equivalent : RuleValidationDisposition.Invalid,
                 equivalent ? null : "rules.incomplete-or-conflicting-receipt"));

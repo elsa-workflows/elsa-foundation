@@ -1759,6 +1759,15 @@
           "Elsa.Rules.Core": "[4.0.0-dev, )"
         }
       },
+      "elsa.rules.persistence.entityframeworkcore": {
+        "type": "Project",
+        "dependencies": {
+          "Elsa.Persistence.EntityFramework": "[4.0.0-dev, )",
+          "Elsa.Rules.Persistence.Core": "[4.0.0-dev, )",
+          "Microsoft.EntityFrameworkCore": "[10.0.10, )",
+          "Microsoft.EntityFrameworkCore.Relational": "[10.0.10, )"
+        }
+      },
       "elsa.rules.runtime": {
         "type": "Project",
         "dependencies": {

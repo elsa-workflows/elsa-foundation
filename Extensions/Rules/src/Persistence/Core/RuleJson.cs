@@ -1,7 +1,7 @@
 using System.Buffers;
 using System.Text.Json;
 
-namespace Elsa.Rules.Runtime;
+namespace Elsa.Rules.Persistence.Core;
 
 /// <summary>Canonical JSON writes stop at the representation limit, before retaining oversized output.</summary>
 internal static class RuleJson

@@ -1,11 +1,12 @@
 using System.Text;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Elsa.Rules.Core;
 
-namespace Elsa.Rules.Runtime;
+namespace Elsa.Rules.Persistence.Core;
 
 /// <summary>Stable common framing; identity and cancellation do not interpret a program or select a deployment.</summary>
-internal static class RuleInvocationCodec
+public static partial class RuleRecordCodec
 {
     public static byte[] ScopeBytes(RuleRunIdentity identity)
     {
@@ -37,9 +38,9 @@ internal static class RuleInvocationCodec
             throw new NotSupportedException("rules.invocation-schema");
         var artifact = invocation.Artifact;
         var artifactBytes = artifact.CanonicalBytes;
-        if (RulesCodec.Hash(artifactBytes.Span) != artifact.Sha256 || artifact.ArtifactId != "rules:" + artifact.Sha256)
+        if (Hash(artifactBytes.Span) != artifact.Sha256 || artifact.ArtifactId != "rules:" + artifact.Sha256)
             throw new InvalidDataException("rules.artifact-identity");
-        var facts = RulesCodec.CanonicalFacts(invocation.InitialFacts);
+        var facts = CanonicalFacts(invocation.InitialFacts);
         ValidatePinShape(invocation.ExpectedImplementation);
         if (invocation.NativeDestination is { FormatVersion: not 1 })
             throw new NotSupportedException("rules.destination-schema");
@@ -58,10 +59,10 @@ internal static class RuleInvocationCodec
             writer.WriteBase64String("bytes", artifactBytes.Span);
             writer.WriteEndObject();
             writer.WritePropertyName("initialFacts");
-            RulesCodec.WriteFacts(writer, facts);
+            WriteFacts(writer, facts);
             writer.WriteNumber("maxRounds", invocation.MaxRounds);
             writer.WritePropertyName("implementation");
-            RulesCodec.WritePin(writer, invocation.ExpectedImplementation);
+            WritePin(writer, invocation.ExpectedImplementation);
             writer.WritePropertyName("nativeDestination");
             WriteDestination(writer, invocation.NativeDestination);
             writer.WriteEndObject();
@@ -69,15 +70,17 @@ internal static class RuleInvocationCodec
     }
 
     public static RuleInvocationFingerprint Fingerprint(RuleInvocationEnvelope invocation) =>
-        new(RulesCodec.Hash(InvocationBytes(invocation)));
+        new(Hash(InvocationBytes(invocation)));
 
     public static byte[] TerminalBytes(RuleTerminalResult result) => RuleJson.Write(writer =>
     {
         ArgumentNullException.ThrowIfNull(result);
-        if (!Enum.IsDefined(result.Kind) || result.ResultSchemaVersion != 1)
-            throw new InvalidDataException("rules.terminal-schema");
-        var facts = RulesCodec.CanonicalFacts(result.ResultFacts);
-        if (RulesCodec.FactsHash(facts) != result.FinalFactsSha256)
+        if (!Enum.IsDefined(result.Kind))
+            throw new InvalidDataException("rules.terminal-kind");
+        if (result.ResultSchemaVersion != 1)
+            throw new NotSupportedException("rules.terminal-schema");
+        var facts = CanonicalFacts(result.ResultFacts);
+        if (FactsHash(facts) != result.FinalFactsSha256)
             throw new InvalidDataException("rules.terminal-facts-digest");
         writer.WriteStartObject();
         writer.WriteString("terminalId", result.TerminalId);
@@ -85,7 +88,7 @@ internal static class RuleInvocationCodec
         writer.WriteNumber("committedRounds", result.CommittedRounds);
         writer.WriteNumber("resultSchemaVersion", result.ResultSchemaVersion);
         writer.WritePropertyName("facts");
-        RulesCodec.WriteFacts(writer, facts);
+        WriteFacts(writer, facts);
         writer.WriteString("factsSha256", result.FinalFactsSha256);
         writer.WriteString("diagnostic", result.Diagnostic?.Code);
         writer.WriteEndObject();
@@ -116,7 +119,7 @@ internal static class RuleInvocationCodec
             writer.WriteStartObject();
             writer.WritePropertyName("delivery");
             writer.WriteRawValue(body);
-            writer.WriteString("canonicalPayloadSha256", RulesCodec.Hash(body));
+            writer.WriteString("canonicalPayloadSha256", Hash(body));
             writer.WriteEndObject();
         }, RuleLimits.MaxEnvelopeBytes);
     }
@@ -171,5 +174,113 @@ internal static class RuleInvocationCodec
         writer.WriteString("deduplicationPolicy", destination.DeduplicationPolicy);
         writer.WriteString("providerId", destination.ProviderId);
         writer.WriteEndObject();
+    }
+
+    public static RuleFact[] CanonicalFacts(IEnumerable<RuleFact> facts)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        // Bound enumeration too: an unbounded host enumerable cannot allocate without limit.
+        var copy = facts.Take(RuleLimits.MaxVocabularyFacts + 1).ToArray();
+        Require(copy.Length <= RuleLimits.MaxVocabularyFacts, "rules.too-many-facts");
+        foreach (var fact in copy) RuleValueValidation.Identifier(fact?.Atom!, nameof(facts));
+        Require(copy.Select(fact => fact.Atom).Distinct(StringComparer.Ordinal).Count() == copy.Length,
+            "rules.duplicate-fact");
+        return copy.OrderBy(fact => fact.Atom, StringComparer.Ordinal).ToArray();
+    }
+
+    public static string FactsHash(IReadOnlyList<RuleFact> facts) => Hash(FactsBytes(facts));
+
+    public static string PinHash(RuleSemanticPin pin) => Hash(RuleJson.Write(writer => WritePin(writer, pin), RuleLimits.MaxEnvelopeBytes));
+
+    public static byte[] ReceiptBytes(RuleRoundReceipt receipt) => RuleJson.Write(writer =>
+    {
+        writer.WriteStartObject();
+        writer.WritePropertyName("identity");
+        WriteRoundIdentity(writer, receipt.Identity);
+        writer.WriteString("implementationPinHash", receipt.ImplementationPinHash);
+        writer.WritePropertyName("addedFacts");
+        WriteFacts(writer, receipt.AddedFacts);
+        writer.WriteStartArray("firings");
+        foreach (var firing in receipt.FiringEvidence)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("ruleId", firing.RuleId);
+            writer.WriteString("conclusion", firing.Conclusion.Atom);
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+    }, RuleLimits.MaxEnvelopeBytes);
+
+    public static byte[] ReceiptRecordBytes(RuleRoundReceipt receipt)
+    {
+        var body = ReceiptBytes(receipt);
+        return RuleJson.Write(writer =>
+        {
+            writer.WriteStartObject();
+            writer.WritePropertyName("receipt");
+            writer.WriteRawValue(body);
+            writer.WriteString("semanticReceiptSha256", receipt.SemanticReceiptSha256);
+            writer.WriteEndObject();
+        }, RuleLimits.MaxEnvelopeBytes);
+    }
+
+    public static string Hash(ReadOnlySpan<byte> bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
+
+    private static void WriteFacts(Utf8JsonWriter writer, IEnumerable<RuleFact> facts)
+    {
+        writer.WriteStartArray();
+        foreach (var fact in facts) writer.WriteStringValue(fact.Atom);
+        writer.WriteEndArray();
+    }
+
+    private static void WriteRoundIdentity(Utf8JsonWriter writer, RuleRoundIdentity identity)
+    {
+        writer.WriteStartObject();
+        writer.WriteString("tenant", identity.Run.Scope.TenantId);
+        writer.WriteString("partition", identity.Run.Scope.PersistencePartition);
+        writer.WriteString("invocation", identity.Run.InvocationId);
+        writer.WriteString("fingerprint", identity.Fingerprint.Sha256);
+        writer.WriteNumber("ordinal", identity.Ordinal);
+        writer.WriteString("inputStateSha256", identity.InputStateSha256);
+        writer.WriteEndObject();
+    }
+
+    private static void WritePin(Utf8JsonWriter writer, RuleSemanticPin pin)
+    {
+        writer.WriteStartObject();
+        writer.WriteNumber("pinSchemaVersion", pin.PinSchemaVersion);
+        writer.WriteString("languageId", pin.LanguageId);
+        writer.WriteNumber("languageVersion", pin.LanguageVersion);
+        writer.WriteNumber("receiptSchemaVersion", pin.ReceiptSchemaVersion);
+        writer.WriteNumber("stateSchemaVersion", pin.StateSchemaVersion);
+        writer.WriteStartArray("packages");
+        foreach (var package in pin.Packages.OrderBy(package => package.PackageId, StringComparer.Ordinal))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("id", package.PackageId);
+            writer.WriteString("version", package.NuGetVersion);
+            writer.WriteString("contentHash", package.NuGetContentHash);
+            writer.WriteStartArray("assets");
+            foreach (var asset in package.SelectedAssets.OrderBy(asset => asset.PackageRelativeAssetPath, StringComparer.Ordinal))
+            {
+                writer.WriteStartObject();
+                writer.WriteString("path", asset.PackageRelativeAssetPath);
+                writer.WriteString("assembly", asset.AssemblyFullName);
+                writer.WriteString("sha256", asset.AssetSha256);
+                writer.WriteEndObject();
+            }
+            writer.WriteEndArray();
+            writer.WriteEndObject();
+        }
+        writer.WriteEndArray();
+        writer.WriteEndObject();
+    }
+
+    public static byte[] FactsBytes(IReadOnlyList<RuleFact> facts) => RuleJson.Write(writer => WriteFacts(writer, CanonicalFacts(facts)), RuleLimits.MaxEnvelopeBytes);
+
+    private static void Require(bool condition, string code)
+    {
+        if (!condition) throw new InvalidDataException(code);
     }
 }
