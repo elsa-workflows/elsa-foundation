@@ -23331,6 +23331,11 @@
       "edges": [
         {
           "type": "internal",
+          "id": "Elsa.Connections.Core",
+          "path": "Essentials/src/Connections/Core/Elsa.Connections.Core.csproj"
+        },
+        {
+          "type": "internal",
           "id": "Elsa.Tasks.Core",
           "path": "Essentials/src/Tasks/Core/Elsa.Tasks.Core.csproj"
         },

@@ -5,10 +5,10 @@
   "counts": {
     "source_projects": 157,
     "test_projects": 156,
-    "direct_project_references": 1790,
+    "direct_project_references": 1791,
     "direct_package_references": 1468,
     "feature_classes": 123,
-    "specs": 272
+    "specs": 273
   },
   "generated_files": [
     "docs/maps/project-reference-map.md",
