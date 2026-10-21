@@ -101,6 +101,51 @@ public sealed class SecretsApiLifecycleContractTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task Create_takes_a_name_a_deleted_secret_freed_but_not_one_a_revoked_secret_holds()
+    {
+        await using var host = await SecretsCanaryHost.StartMigratedAsync(output);
+        const string name = "lifecycle-recreated";
+
+        string originalId;
+        using (var create = await host.Client.SendAsync(JsonRequest(
+                   HttpMethod.Post,
+                   "/secrets",
+                   "write",
+                   JsonSerializer.Serialize(new { name, displayName = "Original", value = "original-value" }))))
+        {
+            Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+            using var document = JsonDocument.Parse(await create.Content.ReadAsStringAsync());
+            originalId = document.RootElement.GetProperty("id").GetString()!;
+        }
+
+        using (var delete = await host.Client.SendAsync(Request(HttpMethod.Delete, $"/secrets/{name}", "delete")))
+            Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode);
+
+        using var recreate = await host.Client.SendAsync(JsonRequest(
+            HttpMethod.Post,
+            "/secrets",
+            "write",
+            JsonSerializer.Serialize(new { name, displayName = "Recreated", value = "recreated-value" })));
+        Assert.Equal(HttpStatusCode.Created, recreate.StatusCode);
+
+        using var read = await host.Client.SendAsync(Request(HttpMethod.Get, $"/secrets/{name}", "read"));
+        using (var document = JsonDocument.Parse(await read.Content.ReadAsStringAsync()))
+        {
+            Assert.Equal("Recreated", document.RootElement.GetProperty("displayName").GetString());
+            Assert.NotEqual(originalId, document.RootElement.GetProperty("id").GetString());
+            Assert.Equal(1, document.RootElement.GetProperty("currentVersion").GetInt32());
+        }
+
+        using var overRevoked = await host.Client.SendAsync(JsonRequest(
+            HttpMethod.Post,
+            "/secrets",
+            "write",
+            JsonSerializer.Serialize(new { name = "revoked.secret", value = "replacement-marker" })));
+        Assert.True((int)overRevoked.StatusCode >= 400);
+        await AssertSafeAsync(overRevoked, "replacement-marker");
+    }
+
+    [Fact]
     public async Task Rotate_revoke_delete_and_test_preserve_lifecycle_semantics()
     {
         await using var host = await SecretsCanaryHost.StartMigratedAsync(output);

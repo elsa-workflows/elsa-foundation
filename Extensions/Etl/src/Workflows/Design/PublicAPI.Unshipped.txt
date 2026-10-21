@@ -1,0 +1,4 @@
+#nullable enable
+Elsa.Etl.Workflows.Design.EtlWorkflowsDesignFeature
+virtual Elsa.Etl.Workflows.Design.EtlWorkflowsDesignFeature.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> void
+Elsa.Etl.Workflows.Design.EtlWorkflowsDesignFeature.EtlWorkflowsDesignFeature() -> void

@@ -84,11 +84,58 @@ internal static class ActivitySuccessorStaging
         return superseded;
     }
 
-    /// <summary>Copies <paramref name="source"/> metadata and records which execution the successor supersedes.</summary>
+    /// <summary>
+    /// Copies <paramref name="source"/> metadata, except the <see cref="PerInvocationMetadataKeys"/>, and records which
+    /// execution the successor supersedes.
+    /// </summary>
+    // The successor is a fresh invocation of the same occurrence. Carried over, the per-invocation markers would tell
+    // the parent-completion handler the successor's outcome was already processed (so a structural parent that already
+    // evaluated the source's fault never hears of the successor), point a background coordinator at the source's work
+    // record, and describe a fault the successor never had.
     public static Dictionary<string, string> SuccessorMetadata(IReadOnlyDictionary<string, string> source, string sourceId)
     {
         var metadata = source.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        foreach (var key in PerInvocationMetadataKeys)
+            metadata.Remove(key);
         metadata[RuntimeMetadataKeys.SupersedesActivityExecutionId] = sourceId;
+        return metadata;
+    }
+
+    /// <summary>The activity metadata the runtime keeps per invocation, which a successor never inherits.</summary>
+    public static readonly IReadOnlyList<string> PerInvocationMetadataKeys =
+    [
+        RuntimeMetadataKeys.ActivityAttemptActivationClaim,
+        RuntimeMetadataKeys.ActivityAttemptActivationClaimWorkItemId,
+        RuntimeMetadataKeys.ActivityActivationCompletedWorkItemId,
+        RuntimeMetadataKeys.ActivityAttemptOrdinalHighWatermark,
+        RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId,
+        RuntimeMetadataKeys.ParentOutcomeWorkItemId,
+        RuntimeMetadataKeys.DescendantFaultProcessedWorkItemId,
+        RuntimeMetadataKeys.IncidentId,
+        RuntimeMetadataKeys.FaultSubStatus,
+        RuntimeMetadataKeys.FaultType,
+        RuntimeMetadataKeys.FaultMessage,
+        RuntimeMetadataKeys.FaultStackTrace,
+        RuntimeMetadataKeys.FaultInnerType,
+        RuntimeMetadataKeys.FaultInnerMessage,
+        RuntimeMetadataKeys.CausalIncidentId,
+        RuntimeMetadataKeys.CausalActivityExecutionId,
+        RuntimeMetadataKeys.CausalExecutableNodeId,
+        RuntimeMetadataKeys.CausationKind,
+        RuntimeMetadataKeys.BackgroundActivityWorkId
+    ];
+
+    /// <summary>The successor's scheduling command metadata, rebuilt from its durable scheduling provenance.</summary>
+    // The source's own schedule command is gone, so its successor's command is rebuilt from the durable scheduling
+    // provenance, the way an ordinary child schedule carries the parent's request metadata. A structural parent reads
+    // its routing data from the child's command metadata, so this is what lets it receive the successor's outcome as
+    // an ordinary child outcome. Routing data a parent kept only in its command metadata is not durable and is lost.
+    public static Dictionary<string, string> SchedulingMetadata(ActivityExecutionState successor)
+    {
+        var metadata = successor.Provenance.Metadata.ToDictionary(item => item.Key, item => item.Value, StringComparer.Ordinal);
+        if (successor.ParentActivityExecutionId is { } parentActivityExecutionId)
+            metadata[RuntimeMetadataKeys.ParentActivityExecutionId] = parentActivityExecutionId;
+        metadata[RuntimeMetadataKeys.ChildExecutableNodeId] = successor.Execution.ExecutableNodeId;
         return metadata;
     }
 

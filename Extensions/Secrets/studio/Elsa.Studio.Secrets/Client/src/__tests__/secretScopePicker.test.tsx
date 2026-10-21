@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SecretScopePicker } from "../SecretScopePicker";
+import { ScopeMatchingHint, SecretScopePicker } from "../SecretScopePicker";
 import type { SecretScopeDescriptor } from "../secretTypes";
 
 const cleanup = new Set<() => void>();
@@ -23,7 +23,23 @@ describe("secret scope picker", () => {
     expect(container.textContent).toContain("Scope does not grant access.");
 
     selectOption(select, "Custom…");
-    expect(customScopeInput(container)).not.toBeNull();
+    const customInput = customScopeInput(container)!;
+    expect(customInput).not.toBeNull();
+    expect(customInput.getAttribute("aria-describedby")).toBe(select.getAttribute("aria-describedby"));
+  });
+
+  it("describes custom scope input with external matching and local recovery hints", () => {
+    const { container } = renderPicker({ options: [], externalMatchingHintId: "canonical-scope-hint" });
+    const select = container.querySelector<HTMLSelectElement>("select")!;
+    selectOption(select, "Custom…");
+
+    const customInput = customScopeInput(container)!;
+    const describedBy = select.getAttribute("aria-describedby")!.split(/\s+/);
+    expect(describedBy).toHaveLength(2);
+    expect(describedBy[0]).toBe("canonical-scope-hint");
+    expect(customInput.getAttribute("aria-describedby")).toBe(describedBy.join(" "));
+    expect(document.getElementById(describedBy[0])?.textContent).toContain("Scope does not grant access.");
+    expect(document.getElementById(describedBy[1])?.textContent).toContain("No suggestions are available.");
   });
 
   it("keeps the authored value exact when suggestions are removed or match only by case", () => {
@@ -85,18 +101,20 @@ function renderPicker({
   options,
   loading,
   error,
+  externalMatchingHintId,
   onRetry = vi.fn()
 }: {
   value?: string;
   options?: SecretScopeDescriptor[];
   loading?: boolean;
   error?: boolean;
+  externalMatchingHintId?: string;
   onRetry?: () => void;
 }) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
-  const render = (props: { value?: string; options?: SecretScopeDescriptor[]; loading?: boolean; error?: boolean; onRetry?: () => void }) => {
+  const render = (props: { value?: string; options?: SecretScopeDescriptor[]; loading?: boolean; error?: boolean; externalMatchingHintId?: string; onRetry?: () => void }) => {
     flushSync(() => root.render(<ScopeHarness {...props} onRetry={props.onRetry ?? onRetry} />));
   };
   const unmount = () => {
@@ -105,7 +123,7 @@ function renderPicker({
     cleanup.delete(unmount);
   };
   cleanup.add(unmount);
-  render({ value, options, loading, error, onRetry });
+  render({ value, options, loading, error, externalMatchingHintId, onRetry });
   return { container, render, unmount };
 }
 
@@ -117,11 +135,13 @@ function ScopeHarness({
   options?: SecretScopeDescriptor[];
   loading?: boolean;
   error?: boolean;
+  externalMatchingHintId?: string;
   onRetry?(): void;
 }) {
   const [value, setValue] = useState(initialValue);
   return (
     <>
+      {props.externalMatchingHintId ? <ScopeMatchingHint id={props.externalMatchingHintId} /> : null}
       <SecretScopePicker {...props} value={value} onChange={setValue} />
       <output>{value}</output>
     </>

@@ -5,8 +5,11 @@ using Elsa.Activities.Compensation.Exceptions;
 namespace Elsa.Activities.Compensation.Internal;
 
 /// <summary>
-/// Upgrades a version-1 (M1) scope state payload to version 2 (spec 251 data model), so a scope that started before
-/// M2 resumes under M2 code. Statuses, ordinals and identities are kept. Version 2 is never downgraded.
+/// Upgrades older scope state payloads to the current version: version 1 (M1) to version 2 (spec 251 data model),
+/// version 2 to version 3 (spec 258 data model), version 3 to version 4 (spec 260 data model), and version 4 to
+/// version 5 (spec 261 data model), so a scope that
+/// started under an older release resumes under the current code. Statuses, ordinals and identities are kept. No
+/// version is ever downgraded.
 /// </summary>
 internal static class CompensationScopeStateUpcaster
 {
@@ -20,6 +23,46 @@ internal static class CompensationScopeStateUpcaster
             foreach (var entry in entries.OfType<JsonObject>())
                 UpgradeEntry(entry);
         }
+
+        return JsonSerializer.SerializeToElement(state);
+    }
+
+    /// <summary>
+    /// Version 2 to 3: every field is kept, and the scope gets no confirmations and no received hand-overs. Entries get
+    /// no origin and no handler node: they are the scope's own, whose handlers resolve from their steps.
+    /// </summary>
+    public static JsonElement FromVersion2(JsonElement payload)
+    {
+        if (JsonNode.Parse(payload.GetRawText()) is not JsonObject state)
+            throw new CompensationScopeExecutionException("Compensation scope private state (version 2) is not an object.");
+
+        state["confirmations"] ??= new JsonArray();
+        state["receivedHandOvers"] ??= new JsonArray();
+        state["handOversInProgress"] ??= new JsonArray();
+        return JsonSerializer.SerializeToElement(state);
+    }
+
+    /// <summary>
+    /// Version 3 to 4: every field is kept and nothing is added. The new fields (an entry's resolution, the scope's
+    /// abandonment) are optional and absent, and no version-3 status changes meaning. The version still moves, so a
+    /// version-3 reader never meets <c>ResolvedManually</c> or <c>Abandoned</c>.
+    /// </summary>
+    public static JsonElement FromVersion3(JsonElement payload)
+    {
+        if (JsonNode.Parse(payload.GetRawText()) is not JsonObject state)
+            throw new CompensationScopeExecutionException("Compensation scope private state (version 3) is not an object.");
+
+        return JsonSerializer.SerializeToElement(state);
+    }
+
+    /// <summary>
+    /// Version 4 to 5: every field is kept and nothing is added. The new attempt fields (<c>notBefore</c>,
+    /// <c>delayClamped</c>) are optional and absent: no version-4 scope ever scheduled a retry after a wait.
+    /// </summary>
+    public static JsonElement FromVersion4(JsonElement payload)
+    {
+        if (JsonNode.Parse(payload.GetRawText()) is not JsonObject state)
+            throw new CompensationScopeExecutionException("Compensation scope private state (version 4) is not an object.");
 
         return JsonSerializer.SerializeToElement(state);
     }

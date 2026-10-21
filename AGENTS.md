@@ -101,3 +101,8 @@ New work moves toward this rule: constitution for gates and governance, glossary
 [org-agents]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md
 [org-agents-ibl]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#issue-bus-lite
 [org-agents-review]: https://github.com/elsa-workflows/.github/blob/main/AGENTS.md#review-and-merge-rules
+
+<!-- SPECKIT START -->
+For the active work unit's design and validation, read
+`specs/993-studio-diagnostics-index/plan.md`.
+<!-- SPECKIT END -->

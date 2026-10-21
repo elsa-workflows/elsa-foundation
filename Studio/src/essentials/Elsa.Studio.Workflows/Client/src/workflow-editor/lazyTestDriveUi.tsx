@@ -10,7 +10,7 @@ export function LazyWorkflowTestDrivePanel(props: ComponentProps<typeof Workflow
   return (
     <Suspense fallback={
       <div className="wf-test-drive-panel">
-        <p className="wf-test-drive-loading" role="status">Loading Test Drive setup…</p>
+        <p className="wf-test-drive-loading" role="status">Loading Test Run setup…</p>
       </div>
     }>
       <WorkflowTestDrivePanel {...props} />
@@ -22,7 +22,7 @@ export function LazyWorkflowTestRunControls(props: ComponentProps<typeof Workflo
   return (
     <Suspense fallback={
       <section className="wf-test-run-controls" aria-label="Test Run controls">
-        <p className="wf-test-drive-loading" role="status">Loading Test Drive controls…</p>
+        <p className="wf-test-drive-loading" role="status">Loading Test Run controls…</p>
       </section>
     }>
       <WorkflowTestRunControls {...props} />

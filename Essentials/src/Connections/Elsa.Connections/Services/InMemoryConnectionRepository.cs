@@ -107,6 +107,23 @@ internal sealed class InMemoryConnectionRepository : IConnectionRepository
         return new(_documents.TryRemove(Key(tenantId, name), out _));
     }
 
+    public ValueTask<bool> DeleteAsync(string tenantId, string name, int expectedVersion, CancellationToken cancellationToken = default)
+    {
+        Validate(tenantId, name);
+        var key = Key(tenantId, name);
+        while (_documents.TryGetValue(key, out var current))
+        {
+            if (current.State.Version != expectedVersion)
+                return new(false);
+
+            // Removes the entry only while it is still the one read, so a concurrent save or re-add is never deleted.
+            if (_documents.TryRemove(new KeyValuePair<string, ConnectionDocument>(key, current)))
+                return new(true);
+        }
+
+        return new(false);
+    }
+
     private static void Validate(string tenantId, string name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);

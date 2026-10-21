@@ -6,10 +6,13 @@ using Elsa.Api.AspNetCore;
 using Elsa.Api.Capabilities;
 using Elsa.Api.Compatibility.Testing.Manifests;
 using Elsa.Api.Compatibility.Testing.Security;
+using Elsa.Connections.Api;
+using Elsa.Connections.Core.Permissions;
 using Elsa.Expressions.Api;
 using Elsa.Foundation.Identity.Authorization;
 using Elsa.Foundation.Identity.Core.Authorization;
 using Elsa.Workflows.Design.Api;
+using Elsa.Workflows.Design.Api.Authorization;
 using Elsa.Workflows.Publishing.Api;
 using Elsa.Workflows.Publishing.Api.Authorization;
 using Elsa.Workflows.Runtime.Api;
@@ -232,6 +235,45 @@ public sealed class EndpointSecurityTests
             Assert.Equal(PermissionPolicyParseStatus.Valid, dispositionPolicy.Status);
             Assert.Equal([permission], dispositionPolicy.Descriptor!.Permissions);
         }
+    }
+
+    [Fact]
+    public void Connections_minimal_api_lists_under_workflow_design_read_or_connections_manage_and_administers_under_its_own_rights()
+    {
+        // Connections does not reference the Workflow Design API, so it names that domain's read permission itself.
+        // This compares against the owner's declaration, which keeps the mirrored name honest.
+        string[] listing = [WorkflowDesignPermissions.Read, ConnectionsPermissions.Manage];
+        var expected = new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["GET /connections"] = listing,
+            ["GET /connections/descriptors"] = listing,
+            ["POST /connections/picker"] = listing,
+            ["GET /connections/{name}"] = listing,
+            ["POST /connections"] = [ConnectionsPermissions.Manage],
+            ["PUT /connections/{name}"] = [ConnectionsPermissions.Manage],
+            ["DELETE /connections/{name}"] = [ConnectionsPermissions.Manage],
+            ["POST /connections/{name}/revoke"] = [ConnectionsPermissions.Manage],
+            ["GET /connections/{name}/oauth-redirect-uri"] = [ConnectionsPermissions.Manage],
+            ["POST /connections/{name}/test"] = [ConnectionsPermissions.Test]
+        };
+        using var serviceProvider = new ServiceCollection().AddRouting().AddElsaEndpoints().BuildServiceProvider();
+        var routes = new TestEndpointRouteBuilder(serviceProvider);
+        ConnectionsApi.MapConnectionsApi(routes);
+
+        var actual = routes.DataSources.SelectMany(source => source.Endpoints).OfType<RouteEndpoint>()
+            .Where(endpoint => endpoint.Metadata.GetMetadata<IAllowAnonymous>() is null)
+            .ToDictionary(
+                endpoint => $"{endpoint.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods.Single()} {endpoint.RoutePattern.RawText}",
+                endpoint => new PermissionPolicyCodec()
+                    .Parse(Assert.Single(endpoint.Metadata.GetOrderedMetadata<EndpointSecurityDispositionMetadata>()).Value!)
+                    .Descriptor!.Permissions.Order(StringComparer.Ordinal).ToArray(),
+                StringComparer.Ordinal);
+
+        Assert.Equal(expected.Keys.Order(StringComparer.Ordinal), actual.Keys.Order(StringComparer.Ordinal));
+        foreach (var (route, permissions) in expected)
+            Assert.True(
+                permissions.Select(PermissionKey.Normalize).Append(PermissionKey.Wildcard).Order(StringComparer.Ordinal).SequenceEqual(actual[route]),
+                $"{route} accepts [{string.Join(", ", actual[route])}], not [{string.Join(", ", permissions)}].");
     }
 
     [Fact]

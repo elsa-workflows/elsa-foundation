@@ -138,7 +138,7 @@ export function PublishActionButton({ busy, saving, onPublish }: PublishActionBu
         onClick={event => submitFromPrimary(mode, event.currentTarget)}
       >
         {isReview ? <GitBranch size={15} aria-hidden="true" /> : <Send size={15} aria-hidden="true" />}
-        {isReview ? "Review and Publish" : "Publish"}
+        {isReview ? "Review & publish" : "Publish"}
       </button>
       <button
         ref={triggerRef}
@@ -169,7 +169,7 @@ export function PublishActionButton({ busy, saving, onPublish }: PublishActionBu
       >
         <div id={menuId} role="menu" aria-label="Publish action" onKeyDown={handleMenuKeyDown}>
           {modes.map((optionMode, index) => {
-            const optionLabel = optionMode === "review" ? "Review and Publish" : "Publish";
+            const optionLabel = optionMode === "review" ? "Review & publish" : "Publish";
             return (
               <button
                 ref={element => { optionRefs.current[index] = element; }}

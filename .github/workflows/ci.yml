@@ -95,7 +95,9 @@ jobs:
     runs-on: ubuntu-latest
     # The native-hosting process matrix shares this job with the container-free suites.
     # The former 30-minute budget expired before that suite completed (#3056); per-test limits stay bounded.
-    timeout-minutes: 45
+    # 45 minutes then left no margin: the Workbench suite alone takes 25-28 minutes after about 17 minutes of build
+    # and other suites, so runs on main and on PRs were cancelled mid-Workbench with no failing test (#3150, #3152).
+    timeout-minutes: 60
     outputs:
       docs_only: ${{ steps.scope.outputs.docs_only }}
     steps:

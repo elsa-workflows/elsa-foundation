@@ -12,6 +12,7 @@ namespace Elsa.Workflows.Publishing.Api.Tests.Support;
 public static class PublishingCompatibilityCases
 {
     public const string IdentityHeader = "X-Elsa-Publishing-Capture-Identity";
+    public const string TenantHeader = "X-Elsa-Publishing-Capture-Tenant";
 
     public static IReadOnlyList<PublishingRoute> Manifest { get; } =
     [

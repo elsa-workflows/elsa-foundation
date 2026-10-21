@@ -18,6 +18,9 @@ This module does not expose replaceable service contracts in v1. Its activity-ow
   or fault (faults arrive through a child-fault parent-evaluation work item). Both callbacks funnel through
   one fault-aware join decision and return a `RuntimeStructuralContinuation`: complete with `Done` once
   enough branches succeed, fault the composite once the threshold is unreachable, otherwise defer.
+- `Parallel` implements `IRuntimeAcceptsRescheduledFaultedChild` (`Elsa.Workflows.Runtime.Core`, #3135): the
+  join reads the durable branch states, where a superseded branch does not count and its successor's completion
+  counts as that branch's success, so rescheduling a faulted branch of a join that deferred lets it rejoin.
 
 ## Cross-domain contributions
 

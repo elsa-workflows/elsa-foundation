@@ -33,6 +33,7 @@ COPY Extensions/ConsoleStream/studio/ ./Extensions/ConsoleStream/studio/
 COPY Extensions/Connections/studio/ ./Extensions/Connections/studio/
 COPY Extensions/Diagnostics.OpenTelemetry/studio/ ./Extensions/Diagnostics.OpenTelemetry/studio/
 COPY Extensions/Diagnostics.StructuredLogs/studio/ ./Extensions/Diagnostics.StructuredLogs/studio/
+COPY Extensions/Etl/studio/ ./Extensions/Etl/studio/
 COPY Extensions/ExpressionEditors.JavaScript/studio/ ./Extensions/ExpressionEditors.JavaScript/studio/
 COPY Extensions/ExpressionEditors.Liquid/studio/ ./Extensions/ExpressionEditors.Liquid/studio/
 COPY Extensions/ExtensionBuilder/studio/ ./Extensions/ExtensionBuilder/studio/

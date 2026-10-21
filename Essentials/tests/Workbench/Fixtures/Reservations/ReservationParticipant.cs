@@ -6,15 +6,68 @@ using Elsa.Activities.Runtime.Core.Abstractions;
 using Elsa.Activities.Runtime.Core.Attributes;
 using Elsa.Activities.Runtime.Core.Models;
 using Elsa.Primitives.Models;
+using Elsa.Workflows.Runtime.Core.Contracts;
+using Elsa.Workflows.Runtime.Core.Models;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Elsa.Workbench.Tests.Reservations;
 
 [ShellFeature("ReservationWitness", DependsOn = new object[] { "ActivitiesCompensation" })]
-public sealed class ReservationWitnessFeature : IShellFeature
+public sealed class ReservationWitnessFeature : IShellFeature, IPostConfigureShellServices
 {
+    /// <summary>
+    /// When set, the first operator decision delivery holds while <c>decision-delivery.hold</c> exists in this directory
+    /// and <c>decision-delivery.release</c> does not, after writing <c>decision-delivery.held</c>: the test kills the
+    /// process after the alteration checkpoint committed and before the decision reached the scope (spec 260 O8 point 2).
+    /// </summary>
+    public string? HoldDecisionDeliveryDirectory { get; set; }
+
     public void ConfigureServices(IServiceCollection services) =>
         services.AddScoped<IActivityReconciliationSource, ReservationParticipantCatalog>();
+
+    public void PostConfigureServices(IServiceCollection services)
+    {
+        if (string.IsNullOrWhiteSpace(HoldDecisionDeliveryDirectory))
+            return;
+
+        var directory = HoldDecisionDeliveryDirectory;
+        var descriptors = services
+            .Where(descriptor => descriptor.ServiceType == typeof(IWorkflowSchedulerWorkHandler) &&
+                                 descriptor.ImplementationType?.Name == "WorkflowInterventionDecisionSchedulerWorkHandler")
+            .ToArray();
+        foreach (var descriptor in descriptors)
+        {
+            var implementationType = descriptor.ImplementationType!;
+            services.Remove(descriptor);
+            services.Add(ServiceDescriptor.Describe(
+                typeof(IWorkflowSchedulerWorkHandler),
+                serviceProvider => new HoldingDecisionDeliveryHandler(
+                    (IWorkflowSchedulerWorkHandler)ActivatorUtilities.CreateInstance(serviceProvider, implementationType),
+                    directory),
+                descriptor.Lifetime));
+        }
+    }
+
+    private sealed class HoldingDecisionDeliveryHandler(IWorkflowSchedulerWorkHandler inner, string directory) : IWorkflowSchedulerWorkHandler
+    {
+        public string Name => inner.Name;
+
+        public bool CanHandle(RuntimeSchedulerWorkItem workItem) => inner.CanHandle(workItem);
+
+        public async ValueTask HandleAsync(RuntimeSchedulerWorkItem workItem, CancellationToken cancellationToken = default)
+        {
+            var hold = Path.Combine(directory, "decision-delivery.hold");
+            var release = Path.Combine(directory, "decision-delivery.release");
+            if (File.Exists(hold) && !File.Exists(release))
+            {
+                await File.WriteAllTextAsync(Path.Combine(directory, "decision-delivery.held"), workItem.WorkItemId, cancellationToken);
+                while (!File.Exists(release))
+                    await Task.Delay(25, cancellationToken);
+            }
+
+            await inner.HandleAsync(workItem, cancellationToken);
+        }
+    }
 }
 
 // Feed packages contribute their catalog explicitly; the host's CLR source scans only its own binary folder.
@@ -71,11 +124,12 @@ public sealed partial class ReservationParticipant : Activity<ReservationResult>
 
     protected override async ValueTask<ActivityTransition<ReservationResult>> ExecuteAsync(ActivityExecutionContext context)
     {
+        var startedAt = DateTimeOffset.UtcNow;
         Directory.CreateDirectory(DirectoryPath);
         var calls = Path.Combine(DirectoryPath, Key + ".calls");
         var previousCalls = File.Exists(calls) ? (await File.ReadAllLinesAsync(calls, context.CancellationToken)).Length : 0;
         await File.AppendAllTextAsync(calls,
-            $"{Environment.ProcessId}|{context.InvocationId}|{context.AttemptId}|{context.OperationKey}{Environment.NewLine}", context.CancellationToken);
+            $"{Environment.ProcessId}|{context.InvocationId}|{context.AttemptId}|{context.OperationKey}|{startedAt:O}{Environment.NewLine}", context.CancellationToken);
 
         if (Undoes is not null)
             await File.AppendAllTextAsync(Path.Combine(DirectoryPath, Key + ".undoes"), Undoes + Environment.NewLine, context.CancellationToken);

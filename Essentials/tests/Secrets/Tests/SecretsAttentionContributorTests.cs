@@ -3,6 +3,7 @@ using Elsa.Attention.Core;
 using Elsa.Secrets.Attention;
 using Elsa.Secrets.Core.Contracts;
 using Elsa.Secrets.Core.Models;
+using Elsa.Secrets.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Microsoft.Extensions.Time.Testing;
@@ -54,6 +55,26 @@ public sealed class SecretsAttentionContributorTests
         Assert.Equal(7, result.TotalCount);
         Assert.True(result.IsTruncated);
         Assert.Equal(5, result.Items.Count);
+    }
+
+    [Fact]
+    public async Task SecretsDeletedUnderAReusedNameDoNotCountAgainstTheBoundedQuery()
+    {
+        var repository = new InMemorySecretRepository();
+        for (var deletion = 0; deletion < SecretRepositoryListRequest.MaximumTake; deletion++)
+        {
+            var deleted = Secret($"reused-{deletion:D3}", SecretStatus.Deleted, Now.AddDays(-1));
+            deleted.Name = "reused.name";
+            await repository.SaveAsync(deleted);
+        }
+
+        await repository.SaveAsync(Secret("revoked", SecretStatus.Revoked, Now.AddDays(90)));
+        var contributor = new SecretsAttentionContributor(repository, new FakeTimeProvider(Now));
+
+        var result = await contributor.EvaluateAsync(Context(1));
+
+        Assert.Equal("secret:revoked", Assert.Single(result.Items).Id);
+        Assert.Equal(1, result.TotalCount);
     }
 
     [Fact]

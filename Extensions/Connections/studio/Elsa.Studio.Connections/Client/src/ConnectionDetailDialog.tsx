@@ -32,7 +32,7 @@ export function ConnectionDetailDialog({ connection, descriptors, busy, notifica
       </header>
       <div className="connections-dialog-body">
         <div className="connections-detail-status"><ConnectionStatusBadge status={connection.status} />
-          <p>{connection.status === "Ready" ? "Available to workflows that use this connection." : connection.status === "NeedsAuthorization" ? "You can publish workflows. Runs that use this connection will fail until it is authorized." : connection.status === "Revoked" ? "This connection can no longer authorize requests." : "Test this connection to check its configuration."}</p>
+          <p>{connection.status === "Ready" ? "Available to workflows that use this connection." : connection.status === "NeedsAuthorization" ? "Workflows that use it can still be promoted. Runs that use this connection will fail until it is authorized." : connection.status === "Revoked" ? "This connection can no longer authorize requests." : "Test this connection to check its configuration."}</p>
         </div>
         {notification}
         <dl className="connections-summary">

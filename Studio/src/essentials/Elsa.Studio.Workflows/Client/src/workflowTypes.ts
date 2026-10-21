@@ -187,6 +187,11 @@ export interface ValidationError {
   type?: string | null;
   code?: string | null;
   message?: string | null;
+  /**
+   * Backend `ValidationError.Severity`: `Error` blocks publication, `Warning` is reported and does not block. A missing
+   * value reads as `Error` (spec 261 FR-515).
+   */
+  severity?: "Error" | "Warning" | string | null;
   [key: string]: unknown;
 }
 
@@ -875,6 +880,31 @@ export interface WorkflowInstanceDetails {
   /** Present when Runtime bounded the activity summaries and another page is available. */
   activityNextContinuationToken?: string | null;
   incidents?: IncidentStateSummary[] | null;
+  /** The caller's permissions for this run (spec 260 FR-416); an older host omits it, which reads as "may not manage". */
+  permissions?: WorkflowInstancePermissions | null;
+}
+
+/** A display hint: the endpoints still enforce every permission. */
+export interface WorkflowInstancePermissions {
+  canManage: boolean;
+  canInspectValues: boolean;
+}
+
+/**
+ * A module's read-only projection of a live structural activity's private state (spec 260 R-6), such as a compensation
+ * scope's journal. `view` is null when `available` is false; `unavailableReason` then says why.
+ */
+export interface ActivityStateView {
+  workflowExecutionId: string;
+  activityExecutionId: string;
+  executableNodeId: string;
+  activityStatus: string;
+  available: boolean;
+  unavailableReason?: "StateCleared" | "NoProjector" | string | null;
+  viewKind?: string | null;
+  viewVersion?: number | null;
+  canInspectValues: boolean;
+  view?: unknown;
 }
 
 export interface ActivityExecutionInspection {
@@ -1239,6 +1269,7 @@ export interface ActivityExecutionStateSummary {
 export interface ActivityExecutionSchedulingProvenance {
   parentActivityExecutionId?: string | null;
   schedulingActivityExecutionId?: string | null;
+  iterationId?: string | null;
   schedulingCause?: string | null;
   metadata?: Record<string, string> | null;
 }

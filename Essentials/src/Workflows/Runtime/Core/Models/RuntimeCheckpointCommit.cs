@@ -372,7 +372,8 @@ public sealed class RuntimePostCommitIntent
         IReadOnlyDictionary<string, string>? metadata = null,
         string? dependsOnWaitRegistrationId = null,
         RuntimeWaitDependentIntentFailurePolicy? waitFailurePolicy = null,
-        RuntimeSchedulerWorkItem? materializedSchedulerWorkItem = null)
+        RuntimeSchedulerWorkItem? materializedSchedulerWorkItem = null,
+        DateTimeOffset? notBefore = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(intentId);
         ArgumentException.ThrowIfNullOrWhiteSpace(workflowExecutionId);
@@ -398,6 +399,7 @@ public sealed class RuntimePostCommitIntent
         DependsOnWaitRegistrationId = dependsOnWaitRegistrationId;
         WaitFailurePolicy = waitFailurePolicy;
         MaterializedSchedulerWorkItem = materializedSchedulerWorkItem;
+        NotBefore = notBefore?.ToUniversalTime();
     }
 
     public string IntentId { get; }
@@ -411,6 +413,17 @@ public sealed class RuntimePostCommitIntent
     public string? DependsOnWaitRegistrationId { get; }
     public RuntimeWaitDependentIntentFailurePolicy? WaitFailurePolicy { get; }
     public bool IsWaitDependent => !string.IsNullOrWhiteSpace(DependsOnWaitRegistrationId);
+
+    /// <summary>
+    /// The time before which the intent must not be delivered (R-7, spec 261): its outbox item becomes available then
+    /// instead of at the commit. Null, or a time at or before the commit, delivers it after the commit as usual. A
+    /// checkpoint that carries a later one is mandatory and durable in every persistence mode, and neither the
+    /// in-process hop nor a drain's own delivery hands it over early.
+    /// </summary>
+    public DateTimeOffset? NotBefore { get; }
+
+    /// <summary>Whether this intent must wait past <paramref name="committedAt"/>, its checkpoint's time.</summary>
+    public bool IsDelayedPast(DateTimeOffset committedAt) => NotBefore is { } notBefore && notBefore > committedAt;
 
     /// <summary>
     /// Whether <paramref name="other"/> is the same logical intent. Payloads compare as JSON values, not text: an intent
@@ -427,6 +440,7 @@ public sealed class RuntimePostCommitIntent
         StringComparer.Ordinal.Equals(IdempotencyKey, other.IdempotencyKey) &&
         StringComparer.Ordinal.Equals(DependsOnWaitRegistrationId, other.DependsOnWaitRegistrationId) &&
         WaitFailurePolicy == other.WaitFailurePolicy &&
+        NotBefore == other.NotBefore &&
         (Payload is { } payload ? other.Payload is { } otherPayload && JsonElement.DeepEquals(payload, otherPayload) : other.Payload is null) &&
         RuntimeModelMetadata.AreEqual(Metadata, other.Metadata);
 

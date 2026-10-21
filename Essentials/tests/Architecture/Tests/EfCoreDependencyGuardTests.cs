@@ -105,6 +105,21 @@ public sealed class EfCoreDependencyGuardTests
     };
 
     [Fact]
+    public void Every_admitted_ETL_project_resolves_only_its_reviewed_EF_closure()
+    {
+        var offenders = Adr0087FiniteEtlEf.ExpectedEfPackagesByProject
+            .SelectMany(project => RestoreConfigurations.SelectMany(configuration =>
+            {
+                var resolved = ReadProjectEfPackages(project.Key, configuration);
+                return FindUnexpectedEfPackages(resolved, project.Value)
+                    .Select(package => $"{project.Key} ({configuration}) unexpectedly resolves {package}")
+                    .Concat(FindUnexpectedEfPackages(project.Value, resolved)
+                        .Select(package => $"{project.Key} ({configuration}) no longer resolves reviewed package {package}"));
+            })).ToArray();
+        Assert.True(offenders.Length == 0, Report("drift from the reviewed finite ETL EF closure", offenders));
+    }
+
+    [Fact]
     public void Every_admitted_Secrets_pilot_project_resolves_only_its_reviewed_EF_closure()
     {
         var offenders = Adr0072SecretsEfPilot.ExpectedEfPackagesByProject
@@ -694,6 +709,7 @@ public sealed class EfCoreDependencyGuardTests
                     Adr0073WorkflowsDesignEf.IsProjectPath(relativePath) ||
                     Adr0073ActivitiesDesignEf.IsProjectPath(relativePath) ||
                     Adr0073Elsa3ImportEf.IsProjectPath(relativePath) ||
+                    Adr0087FiniteEtlEf.IsProjectPath(relativePath) ||
                     Adr0076ActivationGuardEf.IsProjectPath(relativePath) ||
                     Spec183ReadabilityEf.IsProjectPath(relativePath) ||
                     Adr0078ClusterMembershipEf.IsProjectPath(relativePath) ||
@@ -1200,6 +1216,21 @@ public sealed class EfCoreDependencyGuardTests
             "Microsoft.EntityFrameworkCore.Analyzers",
             "Microsoft.EntityFrameworkCore.Relational"
         ];
+    }
+
+    /// <summary>The scoped ETL design module admission for #3109 and ADR 0087.</summary>
+    internal static class Adr0087FiniteEtlEf
+    {
+        public static readonly IReadOnlyDictionary<string, string[]> ExpectedEfPackagesByProject =
+            new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                ["Extensions/Etl/src/Persistence/EntityFrameworkCore/Elsa.Etl.Persistence.EntityFrameworkCore.csproj"] =
+                ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational"],
+                ["Extensions/Etl/tests/Tests/Elsa.Etl.Tests.csproj"] =
+                ["Microsoft.EntityFrameworkCore", "Microsoft.EntityFrameworkCore.Abstractions", "Microsoft.EntityFrameworkCore.Analyzers", "Microsoft.EntityFrameworkCore.Relational", "Microsoft.EntityFrameworkCore.Sqlite", "Microsoft.EntityFrameworkCore.Sqlite.Core"]
+            };
+
+        public static bool IsProjectPath(string relativePath) => ExpectedEfPackagesByProject.ContainsKey(relativePath);
     }
 
     /// <summary>

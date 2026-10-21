@@ -16,7 +16,7 @@ namespace Elsa.Connections.Design.Features;
 [ShellFeature(
     name: "ConnectionsDesign",
     DisplayName = "Connections Design",
-    Description = "Publish-time connection gate: missing or wrong-type connections block; NeedsAuthorization warns only.",
+    Description = "Promotion-time connection gate: missing or wrong-type connections block; NeedsAuthorization warns only.",
     DependsOn = new object[] { "Connections", "WorkflowDesignValidations" }
 )]
 public class ConnectionsDesignFeature : IShellFeature
