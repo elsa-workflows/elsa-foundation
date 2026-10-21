@@ -5,6 +5,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using Elsa.Connections.Api.Features;
 using Elsa.Connections.Core.Contracts;
+using Elsa.Connections.Core.Exceptions;
 using Elsa.Connections.Core.Models;
 using Elsa.Connections.Extensions;
 using Elsa.Foundation.Identity.Core.Authorization;
@@ -20,6 +21,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -64,6 +66,46 @@ public sealed class ConnectionsApiTests
 
         using var duplicate = await client.SendAsync(Authed(HttpMethod.Post, "/connections", BearerBody("dup")));
         Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+    }
+
+    [Fact]
+    public async Task Update_MapsACredentialWriteFailureTo500WithoutLeakingTheStoreFailure()
+    {
+        var body = await UpdateFailingWithAsync(name => new ConnectionCredentialWriteException(
+            name,
+            ["token"],
+            $"Connection '{name}' credential(s) 'token' were not written. Its other changes were saved.",
+            new IOException("Connection refused by db-host-1")));
+
+        Assert.Contains("token", body);
+        Assert.DoesNotContain("db-host-1", body);
+    }
+
+    [Fact]
+    public async Task Update_MapsAStoreFailureBeforeTheSaveTo500WithoutLeakingTheStoreFailure()
+    {
+        var body = await UpdateFailingWithAsync(name => new ConnectionStoreException(
+            name,
+            $"Connection '{name}' may not have been updated: the connection or secret store failed before the change was confirmed saved. Retry; if the retry reports a credential secret name as taken, use a different connection name or bind an existing secret.",
+            new IOException("Connection refused by db-host-1")));
+
+        Assert.Contains("may not have been updated", body);
+        Assert.DoesNotContain("db-host-1", body);
+    }
+
+    private async Task<string> UpdateFailingWithAsync(Func<string, Exception> failure)
+    {
+        await using var host = await StartHostAsync(configure: services =>
+        {
+            services.RemoveAll<IConnectionManager>();
+            services.AddScoped<IConnectionManager>(_ => new FailingConnectionManager(failure));
+        });
+        using var client = host.GetTestClient();
+
+        using var response = await client.SendAsync(Authed(HttpMethod.Put, "/connections/any", new { displayName = "Renamed" }));
+
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        return await response.Content.ReadAsStringAsync();
     }
 
     [Fact]
@@ -291,7 +333,7 @@ public sealed class ConnectionsApiTests
         return request;
     }
 
-    private static async Task<WebApplication> StartHostAsync(string? publicBaseUrl = "https://studio.example")
+    private static async Task<WebApplication> StartHostAsync(string? publicBaseUrl = "https://studio.example", Action<IServiceCollection>? configure = null)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -317,6 +359,7 @@ public sealed class ConnectionsApiTests
         builder.Services.AddConnections(configuration);
         builder.Services.Configure<Elsa.Connections.Options.ConnectionsOptions>(options => options.PublicBaseUrl = publicBaseUrl);
         new ConnectionsApiFeature().ConfigureServices(builder.Services);
+        configure?.Invoke(builder.Services);
 
         var app = builder.Build();
         Assert.NotNull(app.Services.GetService<IConnectionManager>());
@@ -325,6 +368,25 @@ public sealed class ConnectionsApiTests
         new ConnectionsApiFeature().MapEndpoints(app, app.Environment);
         await app.StartAsync();
         return app;
+    }
+
+    /// <summary>Fails every update with the exception the default manager throws for a store outage.</summary>
+    private sealed class FailingConnectionManager(Func<string, Exception> failure) : IConnectionManager
+    {
+        public ValueTask<ConnectionMetadata?> UpdateAsync(string tenantId, string name, UpdateConnectionRequest request, CancellationToken cancellationToken = default) =>
+            throw failure(name);
+
+        public ValueTask<ConnectionMetadata> CreateAsync(string tenantId, CreateConnectionRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public ValueTask<ConnectionMetadata?> FindAsync(string tenantId, string name, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public ValueTask<IReadOnlyList<ConnectionMetadata>> ListAsync(string tenantId, ConnectionQuery? query = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public ValueTask<ConnectionTestResult> TestAsync(string tenantId, string name, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public ValueTask<ConnectionMetadata?> RevokeAsync(string tenantId, string name, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public ValueTask<bool> DeleteAsync(string tenantId, string name, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class HeaderAuthenticationHandler(

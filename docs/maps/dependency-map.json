@@ -3168,6 +3168,11 @@
         },
         {
           "type": "pinned-transitive",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
+          "version": "10.0.10"
+        },
+        {
+          "type": "pinned-transitive",
           "id": "Microsoft.Extensions.Options",
           "version": "10.0.10"
         },
@@ -3316,6 +3321,11 @@
         {
           "type": "external",
           "id": "Microsoft.Extensions.DependencyInjection",
+          "version": "10.0.10"
+        },
+        {
+          "type": "external",
+          "id": "Microsoft.Extensions.Logging.Abstractions",
           "version": "10.0.10"
         },
         {
@@ -14660,6 +14670,11 @@
           "type": "internal",
           "id": "Elsa.Workflows.Runtime",
           "path": "Essentials/src/Workflows/Runtime/Elsa.Workflows.Runtime/Elsa.Workflows.Runtime.csproj"
+        },
+        {
+          "type": "internal",
+          "id": "Elsa.Testing",
+          "path": "Essentials/tests/Testing/Elsa.Testing.csproj"
         },
         {
           "type": "external",
