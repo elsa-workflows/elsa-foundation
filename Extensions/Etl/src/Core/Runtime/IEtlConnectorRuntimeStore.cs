@@ -9,6 +9,9 @@ namespace Elsa.Etl.Core.Runtime;
 /// page and file positions never share numeric sentinels. Preparation renewal, cancellation and terminal
 /// settlement remain on <see cref="IEtlRuntimeStore"/>. Leases authorize durable transitions, not
 /// exclusive physical execution or reversal of effects. Caller-owned collections must be snapshotted.
+/// BudgetExceeded means capacity may become available after other outstanding work progresses; callers yield.
+/// PermanentBudgetExceeded means the transition cannot fit even after releasable capacity is returned;
+/// callers settle a safe diagnostic through the common fenced terminal path, preserving unaccepted evidence.
 /// </remarks>
 public interface IEtlConnectorRuntimeStore
 {

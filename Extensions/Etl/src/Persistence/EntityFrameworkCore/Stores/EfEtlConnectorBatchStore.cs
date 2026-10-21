@@ -61,10 +61,17 @@ internal sealed partial class EfEtlRuntimeStore
         var metadataBytes = checked(MetadataBytes(descriptor) + acceptanceReserve);
         var newMetadataBytes = checked(metadataBytes - transferred);
         if (records > limits.MaxBatchRecords || batch.InputBytes > limits.MaxBatchBytes ||
-            run.OutstandingRecords > limits.MaxOutstandingRecords - records ||
-            run.OutstandingBytes > limits.MaxOutstandingBytes - batch.InputBytes ||
-            newMetadataBytes > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes)
+            records > limits.MaxOutstandingRecords || batch.InputBytes > limits.MaxOutstandingBytes)
+            return new(EtlStoreStatus.PermanentBudgetExceeded, null);
+        if (run.OutstandingRecords > limits.MaxOutstandingRecords - records ||
+            run.OutstandingBytes > limits.MaxOutstandingBytes - batch.InputBytes)
             return new(EtlStoreStatus.BudgetExceeded, null);
+        if (newMetadataBytes > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes)
+        {
+            var unavoidable = checked(MetadataBytes(row.PositionJson) + metadataBytes +
+                (sourceRequest is null ? 0 : sourceRequest.FetchMetadataBytes + sourceRequest.SourceMetadataReserveBytes - transferred));
+            return new(await ConnectorMetadataBudgetStatusAsync(connector, state.Pipeline.Http, row.PartitionOrdinal, unavoidable, cancellationToken), null);
+        }
         var startKey = ConnectorBatchStartKey(batch.Range);
         if (await db.ConnectorBatches.AnyAsync(x => x.ScopeKey == key.ScopeKey && x.RunKey == key.RunKey &&
             x.PartitionOrdinal == row.PartitionOrdinal && (x.BatchId == batch.BatchId || x.StartKey == startKey), cancellationToken))

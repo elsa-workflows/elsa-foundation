@@ -203,3 +203,18 @@ encoded bound before dispatch. No canonical serialization or v1 document limit c
 The [source store checkpoint](evidence/source-store-checkpoint.md) records this storage integration.
 Actual transport, cache verification/publication orchestration, physical request capacity/cleanup and
 full native/product/process recovery remain runtime acceptance; these stores do not activate HTTP execution.
+
+### Shared connector worker composition
+
+The shared worker now consumes the optional typed connector capability alongside the unchanged v1 file path.
+It rotates configured file/HTTP scopes and preparation/partition/result delivery within one physical attempt
+pool. One connector attempt executes one bounded batch or empty-page transition and yields. Exact v2 typed
+batches are reconstructed from retained HTTP pages or CSV indexes; route bodies are retained before dispatch,
+and all route evidence precedes atomic acceptance. The [worker checkpoint](evidence/http-worker-checkpoint.md)
+records the executed boundary and remaining native/product/process acceptance.
+
+`BudgetExceeded` leaves responsibility pending for releasable outstanding capacity. The additive
+`PermanentBudgetExceeded` reports a proven per-run/document retention limit that cannot fit after releasable
+capacity returns; the worker settles a safe fenced failure without deleting unaccepted descriptors. Metadata
+classification preserves historical source journals and fixed/monotonic file cursor bytes, and treats peer
+active reservations conservatively. This distinction does not change v1 quota statuses or clear failure evidence.

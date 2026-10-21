@@ -118,7 +118,7 @@ public sealed partial class EtlRuntimeStoreTests
         var status = await store.CommitConnectorPreparationAsync(preparation, new(null, null));
 
         Assert.Equal(EtlStoreStatus.Applied, admitted.Status);
-        Assert.Equal(EtlStoreStatus.BudgetExceeded, status);
+        Assert.Equal(EtlStoreStatus.PermanentBudgetExceeded, status);
         Assert.Empty(await context.ConnectorPartitions.AsNoTracking().ToListAsync());
         Assert.Empty(await context.ConnectorHttpRequests.AsNoTracking().ToListAsync());
         Assert.Empty(await context.ConnectorHttpPages.AsNoTracking().ToListAsync());
@@ -152,7 +152,7 @@ public sealed partial class EtlRuntimeStoreTests
         context.ChangeTracker.Clear();
 
         Assert.Equal(limit, beforeBegin);
-        Assert.Equal(EtlStoreStatus.BudgetExceeded, begin.Status);
+        Assert.Equal(EtlStoreStatus.PermanentBudgetExceeded, begin.Status);
         Assert.Null(begin.Permit);
         Assert.Null(begin.Fetch);
         var unchangedPartition = await context.ConnectorPartitions.AsNoTracking().SingleAsync();
@@ -214,6 +214,53 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(0L, partitions[0].PageCount);
         Assert.Equal(0L, partitions[1].PageCount);
         Assert.All(partitions, partition => Assert.True(partition.MetadataBytes < limits.AfterFirstBegin));
+    }
+
+    [Fact]
+    public async Task Historical_http_fetch_journal_is_not_released_for_a_later_page_reservation()
+    {
+        const string runId = "metadata-source-history-limit";
+        const string partitionId = "metadata-source-history-limit";
+        var defaults = EtlV2TestPipelines.Create();
+        var http = defaults.Http with { MaxPageBytes = 128, MaxContinuationBytes = 64 };
+        var pipeline = defaults with { Http = http };
+        var measured = await MeasureHistoricalHttpRequestMetadataBudgetAsync(runId, partitionId, pipeline);
+        Assert.True(measured.HistoricalFetchBytes > 0);
+        Assert.True(measured.AfterFirstPage < measured.AfterSecondBegin);
+
+        pipeline = pipeline with { Http = http with { MaxRetainedMetadataBytes = measured.AfterSecondBegin - 1 } };
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.CreateContext();
+        var clock = new MutableTimeProvider();
+        var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock);
+        var admission = ConnectorAdmission(runId, new("tenant", partitionId), pipeline, ["shard"]);
+        var initial = Assert.Single(await StartHttpRunAsync(store, admission, "worker"));
+        var first = await store.BeginConnectorHttpSourceAsync(initial, "00000000000000000000000000000001");
+        Assert.Equal(EtlStoreStatus.Applied, first.Status);
+        var page = RetainedPage(initial, "history-page-0", 10, 0, "cursor-1");
+        Assert.Equal(EtlStoreStatus.Applied,
+            (await store.CaptureConnectorHttpSourceAsync(initial, first.Permit!, page, first.Permit!.StartedAt)).Status);
+        var attached = await store.AttachHttpPageAsync(initial, page);
+        Assert.Equal(EtlStoreStatus.Applied, attached.Status);
+        var advanced = await store.AdvanceEmptyHttpPageAsync(attached.Lease!);
+        Assert.Equal(EtlStoreStatus.Applied, advanced.Status);
+        var beforeSecondBegin = await AssertMetadataAccountingAsync(context);
+        var historical = await context.ConnectorHttpRequests.AsNoTracking().SingleAsync(request => request.PageSequence == 0);
+        Assert.Equal(EtlConnectorHttpSourceFetchPhase.Captured,
+            EtlConnectorRecordCodec.Read<EtlConnectorHttpSourceFetch>(historical.FetchJson!).Phase);
+        Assert.Equal(measured.HistoricalFetchBytes, historical.FetchMetadataBytes);
+        Assert.Equal(measured.AfterFirstPage, beforeSecondBegin);
+
+        var second = await store.BeginConnectorHttpSourceAsync(advanced.Lease!, "00000000000000000000000000000002");
+
+        Assert.Equal(EtlStoreStatus.PermanentBudgetExceeded, second.Status);
+        Assert.Null(second.Permit);
+        Assert.Equal(beforeSecondBegin, await AssertMetadataAccountingAsync(context));
+        var connector = await context.ConnectorRuns.AsNoTracking().SingleAsync();
+        Assert.Equal(0, connector.SourceInputReservedBytes);
+        Assert.Equal(2, await context.ConnectorHttpRequests.CountAsync());
+        Assert.Null(await context.ConnectorHttpRequests.AsNoTracking()
+            .Where(request => request.PageSequence == 1).Select(request => request.FetchJson).SingleAsync());
     }
 
     [Fact]
@@ -415,6 +462,32 @@ public sealed partial class EtlRuntimeStoreTests
             "00000000000000000000000000000002")).Status);
         var afterSecond = await AssertMetadataAccountingAsync(context);
         return (afterFirst, afterSecond);
+    }
+
+    private static async Task<(long AfterFirstPage, long AfterSecondBegin, long HistoricalFetchBytes)>
+        MeasureHistoricalHttpRequestMetadataBudgetAsync(string runId, string partitionId, EtlPipelineV2 pipeline)
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        await using var context = database.CreateContext();
+        var clock = new MutableTimeProvider();
+        var store = (IEtlConnectorRuntimeStore)database.CreateStore(context, clock);
+        var admission = ConnectorAdmission(runId, new("tenant", partitionId), pipeline, ["shard"]);
+        var initial = Assert.Single(await StartHttpRunAsync(store, admission, "worker"));
+        var first = await store.BeginConnectorHttpSourceAsync(initial, "00000000000000000000000000000001");
+        Assert.Equal(EtlStoreStatus.Applied, first.Status);
+        var page = RetainedPage(initial, "history-page-0", 10, 0, "cursor-1");
+        Assert.Equal(EtlStoreStatus.Applied,
+            (await store.CaptureConnectorHttpSourceAsync(initial, first.Permit!, page, first.Permit!.StartedAt)).Status);
+        var attached = await store.AttachHttpPageAsync(initial, page);
+        Assert.Equal(EtlStoreStatus.Applied, attached.Status);
+        var advanced = await store.AdvanceEmptyHttpPageAsync(attached.Lease!);
+        Assert.Equal(EtlStoreStatus.Applied, advanced.Status);
+        var afterFirstPage = await AssertMetadataAccountingAsync(context);
+        var historical = await context.ConnectorHttpRequests.AsNoTracking().SingleAsync(request => request.PageSequence == 0);
+        var second = await store.BeginConnectorHttpSourceAsync(advanced.Lease!, "00000000000000000000000000000002");
+        Assert.Equal(EtlStoreStatus.Applied, second.Status);
+        var afterSecondBegin = await AssertMetadataAccountingAsync(context);
+        return (afterFirstPage, afterSecondBegin, historical.FetchMetadataBytes);
     }
 
     private static async Task<long> AssertMetadataAccountingAsync(EtlRuntimeSqliteDbContext context)

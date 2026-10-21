@@ -33,7 +33,7 @@ No credential is read during validation or pinning. The short-lived connection i
 request execution must obtain a new exact-pin resolution and authenticate each request separately. Credential
 source references are not exposed by this public port, so changes to those references remain part of permitted
 credential rotation. The [HTTP profile](../../../../specs/996-http-etl/contracts/http-profile.md) defines the
-remaining transport and publication boundaries. These binding ports do not enable connector worker execution.
+transport and publication boundaries. Binding ports do not themselves execute work; the shared worker consumes their exact pins.
 
 ## Runtime inspection bounds
 
@@ -53,7 +53,15 @@ separate decisions; a successfully decoded document is not proof that the config
 
 The runtime applies independent `EtlRuntimeFeature.HttpLimits` and live-attempt capacity ceilings, and checks
 mapping/filter/lookup semantics without design services. A compiler-valid artifact can exceed a particular
-host's ceilings. A missing lookup does not reserve a synthetic lookup allowance. The existing file store still
-rejects v2 admissions; known canonical v2 invocations can be retained for cancellation or refusal and terminal
-delivery. This checkpoint does not yet supply a connector worker. See the
-[runtime reader checkpoint](../../../../specs/996-http-etl/evidence/v2-runtime-reader-checkpoint.md).
+host's ceilings. A missing lookup does not reserve a synthetic lookup allowance. The existing file-only store
+contract still rejects v2 admissions. An optional `IEtlConnectorRuntimeStore` supplies typed connector transitions;
+the shared worker discovers it and uses the same physical attempt pool, heartbeat and terminal delivery. A selected
+file-only replacement/decorator remains usable and receives a durable v2-unavailable refusal. See the
+[worker checkpoint](../../../../specs/996-http-etl/evidence/http-worker-checkpoint.md).
+
+Connector providers distinguish temporary outstanding-capacity pressure (`BudgetExceeded`) from a transition
+that cannot fit the retained-input/output/metadata limits (`PermanentBudgetExceeded`). The worker yields for
+temporary pressure and settles a safe fenced diagnostic for a proven permanent shortage. Terminal failure keeps
+unaccepted descriptors and accounting as evidence; it never fabricates acceptance to clear counters. Providers
+must retain the request/page history needed to classify irreversible growth and must not mistake another live
+partition's releasable reservation for permanent exhaustion.

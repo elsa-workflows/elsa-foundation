@@ -35,13 +35,21 @@ internal sealed partial class EfEtlRuntimeStore
         if (owed is null) return new(EtlStoreStatus.Conflict, null);
         var batch = await db.ConnectorBatches.SingleAsync(row => row.ScopeKey == key.ScopeKey && row.RunKey == key.RunKey &&
             row.PartitionOrdinal == lease.PartitionOrdinal && row.BatchId == batchId, cancellationToken);
+        var sourceRequest = position is EtlConnectorHttpPosition httpPosition
+            ? await HttpRequestForUpdateAsync(partition, httpPosition.PageSequence, cancellationToken)
+            : null;
         // Replaying output retention is the pre-dispatch capacity check for migrated checkpoints.
         var reserveDelta = MissingAcceptanceReserve(partition, position, owed.Batch, batch);
         if (owed.Output is { } retained)
         {
             if (retained != output) return new(EtlStoreStatus.Conflict, null);
             if (reserveDelta > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes)
-                return new(EtlStoreStatus.BudgetExceeded, null);
+            {
+                var unavoidable = checked(MetadataBytes(partition.PositionJson) +
+                    (sourceRequest is null ? 0 : sourceRequest.FetchMetadataBytes + sourceRequest.SourceMetadataReserveBytes) +
+                    batch.AcceptanceMetadataBytes + reserveDelta);
+                return new(await ConnectorMetadataBudgetStatusAsync(connector, state.Pipeline.Http, partition.PartitionOrdinal, unavoidable, cancellationToken), null);
+            }
             if (reserveDelta != 0)
             {
                 RetainAcceptanceReserve(connector, partition, batch, reserveDelta);
@@ -68,9 +76,15 @@ internal sealed partial class EfEtlRuntimeStore
         }
         var metadata = MetadataBytes(json);
         if (bytes > state.Pipeline.Limits.MaxOutputBatchBytes ||
-            bytes > state.Pipeline.Limits.MaxRetainedOutputBytes - connector.RetainedOutputBytes ||
-            checked(metadata + reserveDelta) > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes)
-            return new(EtlStoreStatus.BudgetExceeded, null);
+            bytes > state.Pipeline.Limits.MaxRetainedOutputBytes - connector.RetainedOutputBytes)
+            return new(EtlStoreStatus.PermanentBudgetExceeded, null);
+        if (checked(metadata + reserveDelta) > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes)
+        {
+            var unavoidable = checked(MetadataBytes(partition.PositionJson) +
+                (sourceRequest is null ? 0 : sourceRequest.FetchMetadataBytes + sourceRequest.SourceMetadataReserveBytes) +
+                batch.AcceptanceMetadataBytes + reserveDelta + metadata);
+            return new(await ConnectorMetadataBudgetStatusAsync(connector, state.Pipeline.Http, partition.PartitionOrdinal, unavoidable, cancellationToken), null);
+        }
         RetainAcceptanceReserve(connector, partition, batch, reserveDelta);
         batch.OutputJson = json;
         batch.OutputDigest = MetadataDigest(json);

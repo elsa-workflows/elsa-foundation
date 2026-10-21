@@ -106,7 +106,7 @@ internal sealed partial class EfEtlRuntimeStore
             // attachment. A second history-wide sequence-or-hash probe is unnecessary.
             // Subtraction avoids overflow even for a caller supplying an extremely large object.
             if (page.Body.ByteLength > state.Pipeline.Http.MaxRetainedInputBytes - connector.RetainedInputBytes)
-                return new(EtlStoreStatus.BudgetExceeded, null);
+                return new(EtlStoreStatus.PermanentBudgetExceeded, null);
             var pageJson = EtlConnectorRecordCodec.Write(page);
             addedPage = new EtlConnectorHttpPageRecord
             {
@@ -131,7 +131,11 @@ internal sealed partial class EfEtlRuntimeStore
         var metadataDelta = checked(MetadataBytes(positionJson) - MetadataBytes(row.PositionJson) +
             (addedPage?.MetadataBytes ?? 0) + (addedRequest?.MetadataBytes ?? 0) + reserveDelta);
         if (metadataDelta > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes)
-            return new(EtlStoreStatus.BudgetExceeded, null);
+        {
+            var unavoidable = checked(MetadataBytes(positionJson) + (addedPage?.MetadataBytes ?? 0) +
+                (addedRequest?.MetadataBytes ?? 0) + request.FetchMetadataBytes + remainingReserve);
+            return new(await ConnectorMetadataBudgetStatusAsync(connector, state.Pipeline.Http, row.PartitionOrdinal, unavoidable, cancellationToken), null);
+        }
         request.SourceMetadataReserveBytes = remainingReserve;
         request.MetadataBytes = checked(request.MetadataBytes + reserveDelta);
         request.InputReservationBytes = checked(request.InputReservationBytes - inputReleased);

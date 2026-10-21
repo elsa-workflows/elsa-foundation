@@ -89,15 +89,21 @@ internal sealed partial class EfEtlRuntimeStore
                 : HttpSourceCaptureProgressMetadataReserve(current, state.Pipeline.Http);
             if (checked(fetchBytes + (fetch.Capture is null ? HttpSourceCaptureJournalMetadataReserve(current, state.Pipeline.Http) : 0)) >
                 EtlConnectorRecordCodec.MaximumDocumentBytes)
-                return new(EtlStoreStatus.BudgetExceeded, previous, null);
+                return new(EtlStoreStatus.PermanentBudgetExceeded, previous, null);
         }
-        catch (Exception exception) when (exception is ArgumentException or InvalidDataException or OverflowException)
-        { return new(EtlStoreStatus.BudgetExceeded, previous, null); }
+        catch (Exception exception) when (exception is ArgumentException or OverflowException)
+        { return new(EtlStoreStatus.PermanentBudgetExceeded, previous, null); }
+        catch (InvalidDataException)
+        { return new(EtlStoreStatus.Invalid, previous, null); }
         var inputReserve = fetch.Capture?.Page.Body.ByteLength ?? state.Pipeline.Http.MaxPageBytes;
         var inputDelta = checked(inputReserve - request.InputReservationBytes);
         var metadataDelta = checked(fetchBytes + sourceReserve - request.FetchMetadataBytes - request.SourceMetadataReserveBytes);
-        if (metadataDelta > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes ||
-            inputDelta > state.Pipeline.Http.MaxRetainedInputBytes - connector.RetainedInputBytes - connector.SourceInputReservedBytes)
+        if (inputReserve > state.Pipeline.Http.MaxRetainedInputBytes - connector.RetainedInputBytes)
+            return new(EtlStoreStatus.PermanentBudgetExceeded, previous, null);
+        if (metadataDelta > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes)
+            return new(await ConnectorMetadataBudgetStatusAsync(connector, state.Pipeline.Http, partition.PartitionOrdinal,
+                checked(MetadataBytes(partition.PositionJson) + fetchBytes + sourceReserve), cancellationToken), previous, null);
+        if (inputDelta > state.Pipeline.Http.MaxRetainedInputBytes - connector.RetainedInputBytes - connector.SourceInputReservedBytes)
             return new(EtlStoreStatus.BudgetExceeded, previous, null);
         request.FetchJson = json;
         request.FetchDigest = MetadataDigest(json);

@@ -202,7 +202,7 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(expectedBaseline, before);
         Assert.Equal(expectedDescriptorBytes, batchMetadataBytes);
         Assert.Equal(metadataLimit, before + batchMetadataBytes - 1);
-        Assert.Equal(EtlStoreStatus.BudgetExceeded, result.Status);
+        Assert.Equal(EtlStoreStatus.PermanentBudgetExceeded, result.Status);
         Assert.Null(result.Reservation);
         Assert.Equal(0, current.Run.OutstandingRecords);
         Assert.Equal(0, current.Run.OutstandingBytes);

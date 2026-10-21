@@ -295,7 +295,7 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(EtlStoreStatus.Replay, replay.Status);
         Assert.Equal(8, afterFirst);
         Assert.Equal(afterFirst, afterReplay);
-        Assert.Equal(EtlStoreStatus.BudgetExceeded, refused.Status);
+        Assert.Equal(EtlStoreStatus.PermanentBudgetExceeded, refused.Status);
         Assert.Null(refused.Output);
         Assert.Equal(8, (await context.ConnectorRuns.AsNoTracking().SingleAsync()).RetainedOutputBytes);
         Assert.Equal(0, (await context.ConnectorPartitions.AsNoTracking().SingleAsync(partition =>
@@ -322,7 +322,7 @@ public sealed partial class EtlRuntimeStoreTests
         var result = await store.RetainConnectorBatchOutputAsync(lease, batch.BatchId, output);
 
         Assert.Equal(12, BodyBytes(output));
-        Assert.Equal(EtlStoreStatus.BudgetExceeded, result.Status);
+        Assert.Equal(EtlStoreStatus.PermanentBudgetExceeded, result.Status);
         Assert.Null(result.Output);
         Assert.Null((await context.ConnectorBatches.AsNoTracking().SingleAsync()).OutputJson);
         Assert.Equal(0, (await context.ConnectorRuns.AsNoTracking().SingleAsync()).RetainedOutputBytes);
@@ -346,6 +346,7 @@ public sealed partial class EtlRuntimeStoreTests
         var run = Assert.IsType<EtlConnectorRunView>(await store.FindConnectorRunAsync(admission.Invocation.Scope, admission.Invocation.RunId));
         var batch = OutputTestBatch(admission, run.Prepared!, lease);
         Assert.Equal(EtlStoreStatus.Applied, (await store.ReserveConnectorBatchAsync(lease, batch)).Status);
+        Assert.Equal(2, await context.ConnectorPartitions.CountAsync());
         var output = CreateOutput(admission, batch, accepted: 1, rejected: 1, filtered: 0, suffix: "metadata");
         var baseline = await RetainedMetadataBytesAsync(context);
         var planBytes = Encoding.UTF8.GetByteCount(EtlConnectorRecordCodec.Write(output));
@@ -355,7 +356,7 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(measurement.Baseline, baseline);
         Assert.Equal(measurement.PlanBytes, planBytes);
         Assert.Equal(measurement.Limit, baseline + planBytes - 1);
-        Assert.Equal(EtlStoreStatus.BudgetExceeded, result.Status);
+        Assert.Equal(EtlStoreStatus.PermanentBudgetExceeded, result.Status);
         Assert.Null(result.Output);
         Assert.Null((await context.ConnectorBatches.AsNoTracking().SingleAsync()).OutputJson);
         Assert.Equal(baseline, await RetainedMetadataBytesAsync(context));

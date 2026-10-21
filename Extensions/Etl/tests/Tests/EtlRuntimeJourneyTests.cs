@@ -297,7 +297,7 @@ public sealed partial class EtlRuntimeJourneyTests
 
         public async Task<IHost> StartHostAsync(EfMigratePolicy policy, bool includeBindings = true, bool useShell = false,
             string bindingRevision = "v1", IEtlResultDelivery? resultDelivery = null, int deliveryLeaseSeconds = 30, int maximumPageSize = 100,
-            Action<IServiceCollection>? configureServices = null)
+            Action<IServiceCollection>? configureServices = null, Action<EtlRuntimeFeature>? configureRuntime = null)
         {
             var builder = Host.CreateApplicationBuilder();
             var runtime = new EtlRuntimeFeature
@@ -306,6 +306,7 @@ public sealed partial class EtlRuntimeJourneyTests
                 FileBindings = includeBindings ? [Binding("source", "Source", _source, bindingRevision), Binding("lookup", "Lookup", _lookup, bindingRevision),
                     Binding("output", "MainOutput", OutputRoot, bindingRevision), Binding("errors", "ErrorOutput", ErrorRoot, bindingRevision)] : []
             };
+            configureRuntime?.Invoke(runtime);
             var persistence = new EtlRuntimeEntityFrameworkCoreFeature
             {
                 ConnectionString = $"Data Source={Path.Combine(_directory, "runtime.db")};Pooling=False",
@@ -321,6 +322,7 @@ public sealed partial class EtlRuntimeJourneyTests
                         {
                             feature.SnapshotRoot = runtime.SnapshotRoot;
                             feature.FileBindings = runtime.FileBindings;
+                            feature.HttpBindings = runtime.HttpBindings;
                         })
                         .WithFeature<EtlRuntimeEntityFrameworkCoreFeature>(feature => feature.ConnectionString = persistence.ConnectionString)
                         .WithFeature<FileSystemLockingFeature>(feature => feature.LocksFolderPath = Path.Combine(_directory, "locks"))));

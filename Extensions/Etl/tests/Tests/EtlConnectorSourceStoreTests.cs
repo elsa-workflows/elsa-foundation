@@ -102,7 +102,7 @@ public sealed partial class EtlRuntimeStoreTests
         var begin = await store.BeginConnectorHttpSourceAsync(lease, requestId);
         if (!exactFit)
         {
-            Assert.Equal(EtlStoreStatus.BudgetExceeded, begin.Status);
+            Assert.Equal(EtlStoreStatus.PermanentBudgetExceeded, begin.Status);
             Assert.Null(begin.Permit);
             Assert.Null((await context.ConnectorHttpRequests.AsNoTracking().SingleAsync()).FetchJson);
             var unchanged = await context.ConnectorRuns.AsNoTracking().SingleAsync();

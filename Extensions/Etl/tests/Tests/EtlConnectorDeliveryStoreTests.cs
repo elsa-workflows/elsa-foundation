@@ -263,7 +263,7 @@ public sealed partial class EtlRuntimeStoreTests
         var after = await DeliveryAccountingAsync(context, lease.PartitionOrdinal);
         var retained = await context.ConnectorBatches.AsNoTracking().SingleAsync();
 
-        Assert.Equal(EtlStoreStatus.BudgetExceeded, result.Status);
+        Assert.Equal(EtlStoreStatus.PermanentBudgetExceeded, result.Status);
         Assert.Null(result.Permit);
         Assert.Null(retained.HttpDeliveryJson);
         Assert.Null(retained.HttpDeliveryDigest);

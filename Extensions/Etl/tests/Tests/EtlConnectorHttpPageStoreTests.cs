@@ -206,7 +206,7 @@ public sealed partial class EtlRuntimeStoreTests
         var overBudget = await store.AttachTestHttpPageAsync(nextLease, RetainedPage(nextLease, "budget-1", byteLength: 10, recordCount: 0));
         var run = Assert.IsType<EtlConnectorRunView>(await store.FindConnectorRunAsync(admission.Invocation.Scope, admission.Invocation.RunId));
 
-        Assert.Equal(EtlStoreStatus.BudgetExceeded, overBudget.Status);
+        Assert.Equal(EtlStoreStatus.PermanentBudgetExceeded, overBudget.Status);
         Assert.Null(overBudget.Lease);
         Assert.Equal(10, run.RetainedInputBytes);
         Assert.Single(await context.ConnectorHttpPages.ToListAsync());

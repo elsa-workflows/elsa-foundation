@@ -517,6 +517,7 @@ Elsa.Etl.Core.Runtime.EtlStoreStatus.Applied = 0 -> Elsa.Etl.Core.Runtime.EtlSto
 Elsa.Etl.Core.Runtime.EtlStoreStatus.BudgetExceeded = 5 -> Elsa.Etl.Core.Runtime.EtlStoreStatus
 Elsa.Etl.Core.Runtime.EtlStoreStatus.Conflict = 2 -> Elsa.Etl.Core.Runtime.EtlStoreStatus
 Elsa.Etl.Core.Runtime.EtlStoreStatus.Invalid = 7 -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlStoreStatus.PermanentBudgetExceeded = 8 -> Elsa.Etl.Core.Runtime.EtlStoreStatus
 Elsa.Etl.Core.Runtime.EtlStoreStatus.LeaseLost = 4 -> Elsa.Etl.Core.Runtime.EtlStoreStatus
 Elsa.Etl.Core.Runtime.EtlStoreStatus.NotFound = 3 -> Elsa.Etl.Core.Runtime.EtlStoreStatus
 Elsa.Etl.Core.Runtime.EtlStoreStatus.Replay = 1 -> Elsa.Etl.Core.Runtime.EtlStoreStatus

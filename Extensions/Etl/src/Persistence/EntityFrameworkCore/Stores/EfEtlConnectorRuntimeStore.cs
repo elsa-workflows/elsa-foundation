@@ -139,7 +139,7 @@ internal sealed partial class EfEtlRuntimeStore
                 partition.MetadataBytes = checked(partition.MetadataBytes + request.MetadataBytes);
             }
             if (partition.MetadataBytes > state.Pipeline.Http.MaxRetainedMetadataBytes - metadataBytes)
-                return EtlStoreStatus.BudgetExceeded;
+                return EtlStoreStatus.PermanentBudgetExceeded;
             metadataBytes += partition.MetadataBytes;
             partitions.Add(partition);
         }

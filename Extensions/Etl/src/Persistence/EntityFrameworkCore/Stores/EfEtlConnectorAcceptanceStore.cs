@@ -121,7 +121,21 @@ internal sealed partial class EfEtlRuntimeStore
         var positionJson = EtlConnectorRecordCodec.Write<EtlConnectorPosition>(next);
         var metadataDelta = checked(MetadataBytes(positionJson) - MetadataBytes(partition.PositionJson) + (addedRequest?.MetadataBytes ?? 0) - batch.AcceptanceMetadataBytes + sourceReserveDelta);
         if (metadataDelta > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes)
-            return new(EtlStoreStatus.BudgetExceeded, null);
+        {
+            var sourceFetchBytes = 0L;
+            if (position is EtlConnectorHttpPosition currentHttp)
+            {
+                var sourceRequest = await HttpRequestForUpdateAsync(partition, currentHttp.PageSequence, cancellationToken);
+                sourceFetchBytes = sourceRequest.FetchMetadataBytes;
+            }
+            var sourceProgressReserve = position is EtlConnectorHttpPosition
+                ? HttpSourceAttachedProgressMetadataReserve((EtlConnectorHttpPosition)next, state.Pipeline.Http)
+                : 0;
+            var unavoidable = checked(MetadataBytes(positionJson) + (addedRequest?.MetadataBytes ?? 0) +
+                sourceFetchBytes + sourceProgressReserve +
+                (batch.HttpDeliveryJson is null ? 0 : MetadataBytes(batch.HttpDeliveryJson)));
+            return new(await ConnectorMetadataBudgetStatusAsync(connector, state.Pipeline.Http, partition.PartitionOrdinal, unavoidable, cancellationToken), null);
+        }
         if (addedRequest is not null)
         {
             db.ConnectorHttpRequests.Add(addedRequest);

@@ -4,6 +4,7 @@ using Elsa.Etl.Core.Runtime;
 using Elsa.Etl.Runtime.Bindings;
 using Elsa.Etl.Runtime.Execution;
 using Elsa.Etl.Runtime.Hosting;
+using Elsa.Etl.Runtime.Http;
 using Elsa.Etl.Runtime.Output;
 using Elsa.Etl.Runtime.Preparation;
 using Elsa.Tasks.Core;
@@ -16,7 +17,7 @@ namespace Elsa.Etl.Runtime;
 [ManifestRuntimeKind(ElsaRuntimeKinds.Server)]
 [ManifestFeatureCategory("ETL")]
 [ManifestFeatureCategory("Runtime")]
-[ShellFeature(name: "EtlRuntime", DisplayName = "ETL Runtime", Description = "Bounded execution support for published finite file ETL pipelines.", DependsOn = new object[] { "Tasks" })]
+[ShellFeature(name: "EtlRuntime", DisplayName = "ETL Runtime", Description = "Bounded execution support for published finite file and HTTP ETL pipelines.", DependsOn = new object[] { "Tasks" })]
 public class EtlRuntimeFeature : IShellFeature
 {
     [ManifestSetting(DisplayName = "Snapshot root", Description = "Absolute host-approved root for bounded ETL source and lookup snapshots.", Category = "Storage")]
@@ -88,6 +89,12 @@ public class EtlRuntimeFeature : IShellFeature
             provider.GetRequiredService<HostFileBindings>(),
             options.SnapshotRoot,
             provider.GetRequiredService<IFileChunkPublisherFactory>()));
+        services.AddScoped(provider => new EtlConnectorPreparer(
+            provider.GetRequiredService<HostFileBindings>(), options.SnapshotRoot,
+            provider.GetRequiredService<IFileChunkPublisherFactory>()));
+        services.AddScoped<EtlHttpTransport>();
+        // Resolve this optional execution path only after the worker discovers a connector-capable store.
+        services.AddScoped(provider => ActivatorUtilities.CreateInstance<EtlConnectorExecution>(provider));
         services.AddScoped<EtlExecution>();
         services.AddScoped<EtlAcceptedOutputMaterializer>();
         services.AddScoped<IEtlRunAdmissionService>(provider => provider.GetRequiredService<EtlExecution>());

@@ -70,6 +70,7 @@ public sealed partial class EtlRuntimeJourneyTests
         var store = control.ServiceProvider.GetRequiredService<IEtlRuntimeStore>();
         // A v1-only provider remains usable without the optional connector capability.
         Assert.False(store is IEtlConnectorRuntimeStore);
+        Assert.Null(control.ServiceProvider.GetService<IEtlConnectorRuntimeStore>());
         var execution = control.ServiceProvider.GetRequiredService<EtlExecution>();
         var invocation = files.Invocation(pipeline, "live-replacement");
         Assert.Equal(EtlStoreStatus.Applied, (await execution.AdmitAsync(invocation, deadline.Token)).Status);

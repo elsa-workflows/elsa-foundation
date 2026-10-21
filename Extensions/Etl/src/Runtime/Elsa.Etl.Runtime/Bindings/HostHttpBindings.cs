@@ -53,6 +53,8 @@ internal sealed class HostHttpBindings
         new(_bindings, connectionResolver, connectionTypes, authenticationSchemes,
             Array.AsReadOnly((authenticators ?? []).Where(x => x is not null).ToArray()));
 
+    internal IEnumerable<EtlScope> Scopes => _bindings.Select(binding => binding.Scope).Distinct();
+
     public bool ContainsBinding(EtlScope scope, string alias, string role)
     {
         ArgumentNullException.ThrowIfNull(scope);

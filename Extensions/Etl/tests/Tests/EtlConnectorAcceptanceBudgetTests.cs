@@ -104,7 +104,7 @@ public sealed partial class EtlRuntimeStoreTests
             Assert.Equal(metadataLimit, await RetainedMetadataBytesAsync(context));
             return;
         }
-        Assert.Equal(EtlStoreStatus.BudgetExceeded, result.Status);
+        Assert.Equal(EtlStoreStatus.PermanentBudgetExceeded, result.Status);
         Assert.Null(result.Reservation);
         Assert.Equal(before, after);
         Assert.Equal(metadataBefore, await RetainedMetadataBytesAsync(context));
@@ -207,7 +207,7 @@ public sealed partial class EtlRuntimeStoreTests
         var after = await ReadAcceptanceStateAsync(context, fixture.Lease.PartitionOrdinal);
         var afterRows = await ReadAcceptanceBudgetRowsAsync(context, fixture.Lease.PartitionOrdinal);
 
-        Assert.Equal(EtlStoreStatus.BudgetExceeded, result.Status);
+        Assert.Equal(EtlStoreStatus.PermanentBudgetExceeded, result.Status);
         Assert.Null(result.Permit);
         Assert.Equal(before, after);
         Assert.Equal(beforeRows, afterRows);

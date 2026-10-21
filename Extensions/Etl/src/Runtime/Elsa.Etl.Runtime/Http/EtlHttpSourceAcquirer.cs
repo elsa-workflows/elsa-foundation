@@ -162,7 +162,9 @@ internal sealed class EtlHttpSourceAcquirer(IEtlConnectorRuntimeStore store, Hos
             : Refused(result.Status);
 
     private static EtlHttpSourceAcquisition Refused(EtlStoreStatus status) =>
-        status is EtlStoreStatus.Invalid or EtlStoreStatus.NotFound
+        status == EtlStoreStatus.PermanentBudgetExceeded
+            ? Failed("etl.http.source-retention-limit")
+            : status is EtlStoreStatus.Invalid or EtlStoreStatus.NotFound
             ? Failed("etl.http.source-transition-refused")
             : new(status, null, null, null);
 

@@ -10,7 +10,7 @@ namespace Elsa.Etl.Tests;
 public sealed partial class EtlRuntimeJourneyTests
 {
     [Theory]
-    [InlineData(false, "etl.connector-runtime-unavailable")]
+    [InlineData(false, "etl.binding-unavailable")]
     [InlineData(true, "etl.executable.limits-exceeded")]
     public async Task Connector_admission_uses_runtime_validation_and_retains_refusal_for_delivery(
         bool lowerHostCeiling, string expectedCode)

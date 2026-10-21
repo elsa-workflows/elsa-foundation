@@ -2,6 +2,15 @@
 
 Optional `Elsa.Etl` implements the execution domain admitted by [ADR 0087](../../docs/adr/0087-etl-owns-its-execution-domain.md). [Spec 255](../../specs/255-finite-file-etl/spec.md) and [issue #3109](https://github.com/elsa-workflows/elsa-foundation/issues/3109) own the complete delivery scope. Durable fixtures and the [rebuilt Workbench HTTP journey](../../specs/255-finite-file-etl/evidence/workbench-http.md) exercise native invocation and continuation. The [Studio browser journey](../../specs/255-finite-file-etl/evidence/studio-browser.md) records authoring, publication, exact selection, native execution and inspection; each receipt identifies its qualified source state.
 
+## Finite HTTP connector work in progress
+
+[Spec 996](../../specs/996-http-etl/spec.md) and [#3151](https://github.com/elsa-workflows/elsa-foundation/issues/3151)
+extend the finite runtime with HTTP JSON sources and HTTP/JSONL routes. The
+[shared-worker checkpoint](../../specs/996-http-etl/evidence/http-worker-checkpoint.md) records actual HTTP-to-HTTP,
+HTTP-to-JSONL and CSV-to-HTTP execution with optional CSV lookup and durable retries. It uses the same worker
+capacity, terminal delivery and optional provider boundary as file ETL. Full HTTP native continuation, Studio,
+operator and process-recovery acceptance is still in progress; the file-only evidence below does not establish it.
+
 ## Implemented boundaries
 
 - Core: typed finite topology, exact nullable-tenant/required-persistence scope, immutable versioned artifact envelope, typed JSON representation and SHA-256. Complete v1 envelopes are limited to 256 KiB; a definition may request a lower limit. Unknown saved formats remain observable and are refused at publication/read boundaries.

@@ -57,12 +57,20 @@ internal sealed partial class EfEtlRuntimeStore
             row.PartitionOrdinal == lease.PartitionOrdinal && row.BatchId == batchId, cancellationToken);
         // Receiving an outcome must not be blocked by a migrated checkpoint lacking dispatch capacity.
         var reserveDelta = result.Permit is null ? 0 : MissingAcceptanceReserve(partition, position, owed.Batch, batch);
+        var sourceRequest = position is EtlConnectorHttpPosition httpPosition
+            ? await HttpRequestForUpdateAsync(partition, httpPosition.PageSequence, cancellationToken)
+            : null;
         if (result.Status != EtlStoreStatus.Applied)
         {
             if (result.Permit is not { } replayPermit) return result;
             if (replayPermit.ExpiresAt.UtcTicks <= NowTicks()) return new(EtlStoreStatus.Conflict, result.Delivery, null);
             if (reserveDelta > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes)
-                return new(EtlStoreStatus.BudgetExceeded, previous, null);
+            {
+                var unavoidable = checked(MetadataBytes(partition.PositionJson) +
+                    (sourceRequest is null ? 0 : sourceRequest.FetchMetadataBytes + sourceRequest.SourceMetadataReserveBytes) +
+                    batch.AcceptanceMetadataBytes + reserveDelta + HttpDeliveryMetadataBytes(batch.HttpDeliveryJson));
+                return new(await ConnectorMetadataBudgetStatusAsync(connector, state.Pipeline.Http, partition.PartitionOrdinal, unavoidable, cancellationToken), previous, null);
+            }
             if (reserveDelta != 0)
             {
                 RetainAcceptanceReserve(connector, partition, batch, reserveDelta);
@@ -81,13 +89,18 @@ internal sealed partial class EfEtlRuntimeStore
         deliveries = route == EtlOutputRoute.Main ? deliveries with { Main = result.Delivery } : deliveries with { Errors = result.Delivery };
         string json;
         try { json = EtlConnectorRecordCodec.Write(deliveries); }
-        catch (ArgumentException) { return new(EtlStoreStatus.BudgetExceeded, previous, null); }
+        catch (ArgumentException) { return new(EtlStoreStatus.PermanentBudgetExceeded, previous, null); }
         var retainedBytes = checked(MetadataBytes(json) + HttpDeliveryTransitionReserve(deliveries));
         if (retainedBytes > EtlConnectorRecordCodec.MaximumDocumentBytes)
-            return new(EtlStoreStatus.BudgetExceeded, previous, null);
+            return new(EtlStoreStatus.PermanentBudgetExceeded, previous, null);
         var delta = checked(retainedBytes - HttpDeliveryMetadataBytes(batch.HttpDeliveryJson));
         if (checked(delta + reserveDelta) > state.Pipeline.Http.MaxRetainedMetadataBytes - connector.RetainedMetadataBytes)
-            return new(EtlStoreStatus.BudgetExceeded, previous, null);
+        {
+            var unavoidable = checked(MetadataBytes(partition.PositionJson) +
+                (sourceRequest is null ? 0 : sourceRequest.FetchMetadataBytes + sourceRequest.SourceMetadataReserveBytes) +
+                batch.AcceptanceMetadataBytes + reserveDelta + retainedBytes);
+            return new(await ConnectorMetadataBudgetStatusAsync(connector, state.Pipeline.Http, partition.PartitionOrdinal, unavoidable, cancellationToken), previous, null);
+        }
         RetainAcceptanceReserve(connector, partition, batch, reserveDelta);
         batch.HttpDeliveryJson = json;
         batch.HttpDeliveryDigest = MetadataDigest(json);
