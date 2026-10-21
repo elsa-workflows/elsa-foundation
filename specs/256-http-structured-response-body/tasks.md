@@ -55,6 +55,13 @@ No setup: existing projects only.
 - [X] T016 Set this spec's `**Status**:` to `Implemented` with the PR link, before the PR merges (spec-lifecycle transition rule; never a separate status PR) in specs/256-http-structured-response-body/spec.md
 - [X] T017 Regenerate the maps with `Elsa.Maps.Generator -- all` after ticking this file; stage only the files whose content really changed (CRLF caveat)
 
+## Phase 7: Review (Sipke, 2026-10-21)
+
+- [X] T018 [US3] Refuse a script body declared `String`, and convert another spelling of a JSON type with `ELS3-BEHAVIOUR-HTTP-RESPONSE-JSON-VARIANT`, in Extensions/Elsa3/src/Mapping/Conversion/Elsa3ActivityNormalizer.cs and Extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs
+- [X] T019 [US3] Add a non-Http test of the lowered-expression rule (ForEach.Collection) and the review cases in Extensions/Elsa3/tests/Mapping/Tests/Elsa3HttpResponseBodyTests.cs
+- [X] T020 [US1] Keep a content type with parameters in Essentials/src/Http/Core/Models/RawStringContent.cs, with delivery tests in Essentials/tests/Activities/Http/Tests/WriteHttpResponseStructuredBodyTests.cs
+- [X] T021 Amend the member map, the Mapping README, the Body docs and this spec (FR-013, FR-014)
+
 ## Dependencies
 
 T001 → T002 → (US1, US2). T003 precedes T004, T005 and T008. US3 (T009–T013) depends only on T001 (the catalog alias) and

@@ -67,27 +67,74 @@ public sealed class Elsa3HttpResponseBodyTests
         Assert.Equal("text/plain", Text(Input(node, "ContentType")));
     }
 
-    [Fact]
-    public async Task String_content_converts_with_a_non_JSON_content_type()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("text/html")]
+    public async Task A_script_declared_String_is_refused(string? contentType)
     {
-        var state = await ConvertAsync(Respond(
-            ("content", Expression("JavaScript", "return 'hello';")),
-            ("contentType", Literal("text/html"))));
+        // Elsa 3 converted the result to text; the lowered body declares JSON, so Elsa 4 would send an object as JSON.
+        (string, JsonElement)[] properties = contentType is null
+            ? [("content", Expression("JavaScript", "return 'hello';"))]
+            : [("content", Expression("JavaScript", "return 'hello';")), ("contentType", Literal(contentType))];
 
-        var body = Input(Node(state, "respond"), "Body");
-        Assert.Contains("hello", Source(body), StringComparison.Ordinal);
-        Assert.Equal(BodyType, ResultTypeAlias(body));
+        var result = await ConvertResultAsync(Respond(properties));
+
+        Assert.False(result.Succeeded);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.ValueOutsideContract);
+        Assert.Contains("declared as 'String'", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Contains("Object", diagnostic.Guidance, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_String_variable_converts_with_a_non_JSON_content_type()
+    {
+        // A String variable holds text, which both Elsa 3 and Elsa 4 send as is.
+        var content = JsonSerializer.SerializeToElement(new
+        {
+            typeName = "String",
+            expression = new { type = "Variable", value = new { id = "greeting", name = "Greeting", typeName = "String" } }
+        });
+        var root = Respond(("content", content), ("contentType", Literal("text/html")));
+
+        var result = await ConversionServices.ConvertAsync(RealActivityCatalog.Create(), ConversionServices.Definition(root,
+            variables: [new Elsa3Variable { Id = "greeting", Name = "Greeting", TypeName = "String" }]));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+    }
+
+    [Theory]
+    [InlineData("Application/JSON")]
+    [InlineData("application/json; charset=utf-8")]
+    [InlineData("application/problem+json")]
+    public async Task Object_content_with_another_spelling_of_a_JSON_type_converts_with_a_warning(string contentType)
+    {
+        // Elsa 3 matched its JSON writer by exact string and sent the type name; Elsa 4 sends the JSON.
+        var result = await ConvertResultAsync(Respond(
+            ("content", Expression("JavaScript", ObjectBody, "Object")),
+            ("contentType", Literal(contentType))));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.HttpResponseJsonVariant);
+    }
+
+    [Fact]
+    public async Task Object_content_with_exactly_application_json_converts_without_a_warning()
+    {
+        var result = await ConvertResultAsync(Respond(
+            ("content", Expression("JavaScript", ObjectBody, "Object")),
+            ("contentType", Literal("application/json"))));
+
+        Assert.True(result.Succeeded, Describe(result.Diagnostics));
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.HttpResponseJsonVariant);
     }
 
     [Theory]
     [InlineData("Literal", "text/plain")]
-    [InlineData("Literal", "application/problem+json")]
-    [InlineData("Literal", "Application/JSON")]
-    [InlineData("Literal", "application/json; charset=utf-8")]
+    [InlineData("Literal", "application/xml")]
     [InlineData("JavaScript", "return 'application/json';")]
     public async Task Object_content_whose_Elsa3_response_was_not_JSON_is_refused(string contentTypeSyntax, string contentType)
     {
-        // Elsa 3 matched its JSON writer by exact media type; anything else sent the value's type name as text.
+        // Elsa 3 sent the value's type name as text for a non-JSON type, and a computed type depends on the run.
         var result = await ConvertResultAsync(Respond(
             ("content", Expression("JavaScript", ObjectBody, "Object")),
             ("contentType", Expression(contentTypeSyntax, contentType))));
@@ -119,6 +166,18 @@ public sealed class Elsa3HttpResponseBodyTests
             Activity("write", "Elsa.WriteLine", ("text", Expression("JavaScript", "return 'hi';")))));
 
         Assert.Equal("String", ResultTypeAlias(Input(Node(state, "write"), "text")));
+    }
+
+    [Fact]
+    public async Task A_typed_expression_bound_to_a_JSON_member_of_any_activity_declares_the_member_type()
+    {
+        // The rule applies to every activity, not only Http (ForEach.Collection is object?). Elsa 3 converted this value
+        // to its declared Int32; Elsa 4 receives what the script returns (here the string "5"), because the member
+        // accepts any JSON value. Publication requires the member type verbatim.
+        var state = await ConvertAsync(Sequence("root",
+            Activity("loop", "Elsa.ForEach", ("items", Expression("JavaScript", "return '5';", "Int32")))));
+
+        Assert.Equal("Object", ResultTypeAlias(Input(Node(state, "loop"), "Collection")));
     }
 
     private static Elsa3Activity Respond(params (string Name, JsonElement Value)[] properties) =>

@@ -23,8 +23,9 @@ public sealed class WriteHttpResponse : Activity<HttpResponseInstruction>
     public int StatusCode { get; set; } = StatusCodes.Status200OK;
 
     /// <summary>
-    /// The response body to return: any JSON value. Text is sent as is; any other value is sent as JSON. A literal binds
-    /// as text and is never parsed.
+    /// The response body to return: any JSON value. Text is sent as is; any other value is sent as JSON text, also when
+    /// <see cref="ContentType"/> names a non-JSON type such as <c>application/xml</c>. A literal binds as text and is
+    /// never parsed.
     /// </summary>
     [ActivityInput(Key = nameof(Body))]
     public JsonElement? Body { get; set; }

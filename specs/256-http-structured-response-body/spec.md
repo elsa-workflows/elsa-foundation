@@ -29,6 +29,10 @@ It is not a converter workaround: wrapping the value in `JSON.stringify` cannot 
    renaming. It is JSON-equivalent to Elsa 3; only the escaping of non-ASCII and HTML-sensitive characters may differ.
 4. **Converter edge cases**: refuse with guidance where Elsa 4 would send a different response (see User Story 3).
 
+**Review decisions (2026-10-21, @j03y-nxxbz on Sipke's review of #3112)**: the lowered-expression rule (FR-013) applies to
+every activity; a script body declared `String` is refused; another spelling of a JSON content type converts with a
+warning; the Elsa 4 `RawStringContent` fault on a content type with parameters is fixed here (FR-014).
+
 ## User Scenarios & Testing *(mandatory)*
 
 The actors are an Elsa 4 workflow author who returns an HTTP response from a workflow, and an operator who converts Elsa 3
@@ -91,8 +95,10 @@ catalog and check the diagnostics and the carried body.
 
 1. **Given** Elsa 3 content declared as an object (expression or variable) and no content type, a blank literal content type, or a content type expression with an empty script, **When** it is converted, **Then** no diagnostic is reported and the Elsa 4 body carries the same expression.
 2. **Given** Elsa 3 content declared as an object and the literal content type exactly `application/json` or `text/json`, **When** it is converted, **Then** no diagnostic is reported and the body is carried.
-3. **Given** Elsa 3 content that is a literal or is declared as a string, **When** it is converted, **Then** it is carried whatever the content type, as before.
-4. **Given** Elsa 3 content declared as an object and any other literal content type (for example `text/plain`, `Application/JSON`, `application/json; charset=utf-8` or `application/problem+json`), **When** it is converted, **Then** it is refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, and the guidance says to return a string or set the content type to exactly `application/json`. (Elsa 3 matched its JSON writer by exact media type and otherwise sent the object's type name as text.)
+3. **Given** Elsa 3 content that is a literal or a `String` variable, **When** it is converted, **Then** it is carried whatever the content type.
+4. **Given** Elsa 3 content declared as an object and a literal non-JSON content type (for example `text/plain` or `application/xml`), **When** it is converted, **Then** it is refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, and the guidance says to return a string or set the content type to `application/json`. (Elsa 3 sent the object's type name as text.)
+4a. **Given** Elsa 3 content declared as an object and another spelling of a JSON type (`Application/JSON`, `application/json; charset=utf-8`, `application/problem+json`), **When** it is converted, **Then** it converts with the warning `ELS3-BEHAVIOUR-HTTP-RESPONSE-JSON-VARIANT`: Elsa 3 matched its JSON writer by exact string and sent the type name, while Elsa 4 sends the JSON.
+4b. **Given** Elsa 3 content that is a script declared `String`, **When** it is converted, **Then** it is refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`: Elsa 3 converted the result to text, but the lowered body declares the JSON body type, so Elsa 4 would send a returned object as JSON.
 5. **Given** Elsa 3 content declared as an object and a content type computed by a non-empty expression, **When** it is converted, **Then** it is refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`, and the guidance says to set a literal JSON content type. (Elsa 3's result depends on the run-time value.)
 6. **Given** Elsa 3 content declared as another non-JSON type (for example a byte array or a stream), **When** it is converted, **Then** it is refused with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`. (Elsa 3 sent it as `application/octet-stream`; Elsa 4 has no binary response body.)
 
@@ -125,6 +131,8 @@ catalog and check the diagnostics and the carried body.
 - **FR-010**: The converter MUST refuse with `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT` and guidance when non-text content meets a literal non-JSON content type or a content type computed by a non-empty expression, and when the content is declared as a binary type.
 - **FR-011**: The spec 236 member map row `WriteHttpResponse.Content`, the converter README and the map coverage test MUST describe the new rule in the same change.
 - **FR-012**: The activity contract baseline MUST record the body's new type; ADR 0080 pre-GA cleanup applies, so no compatibility shim or data migration is added.
+- **FR-013**: For **every activity**, a lowered Elsa 3 expression bound to a JSON member (`JsonElement`, `Object`, `Any`) MUST declare the member's type, because publication requires it verbatim. This deliberately drops Elsa 3's conversion to the expression's declared type there (an expression declared `Int32` that returns `"5"` reaches the member as the string). A typed member keeps the Elsa 3 declared type.
+- **FR-014**: Delivery MUST keep a content type with parameters as given (`application/json; charset=utf-8`) instead of faulting.
 
 ### Key Entities
 

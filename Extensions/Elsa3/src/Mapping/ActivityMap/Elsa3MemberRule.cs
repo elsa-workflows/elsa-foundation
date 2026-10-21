@@ -91,8 +91,9 @@ public enum Elsa3ValueContract
     HttpMethodSupported,
 
     /// <summary>
-    /// A WriteHttpResponse body (spec 256): text always fits; any other value fits when the response content type is
-    /// unset or exactly a JSON type Elsa 3 serialized it for, so Elsa 4 sends the same JSON and content type.
+    /// A WriteHttpResponse body (spec 256): a literal or a <c>String</c> variable fits; a script declared as another type fits
+    /// when the response content type is unset or JSON, so Elsa 4 sends JSON as Elsa 3 did. A script declared
+    /// <c>String</c> does not fit, because Elsa 3 converted its value to text and Elsa 4 does not.
     /// </summary>
     HttpResponseBody,
 

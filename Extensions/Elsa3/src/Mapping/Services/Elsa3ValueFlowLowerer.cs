@@ -831,8 +831,10 @@ public sealed class Elsa3ValueFlowLowerer(Elsa3ExpressionRewriter expressionRewr
     /// <summary>
     /// The result type a lowered expression declares. Publication requires it to equal the member's type verbatim. A JSON
     /// member (<c>JsonElement</c>, <c>Object</c>, <c>Any</c>) accepts any expression value, so the expression declares
-    /// the member's own type (spec 256: an Elsa 3 <c>Object</c> response body binds Elsa 4's <c>JsonElement?</c>). A typed
-    /// member keeps the declared Elsa 3 type, so publication still refuses a real mismatch.
+    /// the member's own type, for every activity (spec 256: an Elsa 3 <c>Object</c> response body binds Elsa 4's
+    /// <c>JsonElement?</c>). This drops Elsa 3's conversion to a typed declaration: an expression declared <c>Int32</c>
+    /// that returns <c>"5"</c> reaches the member as the string. A typed member keeps the declared Elsa 3 type, so
+    /// publication still refuses a real mismatch.
     /// </summary>
     private static TypeReference ExpressionResultType(ActivityProperty property) =>
         property.InputContract?.Type is { } member && IsUntyped(member, SimpleName(member.Alias))

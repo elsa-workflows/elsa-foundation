@@ -47,6 +47,7 @@ public sealed class WriteHttpResponseStructuredBodyTests
     [InlineData("application/json")]
     [InlineData("text/json")]
     [InlineData("Application/JSON")]
+    [InlineData("application/json; charset=utf-8")]
     public async Task A_structured_body_with_a_JSON_content_type_goes_through_the_JSON_writer(string contentType)
     {
         var json = new RecordingFactory(["application/json", "text/json"]);
@@ -117,6 +118,19 @@ public sealed class WriteHttpResponseStructuredBodyTests
 
         Assert.Equal("application/json", contentType);
         Assert.Equal("""{"a":1}""", text);
+    }
+
+    [Fact]
+    public async Task A_content_type_with_a_parameter_is_kept_and_does_not_fault()
+    {
+        // The writer's content kept the media type as given; parameters used to throw FormatException.
+        var json = new RecordingFactory(["application/json"]);
+
+        var (status, contentType, text) = await DeliverAsync(Text("hello"), "application/json; charset=utf-8", json);
+
+        Assert.Equal(200, status);
+        Assert.Equal("application/json; charset=utf-8", contentType);
+        Assert.Equal("hello", text);
     }
 
     [Fact]

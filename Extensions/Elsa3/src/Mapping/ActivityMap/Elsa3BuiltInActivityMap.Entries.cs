@@ -165,7 +165,7 @@ internal sealed partial class Elsa3BuiltInActivityMap
         Catalog("WriteHttpResponse", Http + "WriteHttpResponse",
             [
                 Narrow("StatusCode", "StatusCode", Elsa3ValueContract.EnumNameToInt),
-                Narrow("Content", "Body", Elsa3ValueContract.HttpResponseBody),
+                Narrow("Content", "Body", Elsa3ValueContract.HttpResponseBody) with { BehaviourWarning = HttpResponseJsonVariant },
                 Narrow("ContentType", "ContentType", Elsa3ValueContract.HttpResponseContentType),
                 Carry("ResponseHeaders", "Headers")
             ]),

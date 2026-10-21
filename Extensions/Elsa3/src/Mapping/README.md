@@ -68,14 +68,18 @@ A catalog target takes its highest valid-SemVer version; the Elsa 3 integer vers
 - **Declared types.** Value-flow lowering compares a value with the Elsa 4 member in the shape normalization gave it:
   `HttpStatusCode` is an integer, `HttpHeaders` a dictionary of string arrays, `ObjectDictionary` a dictionary, and
   `List<T>` a list of `T`. A declared type that still does not fit is `VF-IMP-008`. A lowered expression declares the
-  Elsa 3 type as its result type, except for a JSON member (`JsonElement`, `Object`, `Any`): it accepts any value, so
-  the expression declares the member's own type, which publication requires verbatim.
+  Elsa 3 type as its result type, except for a JSON member (`JsonElement`, `Object`, `Any`), for every activity: it
+  accepts any value, so the expression declares the member's own type, which publication requires verbatim. Elsa 3's
+  conversion to a typed declaration is dropped there: an expression declared `Int32` that returns `"5"` arrives as the
+  string.
 - **HTTP response body.** Elsa 4's `WriteHttpResponse.Body` is a JSON value: text is sent as is, anything else as JSON,
   and an unset content type is inferred as Elsa 3 did (`text/plain` for text, `application/json` otherwise). Elsa 3
-  `Content` therefore converts when it is a literal or a string, or when the content type is unset, blank or exactly
-  `application/json` or `text/json`. Elsa 3 matched its JSON writer by exact media type and sent any other value's
-  type name as text, so an object with another literal content type, with a computed content type, or binary content
-  is `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`. A content type expression with a blank script is dropped.
+  `Content` therefore converts when it is a literal or a `String` variable, or when the content type is unset, blank or JSON.
+  Elsa 3 matched its JSON writer by exact media type and sent any other value's type name as text: another spelling of
+  a JSON type (letter case, a parameter, `+json`) converts with `ELS3-BEHAVIOUR-HTTP-RESPONSE-JSON-VARIANT`, because
+  Elsa 4 sends the JSON. A script declared `String` (Elsa 3 converted its result to text), an object with a non-JSON or
+  computed content type, and binary content are `ELS3-ACTIVITY-VALUE-OUTSIDE-CONTRACT`. A content type expression with
+  a blank script is dropped.
 - **JavaScript** converts when Elsa 4 runs it the same, and is refused otherwise. See
   [Migrating Elsa 3 JavaScript](#migrating-elsa-3-javascript).
 - **Reusable workflows** (collection import, `IsReusable`):
