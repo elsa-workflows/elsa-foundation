@@ -105,6 +105,10 @@ namespace Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.Migrations
                         .HasColumnType("varchar(256)")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
+                    b.Property<string>("Tombstone")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)");
+
                     b.Property<byte[]>("ConcurrencyToken")
                         .IsConcurrencyToken()
                         .IsRequired()
@@ -154,7 +158,7 @@ namespace Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.Migrations
                         .HasColumnType("longtext")
                         .HasAnnotation("MySQL:Collation", "utf8mb4_0900_bin");
 
-                    b.HasKey("TenantId", "NormalizedName");
+                    b.HasKey("TenantId", "NormalizedName", "Tombstone");
 
                     b.HasIndex("SchemaVersion");
 

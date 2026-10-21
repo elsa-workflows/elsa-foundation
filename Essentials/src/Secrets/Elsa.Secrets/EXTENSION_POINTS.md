@@ -12,7 +12,9 @@ selection is order-independent rather than last-write-wins. See
 [`Persistence/EntityFrameworkCore/EXTENSION_POINTS.md`](../Persistence/EntityFrameworkCore/EXTENSION_POINTS.md)
 and that module's README for the model, migrations and host settings.
 
-Tenant id and normalized secret name form the row key, searchable and filterable values are projected into typed
+Tenant id, normalized secret name and a tombstone form the row key: the tombstone is empty for the secret holding a
+name and the secret's id once it is deleted, so a soft delete frees the name while the deleted secret keeps its row and
+versions. Searchable and filterable values are projected into typed
 columns, and the complete secret is retained in a JSON payload. Every repository operation runs inside an explicit
 tenant-scoped persistence access context. Reads, writes, counts, ordering, paging, active-version filtering and
 revision preconditions all execute through the module's own EF model.
