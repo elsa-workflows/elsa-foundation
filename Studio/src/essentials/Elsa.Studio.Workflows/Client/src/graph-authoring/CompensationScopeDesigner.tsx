@@ -697,7 +697,11 @@ function attemptLabel(attempts: { count: number; max?: number } | undefined) {
 function retryTimeLabel(recovery: CompensationRowRuntime["recovery"]) {
   if (recovery.state !== "RetryScheduled" || !recovery.retryNotBefore || isRetryDue(recovery)) return "";
   const due = new Date(recovery.retryNotBefore);
-  return Number.isNaN(due.getTime()) ? "" : ` · after ${due.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
+  if (Number.isNaN(due.getTime())) return "";
+  const time: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", second: "2-digit" };
+  // A wait can reach 24 hours, so a retry due on another day names its date.
+  const today = due.toDateString() === new Date().toDateString();
+  return ` · after ${today ? due.toLocaleTimeString(undefined, time) : due.toLocaleString(undefined, { ...time, year: "numeric", month: "short", day: "numeric" })}`;
 }
 
 // Arrow keys move between the same cell of neighbouring rows; Home and End jump to the first and last row.
