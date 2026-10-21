@@ -86,6 +86,7 @@ internal sealed partial class EtlArtifactCompiler
                 limits.MaxRecordBytes <= 0 || limits.MaxFields <= 0 || limits.MaxBatchRecords <= 0 ||
                 limits.MaxBatchBytes <= 0 || limits.MaxOutstandingRecords <= 0 || limits.MaxOutstandingBytes <= 0 ||
                 limits.MaxLookupRecords <= 0 || limits.MaxLookupBytes <= 0 || limits.MaxOutputBatchBytes <= 0 ||
+                limits.MaxRetainedOutputBytes <= 0 ||
                 limits.MaxSnapshotBytes <= 0 || limits.MaxArtifactBytes <= 0 ||
                 limits.MaxBatchRecords > limits.MaxOutstandingRecords || limits.MaxBatchBytes > limits.MaxOutstandingBytes ||
                 limits.MaxRecordBytes > limits.MaxBatchBytes || limits.MaxLookupBytes > limits.MaxSnapshotBytes)

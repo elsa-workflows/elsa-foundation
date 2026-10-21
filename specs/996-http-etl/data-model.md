@@ -52,7 +52,7 @@ The HTTP page companion table retains immutable metadata keyed by scope/run/part
 with a unique request digest per partition. Its payload is an object reference, not inline response
 JSON. Total retained-input accounting includes every retained page body. A separate authored metadata limit
 (default 64 MiB, bounded by the host default ceiling of 256 MiB) accounts for UTF-8 bytes of all
-request/page JSON, retained batch-descriptor JSON and each current partition-position JSON across the run. Fixed SQL row/index/file
+request/page JSON, retained batch-descriptor/output-plan JSON and each current partition-position JSON across the run. Fixed SQL row/index/file
 overhead is excluded; admission/preparation/terminal envelopes retain their independent bounds.
 Partition and run counters are updated in the same transaction as metadata and position changes;
 replay does not recharge. Empty-page progression keeps
@@ -73,3 +73,26 @@ it leaves the released v1 migration unchanged. The supported upgrade target is t
 There is no in-place upgrade from private databases that already applied the earlier draft
 connector migrations. Disposable checkpoint databases must be recreated for this revised branch;
 this is not a production rolling-upgrade claim.
+
+### Retained connector output plans
+
+Each owed batch may retain one complete transformation result before delivery: accepted/rejected/filtered
+counts and fixed main/error route slots. A positive route count requires a verified immutable body; a
+fully filtered nonempty batch has no bodies. Every input record is accounted for exactly once by these
+three counts. Route kind must match the admitted destination, and its stable effect identity binds the
+invocation, batch, route, destination revision and exact body content/size/count. Storage location and
+physical attempt are not effect identity inputs, but a retained plan cannot be replaced by a different
+body reference. Retaining a plan is not an acknowledgement and does not advance or settle the batch.
+
+The authored `MaxRetainedOutputBytes` budget defaults to 1 GiB, with a configurable runtime host ceiling
+defaulting to 4 GiB. It counts every referenced route body across the run, conservatively charging two
+routes even when their content hashes match. It is separate from live attempt memory, retained input,
+and metadata budgets. It does not bound unreferenced staging objects or physical storage overhead;
+worker publication/cleanup integration remains required. The default is omitted from canonical v2 JSON,
+preserving existing default artifact bytes. Nondefault values are explicit and positive.
+
+Output-plan JSON/digest, batch byte counts and partition/run aggregates commit together under the current
+lease. Identical replay does not charge again. A replacement claims the original plan, validates its
+identity and body accounting, and keeps the original owed input charge. Cancellation retains that
+evidence and rejects further writes. The additive output migration preserves existing reservations;
+provider upgrade checks here are structural, not proof of retained old-worker execution.

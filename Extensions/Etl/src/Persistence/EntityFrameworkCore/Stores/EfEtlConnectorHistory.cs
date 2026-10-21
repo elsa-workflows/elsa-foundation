@@ -16,9 +16,9 @@ internal sealed partial class EfEtlRuntimeStore
         // page limit, so hot transitions must never aggregate page rows or deserialize that history.
         var totals = await db.ConnectorPartitions.Where(partition => partition.ScopeKey == connector.ScopeKey && partition.RunKey == connector.RunKey)
             .GroupBy(partition => partition.RunKey)
-            .Select(group => new { PageBytes = group.Sum(partition => partition.PageBytes), MetadataBytes = group.Sum(partition => partition.MetadataBytes) })
+            .Select(group => new { PageBytes = group.Sum(partition => partition.PageBytes), MetadataBytes = group.Sum(partition => partition.MetadataBytes), OutputBytes = group.Sum(partition => partition.RetainedOutputBytes) })
             .SingleOrDefaultAsync(cancellationToken);
-        var state = ReadConnectorState(invocation, connector, totals?.PageBytes ?? 0, totals?.MetadataBytes ?? 0);
+        var state = ReadConnectorState(invocation, connector, totals?.PageBytes ?? 0, totals?.MetadataBytes ?? 0, totals?.OutputBytes ?? 0);
         await ValidateConnectorOutstandingAsync(connector, state.Pipeline, cancellationToken);
         return state;
     }
@@ -27,7 +27,7 @@ internal sealed partial class EfEtlRuntimeStore
         EtlConnectorRunBindings bindings, EtlConnectorPreparedRun? prepared, CancellationToken cancellationToken, bool auditHistory = false)
     {
         var position = ReadConnectorPosition(row, pipeline, bindings, prepared);
-        if (row.PageBytes < 0 || row.BatchMetadataBytes < 0 || row.MetadataBytes < checked(MetadataBytes(row.PositionJson) + row.BatchMetadataBytes))
+        if (row.RetainedOutputBytes < 0 || row.PageBytes < 0 || row.BatchMetadataBytes < 0 || row.MetadataBytes < checked(MetadataBytes(row.PositionJson) + row.BatchMetadataBytes))
             throw new InvalidDataException("The connector partition accounting is invalid.");
         if (auditHistory) await AuditConnectorBatchHistoryAsync(row, cancellationToken);
         if (position is not EtlConnectorHttpPosition http)

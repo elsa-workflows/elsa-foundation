@@ -51,6 +51,9 @@ public class EtlRuntimeFeature : IShellFeature
     [ManifestSetting(DisplayName = "Maximum snapshot bytes", Description = "Maximum size of each host-approved ETL snapshot.", Category = "Capacity")]
     public long MaxSnapshotBytes { get; set; } = 4L * 1024 * 1024 * 1024;
 
+    [ManifestSetting(DisplayName = "Maximum retained output bytes", Description = "Host ceiling for route-body bytes retained across output plans for one ETL run.", Category = "Capacity")]
+    public long MaxRetainedOutputBytes { get; set; } = 4L * 1024 * 1024 * 1024;
+
     [ManifestSetting(DisplayName = "HTTP limits", Description = "Host ceilings for finite HTTP pages, retention and retries; independent of authored limits.", Category = "Capacity")]
     public EtlHttpHostLimits HttpLimits { get; set; } = new();
 

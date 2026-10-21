@@ -8,6 +8,7 @@ internal sealed class EtlConnectorRunRecord
     public string? PreparedJson { get; set; }
     public long RetainedInputBytes { get; set; }
     public long RetainedMetadataBytes { get; set; }
+    public long RetainedOutputBytes { get; set; }
     public long Revision { get; set; }
     public string SchemaVersion { get; set; } = null!;
 }
@@ -27,6 +28,7 @@ internal sealed class EtlConnectorPartitionRecord
     public long MetadataBytes { get; set; }
     public string? OwedBatchId { get; set; }
     public long BatchMetadataBytes { get; set; }
+    public long RetainedOutputBytes { get; set; }
     public long? CurrentRequestSequence { get; set; }
     public string? CurrentRequestHash { get; set; }
     public long Revision { get; set; }
@@ -42,6 +44,9 @@ internal sealed class EtlConnectorBatchRecord
     public string StartKey { get; set; } = null!;
     public string DescriptorJson { get; set; } = null!;
     public string DescriptorDigest { get; set; } = null!;
+    public string? OutputJson { get; set; }
+    public string? OutputDigest { get; set; }
+    public long OutputBytes { get; set; }
     public long RecordCount { get; set; }
     public long InputBytes { get; set; }
     public long MetadataBytes { get; set; }

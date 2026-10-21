@@ -20,6 +20,7 @@ Issue [#3151](https://github.com/elsa-workflows/elsa-foundation/issues/3151). On
   - Retained page attachment, request history and empty-page progression: [checkpoint](evidence/http-page-store-checkpoint.md). Nonempty batch/effect/retry transitions remain owed.
   - Indexed request ledger, transactional run-wide metadata budget and full recovery/terminal audits: [checkpoint](evidence/http-metadata-ledger-checkpoint.md). This addresses the preceding resource findings without closing T005.
   - Typed nonempty batch reservations, replay, quota accounting and replacement-worker recovery: [checkpoint](evidence/connector-reservation-checkpoint.md). Route effects, durable attempts/retries and atomic acceptance remain owed; T005 stays open.
+  - Retained output plans, pinned route effect identities and independent output/metadata accounting: [checkpoint](evidence/connector-output-checkpoint.md). Dispatch attempts, acknowledgements and atomic acceptance remain owed; T005 stays open.
 
 ## Phase 3 — US1: Author and execute HTTP integrations
 

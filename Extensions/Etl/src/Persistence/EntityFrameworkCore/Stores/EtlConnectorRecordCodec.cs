@@ -51,6 +51,7 @@ internal static class EtlConnectorRecordCodec
         if (limits.FilePartitionCount <= 0 || limits.MaxPartitions <= 0 || limits.FilePartitionCount > limits.MaxPartitions ||
             limits.MaxPartitions > maximumPartitions || limits.MaxSnapshotBytes <= 0 || limits.MaxLookupBytes <= 0 ||
             limits.MaxLookupBytes > limits.MaxSnapshotBytes || limits.MaxBatchRecords <= 0 || limits.MaxBatchBytes <= 0 ||
+            limits.MaxOutputBatchBytes <= 0 || limits.MaxRetainedOutputBytes <= 0 || limits.MaxOutputBatchBytes <= 0 ||
             limits.MaxOutstandingRecords < limits.MaxBatchRecords || limits.MaxOutstandingBytes < limits.MaxBatchBytes ||
             pipeline.Http.MaxRetainedInputBytes <= 0 || pipeline.Http.MaxRetainedMetadataBytes <= 0 ||
             pipeline.Http.MaxPagesPerPartition <= 0 || pipeline.Http.MaxPageBytes <= 0 || pipeline.Http.MaxPageRecords <= 0 ||

@@ -14,6 +14,7 @@ internal sealed record EtlRuntimeOptions(
     long MaxLookupCells,
     int MaxPartitions,
     long MaxSnapshotBytes,
+    long MaxRetainedOutputBytes,
     EtlHttpHostLimits HttpLimits)
 {
     public static EtlRuntimeOptions Create(EtlRuntimeFeature feature)
@@ -24,7 +25,7 @@ internal sealed record EtlRuntimeOptions(
             feature.MaxConcurrentAttempts <= 0 || feature.MaxLiveRecords <= 0 || feature.MaxLiveInputBytes <= 0 ||
             feature.MaxLiveLookupBytes <= 0 || feature.MaxLiveOutputBytes <= 0 || feature.MaxLookupRecords <= 0 ||
             feature.MaxLookupCells <= 0 || feature.MaxPartitions <= 0 ||
-            feature.MaxSnapshotBytes <= 0 || feature.FileBindings is null)
+            feature.MaxSnapshotBytes <= 0 || feature.MaxRetainedOutputBytes <= 0 || feature.FileBindings is null)
             throw InvalidConfiguration();
 
         var http = feature.HttpLimits;
@@ -53,6 +54,7 @@ internal sealed record EtlRuntimeOptions(
                 feature.MaxLookupCells,
                 feature.MaxPartitions,
                 feature.MaxSnapshotBytes,
+                feature.MaxRetainedOutputBytes,
                 http);
         }
         catch (Exception exception) when (exception is ArgumentException or EtlBindingException or NullReferenceException)

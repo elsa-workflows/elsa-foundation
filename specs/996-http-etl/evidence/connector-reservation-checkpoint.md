@@ -71,3 +71,6 @@ HTTP runtime remains explicitly unavailable until the execution path is integrat
 combinations, native/Studio journeys, interruption/cancellation/retry matrices and old-worker resume
 remain required. No live HTTP, browser, throughput or physical capacity qualification is claimed by
 these storage tests. Historical CI timeouts and main-red #2293 are not explained by these results.
+
+Follow-up: [retained output plans](connector-output-checkpoint.md) add route bodies, stable effect identities
+and separate output retention accounting. Dispatch, acknowledgement and acceptance remain owed.

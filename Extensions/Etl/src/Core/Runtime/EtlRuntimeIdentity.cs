@@ -53,6 +53,19 @@ public static class EtlRuntimeIdentity
     private static string? ConnectorBinding(EtlConnectorBindingRevision? binding) => binding is null
         ? null : Hash("etl-connector-binding-v2", Number((int)binding.Kind), Binding(binding.Revision));
 
+    /// <summary>Stable route effect bound to its input batch, pinned destination and exact body content.</summary>
+    /// <remarks>Independent of worker, attempt and staging location; pass unchanged as the delivery identity.</remarks>
+    public static string ConnectorEffectId(EtlConnectorRunAdmission admission, string batchId, EtlOutputRoute route,
+        string contentHash, long byteLength, long recordCount)
+    {
+        ArgumentNullException.ThrowIfNull(admission);
+        ArgumentNullException.ThrowIfNull(admission.Bindings);
+        if (!Enum.IsDefined(route)) throw new ArgumentOutOfRangeException(nameof(route));
+        var destination = route == EtlOutputRoute.Main ? admission.Bindings.Main : admission.Bindings.Errors;
+        return Hash("etl-connector-effect-v2", InvocationFingerprint(admission.Invocation), batchId, Number((int)route),
+            ConnectorBinding(destination), contentHash, Number(byteLength), Number(recordCount));
+    }
+
     private static string? ObjectReference(EtlObjectReference? reference) => reference is null
         ? null : Hash("etl-object-v2", reference.Key, reference.ContentHash, Number(reference.ByteLength));
 

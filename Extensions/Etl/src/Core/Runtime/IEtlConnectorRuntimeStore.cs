@@ -26,6 +26,10 @@ public interface IEtlConnectorRuntimeStore
     ValueTask<EtlConnectorPositionResult> AdvanceEmptyHttpPageAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default);
     /// <summary>Reserves measured input at the current position. Replacement workers inherit the same owed batch and quota charges.</summary>
     ValueTask<EtlConnectorReservationResult> ReserveConnectorBatchAsync(EtlConnectorPartitionLease lease, EtlConnectorBatchDescriptor batch, CancellationToken cancellationToken = default);
+    /// <summary>Retains the complete verified transformation output before any route is dispatched.</summary>
+    /// <remarks>The caller verifies immutable bodies before retention. Identical replay does not charge again.
+    /// Retention neither acknowledges delivery nor advances input.</remarks>
+    ValueTask<EtlConnectorOutputResult> RetainConnectorBatchOutputAsync(EtlConnectorPartitionLease lease, string batchId, EtlConnectorBatchOutput output, CancellationToken cancellationToken = default);
     ValueTask<EtlStoreStatus> RenewConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default);
     ValueTask<EtlStoreStatus> ReleaseConnectorPartitionAsync(EtlConnectorPartitionLease lease, CancellationToken cancellationToken = default);
 

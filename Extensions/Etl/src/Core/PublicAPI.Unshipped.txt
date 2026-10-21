@@ -1382,3 +1382,61 @@ static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorBatchId(Elsa.Etl.Core.R
 virtual Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.EqualityContract.get -> System.Type!
 virtual Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.Equals(Elsa.Etl.Core.Runtime.EtlConnectorBatchRange? other) -> bool
 virtual Elsa.Etl.Core.Runtime.EtlConnectorBatchRange.PrintMembers(System.Text.StringBuilder! builder) -> bool
+Elsa.Etl.Core.EtlConnectorLimits.MaxRetainedOutputBytes.get -> long
+Elsa.Etl.Core.EtlConnectorLimits.MaxRetainedOutputBytes.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput!
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.AcceptedRecords.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.AcceptedRecords.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.Deconstruct(out long AcceptedRecords, out long RejectedRecords, out long FilteredRecords, out Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? Main, out Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? Errors) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.Equals(Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.Errors.get -> Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput?
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.Errors.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.EtlConnectorBatchOutput(long AcceptedRecords, long RejectedRecords, long FilteredRecords, Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? Main, Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? Errors) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.FilteredRecords.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.FilteredRecords.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.Main.get -> Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput?
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.Main.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.RejectedRecords.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.RejectedRecords.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.Output.get -> Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput?
+Elsa.Etl.Core.Runtime.EtlConnectorBatchReservation.Output.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorOutputResult
+Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorOutputResult!
+Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.Deconstruct(out Elsa.Etl.Core.Runtime.EtlStoreStatus Status, out Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput? Output) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.Equals(Elsa.Etl.Core.Runtime.EtlConnectorOutputResult? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.EtlConnectorOutputResult(Elsa.Etl.Core.Runtime.EtlStoreStatus Status, Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput? Output) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.Output.get -> Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput?
+Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.Output.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.Status.get -> Elsa.Etl.Core.Runtime.EtlStoreStatus
+Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.Status.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.<Clone>$() -> Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput!
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.Body.get -> Elsa.Etl.Core.Runtime.EtlObjectReference!
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.Body.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.Deconstruct(out Elsa.Etl.Core.Runtime.EtlConnectorKind Kind, out Elsa.Etl.Core.Runtime.EtlObjectReference! Body, out long RecordCount, out string! EffectId) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.EffectId.get -> string!
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.EffectId.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.Equals(Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? other) -> bool
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.EtlConnectorRouteOutput(Elsa.Etl.Core.Runtime.EtlConnectorKind Kind, Elsa.Etl.Core.Runtime.EtlObjectReference! Body, long RecordCount, string! EffectId) -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.Kind.get -> Elsa.Etl.Core.Runtime.EtlConnectorKind
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.Kind.init -> void
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.RecordCount.get -> long
+Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.RecordCount.init -> void
+Elsa.Etl.Core.Runtime.IEtlConnectorRuntimeStore.RetainConnectorBatchOutputAsync(Elsa.Etl.Core.Runtime.EtlConnectorPartitionLease! lease, string! batchId, Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput! output, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Elsa.Etl.Core.Runtime.EtlConnectorOutputResult!>
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.ToString() -> string!
+override Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.Equals(object? obj) -> bool
+override Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.GetHashCode() -> int
+override Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.ToString() -> string!
+static Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput? left, Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput? left, Elsa.Etl.Core.Runtime.EtlConnectorBatchOutput? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorOutputResult? left, Elsa.Etl.Core.Runtime.EtlConnectorOutputResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorOutputResult.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorOutputResult? left, Elsa.Etl.Core.Runtime.EtlConnectorOutputResult? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.operator !=(Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? left, Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput.operator ==(Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? left, Elsa.Etl.Core.Runtime.EtlConnectorRouteOutput? right) -> bool
+static Elsa.Etl.Core.Runtime.EtlRuntimeIdentity.ConnectorEffectId(Elsa.Etl.Core.Runtime.EtlConnectorRunAdmission! admission, string! batchId, Elsa.Etl.Core.Runtime.EtlOutputRoute route, string! contentHash, long byteLength, long recordCount) -> string!

@@ -12,7 +12,7 @@ namespace Elsa.Etl.Core;
 /// <param name="Routes">The main and error destinations.</param>
 /// <param name="Mapping">The typed output field mappings.</param>
 /// <param name="Filters">The deterministic record filters.</param>
-/// <param name="Limits">The finite record, partition, batch, and retention limits.</param>
+/// <param name="Limits">The finite record, partition, batch, and input/output retention limits.</param>
 /// <param name="Http">The finite HTTP page, request, and retry limits.</param>
 public sealed record EtlPipelineV2(
     [property: JsonRequired] EtlSource Source,
@@ -114,7 +114,7 @@ public sealed record EtlTokenPagination(
 public sealed record EtlNextLinkPagination(
     [property: JsonRequired] string ContinuationPointer) : EtlHttpPagination;
 
-/// <summary>Finite payload, partition, batching, and retained-input limits for a v2 pipeline.</summary>
+/// <summary>Finite payload, partition, batching, and retained-input and output limits for a v2 pipeline.</summary>
 /// <remarks>Byte totals use 64-bit values. These are logical limits, not a process-memory guarantee.</remarks>
 public sealed record EtlConnectorLimits
 {
@@ -151,6 +151,12 @@ public sealed record EtlConnectorLimits
     /// <summary>The maximum serialized output bytes emitted by one batch across its routes.</summary>
     public long MaxOutputBatchBytes { get; init; } = 8L * 1024 * 1024;
 
+    internal const long DefaultMaxRetainedOutputBytes = 1024L * 1024 * 1024;
+
+    /// <summary>The maximum route-body bytes retained across all output plans for one run.</summary>
+    /// <remarks>Counts the logical bytes of retained main and error route bodies. Output-plan and batch-descriptor JSON is charged separately to <see cref="EtlHttpPolicy.MaxRetainedMetadataBytes"/>. Database and index overhead is excluded.</remarks>
+    public long MaxRetainedOutputBytes { get; init; } = DefaultMaxRetainedOutputBytes;
+
     /// <summary>The maximum bytes in a file-backed source or lookup snapshot.</summary>
     public long MaxSnapshotBytes { get; init; } = 1024L * 1024 * 1024;
 
@@ -185,8 +191,8 @@ public sealed record EtlHttpPolicy
     /// <summary>The maximum retained source input bytes for the run.</summary>
     public long MaxRetainedInputBytes { get; init; } = 1024L * 1024 * 1024;
 
-    /// <summary>The maximum logical UTF-8 bytes per run across retained connector position, request-ledger, and page-history JSON.</summary>
-    /// <remarks>The budget counts canonical <c>PositionJson</c>, <c>RequestJson</c>, and <c>PageJson</c> bytes. It excludes admission, prepared, and native-terminal envelopes and database or index overhead; it does not promise an aggregate physical database size. The default value is omitted from the v2 JSON representation to preserve existing artifact bytes and hashes.</remarks>
+    /// <summary>The maximum logical UTF-8 bytes per run across retained positions, request and page history, batch descriptors, and output plans.</summary>
+    /// <remarks>The budget counts canonical <c>PositionJson</c>, <c>RequestJson</c>, <c>PageJson</c>, batch-descriptor, and output-plan JSON bytes. It excludes admission, prepared, and native-terminal envelopes and database or index overhead; it does not promise an aggregate physical database size. Retained route-body bytes are charged separately to <see cref="EtlConnectorLimits.MaxRetainedOutputBytes"/>. The default value is omitted from the v2 JSON representation to preserve existing artifact bytes and hashes.</remarks>
     public long MaxRetainedMetadataBytes { get; init; } = DefaultMaxRetainedMetadataBytes;
 
     /// <summary>The maximum physical attempts for one HTTP route delivery.</summary>

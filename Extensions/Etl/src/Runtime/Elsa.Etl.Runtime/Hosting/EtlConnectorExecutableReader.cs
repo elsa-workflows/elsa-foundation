@@ -61,6 +61,7 @@ internal sealed class EtlConnectorExecutableReader(EtlRuntimeOptions options)
             limits.MaxPartitions > options.MaxPartitions || limits.MaxRecordBytes <= 0 || limits.MaxFields is <= 0 or > 1024 ||
             limits.MaxBatchRecords <= 0 || limits.MaxBatchBytes <= 0 || limits.MaxOutstandingRecords <= 0 || limits.MaxOutstandingBytes <= 0 ||
             limits.MaxLookupRecords <= 0 || limits.MaxLookupBytes <= 0 || limits.MaxOutputBatchBytes <= 0 ||
+            limits.MaxRetainedOutputBytes <= 0 || limits.MaxRetainedOutputBytes > options.MaxRetainedOutputBytes ||
             limits.MaxSnapshotBytes <= 0 || limits.MaxArtifactBytes is <= 0 or > EtlArtifact.MaximumByteLength ||
             limits.MaxBatchRecords > limits.MaxOutstandingRecords || limits.MaxBatchBytes > limits.MaxOutstandingBytes ||
             limits.MaxRecordBytes > limits.MaxBatchBytes || limits.MaxLookupBytes > limits.MaxSnapshotBytes ||

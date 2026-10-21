@@ -79,3 +79,5 @@ Elsa.Etl.Runtime.EtlHttpHostLimits.MaxDelaySeconds.get -> int
 Elsa.Etl.Runtime.EtlHttpHostLimits.MaxDelaySeconds.init -> void
 Elsa.Etl.Runtime.EtlRuntimeFeature.HttpLimits.get -> Elsa.Etl.Runtime.EtlHttpHostLimits!
 Elsa.Etl.Runtime.EtlRuntimeFeature.HttpLimits.set -> void
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxRetainedOutputBytes.get -> long
+Elsa.Etl.Runtime.EtlRuntimeFeature.MaxRetainedOutputBytes.set -> void

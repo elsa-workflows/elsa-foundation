@@ -1,5 +1,4 @@
 using Elsa.Etl.Persistence.EntityFrameworkCore;
-using Elsa.Etl.Persistence.EntityFrameworkCore.Entities;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -26,8 +25,12 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.Equal(1, await ForeignKeysEnabledAsync(context));
         await AssertNoForeignKeyViolationsAsync(context);
         Assert.Single(await context.Runs.AsNoTracking().ToListAsync());
-        Assert.Single(await context.ConnectorRuns.AsNoTracking().ToListAsync());
-        var partition = await context.ConnectorPartitions.AsNoTracking().SingleAsync();
+        Assert.Equal(1, await context.ConnectorRuns.CountAsync());
+        // Query only the historical columns: the current EF entity may include later migrations.
+        var partition = await context.ConnectorPartitions.AsNoTracking().Select(row => new
+        {
+            row.ScopeKey, row.RunKey, row.PartitionOrdinal, row.CurrentRequestHash, row.OwedBatchId, row.BatchMetadataBytes
+        }).SingleAsync();
         Assert.Equal(new string('b', 64), partition.CurrentRequestHash);
         Assert.Null(partition.OwedBatchId);
         Assert.Equal(0, partition.BatchMetadataBytes);
@@ -40,33 +43,23 @@ public sealed partial class EtlRuntimeStoreTests
         Assert.True(page.HasContinuation);
 
         var batchId = new string('e', 64);
-        await context.ConnectorBatches.AddAsync(new EtlConnectorBatchRecord
-        {
-            ScopeKey = partition.ScopeKey,
-            RunKey = partition.RunKey,
-            PartitionOrdinal = partition.PartitionOrdinal,
-            BatchId = batchId,
-            StartKey = new string('f', 64),
-            DescriptorJson = "{}",
-            DescriptorDigest = new string('d', 64),
-            RecordCount = 1,
-            InputBytes = 12,
-            MetadataBytes = 2,
-            Settled = false,
-            SchemaVersion = EtlRuntimeEfModule.SchemaVersion
-        });
-        await context.SaveChangesAsync();
-
-        var owedPartition = await context.ConnectorPartitions.SingleAsync();
-        owedPartition.OwedBatchId = batchId;
-        owedPartition.BatchMetadataBytes = 2;
-        await context.SaveChangesAsync();
-        Assert.Equal(batchId, (await context.ConnectorPartitions.AsNoTracking().SingleAsync()).OwedBatchId);
+        await context.Database.ExecuteSqlInterpolatedAsync($$"""
+            INSERT INTO elsa_etl_connector_batches
+                (ScopeKey, RunKey, PartitionOrdinal, BatchId, StartKey, DescriptorJson, DescriptorDigest,
+                 RecordCount, InputBytes, MetadataBytes, Settled, SchemaVersion)
+            VALUES ({{partition.ScopeKey}}, {{partition.RunKey}}, {{partition.PartitionOrdinal}}, {{batchId}},
+                    {{new string('f', 64)}}, '{}', {{new string('d', 64)}}, 1, 12, 2, 0, {{EtlRuntimeEfModule.SchemaVersion}});
+            """);
+        await context.Database.ExecuteSqlInterpolatedAsync($$"""
+            UPDATE elsa_etl_connector_partitions SET OwedBatchId = {{batchId}}, BatchMetadataBytes = 2
+            WHERE ScopeKey = {{partition.ScopeKey}} AND RunKey = {{partition.RunKey}} AND PartitionOrdinal = {{partition.PartitionOrdinal}};
+            """);
+        Assert.Equal(batchId, await context.ConnectorPartitions.Select(row => row.OwedBatchId).SingleAsync());
 
         var missingBatchError = await Assert.ThrowsAsync<SqliteException>(() =>
             context.Database.ExecuteSqlInterpolatedAsync($"UPDATE elsa_etl_connector_partitions SET OwedBatchId = {new string('g', 64)} WHERE ScopeKey = {partition.ScopeKey} AND RunKey = {partition.RunKey} AND PartitionOrdinal = {partition.PartitionOrdinal}"));
         Assert.Equal(19, missingBatchError.SqliteErrorCode);
-        Assert.Equal(batchId, (await context.ConnectorPartitions.AsNoTracking().SingleAsync()).OwedBatchId);
+        Assert.Equal(batchId, await context.ConnectorPartitions.Select(row => row.OwedBatchId).SingleAsync());
         await AssertNoForeignKeyViolationsAsync(context);
     }
 

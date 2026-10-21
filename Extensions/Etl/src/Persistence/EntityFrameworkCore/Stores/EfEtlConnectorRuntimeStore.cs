@@ -57,11 +57,12 @@ internal sealed partial class EfEtlRuntimeStore
             join connector in db.ConnectorRuns.AsNoTracking() on new { run.Run.ScopeKey, run.Run.RunKey } equals new { connector.ScopeKey, connector.RunKey }
             where run.Run.RunKey == key.RunKey
             select new { Snapshot = run, Connector = connector, PageBytes = db.ConnectorPartitions.Where(partition => partition.ScopeKey == connector.ScopeKey && partition.RunKey == connector.RunKey).Sum(partition => (long?)partition.PageBytes) ?? 0,
+                OutputBytes = db.ConnectorPartitions.Where(partition => partition.ScopeKey == connector.ScopeKey && partition.RunKey == connector.RunKey).Sum(partition => (long?)partition.RetainedOutputBytes) ?? 0,
                 MetadataBytes = db.ConnectorPartitions.Where(partition => partition.ScopeKey == connector.ScopeKey && partition.RunKey == connector.RunKey).Sum(partition => (long?)partition.MetadataBytes) ?? 0 }).SingleOrDefaultAsync(cancellationToken);
         if (snapshot is null) return null;
         ValidateRun(snapshot.Snapshot.Run, scope, runId);
         var view = BuildRunView(snapshot.Snapshot.Run, snapshot.Snapshot.Prepared, snapshot.Snapshot.Terminal);
-        var state = ReadConnectorState(view.Invocation, snapshot.Connector, snapshot.PageBytes, snapshot.MetadataBytes);
+        var state = ReadConnectorState(view.Invocation, snapshot.Connector, snapshot.PageBytes, snapshot.MetadataBytes, snapshot.OutputBytes);
         return new(view, state.Bindings, state.Prepared, snapshot.Connector.RetainedInputBytes);
     }
 
@@ -243,7 +244,7 @@ internal sealed partial class EfEtlRuntimeStore
         return new(view, state.Bindings, state.Prepared, connector.RetainedInputBytes);
     }
 
-    private (EtlPipelineV2 Pipeline, EtlConnectorRunBindings Bindings, EtlConnectorPreparedRun? Prepared) ReadConnectorState(EtlInvocation invocation, EtlConnectorRunRecord connector, long pageBytes, long metadataBytes)
+    private (EtlPipelineV2 Pipeline, EtlConnectorRunBindings Bindings, EtlConnectorPreparedRun? Prepared) ReadConnectorState(EtlInvocation invocation, EtlConnectorRunRecord connector, long pageBytes, long metadataBytes, long outputBytes)
     {
         EnsureSchema(connector.SchemaVersion);
         try
@@ -259,6 +260,9 @@ internal sealed partial class EfEtlRuntimeStore
             if (metadataBytes < 0 || connector.RetainedMetadataBytes != metadataBytes ||
                 metadataBytes > pipeline.Http.MaxRetainedMetadataBytes || prepared is null && metadataBytes != 0)
                 throw new InvalidDataException("The retained connector metadata accounting is invalid.");
+            if (outputBytes < 0 || connector.RetainedOutputBytes != outputBytes ||
+                outputBytes > pipeline.Limits.MaxRetainedOutputBytes || prepared is null && outputBytes != 0)
+                throw new InvalidDataException("The retained connector output accounting is invalid.");
             return (pipeline, bindings, prepared);
         }
         catch (Exception exception) when (exception is ArgumentException or OverflowException)
