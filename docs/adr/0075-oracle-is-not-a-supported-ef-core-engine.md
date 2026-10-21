@@ -59,8 +59,9 @@ the marker proves, each provider supplies SQL per member
    (`EfOrdinalCollation.cs:27`, `:30`, `:33`, `:40`, `:73`), proved against generated migrations and
    against real SQL Server and PostgreSQL databases created with a linguistic default.
 2. Wrapped transients. #1801 and #1816 established that a store classifies from what `SaveChanges`
-   reported by walking the exception chain (`EfRelationalExceptionClassifier.IsSaveConflict`), because the non-retrying default strategies of SQL Server and PostgreSQL wrap a transient
-   error in an `InvalidOperationException`. ADR 0074 D3 makes that a standing rule for new stores.
+   reported by walking the exception chain (`EfRelationalExceptionClassifier.IsSaveConflict`),
+   because the non-retrying default strategies of SQL Server and PostgreSQL wrap a transient error in
+   an `InvalidOperationException`. ADR 0074 D3 makes that a standing rule for new stores.
 
 A future Oracle engine inherits both as prerequisites rather than starting cold. What neither supplies
 is Oracle's own error codes: `EfRelationalExceptionClassifier` carries per-provider arms for
