@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-21
 
-**Status**: In progress
+**Status**: Implemented — terminal transition takes effect when the implementation PR merges; root qualification gates below remain pending.
 
 **Input**: Issue #3175, “Studio Features: keep narrow selection counts and bulk actions readable.”
 
@@ -61,3 +61,7 @@ No data entities are introduced. The layout presents the existing visible and se
 - The feature-management module continues to own its responsive styles and existing markup.
 - A container query is the appropriate breakpoint source because the page can occupy a narrow module pane within a wider viewport.
 - Existing Studio module tests remain the behavior regression surface for category, inspector, permissions, and review/apply flows.
+
+## Integration gates
+
+The implementation PR must pass root normal-host verification, independent review, and exact-head CI before merge. Resulting-main checks complete public issue qualification afterward. The status above follows the repository rule that the terminal transition belongs in the implementation PR; it is not evidence that any pending gate already passed.

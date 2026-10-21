@@ -76,3 +76,9 @@ See [quickstart.md](quickstart.md). Establish the focused browser test's red res
 ## Complexity Tracking
 
 No constitutional violations, new dependencies, API surfaces, or architectural exceptions.
+
+## Root qualification checkpoint
+
+The scoped implementation passed 70 existing module tests, Stylelint, ESLint and the module client build. The rendered regression failed on the original CSS, then passed all four width/container scenarios and both selection states. Root tightened the regression to strict count/overflow bounds, count-to-count non-overlap and all-sided button containment; that same real-page test passes on the branch integrated with main `b4d449b2537da599bc1ee972682cf972d6768e32`.
+
+Root recursive typecheck/lint, rebuilt normal-host proof, independent review, hosted exact-head checks, merge and resulting-main gates are pending at this source checkpoint. Keep their actual commands, outcomes, source/artifact bounds and review rounds on issue #3175 and its implementation PR. Do not treat this pre-merge checkpoint as final acceptance.

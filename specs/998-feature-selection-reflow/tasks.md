@@ -28,3 +28,11 @@
 ## Implementation Strategy
 
 Deliver the single P2 story as one increment: add the fixture and test, prove the current failure, make the scoped CSS correction, then run the focused checks. No feature action is invoked by the regression.
+
+## Root qualification and delivery
+
+- [ ] T006 Run recursive Studio typecheck/lint and build the current combined Workbench/Studio host; record source/artifact bindings.
+- [ ] T007 Verify both real host targets, empty/populated selection, narrow/desktop layouts and keyboard behavior without activating feature changes; review before/after captures and cleanup.
+- [ ] T008 Complete independent reviews, green exact-head gates, merge and containing-main verification through the public issue/PR record.
+
+These are gate checkpoints, not a separate status-only follow-up PR. The frozen source remains a pre-merge record; the public issue/PR records completed delivery evidence.
