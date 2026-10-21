@@ -32,6 +32,8 @@ Independent acceptance: direct finite witness from a clean PackageReference cons
 - [ ] T014 [US1] Implement `tools/rules/verify-packaged-rules.py` and its clean consumer generation/receipt support; compute versions from immutable refs, pack actual dependency closure, isolated cache/outside repo, verify no transitive implementation ProjectReference, compare NuGet content/archive/selected loaded assets separately.
 - [ ] T015 [US1] Execute clean package direct witness and incompatible-pin cases; retain manifests/commands/results under `specs/999-durable-rules/evidence/` with large/raw artifacts referenced from the evidence receipt. Include a package-identity removal control, restore and rerun. No invented package versions or success-shaped fallback.
 
+T014–T015 direct-package subcheckpoint: the four existing Rules modules and their complete eight-package closure are packed from immutable inputs and exercised by an isolated external consumer. Direct success/fault/replay, distinct content/archive/asset evidence and an actual identity-check removal control are recorded in the [package checkpoint](evidence/package-checkpoint.md). These boxes remain open for the full six-module packaging target after native modules exist; no process/upgrade acceptance is implied.
+
 ## Phase 4: US2 — Durable recovery and cancellation (P1)
 
 Independent acceptance: separate packaged PostgreSQL processes recover accepted and consumed boundaries with design storage unavailable; late/stale results cannot advance state.

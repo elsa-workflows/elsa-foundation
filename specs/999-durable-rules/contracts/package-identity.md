@@ -1,6 +1,6 @@
 # Package identity and acceptance host
 
-This contract describes planned acceptance tooling, not completed package qualification. It supplements [persistence](persistence.md) and the [plan](../plan.md).
+The four-module direct package checkpoint is implemented and exercised; see [evidence](../evidence/package-checkpoint.md). This contract also retains the planned six-module, recovery and upgrade acceptance that remains open. It supplements [persistence](persistence.md) and the [plan](../plan.md).
 
 ## Trusted deployment receipt
 
@@ -25,9 +25,9 @@ A worker advertises only pins it actually loaded and verified. Mismatched evalua
 
 ## Clean consumer and process witness
 
-`tools/rules/verify-packaged-rules.py` will compute versions from immutable refs using `tools/versioning/Elsa.Versioning.Calculator`, build/pack with its generated properties, and create a consumer outside repository-inherited build configuration. The consumer uses PackageReference only; inspect its restored graph and ensure no direct or transitive ProjectReference to the engine. Keep the feed, assets file, lock file, receipts, process outputs and result JSON as acceptance artifacts. Ordinary source-host tests do not satisfy this gate.
+`tools/rules/verify-packaged-rules.py` computes versions from immutable refs using `tools/versioning/Elsa.Versioning.Calculator`, builds/packs with its generated properties, and creates a consumer outside repository-inherited build configuration. The consumer uses PackageReference only; inspect its restored graph and ensure no direct or transitive ProjectReference to the engine. Keep the feed, assets file, lock file, receipts, process outputs and result JSON as acceptance artifacts. Ordinary source-host tests do not satisfy this gate.
 
-The same consumer executable supports direct invocation, one-round worker progression, bounded inspection and native-host scenarios. The coordinator starts independent PostgreSQL-backed processes, stops the first after accepted-unconsumed receipt and separately after consumed-round commit, then starts a successor with design storage absent. Compare logical receipt identity, winning physical attempt attribution, committed facts, round ordinal and exactly one terminal result. Same-machine process replacement is the declared proof, not separate-host or power-loss durability.
+The current consumer supports direct invocation and bounded inspection through the real worker. One-round worker progression, native-host scenarios and recovery modes remain to be added. For that later acceptance, the coordinator must start independent PostgreSQL-backed processes, stop the first after accepted-unconsumed receipt and separately after consumed-round commit, then start a successor with design storage absent. Compare logical receipt identity, winning physical attempt attribution, committed facts, round ordinal and exactly one terminal result. Same-machine process replacement is the declared proof, not separate-host or power-loss durability.
 
 Upgrade checks use an original pinned deployment plus an incompatible successor and the retained original deployment. A deployment disabled for new admissions still retains readers/workers needed by existing runs. Retain original state/receipt schemas and exact pin; no down migration or implicit interpretation by the replacement package. Repeat with a native workflow persisted before additive Rules schema installation, proving its identity and continuation survive.
 

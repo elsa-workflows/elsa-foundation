@@ -1,6 +1,6 @@
 # Durable Rules acceptance quickstart
 
-Sections 1–2 are runnable for the implemented semantics, direct host composition and four-provider store contracts. Sections 3–4 remain implementation targets and their commands become runnable only when their owning tasks are delivered. See the [direct-runtime checkpoint](evidence/direct-runtime-checkpoint.md) and [provider checkpoint](evidence/provider-checkpoint.md) for executed evidence; this document alone is not evidence that a command ran. Run heavy commands through the normal build-slot wrapper. Do not parallelize full builds on the shared machine.
+Sections 1–3 are runnable for semantics, direct host composition, four-provider store contracts and the four-module package consumer. PostgreSQL process replacement and section 4 remain implementation targets. See the [direct-runtime checkpoint](evidence/direct-runtime-checkpoint.md), [provider checkpoint](evidence/provider-checkpoint.md) and [package checkpoint](evidence/package-checkpoint.md) for executed evidence; this document alone is not evidence that a command ran. Run heavy commands through the normal build-slot wrapper. Do not parallelize full builds on the shared machine.
 
 ## 1. Focused semantics and direct-runtime tests
 
@@ -22,7 +22,7 @@ The driver starts/uses disposable configured SQLite, PostgreSQL, SQL Server and 
 
 Require admission/cancellation/refusal races, exact null scope and collation cases, stale worker/revision rejection, renew/release invariants, accepted-receipt lost response, single consumption, bounded inspection, direct/no-outbox and native/proof-before-ack cases. Retain counterexample evidence for meaningful removal controls and restore original code before the final run.
 
-## 3. Actual packages and process replacement
+## 3. Actual packages and direct consumer
 
 ```bash
 python3 tools/rules/verify-packaged-rules.py \
@@ -31,7 +31,9 @@ python3 tools/rules/verify-packaged-rules.py \
   --evidence-dir /tmp/rules-package-evidence
 ```
 
-Resolve real immutable refs before running; angle-bracket text is a placeholder, never a claimed tested command. The tool must reject mutable or missing refs. It computes repository versions, packs the actual module closure, creates a clean external PackageReference consumer, records content/archive/asset identities, and runs independent PostgreSQL-backed processes. Both accepted-unconsumed receipt and consumed-round recovery must pass with mutable design storage unavailable. Report loaded semantic package identity, not only version strings or source SHA.
+Resolve real immutable refs before running; angle-bracket text is a placeholder, never a claimed tested command. The tool rejects mutable or missing refs. It computes repository versions, packs the actual four-module closure, creates a fresh external PackageReference consumer and cache, and records distinct NuGet content/archive/loaded-asset identities. It runs real SQLite-backed direct success, budget fault, replay, incompatible-pin and changed-asset rejection cases. An actual assembly-digest removal control must fail its intended assertion; restoration must pass direct execution again. Each run retains commands, logs, packages, resolved assets and result JSON outside the checkout. No packages are published.
+
+Use `--stage pack` for packing only; this never reports a consumer pass. `--packed-run <absolute-run-directory>` reuses a successful, unchanged pack matching both immutable refs; each consumer cache and deployment remains fresh. The receipt keeps `fullAcceptancePassed: false`: native modules, retained-run upgrades and separate PostgreSQL process replacement are not implemented by this command yet. T019–T020 must add recovery at accepted-unconsumed and consumed-round boundaries with mutable design storage unavailable; repeated fresh direct processes are not recovery proof.
 
 ## 4. Rebuilt host and upgrades
 
