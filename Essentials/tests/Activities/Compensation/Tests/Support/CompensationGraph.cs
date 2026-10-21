@@ -43,13 +43,26 @@ public static class CompensationGraph
     public static ExecutableNode Scope(string nodeId, bool faultAfterCompensation, int handlerMaxAttempts, params Step[] steps) =>
         Scope(nodeId, faultAfterCompensation, handlerMaxAttempts, confirmOnComplete: false, steps);
 
-    public static ExecutableNode Scope(string nodeId, bool faultAfterCompensation, int handlerMaxAttempts, bool confirmOnComplete, params Step[] steps)
+    public static ExecutableNode Scope(string nodeId, bool faultAfterCompensation, int handlerMaxAttempts, bool confirmOnComplete, params Step[] steps) =>
+        Scope(nodeId, faultAfterCompensation, handlerMaxAttempts, confirmOnComplete, Backoff.None, steps);
+
+    /// <summary>The scope's handler retry backoff inputs (spec 261); <see cref="None"/> is their published default.</summary>
+    public sealed record Backoff(TimeSpan Delay, double Multiplier, TimeSpan MaxDelay)
+    {
+        public static Backoff None { get; } = new(TimeSpan.Zero, CompensationScope.DefaultHandlerRetryBackoffMultiplier, CompensationScope.DefaultHandlerRetryMaxDelay);
+    }
+
+    public static ExecutableNode Scope(string nodeId, bool faultAfterCompensation, int handlerMaxAttempts, bool confirmOnComplete, Backoff backoff, params Step[] steps)
     {
         var contract = ClrActivityContractTestBuilder.BuildContract(typeof(CompensationScope));
         var bindings = new Dictionary<string, RuntimeInputBinding>(StringComparer.Ordinal);
         Bind("faultAfterCompensation", faultAfterCompensation);
         Bind("handlerMaxAttempts", handlerMaxAttempts);
         Bind("confirmOnComplete", confirmOnComplete);
+        // Publication binds an unbound input to its declared default, as here.
+        Bind("handlerRetryDelay", backoff.Delay);
+        Bind("handlerRetryBackoffMultiplier", backoff.Multiplier);
+        Bind("handlerRetryMaxDelay", backoff.MaxDelay);
 
         void Bind<T>(string key, T value)
         {

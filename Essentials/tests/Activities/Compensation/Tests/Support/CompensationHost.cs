@@ -83,6 +83,12 @@ public sealed class CompensationHost(PersistenceMode mode) : IDisposable
     /// <summary>Moves the shared clock past every lease a stopped host left behind.</summary>
     public void ExpireLeases() => _clock.Advance(TimeSpan.FromHours(1));
 
+    /// <summary>The shared clock's time, which every host generation reads.</summary>
+    public DateTimeOffset Now => _clock.GetUtcNow();
+
+    /// <summary>Moves the shared clock forward, as time passes for a waiting retry (spec 261).</summary>
+    public void Advance(TimeSpan by) => _clock.Advance(by);
+
     private async Task<WorkflowExecutionRun> ReadAsync(WorkflowExecutionHarness host)
     {
         BlockingIncidents = await host.Services.GetRequiredService<IIncidentStateStore>().ListBlockingAsync(WorkflowExecutionId);

@@ -26,9 +26,11 @@ namespace Elsa.Activities.Compensation.Activities;
 /// <para>
 /// A step that faults with category <see cref="OutcomeUnknownCategory"/> may have had its effect: it is journaled as
 /// uncertain and undone like a completed step. A failed handler is retried with the same operation key up to
-/// <see cref="HandlerMaxAttempts"/> times; after that its incident stays blocking with Wait for intervention and an
-/// operator resumes it with the <c>RetryFaultedActivity/1</c> alteration. Workflow cancellation runs no handler. See
-/// <c>specs/250-native-compensation</c> and <c>specs/251-compensation-uncertainty</c>.
+/// <see cref="HandlerMaxAttempts"/> times, at once or, with <see cref="HandlerRetryDelay"/>, after a growing wait
+/// (spec 261) that the runtime's delayed child schedule keeps durably; after that its incident stays blocking with Wait
+/// for intervention and an operator resumes it with the <c>RetryFaultedActivity/1</c> alteration, which never waits.
+/// Workflow cancellation runs no handler. See <c>specs/250-native-compensation</c>,
+/// <c>specs/251-compensation-uncertainty</c> and <c>specs/261-compensation-qualification</c>.
 /// </para>
 /// <para>
 /// A waiting scope offers an operator three decisions through <c>DecideIntervention/1</c> (spec 260): resolve the
@@ -194,6 +196,42 @@ public sealed class CompensationScope : StructuralActivity,
     /// </summary>
     [ActivityInput(Key = "confirmOnComplete", DefaultValue = "false")]
     public bool ConfirmOnComplete { get; set; }
+
+    /// <summary>The longest wait between two automatic attempts, and the limit of the retry delay inputs (spec 261).</summary>
+    public static readonly TimeSpan MaxHandlerRetryDelay = TimeSpan.FromHours(24);
+
+    /// <summary>The default of <see cref="HandlerRetryBackoffMultiplier"/>.</summary>
+    public const double DefaultHandlerRetryBackoffMultiplier = 2;
+
+    /// <summary>The default of <see cref="HandlerRetryMaxDelay"/>: 5 minutes.</summary>
+    public static readonly TimeSpan DefaultHandlerRetryMaxDelay = TimeSpan.FromMinutes(5);
+
+    private readonly TimeProvider _timeProvider;
+
+    public CompensationScope() : this(TimeProvider.System)
+    {
+    }
+
+    public CompensationScope(TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        _timeProvider = timeProvider;
+    }
+
+    /// <summary>
+    /// How long the scope waits before a failed handler's second attempt (spec 261). Zero, the default, retries at once,
+    /// as before. A wait is a minimum: the retry runs at the first outbox sweep after it, every 10 seconds by default.
+    /// </summary>
+    [ActivityInput(Key = "handlerRetryDelay", DefaultValue = "00:00:00", DefaultSyntax = "Literal")]
+    public TimeSpan? HandlerRetryDelay { get; set; }
+
+    /// <summary>How much each further wait grows: the wait before attempt n+1 is the delay times this to the power n−1. At least 1.</summary>
+    [ActivityInput(Key = "handlerRetryBackoffMultiplier", DefaultValue = "2", DefaultSyntax = "Literal")]
+    public double? HandlerRetryBackoffMultiplier { get; set; }
+
+    /// <summary>The longest any one wait may be, at most 24 hours.</summary>
+    [ActivityInput(Key = "handlerRetryMaxDelay", DefaultValue = "00:05:00", DefaultSyntax = "Literal")]
+    public TimeSpan? HandlerRetryMaxDelay { get; set; }
 
     /// <summary>The selector of the nearest enclosing scope on this side of every reusable-activity boundary.</summary>
     internal static RuntimeAncestorSelector NearestScope(bool optional = false) =>
@@ -682,13 +720,14 @@ public sealed class CompensationScope : StructuralActivity,
 
         if (recorded.HandlerAttempts.Count < MaxAttempts)
         {
-            // Attempts left: absorb this fault and run the same handler again, with the same keys, in one commit.
+            // Attempts left: absorb this fault and run the same handler again, with the same keys, in one commit. With a
+            // retry delay the next attempt waits (spec 261); without one it runs at once, as before.
             runtimeContext.RequestChildFaultAbsorption(
                 incidentId,
                 $"Compensation scope retries the compensation of step '{entry.Step}'.",
                 AttemptMetadata(recorded.HandlerAttempts.Count));
             var retrying = Replace(state, recorded with { InterventionIncidentId = null }) with { Phase = CompensationScopePhase.Compensating };
-            return ScheduleHandler(runtimeContext, navigator, retrying, recorded);
+            return ScheduleHandler(runtimeContext, navigator, retrying, recorded, RetryWait(FailedAttempts(recorded)));
         }
 
         // Every attempt failed: the incident stays blocking for an operator, and nothing is reported as compensated.
@@ -861,12 +900,15 @@ public sealed class CompensationScope : StructuralActivity,
         };
     }
 
-    // Schedules the next attempt of an entry's handler and marks the entry compensating, in one commit (FR-008).
+    // Schedules the next attempt of an entry's handler and marks the entry compensating, in one commit (FR-008). A
+    // positive wait schedules it not before the scope's clock plus the wait, through the runtime's delayed child schedule
+    // (spec 261 R-7), and records that time on the attempt.
     private RuntimeStructuralContinuation ScheduleHandler(
         IRuntimeActivityExecutionContext runtimeContext,
         CompensationScopeNavigator navigator,
         CompensationScopeState state,
-        CompensationEntry entry)
+        CompensationEntry entry,
+        HandlerRetryWait? wait = null)
     {
         var handlerNodeId = HandlerNodeOf(navigator, entry)
                             ?? throw new CompensationScopeExecutionException(
@@ -895,25 +937,30 @@ public sealed class CompensationScope : StructuralActivity,
 
         // The routing keys go in both the request and the provenance metadata: an operator retry rebuilds the handler's
         // command from its provenance, so the scope still recognises the retried handler (spec 258 FR-304).
-        runtimeContext.ScheduleChildActivity(
-            handlerNodeId,
+        var notBefore = wait is { Delay: var delay } && delay > TimeSpan.Zero ? _timeProvider.GetUtcNow() + delay : (DateTimeOffset?)null;
+        var provenance = ActivitySchedulingProvenance.From(
+            runtimeContext.WorkflowExecutionId,
+            scopeActivityExecutionId,
             entry.ForwardActivityExecutionId,
-            metadata,
-            ActivitySchedulingProvenance.From(
-                runtimeContext.WorkflowExecutionId,
-                scopeActivityExecutionId,
-                entry.ForwardActivityExecutionId,
-                branchId: null,
-                iterationId: null,
-                executionPathId: null,
-                executionScopeId: null,
-                schedulingCause: HandlerSchedulingCause,
-                metadata: metadata));
+            branchId: null,
+            iterationId: null,
+            executionPathId: null,
+            executionScopeId: null,
+            schedulingCause: HandlerSchedulingCause,
+            metadata: metadata);
+        if (notBefore is null)
+            runtimeContext.ScheduleChildActivity(handlerNodeId, entry.ForwardActivityExecutionId, metadata, provenance);
+        else
+            runtimeContext.ScheduleChildActivity(handlerNodeId, entry.ForwardActivityExecutionId, metadata, provenance, iterationFrame: null, notBefore);
 
         var compensating = entry with
         {
             Status = CompensationEntryStatus.Compensating,
-            HandlerAttempts = [.. entry.HandlerAttempts, new CompensationHandlerAttempt(CompensationAttemptResult.Running)]
+            HandlerAttempts =
+            [
+                .. entry.HandlerAttempts,
+                new CompensationHandlerAttempt(CompensationAttemptResult.Running, notBefore: notBefore, delayClamped: wait is { Clamped: true } ? true : null)
+            ]
         };
         return CompensationScopeStatePersister.Stage(RuntimeStructuralContinuation.Defer, Replace(state, compensating));
     }
@@ -1033,6 +1080,56 @@ public sealed class CompensationScope : StructuralActivity,
             RuntimeStructuralContinuation.Defer,
             Replace(state, waiting) with { Phase = CompensationScopePhase.AwaitingIntervention });
     }
+
+    // The failed attempts of an entry's handler so far, the operator's retries included.
+    private static int FailedAttempts(CompensationEntry entry) =>
+        entry.HandlerAttempts.Count(attempt => attempt.Result == CompensationAttemptResult.Faulted);
+
+    /// <summary>
+    /// The wait before the next automatic attempt after <paramref name="failedAttempts"/> failed ones (spec 261 FR-508):
+    /// <c>min(maxDelay, delay × multiplier^(failedAttempts − 1))</c>. The inputs are clamped into their allowed ranges
+    /// first (FR-509); a literal outside them is refused at publication, so only an expression value is ever clamped.
+    /// </summary>
+    internal HandlerRetryWait RetryWait(int failedAttempts)
+    {
+        var clamped = false;
+        var delay = Clamp(HandlerRetryDelay ?? TimeSpan.Zero, TimeSpan.Zero, MaxHandlerRetryDelay, ref clamped);
+        if (delay == TimeSpan.Zero)
+            return new HandlerRetryWait(TimeSpan.Zero, clamped);
+
+        var multiplier = HandlerRetryBackoffMultiplier ?? DefaultHandlerRetryBackoffMultiplier;
+        if (double.IsNaN(multiplier) || multiplier < 1)
+        {
+            multiplier = 1;
+            clamped = true;
+        }
+
+        var maxDelay = Clamp(HandlerRetryMaxDelay ?? DefaultHandlerRetryMaxDelay, delay, MaxHandlerRetryDelay, ref clamped);
+        var exponent = Math.Max(0, failedAttempts - 1);
+        var seconds = delay.TotalSeconds * Math.Pow(multiplier, exponent);
+        var wait = double.IsFinite(seconds) && seconds < maxDelay.TotalSeconds ? TimeSpan.FromSeconds(seconds) : maxDelay;
+        return new HandlerRetryWait(wait, clamped);
+    }
+
+    private static TimeSpan Clamp(TimeSpan value, TimeSpan min, TimeSpan max, ref bool clamped)
+    {
+        if (value < min)
+        {
+            clamped = true;
+            return min;
+        }
+
+        if (value > max)
+        {
+            clamped = true;
+            return max;
+        }
+
+        return value;
+    }
+
+    /// <summary>The wait before an automatic retry, and whether an input was clamped to compute it.</summary>
+    internal readonly record struct HandlerRetryWait(TimeSpan Delay, bool Clamped);
 
     private Dictionary<string, string> AttemptMetadata(int attempt) => new(StringComparer.Ordinal)
     {
