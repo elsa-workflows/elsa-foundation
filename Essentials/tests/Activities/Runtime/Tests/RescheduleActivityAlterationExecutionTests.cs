@@ -14,6 +14,7 @@ using Elsa.Workflows.Runtime.Services.Recovery;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
+using ParallelActivity = Elsa.Activities.Parallel.Activities.Parallel;
 using SequenceActivity = Elsa.Activities.Sequence.Activities.Sequence;
 
 namespace Elsa.Activities.Runtime.Tests;
@@ -100,6 +101,29 @@ public sealed class RescheduleActivityAlterationExecutionTests
         run.AssertWorkflowCompleted();
     }
 
+    [Fact]
+    public async Task FaultedBranchOfADeferredParallel_IsRescheduled_AndTheJoinCompletes()
+    {
+        Assert.True(typeof(IRuntimeAcceptsRescheduledFaultedChild).IsAssignableFrom(typeof(ParallelActivity)));
+        // One of two branches is enough, so the join defers on the faulted branch while the other one is suspended.
+        await using var fixture = await RescheduleFixture.StartAsync(
+            NewParallelNode(threshold: 1,
+                ("a", InterventionTestSupport.NewLeafNode("node-f", typeof(OutcomeUnknownActivity))),
+                ("b", InterventionTestSupport.NewLeafNode("node-b", typeof(SuspendOnceActivity)))),
+            "actexec-parallel", "actexec-f", "actexec-b");
+        var source = fixture.Run.State("node-f");
+        Assert.Equal(ActivityExecutionStatus.Faulted, source.Status);
+        Assert.Equal(ActivityExecutionStatus.Suspended, fixture.Run.State("node-b").Status);
+        Assert.Equal(ActivityExecutionStatus.Running, fixture.Run.State("node-parallel").Status);
+
+        var job = await fixture.RescheduleAsync(source.Execution.ActivityExecutionId, "reschedule-parallel-branch");
+
+        Assert.Equal(WorkflowAlterationJobStatus.Succeeded, job.Status);
+        var run = await fixture.ReadRunAsync();
+        Assert.Single(run.States("node-f"), state => state.Status == ActivityExecutionStatus.Completed);
+        run.AssertCompleted("node-parallel");
+    }
+
     // The executable compiler sets the capability from the activity type; the harness builds nodes by hand.
     private static ExecutableNode NewSequenceNode(params ExecutableNode[] children) =>
         new(
@@ -117,7 +141,28 @@ public sealed class RescheduleActivityAlterationExecutionTests
                 SequenceActivity.StructureSchemaVersion,
                 JsonSerializer.SerializeToElement(new { activities = children.Select(child => child.ExecutableNodeId).ToArray() })));
 
+    private static ExecutableNode NewParallelNode(int threshold, params (string Name, ExecutableNode Activity)[] branches) =>
+        new(
+            executableNodeId: "node-parallel",
+            authoredActivityId: "authored-parallel",
+            activityType: typeof(ParallelActivity).FullName!,
+            activityTypeVersion: "1.0.0",
+            descriptorType: typeof(ParallelDescriptor).FullName!,
+            descriptorPayload: JsonSerializer.SerializeToElement(new ParallelDescriptor()),
+            inputBindings: new Dictionary<string, RuntimeInputBinding>(),
+            metadata: new Dictionary<string, string> { [RuntimeMetadataKeys.AcceptsRescheduledFaultedChild] = "true" },
+            childSlots: branches.Select(branch => new ExecutableChildSlot(ParallelActivity.BranchSlotName(branch.Name), [branch.Activity])).ToArray(),
+            structure: new ExecutableActivityStructure(
+                ParallelActivity.StructureKind,
+                ParallelActivity.StructureSchemaVersion,
+                JsonSerializer.SerializeToElement(new
+                {
+                    branches = branches.Select(branch => new { name = branch.Name, activity = branch.Activity.ExecutableNodeId }).ToArray(),
+                    threshold
+                })));
+
     private sealed record SequenceDescriptor;
+    private sealed record ParallelDescriptor;
 
     /// <summary>
     /// Schedules its slot children with a marker in their scheduling metadata; on a child fault it records the fault and
@@ -225,7 +270,7 @@ public sealed class RescheduleActivityAlterationExecutionTests
                 .Build(activityExecutionIds);
             var executable = StructuralExecutionTestSupport.NewExecutable(
                 root,
-                waitingNodeIds: ["node-f"],
+                waitingNodeIds: ["node-f", "node-b"],
                 incidentStrategy: IncidentStrategyBuiltIns.ContinueWithIncidentsReference);
             var reference = await harness.PublishAsync(executable, "reschedule-source");
             await harness.StartPublishedAsync(reference, harness.ExecutionId, tenantId: WorkflowExecutionHarness.Partition.Value);

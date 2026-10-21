@@ -112,6 +112,13 @@ public sealed class RescheduleActivityAlterationHandler(
         IReadOnlyCollection<ActivityExecutionState> activities,
         WorkflowExecutable executable)
     {
+        // An ancestor that received this fault past a composite that does not handle it (spec 258 R-3) already
+        // decided on it, for example a compensation scope that faulted or abandoned the step without cancelling it.
+        if (source.Metadata.TryGetValue(RuntimeMetadataKeys.DescendantFaultProcessedWorkItemId, out var descendantWorkItemId) &&
+            !string.IsNullOrWhiteSpace(descendantWorkItemId))
+            return WorkflowAlterationPreflightResult.Rejected(
+                "SourceFaultHandledByAncestor",
+                "An ancestor of the source activity already received and decided on its fault.");
         if (!source.Metadata.TryGetValue(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId, out var processedWorkItemId) ||
             string.IsNullOrWhiteSpace(processedWorkItemId))
             return null;

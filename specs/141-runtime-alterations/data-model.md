@@ -276,7 +276,10 @@ the parent-completion marker) is accepted only when that parent is still running
 (`SourceParentNotRunning` otherwise) and its executable node carries
 `runtime.acceptsRescheduledFaultedChild`, compiled from `IRuntimeAcceptsRescheduledFaultedChild`
 (`ParentDoesNotAcceptRescheduledChild` otherwise); the successor's outcome then reaches the parent as
-that child's outcome (#3135). Executables published before the capability existed do not carry it.
+that child's outcome (#3135). A source whose fault an ancestor already received past a composite that
+does not handle it (spec 258 R-3) is refused with `SourceFaultHandledByAncestor`. Only a newly compiled
+artifact carries the capability: node metadata is not part of the artifact hash, so republishing an
+unchanged definition reuses the stored artifact without it.
 
 ### Migrate/1
 

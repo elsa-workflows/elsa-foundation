@@ -122,7 +122,10 @@ public sealed class RescheduleActivityAlterationHandlerTests
             RuntimeMetadataKeys.CausationKind,
             RuntimeMetadataKeys.BackgroundActivityWorkId
         ];
-        var metadata = perInvocationKeys.ToDictionary(key => key, _ => "source-value", StringComparer.Ordinal);
+        // A source an ancestor already received the fault of is refused outright, so that marker is left out here.
+        var metadata = perInvocationKeys
+            .Where(key => key != RuntimeMetadataKeys.DescendantFaultProcessedWorkItemId)
+            .ToDictionary(key => key, _ => "source-value", StringComparer.Ordinal);
         metadata["custom.kept"] = "kept";
         // The parent already evaluated the source's fault, so it must be running and accept a rescheduled child.
         var source = Source(ActivityExecutionStatus.Faulted) with { Metadata = metadata, ParentActivityExecutionId = "parent" };
@@ -206,6 +209,30 @@ public sealed class RescheduleActivityAlterationHandlerTests
         var successor = Assert.Single(builder.ActivityExecutions,
             change => change.StateId != source.Execution.ActivityExecutionId && change.StateId != "parent").State;
         Assert.DoesNotContain(RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId, successor.Metadata.Keys);
+    }
+
+    [Fact]
+    public async Task PreflightAsync_RefusesASourceWhoseFaultAnAncestorAlreadyReceived()
+    {
+        // The direct parent is running and accepts it, but an ancestor past it already decided on the fault.
+        var source = Source(ActivityExecutionStatus.Faulted) with
+        {
+            ParentActivityExecutionId = "parent",
+            Metadata = new Dictionary<string, string>
+            {
+                [RuntimeMetadataKeys.ParentCompletionProcessedWorkItemId] = "work-1",
+                [RuntimeMetadataKeys.DescendantFaultProcessedWorkItemId] = "work-2"
+            }
+        };
+        var executableStore = new InMemoryWorkflowExecutableStore();
+        await executableStore.SaveAsync(ExecutableWithParent(acceptsRescheduledFaultedChild: true));
+        var staging = new Staging();
+
+        var result = await Handler(executableStore).PreflightAsync(Context(source, staging, Parent(ActivityExecutionStatus.Running)));
+
+        Assert.False(result.IsAccepted);
+        Assert.Equal("SourceFaultHandledByAncestor", result.Failure!.Code);
+        Assert.Empty(staging.StagedChanges);
     }
 
     [Fact]

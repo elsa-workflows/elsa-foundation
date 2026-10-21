@@ -291,7 +291,7 @@ sensitive result material are rejected.
   that is already non-blocking. It MUST NOT resolve any incident; incident recovery/redrive is a
   separate explicit operation. When the source's parent already evaluated its fault, rescheduling MUST
   be refused unless that parent is still running and declares that it accepts a rescheduled faulted
-  child's outcome (#3135).
+  child's outcome, and it MUST be refused when an ancestor already received that fault (#3135).
 - **FR-030**: Activity rescheduling MUST NOT implicitly recover or reopen a terminal workflow.
 - **FR-031**: `Migrate` MUST appear at most once and, when present, MUST be the first alteration in its
   job.
