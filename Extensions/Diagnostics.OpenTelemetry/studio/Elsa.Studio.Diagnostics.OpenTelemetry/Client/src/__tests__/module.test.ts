@@ -3,7 +3,7 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { buildWaterfallRows, classifyOpenTelemetryError, OpenTelemetryPage, register, normalizeSpan } from "../module";
-import type { ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
+import { StudioHttpError, type ElsaStudioModuleApi } from "@elsa-workflows/studio-sdk";
 
 type StudioRequest = { method: "GET" | "POST"; url: string; body?: unknown };
 type Responder = (request: StudioRequest) => Promise<unknown>;
@@ -125,11 +125,11 @@ describe("open telemetry module", () => {
     [403, "Forbidden", "unauthorized"],
     [404, "Not Found", "unavailable"]
   ] as const)("classifies a Studio HTTP error from status %s even when its message only says %s", (status, message, expected) => {
-    expect(classifyOpenTelemetryError(studioHttpError(status, message))).toMatchObject({ status: expected });
+    expect(classifyOpenTelemetryError(new StudioHttpError(status, message))).toMatchObject({ status: expected });
   });
 
   it("treats the numeric Studio HTTP status as authoritative over digits in its message", () => {
-    expect(classifyOpenTelemetryError(studioHttpError(500, "Not Found (404)"))).toMatchObject({ status: "failed" });
+    expect(classifyOpenTelemetryError(new StudioHttpError(500, "Not Found (404)"))).toMatchObject({ status: "failed" });
   });
 });
 
@@ -364,7 +364,7 @@ describe("US2 — understand stored diagnostic data", () => {
   });
 
   it("does not turn absent or malformed stored counts into zero", async () => {
-    const malformedStorageResponse = { ...storageResponse, resourceCount: undefined, spanCount: "invalid" as unknown as number };
+    const malformedStorageResponse = { ...storageResponse, resourceCount: undefined, spanCount: "invalid" };
     const { container } = renderPage(overviewResponder("success", "success", malformedStorageResponse));
     await flushPromises();
     findTab(container, "Overview")?.click();
@@ -394,10 +394,10 @@ describe("US3 — distinguish empty, denied, and unavailable states", () => {
   });
 
   it.each([
-    { state: "permission", error: studioHttpError(401, "Unauthorized"), expected: /Permission denied while loading OpenTelemetry diagnostics/ },
-    { state: "permission", error: studioHttpError(403, "Forbidden"), expected: /Permission denied while loading OpenTelemetry diagnostics/ },
-    { state: "unavailable", error: studioHttpError(404, "Not Found"), expected: /OpenTelemetry diagnostics are unavailable/ },
-    { state: "failure", error: studioHttpError(500, "Request failed with code 404"), expected: /OpenTelemetry diagnostics failed/ }
+    { state: "permission", error: new StudioHttpError(401, "Unauthorized"), expected: /Permission denied while loading OpenTelemetry diagnostics/ },
+    { state: "permission", error: new StudioHttpError(403, "Forbidden"), expected: /Permission denied while loading OpenTelemetry diagnostics/ },
+    { state: "unavailable", error: new StudioHttpError(404, "Not Found"), expected: /OpenTelemetry diagnostics are unavailable/ },
+    { state: "failure", error: new StudioHttpError(500, "Request failed with code 404"), expected: /OpenTelemetry diagnostics failed/ }
   ])("renders a distinct trace $state state from the Studio HTTP status", async ({ error, expected }) => {
     const { container } = renderPage(async () => { throw error; });
     await flushPromises();
@@ -411,7 +411,7 @@ describe("US3 — distinguish empty, denied, and unavailable states", () => {
       if (request.method === "POST" && request.url.endsWith("/diagnostics/opentelemetry/traces/search")) return { items: [trace], droppedCount: 0 };
       if (request.method === "POST" && request.url.endsWith("/diagnostics/opentelemetry/resources/search")) return resourcesResponse;
       if (request.method === "GET" && request.url.endsWith("/diagnostics/opentelemetry/storage")) return storageResponse;
-      if (request.method === "GET" && request.url.endsWith(`/diagnostics/opentelemetry/traces/${traceId}`)) throw studioHttpError(404, "Not Found");
+      if (request.method === "GET" && request.url.endsWith(`/diagnostics/opentelemetry/traces/${traceId}`)) throw new StudioHttpError(404, "Not Found");
       throw new Error("Status code '404'");
     });
     await flushPromises();
@@ -423,16 +423,16 @@ describe("US3 — distinguish empty, denied, and unavailable states", () => {
   });
 
   it.each([
-    { state: "permission denied", error: studioHttpError(403, "Forbidden"), expected: /Permission denied while loading this trace/i },
-    { state: "missing", error: studioHttpError(404, "Not Found"), expected: /This trace is no longer available/i },
-    { state: "failure", error: studioHttpError(500, "Request failed"), expected: /Trace details failed to load/i }
+    { state: "permission denied", error: new StudioHttpError(403, "Forbidden"), expected: /Permission denied while loading this trace/i },
+    { state: "missing", error: new StudioHttpError(404, "Not Found"), expected: /This trace is no longer available/i },
+    { state: "failure", error: new StudioHttpError(500, "Request failed"), expected: /Trace details failed to load/i }
   ])("keeps selected trace detail $state scoped to the detail pane", async ({ error, expected }) => {
     const { container } = renderPage(async request => {
       if (request.method === "POST" && request.url.endsWith("/diagnostics/opentelemetry/traces/search")) return { items: [trace], droppedCount: 0 };
       if (request.method === "POST" && request.url.endsWith("/diagnostics/opentelemetry/resources/search")) return resourcesResponse;
       if (request.method === "GET" && request.url.endsWith("/diagnostics/opentelemetry/storage")) return storageResponse;
       if (request.method === "GET" && request.url.endsWith(`/diagnostics/opentelemetry/traces/${traceId}`)) throw error;
-      throw studioHttpError(404, "Not Found");
+      throw new StudioHttpError(404, "Not Found");
     });
     await flushPromises();
 
@@ -466,7 +466,7 @@ function backendResponder(request: StudioRequest): Promise<unknown> {
   return Promise.reject(new Error("Status code '404'"));
 }
 
-function overviewResponder(resourceState: OverviewReadState, storageState: OverviewReadState, storage = storageResponse): Responder {
+function overviewResponder(resourceState: OverviewReadState, storageState: OverviewReadState, storage: unknown = storageResponse): Responder {
   return request => {
     if (request.method === "POST" && request.url.endsWith("/diagnostics/opentelemetry/traces/search")) return Promise.resolve(tracesResponse);
     if (request.method === "POST" && request.url.endsWith("/diagnostics/opentelemetry/resources/search")) {
@@ -482,14 +482,10 @@ function overviewResponder(resourceState: OverviewReadState, storageState: Overv
 
 function readResponse(state: OverviewReadState, success: unknown, empty: unknown): Promise<unknown> {
   if (state === "pending") return new Promise(() => {});
-  if (state === "unauthorized") return Promise.reject(studioHttpError(401, "Unauthorized"));
-  if (state === "forbidden") return Promise.reject(studioHttpError(403, "Forbidden"));
-  if (state === "missing") return Promise.reject(studioHttpError(404, "Not Found"));
+  if (state === "unauthorized") return Promise.reject(new StudioHttpError(401, "Unauthorized"));
+  if (state === "forbidden") return Promise.reject(new StudioHttpError(403, "Forbidden"));
+  if (state === "missing") return Promise.reject(new StudioHttpError(404, "Not Found"));
   return Promise.resolve(state === "empty" ? empty : success);
-}
-
-function studioHttpError(status: number, message: string): Error & { status: number } {
-  return Object.assign(new Error(message), { status });
 }
 
 function renderPage(respond: Responder) {
