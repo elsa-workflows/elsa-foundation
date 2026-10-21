@@ -649,21 +649,15 @@ internal sealed class Elsa3ActivityNormalizer(
     /// <summary>
     /// Elsa 3 sent text as is and serialized any other value as JSON when the content type was unset (inferred
     /// <c>application/json</c>) or exactly a type its JSON writer handled; otherwise it sent the value's type name.
-    /// Elsa 4 sends text as is and any other value as JSON, so only the JSON cases convert faithfully. A script declared
-    /// <c>String</c> is refused: Elsa 3 converted its value to text, but its lowered expression declares the body's JSON
-    /// type, so Elsa 4 would send a returned object as JSON.
+    /// Elsa 4 sends text as is and any other value as JSON, so only the JSON cases convert faithfully. A script with a
+    /// typed declaration (<c>String</c>, <c>Int32</c>, …) passes here and is refused by value-flow lowering (FR-013),
+    /// because Elsa 3 converted its result to that type.
     /// </summary>
     private static JsonElement? CheckHttpResponseBody(
         Elsa3RewriteContext context, string propertyName, JsonElement value, bool isLiteral, string? alias)
     {
-        if (isLiteral)
+        if (isLiteral || string.Equals(alias, "String", StringComparison.OrdinalIgnoreCase))
             return value;
-        if (string.Equals(alias, "String", StringComparison.OrdinalIgnoreCase))
-            return Elsa3TypedValues.TryGetExpression(value, out var expressionType, out _) &&
-                   !expressionType.Equals("Variable", StringComparison.OrdinalIgnoreCase)
-                ? Outside("is a script declared as 'String'; Elsa 3 converted its result to text, but Elsa 4 sends a returned object as JSON",
-                    "Declare the expression's type as Object: Elsa 4 then sends a returned string as text/plain and any other value as JSON.")
-                : value;
 
         if (alias is not null && (alias.Equals("Byte[]", StringComparison.OrdinalIgnoreCase) ||
                                   alias.EndsWith("Stream", StringComparison.OrdinalIgnoreCase)))

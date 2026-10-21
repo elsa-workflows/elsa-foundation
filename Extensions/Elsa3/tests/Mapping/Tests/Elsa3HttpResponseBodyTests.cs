@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Elsa3.Mapping.Services;
 using Elsa3.Mapping.Tests.Support;
 using Elsa3.Models;
 using Elsa.Workflows.Design.Core.Models;
@@ -68,20 +69,22 @@ public sealed class Elsa3HttpResponseBodyTests
     }
 
     [Theory]
-    [InlineData(null)]
-    [InlineData("text/html")]
-    public async Task A_script_declared_String_is_refused(string? contentType)
+    [InlineData("String", null)]
+    [InlineData("String", "text/html")]
+    [InlineData("Int32", null)]
+    [InlineData("Boolean", "application/json")]
+    public async Task A_script_body_with_a_typed_declaration_is_refused(string typeName, string? contentType)
     {
-        // Elsa 3 converted the result to text; the lowered body declares JSON, so Elsa 4 would send an object as JSON.
+        // Elsa 3 converted the result to the declared type (an object to text, "5" to 5); Elsa 4 sends what the script returns.
         (string, JsonElement)[] properties = contentType is null
-            ? [("content", Expression("JavaScript", "return 'hello';"))]
-            : [("content", Expression("JavaScript", "return 'hello';")), ("contentType", Literal(contentType))];
+            ? [("content", Expression("JavaScript", "return 'hello';", typeName))]
+            : [("content", Expression("JavaScript", "return 'hello';", typeName)), ("contentType", Literal(contentType))];
 
         var result = await ConvertResultAsync(Respond(properties));
 
         Assert.False(result.Succeeded);
-        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ActivityDiagnosticCodes.ValueOutsideContract);
-        Assert.Contains("declared as 'String'", diagnostic.Message, StringComparison.Ordinal);
+        var diagnostic = Assert.Single(result.Diagnostics, diagnostic => diagnostic.Code == Elsa3ImportDiagnosticCodes.IncompatibleValue);
+        Assert.Contains($"script declared as '{typeName}'", diagnostic.Message, StringComparison.Ordinal);
         Assert.Contains("Object", diagnostic.Guidance, StringComparison.Ordinal);
     }
 
@@ -169,13 +172,27 @@ public sealed class Elsa3HttpResponseBodyTests
     }
 
     [Fact]
-    public async Task A_typed_expression_bound_to_a_JSON_member_of_any_activity_declares_the_member_type()
+    public async Task A_script_with_a_typed_declaration_bound_to_a_JSON_member_of_any_activity_is_refused()
     {
-        // The rule applies to every activity, not only Http (ForEach.Collection is object?). Elsa 3 converted this value
-        // to its declared Int32; Elsa 4 receives what the script returns (here the string "5"), because the member
-        // accepts any JSON value. Publication requires the member type verbatim.
-        var state = await ConvertAsync(Sequence("root",
+        // The rule applies to every activity (ForEach.Collection is object?). Elsa 3 converted this result to its declared
+        // Int32; Elsa 4 would receive the string "5" as returned, so the conversion would be lost silently.
+        var result = await ConvertResultAsync(Sequence("root",
             Activity("loop", "Elsa.ForEach", ("items", Expression("JavaScript", "return '5';", "Int32")))));
+
+        Assert.False(result.Succeeded);
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Code == Elsa3ImportDiagnosticCodes.IncompatibleValue &&
+            diagnostic.Message.Contains("script declared as 'Int32'", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("Object")]
+    [InlineData("List<Object>")]
+    public async Task An_untyped_script_bound_to_a_JSON_member_of_any_activity_declares_the_member_type(string typeName)
+    {
+        // No Elsa 3 conversion happened for an untyped declaration; publication requires the member type verbatim.
+        var state = await ConvertAsync(Sequence("root",
+            Activity("loop", "Elsa.ForEach", ("items", Expression("JavaScript", "return [1, 2];", typeName)))));
 
         Assert.Equal("Object", ResultTypeAlias(Input(Node(state, "loop"), "Collection")));
     }

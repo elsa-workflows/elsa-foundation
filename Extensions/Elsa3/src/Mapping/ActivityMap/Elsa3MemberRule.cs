@@ -91,9 +91,9 @@ public enum Elsa3ValueContract
     HttpMethodSupported,
 
     /// <summary>
-    /// A WriteHttpResponse body (spec 256): a literal or a <c>String</c> variable fits; a script declared as another type fits
-    /// when the response content type is unset or JSON, so Elsa 4 sends JSON as Elsa 3 did. A script declared
-    /// <c>String</c> does not fit, because Elsa 3 converted its value to text and Elsa 4 does not.
+    /// A WriteHttpResponse body (spec 256): text (a literal, or a value declared <c>String</c>) fits; any other value fits
+    /// when the response content type is unset or JSON, so Elsa 4 sends JSON as Elsa 3 did. A script with a typed
+    /// declaration is then refused by value-flow lowering (spec 256 FR-013).
     /// </summary>
     HttpResponseBody,
 

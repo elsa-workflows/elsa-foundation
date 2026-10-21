@@ -57,9 +57,10 @@ No setup: existing projects only.
 
 ## Phase 7: Review (Sipke, 2026-10-21)
 
-- [X] T018 [US3] Refuse a script body declared `String`, and convert another spelling of a JSON type with `ELS3-BEHAVIOUR-HTTP-RESPONSE-JSON-VARIANT`, in Extensions/Elsa3/src/Mapping/Conversion/Elsa3ActivityNormalizer.cs and Extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs
+- [X] T018 [US3] Convert another spelling of a JSON type with `ELS3-BEHAVIOUR-HTTP-RESPONSE-JSON-VARIANT`, in Extensions/Elsa3/src/Mapping/Conversion/Elsa3ActivityNormalizer.cs and Extensions/Elsa3/src/Models/Elsa3ActivityDiagnosticCodes.cs
 - [X] T019 [US3] Add a non-Http test of the lowered-expression rule (ForEach.Collection) and the review cases in Extensions/Elsa3/tests/Mapping/Tests/Elsa3HttpResponseBodyTests.cs
 - [X] T020 [US1] Keep a content type with parameters in Essentials/src/Http/Core/Models/RawStringContent.cs, with delivery tests in Essentials/tests/Activities/Http/Tests/WriteHttpResponseStructuredBodyTests.cs
+- [X] T022 [US3] Refuse a script with a typed declaration bound to a JSON member (any activity) with `VF-IMP-008` in Extensions/Elsa3/src/Mapping/Services/Elsa3ValueFlowLowerer.cs (owner decision 2026-10-21, stricter than the review), replacing the String-body refusal in the normalizer
 - [X] T021 Amend the member map, the Mapping README, the Body docs and this spec (FR-013, FR-014)
 
 ## Dependencies
