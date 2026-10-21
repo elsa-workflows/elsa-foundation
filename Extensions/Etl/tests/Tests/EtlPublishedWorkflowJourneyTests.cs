@@ -14,6 +14,7 @@ using Elsa.Etl.Persistence.EntityFrameworkCore.Entities;
 using Elsa.Etl.Persistence.EntityFrameworkCore.Stores;
 using Elsa.Etl.Runtime;
 using Elsa.Etl.Runtime.Hosting;
+using Elsa.Etl.Tests.Support;
 using Elsa.Etl.Workflows.Runtime;
 using Elsa.Etl.Workflows.Runtime.Activities;
 using Elsa.Etl.Workflows.Runtime.Models;
@@ -40,15 +41,21 @@ namespace Elsa.Etl.Tests;
 public sealed class EtlPublishedWorkflowJourneyTests
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Published_parent_keeps_its_ETL_version_after_edit_and_runs_without_design_services(bool flowchart)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task Published_parent_keeps_its_ETL_version_after_edit_and_runs_without_design_services(bool flowchart, bool httpSource)
     {
-        await using var published = await EtlPublishedWorkflowFixture.CreateAsync(flowchart);
+        await using var endpoint = httpSource ? await EtlHttpLoopbackServer.StartAsync((request, _) =>
+            ValueTask.FromResult(new EtlHttpLoopbackResponse(200, request.RawTarget == "/original"
+                ? "{\"records\":[{\"id\":1,\"name\":\"Ada\"}]}"
+                : "{\"records\":[{\"id\":2,\"name\":\"Changed binding\"}]}"))) : null;
+        await using var published = await EtlPublishedWorkflowFixture.CreateAsync(flowchart, httpSource: httpSource);
         // All authoring scopes and connections are disposed before taking the design database offline.
         var offlineDesignDatabase = published.EtlDesignDatabase + ".offline";
         File.Move(published.EtlDesignDatabase, offlineDesignDatabase);
-        await using var runtime = await RuntimeHost.CreateAsync(published);
+        RuntimeHost? runtime = await RuntimeHost.CreateAsync(published, endpoint);
         try
         {
             Assert.NotEqual(published.OriginalArtifact.DefinitionVersion, published.UpdatedArtifact.DefinitionVersion);
@@ -62,6 +69,33 @@ public sealed class EtlPublishedWorkflowJourneyTests
             Assert.Equal(published.OriginalArtifact.ContentHash, invocation.Artifact.ContentHash);
             Assert.Equal(published.Executable.Identity.ArtifactId, invocation.ResultAddress.ExecutableId);
             Assert.Equal(published.Executable.Identity.ArtifactHash, invocation.ResultAddress.ExecutableHash);
+
+            EtlConnectorBindingRevision? admittedSource = null;
+            if (httpSource)
+            {
+                var admitted = await runtime.ReadConnectorAsync(invocation);
+                admittedSource = admitted.Bindings.Source;
+                Assert.Equal("source-v1", admittedSource.Revision.Revision);
+                Assert.Empty(endpoint!.Requests);
+                var executionId = runtime.ExecutionId;
+                await runtime.DisposeAsync();
+                runtime = null;
+                // A fresh runtime sees a different current host revision. The pending run must use its
+                // retained revision and approved seed, while the published parent keeps ETL version 1.
+                runtime = await RuntimeHost.CreateAsync(published, endpoint, executionId);
+                await runtime.AssertRuntimeOnlyAsync();
+                await using (var replacementScope = await runtime.OpenScopeAsync())
+                {
+                    var current = await replacementScope.ServiceProvider.GetRequiredService<IEtlConnectorBindingResolver>()
+                        .ResolveAsync(published.Scope, EtlArtifactV2Json.Read(invocation.Artifact.Pipeline));
+                    Assert.Equal("source-v2", current.Bindings!.Source.Revision.Revision);
+                    Assert.NotEqual(admittedSource.Revision.Handle, current.Bindings.Source.Revision.Handle);
+                }
+                var resumedInvocation = await runtime.WaitForSuspensionAsync();
+                Assert.Equal(invocation.RunId, resumedInvocation.RunId);
+                Assert.Equal(JsonSerializer.Serialize(invocation.Artifact), JsonSerializer.Serialize(resumedInvocation.Artifact));
+                Assert.Equal(admittedSource, (await runtime.ReadConnectorAsync(invocation)).Bindings.Source);
+            }
 
             await runtime.StartWorkerAsync();
             await runtime.WaitForCompletionAsync(invocation);
@@ -94,18 +128,38 @@ public sealed class EtlPublishedWorkflowJourneyTests
             Assert.Equal(new RunEtlResult(invocation.RunId, result.Outcome, 1, 0, 0, null), typed);
             Assert.Null(await services.GetRequiredService<IBookmarkStateStore>()
                 .FindAsync(runtime.ExecutionId, invocation.ResultAddress.BookmarkId));
-            var manifest = await store.ListManifestAsync(published.Scope, invocation.RunId, null, 20);
-            var output = Assert.Single(manifest);
-            Assert.Equal(EtlOutputRoute.Main, output.Effect.Route);
-            Assert.Equal("{\"name\":\"Ada\"}\n",
-                await File.ReadAllTextAsync(Path.Combine(published.OutputRoot, output.Effect.Chunk.Key), Encoding.UTF8));
+            string outputPath;
+            if (httpSource)
+            {
+                var retained = await runtime.ReadConnectorAsync(invocation);
+                Assert.Equal(admittedSource, retained.Bindings.Source);
+                Assert.Null(retained.Prepared!.File);
+                Assert.Null(retained.Prepared.Lookup);
+                var request = Assert.Single(endpoint!.Requests);
+                Assert.Equal("GET", request.Method);
+                Assert.Equal("/original", request.RawTarget);
+                outputPath = Assert.Single(Directory.GetFiles(published.OutputRoot, "*.jsonl", SearchOption.AllDirectories));
+            }
+            else
+            {
+                var output = Assert.Single(await store.ListManifestAsync(published.Scope, invocation.RunId, null, 20));
+                Assert.Equal(EtlOutputRoute.Main, output.Effect.Route);
+                outputPath = Path.Combine(published.OutputRoot, output.Effect.Chunk.Key);
+            }
+            Assert.Equal("{\"name\":\"Ada\"}\n", await File.ReadAllTextAsync(outputPath, Encoding.UTF8));
             Assert.False(File.Exists(published.EtlDesignDatabase));
             Assert.True(File.Exists(offlineDesignDatabase));
         }
         catch (Exception exception)
         {
-            await runtime.PreserveFailureAsync(exception);
+            if (runtime is not null)
+                await runtime.PreserveFailureAsync(exception);
             throw;
+        }
+        finally
+        {
+            if (runtime is not null)
+                await runtime.DisposeAsync();
         }
     }
 
@@ -117,14 +171,15 @@ public sealed class EtlPublishedWorkflowJourneyTests
         public string ExecutionId { get; } = executionId;
         private bool _workerStarted;
 
-        public static async Task<RuntimeHost> CreateAsync(EtlPublishedWorkflowFixture published)
+        public static async Task<RuntimeHost> CreateAsync(EtlPublishedWorkflowFixture published,
+            EtlHttpLoopbackServer? endpoint = null, string? retainedExecutionId = null)
         {
             var lifetime = Host.CreateApplicationBuilder().Build();
             WorkflowExecutionHarness? harness = null;
             try
             {
                 await lifetime.StartAsync();
-                var executionId = "etl-published-parent-" + Guid.NewGuid().ToString("N");
+                var executionId = retainedExecutionId ?? "etl-published-parent-" + Guid.NewGuid().ToString("N");
                 harness = WorkflowExecutionHarness.Create()
                     .WithFeature(services => new WorkflowsRuntimeResumptionFeature().ConfigureServices(services))
                     .WithFeature(services => new ActivitiesSequenceFeature().ConfigureServices(services))
@@ -134,7 +189,12 @@ public sealed class EtlPublishedWorkflowJourneyTests
                     .WithFeature(services => new EventsFeature().ConfigureServices(services))
                     .WithFeature(services => new EtlRuntimeFeature
                     {
-                        SnapshotRoot = published.SnapshotRoot, FileBindings = published.Bindings.ToList()
+                        SnapshotRoot = published.SnapshotRoot,
+                        FileBindings = published.Bindings.ToList(),
+                        HttpBindings = endpoint is null ? [] : retainedExecutionId is null
+                            ? [SourceBinding(published, endpoint, "source-v1", "/original", true)]
+                            : [SourceBinding(published, endpoint, "source-v1", "/original", false),
+                               SourceBinding(published, endpoint, "source-v2", "/changed", true)]
                     }.ConfigureServices(services))
                     .WithFeature(services => new EtlRuntimeEntityFrameworkCoreFeature
                     {
@@ -155,7 +215,9 @@ public sealed class EtlPublishedWorkflowJourneyTests
                     })
                     .WithPersistenceMode(PersistenceMode.Durable)
                     .Build(published.Executable.Identity, executionId,
-                        Enumerable.Range(1, 32).Select(index => $"{executionId}-activity-{index}"));
+                        // A restarted deterministic harness must not reuse activity IDs already persisted by its predecessor.
+                        Enumerable.Range(retainedExecutionId is null ? 1 : 33, 32)
+                            .Select(index => $"{executionId}-activity-{index}"));
                 foreach (var initializer in harness.Services.GetServices<IShellInitializer>())
                     await initializer.InitializeAsync();
                 harness.InitializeActivityTypes();
@@ -172,11 +234,29 @@ public sealed class EtlPublishedWorkflowJourneyTests
             }
         }
 
+        private static EtlHostHttpBindingOptions SourceBinding(EtlPublishedWorkflowFixture published,
+            EtlHttpLoopbackServer endpoint, string revision, string path, bool current) => new()
+        {
+            TenantId = published.Scope.TenantId, PersistencePartition = published.Scope.PersistencePartition,
+            Alias = "source", Role = "Source", Revision = revision, IsCurrent = current,
+            Endpoint = endpoint.CreateUri(path).AbsoluteUri, AllowHttp = true, AllowedPaths = [path],
+            Shards = [new() { Id = "only", SeedUri = endpoint.CreateUri(path).AbsoluteUri }]
+        };
+
+        public async Task<EtlConnectorRunView> ReadConnectorAsync(EtlInvocation invocation)
+        {
+            await using var operation = await OpenScopeAsync();
+            return Assert.IsType<EtlConnectorRunView>(await operation.ServiceProvider
+                .GetRequiredService<IEtlConnectorRuntimeStore>().FindConnectorRunAsync(published.Scope, invocation.RunId));
+        }
+
         public async Task AssertRuntimeOnlyAsync()
         {
             await using var operation = await OpenScopeAsync();
             Assert.Null(operation.ServiceProvider.GetService<IEtlDefinitionStore>());
             Assert.Null(operation.ServiceProvider.GetService<IEtlArtifactCompiler>());
+            Assert.Null(operation.ServiceProvider.GetService<IEtlDefinitionStoreV2>());
+            Assert.Null(operation.ServiceProvider.GetService<IEtlArtifactCompilerV2>());
             Assert.Null(operation.ServiceProvider.GetService<EtlDesignDbContext>());
             Assert.Empty(operation.ServiceProvider.GetServices<IExecutableCompilationSource>());
             Assert.Null(operation.ServiceProvider.GetService<IWorkflowExecutableCompiler>());
