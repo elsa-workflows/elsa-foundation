@@ -74,6 +74,7 @@
     <Project Path="Extensions/ExtensionBuilder/tests/Api/Tests/Elsa.ExtensionBuilder.Api.Tests.csproj" />
   </Folder>
   <Folder Name="/samples/">
+    <Project Path="samples/Elsa.Samples.Compensation/Elsa.Samples.Compensation.csproj" />
     <Project Path="samples/Elsa.Samples.Nuplane.Activities/Elsa.Samples.Nuplane.Activities.csproj" />
     <Project Path="samples/Elsa.Samples.Nuplane.Notes/Elsa.Samples.Nuplane.Notes.csproj" />
     <Project Path="samples/Elsa.Samples.Nuplane.Notes.Activities/Elsa.Samples.Nuplane.Notes.Activities.csproj" />
@@ -595,6 +596,9 @@
     <Project Path="Essentials/tests/Persistence/EntityFrameworkCore/MySql/FeasibilityTests/Elsa.Persistence.EntityFrameworkCore.MySql.FeasibilityTests.csproj" />
   </Folder>
   <Folder Name="/Essentials/tests/Samples/" />
+  <Folder Name="/Essentials/tests/Samples/Compensation/">
+    <Project Path="Essentials/tests/Samples/Compensation/Tests/Elsa.Samples.Compensation.Tests.csproj" />
+  </Folder>
   <Folder Name="/Essentials/tests/Samples/Nuplane/" />
   <Folder Name="/Essentials/tests/Samples/Nuplane/Activities/">
     <Project Path="Essentials/tests/Samples/Nuplane/Activities/Tests/Elsa.Samples.Nuplane.Activities.Tests.csproj" />
