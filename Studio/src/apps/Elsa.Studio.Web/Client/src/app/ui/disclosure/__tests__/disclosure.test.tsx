@@ -369,6 +369,33 @@ describe("AdvancedSection", () => {
     expect(setItem).toHaveBeenCalledWith(storageKey, "false");
   });
 
+  it("lets Runs collapse More filters while preserving unapplied drafts and applied criteria", () => {
+    const host = mount(
+      <AdvancedSection label="More filters" setCount={2} defaultOpen allowCollapseWhenSet>
+        <input aria-label="Unapplied artifact" defaultValue="draft-artifact" />
+      </AdvancedSection>
+    );
+    const trigger = host.querySelector<HTMLButtonElement>(".studio-disclosure-fold-trigger")!;
+    const field = host.querySelector<HTMLInputElement>("input[aria-label='Unapplied artifact']")!;
+    const hiddenBody = host.querySelector<HTMLElement>("[id='" + trigger.getAttribute("aria-controls") + "']")!;
+
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(host.textContent).toContain("2 set");
+    field.value = "unfinished draft";
+    flushSync(() => trigger.click());
+
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(hiddenBody.hasAttribute("hidden")).toBe(true);
+    expect(host.querySelector("input[aria-label='Unapplied artifact']")).toBe(field);
+    expect(field.value).toBe("unfinished draft");
+    expect(host.textContent).toContain("2 set");
+
+    flushSync(() => trigger.click());
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector("input[aria-label='Unapplied artifact']")).toBe(field);
+    expect(field.value).toBe("unfinished draft");
+  });
+
   it.each(["forceOpen", "setCount"] as const)("retains a recovered %s reveal until manual collapse", reason => {
     const persistKey = `connection.more-options.${reason}`;
     const { storageKey, setItem } = seedCollapsedPreference(persistKey);
