@@ -84,6 +84,10 @@ Two details the research did not foresee: the due time travels on the child's `S
   - A new compensation validator `CompensationReplaySafeValidator` warns on a `ReplaySafe` leaf as a step with a compensation, or as a handler. It skips structural activities (any node with a `Structure`) and resolves nothing when no reader is registered.
 - **Rejected:** a design facet carrying the profile on the activity version, written by the CLR scanner (`Activities/Design/Reconciliation/Clr/Services/ClrAssemblyScanner.cs`). It changes the version content, and so the hash, of every existing `ReplaySafe` activity version, which reconciliation would see as drift. **To verify in T509:** whether a facet would in fact change the hash; if it would not, the facet is the simpler home and the reader becomes a facet read.
 
+### R5 outcome (T512, PR 1)
+
+The facet would change the hash. `DefaultActivityDefinitionHasher` (`Activities/Design/Persistence/Core/Services/DefaultActivityDefinitionHasher.cs:77`) hashes every design facet except the presentation-only `elsa.activity-icon`, so a profile facet changes the content hash of every existing `ReplaySafe` version, which reconciliation reads as drift. Excluding it from the hash the way the icon is excluded would avoid the drift, but then versions already stored would never gain the facet, and the facet could disagree with the attribute the compiler reads. The reader therefore stays: `ActivitySideEffectProfileReader` (Publishing) reads the version from `IActivityDefinitionVersionStore` and applies `ActivitySideEffectProfiles.Of`, the same helper `ExecutableNodeCompiler` now uses. A consumer that is not a CLR activity (a reusable graph activity) reads as `External`, as the compiler pins it; an unknown version or a CLR type that is not loaded reads as no profile, and the validator then stays silent.
+
 ## R6 — Studio blocks publication on warnings today
 
 - **Evidence:**
@@ -93,6 +97,10 @@ Two details the research did not foresee: the due time travels on the child's `S
 - **Decision:**
   - Read severity on both shapes; list warnings under their own heading with text and icon; keep **Publish** enabled when only warnings remain (FR-515).
   - **To verify in T511:** whether the saved draft's `validationErrors` already include warnings (then a Connections warning blocks Studio publication today, and this is a bug fix with its own regression test).
+
+### R6 outcome (T514, PR 1)
+
+The saved draft does not carry warnings, so Studio has never blocked on a warning; it never showed one in the review either. The Design API's draft view (`Workflows/Design/Api/Models/WorkflowDraftView.cs`, used by Get and Replace) has no validation list, so the client's `validationErrors` on a saved draft is always empty, and warnings reach Studio only through the validations endpoint (`DraftValidationsView`), which the publish path did not call. Server-side, promotion already ignores warnings. So this is not a blocking bug, but without a change the replay-safe warning would be invisible at publication. The fix: Studio reads `severity` on `ValidationError` (a missing severity is an error), `splitPublicationValidations` separates the two, and `preparePublication` adds the server's warnings from `getDraftValidations` to the review (`withPublicationWarnings`; a failed fetch shows no warnings and does not block). The review lists them under a **Warnings** heading with an icon and keeps **Publish** enabled; errors still block.
 
 ## R7 — The broken M1 live journey (#3142)
 

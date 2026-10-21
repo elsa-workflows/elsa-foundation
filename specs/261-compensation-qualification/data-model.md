@@ -61,8 +61,8 @@ When the journal is unavailable (a completed scope), the M1–M3 derivation has 
 | `CompensationScope/InvalidRetryDelay` | Error | `{scope}/inputs/handlerRetryDelay` | "Handler retry delay must be between 0 and 24 hours." |
 | `CompensationScope/InvalidBackoffMultiplier` | Error | `{scope}/inputs/handlerRetryBackoffMultiplier` | "Handler retry backoff multiplier must be at least 1." |
 | `CompensationScope/InvalidRetryMaxDelay` | Error | `{scope}/inputs/handlerRetryMaxDelay` | "Handler retry max delay must be at least the retry delay and at most 24 hours." |
-| `CompensationScope/ReplaySafeStep` | Warning | `{scope}/steps/{index}` | "*{step}* is marked safe to repeat, so its call may not be committed before it runs; if the process stops, recovery may not know it happened. Mark it as an external effect unless it has none." |
-| `CompensationScope/ReplaySafeHandler` | Warning | `{scope}/steps/{index}` | "The compensation of *{step}* is marked safe to repeat, so an undo may run again after a restart without a committed claim. Mark it as an external effect unless it is idempotent and has no effect of its own." |
+| `CompensationScope/ReplaySafeStep` | Warning | `{scope}/steps/{index}` | "\"{step}\" is marked safe to repeat, so its call may not be committed before it runs; if the process stops, recovery may not know it happened. Mark it as an external effect unless it has none." |
+| `CompensationScope/ReplaySafeHandler` | Warning | `{scope}/steps/{index}` | "The compensation of \"{step}\" is marked safe to repeat, so an undo may run again after a restart without a committed claim. Mark it as an external effect unless it is idempotent and has no effect of its own." |
 
 ## Side-effect profile reader (FR-513)
 

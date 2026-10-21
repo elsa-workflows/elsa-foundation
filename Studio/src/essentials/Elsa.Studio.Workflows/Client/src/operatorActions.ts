@@ -243,7 +243,8 @@ const notUndoneLabels: Partial<Record<CompensationRowRuntime["recovery"]["state"
   Pending: "waiting to undo",
   Registered: "can be undone",
   Running: "undoing",
-  Retrying: "undoing"
+  Retrying: "undoing",
+  RetryScheduled: "retry scheduled"
 };
 
 export function abandonActionModel(context: OperatorActionScopeContext): OperatorActionModel {

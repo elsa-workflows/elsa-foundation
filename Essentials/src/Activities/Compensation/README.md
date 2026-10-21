@@ -17,6 +17,10 @@ never runs a handler twice for one entry. The runtime clears structural private 
 forward and handler executions keep the scope's `compensation.*` scheduling metadata, which is the completed
 record.
 
+A failed handler runs again up to `handlerMaxAttempts` times, at once by default or, with `handlerRetryDelay`, after a
+growing wait that the runtime keeps durably (spec 261). Publication warns, without blocking, on a step that has a
+compensation, or a compensation, that is a replay-safe leaf activity.
+
 Limits in this version: a handler fault stays a blocking incident and the run's incident strategy decides; workflow
 cancellation runs no handler; a fault inside a `Sequence` step does not reach the scope because `Sequence` does not
 propagate child faults. Native compensation is separate from BPMN compensation

@@ -22,7 +22,7 @@ Some checkpoints are committed in every mode, because skipping them would lose w
 - a cancellation;
 - the dispatch of a child workflow;
 - completion;
-- the step before an activity that is not safe to repeat. Activities that call out to other systems (an HTTP endpoint, publishing an event, any custom activity not marked safe to repeat) are committed before they run, so a crash never repeats them silently.
+- the step before an activity that is not safe to repeat. Activities that call out to other systems (an HTTP endpoint, publishing an event, any custom activity not marked safe to repeat) are committed before they run, so a crash never repeats them silently. Marking an activity safe to repeat drops that commit, which is why publication warns when a [compensation scope](compensation.md#crashes-and-repeated-calls) step that has a compensation, or a compensation, is marked safe to repeat.
 
 There is one exception, which a host opts into. Under Ephemeral with `RecordCompletion` off, a run that completes without ever having been persisted writes no record at all. A run that already has a record, because it suspended, faulted or ran an activity that is not safe to repeat, always gets its completion committed, so no stored run is left looking suspended. A run whose completion something else is waiting for is also always recorded: a dispatched child, whose parent is told about the result, and any run that leaves work behind for after its completion.
 

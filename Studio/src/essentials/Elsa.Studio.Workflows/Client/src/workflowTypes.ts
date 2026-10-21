@@ -187,6 +187,11 @@ export interface ValidationError {
   type?: string | null;
   code?: string | null;
   message?: string | null;
+  /**
+   * Backend `ValidationError.Severity`: `Error` blocks publication, `Warning` is reported and does not block. A missing
+   * value reads as `Error` (spec 261 FR-515).
+   */
+  severity?: "Error" | "Warning" | string | null;
   [key: string]: unknown;
 }
 

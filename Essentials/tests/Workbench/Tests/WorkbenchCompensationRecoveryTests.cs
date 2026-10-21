@@ -17,7 +17,7 @@ namespace Elsa.Workbench.Tests;
 /// and the process is killed after the first handed-over handler's effect. In all, the participant applies each effect
 /// once and the scope finishes Compensated. Spec 260 (M4): an operator retries, resolves and abandons over REST on runs
 /// a Studio test run started, and the process is killed after a resolve's alteration checkpoint and before the decision
-/// reaches the scope. Spec 261 (M5): a handler retry waits for its delay, and the process is killed during the wait.
+/// reaches the scope. Spec 261 (M5): a handler retry waits for its delay, and the process is killed during the wait; a replay-safe step with a compensation warns without blocking publication.
 /// </summary>
 /// <remarks>
 /// The participant keeps its state in files under the content root, which outlive the killed process. The recovery
@@ -33,6 +33,7 @@ public sealed class WorkbenchCompensationRecoveryTests
     private const string ParticipantType = PackageId + ".ReservationParticipant";
     private const string ScopeType = "Elsa.Activities.Compensation.Activities.CompensationScope";
     private const string ConfirmType = "Elsa.Activities.Compensation.Activities.Confirm";
+    private const string WriteLineType = "Elsa.Activities.Primitives.Activities.WriteLine";
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(120);
 
     [Fact]
@@ -243,6 +244,42 @@ public sealed class WorkbenchCompensationRecoveryTests
         Assert.Single(cancelCalls.Select(call => call.OperationKey).Distinct());
         Assert.Single(Calls(journal, "backoff-inventory-release"));
         Assert.Contains("Compensated", Activity(completed, "scope")["outcomeNames"]!.AsArray().Select(outcome => outcome!.GetValue<string>()));
+    }
+
+    /// <summary>
+    /// Spec 261 W6 (FR-514, OD20 A), over REST: a step that has a compensation and is a replay-safe Write Line gets one
+    /// warning in the draft's validations, on the step's row with severity Warning, and the draft still promotes and
+    /// publishes. The external participant steps beside it get none.
+    /// </summary>
+    [Fact]
+    public async Task A_replay_safe_step_with_a_compensation_warns_without_blocking_promotion_or_publication()
+    {
+        await using var host = await WorkbenchProcess.StartAsync(WitnessShell(), PrepareContentRoot);
+        await LoginAsync(host);
+        var reservations = new Reservations(await ActivityVersionAsync(host, ParticipantType), Path.Combine(host.ContentRoot, "reservations"));
+        var writeLine = await ActivityVersionAsync(host, WriteLineType);
+        var root = Node("scope", await ActivityVersionAsync(host, ScopeType), [Input("faultAfterCompensation", false)], ScopeStructure(
+            Step("Reserve inventory", reservations.Participant("inventory", "warning-inventory"),
+                reservations.Participant("inventory-release", "warning-inventory-release")),
+            Step("Log the order", Node("log", writeLine, [Input("text", "Order received")]),
+                reservations.Participant("log-undo", "warning-log-undo"))));
+        var added = await PostAsync(host, "/design/workflows/definitions", new
+        {
+            name = "Compensation warning witness", description = "A replay-safe step with a compensation",
+            initialState = new { variables = Array.Empty<object>(), inputs = Array.Empty<object>(), outputs = Array.Empty<object>(), rootActivity = root }
+        });
+        var draftId = added["draft"]!["id"]!.GetValue<string>();
+
+        var validations = await host.Client.GetFromJsonAsync<JsonNode>($"/design/workflows/drafts/{draftId}/validations");
+        var warning = Assert.Single(validations!["errors"]!.AsArray())!;
+        Assert.Equal(("CompensationScope/ReplaySafeStep", "Warning", "scope", "steps/1"), (
+            warning["code"]!.GetValue<string>(), warning["severity"]!.GetValue<string>(),
+            warning["nodeId"]!.GetValue<string>(), warning["member"]!.GetValue<string>()));
+        Assert.StartsWith("\"Log the order\" is marked safe to repeat", warning["message"]!.GetValue<string>());
+
+        var version = await PostAsync(host, $"/design/workflows/drafts/{draftId}/promote", new { });
+        var published = await PostAsync(host, $"/publishing/workflows/{version["id"]!.GetValue<string>()}/publish", new { });
+        Assert.False(string.IsNullOrEmpty(published["artifactId"]?.GetValue<string>()), published.ToJsonString());
     }
 
     /// <summary>
