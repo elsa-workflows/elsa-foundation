@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-21
 
-**Status**: In progress
+**Status**: Implemented
 
 **Input**: Issue #3131 — Studio diagnostics: align trace reads with the existing OpenTelemetry API
 
