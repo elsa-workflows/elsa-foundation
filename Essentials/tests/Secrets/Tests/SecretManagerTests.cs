@@ -1,7 +1,9 @@
 using Elsa.Secrets.Core.Contracts;
+using Elsa.Secrets.Core.Exceptions;
 using Elsa.Secrets.Core.Models;
 using Elsa.Secrets.Extensions;
 using Elsa.Secrets.Tests.Support;
+using Elsa.Secrets.Types;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
@@ -192,9 +194,11 @@ public sealed class SecretManagerTests : IDisposable
         var original = await CreateEncryptedAsync("payments.api", value: "first-value");
         await _manager.RevokeAsync(TenantId, "payments.api");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        var refused = await Assert.ThrowsAsync<SecretNameInUseException>(async () =>
             await CreateEncryptedAsync("payments.api", value: "replacement-value"));
 
+        Assert.Equal("A secret with the same name already exists.", refused.Message);
+        Assert.Equal("payments.api", refused.SecretName);
         var holder = (await _manager.FindAsync(TenantId, "payments.api"))!;
         Assert.Equal(original.Id, holder.Id);
         Assert.Equal(SecretStatus.Revoked, holder.Status);
@@ -309,6 +313,42 @@ public sealed class SecretManagerTests : IDisposable
         Assert.True(await _manager.DeleteAsync("tenant-alpha", "shared.name"));
         Assert.Null(await _manager.FindAsync("tenant-alpha", "shared.name"));
         Assert.Equal(SecretStatus.Revoked, (await _manager.FindAsync("tenant-beta", "shared.name"))!.Status);
+    }
+
+    [Theory]
+    [InlineData("missing-store", SecretTypeNames.Text, "Secret store not found.")]
+    [InlineData(SecretStoreNames.Encrypted, "missing-type", "Secret type not found.")]
+    [InlineData(SecretStoreNames.Encrypted, ConfigurationOnlyType.Name, "Secret type is not compatible with the selected store.")]
+    public async Task Create_Reports_A_Store_Or_Type_It_Cannot_Use_As_A_Configuration_Fault(string storeName, string typeName, string message)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Elsa:Secrets:EncryptionKey"] = "tests-only-secret-key" })
+            .Build();
+        await using var provider = new ServiceCollection()
+            .AddSingleton<IConfiguration>(configuration)
+            .AddSecrets(configuration)
+            .AddSingleton<ISecretTypeProvider, ConfigurationOnlyType>()
+            .BuildServiceProvider();
+        var manager = provider.GetRequiredService<ISecretManager>();
+
+        var refused = await Assert.ThrowsAsync<SecretStoreConfigurationException>(async () => await manager.CreateAsync(TenantId, new CreateSecretRequest
+        {
+            Name = "payments.api",
+            TypeName = typeName,
+            StoreName = storeName,
+            Value = "secret-value"
+        }));
+
+        // The message is unchanged from the plain InvalidOperationException this used to be.
+        Assert.Equal(message, refused.Message);
+        Assert.IsAssignableFrom<InvalidOperationException>(refused);
+        Assert.Null(await manager.FindAsync(TenantId, "payments.api"));
+    }
+
+    private sealed class ConfigurationOnlyType() : DelegatingSecretTypeProvider(new(
+        Name, "Configuration-only text", "A type no encrypted store can hold.", "text", [SecretStoreNames.Configuration]))
+    {
+        public const string Name = "configuration-only-text";
     }
 
     private ValueTask<SecretMetadata> CreateEncryptedAsync(

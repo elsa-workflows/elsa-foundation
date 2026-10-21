@@ -63,7 +63,7 @@ public sealed class DefaultSecretManager(
             secret.Versions.Add(version);
 
             if (!await repository.TryAddAsync(secret, cancellationToken))
-                throw new InvalidOperationException("A secret with the same name already exists.");
+                throw new SecretNameInUseException(normalizedName);
 
             await RecordAsync(tenantId, "create", normalizedName, "succeeded", null, cancellationToken);
             return mapper.Map(secret);
@@ -333,7 +333,7 @@ public sealed class DefaultSecretManager(
     private static void EnsureStoreIsSupported(ISecretTypeProvider typeProvider, string storeName)
     {
         if (!typeProvider.Descriptor.SupportedStoreNames.Contains(storeName, StringComparer.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Secret type is not compatible with the selected store.");
+            throw new SecretStoreConfigurationException("Secret type is not compatible with the selected store.");
     }
 
     private static void ValidateTenantId(string tenantId) => ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
